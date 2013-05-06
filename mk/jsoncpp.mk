@@ -1,6 +1,6 @@
 # included mk file for the jsoncpp module
 
-JSONCPP_DIR := ${MODULE_DIR}/jsoncpp/jsoncpp
+JSONCPP_DIR := ${MODULE_DIR}/jsoncpp
 JSONCPP_PLATFORM := linux-gcc
 
 jsoncpp: ${INCLUDE_DIR} ${LIB_DIR}
