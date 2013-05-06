@@ -1,0 +1,70 @@
+Source: sprout
+Section: network
+Priority: optional
+# This field must stay as 'Project Clearwater Maintainers', as
+# clearwater-infrastructure explicitly checks for packages of this name when
+# updating
+Maintainer: Project Clearwater Maintainers <maintainers@projectclearwater.org>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.2
+Homepage: http://projectclearwater.org/
+
+Package: sprout-libs
+Architecture: any
+Description: Libraries for sprout, bono and restund
+
+Package: sprout
+Architecture: any
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, sprout-libs, clearwater-memcached, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3
+Conflicts: bono
+Suggests: sprout-dbg, clearwater-logging, clearwater-snmpd
+Description: sprout, the SIP Router
+
+Package: sprout-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout (= ${binary:Version})
+Recommends: gdb
+Description: Debugging symbols for sprout, the SIP Router
+
+Package: bono
+Architecture: any
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, sprout-libs, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3
+Conflicts: sprout
+Suggests: restund, bono-dbg, clearwater-logging, clearwater-snmpd
+Description: bono, the SIP edge proxy
+
+Package: bono-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: bono (= ${binary:Version})
+Recommends: gdb
+Description: Debugging symbols for bono, the SIP edge proxy
+
+Package: restund
+Architecture: any
+Depends: clearwater-infrastructure, sprout-libs
+Suggests: clearwater-logging, clearwater-snmpd
+Description: restund, the STUN/TURN server
+
+Package: clearwater-sip-stress
+Architecture: any
+Depends: clearwater-infrastructure, clearwater-tcp-scalability
+Conflicts: sprout, bono, restund
+Suggests: clearwater-sip-stress-dbg, clearwater-sip-stress-stats, clearwater-logging, clearwater-snmpd
+Description: Runs SIP stress against Clearwater
+
+Package: clearwater-sip-stress-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: clearwater-sip-stress (= ${binary:Version})
+Recommends: gdb
+Description: Debugging symbols for sipp, used for running SIP stress against Clearwater
+
+Package: clearwater-sip-stress-stats
+Architecture: any
+Depends: clearwater-sip-stress, libzmq3-dev, ruby1.9.3, build-essential
+Description: Exposes SIPp stress statistics over the clearwater statistics interface.

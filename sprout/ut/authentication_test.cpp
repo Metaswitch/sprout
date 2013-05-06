@@ -1,0 +1,172 @@
+/**
+ * @file authentication_test.cpp UT for Sprout authentication module.
+ *
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by post at
+ * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ */
+
+///
+///----------------------------------------------------------------------------
+
+#include <string>
+#include "gtest/gtest.h"
+
+#include "siptest.hpp"
+#include "utils.h"
+#include "localstorefactory.h"
+#include "analyticslogger.h"
+#include "hssconnection.h"
+#include "authentication.h"
+#include "fakelogger.hpp"
+#include "fakehssconnection.hpp"
+
+using namespace std;
+
+/// Fixture for AuthenticationTest.
+class AuthenticationTest : public SipTest
+{
+public:
+  FakeLogger _log;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+
+    _hss_connection = new FakeHSSConnection();
+    _analytics = new AnalyticsLogger("foo");
+    delete _analytics->_logger;
+    _analytics->_logger = NULL;
+    pj_status_t ret = init_authentication("ut.cw-ngv.com", true, "sip-digest", _hss_connection, _analytics);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+  }
+
+  static void TearDownTestCase()
+  {
+    destroy_authentication();
+    delete _hss_connection;
+    delete _analytics;
+
+    SipTest::TearDownTestCase();
+  }
+
+  AuthenticationTest() : SipTest(&mod_auth)
+  {
+    _analytics->_logger = &_log;
+  }
+
+  ~AuthenticationTest()
+  {
+    _analytics->_logger = NULL;
+  }
+
+protected:
+  static FakeHSSConnection* _hss_connection;
+  static AnalyticsLogger* _analytics;
+};
+
+FakeHSSConnection* AuthenticationTest::_hss_connection;
+AnalyticsLogger* AuthenticationTest::_analytics;
+
+class AuthenticationMessage
+{
+public:
+  string _user;
+  string _domain;
+  bool _auth_hdr;
+  string _auth_user;
+  string _auth_realm;
+  string _nonce;
+  string _uri;
+  string _response;
+  string _algorithm;
+  string _opaque;
+  string _integ_prot;
+
+  AuthenticationMessage() :
+    _user("6505550001"),
+    _domain("ut.cw-ngv.com"),
+    _auth_hdr(true),
+    _auth_user("sip:6505550001@ut.cw-ngv.com"),
+    _auth_realm("ut.cw-ngv.com"),
+    _nonce(""),
+    _uri("sip:ut.cw-ngv.com"),
+    _response("8deeadd5f2d912be142530786bc0ccab"),
+    _algorithm("md5"),
+    _opaque(""),
+    _integ_prot("")
+  {
+  }
+
+  string get();
+};
+
+string AuthenticationMessage::get()
+{
+  char buf[16384];
+
+  int n = snprintf(buf, sizeof(buf),
+                   "REGISTER sip:%2$s SIP/2.0\r\n"
+                   "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
+                   "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
+                   "Max-Forwards: 68\r\n"
+                   "Supported: outbound, path\r\n"
+                   "To: <sip:%1$s@%2$s>\r\n"
+                   "From: <sip:%1$s@%2$s>;tag=fc614d9c\r\n"
+                   "Call-ID: OWZiOGFkZDQ4MGI1OTljNjlkZDkwNTdlMTE0NmUyOTY.\r\n"
+                   "CSeq: 1 REGISTER\r\n"
+                   "Expires: 300\r\n"
+                   "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n"
+                   "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
+                   "Contact: <sip:%1$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP>\r\n"
+                   "Route: <sip:sprout.ut.cw-ngv.com;transport=tcp;lr>\r\n"
+                   "%3$s"
+                   "Content-Length: 0\r\n"
+                   "\r\n",
+                   /*  1 */ _user.c_str(),
+                   /*  2 */ _domain.c_str(),
+                   /*  3 */ _auth_hdr ?
+                              string("Authorization: Digest ")
+                                .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\",") : "")
+                                .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\",") : "")
+                                .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\",") : "")
+                                .append((!_uri.empty()) ? string("uri=\"").append(_uri).append("\",") : "")
+                                .append((!_response.empty()) ? string("response=\"").append(_response).append("\",") : "")
+                                .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm).append(",") : "")
+                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\",") : "")
+                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\",") : "").c_str() :
+                              ""
+    );
+
+  EXPECT_LT(n, (int)sizeof(buf));
+
+  string ret(buf, n);
+  // cout << ret <<endl;
+  return ret;
+}
+
+
+TEST_F(AuthenticationTest, NoAuthorization)
+{
+  AuthenticationMessage msg;
+  msg._auth_hdr = false;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_TRUE, ret);
+  ASSERT_EQ(1u, _out.size());
+  pjsip_msg* out = _out.front()->msg;
+  RespMatcher(401).matches(out);
+}

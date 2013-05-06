@@ -1,0 +1,14 @@
+*.debhelper
+*.debhelper.log
+*.substvars
+/changelog
+/files
+/bono-dbg/
+/bono/
+/clearwater-sip-stress-dbg/
+/clearwater-sip-stress/
+/clearwater-sip-stress-stats/
+/restund/
+/sprout-dbg/
+/sprout-libs/
+/sprout/

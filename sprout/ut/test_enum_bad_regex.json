@@ -1,0 +1,24 @@
+{
+    "number_blocks" : [
+        {   "name" : "Working - all following entries are (broken) variations on this",
+            "prefix" : "+15108580271",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Two few separators (missing final !) - strictly, this is invalid, but it works so let it through",
+            "prefix" : "+15108580272",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com"
+        },
+        {   "name" : "Two few separators (missing middle !)",
+            "prefix" : "+15108580273",
+            "regex"  : "!(^.*$)sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Two many separators",
+            "prefix" : "+15108580274",
+            "regex"  : "!(^.*$)!sip:\\1@!ut.cw-ngv.com!"
+        },
+        {   "name" : "Regular expression isn't parseable (unmatched [)",
+            "prefix" : "+15108580275",
+            "regex"  : "!(^[a-z*$)!sip:\\1@ut.cw-ngv.com!"
+        }
+    ]
+}

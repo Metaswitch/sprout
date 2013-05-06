@@ -1,0 +1,20 @@
+{
+    "number_blocks" : [
+        {   "name" : "Basic number 5108580271",
+            "prefix" : "5108580271",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "With +1 prefix",
+            "prefix" : "+15108580271",
+            "regex"  : "!^\\+1(.*)$!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "With 0111 prefix",
+            "prefix" : "01115108580271",
+            "regex"  : "!^0111(.*)$!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Basic number 5108580272 using unusual separators",
+            "prefix" : "5108580272",
+            "regex"  : "/(^.*$)/sip:\\1@ut.cw-ngv.com/"
+        }
+    ]
+}

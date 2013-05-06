@@ -1,0 +1,24 @@
+# This file lists filenames for which we do not currently expect 100%
+# coverage. These are files that existed before we introduced unit
+# tests to Sprout, and for which we have not yet written tests. New
+# code and new files should have 100% code coverage (by lines); it may
+# be acceptable to use exclusion markers to achieve this.
+
+stateful_proxy.cpp
+connection_pool.cpp
+pjutils.cpp
+analyticslogger.cpp
+authentication.cpp
+callservices.cpp
+stack.cpp
+websockets.cpp
+dnsresolver.cpp
+flowtable.cpp
+zmq_lvc.cpp
+
+# @@@KSW to fix as part of ISC work.
+aschain.cpp
+ifchandler.cpp
+
+# Not intended to be covered, as just stub code.
+sas.cpp

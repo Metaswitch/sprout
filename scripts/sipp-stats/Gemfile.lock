@@ -1,0 +1,18 @@
+PATH
+  remote: .
+  specs:
+    clearwater-sipp-stats (1.0.0)
+      ffi-rzmq
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    ffi (1.7.0)
+    ffi-rzmq (1.0.0)
+      ffi
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  clearwater-sipp-stats!

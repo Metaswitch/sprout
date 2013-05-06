@@ -1,0 +1,252 @@
+/**
+ * @file eventq.h Template definition for event queue
+ *
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by post at
+ * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ */
+
+///
+///
+
+#ifndef EVENTQ__
+#define EVENTQ__
+
+#include <pthread.h>
+#include <errno.h>
+
+#include <queue>
+
+template<class T>
+class eventq
+{
+public:
+  /// Create an event queue.
+  ///
+  /// @param max_queue maximum size of event queue, zero is unlimited.
+  eventq(unsigned int max_queue=0) :
+    _max_queue(max_queue),
+    _q(),
+    _writers(0),
+    _readers(0),
+    _terminated(false)
+  {
+    pthread_mutex_init(&_m, NULL);
+    pthread_cond_init(&_w_cond, NULL);
+    pthread_cond_init(&_r_cond, NULL);
+  };
+
+  ~eventq()
+  {
+  };
+
+  /// Send a termination signal via the queue.
+  void terminate()
+  {
+    pthread_mutex_lock(&_m);
+
+    _terminated = true;
+
+    // Are there any readers waiting?
+    if (_readers > 0)
+    {
+      // Signal all waiting readers.  Can do this before releasing the mutex
+      // as we're relying on wait-morphing being supported by the OS (so
+      // there will be no spurious context switches).
+      pthread_cond_broadcast(&_r_cond);
+    }
+
+    pthread_mutex_unlock(&_m);
+  }
+
+  /// Push an item on to the event queue.
+  ///
+  /// This may block or fail if the queue is full.
+  void push(T item)
+  {
+    pthread_mutex_lock(&_m);
+
+    if (_max_queue != 0)
+    {
+      while (_q.size() >= _max_queue)
+      {
+        // Queue is full, so writer must block.
+        ++_writers;
+        pthread_cond_wait(&_w_cond, &_m);
+        --_writers;
+      }
+    }
+
+    // Must be space on the queue now.
+    _q.push(item);
+
+    // Are there any readers waiting?
+    if (_readers > 0)
+    {
+      pthread_cond_signal(&_r_cond);
+    }
+
+    pthread_mutex_unlock(&_m);
+  };
+
+  /// Push an item on to the event queue.
+  ///
+  /// This will not block, but may discard the event if the queue is full.
+  bool push_noblock(T item)
+  {
+    bool rc = false;
+
+    pthread_mutex_lock(&_m);
+
+    if ((_max_queue == 0) || (_q.size() < _max_queue))
+    {
+      // There is space on the queue.
+      _q.push(item);
+
+      // Are there any readers waiting?
+      if (_readers > 0)
+      {
+        pthread_cond_signal(&_r_cond);
+      }
+
+      rc = true;
+    }
+
+    pthread_mutex_unlock(&_m);
+
+    return rc;
+  };
+
+  /// Pop an item from the event queue, waiting indefinitely if it is empty.
+  bool pop(T& item)
+  {
+    pthread_mutex_lock(&_m);
+
+    while ((_q.empty()) && (!_terminated))
+    {
+      // The queue is empty, so wait for something to arrive.
+      ++_readers;
+      pthread_cond_wait(&_r_cond, &_m);
+      --_readers;
+    }
+
+    if (!_q.empty()) 
+    {
+      // Something on the queue to receive.
+      item = _q.front();
+      _q.pop();
+
+      // Are there blocked writers?
+      if ((_max_queue != 0) &&
+          (_q.size() < _max_queue) &&
+          (_writers > 0))
+      {
+        pthread_cond_signal(&_w_cond);
+      }
+    }
+
+    pthread_mutex_unlock(&_m);
+
+    return !_terminated;
+  };
+
+  /// Pop an item from the event queue, waiting for the specified timeout if
+  /// the queue is empty.
+  ///
+  /// @param timeout Maximum time to wait in milliseconds.
+  bool pop(T& item, int timeout)
+  {
+    pthread_mutex_lock(&_m);
+
+    if ((_q.empty()) && (timeout != 0))
+    {
+      // The queue is empty and the timeout is non-zero, so wait for
+      // something to arrive.
+      struct timespec attime;
+      if (timeout != -1)
+      {
+        clock_gettime(CLOCK_REALTIME, &attime);
+        attime.tv_sec += timeout / 1000;
+        attime.tv_nsec += ((timeout % 1000) * 1000000);
+        if (attime.tv_nsec >= 1000000000)
+        {
+          attime.tv_nsec -= 1000000000;
+          attime.tv_sec += 1;
+        }
+      }
+
+      ++_readers;
+
+      while ((_q.empty()) && (!_terminated))
+      {
+        // The queue is empty, so wait for something to arrive.
+        if (timeout != -1)
+        {
+          int rc = pthread_cond_timedwait(&_r_cond, &_m, &attime);
+          if (rc == ETIMEDOUT)
+          {
+            break;
+          }
+        }
+        else
+        {
+          pthread_cond_wait(&_r_cond, &_m);
+        }
+      }
+
+      --_readers;
+    }
+
+    if (!_q.empty())
+    {
+      item = _q.front();
+      _q.pop();
+
+      if ((_max_queue != 0) &&
+          (_q.size() < _max_queue) &&
+          (_writers > 0))
+      {
+        pthread_cond_signal(&_w_cond);
+      }
+    }
+
+    pthread_mutex_unlock(&_m);
+
+    return !_terminated;
+  };
+
+  /// Peek at the item at the front of the event queue.
+  T peek() const
+  {
+    return _q.front();
+  };
+
+private:
+
+  unsigned int _max_queue;
+  std::queue<T> _q;
+  int _writers;
+  int _readers;
+  bool _terminated;
+
+  pthread_mutex_t _m;
+  pthread_cond_t _w_cond;
+  pthread_cond_t _r_cond;
+
+};
+
+#endif

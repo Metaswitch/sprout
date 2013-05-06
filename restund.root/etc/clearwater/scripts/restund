@@ -1,0 +1,52 @@
+#!/bin/sh
+
+# Read the configuration in.
+. /etc/clearwater/config
+
+# Build the restund configuration file.
+CONF=/etc/clearwater/restund.conf
+cat >$CONF <<EOF
+# restund.conf
+# core
+daemon                  yes
+debug                   no
+realm                   $home_domain
+syncinterval            600
+udp_listen              $local_ip:3478
+udp_sockbuf_size        524288
+tcp_listen              $local_ip:3478
+# modules
+module_path             /usr/share/clearwater/lib
+module                  stat.so
+module                  httpdb.so
+module                  binding.so
+module                  auth.so
+module                  turn.so
+module                  syslog.so
+module                  status.so
+# auth
+auth_nonce_expiry       3600
+# turn
+turn_max_allocations    512
+turn_max_lifetime       600
+turn_relay_addr         $local_ip
+turn_relay_snat_addr    $public_ip
+turn_relay_addr6        ::1
+# Cope with broken TURN clients
+turn_extended_channels  yes
+# httpdb
+httpdb_url              http://hs.$home_domain:8888/privatecredentials/%s/digest/
+# Relax TURN security to support buggy clients
+httpdb_uri_workaround   yes
+httpdb_uri_workaround_password  $turn_workaround
+# syslog
+syslog_facility         24
+# status
+status_udp_addr         127.0.0.1
+status_udp_port         33000
+status_http_addr        127.0.0.1
+status_http_port        8080
+EOF
+
+# Build the restund monit configuration file.
+sed -e s/LOCAL_IP/$local_ip/g < /etc/clearwater/templates/restund.monit.tmpl > /etc/monit/conf.d/restund.monit

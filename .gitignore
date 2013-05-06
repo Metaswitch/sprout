@@ -1,0 +1,10 @@
+*~
+/usr/
+/build/
+*.o
+*.d
+*.swp
+*.gem
+on-eclipse-build.local.sh
+
+.openssl_config_run

@@ -1,0 +1,22 @@
+{
+    "routes" : [
+        {   "name" : "Alameda PBX",
+            "route" : "ec2-54-243-253-10.compute-1.amazonaws.com"
+        },
+        {   "name" : "Oakland PBX",
+            "domain" : "foreign-domain.example.com"
+        },
+        {   "name" : "San Leandro PBX",
+            "domain" : [],
+            "route" : "fd3.amazonaws.com"
+        },
+        {   "name" : "Berkeley PBX",
+            "domain" : "198.147.226.99",
+            "route" : { "route" : "whatsit.example.com" }
+        },
+        {   "name" : "Hayward PBX",
+            "domain" : "198.147.226.98",
+            "route" : "fd4.amazonaws.com"
+        }
+    ]
+}

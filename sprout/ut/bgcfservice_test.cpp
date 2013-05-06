@@ -1,0 +1,118 @@
+/**
+ * @file enumservice_test.cpp UT for Sprout BGCF service.
+ *
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by post at
+ * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ */
+
+///
+///----------------------------------------------------------------------------
+
+#include <string>
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include <json/reader.h>
+
+#include "utils.h"
+#include "sas.h"
+#include "bgcfservice.h"
+#include "fakelogger.hpp"
+#include "test_utils.hpp"
+
+using namespace std;
+
+/// Fixture for BgcfServiceTest.
+class BgcfServiceTest : public ::testing::Test
+{
+  FakeLogger _log;
+
+  BgcfServiceTest()
+  {
+    Log::setLoggingLevel(99);
+  }
+
+  virtual ~BgcfServiceTest()
+  {
+  }
+};
+
+/// A single test case.
+class ET
+{
+public:
+  ET(string in, string out) :
+    _in(in),
+    _out(out)
+  {
+  }
+
+  void test(BgcfService& bgcf_)
+  {
+    SCOPED_TRACE(_in);
+    string ret = bgcf_.get_route(_in);
+    EXPECT_EQ(_out, ret);
+  }
+
+private:
+  string _in; //^ input
+  string _out; //^ expected output
+};
+
+
+TEST_F(BgcfServiceTest, SimpleTests)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
+
+  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
+  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "").test(bgcf_);
+  ET("",                           ""                  ).test(bgcf_);
+  ET("billy2",                     ""                  ).test(bgcf_);
+  ET("198.147.226.",               ""                  ).test(bgcf_);
+  ET("foreign-domain.example.com", "sip.example.com"   ).test(bgcf_);
+  ET("198.147.226.99",             "fd3.amazonaws.com" ).test(bgcf_);
+}
+
+TEST_F(BgcfServiceTest, ParseError)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));
+  EXPECT_TRUE(_log.contains("Failed to read BGCF configuration data"));
+  ET("+15108580271", "").test(bgcf_);
+}
+
+TEST_F(BgcfServiceTest, MissingParts)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_parts.json"));
+  EXPECT_TRUE(_log.contains("Badly formed BGCF route entry"));
+  ET("foreign-domain.example.com", "").test(bgcf_);
+  ET("198.147.226.99", "").test(bgcf_);
+  ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_);
+}
+
+TEST_F(BgcfServiceTest, MissingBlock)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_block.json"));
+  EXPECT_TRUE(_log.contains("Badly formed BGCF configuration file - missing routes object"));
+  ET("+15108580271", "").test(bgcf_);
+}
+
+TEST_F(BgcfServiceTest, MissingFile)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
+  EXPECT_TRUE(_log.contains("Failed to read BGCF configuration data"));
+  ET("+15108580271", "").test(bgcf_);
+}

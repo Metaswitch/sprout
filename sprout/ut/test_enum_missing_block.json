@@ -1,0 +1,52 @@
+{
+    "number_blockx" : [
+        {   "name" : "Clearwater external number +15108580271",
+            "prefix" : "+15108580271",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580272",
+            "prefix" : "+15108580272",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580273",
+            "prefix" : "+15108580273",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580274",
+            "prefix" : "+15108580274",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580275",
+            "prefix" : "+15108580275",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580276",
+            "prefix" : "+15108580276",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580277",
+            "prefix" : "+15108580277",
+            "regex"  : "!(^.*$)!sip:\\1@utext.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580278",
+            "prefix" : "+15108580278",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580279",
+            "prefix" : "+15108580279",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater external number +15108580280",
+            "prefix" : "+15108580280",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Clearwater internal numbers",
+            "prefix" : "650555",
+            "regex"  : "!(^.*$)!sip:\\1@ut-int.cw-ngv.com!"
+        },
+        {   "name" : "NANP => Alameda PBX",
+            "prefix" : "",
+            "regex"  : "!(^.*$)!sip:\\1@198.147.226.2!"
+        }
+    ]
+}

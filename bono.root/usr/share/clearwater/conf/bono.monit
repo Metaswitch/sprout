@@ -1,0 +1,11 @@
+# Poll every 10 seconds
+set daemon 10
+
+# Monitor the server's PID file and check its public interfaces.
+check process bono pidfile /var/run/bono.pid
+  start program = "/etc/init.d/bono start"
+  stop program = "/etc/init.d/bono stop"
+  if failed host localhost port 5058 type tcp
+     protocol sip and target "monit@localhost:5058" and maxforward 2
+     with timeout 12 seconds for 2 cycles
+     then restart
