@@ -126,12 +126,15 @@ void SipTest::TearDownTestCase()
   term_pjsip();
 }
 
+
+/// Initialises a SIP port for both UDP and TCP transports.
 void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory)
 {
   pj_status_t status;
   pj_sockaddr_in addr;
   pjsip_host_port published_name;
 
+  memset(&addr, 0, sizeof(pj_sockaddr_in));
   addr.sin_family = pj_AF_INET();
   addr.sin_addr.s_addr = 0;
   addr.sin_port = pj_htons((pj_uint16_t)port);
@@ -145,15 +148,6 @@ void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tc
                                           50,
                                           udp_tp);
   ASSERT_EQ(PJ_SUCCESS, status);
-
-  //pjsip_fake_tcp_transport_cfg cfg;
-  //pjsip_fake_tcp_transport_cfg_default(&cfg, pj_AF_INET());
-  //pj_sockaddr_cp(&cfg.bind_addr, &addr);
-  //cfg.addr_name.host = stack_data.local_host;
-  //cfg.addr_name.port = port;
-  //status = pjsip_fake_tcp_transport_start3(stack_data.endpt,
-  //                                         &cfg,
-  //                                         tcp_factory);
 
   status = pjsip_fake_tcp_transport_start2(stack_data.endpt,
                                            &addr,
@@ -230,13 +224,6 @@ SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char
                                    (pj_sockaddr_t*)&_rem_addr,
                                    sizeof(pj_sockaddr_in),
                                    &_transport);
-//    status = factory->create_transport(factory,
-//                                       pjsip_endpt_get_tpmgr(stack_data.endpt),
-//                                       stack_data.endpt,
-//                                       &_rem_addr,
-//                                       sizeof(pj_sockaddr_in),
-//                                       &_transport);
-
     EXPECT_EQ(PJ_SUCCESS, status);
   }
 }
