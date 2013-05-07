@@ -20,9 +20,6 @@
  * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include <sstream>
 #include "gtest/gtest.h"
@@ -70,7 +67,13 @@ protected:
   class TransportFlow
   {
   public:
-    TransportFlow(const char* type_name, const char* addr, int port);
+    typedef enum {TCP, UDP, WS} Protocol;
+    typedef enum {TRUSTED, UNTRUSTED} Trust;
+
+    TransportFlow(Protocol protocol,
+                  Trust trust,
+                  const char* addr,
+                  int port);
     ~TransportFlow();
 
     /// Returns the type of the transport.
@@ -91,6 +94,9 @@ protected:
     pjsip_transport* _transport;
     pj_sockaddr _rem_addr;
   };
+
+  /// Initialise the UDP and TCP transports for the specified port.
+  static void init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory);
 
   /// Initialise PJSIP for testing.
   static void init_pjsip();
@@ -180,11 +186,13 @@ private:
   /// Handle an outbound SIP message.
   void handle_txdata(pjsip_tx_data* tdata);
 
-  /// The fake TCP transport factory.
-  static pjsip_tpfactory* _tpfactory_tcp;
+  /// Trusted TCP factory and UDP transport
+  static pjsip_tpfactory* _tcp_tpfactory_trusted;
+  static pjsip_transport* _udp_tp_trusted;
 
-  /// The fake UDP transport.
-  static pjsip_transport* _tp_udp;
+  /// Untrusted TCP factory and UDP transport
+  static pjsip_tpfactory* _tcp_tpfactory_untrusted;
+  static pjsip_transport* _udp_tp_untrusted;
 
   /// The transport we usually use when injecting messages.
   static TransportFlow* _tp_default;

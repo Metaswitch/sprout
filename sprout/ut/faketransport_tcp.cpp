@@ -2,6 +2,8 @@
  * @file faketransport_tcp.cpp
  *
  * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
+ * Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,7 +21,6 @@
  * The author can be reached by email at clearwater@metaswitch.com or by post at
  * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
  */
-
 #include "faketransport_tcp.hpp"
 #include <pjsip/sip_endpoint.h>
 #include <pjsip/sip_errno.h>
@@ -62,7 +63,6 @@ struct fake_tcp_listener
     pj_bool_t		     is_registered;
     pjsip_endpoint	    *endpt;
     pjsip_tpmgr		    *tpmgr;
-    pj_activesock_t	    *asock;
     pj_sockaddr		     bound_addr;
     pj_qos_type		     qos_type;
     pj_qos_params	     qos_params;
@@ -130,12 +130,6 @@ struct fake_tcp_transport
  * PROTOTYPES
  */
 
-/* This callback is called when pending accept() operation completes. */
-static pj_bool_t on_accept_complete(pj_activesock_t *asock,
-				    pj_sock_t newsock,
-				    const pj_sockaddr_t *src_addr,
-				    int src_addr_len);
-
 /* This callback is called by transport manager to destroy listener */
 static pj_status_t lis_destroy(pjsip_tpfactory *factory);
 
@@ -150,11 +144,16 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
 /* Common function to create and initialize transport */
 static pj_status_t fake_tcp_create(struct fake_tcp_listener *listener,
 			      pj_pool_t *pool,
-			      pj_sock_t sock, pj_bool_t is_server,
+                              pj_bool_t is_server,
 			      const pj_sockaddr *local,
 			      const pj_sockaddr *remote,
 			      struct fake_tcp_transport **p_fake_tcp);
 
+/* Utility to destroy transport */
+static pj_status_t fake_tcp_destroy(pjsip_transport *transport,
+			       pj_status_t reason);
+
+static pj_status_t fake_tcp_start_read(struct fake_tcp_transport *fake_tcp);
 
 static void fake_tcp_perror(const char *sender, const char *title,
 		       pj_status_t status)
@@ -246,10 +245,7 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
     pj_pool_t *pool;
     pj_sock_t sock = PJ_INVALID_SOCKET;
     struct fake_tcp_listener *listener;
-    pj_activesock_cfg asock_cfg;
-    pj_activesock_cb listener_cb;
     pj_sockaddr *listener_addr;
-    int addr_len;
     pj_status_t status;
 
     /* Sanity check */
@@ -269,11 +265,9 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
 	    return PJ_EINVAL;
 	}
     }
-
     pool = pjsip_endpt_create_pool(endpt, "fake_tcplis", POOL_LIS_INIT,
 				   POOL_LIS_INC);
     PJ_ASSERT_RETURN(pool, PJ_ENOMEM);
-
 
     listener = PJ_POOL_ZALLOC_T(pool, struct fake_tcp_listener);
     listener->factory.pool = pool;
@@ -296,17 +290,6 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
     if (status != PJ_SUCCESS)
 	goto on_error;
 
-
-    /* Create socket */
-    status = pj_sock_socket(cfg->af, pj_SOCK_STREAM(), 0, &sock);
-    if (status != PJ_SUCCESS)
-	goto on_error;
-
-    /* Apply QoS, if specified */
-    status = pj_sock_apply_qos2(sock, cfg->qos_type, &cfg->qos_params,
-				2, listener->factory.obj_name,
-				"SIP FAKE_TCP listener socket");
-
     /* Bind address may be different than factory.local_addr because
      * factory.local_addr will be resolved below.
      */
@@ -316,16 +299,8 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
     listener_addr = &listener->factory.local_addr;
     pj_sockaddr_cp(listener_addr, &cfg->bind_addr);
 
-    status = pj_sock_bind(sock, listener_addr,
-			  pj_sockaddr_get_len(listener_addr));
-    if (status != PJ_SUCCESS)
-	goto on_error;
-
-    /* Retrieve the bound address */
-    addr_len = pj_sockaddr_get_len(listener_addr);
-    status = pj_sock_getsockname(sock, listener_addr, &addr_len);
-    if (status != PJ_SUCCESS)
-	goto on_error;
+    /* Get the local host IP address */
+    listener_addr->ipv4.sin_addr = pj_gethostaddr();
 
     /* If published host/IP is specified, then use that address as the
      * listener advertised address.
@@ -336,28 +311,6 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
 	pj_strdup(listener->factory.pool, &listener->factory.addr_name.host,
 		  &cfg->addr_name.host);
 	listener->factory.addr_name.port = cfg->addr_name.port;
-
-    } else {
-	/* No published address is given, use the bound address */
-
-	/* If the address returns 0.0.0.0, use the default
-	 * interface address as the transport's address.
-	 */
-	if (!pj_sockaddr_has_addr(listener_addr)) {
-	    pj_sockaddr hostip;
-
-	    status = pj_gethostip(listener->bound_addr.addr.sa_family,
-	                          &hostip);
-	    if (status != PJ_SUCCESS)
-		goto on_error;
-
-	    pj_sockaddr_copy_addr(listener_addr, &hostip);
-	}
-
-	/* Save the address name */
-	sockaddr_to_host_port(listener->factory.pool,
-			      &listener->factory.addr_name,
-			      listener_addr);
     }
 
     /* If port is zero, get the bound port */
@@ -369,27 +322,6 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
 		     sizeof(listener->factory.obj_name),
 		     "fake_tcplis:%d",  listener->factory.addr_name.port);
 
-
-    /* Start listening to the address */
-    status = pj_sock_listen(sock, PJSIP_FAKE_TCP_TRANSPORT_BACKLOG);
-    if (status != PJ_SUCCESS)
-	goto on_error;
-
-
-    /* Create active socket */
-    pj_activesock_cfg_default(&asock_cfg);
-    if (cfg->async_cnt > MAX_ASYNC_CNT)
-	asock_cfg.async_cnt = MAX_ASYNC_CNT;
-    else
-	asock_cfg.async_cnt = cfg->async_cnt;
-
-    pj_bzero(&listener_cb, sizeof(listener_cb));
-    listener_cb.on_accept_complete = &on_accept_complete;
-    status = pj_activesock_create(pool, sock, pj_SOCK_STREAM(), &asock_cfg,
-				  pjsip_endpt_get_ioqueue(endpt),
-				  &listener_cb, listener,
-				  &listener->asock);
-
     /* Register to transport manager */
     listener->endpt = endpt;
     listener->tpmgr = pjsip_endpt_get_tpmgr(endpt);
@@ -398,15 +330,20 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
     listener->is_registered = PJ_TRUE;
     status = pjsip_tpmgr_register_tpfactory(listener->tpmgr,
 					    &listener->factory);
+    if (status != PJ_SUCCESS)
+    {
+      /* Transport manager cannot handle multiple factories for the same
+       * transport type.  This isn't an issue for multiple TCP listeners on
+       * the same IP address as the source port on outgoing connections is
+       * ephemeral, so just ignore the error.
+       */
+      status = PJ_SUCCESS;
+    }
+
     if (status != PJ_SUCCESS) {
 	listener->is_registered = PJ_FALSE;
 	goto on_error;
     }
-
-    /* Start pending accept() operations */
-    status = pj_activesock_start_accept(listener->asock, pool);
-    if (status != PJ_SUCCESS)
-	goto on_error;
 
     PJ_LOG(4,(listener->factory.obj_name,
 	     "SIP FAKE_TCP listener ready for incoming connections at %.*s:%d",
@@ -420,9 +357,113 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
     return PJ_SUCCESS;
 
 on_error:
-    if (listener->asock==NULL && sock!=PJ_INVALID_SOCKET)
-	pj_sock_close(sock);
     lis_destroy(&listener->factory);
+    return status;
+}
+
+/*
+ * This is the public API to create, initialize, register, and start the
+ * TCP listener.
+ */
+PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start2(pjsip_endpoint *endpt,
+                                                    const pj_sockaddr_in *local,
+                                                    const pjsip_host_port *a_name,
+                                                    unsigned async_cnt,
+                                                    pjsip_tpfactory **p_factory)
+{
+    pjsip_fake_tcp_transport_cfg cfg;
+
+    pjsip_fake_tcp_transport_cfg_default(&cfg, pj_AF_INET());
+
+    if (local)
+	pj_sockaddr_cp(&cfg.bind_addr, local);
+    else
+	pj_sockaddr_init(cfg.af, &cfg.bind_addr, NULL, 0);
+
+    if (a_name)
+	pj_memcpy(&cfg.addr_name, a_name, sizeof(*a_name));
+
+    if (async_cnt)
+	cfg.async_cnt = async_cnt;
+
+    return pjsip_fake_tcp_transport_start3(endpt, &cfg, p_factory);
+}
+
+
+PJ_DEF(pj_status_t) pjsip_fake_tcp_accept(pjsip_tpfactory *factory,
+                                          const pj_sockaddr_t *src_addr,
+                                          int src_addr_len,
+                                          pjsip_transport** p_transport)
+{
+    struct fake_tcp_listener *listener;
+    struct fake_tcp_transport *fake_tcp;
+    char addr[PJ_INET6_ADDRSTRLEN+10];
+    pjsip_tp_state_callback state_cb;
+    pj_sockaddr tmp_src_addr;
+    pj_status_t status;
+
+    PJ_UNUSED_ARG(src_addr_len);
+
+    listener = (struct fake_tcp_listener*)factory;
+
+    PJ_LOG(4,(listener->factory.obj_name,
+	      "FAKE_TCP listener %.*s:%d: got incoming FAKE_TCP connection "
+	      "from %s",
+	      (int)listener->factory.addr_name.host.slen,
+	      listener->factory.addr_name.host.ptr,
+	      listener->factory.addr_name.port,
+	      pj_sockaddr_print(src_addr, addr, sizeof(addr), 3)));
+
+    /* fake_tcp_create() expect pj_sockaddr, so copy src_addr to temporary var,
+     * just in case.
+     */
+    pj_bzero(&tmp_src_addr, sizeof(tmp_src_addr));
+    pj_sockaddr_cp(&tmp_src_addr, src_addr);
+
+    /*
+     * Incoming connection!
+     * Create FAKE_TCP transport for the new socket.
+     */
+    status = fake_tcp_create( listener, NULL, PJ_TRUE,
+                         &listener->factory.local_addr,
+                         &tmp_src_addr, &fake_tcp);
+    if (status == PJ_SUCCESS) {
+
+        /* Add a reference to prevent the transport from being destroyed while
+         * we're operating on it.
+         */
+        pjsip_transport_add_ref(&fake_tcp->base);
+
+        status = fake_tcp_start_read(fake_tcp);
+        if (status != PJ_SUCCESS) {
+            PJ_LOG(3,(fake_tcp->base.obj_name, "New transport cancelled"));
+            pjsip_transport_dec_ref(&fake_tcp->base);
+            fake_tcp_destroy(&fake_tcp->base, status);
+        } else {
+            /* Start keep-alive timer */
+            if (PJSIP_FAKE_TCP_KEEP_ALIVE_INTERVAL) {
+                pj_time_val delay = {PJSIP_FAKE_TCP_KEEP_ALIVE_INTERVAL, 0};
+                pjsip_endpt_schedule_timer(listener->endpt,
+                                           &fake_tcp->ka_timer,
+                                           &delay);
+                fake_tcp->ka_timer.id = PJ_TRUE;
+                pj_gettimeofday(&fake_tcp->last_activity);
+            }
+
+            /* Notify application of transport state accepted */
+            state_cb = pjsip_tpmgr_get_state_cb(fake_tcp->base.tpmgr);
+            if (state_cb) {
+                pjsip_transport_state_info state_info;
+
+                pj_bzero(&state_info, sizeof(state_info));
+                (*state_cb)(&fake_tcp->base, PJSIP_TP_STATE_CONNECTED, &state_info);
+            }
+            pjsip_transport_dec_ref(&fake_tcp->base);
+
+            *p_transport = &fake_tcp->base;
+        }
+    }
+
     return status;
 }
 
@@ -435,11 +476,6 @@ static pj_status_t lis_destroy(pjsip_tpfactory *factory)
     if (listener->is_registered) {
 	pjsip_tpmgr_unregister_tpfactory(listener->tpmgr, &listener->factory);
 	listener->is_registered = PJ_FALSE;
-    }
-
-    if (listener->asock) {
-	pj_activesock_close(listener->asock);
-	listener->asock = NULL;
     }
 
     if (listener->factory.lock) {
@@ -482,24 +518,13 @@ static pj_status_t fake_tcp_shutdown(pjsip_transport *transport);
 /* Called by transport manager to destroy transport */
 static pj_status_t fake_tcp_destroy_transport(pjsip_transport *transport);
 
-/* Utility to destroy transport */
-static pj_status_t fake_tcp_destroy(pjsip_transport *transport,
-			       pj_status_t reason);
-
-/* Callback on incoming data */
-static pj_bool_t on_data_read(pj_activesock_t *asock,
-			      void *data,
-			      pj_size_t size,
-			      pj_status_t status,
-			      pj_size_t *remainder);
-
 /* Callback when packet is sent */
-static pj_bool_t on_data_sent(pj_activesock_t *asock,
+static pj_bool_t on_data_sent(struct fake_tcp_transport *fake_tcp,
 			      pj_ioqueue_op_key_t *send_key,
 			      pj_ssize_t sent);
 
 /* Callback when connect completes */
-static pj_bool_t on_connect_complete(pj_activesock_t *asock,
+static pj_bool_t on_connect_complete(struct fake_tcp_transport *fake_tcp,
 				     pj_status_t status);
 
 /* FAKE_TCP keep-alive timer callback */
@@ -514,22 +539,15 @@ static void fake_tcp_connect_timer(pj_timer_heap_t *th, pj_timer_entry *e);
  */
 static pj_status_t fake_tcp_create( struct fake_tcp_listener *listener,
 			       pj_pool_t *pool,
-			       pj_sock_t sock, pj_bool_t is_server,
+                               pj_bool_t is_server,
 			       const pj_sockaddr *local,
 			       const pj_sockaddr *remote,
 			       struct fake_tcp_transport **p_fake_tcp)
 {
     struct fake_tcp_transport *fake_tcp;
-    pj_ioqueue_t *ioqueue;
-    pj_activesock_cfg asock_cfg;
-    pj_activesock_cb fake_tcp_callback;
     const pj_str_t ka_pkt = PJSIP_FAKE_TCP_KEEP_ALIVE_DATA;
     char print_addr[PJ_INET6_ADDRSTRLEN+10];
     pj_status_t status;
-
-
-    PJ_ASSERT_RETURN(sock != PJ_INVALID_SOCKET, PJ_EINVAL);
-
 
     if (pool == NULL) {
 	pool = pjsip_endpt_create_pool(listener->endpt, "fake_tcp",
@@ -542,7 +560,7 @@ static pj_status_t fake_tcp_create( struct fake_tcp_listener *listener,
      */
     fake_tcp = PJ_POOL_ZALLOC_T(pool, struct fake_tcp_transport);
     fake_tcp->is_server = is_server;
-    fake_tcp->sock = sock;
+
     /*fake_tcp->listener = listener;*/
     pj_list_init(&fake_tcp->delayed_list);
     fake_tcp->base.pool = pool;
@@ -583,22 +601,6 @@ static pj_status_t fake_tcp_create( struct fake_tcp_listener *listener,
     fake_tcp->base.send_msg = &fake_tcp_send_msg;
     fake_tcp->base.do_shutdown = &fake_tcp_shutdown;
     fake_tcp->base.destroy = &fake_tcp_destroy_transport;
-
-    /* Create active socket */
-    pj_activesock_cfg_default(&asock_cfg);
-    asock_cfg.async_cnt = 1;
-
-    pj_bzero(&fake_tcp_callback, sizeof(fake_tcp_callback));
-    fake_tcp_callback.on_data_read = &on_data_read;
-    fake_tcp_callback.on_data_sent = &on_data_sent;
-    fake_tcp_callback.on_connect_complete = &on_connect_complete;
-
-    ioqueue = pjsip_endpt_get_ioqueue(listener->endpt);
-    status = pj_activesock_create(pool, sock, pj_SOCK_STREAM(), &asock_cfg,
-				  ioqueue, &fake_tcp_callback, fake_tcp, &fake_tcp->asock);
-    if (status != PJ_SUCCESS) {
-	goto on_error;
-    }
 
     /* Register transport to transport manager */
     status = pjsip_transport_register(listener->tpmgr, &fake_tcp->base);
@@ -666,7 +668,7 @@ static void fake_tcp_flush_pending_tx(struct fake_tcp_transport *fake_tcp)
         status = PJ_SUCCESS;  // drop on floor!
 	if (status != PJ_EPENDING) {
             pj_lock_release(fake_tcp->base.lock);
-	    on_data_sent(fake_tcp->asock, op_key, size);
+	    on_data_sent(fake_tcp, op_key, size);
             pj_lock_acquire(fake_tcp->base.lock);
 	}
 
@@ -732,21 +734,12 @@ static pj_status_t fake_tcp_destroy(pjsip_transport *transport,
 
 	op_key = (pj_ioqueue_op_key_t*)pending_tx->tdata_op_key;
 
-	on_data_sent(fake_tcp->asock, op_key, -reason);  // The recipients of these callbacks had better still exist!
+	on_data_sent(fake_tcp, op_key, -reason);  // The recipients of these callbacks had better still exist!
     }
 
     if (fake_tcp->rdata.tp_info.pool) {
 	pj_pool_release(fake_tcp->rdata.tp_info.pool);
 	fake_tcp->rdata.tp_info.pool = NULL;
-    }
-
-    if (fake_tcp->asock) {
-	pj_activesock_close(fake_tcp->asock);
-	fake_tcp->asock = NULL;
-	fake_tcp->sock = PJ_INVALID_SOCKET;
-    } else if (fake_tcp->sock != PJ_INVALID_SOCKET) {
-	pj_sock_close(fake_tcp->sock);
-	fake_tcp->sock = PJ_INVALID_SOCKET;
     }
 
     if (fake_tcp->base.lock) {
@@ -793,48 +786,6 @@ static pj_status_t fake_tcp_destroy(pjsip_transport *transport,
  */
 static pj_status_t fake_tcp_start_read(struct fake_tcp_transport *fake_tcp)
 {
-    pj_pool_t *pool;
-    pj_ssize_t size;
-    pj_sockaddr *rem_addr;
-    void *readbuf[1];
-    pj_status_t status;
-
-    /* Init rdata */
-    pool = pjsip_endpt_create_pool(fake_tcp->base.endpt,
-				   "rtd%p",
-				   PJSIP_POOL_RDATA_LEN,
-				   PJSIP_POOL_RDATA_INC);
-    if (!pool) {
-	fake_tcp_perror(fake_tcp->base.obj_name, "Unable to create pool", PJ_ENOMEM);
-	return PJ_ENOMEM;
-    }
-
-    fake_tcp->rdata.tp_info.pool = pool;
-
-    fake_tcp->rdata.tp_info.transport = &fake_tcp->base;
-    fake_tcp->rdata.tp_info.tp_data = fake_tcp;
-    fake_tcp->rdata.tp_info.op_key.rdata = &fake_tcp->rdata;
-    pj_ioqueue_op_key_init(&fake_tcp->rdata.tp_info.op_key.op_key,
-			   sizeof(pj_ioqueue_op_key_t));
-
-    fake_tcp->rdata.pkt_info.src_addr = fake_tcp->base.key.rem_addr;
-    fake_tcp->rdata.pkt_info.src_addr_len = sizeof(fake_tcp->rdata.pkt_info.src_addr);
-    rem_addr = &fake_tcp->base.key.rem_addr;
-    pj_sockaddr_print(rem_addr, fake_tcp->rdata.pkt_info.src_name,
-                      sizeof(fake_tcp->rdata.pkt_info.src_name), 0);
-    fake_tcp->rdata.pkt_info.src_port = pj_sockaddr_get_port(rem_addr);
-
-    size = sizeof(fake_tcp->rdata.pkt_info.packet);
-    readbuf[0] = fake_tcp->rdata.pkt_info.packet;
-    status = pj_activesock_start_read2(fake_tcp->asock, fake_tcp->base.pool, size,
-				       readbuf, 0);
-    if (status != PJ_SUCCESS && status != PJ_EPENDING) {
-	PJ_LOG(4, (fake_tcp->base.obj_name,
-		   "pj_activesock_start_read() error, status=%d",
-		   status));
-	return status;
-    }
-
     return PJ_SUCCESS;
 }
 
@@ -851,7 +802,6 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
 {
     struct fake_tcp_listener *listener;
     struct fake_tcp_transport *fake_tcp;
-    pj_sock_t sock;
     pj_sockaddr local_addr;
     pj_status_t status;
 
@@ -868,45 +818,15 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
 
     listener = (struct fake_tcp_listener*)factory;
 
-    /* Create socket */
-    status = pj_sock_socket(rem_addr->addr.sa_family, pj_SOCK_STREAM(),
-                            0, &sock);
-    if (status != PJ_SUCCESS)
-	return status;
-
-    /* Apply QoS, if specified */
-    status = pj_sock_apply_qos2(sock, listener->qos_type,
-				&listener->qos_params,
-				2, listener->factory.obj_name,
-				"outgoing SIP FAKE_TCP socket");
-
-    /* Bind to listener's address and any port */
-    pj_bzero(&local_addr, sizeof(local_addr));
-    pj_sockaddr_cp(&local_addr, &listener->bound_addr);
-    pj_sockaddr_set_port(&local_addr, 0);
-
-    status = pj_sock_bind(sock, &local_addr,
-                          pj_sockaddr_get_len(&local_addr));
-    if (status != PJ_SUCCESS) {
-	pj_sock_close(sock);
-	return status;
-    }
-
-    /* Get the local port */
-    addr_len = sizeof(local_addr);
-    status = pj_sock_getsockname(sock, &local_addr, &addr_len);
-    if (status != PJ_SUCCESS) {
-	pj_sock_close(sock);
-	return status;
-    }
+    pj_sockaddr_cp(&local_addr, &listener->factory.local_addr);
 
     /* Initially set the address from the listener's address */
     if (!pj_sockaddr_has_addr(&local_addr)) {
-	pj_sockaddr_copy_addr(&local_addr, &listener->factory.local_addr);
+        pj_sockaddr_copy_addr(&local_addr, &listener->factory.local_addr);
     }
 
     /* Create the transport descriptor */
-    status = fake_tcp_create(listener, NULL, sock, PJ_FALSE, &local_addr,
+    status = fake_tcp_create(listener, NULL, PJ_FALSE, &local_addr,
 			rem_addr, &fake_tcp);
     if (status != PJ_SUCCESS)
 	return status;
@@ -928,40 +848,10 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
     status = PJ_EPENDING;
 
     if (status == PJ_SUCCESS) {
-	on_connect_complete(fake_tcp->asock, PJ_SUCCESS);
+	on_connect_complete(fake_tcp, PJ_SUCCESS);
     } else if (status != PJ_EPENDING) {
 	fake_tcp_destroy(&fake_tcp->base, status);
 	return status;
-    }
-
-    if (fake_tcp->has_pending_connect) {
-	/* Update (again) local address, just in case local address currently
-	 * set is different now that asynchronous connect() is started.
-	 */
-	addr_len = sizeof(local_addr);
-	if (pj_sock_getsockname(sock, &local_addr, &addr_len)==PJ_SUCCESS) {
-	    pj_sockaddr *tp_addr = &fake_tcp->base.local_addr;
-
-	    /* Some systems (like old Win32 perhaps) may not set local address
-	     * properly before socket is fully connected.
-	     */
-	    if (pj_sockaddr_cmp(tp_addr, &local_addr) &&
-		pj_sockaddr_get_port(&local_addr) != 0)
-	    {
-		pj_sockaddr_cp(tp_addr, &local_addr);
-		sockaddr_to_host_port(fake_tcp->base.pool, &fake_tcp->base.local_name,
-				      &local_addr);
-	    }
-	}
-
-	PJ_LOG(4,(fake_tcp->base.obj_name,
-		  "FAKE_TCP transport %.*s:%d is connecting to %.*s:%d...",
-		  (int)fake_tcp->base.local_name.host.slen,
-		  fake_tcp->base.local_name.host.ptr,
-		  fake_tcp->base.local_name.port,
-		  (int)fake_tcp->base.remote_name.host.slen,
-		  fake_tcp->base.remote_name.host.ptr,
-		  fake_tcp->base.remote_name.port));
     }
 
     /* Done */
@@ -972,103 +862,12 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
 
 
 /*
- * This callback is called by active socket when pending accept() operation
- * has completed.
- */
-static pj_bool_t on_accept_complete(pj_activesock_t *asock,
-				    pj_sock_t sock,
-				    const pj_sockaddr_t *src_addr,
-				    int src_addr_len)
-{
-    struct fake_tcp_listener *listener;
-    struct fake_tcp_transport *fake_tcp;
-    char addr[PJ_INET6_ADDRSTRLEN+10];
-    pjsip_tp_state_callback state_cb;
-    pj_sockaddr tmp_src_addr;
-    pj_status_t status;
-
-    PJ_UNUSED_ARG(src_addr_len);
-
-    listener = (struct fake_tcp_listener*) pj_activesock_get_user_data(asock);
-
-    PJ_ASSERT_RETURN(sock != PJ_INVALID_SOCKET, PJ_TRUE);
-
-    PJ_LOG(4,(listener->factory.obj_name,
-	      "FAKE_TCP listener %.*s:%d: got incoming FAKE_TCP connection "
-	      "from %s, sock=%d",
-	      (int)listener->factory.addr_name.host.slen,
-	      listener->factory.addr_name.host.ptr,
-	      listener->factory.addr_name.port,
-	      pj_sockaddr_print(src_addr, addr, sizeof(addr), 3),
-	      sock));
-
-    /* Apply QoS, if specified */
-    status = pj_sock_apply_qos2(sock, listener->qos_type,
-				&listener->qos_params,
-				2, listener->factory.obj_name,
-				"incoming SIP FAKE_TCP socket");
-
-    /* fake_tcp_create() expect pj_sockaddr, so copy src_addr to temporary var,
-     * just in case.
-     */
-    pj_bzero(&tmp_src_addr, sizeof(tmp_src_addr));
-    pj_sockaddr_cp(&tmp_src_addr, src_addr);
-
-    /*
-     * Incoming connection!
-     * Create FAKE_TCP transport for the new socket.
-     */
-    status = fake_tcp_create( listener, NULL, sock, PJ_TRUE,
-			 &listener->factory.local_addr,
-			 &tmp_src_addr, &fake_tcp);
-    if (status == PJ_SUCCESS) {
-
-        /* Add a reference to prevent the transport from being destroyed while
-         * we're operating on it.
-         */
-        pjsip_transport_add_ref(&fake_tcp->base);
-
-	status = fake_tcp_start_read(fake_tcp);
-	if (status != PJ_SUCCESS) {
-	    PJ_LOG(3,(fake_tcp->base.obj_name, "New transport cancelled"));
-            pjsip_transport_dec_ref(&fake_tcp->base);
-	    fake_tcp_destroy(&fake_tcp->base, status);
-	} else {
-	    /* Start keep-alive timer */
-	    if (PJSIP_FAKE_TCP_KEEP_ALIVE_INTERVAL) {
-		pj_time_val delay = {PJSIP_FAKE_TCP_KEEP_ALIVE_INTERVAL, 0};
-		pjsip_endpt_schedule_timer(listener->endpt,
-					   &fake_tcp->ka_timer,
-					   &delay);
-		fake_tcp->ka_timer.id = PJ_TRUE;
-		pj_gettimeofday(&fake_tcp->last_activity);
-	    }
-
-	    /* Notify application of transport state accepted */
-	    state_cb = pjsip_tpmgr_get_state_cb(fake_tcp->base.tpmgr);
-	    if (state_cb) {
-		pjsip_transport_state_info state_info;
-
-		pj_bzero(&state_info, sizeof(state_info));
-		(*state_cb)(&fake_tcp->base, PJSIP_TP_STATE_CONNECTED, &state_info);
-	    }
-            pjsip_transport_dec_ref(&fake_tcp->base);
-	}
-    }
-
-    return PJ_TRUE;
-}
-
-
-/*
  * Callback from ioqueue when packet is sent.
  */
-static pj_bool_t on_data_sent(pj_activesock_t *asock,
+static pj_bool_t on_data_sent(struct fake_tcp_transport *fake_tcp,
 			      pj_ioqueue_op_key_t *op_key,
 			      pj_ssize_t bytes_sent)
 {
-    struct fake_tcp_transport *fake_tcp = (struct fake_tcp_transport*)
-    				pj_activesock_get_user_data(asock);
     pjsip_tx_data_op_key *tdata_op_key = (pjsip_tx_data_op_key*)op_key;
 
     /* Note that op_key may be the op_key from keep-alive, thus
@@ -1234,93 +1033,14 @@ static pj_status_t fake_tcp_shutdown(pjsip_transport *transport)
 
 
 /*
- * Callback from ioqueue that an incoming data is received from the socket.
- */
-static pj_bool_t on_data_read(pj_activesock_t *asock,
-			      void *data,
-			      pj_size_t size,
-			      pj_status_t status,
-			      pj_size_t *remainder)
-{
-    enum { MAX_IMMEDIATE_PACKET = 10 };
-    struct fake_tcp_transport *fake_tcp;
-    pjsip_rx_data *rdata;
-
-    PJ_UNUSED_ARG(data);
-
-    fake_tcp = (struct fake_tcp_transport*) pj_activesock_get_user_data(asock);
-    rdata = &fake_tcp->rdata;
-
-    /* Don't do anything if transport is closing. */
-    if (fake_tcp->is_closing) {
-	fake_tcp->is_closing++;
-	return PJ_FALSE;
-    }
-
-    /* Houston, we have packet! Report the packet to transport manager
-     * to be parsed.
-     */
-    if (status == PJ_SUCCESS) {
-	pj_size_t size_eaten;
-
-	/* Mark this as an activity */
-	pj_gettimeofday(&fake_tcp->last_activity);
-
-	pj_assert((void*)rdata->pkt_info.packet == data);
-
-	/* Init pkt_info part. */
-	rdata->pkt_info.len = size;
-	rdata->pkt_info.zero = 0;
-	pj_gettimeofday(&rdata->pkt_info.timestamp);
-
-	/* Report to transport manager.
-	 * The transport manager will tell us how many bytes of the packet
-	 * have been processed (as valid SIP message).
-	 */
-	size_eaten =
-	    pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
-				       rdata);
-
-	pj_assert(size_eaten <= (pj_size_t)rdata->pkt_info.len);
-
-	/* Move unprocessed data to the front of the buffer */
-	*remainder = size - size_eaten;
-	if (*remainder > 0 && *remainder != size) {
-	    pj_memmove(rdata->pkt_info.packet,
-		       rdata->pkt_info.packet + size_eaten,
-		       *remainder);
-	}
-
-    } else {
-
-	/* Transport is closed */
-	PJ_LOG(4,(fake_tcp->base.obj_name, "FAKE_TCP connection closed"));
-
-	fake_tcp_init_shutdown(fake_tcp, status);
-
-	return PJ_FALSE;
-
-    }
-
-    /* Reset pool. */
-    pj_pool_reset(rdata->tp_info.pool);
-
-    return PJ_TRUE;
-}
-
-
-/*
  * Callback from ioqueue when asynchronous connect() operation completes.
  */
-static pj_bool_t on_connect_complete(pj_activesock_t *asock,
+static pj_bool_t on_connect_complete(struct fake_tcp_transport *fake_tcp,
 				     pj_status_t status)
 {
-    struct fake_tcp_transport *fake_tcp;
     pj_sockaddr addr;
     int addrlen;
     pjsip_tp_state_callback state_cb;
-
-    fake_tcp = (struct fake_tcp_transport*) pj_activesock_get_user_data(asock);
 
     /* Mark that pending connect() operation has completed. */
     fake_tcp->has_pending_connect = PJ_FALSE;
@@ -1340,7 +1060,7 @@ static pj_bool_t on_connect_complete(pj_activesock_t *asock,
 
 	    op_key = (pj_ioqueue_op_key_t*)pending_tx->tdata_op_key;
 
-	    on_data_sent(fake_tcp->asock, op_key, -status);
+	    on_data_sent(fake_tcp, op_key, -status);
 	}
 
 	fake_tcp_init_shutdown(fake_tcp, status);
@@ -1468,7 +1188,8 @@ static void fake_tcp_connect_timer(pj_timer_heap_t *th, pj_timer_entry *e)
 
     PJ_LOG(5,(fake_tcp->base.obj_name, "FAKE_TCP connected"));
 
-    on_connect_complete(fake_tcp->asock, PJ_SUCCESS);
+    on_connect_complete(fake_tcp, PJ_SUCCESS);
 
     fake_tcp->connect_timer.id = PJ_FALSE;
 }
+
