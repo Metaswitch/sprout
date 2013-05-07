@@ -20,9 +20,6 @@
  * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -1415,15 +1412,18 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   return msg;
 }
 
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFW)
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFW)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp("TCP", "1.2.3.4", 5062);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        49152);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken);
+  doRegisterEdge(tp, token, baretoken);
 
   // Do two invites - the first time, the token is created; the second
   // time, we reuse the existing token.
@@ -1443,7 +1443,7 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFW)
     r2.matches(tdata->msg);
 
     // Goes to the right place (straight to the registered client).
-    tp.expect_target(tdata);
+    tp->expect_target(tdata);
 
     // Path not added.
     string actual = get_headers(tdata->msg, "Path");
@@ -1456,7 +1456,7 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFW)
     // Route header value appears in Record-Route
     actual = get_headers(tdata->msg, "Record-Route");
     EXPECT_THAT(actual, HasSubstr(baretoken));
-    EXPECT_THAT(actual, HasSubstr(":" + to_string<int>(tp.local_port(), std::dec)));
+    EXPECT_THAT(actual, HasSubstr(":" + to_string<int>(tp->local_port(), std::dec)));
     EXPECT_THAT(actual, HasSubstr(";lr"));
     EXPECT_THAT(actual, Not(HasSubstr(";ob")));
 
@@ -1482,17 +1482,22 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFW)
     r4.matches(tdata->msg);
 
     // Goes to the right place (straight to the registered client).
-    tp.expect_target(tdata);
+    tp->expect_target(tdata);
     free_txdata();
   }
+
+  delete tp;
 }
 
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFWUDP)
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWUDP)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow* tp = new TransportFlow("UDP", "1.2.3.4", 5062);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::UDP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        5060);
   string token;
   string baretoken;
   doRegisterEdge(tp, token, baretoken);
@@ -1560,12 +1565,15 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeRegisterFWUDP)
   delete tp;
 }
 
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeCorruptToken)
+TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow* tp = new TransportFlow("TCP", "1.2.3.4", 5062);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        49152);
   string token;
   string baretoken;
   doRegisterEdge(tp, token, baretoken);
@@ -1649,12 +1657,18 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
   string baretoken;
 
   // Client 1: Declares outbound support, not behind NAT. Should get path.
-  tp = new TransportFlow("TCP", "10.83.18.38", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                         TransportFlow::Trust::UNTRUSTED,
+                         "10.83.18.38",
+                         49152);
   doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
-  tp = new TransportFlow("TCP", "10.83.18.39", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                         TransportFlow::Trust::UNTRUSTED,
+                         "10.83.18.39",
+                         49152);
   doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
@@ -1665,7 +1679,10 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
   //delete tp;
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
-  tp = new TransportFlow("TCP", "10.83.18.41", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                         TransportFlow::Trust::UNTRUSTED,
+                         "10.83.18.41",
+                         49152);
   doRegisterEdge(tp, token, baretoken, true, "path", true, "10.22.3.5:8888");
   delete tp;
 
@@ -1676,17 +1693,20 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
   //delete tp;
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
-  tp = new TransportFlow("TCP", "10.83.18.41", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                         TransportFlow::Trust::UNTRUSTED,
+                         "10.83.18.41",
+                         49152);
   doRegisterEdge(tp, token, baretoken, true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeFirstHop)
+TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow* tp = new TransportFlow("TCP", "10.83.18.38", 36530);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(tp, token, baretoken, true);
@@ -1796,12 +1816,12 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestEdgeFirstHop)
 }
 
 // Test flows out of Bono (P-CSCF), first hop, in particular for header stripping.
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestMainlineHeadersBonoFirstOut)
+TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp("TCP", "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, true);
@@ -1821,7 +1841,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp("TCP", "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, true);
@@ -1836,12 +1856,12 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
 }
 
 // Test flows out of Bono (P-CSCF), not first hop, in particular for header stripping.
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestMainlineHeadersBonoProxyOut)
+TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp("TCP", "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, false);
@@ -1858,12 +1878,12 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestMainlineHeadersBonoProxyOut)
 }
 
 // Test flows into Bono (P-CSCF), not first hop, in particular for header stripping.
-TEST_F(StatefulEdgeProxyTest, DISABLED_TestMainlineHeadersBonoProxyIn)
+TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
 {
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp("TCP", "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, false);
@@ -1874,9 +1894,8 @@ TEST_F(StatefulEdgeProxyTest, DISABLED_TestMainlineHeadersBonoProxyIn)
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
   // Strip PANI in outbound direction - leaving the trust zone.
-  // @@@DISABLED Currently can't detect this case, so we strip all. Fix when trusted zone added.
   // This is originating; mark it so.
-  doTestHeaders(&tp, false, _tp_default, false, msg, false, false /* @@@ */, false, true);
+  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true);
 }
 
 
@@ -1893,7 +1912,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   msg._via = "10.7.7.10:36530;transport=tcp";
 
   // Get a connection from the trusted host.
-  TransportFlow tp("TCP", "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
 
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
@@ -1902,7 +1921,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
 }
 
 // Test flows out of IBCF, in particular for header stripping.
-TEST_F(StatefulTrunkProxyTest, DISABLED_TestMainlineHeadersIbcfTrustedOut)
+TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
 {
   SCOPED_TRACE("");
 
@@ -1915,7 +1934,7 @@ TEST_F(StatefulTrunkProxyTest, DISABLED_TestMainlineHeadersIbcfTrustedOut)
   msg._via = "10.99.88.11:12345";
 
   // Get a connection from the trusted host.
-  TransportFlow tp("TCP", "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
@@ -1940,7 +1959,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   string actual;
 
   // Get a connection from the trusted host.
-  tp = new TransportFlow("TCP", "10.7.7.10", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -1986,7 +2005,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted2)
   string actual;
 
   // Get a connection from the other trusted host.
-  tp = new TransportFlow("TCP", "10.7.7.11", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.11", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2019,7 +2038,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
   string actual;
 
   // Get a connection from some other random (untrusted) host.
-  tp = new TransportFlow("TCP", "10.83.18.39", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.39", 36530);
 
   // Send the same INVITE from the random host.
   msg._unique++;
@@ -2063,8 +2082,8 @@ TEST_F(IscTest, SimpleMainline)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile>");
 
-  TransportFlow tpBono("TCP", "10.99.88.11", 12345);
-  TransportFlow tpAS("UDP", "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
