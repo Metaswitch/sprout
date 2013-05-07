@@ -332,6 +332,11 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
 					    &listener->factory);
     if (status != PJ_SUCCESS)
     {
+      /* Transport manager cannot handle multiple factories for the same
+       * transport type.  This isn't an issue for multiple TCP listeners on
+       * the same IP address as the source port on outgoing connections is
+       * ephemeral, so just ignore the error.
+       */
       status = PJ_SUCCESS;
     }
 
