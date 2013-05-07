@@ -20,8 +20,6 @@
  * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
  */
 
-///
-///----------------------------------------------------------------------------
 
 #include <string>
 #include <stdexcept>
@@ -83,8 +81,10 @@ SipTest::~SipTest()
   for_each(_out.begin(), _out.end(), pjsip_tx_data_dec_ref);
 }
 
-pjsip_tpfactory* SipTest::_tpfactory_tcp;
-pjsip_transport* SipTest::_tp_udp;
+pjsip_tpfactory* SipTest::_tcp_tpfactory_trusted;
+pjsip_transport* SipTest::_udp_tp_trusted;
+pjsip_tpfactory* SipTest::_tcp_tpfactory_untrusted;
+pjsip_transport* SipTest::_udp_tp_untrusted;
 SipTest::TransportFlow* SipTest::_tp_default;
 SipTest* SipTest::_current_instance;
 
@@ -126,6 +126,43 @@ void SipTest::TearDownTestCase()
   term_pjsip();
 }
 
+void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory)
+{
+  pj_status_t status;
+  pj_sockaddr_in addr;
+  pjsip_host_port published_name;
+
+  addr.sin_family = pj_AF_INET();
+  addr.sin_addr.s_addr = 0;
+  addr.sin_port = pj_htons((pj_uint16_t)port);
+
+  published_name.host = stack_data.local_host;
+  published_name.port = port;
+
+  status = pjsip_fake_udp_transport_start(stack_data.endpt,
+                                          &addr,
+                                          &published_name,
+                                          50,
+                                          udp_tp);
+  ASSERT_EQ(PJ_SUCCESS, status);
+
+  //pjsip_fake_tcp_transport_cfg cfg;
+  //pjsip_fake_tcp_transport_cfg_default(&cfg, pj_AF_INET());
+  //pj_sockaddr_cp(&cfg.bind_addr, &addr);
+  //cfg.addr_name.host = stack_data.local_host;
+  //cfg.addr_name.port = port;
+  //status = pjsip_fake_tcp_transport_start3(stack_data.endpt,
+  //                                         &cfg,
+  //                                         tcp_factory);
+
+  status = pjsip_fake_tcp_transport_start2(stack_data.endpt,
+                                           &addr,
+                                           &published_name,
+                                           50,
+                                           tcp_factory);
+  ASSERT_EQ(PJ_SUCCESS, status);
+}
+
 void SipTest::init_pjsip()
 {
   // Sort out logging:
@@ -151,19 +188,20 @@ void SipTest::init_pjsip()
   status = pjsip_tsx_layer_init_module(stack_data.endpt);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  // Init fake UDP transport.
-  status = pjsip_fake_udp_transport_start(stack_data.endpt, NULL, NULL, 10, &_tp_udp);
-  ASSERT_EQ(PJ_SUCCESS, status);
+  // Initialise the trusted port.
+  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
 
-  // Init fake TCP transport factory.
-  pjsip_fake_tcp_transport_cfg fake_cfg;
-  pjsip_fake_tcp_transport_cfg_default(&fake_cfg, pj_AF_INET());
-  status = pjsip_fake_tcp_transport_start3(stack_data.endpt, &fake_cfg, &_tpfactory_tcp);
-  ASSERT_EQ(PJ_SUCCESS, status);
-  stack_data.tcp_factory = _tpfactory_tcp;
+  // Initialise the untrusted port.
+  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
+
+  // Set the TCP factory used by Bono to create connections to Sprout.
+  stack_data.tcp_factory = _tcp_tpfactory_trusted;
 
   // Get a default TCP transport flow to use for injection.  Give it a dummy address.
-  _tp_default = new TransportFlow("TCP", "0.0.0.0", 5060);
+  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
+                                  TransportFlow::Trust::TRUSTED,
+                                  "0.0.0.0",
+                                  5060);
 }
 
 void SipTest::term_pjsip()
@@ -175,24 +213,30 @@ void SipTest::term_pjsip()
   pj_shutdown();
 }
 
-SipTest::TransportFlow::TransportFlow(const char* type_name, const char* addr, int port)
+SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char* addr, int port)
 {
   pj_str_t addr_str = pj_str(const_cast<char*>(addr));
   pj_sockaddr_init(PJ_AF_INET, &_rem_addr, &addr_str, port);
 
-  if (!strcmp(type_name, "UDP"))
+  if (protocol == UDP)
   {
-    _transport = _tp_udp;
+    _transport = (trust == TRUSTED) ? _udp_tp_trusted : _udp_tp_untrusted;
   }
   else
   {
     pj_status_t status;
-    status = _tpfactory_tcp->create_transport(_tpfactory_tcp,
-                                              pjsip_endpt_get_tpmgr(stack_data.endpt),
-                                              stack_data.endpt,
-                                              &_rem_addr,
-                                              sizeof(pj_sockaddr_in),
-                                              &_transport);
+    pjsip_tpfactory *factory = (trust == TRUSTED) ? _tcp_tpfactory_trusted : _tcp_tpfactory_untrusted;
+    status = pjsip_fake_tcp_accept(factory,
+                                   (pj_sockaddr_t*)&_rem_addr,
+                                   sizeof(pj_sockaddr_in),
+                                   &_transport);
+//    status = factory->create_transport(factory,
+//                                       pjsip_endpt_get_tpmgr(stack_data.endpt),
+//                                       stack_data.endpt,
+//                                       &_rem_addr,
+//                                       sizeof(pj_sockaddr_in),
+//                                       &_transport);
+
     EXPECT_EQ(PJ_SUCCESS, status);
   }
 }

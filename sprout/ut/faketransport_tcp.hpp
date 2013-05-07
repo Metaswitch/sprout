@@ -1,7 +1,9 @@
 /**
- * @file sip_transport_fake.h
+ * @file faketransport_tcp.hpp
  *
  * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
+ * Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +21,17 @@
  * The author can be reached by email at clearwater@metaswitch.com or by post at
  * Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
  */
-
 #ifndef __PJSIP_TRANSPORT_FAKE_TCP_H__
 #define __PJSIP_TRANSPORT_FAKE_TCP_H__
 
+/**
+ * @file sip_transport_fake.h
+ * @brief SIP FAKE Transport.
+ */
+
 #include <pjsip/sip_transport.h>
 #include <pj/sock_qos.h>
+
 
 PJ_BEGIN_DECL
 
@@ -36,6 +43,40 @@ PJ_BEGIN_DECL
  * The functions below are used to create FAKE_TCP transport and register
  * the transport to the framework.
  */
+
+/**
+ * A newer variant of #pjsip_fake_tcp_transport_start(), which allows specifying
+ * the published/public address of the TCP transport.
+ *
+ * @param endpt		The SIP endpoint.
+ * @param local		Optional local address to bind, or specify the
+ *			address to bind the server socket to. Both IP
+ *			interface address and port fields are optional.
+ *			If IP interface address is not specified, socket
+ *			will be bound to PJ_INADDR_ANY. If port is not
+ *			specified, socket will be bound to any port
+ *			selected by the operating system.
+ * @param a_name	Optional published address, which is the address to be
+ *			advertised as the address of this SIP transport.
+ *			If this argument is NULL, then the bound address
+ *			will be used as the published address.
+ * @param async_cnt	Number of simultaneous asynchronous accept()
+ *			operations to be supported. It is recommended that
+ *			the number here corresponds to the number of
+ *			processors in the system (or the number of SIP
+ *			worker threads).
+ * @param p_factory	Optional pointer to receive the instance of the
+ *			SIP TCP transport factory just created.
+ *
+ * @return		PJ_SUCCESS when the transport has been successfully
+ *			started and registered to transport manager, or
+ *			the appropriate error code.
+ */
+PJ_DECL(pj_status_t) pjsip_fake_tcp_transport_start2(pjsip_endpoint *endpt,
+                                                     const pj_sockaddr_in *local,
+                                                     const pjsip_host_port *a_name,
+                                                     unsigned async_cnt,
+                                                     pjsip_tpfactory **p_factory);
 
 /**
  * Settings to be specified when creating the FAKE_TCP transport. Application
@@ -122,6 +163,21 @@ PJ_DECL(pj_status_t) pjsip_fake_tcp_transport_start3(
 					const pjsip_fake_tcp_transport_cfg *cfg,
 					pjsip_tpfactory **p_factory
 					);
+
+
+/**
+ * Simulates an incoming TCP connection.
+ *
+ * @param factory       The factory used to create the connection.
+ * @param src_addr      The source IP address of the connection.
+ * @param src_addr_len  The length of the source IP address. (Not used).
+ * @param p_transport   Receives the transport instance created.
+ *
+ */
+PJ_DECL(pj_status_t) pjsip_fake_tcp_accept(pjsip_tpfactory* factory,
+                                           const pj_sockaddr_t* src_addr,
+                                           int src_addr_len,
+                                           pjsip_transport** p_transport);
 
 
 /**
