@@ -502,7 +502,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // node/home domain.
 
     // Do incoming (originating) half.
-    AsChain::Disposition disposition = uas_data->handle_originating(rdata, tdata, &target);
+    disposition = uas_data->handle_originating(rdata, tdata, &target);
 
     if (disposition == AsChain::Disposition::Next)
     {
