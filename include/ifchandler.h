@@ -51,13 +51,14 @@ extern "C" {
 #include "rapidxml/rapidxml.hpp"
 
 #include "hssconnection.h"
+#include "regdata.h"
 #include "sessioncase.h"
 
 /// iFC handler.
 class IfcHandler
 {
 public:
-  IfcHandler(HSSConnection* hss);
+  IfcHandler(HSSConnection* hss, RegData::Store* store);
   ~IfcHandler();
 
   void lookup_ifcs(const SessionCase& session_case,
@@ -67,10 +68,16 @@ public:
                    std::vector<std::string>& application_servers);
 
 private:
+  static bool spt_matches(const SessionCase& session_case,
+                          bool is_registered,
+                          pjsip_msg *msg,
+                          rapidxml::xml_node<>* spt);
   static bool filter_matches(const SessionCase& session_case,
+                             bool is_registered,
                              pjsip_msg* msg,
                              rapidxml::xml_node<>* ifc);
   static void calculate_application_servers(const SessionCase& session_case,
+                                            bool is_registered,
                                             pjsip_msg* msg,
                                             std::string& ifc_xml,
                                             std::vector<std::string>& as_list);
@@ -78,6 +85,7 @@ private:
   static std::string user_from_uri(pjsip_uri *uri);
 
   HSSConnection* _hss;
+  RegData::Store* _store;
 };
 
 
