@@ -2100,7 +2100,7 @@ TEST_F(IscTest, SimpleMainline)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
-  // INVITE from anywhere to anywhere.
+  // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";

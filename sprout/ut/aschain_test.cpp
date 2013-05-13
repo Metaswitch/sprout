@@ -43,8 +43,9 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "fakelogger.hpp"
+#include "pjutils.h"
+#include "stack.h"
 
-#include "ifchandler.h"
 #include "aschain.h"
 
 using namespace std;
@@ -74,8 +75,46 @@ public:
   }
 };
 
-TEST_F(AsChainTest, ServedUser)
+TEST_F(AsChainTest, Basics)
 {
+  std::vector<std::string> as_list;
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  as_list.push_back("sip:pancommunicon.cw-ngv.com");
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  as_list.push_back("sip:mmtel.homedomain");
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  EXPECT_EQ("orig", as_chain.to_string());
+  EXPECT_EQ(SessionCase::Originating, as_chain.session_case());
+  EXPECT_EQ("sip:5755550011@homedomain", as_chain.served_user());
+
+  EXPECT_TRUE(as_chain.complete());
+  EXPECT_FALSE(as_chain2.complete());
+  EXPECT_FALSE(as_chain3.complete());
+
+  CallServices calls(NULL);  // Not valid, but good enough for this UT.
+
+  EXPECT_FALSE(as_chain.is_mmtel(&calls));
+  EXPECT_FALSE(as_chain2.is_mmtel(&calls));
+  EXPECT_TRUE(as_chain3.is_mmtel(&calls));
+}
+
+TEST_F(AsChainTest, AsInvocation)
+{
+  std::vector<std::string> as_list;
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  as_list.push_back("sip:pancommunicon.cw-ngv.com");
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  as_list.clear();
+  as_list.push_back("::invalid:pancommunicon.cw-ngv.com");
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+
+  // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
+
   string str("INVITE sip:5755550099@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
              "Max-Forwards: 69\n"
@@ -84,14 +123,56 @@ TEST_F(AsChainTest, ServedUser)
              "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 4 INVITE\n"
-             "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+             "Route: <sip:nextnode;transport=TCP;lr;orig>\n"
              "Content-Length: 0\n\n");
   pjsip_rx_data* rdata = build_rxdata(str);
   parse_rxdata(rdata);
 
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg));
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata->msg_info.msg));
-  EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg));
+  pjsip_tx_data* tdata = NULL;
+  pj_status_t status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
+  ASSERT_EQ(PJ_SUCCESS, status);
+
+  target *target;
+  AsChain::Disposition disposition;
+
+  // Nothing to invoke. Just proceed.
+  target = NULL;
+  disposition = as_chain.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  EXPECT_EQ(AsChain::Disposition::Next, disposition);
+  EXPECT_TRUE(target == NULL);
+  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
+
+  // Invoke external AS on originating side.
+  target = NULL;
+  disposition = as_chain2.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  EXPECT_EQ(AsChain::Disposition::Skip, disposition);
+  ASSERT_TRUE(target != NULL);
+  EXPECT_FALSE(target->from_store);
+  EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
+  ASSERT_EQ(2, target->paths.size());
+  std::list<pjsip_uri*>::iterator it = target->paths.begin();
+  EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
+  ++it;
+  EXPECT_EQ("sip:odi_unity@testnode:5058;lr;orig", str_uri(*it));
+  EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
+            get_headers(tdata->msg, "Route"));
+
+  // Invalid AS URI. This should probably return an error, but for now the AS is ignored.
+  target = NULL;
+  disposition = as_chain3.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  EXPECT_EQ(AsChain::Disposition::Next, disposition);
+  EXPECT_TRUE(target == NULL);
+  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
+
+  // MMTEL cases can't easily be tested here, because they construct
+  // real CallServices objects.
 }
 
+// ++@@@ aschain.to_string
+// @@@ initial request: has MMTEL, orig and term
+// ++@@@ has ASs but URI is invalid.
+// ++@@@ no ASs configured.- next
+// ++@@@ is_mmtel
+// ++@@@ get served user
 

@@ -16,9 +16,5 @@ dnsresolver.cpp
 flowtable.cpp
 zmq_lvc.cpp
 
-# @@@KSW to fix as part of ISC work.
-aschain.cpp
-ifchandler.cpp
-
 # Not intended to be covered, as just stub code.
 sas.cpp
