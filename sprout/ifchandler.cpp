@@ -195,6 +195,7 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
     bool reg = parse_integer(profile_part_indicator, "ProfilePartIndicator", 0, 1) == 0;
     if (reg != is_registered)
     {
+      LOG_DEBUG("iFC ProfilePartIndicator %s doesn't match", reg ? "reg" : "unreg");
       return false;
     }
   }
@@ -202,6 +203,7 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
   xml_node<>* trigger = ifc->first_node("TriggerPoint");
   if (!trigger)
   {
+    LOG_DEBUG("iFC has no trigger point - no match");
     return true;
   }
 
@@ -220,11 +222,12 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
     bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
     bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
 
-    for (xml_node<>* group_node = trigger->first_node("Group");
+    for (xml_node<>* group_node = spt->first_node("Group");
          group_node;
          group_node = group_node->next_sibling("Group"))
     {
       int32_t group = parse_integer(group_node, "Group ID", 0, std::numeric_limits<int32_t>::max());
+      LOG_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
       if (groups.find(group) == groups.end())
       {
         groups[group] = val;
@@ -242,9 +245,11 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
        it != groups.end();
        ++it)
   {
+    LOG_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
     ret = cnf ? (ret && it->second) : (ret || it->second);
   }
 
+  LOG_DEBUG("iFC %s", ret ? "matches" : "does not match");
   return ret;
 }
 

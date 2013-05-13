@@ -2080,6 +2080,7 @@ TEST_F(IscTest, SimpleMainline)
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
                                 "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
                                 "    <SPT>\n"
