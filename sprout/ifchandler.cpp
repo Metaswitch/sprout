@@ -65,7 +65,7 @@ public:
   }
 
   virtual const char* what() const throw()
-  {
+  { // LCOV_EXCL_LINE work around unexplained gcov behaviour
     return _what.c_str();
   }
 
@@ -143,7 +143,7 @@ bool IfcHandler::spt_matches(const SessionCase& session_case,  //< The session c
       ret = (session_case == SessionCase::Originating) && is_registered;
     }
     break;
-    case 1: // TERMINATING_REGISETERED
+    case 1: // TERMINATING_REGISTERED
     {
       ret = (session_case == SessionCase::Terminating) && is_registered;
     }
@@ -164,11 +164,13 @@ bool IfcHandler::spt_matches(const SessionCase& session_case,  //< The session c
     }
     break;
     default:
+      // LCOV_EXCL_START Unreachable
     {
       LOG_WARNING("Impossible case %d", direction);
       ret = false;
     }
     break;
+      // LCOV_EXCL_STOP
     }
   }
   else
@@ -203,7 +205,7 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
   xml_node<>* trigger = ifc->first_node("TriggerPoint");
   if (!trigger)
   {
-    LOG_DEBUG("iFC has no trigger point - no match");
+    LOG_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
     return true;
   }
 
