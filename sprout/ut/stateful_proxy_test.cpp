@@ -211,7 +211,7 @@ public:
     if (hss)
     {
       _hss_connection = new FakeHSSConnection();
-      _ifc_handler = new IfcHandler(_hss_connection);
+      _ifc_handler = new IfcHandler(_hss_connection, _store);
     }
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
