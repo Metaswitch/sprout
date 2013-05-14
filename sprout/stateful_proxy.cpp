@@ -3002,7 +3002,7 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
                          SAS::TrailId trail)
 {
   std::string served_user;
-  std::vector<std::string> application_servers;
+  std::vector<AsInvocation*> application_servers;
   ifc_handler->lookup_ifcs(session_case,
                            msg,
                            trail,

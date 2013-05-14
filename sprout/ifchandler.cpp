@@ -255,6 +255,28 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
   return ret;
 }
 
+// Gets the first child node of "node" with name "name". Returns an empty string if there
+// is no such node, otherwise returns its value (which is the empty string if
+// it has no value).
+std::string get_first_node_value(xml_node<>* node, std::string name) {
+  xml_node<>* first_node = node->first_node(name.c_str());
+  if (first_node == NULL)
+  {
+    return "";
+  };
+  return first_node->value();
+}
+
+bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
+  xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
+   if (child_node == NULL)
+   {
+     return false;
+   } else {
+     return true;
+   };
+}
+
 
 /// Determines the list of application servers to apply this message to, given
 // the supplied incoming filter criteria.
@@ -262,7 +284,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
                                                bool is_registered,
                                                pjsip_msg *msg,
                                                std::string& ifc_xml,
-                                               std::vector<std::string>& as_list)
+                                               std::vector<AsInvocation*>& as_list)
 {
   xml_document<> ifc_doc;
   try
@@ -284,7 +306,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
 
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
-  std::multimap<int32_t, std::string> as_map;
+  std::multimap<int32_t, AsInvocation*> as_map;
 
   // Spin through the list of filter criteria, checking whether each matches
   // and adding the application server to the list if so.
@@ -300,12 +322,26 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
         xml_node<>* as = ifc->first_node("ApplicationServer");
         if (as)
         {
+          AsInvocation* as_invocation = new AsInvocation;
           int32_t priority = (int32_t)parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max());
-          xml_node<>* server_name = as->first_node("ServerName");
-          if (server_name)
+          as_invocation->server_name = get_first_node_value(as, "ServerName");
+          as_invocation->default_handling = get_first_node_value(as, "DefaultHandling");
+          as_invocation->service_info = get_first_node_value(as, "ServiceInfo");
+
+          xml_node<>* as_ext = as->first_node("Extension");
+          if (as_ext)
           {
-            LOG_DEBUG("Found (triggered) server %s at priority %d", server_name->value(), (int)priority);
-            as_map.insert(std::pair<int32_t, std::string>(priority, server_name->value()));
+            as_invocation->include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
+            as_invocation->include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
+          } else {
+            as_invocation->include_register_request = false;
+            as_invocation->include_register_response = false;
+          };
+
+          if (!as_invocation->server_name.empty())
+          {
+            LOG_DEBUG("Found (triggered) server %s at priority %d", as_invocation->server_name.c_str(), (int)priority);
+            as_map.insert(std::pair<int32_t, AsInvocation*>(priority, as_invocation));
           }
         }
       }
@@ -318,7 +354,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
     }
   }
 
-  for (std::multimap<int32_t, std::string>::iterator it = as_map.begin();
+  for (std::multimap<int32_t, AsInvocation*>::iterator it = as_map.begin();
        it != as_map.end();
        ++it)
   {
@@ -334,7 +370,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
                              pjsip_msg *msg,                   //< The message starting the dialog
                              SAS::TrailId trail,               //< The SAS trail ID
                              std::string& served_user, //< OUT the served user
-                             std::vector<std::string>& application_servers)  //< OUT the AS list
+                             std::vector<AsInvocation*>& application_servers)  //< OUT the AS list
 {
   served_user = served_user_from_msg(session_case, msg);
 
