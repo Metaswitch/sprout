@@ -360,6 +360,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
         RegData::AoR* aor_data = _store->get_aor_data(aor);
         is_registered = (aor_data != NULL) &&
                         (aor_data->bindings().size() != 0u);
+        delete aor_data; aor_data = NULL;
         LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
       }
 
