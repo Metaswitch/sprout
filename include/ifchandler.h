@@ -54,6 +54,15 @@ extern "C" {
 #include "regdata.h"
 #include "sessioncase.h"
 
+struct AsInvocation
+{
+    std::string server_name;
+    std::string default_handling;
+    std::string service_info;
+    bool include_register_request;
+    bool include_register_response;
+};
+
 /// iFC handler.
 class IfcHandler
 {
@@ -65,7 +74,7 @@ public:
                    pjsip_msg* msg,
                    SAS::TrailId trail,
                    std::string& served_user,
-                   std::vector<std::string>& application_servers);
+                   std::vector<AsInvocation*>& application_servers);
 
 private:
   static bool spt_matches(const SessionCase& session_case,
@@ -80,12 +89,10 @@ private:
                                             bool is_registered,
                                             pjsip_msg* msg,
                                             std::string& ifc_xml,
-                                            std::vector<std::string>& as_list);
+                                            std::vector<AsInvocation*>& as_list);
   static std::string served_user_from_msg(const SessionCase& session_case, pjsip_msg *msg);
   static std::string user_from_uri(pjsip_uri *uri);
 
   HSSConnection* _hss;
   RegData::Store* _store;
 };
-
-
