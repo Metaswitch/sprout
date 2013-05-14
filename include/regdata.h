@@ -154,7 +154,8 @@ namespace RegData
 
     /// Get the data for a particular address of record (registered SIP URI,
     /// in format "sip:2125551212@example.com"), creating creating it if
-    /// necessary.  May return NULL in case of error.
+    /// necessary.  May return NULL in case of error.  Result is owned
+    /// by caller and must be freed with delete.
     virtual AoR* get_aor_data(const std::string& aor_id) = 0;
 
     /// Update the data for a particular address of record.  Writes the data

@@ -83,6 +83,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 {
   if (call_services && is_mmtel(call_services))
   {
+    // LCOV_EXCL_START No test coverage for MMTEL AS yet.
     if (_session_case.is_originating())
     {
       LOG_DEBUG("Invoke originating MMTEL services");
@@ -101,6 +102,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
       bool proceed = terminating->on_initial_invite(tdata);
       return proceed ? AsChain::Disposition::Next : AsChain::Disposition::Stop;
     }
+    // LCOV_EXCL_STOP
   }
   else if (!_application_servers.empty())
   {

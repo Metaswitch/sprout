@@ -15,7 +15,7 @@ included as git submodules, but the rest must be installed separately.
 On Ubuntu 12.04,
 
 1. add the Clearwater repository to provide the ZeroMQ library
-    
+
     This step is necessary because Sprout and Bono rely on a newer version than Ubuntu provide.
 
         echo "deb http://repo.cw-ngv.com/latest binary/" | sudo tee /etc/apt/sources.list.d/clearwater.list
@@ -113,7 +113,8 @@ The sprout makefile offers the following additional options and targets.
 *   `make run_test` just runs the tests without doing code coverage or memory
     leak checks.
 *   Passing `JUSTTEST=testname` just runs the specified test case.
-*   Passing `NOISY=T` enables verbose logging during the tests.
+*   Passing `NOISY=T` enables verbose logging during the tests; you can add
+    a logging level (e.g., `NOISY=T:99`) to control which logs you see.
 *   `make debug` runs the tests under gdb.
 *   `make vg_raw` just runs the memory leak checks.
 
