@@ -312,6 +312,9 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
           {
             LOG_DEBUG("Found (triggered) server %s at priority %d", server_name->value(), (int)priority);
             as_map.insert(std::pair<int32_t, std::string>(priority, server_name->value()));
+            // @@@ KSW Parse the URI and ensure it is parsable and a
+            // SIP URI here. If it's invalid, ignore it (seems the
+            // only sensible option).
           }
         }
       }

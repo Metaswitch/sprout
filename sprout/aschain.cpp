@@ -111,17 +111,9 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     // Temporary code, supporting only one application server.
     std::string as_uri_str = _application_servers[0];
 
-    pjsip_uri* as_uri = PJUtils::uri_from_string(as_uri_str, tdata->pool);
-
-    if (as_uri == NULL)
-    {
-      // @@@ would be good to check earlier, e.g., when parsing the iFCs.
-      LOG_WARNING("Badly formed URI %s in iFC", as_uri_str.c_str());
-      // @@@ hmm, should really simulate a 408 here.
-      return AsChain::Disposition::Next;
-    }
-
-    LOG_DEBUG("Invoking external AS %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, as_uri).c_str());
+    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
+    pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
+    LOG_DEBUG("Invoking external AS %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str());
 
     // Basic support for P-Asserted-Identity: strip any header(s) we've
     // received, and set up to be the same as the From header. Full support will
@@ -154,8 +146,8 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     // Set the AS URI as the topmost route header.  Set loose-route,
     // otherwise the headers get mucked up.
-    ((pjsip_sip_uri*)as_uri)->lr_param = 1;  // @@@ fixme cast
-    as_target->paths.push_back(as_uri);
+    as_uri->lr_param = 1;
+    as_target->paths.push_back((pjsip_uri*)as_uri);
 
     // Insert route header below it with an ODI in it.
     pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
@@ -163,7 +155,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     pj_strdup2(tdata->pool, &self_uri->user, odi_token.c_str());
     self_uri->host = stack_data.local_host;
     self_uri->port = stack_data.trusted_port;
-    self_uri->transport_param = ((pjsip_sip_uri*)as_uri)->transport_param;  // Use same transport as AS, in case it can only cope with one. @@@ not sure if that's a good idea @@@ hack re cast - not good
+    self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 
     if (_session_case.is_originating())
