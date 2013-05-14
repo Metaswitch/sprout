@@ -326,6 +326,7 @@ TEST_F(IfcHandlerTest, MethodMatch)
 
 TEST_F(IfcHandlerTest, NoTrigger)
 {
+  Log::setLoggingLevel(5);
   doTest("",
          "",
          true,
