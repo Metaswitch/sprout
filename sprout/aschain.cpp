@@ -145,13 +145,19 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     pjsip_generic_string_hdr* pai_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_ASSERTED_IDENTITY, &pai_str);
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pai_hdr);
 
-    // @@@ P-Served-User support, including session case and
-    // registration state, per RFC5502.
-    std::string psu_string = "<" + _served_user + ">;sescase=" + _session_case.to_string() + ";regstate=" + (_is_registered ? "reg" : "unreg");
-    pj_str_t psu_str = { const_cast<char*>(psu_string.data()), psu_string.length() };
+    // Set P-Served-User, including session case and registration
+    // state, per RFC5502 and the extension in 3GPP TS 24.229
+    // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
+    // step 5 s5.4.3.3 step 4c.
+    std::string psu_string = "<" + _served_user + ">;sescase=" + _session_case.to_string();
+    if (_session_case != SessionCase::OriginatingCdiv)
+    {
+      psu_string.append(";regstate=");
+      psu_string.append(_is_registered ? "reg" : "unreg");
+    }
+    pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
     pjsip_generic_string_hdr* psu_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_SERVED_USER, &psu_str);
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)psu_hdr);
-
 
     // Start defining the new target.
     target* as_target = new target;
