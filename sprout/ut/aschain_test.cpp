@@ -78,13 +78,13 @@ public:
 TEST_F(AsChainTest, Basics)
 {
   std::vector<std::string> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   as_list.push_back("sip:pancommunicon.cw-ngv.com");
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   as_list.push_back("sip:mmtel.homedomain");
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   EXPECT_EQ("orig", as_chain.to_string());
   EXPECT_EQ(SessionCase::Originating, as_chain.session_case());
@@ -104,14 +104,14 @@ TEST_F(AsChainTest, Basics)
 TEST_F(AsChainTest, AsInvocation)
 {
   std::vector<std::string> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   as_list.push_back("sip:pancommunicon.cw-ngv.com");
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   as_list.clear();
   as_list.push_back("::invalid:pancommunicon.cw-ngv.com");
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
 

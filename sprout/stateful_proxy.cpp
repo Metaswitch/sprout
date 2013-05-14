@@ -3028,9 +3028,11 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
                                                               rdata->msg_info.msg,
                                                               rdata->tp_info.pool);
 
+  bool is_registered = false;
+
   if (!served_user.empty())
   {
-    bool is_registered = is_user_registered(served_user);
+    is_registered = is_user_registered(served_user);
 
     ifc_handler->lookup_ifcs(session_case,
                              served_user,
@@ -3042,6 +3044,7 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
 
   return new AsChain(session_case,
                      served_user,
+                     is_registered,
                      application_servers);
 }
 

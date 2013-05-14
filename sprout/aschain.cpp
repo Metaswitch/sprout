@@ -44,9 +44,11 @@
 
 AsChain::AsChain(const SessionCase& session_case,
                  std::string served_user,
+                 bool is_registered,
                  std::vector<std::string> application_servers) :
   _session_case(session_case),
   _served_user(served_user),
+  _is_registered(is_registered),
   _application_servers(application_servers)
 {
 }
@@ -138,12 +140,18 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     }
 
     pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
-                                              PJSIP_MSG_FROM_HDR(msg)->uri,
+                                              PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
                                               tdata->pool);
     pjsip_generic_string_hdr* pai_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_ASSERTED_IDENTITY, &pai_str);
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pai_hdr);
 
-    // @@@ P-Served-User support, including session case and registration state
+    // @@@ P-Served-User support, including session case and
+    // registration state, per RFC5502.
+    std::string psu_string = "<" + _served_user + ">;sescase=" + _session_case.to_string() + ";regstate=" + (_is_registered ? "reg" : "unreg");
+    pj_str_t psu_str = { const_cast<char*>(psu_string.data()), psu_string.length() };
+    pjsip_generic_string_hdr* psu_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_SERVED_USER, &psu_str);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)psu_hdr);
+
 
     // Start defining the new target.
     target* as_target = new target;
