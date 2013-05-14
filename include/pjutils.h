@@ -88,6 +88,10 @@ namespace PJUtils
   /// blank.
   void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
 
+  void set_generic_header(pjsip_tx_data* tdata,
+                          const pj_str_t* name,
+                          const pj_str_t* value);
+
   /// Checks whether the supplied message contains the extension in the
   /// Supported header.
   pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);

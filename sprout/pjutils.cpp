@@ -253,6 +253,29 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 
+/// Delete all existing copies of a header and replace with a new one.
+void PJUtils::set_generic_header(pjsip_tx_data* tdata,
+                                 const pj_str_t* name,
+                                 const pj_str_t* value)
+{
+  while (1)
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, name, NULL);
+    if (hdr)
+    {
+      pj_list_erase(hdr);
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(tdata->pool, name, value);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)new_hdr);
+}
+
+
 pj_bool_t PJUtils::msg_supports_extension(pjsip_msg* msg, const char* extension)
 {
   pjsip_supported_hdr* supported_hdr = (pjsip_supported_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_SUPPORTED, NULL);

@@ -126,24 +126,10 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     // Basic support for P-Asserted-Identity: strip any header(s) we've
     // received, and set up to be the same as the From header. Full support will
     // be added under sto125.
-    while (1)
-    {
-      pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &STR_P_ASSERTED_IDENTITY, NULL);
-      if (hdr)
-      {
-        pj_list_erase(hdr);
-      }
-      else
-      {
-        break;
-      }
-    }
-
     pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
                                               PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
                                               tdata->pool);
-    pjsip_generic_string_hdr* pai_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_ASSERTED_IDENTITY, &pai_str);
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pai_hdr);
+    PJUtils::set_generic_header(tdata, &STR_P_ASSERTED_IDENTITY, &pai_str);
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
@@ -156,8 +142,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
       psu_string.append(_is_registered ? "reg" : "unreg");
     }
     pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
-    pjsip_generic_string_hdr* psu_hdr = pjsip_generic_string_hdr_create(tdata->pool, &STR_P_SERVED_USER, &psu_str);
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)psu_hdr);
+    PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
 
     // Start defining the new target.
     target* as_target = new target;
