@@ -169,6 +169,15 @@ TEST_F(IfcHandlerTest, ServedUser)
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+
+  // Should ignore (with warning) if URI is unparseable.
+  FakeLogger log;
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+                                "$2", "P-Served-User: <sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
 }
 
 /// Test an iFC.
