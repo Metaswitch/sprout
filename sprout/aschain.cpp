@@ -170,13 +170,6 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     as_target->paths.push_back((pjsip_uri*)self_uri);
 
-    // @@@ to support demo AS's limitations (TCP not supported),
-    // record-route ourselves via UDP, before the AS.  This means that
-    // the AS only has to route to us (via the transport we specify),
-    // rather than to an arbitrary previous hop (e.g., bono over TCP
-    // for a simple 1-AS call).
-    PJUtils::add_record_route(tdata, "udp", stack_data.trusted_port, NULL);
-
     // Stop processing the chain and send the request out to the AS.
     *pre_target = as_target;
     return AsChain::Disposition::Skip;

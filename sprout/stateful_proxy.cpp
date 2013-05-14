@@ -1569,13 +1569,6 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     if (serving_state.original_dialog())
     {
       LOG_DEBUG("Already complete");
-
-      // @@@ to support demo AS's limitations (TCP not supported),
-      // record-route ourselves via UDP, after the AS.  This means
-      // that the AS only has to route to us (via the transport we
-      // specify), rather than to an arbitrary next hop (e.g., bono
-      // over TCP for a simple 1-AS call).
-      PJUtils::add_record_route(tdata, "udp", stack_data.trusted_port, NULL);
     }
     else if (ifc_handler == NULL)
     {
