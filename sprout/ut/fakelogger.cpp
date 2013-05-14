@@ -103,6 +103,17 @@ int FakeLogger::howNoisy()
   // Set logging to the specified level if specified in the environment.
   // NOISY=T:5 sets the level to 5.
   char* val = getenv("NOISY");
-  val = strchr(val, ':');
-  return ((val == NULL) ? DEFAULT_LOGGING_LEVEL : strtol(val + 1, NULL, 10));
+  int level = DEFAULT_LOGGING_LEVEL;
+
+  if (val != NULL)
+  {
+    val = strchr(val, ':');
+
+    if (val != NULL)
+    {
+      level = strtol(val + 1, NULL, 10);
+    }
+  }
+
+  return level;
 }
