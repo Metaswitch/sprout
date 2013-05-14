@@ -584,7 +584,7 @@ int main(int argc, char *argv[])
   if (hss_connection != NULL)
   {
     LOG_STATUS("Initializing iFC handler");
-    ifc_handler = new IfcHandler(hss_connection);
+    ifc_handler = new IfcHandler(hss_connection, registrar_store);
   }
 
   // Initialise the OPTIONS handling module.

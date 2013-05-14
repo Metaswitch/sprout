@@ -79,7 +79,7 @@ class CallServicesTest : public SipTest
   }
 
   CallServicesTest() :
-    _ifcs(_hss_connection),
+    _ifcs(_hss_connection, NULL),
     _calls(_xdm_connection)
   {
   }

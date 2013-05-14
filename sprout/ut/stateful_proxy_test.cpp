@@ -211,7 +211,7 @@ public:
     if (hss)
     {
       _hss_connection = new FakeHSSConnection();
-      _ifc_handler = new IfcHandler(_hss_connection);
+      _ifc_handler = new IfcHandler(_hss_connection, _store);
     }
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
@@ -2080,6 +2080,7 @@ TEST_F(IscTest, SimpleMainline)
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
                                 "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
                                 "    <SPT>\n"
@@ -2099,7 +2100,7 @@ TEST_F(IscTest, SimpleMainline)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
-  // INVITE from anywhere to anywhere.
+  // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";

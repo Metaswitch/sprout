@@ -61,6 +61,7 @@ public:
   bool contains(const char* needle);
 
   static bool isNoisy();
+  static int howNoisy();
 
 private:
   std::string _lastlog;

@@ -43,20 +43,22 @@
 
 #include "fakelogger.hpp"
 
+const int DEFAULT_LOGGING_LEVEL = 4;
+
 using namespace std;
 
 FakeLogger::FakeLogger() :
   _noisy(isNoisy())
 {
   Log::setLogger(this);
-  Log::setLoggingLevel(4);
+  Log::setLoggingLevel(howNoisy());
 }
 
 FakeLogger::FakeLogger(bool noisy) :
   _noisy(noisy)
 {
   Log::setLogger(this);
-  Log::setLoggingLevel(4);
+  Log::setLoggingLevel(DEFAULT_LOGGING_LEVEL);
 }
 
 FakeLogger::~FakeLogger()
@@ -96,3 +98,22 @@ bool FakeLogger::isNoisy()
   return ((val != NULL) && (strchr("TtYy", val[0]) != NULL));
 }
 
+int FakeLogger::howNoisy()
+{
+  // Set logging to the specified level if specified in the environment.
+  // NOISY=T:5 sets the level to 5.
+  char* val = getenv("NOISY");
+  int level = DEFAULT_LOGGING_LEVEL;
+
+  if (val != NULL)
+  {
+    val = strchr(val, ':');
+
+    if (val != NULL)
+    {
+      level = strtol(val + 1, NULL, 10);
+    }
+  }
+
+  return level;
+}
