@@ -48,6 +48,7 @@ const pj_str_t STR_OB = pj_str("ob");
 const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
 const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
 const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
+const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
 const pj_str_t STR_ORIG = pj_str("orig");
 
 /// Prefix of ODI tokens we generate.
