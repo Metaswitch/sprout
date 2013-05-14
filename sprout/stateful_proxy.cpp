@@ -215,7 +215,7 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
                             const pjsip_rx_data* rdata);
 static AsChain* create_as_chain(IfcHandler* ifc_handler,
                                 const SessionCase& session_case,
-                                pjsip_msg* msg,
+                                pjsip_rx_data* rdata,
                                 SAS::TrailId trail);
 
 
@@ -1585,7 +1585,7 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     {
       _as_chain = create_as_chain(ifc_handler,
                                   serving_state.session_case(),
-                                  rdata->msg_info.msg,
+                                  rdata,
                                   trail());
     }
 
@@ -1606,7 +1606,7 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       {
         _as_chain = create_as_chain(ifc_handler,
                                     SessionCase::Terminating,
-                                    rdata->msg_info.msg,
+                                    rdata,
                                     trail());
       }
     }
@@ -1640,7 +1640,7 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
     delete _as_chain;
     _as_chain = create_as_chain(ifc_handler,
                                 SessionCase::Terminating,
-                                rdata->msg_info.msg,
+                                rdata,
                                 trail());
   }
 
@@ -3019,12 +3019,14 @@ bool is_user_registered(std::string served_user)
 /// Factory method: create AsChain by looking up iFCs.
 AsChain* create_as_chain(IfcHandler* ifc_handler,
                          const SessionCase& session_case,
-                         pjsip_msg* msg,
+                         pjsip_rx_data* rdata,
                          SAS::TrailId trail)
 {
   std::vector<std::string> application_servers;
 
-  std::string served_user = ifc_handler->served_user_from_msg(session_case, msg);
+  std::string served_user = ifc_handler->served_user_from_msg(session_case,
+                                                              rdata->msg_info.msg,
+                                                              rdata->tp_info.pool);
 
   if (!served_user.empty())
   {
@@ -3033,7 +3035,7 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
     ifc_handler->lookup_ifcs(session_case,
                              served_user,
                              is_registered,
-                             msg,
+                             rdata->msg_info.msg,
                              trail,
                              application_servers);
   }

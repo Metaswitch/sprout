@@ -72,6 +72,9 @@ namespace PJUtils
   pjsip_uri* uri_from_string(const std::string& uri_s,
                              pj_pool_t* pool);
 
+  pjsip_uri* uri_from_string_header(pjsip_generic_string_hdr* hdr,
+                                    pj_pool_t *pool);
+
   std::string pj_str_to_string(const pj_str_t* pjstr);
 
   std::string pj_status_to_string(const pj_status_t status);

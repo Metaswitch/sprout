@@ -166,6 +166,31 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
 }
 
 
+/// Get the URI (either name-addr or addr-spec) from the string header
+/// (e.g., P-Served-User), ignoring any parameters. If it's a bare
+/// addr-spec, assume (like Contact) that parameters belong to the
+/// header, not to the URI.
+///
+/// @return URI, or NULL if cannot be parsed.
+pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
+                                           pj_pool_t *pool)
+{
+  // We must duplicate the string into memory from the specified pool first as
+  // pjsip_parse_uri does not clone the actual strings within the URI.
+  size_t len = hdr->hvalue.slen;
+  char* buf = (char*)pj_pool_alloc(pool, len + 1);
+  memcpy(buf, hdr->hvalue.ptr, len);
+  buf[len] = 0;
+  char* end = strchr(buf, '>');
+  if (end != NULL)
+  {
+    *end = '\0';
+    len = (end - buf);
+  }
+  return pjsip_parse_uri(pool, buf, len, 0);
+}
+
+
 std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
 {
   return (pjstr != NULL) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");

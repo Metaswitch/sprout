@@ -42,6 +42,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/lexical_cast.hpp>
 
+#include "stack.h"
 #include "utils.h"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
@@ -142,19 +143,19 @@ TEST_F(IfcHandlerTest, ServedUser)
   pjsip_rx_data* rdata = build_rxdata(str);
   parse_rxdata(rdata);
 
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg));
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata->msg_info.msg));
-  EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg));
+  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(str0, "$1", "sip:5755550099@remotenode");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg));
+  EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
 /// Test an iFC.

@@ -149,7 +149,7 @@ TEST_F(AsChainTest, AsInvocation)
   ASSERT_TRUE(target != NULL);
   EXPECT_FALSE(target->from_store);
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
-  ASSERT_EQ(2, target->paths.size());
+  ASSERT_EQ(2u, target->paths.size());
   std::list<pjsip_uri*>::iterator it = target->paths.begin();
   EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
   ++it;

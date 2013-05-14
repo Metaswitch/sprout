@@ -178,7 +178,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 }
 
 
-/// See if we should be invoking our MMTEL AS.  Only valid after lookup_ifcs called.
+/// See if we should be invoking our MMTEL AS.
 // @returns true if we should invoke MMTEL, false if not.
 bool AsChain::is_mmtel(CallServices* call_services)
 {
@@ -199,7 +199,7 @@ bool AsChain::is_mmtel(CallServices* call_services)
   return local_mmtel;
 }
 
-/// @returns the served user. Only valid after lookup_ifcs called.
+/// @returns the served user.
 std::string AsChain::served_user() const
 {
   return _served_user;
