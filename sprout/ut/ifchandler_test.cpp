@@ -40,6 +40,7 @@
 #include <string>
 #include "gtest/gtest.h"
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "utils.h"
 #include "siptest.hpp"
@@ -106,6 +107,13 @@ public:
   {
   }
 
+  void doBaseTest(string description,
+                  string ifc,
+                  pjsip_msg* msg,
+                  string expected_served_user,
+                  bool reg,
+                  const SessionCase& sescase,
+                  bool expected);
   void doTest(string description,
               string frag,
               bool reg,
@@ -149,27 +157,21 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg));
 }
 
-/// Test an individual TriggerPoint under all session case conditions.
-void IfcHandlerTest::doTest(string description,
-                            string frag,
-                            bool reg,
-                            const SessionCase& sescase,
-                            bool expected)
+/// Test an iFC.
+void IfcHandlerTest::doBaseTest(string description,
+                                string ifc,
+                                pjsip_msg* msg,
+                                string expected_served_user,
+                                bool reg,
+                                const SessionCase& sescase,
+                                bool expected)
 {
   SCOPED_TRACE(description);
-  _hss_connection->set_user_ifc("sip:5755550033@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                + frag +
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
-
+  if (ifc != "")
+  {
+    _hss_connection->set_user_ifc("sip:5755550033@homedomain",
+                                  ifc);
+  }
   string served_user;
   std::vector<std::string> application_servers;
   _store->flush_all();  // start from a clean slate on each test
@@ -178,16 +180,131 @@ void IfcHandlerTest::doTest(string description,
     register_uri(_store, "5755550033", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   }
   _ifc_handler->lookup_ifcs(sescase,
-                            TEST_MSG,
+                            msg,
                             0,
                             served_user,
                             application_servers);
-  EXPECT_EQ("sip:5755550033@homedomain", served_user);
+  EXPECT_EQ(expected_served_user, served_user);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
     EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0]);
   }
+}
+
+TEST_F(IfcHandlerTest, NoServedUser)
+{
+  string str("INVITE sip:5755550033@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+             "Max-Forwards: 69\n"
+             "From: <sip:5755550033@remotedomain>;tag=13919SIPpTag0011234\n"
+             "To: <sip:5755550033@homedomain>\n"
+             "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 4 INVITE\n"
+             "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+             "Content-Length: 0\n\n");
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  pjsip_msg* msg = rdata->msg_info.msg;
+
+  doBaseTest("",
+             "",
+             msg,
+             "",
+             false,
+             SessionCase::Originating,
+             false);
+  EXPECT_TRUE(_log.contains("No served user"));
+}
+
+TEST_F(IfcHandlerTest, ProfilePart)
+{
+  for (int profilepart = 0; profilepart <= 1; profilepart++)
+  {
+    SCOPED_TRACE(profilepart);
+    for (int reg = 0; reg <= 1; reg++)
+    {
+      bool is_reg = !!reg;
+      SCOPED_TRACE(is_reg);
+
+      doBaseTest("",
+                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                 "<ServiceProfile>\n"
+                 "  <InitialFilterCriteria>\n"
+                 "    <Priority>1</Priority>\n"
+                 "    <ApplicationServer>\n"
+                 "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                 "      <DefaultHandling>0</DefaultHandling>\n"
+                 "    </ApplicationServer>\n"
+                 "    <ProfilePartIndicator>" + boost::lexical_cast<std::string>(profilepart) + "</ProfilePartIndicator>\n"
+                 "  </InitialFilterCriteria>\n"
+                 "</ServiceProfile>",
+                 TEST_MSG,
+                 "sip:5755550033@homedomain",
+                 is_reg,
+                 SessionCase::Originating,
+                 (profilepart == 0) ? is_reg : !is_reg);
+    }
+  }
+}
+
+TEST_F(IfcHandlerTest, NoIfc)
+{
+  doBaseTest("",
+             "",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false);
+  EXPECT_TRUE(_log.contains("No iFC found"));
+}
+
+TEST_F(IfcHandlerTest, NoPriority)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false);
+  EXPECT_TRUE(_log.contains("Missing mandatory value for iFC priority"));
+}
+
+/// Test an individual TriggerPoint.
+void IfcHandlerTest::doTest(string description,
+                            string frag,
+                            bool reg,
+                            const SessionCase& sescase,
+                            bool expected)
+{
+  doBaseTest(description,
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             + frag +
+             "  <ApplicationServer>\n"
+             "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "    <DefaultHandling>0</DefaultHandling>\n"
+             "  </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             reg,
+             sescase,
+             expected);
 }
 
 TEST_F(IfcHandlerTest, MethodMatch)
@@ -214,7 +331,7 @@ TEST_F(IfcHandlerTest, NoTrigger)
          true,
          SessionCase::Originating,
          true);
-  _log.contains("has no trigger point");
+  EXPECT_TRUE(_log.contains("has no trigger point"));
 }
 
 TEST_F(IfcHandlerTest, ParseError)
@@ -224,7 +341,7 @@ TEST_F(IfcHandlerTest, ParseError)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("iFCs parse error");
+  EXPECT_TRUE(_log.contains("iFCs parse error"));
 }
 
 TEST_F(IfcHandlerTest, NoClass1)
@@ -241,7 +358,7 @@ TEST_F(IfcHandlerTest, NoClass1)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("Missing class");
+  EXPECT_TRUE(_log.contains("Missing class"));
 }
 
 TEST_F(IfcHandlerTest, NoClass2)
@@ -257,7 +374,7 @@ TEST_F(IfcHandlerTest, NoClass2)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("Missing class");
+  EXPECT_TRUE(_log.contains("Missing class"));
 }
 
 TEST_F(IfcHandlerTest, NoType)
@@ -274,7 +391,7 @@ TEST_F(IfcHandlerTest, NoType)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("Missing mandatory value for ConditionTypeCNF");
+  EXPECT_TRUE(_log.contains("Missing mandatory value for ConditionTypeCNF"));
 }
 
 TEST_F(IfcHandlerTest, Unimplemented)
@@ -292,8 +409,8 @@ TEST_F(IfcHandlerTest, Unimplemented)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("Unimplemented");
-  _log.contains("SuperDuperNewThingy");
+  EXPECT_TRUE(_log.contains("Unimplemented"));
+  EXPECT_TRUE(_log.contains("SuperDuperNewThingy"));
 }
 
 TEST_F(IfcHandlerTest, MethodCase)
@@ -444,7 +561,7 @@ TEST_F(IfcHandlerTest, SesCaseGarbage)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("Can't parse session case");
+  EXPECT_TRUE(_log.contains("Can't parse session case"));
 }
 
 TEST_F(IfcHandlerTest, SesCaseRange1)
@@ -462,7 +579,7 @@ TEST_F(IfcHandlerTest, SesCaseRange1)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("session case out of allowable range");
+  EXPECT_TRUE(_log.contains("session case out of allowable range"));
 }
 
 TEST_F(IfcHandlerTest, SesCaseRange2)
@@ -480,7 +597,7 @@ TEST_F(IfcHandlerTest, SesCaseRange2)
          true,
          SessionCase::Originating,
          false);
-  _log.contains("session case out of allowable range");
+  EXPECT_TRUE(_log.contains("session case out of allowable range"));
 }
 
 TEST_F(IfcHandlerTest, Negation)
@@ -642,6 +759,30 @@ TEST_F(IfcHandlerTest, SubAnd1)
          true,
          SessionCase::Originating,
          false);
+}
+
+TEST_F(IfcHandlerTest, MultipleOccurrences)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>1</ConditionNegated>\n"
+         "      <Group>4</Group>\n"
+         "      <Method>INVITE</Method>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>3</Group>\n"
+         "      <Group>4</Group>\n"
+         "      <Method>INVITE</Method>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
 }
 
 TEST_F(IfcHandlerTest, Or2)
