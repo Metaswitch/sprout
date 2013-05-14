@@ -184,8 +184,8 @@ pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
   char* end = strchr(buf, '>');
   if (end != NULL)
   {
-    *end = '\0';
-    len = (end - buf);
+    *(end + 1) = '\0';
+    len = (end + 1 - buf);
   }
   return pjsip_parse_uri(pool, buf, len, 0);
 }
