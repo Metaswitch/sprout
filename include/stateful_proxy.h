@@ -67,12 +67,12 @@ class ServingState
 public:
   ServingState() :
     _session_case(NULL),
-    _original_dialog(true)
+    _original_dialog(NULL)
   {
   }
 
   ServingState(SessionCase* session_case,
-               bool original_dialog) :
+               AsChain* original_dialog) :
     _session_case(session_case),
     _original_dialog(original_dialog)
   {
@@ -98,7 +98,7 @@ public:
   {
     if (_session_case != NULL)
     {
-      return _session_case->to_string() + " " + (_original_dialog ? "exist" : "new");
+      return _session_case->to_string() + " " + (_original_dialog ? _original_dialog->to_string() : "(new)");
     }
     else
     {
@@ -108,7 +108,7 @@ public:
 
   bool is_set() const { return _session_case != NULL; };
   const SessionCase& session_case() const { return *_session_case; };
-  bool original_dialog() const { return _original_dialog; };
+  AsChain* original_dialog() const { return _original_dialog; };
 
 private:
 
@@ -118,10 +118,9 @@ private:
 
   /// Is this related to an existing (original) dialog? If so, we
   // should continue handling the existing AS chain rather than
-  // creating a new one.  In the current implementation this is
-  // just a boolean, but once we support more than a single AS
-  // it will be a pointer to an existing AsChain object.
-  bool _original_dialog;
+  // creating a new one. Pointer to that existing chain, or NULL if
+  // none.
+  AsChain* _original_dialog;
 };
 
 // This is the data that is attached to the UAS transaction

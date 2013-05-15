@@ -139,6 +139,7 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
+static AsChainTable* as_chain_table;
 
 static bool ibcf = false;
 
@@ -419,14 +420,34 @@ void process_tsx_request(pjsip_rx_data* rdata)
       pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
       SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
-      std::string user = PJUtils::pj_str_to_string(&uri->user);
-      bool original_dialog = false;
+      AsChain* original_dialog = NULL;
       if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
       {
         // This is one of our original dialog identifier (ODI) tokens.
         // See 3GPP TS 24.229 s5.4.3.4.
-        // @@@ For now we just flag it; later we will look up the existing object.
-        original_dialog = true;
+        std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
+                                uri->user.slen - STR_ODI_PREFIX.slen);
+        original_dialog = as_chain_table->lookup(odi_token);
+
+        if (original_dialog)
+        {
+          LOG_INFO("Original dialog for %.*s found: %s",
+                   uri->user.slen, uri->user.ptr,
+                   original_dialog->to_string().c_str());
+        }
+        else
+        {
+          // We're in the middle of an AS chain, but we've lost our
+          // reference to the rest of the chain. We must not carry on
+          // - fail the request with a suitable error code.
+          LOG_ERROR("Original dialog lookup for %.*s not found",
+                    uri->user.slen, uri->user.ptr);
+          pjsip_tx_data_dec_ref(tdata);
+          PJUtils::respond_stateless(stack_data.endpt, rdata,
+                                     PJSIP_SC_BAD_REQUEST, NULL,
+                                     NULL, NULL);
+          return;
+        }
       }
 
       LOG_DEBUG("Got our Route header, session case %s, OD=%s",
@@ -1568,7 +1589,8 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
   {
     if (serving_state.original_dialog())
     {
-      LOG_DEBUG("Already complete");
+      pj_assert(_as_chain == NULL);
+      _as_chain = serving_state.original_dialog();
     }
     else if (ifc_handler == NULL)
     {
@@ -1576,6 +1598,7 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     }
     else
     {
+      pj_assert(_as_chain == NULL);
       _as_chain = create_as_chain(ifc_handler,
                                   serving_state.session_case(),
                                   rdata,
@@ -1629,6 +1652,7 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
   {
     // We've completed the originating half: switch to terminating
     // and look up iFCs again.
+    // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
     delete _as_chain;
     _as_chain = create_as_chain(ifc_handler,
@@ -1684,7 +1708,7 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
 
   AsChain::Disposition disposition = AsChain::Disposition::Next;
 
-  if (_as_chain && _as_chain->session_case().is_terminating())
+  if (_as_chain && _as_chain->session_case().is_terminating() && !_as_chain->complete())
   {
     // Apply terminating call services to the message
     LOG_DEBUG("Apply terminating services");
@@ -2837,6 +2861,12 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
       }
     }
   }
+  else
+  {
+    // Routing proxy (Sprout).
+
+    as_chain_table = new AsChainTable;
+  }
 
   enum_service = enumService;
   bgcf_service = bgcfService;
@@ -2857,10 +2887,14 @@ void destroy_stateful_proxy()
   {
     // Destroy the upstream connection pool.  This will quiesce all the TCP
     // connections.
-    delete upstream_conn_pool;
+    delete upstream_conn_pool; upstream_conn_pool = NULL;
 
     // Destroy the flow table.
-    delete flow_table;
+    delete flow_table; flow_table = NULL;
+  }
+  else
+  {
+    delete as_chain_table; as_chain_table = NULL;
   }
 
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
@@ -3035,7 +3069,8 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
                              application_servers);
   }
 
-  return new AsChain(session_case,
+  return new AsChain(as_chain_table,
+                     session_case,
                      served_user,
                      is_registered,
                      application_servers);

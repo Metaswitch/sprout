@@ -56,6 +56,18 @@ extern "C" {
 
 namespace PJUtils
 {
+  static const char _b64[64] =
+    {
+      'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+      'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+      'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+      'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+      'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+      'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+      'w', 'x', 'y', 'z', '0', '1', '2', '3',
+      '4', '5', '6', '7', '8', '9', '+', '/'
+    };
+
   pj_bool_t is_home_domain(const pjsip_uri* uri);
   pj_bool_t is_uri_local(const pjsip_uri* uri);
 
@@ -137,6 +149,8 @@ namespace PJUtils
   bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);
 
   typedef std::map<pj_sockaddr, bool, bool(*)(const pj_sockaddr&, const pj_sockaddr&)> host_list_t;
+
+  void create_random_token(size_t length, std::string& token);
 };
 
 #endif

@@ -42,10 +42,13 @@
 #include "stateful_proxy.h"
 #include "aschain.h"
 
-AsChain::AsChain(const SessionCase& session_case,
+AsChain::AsChain(AsChainTable* as_chain_table,
+                 const SessionCase& session_case,
                  std::string served_user,
                  bool is_registered,
                  std::vector<std::string> application_servers) :
+  _as_chain_table(as_chain_table),
+  _odi_token(_as_chain_table->register_(this)),
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
@@ -55,6 +58,7 @@ AsChain::AsChain(const SessionCase& session_case,
 
 AsChain::~AsChain()
 {
+  _as_chain_table->unregister(_odi_token);
 }
 
 std::string AsChain::to_string() const
@@ -66,6 +70,11 @@ std::string AsChain::to_string() const
 const SessionCase& AsChain::session_case() const
 {
   return _session_case;
+}
+
+std::string AsChain::odi_token() const
+{
+  return _odi_token;
 }
 
 /// Apply first AS (if any) to initial request.
@@ -83,6 +92,9 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
                                                  // freed by caller.
                                                  target** pre_target)
 {
+  // @@@ KSW do the indexed AS, and advance the index. Assert that we
+  // are never called if complete().
+
   if (call_services && is_mmtel(call_services))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
@@ -158,8 +170,8 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     // Insert route header below it with an ODI in it.
     pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
-    std::string odi_token = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + "unity";
-    pj_strdup2(tdata->pool, &self_uri->user, odi_token.c_str());
+    std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + _odi_token;
+    pj_strdup2(tdata->pool, &self_uri->user, odi_value.c_str());
     self_uri->host = stack_data.local_host;
     self_uri->port = stack_data.trusted_port;
     self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
@@ -221,4 +233,26 @@ std::string AsChain::served_user() const
 bool AsChain::complete() const
 {
   return _application_servers.empty();
+}
+
+
+std::string AsChainTable::register_(AsChain* as_chain)
+{
+  std::string token;
+  PJUtils::create_random_token(TOKEN_LENGTH, token);
+  _t2c_map[token] = as_chain;
+  return token;
+}
+
+
+void AsChainTable::unregister(const std::string& token)
+{
+  _t2c_map.erase(token);
+}
+
+
+AsChain* AsChainTable::lookup(const std::string& token) const
+{
+  std::map<std::string, AsChain*>::const_iterator it = _t2c_map.find(token);
+  return (it == _t2c_map.end()) ? NULL : it->second;
 }

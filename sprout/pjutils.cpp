@@ -551,3 +551,16 @@ bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs
 {
   return (pj_sockaddr_cmp(&lhs, &rhs) < 0);
 }
+
+/// Generate a random base64-encoded token.
+void PJUtils::create_random_token(size_t length,       //< Number of characters.
+                                  std::string& token)  //< Destination. Must be empty.
+{
+  token.reserve(length);
+
+  for (int ii = 0; ii < length; ++ii)
+  {
+    token += _b64[rand() % 64];
+  }
+}
+

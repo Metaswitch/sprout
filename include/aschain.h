@@ -64,11 +64,14 @@ struct target
 };
 typedef std::list<target> target_list;
 
+class AsChainTable;
+
 /// The AS chain.
 class AsChain
 {
 public:
-  AsChain(const SessionCase& session_case,
+  AsChain(AsChainTable* as_chain_table,
+          const SessionCase& session_case,
           std::string served_user,
           bool is_registered,
           std::vector<std::string> application_servers);
@@ -102,14 +105,32 @@ public:
   std::string served_user() const;
   const SessionCase& session_case() const;
   bool complete() const;
-
+  std::string odi_token() const;
 
 private:
   bool is_mmtel(CallServices* call_services);
 
+  AsChainTable* _as_chain_table;
+  std::string _odi_token;
   const SessionCase& _session_case;
   std::string _served_user;
   bool _is_registered;
   std::vector<std::string> _application_servers; //< List of application server URIs.
 };
 
+/// Lookup table of AsChain objects.
+class AsChainTable
+{
+public:
+  AsChain* lookup(const std::string& token) const;
+
+private:
+  friend class AsChain;
+
+  std::string register_(AsChain* as_chain);
+  void unregister(const std::string& token);
+
+  static const int TOKEN_LENGTH = 10;
+
+  std::map<std::string, AsChain*> _t2c_map;
+};

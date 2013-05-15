@@ -53,18 +53,6 @@ extern "C" {
 #include "stack.h"
 #include "flowtable.h"
 
-const char Flow::_b64[64] =
-{
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-  'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-  'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-  'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
-  'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
-  'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-  'w', 'x', 'y', 'z', '0', '1', '2', '3',
-  '4', '5', '6', '7', '8', '9', '+', '/'
-};
-
 FlowTable::FlowTable() :
   _tp2flow_map(),
   _tk2flow_map(),
@@ -80,7 +68,7 @@ FlowTable::~FlowTable()
   // Delete all the existing flows.
   for (std::map<FlowKey, Flow*>::iterator i = _tp2flow_map.begin();
        i != _tp2flow_map.end();
-       ++i) 
+       ++i)
   {
     delete i->second;
   }
@@ -88,7 +76,7 @@ FlowTable::~FlowTable()
   pthread_mutex_destroy(&_flow_map_lock);
 }
 
-  
+
 /// Find or create a flow corresponding to the specified transport and remote
 /// IP address and port. This is a single method to ensure it is atomic.
 Flow* FlowTable::find_create_flow(pjsip_transport* transport, const pj_sockaddr* raddr)
@@ -178,7 +166,7 @@ Flow* FlowTable::find_flow(const std::string& token)
   pthread_mutex_lock(&_flow_map_lock);
 
   std::map<std::string, Flow*>::iterator i = _tk2flow_map.find(token);
-  if (i != _tk2flow_map.end()) 
+  if (i != _tk2flow_map.end())
   {
     // Found a flow matching the token.
     flow = i->second;
@@ -210,7 +198,7 @@ void FlowTable::remove_flow(Flow* flow)
   }
 
   std::map<std::string, Flow*>::iterator j = _tk2flow_map.find(flow->token());
-  if (j != _tk2flow_map.end()) 
+  if (j != _tk2flow_map.end())
   {
     _tk2flow_map.erase(j);
   }
@@ -239,13 +227,9 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _refs(1)
 {
   // Create a random base64 encoded token for the flow.
-  _token.reserve(Flow::TOKEN_LENGTH);
-  for (int ii = 0; ii < Flow::TOKEN_LENGTH; ++ii) 
-  {
-    _token += _b64[rand() % 64];
-  }
+  PJUtils::create_random_token(Flow::TOKEN_LENGTH, _token);
 
-  if (PJSIP_TRANSPORT_IS_RELIABLE(_transport)) 
+  if (PJSIP_TRANSPORT_IS_RELIABLE(_transport))
   {
     // We're adding a new reliable transport, so make sure it stays around
     // until we remove it from the map.
@@ -265,7 +249,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
     // timer.
     pj_timer_entry_init(&_ka_timer, PJ_FALSE, (void*)this, &on_ka_timer_expiry);
     pj_time_val delay = {EXPIRY_TIMEOUT, 0};
-    pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay); 
+    pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay);
     _ka_timer.id = PJ_TRUE;
     LOG_DEBUG("Started keepalive timer for flow %p", this);
   }
@@ -274,7 +258,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
 
 Flow::~Flow()
 {
-  if (PJSIP_TRANSPORT_IS_RELIABLE(_transport)) 
+  if (PJSIP_TRANSPORT_IS_RELIABLE(_transport))
   {
     // We incremented the ref count when we put it in the map.
     pjsip_transport_dec_ref(_transport);
@@ -291,9 +275,9 @@ Flow::~Flow()
 void Flow::keepalive()
 {
   // We only run keepalive times on non-reliable transport flows.
-  if (!PJSIP_TRANSPORT_IS_RELIABLE(_transport)) 
+  if (!PJSIP_TRANSPORT_IS_RELIABLE(_transport))
   {
-    if (_ka_timer.id) 
+    if (_ka_timer.id)
     {
       // Stop the existing keepalive timer.
       pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
@@ -323,7 +307,7 @@ void Flow::dec_ref()
   // to zero.
   pthread_mutex_lock(&_flow_table->_flow_map_lock);
 
-  if ((--_refs) == 0) 
+  if ((--_refs) == 0)
   {
     pthread_mutex_unlock(&_flow_table->_flow_map_lock);
     _flow_table->remove_flow(this);
@@ -353,7 +337,7 @@ void Flow::on_transport_state_changed(pjsip_transport *tp,
 void Flow::on_ka_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
 {
   LOG_DEBUG("Keepalive timer expired for flow %p", e->user_data);
-  if (e->id) 
+  if (e->id)
   {
     // The keepalive timer has not been cancelled, so decrement the reference
     // count so the flow will eventually get deleted.
