@@ -300,6 +300,14 @@ void SipTest::inject_msg(const string& msg, TransportFlow* tp)
   EXPECT_EQ((pj_size_t)rdata->pkt_info.len, size_eaten);
 }
 
+void SipTest::inject_msg(pjsip_msg* msg, TransportFlow* tp)
+{
+  char buf[16384];
+  pj_ssize_t len = pjsip_msg_print(msg, buf, sizeof(buf));
+  inject_msg(string(buf, len), tp);
+}
+
+
 /// Inject message directly into the registrar module, bypassing other
 /// layers.  Allows testing which messages we accept into the module.
 pj_bool_t SipTest::inject_msg_direct(const string& msg, pjsip_module* module)

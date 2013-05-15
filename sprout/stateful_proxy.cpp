@@ -1520,7 +1520,7 @@ UASTransaction::~UASTransaction()
   if (_as_chain != NULL)
   {
     LOG_DEBUG("Free AS chain");
-    delete _as_chain;
+    // @@@KSW temp delete _as_chain;
     _as_chain = NULL;
   }
 
@@ -1611,9 +1611,12 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
          (_as_chain->complete())))
     {
       // We've completed the originating half: switch to terminating
-      // and look up again.
+      // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      delete _as_chain;
+      // @@@KSW temp delete _as_chain;
+      _as_chain = NULL;
+      PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
+      PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
       if (ifc_handler == NULL)
       {
@@ -1652,10 +1655,13 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
   if (disposition == AsChain::Disposition::Next)
   {
     // We've completed the originating half: switch to terminating
-    // and look up iFCs again.
+    // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    delete _as_chain;
+    // @@@KSW temp delete _as_chain;
+    _as_chain = NULL;
+    PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
+    PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
     _as_chain = create_as_chain(ifc_handler,
                                 SessionCase::Terminating,
                                 rdata,

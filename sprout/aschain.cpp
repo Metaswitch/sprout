@@ -45,7 +45,7 @@
 
 AsChain::AsChain(AsChainTable* as_chain_table,
                  const SessionCase& session_case,
-                 std::string served_user,
+                 const std::string& served_user,
                  bool is_registered,
                  std::vector<std::string> application_servers) :
   _as_chain_table(as_chain_table),
@@ -170,7 +170,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     {
       /// @@@KSW Should preserve the original header as set by UE, and
       /// any other non-forking parameters.
-      PJUtils::delete_header(tdata, &STR_REQUEST_DISPOSITION);
+      PJUtils::delete_header(tdata->msg, &STR_REQUEST_DISPOSITION);
     }
 
     // Start defining the new target.

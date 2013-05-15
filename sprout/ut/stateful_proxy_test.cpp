@@ -2098,13 +2098,13 @@ TEST_F(IscTest, SimpleMainline)
                                 "</ServiceProfile>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "homedomain;orig";
+  msg._to = "6505551234@homedomain;orig";
   msg._todomain = "";
   msg._route = "sip:6505551234@homedomain";
 
@@ -2120,16 +2120,43 @@ TEST_F(IscTest, SimpleMainline)
   msg.set_route(out);
   free_txdata();
 
-  // INVITE passed on to AS
+  // INVITE passed on to AS1
   SCOPED_TRACE("INVITE (S)");
   out = current_txdata()->msg;
   ReqMatcher r1("INVITE");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
-  tpAS.expect_target(current_txdata(), false);
+  tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
 
   free_txdata();
 }

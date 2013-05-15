@@ -72,7 +72,7 @@ class AsChain
 public:
   AsChain(AsChainTable* as_chain_table,
           const SessionCase& session_case,
-          std::string served_user,
+          const std::string& served_user,
           bool is_registered,
           std::vector<std::string> application_servers);
   ~AsChain();
@@ -106,11 +106,11 @@ public:
   std::string odi_token() const;
 
 private:
-  AsChainTable* _as_chain_table;
-  std::string _odi_token;
+  AsChainTable* const _as_chain_table;
+  const std::string _odi_token;
   const SessionCase& _session_case;
-  std::string _served_user;
-  bool _is_registered;
+  const std::string _served_user;
+  const bool _is_registered;
   std::vector<std::string> _application_servers; //< List of application server URIs.
   size_t _index;  //< Index of next AS to use, or _application_servers.size() if complete.
 };
