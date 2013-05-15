@@ -1,5 +1,5 @@
 /**
- * @file deregister.h
+ * @file stateful_proxy.cpp Stateful proxy implementation
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
