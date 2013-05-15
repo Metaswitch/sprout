@@ -74,7 +74,7 @@ public:
                    pjsip_msg* msg,
                    SAS::TrailId trail,
                    std::string& served_user,
-                   std::vector<AsInvocation*>& application_servers);
+                   std::vector<AsInvocation>& application_servers);
 
 private:
   static bool spt_matches(const SessionCase& session_case,
@@ -89,7 +89,7 @@ private:
                                             bool is_registered,
                                             pjsip_msg* msg,
                                             std::string& ifc_xml,
-                                            std::vector<AsInvocation*>& as_list);
+                                            std::vector<AsInvocation>& as_list);
   static std::string served_user_from_msg(const SessionCase& session_case, pjsip_msg *msg);
   static std::string user_from_uri(pjsip_uri *uri);
 

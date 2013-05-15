@@ -45,7 +45,7 @@
 
 AsChain::AsChain(const SessionCase& session_case,
                  std::string served_user,
-                 std::vector<AsInvocation*> application_servers) :
+                 std::vector<AsInvocation> application_servers) :
   _session_case(session_case),
   _served_user(served_user),
   _application_servers(application_servers)
@@ -108,7 +108,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
   else if (!_application_servers.empty())
   {
     // Temporary code, supporting only one application server.
-    std::string as_uri_str = _application_servers[0]->server_name;
+    std::string as_uri_str = _application_servers[0].server_name;
 
     pjsip_uri* as_uri = PJUtils::uri_from_string(as_uri_str, tdata->pool);
 
@@ -185,11 +185,11 @@ bool AsChain::is_mmtel(CallServices* call_services)
 {
   // Check if we're supposed to be supplying local MMTel services
   bool local_mmtel = false;
-  for (std::vector<AsInvocation*>::const_iterator ii = _application_servers.begin();
+  for (std::vector<AsInvocation>::const_iterator ii = _application_servers.begin();
        ii < _application_servers.end();
        ii++)
   {
-    if (call_services->is_mmtel((*ii)->server_name))
+    if (call_services->is_mmtel((*ii).server_name))
     {
       LOG_DEBUG("Got local MMTel services");
       local_mmtel = true;

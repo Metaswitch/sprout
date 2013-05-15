@@ -71,7 +71,7 @@ class AsChain
 public:
   AsChain(const SessionCase& session_case,
           std::string served_user,
-          std::vector<AsInvocation*> application_servers);
+          std::vector<AsInvocation> application_servers);
   ~AsChain();
 
   /// Disposition of a request. Suggests what to do next.
@@ -109,6 +109,6 @@ private:
 
   const SessionCase& _session_case;
   std::string _served_user;
-  std::vector<AsInvocation*> _application_servers; //< List of application servers.
+  std::vector<AsInvocation> _application_servers; //< List of application servers.
 };
 

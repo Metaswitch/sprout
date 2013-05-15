@@ -284,7 +284,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
                                                bool is_registered,
                                                pjsip_msg *msg,
                                                std::string& ifc_xml,
-                                               std::vector<AsInvocation*>& as_list)
+                                               std::vector<AsInvocation>& as_list)
 {
   xml_document<> ifc_doc;
   try
@@ -306,7 +306,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
 
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
-  std::multimap<int32_t, AsInvocation*> as_map;
+  std::multimap<int32_t, AsInvocation> as_map;
 
   // Spin through the list of filter criteria, checking whether each matches
   // and adding the application server to the list if so.
@@ -340,11 +340,13 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
 
           if (!as_invocation->server_name.empty())
           {
-            LOG_DEBUG("Found (triggered) server %s at priority %d", as_invocation->server_name.c_str(), (int)priority);
-            as_map.insert(std::pair<int32_t, AsInvocation*>(priority, as_invocation));
+            LOG_INFO("Found (triggered) server %s at priority %d", as_invocation->server_name.c_str(), (int)priority);
+            as_map.insert(std::pair<int32_t, AsInvocation>(priority, *as_invocation));
           }
         }
-      }
+      } else {
+        LOG_INFO("Filter did not match!");
+     }
     }
     catch (ifc_error err)
     {
@@ -354,7 +356,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
     }
   }
 
-  for (std::multimap<int32_t, AsInvocation*>::iterator it = as_map.begin();
+  for (std::multimap<int32_t, AsInvocation>::iterator it = as_map.begin();
        it != as_map.end();
        ++it)
   {
@@ -370,7 +372,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
                              pjsip_msg *msg,                   //< The message starting the dialog
                              SAS::TrailId trail,               //< The SAS trail ID
                              std::string& served_user, //< OUT the served user
-                             std::vector<AsInvocation*>& application_servers)  //< OUT the AS list
+                             std::vector<AsInvocation>& application_servers)  //< OUT the AS list
 {
   served_user = served_user_from_msg(session_case, msg);
 
@@ -384,7 +386,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
     std::string ifc_xml;
     if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
     {
-      LOG_INFO("No iFC found - no processing will be applied");
+      LOG_INFO("No iFC found for %s - no processing will be applied", served_user.c_str());
     }
     else
     {

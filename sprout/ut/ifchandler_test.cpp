@@ -175,7 +175,7 @@ void IfcHandlerTest::doBaseTest(string description,
                                   ifc);
   }
   string served_user;
-  std::vector<AsInvocation*> application_servers;
+  std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
   if (reg)
   {
@@ -190,17 +190,17 @@ void IfcHandlerTest::doBaseTest(string description,
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
-    EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0]->server_name);
-    EXPECT_EQ("0", application_servers[0]->default_handling);
+    EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0].server_name);
+    EXPECT_EQ("0", application_servers[0].default_handling);
     if (third_party_reg)
     {
-      EXPECT_EQ("banana", application_servers[0]->service_info);
-      EXPECT_EQ(true, application_servers[0]->include_register_request);
-      EXPECT_EQ(false, application_servers[0]->include_register_response);
+      EXPECT_EQ("banana", application_servers[0].service_info);
+      EXPECT_EQ(true, application_servers[0].include_register_request);
+      EXPECT_EQ(false, application_servers[0].include_register_response);
     } else {
-      EXPECT_EQ("", application_servers[0]->service_info);
-      EXPECT_EQ(false, application_servers[0]->include_register_request);
-      EXPECT_EQ(false, application_servers[0]->include_register_response);
+      EXPECT_EQ("", application_servers[0].service_info);
+      EXPECT_EQ(false, application_servers[0].include_register_request);
+      EXPECT_EQ(false, application_servers[0].include_register_response);
     }
   }
 }
