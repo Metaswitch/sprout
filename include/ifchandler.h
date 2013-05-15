@@ -70,7 +70,11 @@ public:
   IfcHandler(HSSConnection* hss, RegData::Store* store);
   ~IfcHandler();
 
+  static std::string served_user_from_msg(const SessionCase& session_case, pjsip_msg *msg);
+
   void lookup_ifcs(const SessionCase& session_case,
+                   const std::string& served_user,
+                   bool is_registered,
                    pjsip_msg* msg,
                    SAS::TrailId trail,
                    std::string& served_user,
@@ -90,7 +94,6 @@ private:
                                             pjsip_msg* msg,
                                             std::string& ifc_xml,
                                             std::vector<AsInvocation>& as_list);
-  static std::string served_user_from_msg(const SessionCase& session_case, pjsip_msg *msg);
   static std::string user_from_uri(pjsip_uri *uri);
 
   HSSConnection* _hss;

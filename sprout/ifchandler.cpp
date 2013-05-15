@@ -369,40 +369,21 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
 // apply to this message, by inspecting the relevant subscriber's
 // iFCs. If there are no iFCs, the list will be empty.
 void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
+                             const std::string& served_user,   //< The served user
+                             bool is_registered,               //< Whether the served user is registered
                              pjsip_msg *msg,                   //< The message starting the dialog
                              SAS::TrailId trail,               //< The SAS trail ID
-                             std::string& served_user, //< OUT the served user
                              std::vector<AsInvocation>& application_servers)  //< OUT the AS list
 {
-  served_user = served_user_from_msg(session_case, msg);
-
-  if (served_user.empty())
+  LOG_DEBUG("Fetching IFC information for %s", served_user.c_str());
+  std::string ifc_xml;
+  if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
   {
-    LOG_INFO("No served user");
+    LOG_INFO("No iFC found - no processing will be applied");
   }
   else
   {
-    LOG_DEBUG("Fetching IFC information for %s", served_user.c_str());
-    std::string ifc_xml;
-    if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
-    {
-      LOG_INFO("No iFC found for %s - no processing will be applied", served_user.c_str());
-    }
-    else
-    {
-      bool is_registered = false;
-
-      if (_store)
-      {
-        std::string aor = served_user;
-        RegData::AoR* aor_data = _store->get_aor_data(aor);
-        is_registered = (aor_data != NULL) &&
-                        (aor_data->bindings().size() != 0u);
-        LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
-      }
-
-      calculate_application_servers(session_case, is_registered, msg, ifc_xml, application_servers);
-    }
+    calculate_application_servers(session_case, is_registered, msg, ifc_xml, application_servers);
   }
 }
 

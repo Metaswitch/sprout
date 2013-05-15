@@ -2988,19 +2988,48 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   return PJ_SUCCESS;
 }
 
+
+/// Determine if the given user is registered in the registration data
+/// store.
+bool is_user_registered(std::string served_user)
+{
+  bool is_registered = false;
+
+  if (store)
+  {
+    std::string aor = served_user;
+    RegData::AoR* aor_data = store->get_aor_data(aor);
+    is_registered = (aor_data != NULL) &&
+      (aor_data->bindings().size() != 0u);
+    delete aor_data; aor_data = NULL;
+    LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
+  }
+
+  return is_registered;
+}
+
+
 /// Factory method: create AsChain by looking up iFCs.
 AsChain* create_as_chain(IfcHandler* ifc_handler,
                          const SessionCase& session_case,
                          pjsip_msg* msg,
                          SAS::TrailId trail)
 {
-  std::string served_user;
   std::vector<AsInvocation> application_servers;
-  ifc_handler->lookup_ifcs(session_case,
-                           msg,
-                           trail,
-                           served_user,
-                           application_servers);
+  std::string served_user = ifc_handler->served_user_from_msg(session_case, msg);
+
+  if (!served_user.empty())
+  {
+    bool is_registered = is_user_registered(served_user);
+
+    ifc_handler->lookup_ifcs(session_case,
+                             served_user,
+                             is_registered,
+                             msg,
+                             trail,
+                             application_servers);
+  }
+
   return new AsChain(session_case,
                      served_user,
                      application_servers);

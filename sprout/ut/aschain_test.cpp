@@ -165,9 +165,9 @@ TEST_F(AsChainTest, AsInvocation)
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));
+  delete target; target = NULL;
 
   // Invalid AS URI. This should probably return an error, but for now the AS is ignored.
-  target = NULL;
   disposition = as_chain3.on_initial_request(NULL, NULL, NULL, tdata, &target);
   EXPECT_EQ(AsChain::Disposition::Next, disposition);
   EXPECT_TRUE(target == NULL);

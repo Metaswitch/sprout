@@ -110,7 +110,7 @@ public:
   void doBaseTest(string description,
                   string ifc,
                   pjsip_msg* msg,
-                  string expected_served_user,
+                  string served_user,
                   bool reg,
                   const SessionCase& sescase,
                   bool expected,
@@ -162,7 +162,7 @@ TEST_F(IfcHandlerTest, ServedUser)
 void IfcHandlerTest::doBaseTest(string description,
                                 string ifc,
                                 pjsip_msg* msg,
-                                string expected_served_user,
+                                string served_user,
                                 bool reg,
                                 const SessionCase& sescase,
                                 bool expected,
@@ -174,19 +174,14 @@ void IfcHandlerTest::doBaseTest(string description,
     _hss_connection->set_user_ifc("sip:5755550033@homedomain",
                                   ifc);
   }
-  string served_user;
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  if (reg)
-  {
-    register_uri(_store, "5755550033", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  }
   _ifc_handler->lookup_ifcs(sescase,
+                            served_user,
+                            reg,
                             msg,
                             0,
-                            served_user,
                             application_servers);
-  EXPECT_EQ(expected_served_user, served_user);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
@@ -203,33 +198,6 @@ void IfcHandlerTest::doBaseTest(string description,
       EXPECT_EQ(false, application_servers[0].include_register_response);
     }
   }
-}
-
-TEST_F(IfcHandlerTest, NoServedUser)
-{
-  string str("INVITE sip:5755550033@homedomain SIP/2.0\n"
-             "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
-             "Max-Forwards: 69\n"
-             "From: <sip:5755550033@remotedomain>;tag=13919SIPpTag0011234\n"
-             "To: <sip:5755550033@homedomain>\n"
-             "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
-             "Call-ID: 1-13919@10.151.20.48\n"
-             "CSeq: 4 INVITE\n"
-             "Route: <sip:testnode;transport=TCP;lr;orig>\n"
-             "Content-Length: 0\n\n");
-  pjsip_rx_data* rdata = build_rxdata(str);
-  parse_rxdata(rdata);
-  pjsip_msg* msg = rdata->msg_info.msg;
-
-  doBaseTest("",
-             "",
-             msg,
-             "",
-             false,
-             SessionCase::Originating,
-             false,
-             false);
-  EXPECT_TRUE(_log.contains("No served user"));
 }
 
 TEST_F(IfcHandlerTest, ProfilePart)
