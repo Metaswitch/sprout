@@ -58,38 +58,46 @@ const int SAS_PORT = 6761;
 
 
 std::atomic<SAS::TrailId> SAS::_next_trail_id(1);
-eventq<std::string> SAS::_msg_q;
-pthread_t SAS::_writer;
-int SAS::_so;
-std::string SAS::_system_name;
-std::string SAS::_sas_address;
-std::atomic<bool> SAS::_connected(false);
+SAS::Connection* SAS::_connection = NULL;
 
 
 void SAS::init(int system_name_length, const char* system_name, const std::string& sas_address)
 {
-  _connected = false;
-
-  _system_name = std::string(system_name, system_name_length);
-  _sas_address = sas_address;
-  _writer = 0;
-
-  if (_sas_address != "0.0.0.0")
+  if (sas_address != "0.0.0.0")
   {
-    // Spawn a thread to open and write to the SAS connection.
-    int rc = pthread_create(&_writer, NULL, &writer_thread, NULL);
-
-    if (rc < 0)
-    {
-      // LCOV_EXCL_START
-      LOG_ERROR("Error creating SAS thread");
-      // LCOV_EXCL_STOP
-    }
+    _connection = new Connection(std::string(system_name, system_name_length),
+                                 sas_address);
   }
 }
 
 
 void SAS::term()
+{
+  delete _connection;
+  _connection = NULL;
+}
+
+
+SAS::Connection::Connection(const std::string& system_name, const std::string& sas_address) :
+  _system_name(system_name),
+  _sas_address(sas_address),
+  _msg_q(),
+  _writer(0),
+  _so(0),
+  _connected(false)
+{
+  // Spawn a thread to open and write to the SAS connection.
+  int rc = pthread_create(&_writer, NULL, &writer_thread, this);
+
+  if (rc < 0)
+  {
+    // LCOV_EXCL_START
+    LOG_ERROR("Error creating SAS thread");
+    // LCOV_EXCL_STOP
+  }
+}
+
+SAS::Connection::~Connection()
 {
   // Close off the queue.
   _connected = false;
@@ -106,8 +114,14 @@ void SAS::term()
   }
 }
 
+void* SAS::Connection::writer_thread(void* p)
+{
+  ((SAS::Connection*)p)->writer();
+  return NULL;
+}
 
-void* SAS::writer_thread(void* p)
+
+void SAS::Connection::writer()
 {
   int rc;
 
@@ -162,12 +176,10 @@ void* SAS::writer_thread(void* p)
       break;
     }
   }
-
-  return NULL;
 }
 
 
-bool SAS::connect_init()
+bool SAS::Connection::connect_init()
 {
   int rc;
   struct sockaddr_in addr;
@@ -225,6 +237,14 @@ bool SAS::connect_init()
   return true;
 }
 
+void SAS::Connection::send_msg(std::string msg)
+{
+  if (_connected)
+  {
+    _msg_q.push_noblock(msg);
+  }
+}
+
 
 SAS::TrailId SAS::new_trail(uint32_t instance)
 {
@@ -235,27 +255,27 @@ SAS::TrailId SAS::new_trail(uint32_t instance)
 
 void SAS::report_event(const Event& event)
 {
-  if (_connected)
+  if ((_connection) && (_connection->is_connected()))
   {
-    _msg_q.push_noblock(event.to_string());
+    _connection->send_msg(event.to_string());
   }
 }
 
 
 void SAS::report_marker(const Marker& marker)
 {
-  if (_connected)
+  if ((_connection) && (_connection->is_connected()))
   {
-    _msg_q.push_noblock(marker.to_string(Marker::Scope::None));
+    _connection->send_msg(marker.to_string(Marker::Scope::None));
   }
 }
 
 
 void SAS::report_marker(const Marker& marker, Marker::Scope scope)
 {
-  if (_connected)
+  if ((_connection) && (_connection->is_connected()))
   {
-    _msg_q.push_noblock(marker.to_string(scope));
+    _connection->send_msg(marker.to_string(scope));
   }
 }
 

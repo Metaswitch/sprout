@@ -154,8 +154,33 @@ public:
   static void report_marker(const Marker& marker, Marker::Scope scope);
 
 private:
-  static bool connect_init();
-  static void* writer_thread(void* p);
+  class Connection
+  {
+  public:
+    Connection(const std::string& system_name, const std::string& sas_address);
+    ~Connection();
+
+    bool is_connected() const { return _connected; };
+    void send_msg(std::string msg);
+
+    static void* writer_thread(void* p);
+
+  private:
+    bool connect_init();
+    void writer();
+
+    std::string _system_name;
+    std::string _sas_address;
+
+    eventq<std::string> _msg_q;
+
+    pthread_t _writer;
+
+    int _so;
+
+    std::atomic<bool> _connected;
+  };
+
   static void write_hdr(std::string& s, uint16_t msg_length, uint8_t msg_type);
   static void write_int8(std::string& s, uint8_t c);
   static void write_int16(std::string& s, uint16_t v);
@@ -166,13 +191,7 @@ private:
   static void write_trail(std::string& s, TrailId trail);
 
   static std::atomic<TrailId> _next_trail_id;
-  static eventq<std::string> _msg_q;
-  static pthread_t _writer;
-
-  static int _so;
-  static std::string _system_name;
-  static std::string _sas_address;
-  static std::atomic<bool> _connected;
+  static Connection* _connection;
 };
 
 #endif
