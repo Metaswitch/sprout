@@ -53,6 +53,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include "sas.h"
 
 namespace PJUtils
 {
@@ -125,6 +126,7 @@ namespace PJUtils
                                const pjsip_hdr *hdr_list,
                                const pjsip_msg_body *body);
 
+  pjsip_tx_data *populate_tdata(pjsip_msg *old_msg, SAS::TrailId old_trail);
   pjsip_tx_data *clone_tdata(pjsip_tx_data *tdata);
 
   bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);

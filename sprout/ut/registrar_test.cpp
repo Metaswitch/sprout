@@ -44,8 +44,10 @@
 #include "utils.h"
 #include "localstorefactory.h"
 #include "analyticslogger.h"
+#include "stack.h"
 #include "registrar.h"
 #include "fakelogger.hpp"
+#include "fakehssconnection.hpp"
 
 using namespace std;
 
@@ -61,10 +63,13 @@ public:
 
     _store = RegData::create_local_store();
     _analytics = new AnalyticsLogger("foo");
+    _hss_connection = new FakeHSSConnection();
+    _ifc_handler = new IfcHandler(_hss_connection, _store);
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _analytics);
+    pj_status_t ret = init_registrar(_store, _analytics, _ifc_handler);
     ASSERT_EQ(PJ_SUCCESS, ret);
+    stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
   }
 
   static void TearDownTestCase()
@@ -72,6 +77,8 @@ public:
     destroy_registrar();
     RegData::destroy_local_store(_store);
     delete _analytics;
+    delete _ifc_handler; _ifc_handler = NULL;
+    delete _hss_connection; _hss_connection = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -90,10 +97,14 @@ public:
 protected:
   static RegData::Store* _store;
   static AnalyticsLogger* _analytics;
+  static IfcHandler* _ifc_handler;
+  static FakeHSSConnection* _hss_connection;
 };
 
 RegData::Store* RegistrarTest::_store;
 AnalyticsLogger* RegistrarTest::_analytics;
+IfcHandler* RegistrarTest::_ifc_handler;
+FakeHSSConnection* RegistrarTest::_hss_connection;
 
 class Message
 {
@@ -361,6 +372,186 @@ TEST_F(RegistrarTest, NoPath)
             get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // because we have no path
   EXPECT_EQ("", get_headers(out, "Path"));
+  free_txdata();
+}
+
+/// Simple correct example with Expires header
+TEST_F(RegistrarTest, AppServersWithMultipartBody)
+{
+  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
+  _hss_connection->set_user_ifc("sip:homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "    <ServiceInfo>banana</ServiceInfo>\n"
+                                "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // INVITE passed on to AS
+  SCOPED_TRACE("REGISTER (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+
+  free_txdata();
+}
+
+/// Simple correct example with Expires header
+TEST_F(RegistrarTest, AppServersWithOneBody)
+{
+  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
+  _hss_connection->set_user_ifc("sip:homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "      <Extension><IncludeRegisterRequest/></Extension>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // INVITE passed on to AS
+  SCOPED_TRACE("REGISTER (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+
+  free_txdata();
+}
+
+/// Simple correct example with Expires header
+TEST_F(RegistrarTest, AppServersWithNoBody)
+{
+  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
+  _hss_connection->set_user_ifc("sip:homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // INVITE passed on to AS
+  SCOPED_TRACE("REGISTER (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+
   free_txdata();
 }
 

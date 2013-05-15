@@ -55,6 +55,7 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "memcachedstore.h"
+#include "ifchandler.h"
 #include "registrar.h"
 #include "deregister.h"
 #include "constants.h"
@@ -63,9 +64,9 @@ extern "C" {
 
 static RegData::Store* store;
 
+static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
-
 
 //
 // mod_registrar is the module to receive SIP REGISTER requests.  This
@@ -180,6 +181,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
+  int expiry = 0;
 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
@@ -278,7 +280,7 @@ void process_register_request(pjsip_rx_data* rdata)
           }
 
           // Calculate the expiry period for the updated binding.
-          int expiry = (contact->expires != -1) ? contact->expires :
+          expiry = (contact->expires != -1) ? contact->expires :
                        (expires != NULL) ? expires->ivalue : 300;
           if (expiry > 300)
           {
@@ -423,6 +425,8 @@ void process_register_request(pjsip_rx_data* rdata)
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
+  register_with_application_servers(ifchandler, rdata, tdata, expiry);
+
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
   SAS::report_marker(end_marker);
@@ -445,12 +449,14 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 
-pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger)
+pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
 {
   pj_status_t status;
 
   store = registrar_store;
   analytics = analytics_logger;
+  ifchandler = ifchandler_ref;
+
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
