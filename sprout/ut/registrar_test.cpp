@@ -221,21 +221,6 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresParameter)
   free_txdata();
 }
 
-/// Simple correct example with Expires parameter set to 0
-TEST_F(RegistrarTest, SimpleMainlineDeregister)
-{
-  Message msg;
-  msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("", get_headers(out, "Contact"));  // no existing bindings
-  free_txdata();
-}
-
 /// Simple correct example with no expiry header or parameter.
 TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
 {

@@ -56,7 +56,6 @@ extern "C" {
 #include "stack.h"
 #include "memcachedstore.h"
 #include "registrar.h"
-#include "deregister.h"
 #include "constants.h"
 #include "log.h"
 
@@ -285,13 +284,7 @@ void process_register_request(pjsip_rx_data* rdata)
             // Expiry is too long, set it to the maximum of 300 seconds (5 minutes).
             expiry = 300;
           }
-
-          if (expiry == 0)
-          {
-            user_initiated_deregistration(store, aor, binding_id);
-          } else {
-            binding->_expires = now + expiry;
-          }
+          binding->_expires = now + expiry;
 
           if (analytics != NULL)
           {
