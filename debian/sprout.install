@@ -1,2 +1,2 @@
-../../build/bin/sprout usr/share/clearwater/bin
-../../sprout.root/* /
+build/bin/sprout usr/share/clearwater/bin
+sprout.root/* /
