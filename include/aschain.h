@@ -108,14 +108,13 @@ public:
   std::string odi_token() const;
 
 private:
-  bool is_mmtel(CallServices* call_services);
-
   AsChainTable* _as_chain_table;
   std::string _odi_token;
   const SessionCase& _session_case;
   std::string _served_user;
   bool _is_registered;
   std::vector<std::string> _application_servers; //< List of application server URIs.
+  size_t _index;  //< Index of next AS to use, or _application_servers.size() if complete.
 };
 
 /// Lookup table of AsChain objects.

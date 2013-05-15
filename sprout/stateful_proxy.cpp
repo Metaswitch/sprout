@@ -418,7 +418,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       // proxy_calculate_targets as an edge proxy.
       pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
       pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
-      SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
+      const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
       AsChain* original_dialog = NULL;
       if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
@@ -434,6 +434,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
           LOG_INFO("Original dialog for %.*s found: %s",
                    uri->user.slen, uri->user.ptr,
                    original_dialog->to_string().c_str());
+          session_case = &original_dialog->session_case();
         }
         else
         {
@@ -1708,7 +1709,7 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
 
   AsChain::Disposition disposition = AsChain::Disposition::Next;
 
-  if (_as_chain && _as_chain->session_case().is_terminating() && !_as_chain->complete())
+  if (_as_chain && _as_chain->session_case().is_terminating())
   {
     // Apply terminating call services to the message
     LOG_DEBUG("Apply terminating services");

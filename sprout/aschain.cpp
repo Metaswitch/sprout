@@ -34,6 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include <boost/lexical_cast.hpp>
 
 #include "log.h"
 #include "pjutils.h"
@@ -52,7 +53,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
-  _application_servers(application_servers)
+  _application_servers(application_servers),
+  _index(0)
 {
 }
 
@@ -63,7 +65,9 @@ AsChain::~AsChain()
 
 std::string AsChain::to_string() const
 {
-  return _session_case.to_string();
+  return ("AsChain-" + _session_case.to_string() +
+          "[" + _odi_token + "]:" +
+          boost::lexical_cast<std::string>(_index + 1) + "/" + boost::lexical_cast<std::string>(_application_servers.size()));
 }
 
 /// @returns the session case
@@ -92,10 +96,16 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
                                                  // freed by caller.
                                                  target** pre_target)
 {
-  // @@@ KSW do the indexed AS, and advance the index. Assert that we
-  // are never called if complete().
+  if (_index == _application_servers.size())
+  {
+    LOG_DEBUG("No ASs left in chain");
+    return AsChain::Disposition::Next;
+  }
 
-  if (call_services && is_mmtel(call_services))
+  std::string application_server = _application_servers[_index];
+  ++_index;
+
+  if (call_services && call_services->is_mmtel(application_server))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
     if (_session_case.is_originating())
@@ -118,10 +128,9 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     }
     // LCOV_EXCL_STOP
   }
-  else if (!_application_servers.empty())
+  else
   {
-    // Temporary code, supporting only one application server.
-    std::string as_uri_str = _application_servers[0];
+    std::string as_uri_str = application_server;
 
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
@@ -152,8 +161,17 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     // the AS to fork the request - otherwise things will get very
     // confused! Not required by 3GPP TS 24.229, but appears in
     // MSF-IA-SIP.017 s3.2.17.
-    // @@@ KSW only do this if we're not the last in the chain.
-    PJUtils::set_generic_header(tdata, &STR_REQUEST_DISPOSITION, &STR_NO_FORK);
+    if (_index < _application_servers.size())
+    {
+      // @@@KSW Should preserve any other (non-forking) parameters.
+      PJUtils::set_generic_header(tdata, &STR_REQUEST_DISPOSITION, &STR_NO_FORK);
+    }
+    else
+    {
+      /// @@@KSW Should preserve the original header as set by UE, and
+      /// any other non-forking parameters.
+      PJUtils::delete_header(tdata, &STR_REQUEST_DISPOSITION);
+    }
 
     // Start defining the new target.
     target* as_target = new target;
@@ -177,50 +195,14 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 
-    if (_session_case.is_originating())
-    {
-      // @@@ Until we have proper AS chain processing, we need to put
-      // the session case into the ODI URI.
-      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
-      pj_strdup2(tdata->pool, &orig_param->value, "");
-      pj_list_insert_after(&self_uri->other_param, orig_param);
-    }
-
     as_target->paths.push_back((pjsip_uri*)self_uri);
 
     // Stop processing the chain and send the request out to the AS.
     *pre_target = as_target;
     return AsChain::Disposition::Skip;
   }
-  else
-  {
-    LOG_DEBUG("No application servers configured");
-    return AsChain::Disposition::Next;
-  }
 }
 
-
-/// See if we should be invoking our MMTEL AS.
-// @returns true if we should invoke MMTEL, false if not.
-bool AsChain::is_mmtel(CallServices* call_services)
-{
-  // Check if we're supposed to be supplying local MMTel services
-  bool local_mmtel = false;
-  for (std::vector<std::string>::const_iterator ii = _application_servers.begin();
-       ii < _application_servers.end();
-       ii++)
-  {
-    if (call_services->is_mmtel(*ii))
-    {
-      LOG_DEBUG("Got local MMTel services");
-      local_mmtel = true;
-      break;
-    }
-  }
-
-  return local_mmtel;
-}
 
 /// @returns the served user.
 std::string AsChain::served_user() const
@@ -232,7 +214,7 @@ std::string AsChain::served_user() const
 /// @returns true if this AS chain has been completed (no ASs left), false otherwise.
 bool AsChain::complete() const
 {
-  return _application_servers.empty();
+  return (_index == _application_servers.size());
 }
 
 

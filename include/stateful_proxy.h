@@ -71,7 +71,7 @@ public:
   {
   }
 
-  ServingState(SessionCase* session_case,
+  ServingState(const SessionCase* session_case,
                AsChain* original_dialog) :
     _session_case(session_case),
     _original_dialog(original_dialog)
@@ -114,7 +114,7 @@ private:
 
   /// Points to the session case.  If this is NULL it means the serving
   // state has not been set up.
-  SessionCase* _session_case;
+  const SessionCase* _session_case;
 
   /// Is this related to an existing (original) dialog? If so, we
   // should continue handling the existing AS chain rather than

@@ -253,10 +253,9 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 
-/// Delete all existing copies of a header and replace with a new one.
-void PJUtils::set_generic_header(pjsip_tx_data* tdata,
-                                 const pj_str_t* name,
-                                 const pj_str_t* value)
+/// Delete all existing copies of a header.
+void PJUtils::delete_header(pjsip_tx_data* tdata,
+                            const pj_str_t* name)
 {
   while (1)
   {
@@ -270,7 +269,14 @@ void PJUtils::set_generic_header(pjsip_tx_data* tdata,
       break;
     }
   }
+}
 
+/// Delete all existing copies of a header and replace with a new one.
+void PJUtils::set_generic_header(pjsip_tx_data* tdata,
+                                 const pj_str_t* name,
+                                 const pj_str_t* value)
+{
+  delete_header(tdata, name);
   pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(tdata->pool, name, value);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)new_hdr);
 }
@@ -558,7 +564,7 @@ void PJUtils::create_random_token(size_t length,       //< Number of characters.
 {
   token.reserve(length);
 
-  for (int ii = 0; ii < length; ++ii)
+  for (size_t ii = 0; ii < length; ++ii)
   {
     token += _b64[rand() % 64];
   }

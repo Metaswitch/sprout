@@ -38,6 +38,7 @@
 ///----------------------------------------------------------------------------
 
 #include <string>
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "utils.h"
@@ -49,6 +50,7 @@
 #include "aschain.h"
 
 using namespace std;
+using testing::MatchesRegex;
 
 /// Fixture for AsChainTest
 class AsChainTest : public SipTest
@@ -89,19 +91,15 @@ TEST_F(AsChainTest, Basics)
   as_list.push_back("sip:mmtel.homedomain");
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
-  EXPECT_EQ("orig", as_chain.to_string());
+  EXPECT_THAT(as_chain.to_string(), testing::MatchesRegex("AsChain-orig\\[[+/A-Za-z0-9]+\\]:1/0"));
   EXPECT_EQ(SessionCase::Originating, as_chain.session_case());
   EXPECT_EQ("sip:5755550011@homedomain", as_chain.served_user());
 
-  EXPECT_TRUE(as_chain.complete());
-  EXPECT_FALSE(as_chain2.complete());
-  EXPECT_FALSE(as_chain3.complete());
+  EXPECT_TRUE(as_chain.complete()) << as_chain.to_string();
+  EXPECT_FALSE(as_chain2.complete()) << as_chain2.to_string();
+  EXPECT_FALSE(as_chain3.complete()) << as_chain3.to_string();
 
   CallServices calls(NULL);  // Not valid, but good enough for this UT.
-
-  EXPECT_FALSE(as_chain.is_mmtel(&calls));
-  EXPECT_FALSE(as_chain2.is_mmtel(&calls));
-  EXPECT_TRUE(as_chain3.is_mmtel(&calls));
 }
 
 TEST_F(AsChainTest, AsInvocation)
@@ -149,6 +147,7 @@ TEST_F(AsChainTest, AsInvocation)
   target = NULL;
   disposition = as_chain2.on_initial_request(NULL, NULL, NULL, tdata, &target);
   EXPECT_EQ(AsChain::Disposition::Skip, disposition);
+  EXPECT_TRUE(as_chain2.complete());
   ASSERT_TRUE(target != NULL);
   EXPECT_FALSE(target->from_store);
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
@@ -156,7 +155,7 @@ TEST_F(AsChainTest, AsInvocation)
   std::list<pjsip_uri*>::iterator it = target->paths.begin();
   EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
   ++it;
-  EXPECT_EQ("sip:odi_" + as_chain2._odi_token + "@testnode:5058;lr;orig", str_uri(*it));
+  EXPECT_EQ("sip:odi_" + as_chain2._odi_token + "@testnode:5058;lr", str_uri(*it));
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));
