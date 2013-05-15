@@ -113,7 +113,8 @@ public:
                   string served_user,
                   bool reg,
                   const SessionCase& sescase,
-                  bool expected);
+                  bool expected,
+                  bool third_party_reg);
   void doTest(string description,
               string frag,
               bool reg,
@@ -164,7 +165,8 @@ void IfcHandlerTest::doBaseTest(string description,
                                 string served_user,
                                 bool reg,
                                 const SessionCase& sescase,
-                                bool expected)
+                                bool expected,
+                                bool third_party_reg)
 {
   SCOPED_TRACE(description);
   if (ifc != "")
@@ -172,7 +174,7 @@ void IfcHandlerTest::doBaseTest(string description,
     _hss_connection->set_user_ifc("sip:5755550033@homedomain",
                                   ifc);
   }
-  std::vector<std::string> application_servers;
+  std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
   _ifc_handler->lookup_ifcs(sescase,
                             served_user,
@@ -183,7 +185,18 @@ void IfcHandlerTest::doBaseTest(string description,
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
-    EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0]);
+    EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0].server_name);
+    EXPECT_EQ("0", application_servers[0].default_handling);
+    if (third_party_reg)
+    {
+      EXPECT_EQ("banana", application_servers[0].service_info);
+      EXPECT_EQ(true, application_servers[0].include_register_request);
+      EXPECT_EQ(false, application_servers[0].include_register_response);
+    } else {
+      EXPECT_EQ("", application_servers[0].service_info);
+      EXPECT_EQ(false, application_servers[0].include_register_request);
+      EXPECT_EQ(false, application_servers[0].include_register_response);
+    }
   }
 }
 
@@ -213,7 +226,8 @@ TEST_F(IfcHandlerTest, ProfilePart)
                  "sip:5755550033@homedomain",
                  is_reg,
                  SessionCase::Originating,
-                 (profilepart == 0) ? is_reg : !is_reg);
+                 (profilepart == 0) ? is_reg : !is_reg,
+                 false);
     }
   }
 }
@@ -226,6 +240,7 @@ TEST_F(IfcHandlerTest, NoIfc)
              "sip:5755550033@homedomain",
              true,
              SessionCase::Originating,
+             false,
              false);
   EXPECT_TRUE(_log.contains("No iFC found"));
 }
@@ -246,9 +261,36 @@ TEST_F(IfcHandlerTest, NoPriority)
              "sip:5755550033@homedomain",
              true,
              SessionCase::Originating,
+             false,
              false);
   EXPECT_TRUE(_log.contains("Missing mandatory value for iFC priority"));
 }
+
+TEST_F(IfcHandlerTest, ThirdPartyRegistration)
+{
+      doBaseTest("",
+                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                 "<ServiceProfile>\n"
+                 "  <InitialFilterCriteria>\n"
+                 "    <Priority>1</Priority>\n"
+                 "    <ApplicationServer>\n"
+                 "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                 "      <DefaultHandling>0</DefaultHandling>\n"
+                 "      <ServiceInfo>banana</ServiceInfo>\n"
+                 "      <Extension>\n"
+                 "        <IncludeRegisterRequest />\n"
+                 "      </Extension>\n"
+                 "    </ApplicationServer>\n"
+                 "  </InitialFilterCriteria>\n"
+                 "</ServiceProfile>",
+                 TEST_MSG,
+                 "sip:5755550033@homedomain",
+                 true,
+                 SessionCase::Originating,
+                 true,
+                 true);
+}
+
 
 /// Test an individual TriggerPoint.
 void IfcHandlerTest::doTest(string description,
@@ -273,7 +315,8 @@ void IfcHandlerTest::doTest(string description,
              "sip:5755550033@homedomain",
              reg,
              sescase,
-             expected);
+             expected,
+             false);
 }
 
 TEST_F(IfcHandlerTest, MethodMatch)
