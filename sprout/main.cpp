@@ -510,6 +510,13 @@ int main(int argc, char *argv[])
     }
   }
 
+  // Ensure our random numbers are unpredictable.
+  unsigned int seed;
+  pj_time_val now;
+  pj_gettimeofday(&now);
+  seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
+  srand(seed);
+
   init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
