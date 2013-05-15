@@ -87,8 +87,6 @@ public:
     // server. Processing should skip to target processing,
     // omitting any subsequent stages.
     Skip,
-    // @@@ in Java I'd include the target in this as a field. Need to
-    // tidy up similarly somehow.
 
     /// The internal application server (if any) has processed the
     // message. Processing should continue with the next stage.
