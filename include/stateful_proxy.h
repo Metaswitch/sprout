@@ -49,6 +49,8 @@
 class UASTransaction;
 class UACTransaction;
 
+#include <list>
+
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
@@ -177,6 +179,8 @@ private:
   pj_status_t init_uac_transactions(pjsip_tx_data* tdata, target_list& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
+  AsChain* create_as_chain(const SessionCase& session_case,
+                           pjsip_rx_data* rdata);
 
   pjsip_transaction*   _tsx;
   int                  _num_targets;
@@ -196,6 +200,7 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
+  std::list<AsChain*> _victims;  //< Objects to die along with the transaction. Never more than 2.
 };
 
 // This is the data that is attached to the UAC transaction

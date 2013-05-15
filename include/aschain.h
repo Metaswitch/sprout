@@ -67,6 +67,19 @@ typedef std::list<target> target_list;
 class AsChainTable;
 
 /// The AS chain.
+//
+// Lifetime:
+//
+// The AS chain is created when a request first comes in, or when a
+// request turns around from originating to terminating. We impose a
+// simplifying limitation: an ODI is only valid for as long as the
+// transaction that provided that ODI exists. This means that the AS
+// chain only needs to remain valid for as long as the longest-lived
+// Sprout->AS transaction. This is clearly the transaction which
+// created the AS chain in the first place, since it does not end
+// until all the chained transactions have ended. Hence the AS chain
+// is destroyed when the transaction which created it is destroyed.
+//
 class AsChain
 {
 public:

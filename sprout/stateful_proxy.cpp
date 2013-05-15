@@ -214,10 +214,6 @@ static pj_bool_t is_user_numeric(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
-static AsChain* create_as_chain(IfcHandler* ifc_handler,
-                                const SessionCase& session_case,
-                                pjsip_rx_data* rdata,
-                                SAS::TrailId trail);
 
 
 ///@{
@@ -426,7 +422,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         // This is one of our original dialog identifier (ODI) tokens.
         // See 3GPP TS 24.229 s5.4.3.4.
         std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
-                                uri->user.slen - STR_ODI_PREFIX.slen);
+                                            uri->user.slen - STR_ODI_PREFIX.slen);
         original_dialog = as_chain_table->lookup(odi_token);
 
         if (original_dialog)
@@ -1516,6 +1512,15 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
+  for (std::list<AsChain*>::iterator it = _victims.begin();
+       it != _victims.end();
+       ++it)
+  {
+    LOG_DEBUG("Delete AsChain");
+    delete *it;
+  }
+  _victims.clear();
+
   LOG_DEBUG("UASTransaction destructor completed");
 }
 
@@ -1592,10 +1597,8 @@ AsChain* UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     }
     else
     {
-      as_chain = create_as_chain(ifc_handler,
-                                 serving_state.session_case(),
-                                 rdata,
-                                 trail());
+      as_chain = create_as_chain(serving_state.session_case(),
+                                 rdata);
     }
 
     if (serving_state.session_case().is_originating() &&
@@ -1605,7 +1608,6 @@ AsChain* UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      // @@@KSW temp delete _as_chain;
       as_chain = NULL;
       PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
       PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
@@ -1616,10 +1618,8 @@ AsChain* UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       }
       else
       {
-        as_chain = create_as_chain(ifc_handler,
-                                   SessionCase::Terminating,
-                                   rdata,
-                                   trail());
+        as_chain = create_as_chain(SessionCase::Terminating,
+                                   rdata);
       }
     }
   }
@@ -1653,14 +1653,11 @@ AsChain::Disposition UASTransaction::handle_originating(AsChain** as_chain,
     // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    // @@@KSW temp delete _as_chain;
     *as_chain = NULL;
     PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
     PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
-    *as_chain = create_as_chain(ifc_handler,
-                                SessionCase::Terminating,
-                                rdata,
-                                trail());
+    *as_chain = create_as_chain(SessionCase::Terminating,
+                                rdata);
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
@@ -3047,10 +3044,8 @@ bool is_user_registered(std::string served_user)
 
 
 /// Factory method: create AsChain by looking up iFCs.
-AsChain* create_as_chain(IfcHandler* ifc_handler,
-                         const SessionCase& session_case,
-                         pjsip_rx_data* rdata,
-                         SAS::TrailId trail)
+AsChain* UASTransaction::create_as_chain(const SessionCase& session_case,
+                                         pjsip_rx_data* rdata)
 {
   std::vector<std::string> application_servers;
 
@@ -3068,15 +3063,18 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
                              served_user,
                              is_registered,
                              rdata->msg_info.msg,
-                             trail,
+                             trail(),
                              application_servers);
   }
 
-  return new AsChain(as_chain_table,
-                     session_case,
-                     served_user,
-                     is_registered,
-                     application_servers);
+  AsChain* ret = new AsChain(as_chain_table,
+                             session_case,
+                             served_user,
+                             is_registered,
+                             application_servers);
+  _victims.push_back(ret);
+
+  return ret;
 }
 
 ///@}
