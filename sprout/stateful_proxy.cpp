@@ -517,7 +517,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   // Perform common initial processing.
   uas_data->enter_context();
-  uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
+  AsChain* as_chain = uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
 
   AsChain::Disposition disposition = AsChain::Disposition::Next;
 
@@ -529,13 +529,13 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // node/home domain.
 
     // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(rdata, tdata, &target);
+    disposition = uas_data->handle_originating(&as_chain, rdata, tdata, &target);
 
     if (disposition == AsChain::Disposition::Next)
     {
       // Do outgoing (terminating) half.
       LOG_DEBUG("Terminating half");
-      disposition = uas_data->handle_terminating(tdata, &target);
+      disposition = uas_data->handle_terminating(as_chain, tdata, &target);
     }
   }
 
@@ -1437,7 +1437,6 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
                                                          _req(tdata),
                                                          _best_rsp(NULL),
                                                          _trust(trust),
-                                                         _as_chain(NULL),
                                                          _proxy(NULL),
                                                          _pending_destroy(false),
                                                          _context_count(0)
@@ -1517,13 +1516,6 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
-  if (_as_chain != NULL)
-  {
-    LOG_DEBUG("Free AS chain");
-    // @@@KSW temp delete _as_chain;
-    _as_chain = NULL;
-  }
-
   LOG_DEBUG("UASTransaction destructor completed");
 }
 
@@ -1567,9 +1559,9 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 
 // Handle the incoming half of a non-CANCEL message.
-void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
-                                                pjsip_tx_data* tdata,
-                                                const ServingState& serving_state)
+AsChain* UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
+                                                    pjsip_tx_data* tdata,
+                                                    const ServingState& serving_state)
 {
   if ((!edge_proxy) &&
       (method() == PJSIP_INVITE_METHOD))
@@ -1586,12 +1578,13 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(tdata);
 
+  AsChain* as_chain = NULL;
+
   if (serving_state.is_set())
   {
     if (serving_state.original_dialog())
     {
-      pj_assert(_as_chain == NULL);
-      _as_chain = serving_state.original_dialog();
+      as_chain = serving_state.original_dialog();
     }
     else if (ifc_handler == NULL)
     {
@@ -1599,22 +1592,21 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     }
     else
     {
-      pj_assert(_as_chain == NULL);
-      _as_chain = create_as_chain(ifc_handler,
-                                  serving_state.session_case(),
-                                  rdata,
-                                  trail());
+      as_chain = create_as_chain(ifc_handler,
+                                 serving_state.session_case(),
+                                 rdata,
+                                 trail());
     }
 
     if (serving_state.session_case().is_originating() &&
-        ((_as_chain == NULL) ||
-         (_as_chain->complete())))
+        ((as_chain == NULL) ||
+         (as_chain->complete())))
     {
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
       // @@@KSW temp delete _as_chain;
-      _as_chain = NULL;
+      as_chain = NULL;
       PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
       PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
@@ -1624,24 +1616,27 @@ void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       }
       else
       {
-        _as_chain = create_as_chain(ifc_handler,
-                                    SessionCase::Terminating,
-                                    rdata,
-                                    trail());
+        as_chain = create_as_chain(ifc_handler,
+                                   SessionCase::Terminating,
+                                   rdata,
+                                   trail());
       }
     }
   }
+
+  return as_chain;
 }
 
 
 // Perform originating handling.
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
+AsChain::Disposition UASTransaction::handle_originating(AsChain** as_chain,
+                                                        pjsip_rx_data* rdata,
                                                         pjsip_tx_data* tdata,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
-  if (!(_as_chain && _as_chain->session_case().is_originating()))
+  if (!(*as_chain && (*as_chain)->session_case().is_originating()))
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
     return AsChain::Disposition::Next;
@@ -1650,7 +1645,7 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
   // Apply originating call services to the message
   LOG_DEBUG("Applying originating services");
   AsChain::Disposition disposition;
-  disposition = _as_chain->on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
+  disposition = (*as_chain)->on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
 
   if (disposition == AsChain::Disposition::Next)
   {
@@ -1659,10 +1654,10 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
     // @@@KSW temp delete _as_chain;
-    _as_chain = NULL;
+    *as_chain = NULL;
     PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
     PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
-    _as_chain = create_as_chain(ifc_handler,
+    *as_chain = create_as_chain(ifc_handler,
                                 SessionCase::Terminating,
                                 rdata,
                                 trail());
@@ -1674,7 +1669,8 @@ AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
 
 // Perform terminating handling.
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
+AsChain::Disposition UASTransaction::handle_terminating(AsChain* as_chain,
+                                                        pjsip_tx_data* tdata,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
@@ -1715,11 +1711,11 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
 
   AsChain::Disposition disposition = AsChain::Disposition::Next;
 
-  if (_as_chain && _as_chain->session_case().is_terminating())
+  if (as_chain && as_chain->session_case().is_terminating())
   {
     // Apply terminating call services to the message
     LOG_DEBUG("Apply terminating services");
-    disposition = _as_chain->on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
+    disposition = as_chain->on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
     // On return from on_initial_request, our _proxy pointer
     // may be NULL.  Don't use it without checking first.
   }

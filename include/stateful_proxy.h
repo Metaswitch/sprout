@@ -135,9 +135,9 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  void handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
-  AsChain::Disposition handle_originating(pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  AsChain::Disposition handle_terminating(pjsip_tx_data* tdata, target** pre_target);
+  AsChain* handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
+  AsChain::Disposition handle_originating(AsChain** as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
+  AsChain::Disposition handle_terminating(AsChain* as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
@@ -185,7 +185,6 @@ private:
   pjsip_tx_data*       _req;
   pjsip_tx_data*       _best_rsp;
   TrustBoundary*       _trust;  //< Trust-boundary processing for this B2BUA to apply.
-  AsChain*             _as_chain;  //< AS chain / original dialog this transaction belongs to, if any.
 #define MAX_FORKING 10
   UACTransaction*      _uac_data[MAX_FORKING];
   struct
