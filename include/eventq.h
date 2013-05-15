@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef EVENTQ__
 #define EVENTQ__
 
@@ -86,6 +83,27 @@ public:
 
     pthread_mutex_unlock(&_m);
   }
+
+  /// Indicates whether the queue has been terminated.
+  bool is_terminated()
+  {
+    pthread_mutex_lock(&_m);
+    bool terminated = _terminated;
+    pthread_mutex_unlock(&_m);
+    return terminated;
+  }
+
+  /// Flushes the queue.
+  void flush()
+  {
+    pthread_mutex_lock(&_m);
+    while (!_q.empty())
+    {
+      _q.pop();
+    }
+    pthread_mutex_unlock(&_m);
+  }
+
 
   /// Push an item on to the event queue.
   ///
@@ -158,7 +176,7 @@ public:
       --_readers;
     }
 
-    if (!_q.empty()) 
+    if (!_q.empty())
     {
       // Something on the queue to receive.
       item = _q.front();
