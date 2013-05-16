@@ -108,7 +108,6 @@ AsChainStep::on_initial_request(CallServices* call_services,
 
   std::string application_server = _as_chain->_application_servers[_index];
   std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
-  bool is_last_in_chain = _index == (_as_chain->size() - 1);
 
   if (call_services && call_services->is_mmtel(application_server))
   {
@@ -165,22 +164,6 @@ AsChainStep::on_initial_request(CallServices* call_services,
     }
     pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
     PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
-
-    // Unless this is the last AS in the chain, we don't want to allow
-    // the AS to fork the request - otherwise things will get very
-    // confused! Not required by 3GPP TS 24.229, but appears in
-    // MSF-IA-SIP.017 s3.2.17.
-    if (is_last_in_chain)
-    {
-      /// @@@KSW Should preserve the original header as set by UE, and
-      /// any other non-forking parameters.
-      PJUtils::delete_header(tdata->msg, &STR_REQUEST_DISPOSITION);
-    }
-    else
-    {
-      // @@@KSW Should preserve any other (non-forking) parameters.
-      PJUtils::set_generic_header(tdata, &STR_REQUEST_DISPOSITION, &STR_NO_FORK);
-    }
 
     // Start defining the new target.
     target* as_target = new target;
