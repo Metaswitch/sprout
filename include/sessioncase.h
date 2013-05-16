@@ -69,6 +69,11 @@ public:
     return (this == &that);
   }
 
+  inline bool operator!=(const SessionCase& that) const
+  {
+    return (this != &that);
+  }
+
 protected:
   SessionCase(std::string name);
 

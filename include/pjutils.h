@@ -72,6 +72,9 @@ namespace PJUtils
   pjsip_uri* uri_from_string(const std::string& uri_s,
                              pj_pool_t* pool);
 
+  pjsip_uri* uri_from_string_header(pjsip_generic_string_hdr* hdr,
+                                    pj_pool_t *pool);
+
   std::string pj_str_to_string(const pj_str_t* pjstr);
 
   std::string pj_status_to_string(const pj_status_t status);
@@ -84,6 +87,10 @@ namespace PJUtils
   /// and transport.  If the user parameter is NULL the user field is left
   /// blank.
   void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
+
+  void set_generic_header(pjsip_tx_data* tdata,
+                          const pj_str_t* name,
+                          const pj_str_t* value);
 
   /// Checks whether the supplied message contains the extension in the
   /// Supported header.
