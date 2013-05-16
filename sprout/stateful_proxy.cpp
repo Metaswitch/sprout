@@ -3015,7 +3015,7 @@ AsChain* create_as_chain(IfcHandler* ifc_handler,
                          pjsip_rx_data* rdata,
                          SAS::TrailId trail)
 {
-  std::vector<std::string> application_servers;
+  std::vector<AsInvocation> application_servers;
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
                                                               rdata->msg_info.msg,

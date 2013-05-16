@@ -41,11 +41,12 @@
 #include "constants.h"
 #include "stateful_proxy.h"
 #include "aschain.h"
+#include "ifchandler.h"
 
 AsChain::AsChain(const SessionCase& session_case,
                  std::string served_user,
                  bool is_registered,
-                 std::vector<std::string> application_servers) :
+                 std::vector<AsInvocation> application_servers) :
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
@@ -109,7 +110,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
   else if (!_application_servers.empty())
   {
     // Temporary code, supporting only one application server.
-    std::string as_uri_str = _application_servers[0];
+    std::string as_uri_str = _application_servers[0].server_name;
 
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
@@ -195,11 +196,11 @@ bool AsChain::is_mmtel(CallServices* call_services)
 {
   // Check if we're supposed to be supplying local MMTel services
   bool local_mmtel = false;
-  for (std::vector<std::string>::const_iterator ii = _application_servers.begin();
+  for (std::vector<AsInvocation>::const_iterator ii = _application_servers.begin();
        ii < _application_servers.end();
        ii++)
   {
-    if (call_services->is_mmtel(*ii))
+    if (call_services->is_mmtel((*ii).server_name))
     {
       LOG_DEBUG("Got local MMTel services");
       local_mmtel = true;
