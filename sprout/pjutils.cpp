@@ -251,7 +251,8 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 
-/// Delete all existing copies of a header.
+/// Delete all existing copies of a header.  The header to delete must
+/// not be one that has an abbreviation.
 void PJUtils::delete_header(pjsip_msg* msg,
                             const pj_str_t* name)
 {
@@ -270,6 +271,7 @@ void PJUtils::delete_header(pjsip_msg* msg,
 }
 
 /// Delete all existing copies of a header and replace with a new one.
+/// The header to delete must not be one that has an abbreviation.
 void PJUtils::set_generic_header(pjsip_tx_data* tdata,
                                  const pj_str_t* name,
                                  const pj_str_t* value)
