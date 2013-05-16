@@ -470,7 +470,6 @@ pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* ana
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
 
-
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
 

@@ -378,7 +378,8 @@ TEST_F(RegistrarTest, NoPath)
   free_txdata();
 }
 
-/// Simple correct example with Expires header
+// Generate a REGISTER flow to app servers from the iFC.
+// First case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
   //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
@@ -439,7 +440,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   free_txdata();
 }
 
-/// Simple correct example with Expires header
+/// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
   //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
@@ -488,8 +489,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
-  // INVITE passed on to AS
-  SCOPED_TRACE("REGISTER (S)");
+  // REGISTER passed on to AS
   out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -499,7 +499,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   free_txdata();
 }
 
-/// Simple correct example with Expires header
+/// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
   //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
@@ -547,8 +547,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   free_txdata();
 
   SCOPED_TRACE("REGISTER (forwarded)");
-  // INVITE passed on to AS
-  SCOPED_TRACE("REGISTER (S)");
+  // REGISTER passed on to AS
   out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -558,7 +557,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   free_txdata();
 }
 
-/// Simple correct example with Expires header
+/// Check that the network-initiated deregistration code wors as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 {
   //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
@@ -587,12 +586,10 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   register_uri(_store, "6505551234", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
   ASSERT_EQ(1, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
-  //deregister_with_application_servers(_ifc_handler, "sip:6505551234@homedomain");
   network_initiated_deregistration(_ifc_handler, _store, "sip:6505551234@homedomain", "*");
 
-  SCOPED_TRACE("REGISTER (forwarded)");
-  // INVITE passed on to AS
-  SCOPED_TRACE("REGISTER (S)");
+  SCOPED_TRACE("deREGISTER");
+  // Check that we send a REGISTER to the AS on network-initiated deregistration
   pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -600,6 +597,6 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   tpAS.expect_target(current_txdata(), false);
 
   free_txdata();
-  sleep(1);
+  // Check that we deleted the binding
   ASSERT_EQ(0, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
 }
