@@ -2167,45 +2167,72 @@ TEST_F(IscTest, InterestingAs)
 {
   register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>2</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <ServiceProfile>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile>)");
+  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <ServiceProfile>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
+  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -2281,8 +2308,34 @@ TEST_F(IscTest, InterestingAs)
   msg.set_route(out);
   free_txdata();
 
-  // INVITE passed on to final destination
+  // INVITE passed on to AS3
   SCOPED_TRACE("INVITE (3)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS3.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS3 turns it around (acting as proxy)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS3);
+  free_txdata();
+
+  // 100 Trying goes back to AS3
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (4)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
@@ -2291,8 +2344,6 @@ TEST_F(IscTest, InterestingAs)
   EXPECT_EQ("", get_headers(out, "Route"));
 
   free_txdata();
-
-  // @@@KSW need tests on terminating side too.
 }
 
 // @@@ WS stuff
