@@ -144,6 +144,11 @@ public:
     return is_set() ? _as_chain->to_string(_index) : "None";
   }
 
+  const SessionCase& session_case() const
+  {
+    return _as_chain->session_case();
+  }
+
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
     /// The request has been completely handled. Processing should

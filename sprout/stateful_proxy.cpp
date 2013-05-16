@@ -430,7 +430,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
           LOG_INFO("Original dialog for %.*s found: %s",
                    uri->user.slen, uri->user.ptr,
                    original_dialog.to_string().c_str());
-          session_case = &original_dialog._as_chain->session_case();
+          session_case = &original_dialog.session_case();
         }
         else
         {
@@ -1636,7 +1636,7 @@ AsChainStep::Disposition UASTransaction::handle_originating(AsChainStep& as_chai
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
-  if (!(as_chain_step.is_set() && as_chain_step._as_chain->session_case().is_originating()))
+  if (!(as_chain_step.is_set() && as_chain_step.session_case().is_originating()))
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
     return AsChainStep::Disposition::Next;
@@ -1707,7 +1707,7 @@ AsChainStep::Disposition UASTransaction::handle_terminating(AsChainStep& as_chai
 
   AsChainStep::Disposition disposition = AsChainStep::Disposition::Next;
 
-  if (as_chain_step.is_set() && as_chain_step._as_chain->session_case().is_terminating())
+  if (as_chain_step.is_set() && as_chain_step.session_case().is_terminating())
   {
     // Apply terminating call services to the message
     LOG_DEBUG("Apply terminating services");
