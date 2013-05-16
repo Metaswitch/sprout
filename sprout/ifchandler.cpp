@@ -322,26 +322,26 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
         xml_node<>* as = ifc->first_node("ApplicationServer");
         if (as)
         {
-          AsInvocation* as_invocation = new AsInvocation;
+          AsInvocation as_invocation;
           int32_t priority = (int32_t)parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max());
-          as_invocation->server_name = get_first_node_value(as, "ServerName");
-          as_invocation->default_handling = get_first_node_value(as, "DefaultHandling");
-          as_invocation->service_info = get_first_node_value(as, "ServiceInfo");
+          as_invocation.server_name = get_first_node_value(as, "ServerName");
+          as_invocation.default_handling = get_first_node_value(as, "DefaultHandling");
+          as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
           xml_node<>* as_ext = as->first_node("Extension");
           if (as_ext)
           {
-            as_invocation->include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
-            as_invocation->include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
+            as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
+            as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
           } else {
-            as_invocation->include_register_request = false;
-            as_invocation->include_register_response = false;
+            as_invocation.include_register_request = false;
+            as_invocation.include_register_response = false;
           };
 
-          if (!as_invocation->server_name.empty())
+          if (!as_invocation.server_name.empty())
           {
-            LOG_INFO("Found (triggered) server %s at priority %d", as_invocation->server_name.c_str(), (int)priority);
-            as_map.insert(std::pair<int32_t, AsInvocation>(priority, *as_invocation));
+            LOG_INFO("Found (triggered) server %s at priority %d", as_invocation.server_name.c_str(), (int)priority);
+            as_map.insert(std::pair<int32_t, AsInvocation>(priority, as_invocation));
           }
         }
       } else {
