@@ -90,6 +90,60 @@ public:
           std::vector<std::string> application_servers);
   ~AsChain();
 
+  std::string to_string(size_t index) const;
+  const SessionCase& session_case() const;
+  size_t size() const;
+
+private:
+  friend class AsChainStep;
+
+  AsChainTable* const _as_chain_table;
+
+  /// ODI tokens, one for each step.
+  std::vector<std::string> _odi_tokens;
+
+  const SessionCase& _session_case;
+  const std::string _served_user;
+  const bool _is_registered;
+  std::vector<std::string> _application_servers; //< List of application server URIs.
+};
+
+
+/// A single step in the AsChain.
+class AsChainStep
+{
+public:
+  AsChainStep() :
+    _as_chain(NULL),
+    _index(0u)
+  {
+  }
+
+  AsChainStep(AsChain* as_chain, size_t index) :
+    _as_chain(as_chain),
+    _index(index)
+  {
+  }
+
+  ~AsChainStep()
+  {
+  }
+
+  bool is_set() const
+  {
+    return (_as_chain != NULL);
+  }
+
+  bool complete() const
+  {
+    return ((_as_chain == NULL) || (_index == _as_chain->size()));
+  }
+
+  std::string to_string() const
+  {
+    return is_set() ? _as_chain->to_string(_index) : "None";
+  }
+
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
     /// The request has been completely handled. Processing should
@@ -112,35 +166,35 @@ public:
                                  pjsip_tx_data* tdata,
                                  target** target);
 
-  std::string to_string() const;
-  std::string served_user() const;
-  const SessionCase& session_case() const;
-  bool complete() const;
-  std::string odi_token() const;
-
 private:
-  AsChainTable* const _as_chain_table;
-  const std::string _odi_token;
-  const SessionCase& _session_case;
-  const std::string _served_user;
-  const bool _is_registered;
-  std::vector<std::string> _application_servers; //< List of application server URIs.
-  size_t _index;  //< Index of next AS to use, or _application_servers.size() if complete.
+  /// Returns the ODI token of the next AsChainStep in this chain.
+  const std::string& next_odi_token() const
+  {
+    return _as_chain->_odi_tokens[_index];
+  }
+
+  AsChain* _as_chain;
+  size_t _index;
 };
+
 
 /// Lookup table of AsChain objects.
 class AsChainTable
 {
 public:
-  AsChain* lookup(const std::string& token) const;
+  /// Lookup the next step to follow when receiving the given
+  // token. The 0th token thus indicates the 1st step, the 1st token
+  // the 2nd step, and so on.
+  AsChainStep lookup(const std::string& token) const;
 
 private:
   friend class AsChain;
 
-  std::string register_(AsChain* as_chain);
-  void unregister(const std::string& token);
+  void register_(AsChain* as_chain, std::vector<std::string>& tokens);
+  void unregister(std::vector<std::string>& tokens);
 
   static const int TOKEN_LENGTH = 10;
 
-  std::map<std::string, AsChain*> _t2c_map;
+  /// Map from token to pair of (AsChain, index).
+  std::map<std::string, AsChainStep> _t2c_map;
 };

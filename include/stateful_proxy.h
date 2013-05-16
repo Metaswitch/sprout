@@ -68,13 +68,12 @@ class ServingState
 {
 public:
   ServingState() :
-    _session_case(NULL),
-    _original_dialog(NULL)
-  {
+    _session_case(NULL)
+    {
   }
 
   ServingState(const SessionCase* session_case,
-               AsChain* original_dialog) :
+               AsChainStep original_dialog) :
     _session_case(session_case),
     _original_dialog(original_dialog)
   {
@@ -100,7 +99,7 @@ public:
   {
     if (_session_case != NULL)
     {
-      return _session_case->to_string() + " " + (_original_dialog ? _original_dialog->to_string() : "(new)");
+      return _session_case->to_string() + " " + (_original_dialog.is_set() ? _original_dialog.to_string() : "(new)");
     }
     else
     {
@@ -110,7 +109,7 @@ public:
 
   bool is_set() const { return _session_case != NULL; };
   const SessionCase& session_case() const { return *_session_case; };
-  AsChain* original_dialog() const { return _original_dialog; };
+  AsChainStep original_dialog() const { return _original_dialog; };
 
 private:
 
@@ -120,9 +119,9 @@ private:
 
   /// Is this related to an existing (original) dialog? If so, we
   // should continue handling the existing AS chain rather than
-  // creating a new one. Pointer to that existing chain, or NULL if
-  // none.
-  AsChain* _original_dialog;
+  // creating a new one. Index and pointer to that existing chain, or
+  // !is_set() if none.
+  AsChainStep _original_dialog;
 };
 
 // This is the data that is attached to the UAS transaction
@@ -137,9 +136,9 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  AsChain* handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
-  AsChain::Disposition handle_originating(AsChain** as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  AsChain::Disposition handle_terminating(AsChain* as_chain, pjsip_tx_data* tdata, target** pre_target);
+  AsChainStep handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
+  AsChainStep::Disposition handle_originating(AsChainStep& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
+  AsChainStep::Disposition handle_terminating(AsChainStep& as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
@@ -179,8 +178,8 @@ private:
   pj_status_t init_uac_transactions(pjsip_tx_data* tdata, target_list& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
-  AsChain* create_as_chain(const SessionCase& session_case,
-                           pjsip_rx_data* rdata);
+  AsChainStep create_as_chain(const SessionCase& session_case,
+                               pjsip_rx_data* rdata);
 
   pjsip_transaction*   _tsx;
   int                  _num_targets;
