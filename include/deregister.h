@@ -4,11 +4,6 @@
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
  *
- * Parts of this module were derived from GPL licensed PJSIP sample code
- * with the following copyrights.
- *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
- *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
- *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or (at your
@@ -39,8 +34,20 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
+}
+
 #include <string>
 #include "regdata.h"
+#include "ifchandler.h"
 
 void user_initiated_deregistration(RegData::Store* store, const std::string aor, const std::string binding_id);
 void network_initiated_deregistration(RegData::Store* store, const std::string aor, const std::string binding_id);
+void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation* as, int expires);
+void register_with_application_servers(IfcHandler*, pjsip_rx_data*, pjsip_tx_data*, int);
+void deregister_with_application_servers();
+
