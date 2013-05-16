@@ -187,10 +187,13 @@ private:
 class AsChainTable
 {
 public:
+  AsChainTable();
+  ~AsChainTable();
+
   /// Lookup the next step to follow when receiving the given
   // token. The 0th token thus indicates the 1st step, the 1st token
   // the 2nd step, and so on.
-  AsChainStep lookup(const std::string& token) const;
+  AsChainStep lookup(const std::string& token);
 
 private:
   friend class AsChain;
@@ -202,4 +205,5 @@ private:
 
   /// Map from token to pair of (AsChain, index).
   std::map<std::string, AsChainStep> _t2c_map;
+  pthread_mutex_t _lock;
 };

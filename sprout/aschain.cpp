@@ -195,11 +195,24 @@ AsChainStep::on_initial_request(CallServices* call_services,
 }
 
 
+AsChainTable::AsChainTable()
+{
+  pthread_mutex_init(&_lock, NULL);
+}
+
+
+AsChainTable::~AsChainTable()
+{
+  pthread_mutex_destroy(&_lock);
+}
+
+
 /// Create the tokens for the given AsChain, and register them to
 /// point at the next step in each case.
 void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens)
 {
   size_t len = as_chain->size();
+  pthread_mutex_lock(&_lock);
 
   for (size_t i = 0; i < len; i++)
   {
@@ -208,22 +221,32 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
     tokens.push_back(token);
     _t2c_map[token] = AsChainStep(as_chain, i + 1);
   }
+
+  pthread_mutex_unlock(&_lock);
 }
 
 
 void AsChainTable::unregister(std::vector<std::string>& tokens)
 {
+  pthread_mutex_lock(&_lock);
+
   for (std::vector<std::string>::iterator it = tokens.begin();
        it != tokens.end();
        ++it)
   {
     _t2c_map.erase(*it);
   }
+
+  pthread_mutex_unlock(&_lock);
 }
 
 
-AsChainStep AsChainTable::lookup(const std::string& token) const
+AsChainStep AsChainTable::lookup(const std::string& token)
 {
+  pthread_mutex_lock(&_lock);
   std::map<std::string, AsChainStep>::const_iterator it = _t2c_map.find(token);
-  return (it == _t2c_map.end()) ? AsChainStep(NULL, 0) : it->second;
+  AsChainStep ret = (it == _t2c_map.end()) ? AsChainStep(NULL, 0) : it->second;
+  pthread_mutex_unlock(&_lock);
+
+  return ret;
 }
