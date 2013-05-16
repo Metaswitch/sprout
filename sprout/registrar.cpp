@@ -73,6 +73,7 @@ static AnalyticsLogger* analytics;
 // must get invoked before the proxy UA module.
 //
 static pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata);
+static void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event);
 
 pjsip_module mod_registrar =
 {
@@ -88,7 +89,7 @@ pjsip_module mod_registrar =
   NULL,                               // on_rx_response()
   NULL,                               // on_tx_request()
   NULL,                               // on_tx_response()
-  NULL,                               // on_tsx_state()
+  &registrar_on_tsx_state,            // on_tsx_state()
 };
 
 
@@ -290,7 +291,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
           if (expiry == 0)
           {
-            user_initiated_deregistration(store, aor, binding_id);
+            user_initiated_deregistration(ifchandler, store, aor, binding_id);
           } else {
             binding->_expires = now + expiry;
           }
@@ -425,7 +426,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  register_with_application_servers(ifchandler, rdata, tdata, expiry);
+  register_with_application_servers(ifchandler, rdata, tdata, expiry, "");
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
@@ -448,6 +449,18 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
+void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
+  LOG_INFO("REGISTER transaction failed with code %d and event type %d (PJSIP_EVENT_TIMER is %d)", tsx->status_code, event->type, PJSIP_EVENT_TIMER);
+  if ((event->type == PJSIP_EVENT_TIMER) || 
+      ((event->type == PJSIP_EVENT_RX_MSG) && (
+        (tsx->status_code == 408) || ((tsx->status_code > 500) && (tsx->status_code < 600))))) {
+// LCOV_EXCL_START
+// Can't create an AS response in UT
+    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
+    network_initiated_deregistration(ifchandler, store, aor, "*");
+// LCOV_EXCL_STOP
+  }
+}
 
 pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
 {

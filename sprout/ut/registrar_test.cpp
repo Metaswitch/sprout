@@ -46,6 +46,7 @@
 #include "analyticslogger.h"
 #include "stack.h"
 #include "registrar.h"
+#include "deregister.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 
@@ -75,10 +76,10 @@ public:
   static void TearDownTestCase()
   {
     destroy_registrar();
-    RegData::destroy_local_store(_store);
-    delete _analytics;
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
+    delete _analytics;
+    RegData::destroy_local_store(_store); _store = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -155,6 +156,8 @@ string Message::get()
                    "%11$s"
                    "Contact: %8$s%7$s%9$s\r\n"
                    "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
+                   "P-Access-Network-Info: DUMMY\r\n"
+                   "P-Visited-Network-ID: DUMMY\r\n"
                    "%4$s"
                    "Content-Length:  %5$d\r\n"
                    "\r\n"
@@ -555,3 +558,48 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   free_txdata();
 }
 
+/// Simple correct example with Expires header
+TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
+{
+  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
+  _hss_connection->set_user_ifc("sip:homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  register_uri(_store, "6505551234", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  ASSERT_EQ(1, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
+  //deregister_with_application_servers(_ifc_handler, "sip:6505551234@homedomain");
+  network_initiated_deregistration(_ifc_handler, _store, "sip:6505551234@homedomain", "*");
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // INVITE passed on to AS
+  SCOPED_TRACE("REGISTER (S)");
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+
+  free_txdata();
+  sleep(1);
+  ASSERT_EQ(0, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
+}

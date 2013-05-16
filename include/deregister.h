@@ -45,9 +45,8 @@ extern "C" {
 #include "regdata.h"
 #include "ifchandler.h"
 
-void user_initiated_deregistration(RegData::Store* store, const std::string aor, const std::string binding_id);
-void network_initiated_deregistration(RegData::Store* store, const std::string aor, const std::string binding_id);
-void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation* as, int expires);
-void register_with_application_servers(IfcHandler*, pjsip_rx_data*, pjsip_tx_data*, int);
-void deregister_with_application_servers();
-
+void user_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string aor, const std::string binding_id);
+void network_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string aor, const std::string binding_id);
+void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation* as, int expires, std::string);
+void register_with_application_servers(IfcHandler*, pjsip_rx_data*, pjsip_tx_data*, int, const std::string);
+void deregister_with_application_servers(IfcHandler*, const std::string);
