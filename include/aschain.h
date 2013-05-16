@@ -50,6 +50,7 @@ extern "C" {
 
 #include "callservices.h"
 #include "sessioncase.h"
+#include "ifchandler.h"
 
 
 /// Short-lived data structure holding the details of a calculated target.
@@ -87,7 +88,7 @@ public:
           const SessionCase& session_case,
           const std::string& served_user,
           bool is_registered,
-          std::vector<std::string> application_servers);
+          std::vector<AsInvocation> application_servers);
   ~AsChain();
 
   std::string to_string(size_t index) const;
@@ -105,7 +106,7 @@ private:
   const SessionCase& _session_case;
   const std::string _served_user;
   const bool _is_registered;
-  std::vector<std::string> _application_servers; //< List of application server URIs.
+  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
 };
 
 

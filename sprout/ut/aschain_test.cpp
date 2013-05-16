@@ -82,15 +82,19 @@ public:
 
 TEST_F(AsChainTest, Basics)
 {
-  std::vector<std::string> as_list;
+  std::vector<AsInvocation> as_list;
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step(&as_chain, 0u);
 
-  as_list.push_back("sip:pancommunicon.cw-ngv.com");
+  AsInvocation as1;
+  as1.server_name = "sip:pancommunicon.cw-ngv.com";
+  as_list.push_back(as1);
   AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step2(&as_chain2, 0u);
 
-  as_list.push_back("sip:mmtel.homedomain");
+  AsInvocation as2;
+  as2.server_name = "sip:mmtel.homedomain";
+  as_list.push_back(as2);
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step3(&as_chain3, 0u);
 
@@ -113,16 +117,20 @@ TEST_F(AsChainTest, Basics)
 
 TEST_F(AsChainTest, AsInvocation)
 {
-  std::vector<std::string> as_list;
+  std::vector<AsInvocation> as_list;
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step(&as_chain, 0u);
 
-  as_list.push_back("sip:pancommunicon.cw-ngv.com");
+  AsInvocation as1;
+  as1.server_name = "sip:pancommunicon.cw-ngv.com";
+  as_list.push_back(as1);
   AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step2(&as_chain2, 0u);
 
   as_list.clear();
-  as_list.push_back("::invalid:pancommunicon.cw-ngv.com");
+  AsInvocation as2;
+  as2.server_name = "::invalid:pancommunicon.cw-ngv.com";
+  as_list.push_back(as2);
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
   AsChainStep as_chain_step3(&as_chain3, 0u);
 

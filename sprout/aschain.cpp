@@ -42,12 +42,13 @@
 #include "constants.h"
 #include "stateful_proxy.h"
 #include "aschain.h"
+#include "ifchandler.h"
 
 AsChain::AsChain(AsChainTable* as_chain_table,
                  const SessionCase& session_case,
                  const std::string& served_user,
                  bool is_registered,
-                 std::vector<std::string> application_servers) :
+                 std::vector<AsInvocation> application_servers) :
   _as_chain_table(as_chain_table),
   _odi_tokens(),
   _session_case(session_case),
@@ -106,10 +107,10 @@ AsChainStep::on_initial_request(CallServices* call_services,
     return AsChainStep::Disposition::Next;
   }
 
-  std::string application_server = _as_chain->_application_servers[_index];
+  AsInvocation application_server = _as_chain->_application_servers[_index];
   std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
 
-  if (call_services && call_services->is_mmtel(application_server))
+  if (call_services && call_services->is_mmtel(application_server.server_name))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
     if (_as_chain->_session_case.is_originating())
@@ -134,7 +135,7 @@ AsChainStep::on_initial_request(CallServices* call_services,
   }
   else
   {
-    std::string as_uri_str = application_server;
+    std::string as_uri_str = application_server.server_name;
 
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);

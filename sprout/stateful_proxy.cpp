@@ -3046,7 +3046,7 @@ bool is_user_registered(std::string served_user)
 AsChainStep UASTransaction::create_as_chain(const SessionCase& session_case,
                                              pjsip_rx_data* rdata)
 {
-  std::vector<std::string> application_servers;
+  std::vector<AsInvocation> application_servers;
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
                                                               rdata->msg_info.msg,
