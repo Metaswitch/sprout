@@ -77,7 +77,6 @@ public:
                    bool is_registered,
                    pjsip_msg* msg,
                    SAS::TrailId trail,
-                   std::string& served_user,
                    std::vector<AsInvocation>& application_servers);
 
 private:
