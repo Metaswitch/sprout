@@ -55,12 +55,12 @@ void deregister_with_application_servers() {}
 
 void register_with_application_servers(IfcHandler* ifchandler, pjsip_rx_data* received_register, pjsip_tx_data* ok_response, int expires)
 {
-  std::string served_user;
+  std::string served_user = ifchandler->served_user_from_msg(SessionCase::Terminating, received_register->msg_info.msg);
   std::vector<AsInvocation> as_list;
   std::vector<AsInvocation>::iterator as_iter;
   SAS::TrailId trail = get_trail(ok_response);
   LOG_INFO("Looking up list of Application Servers");
-  ifchandler->lookup_ifcs(SessionCase::Terminating, received_register->msg_info.msg, trail, served_user, as_list);
+  ifchandler->lookup_ifcs(SessionCase::Terminating, served_user, true, received_register->msg_info.msg, trail, as_list);
   LOG_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
