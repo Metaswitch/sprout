@@ -177,17 +177,15 @@ pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
 {
   // We must duplicate the string into memory from the specified pool first as
   // pjsip_parse_uri does not clone the actual strings within the URI.
-  size_t len = hdr->hvalue.slen;
-  char* buf = (char*)pj_pool_alloc(pool, len + 1);
-  memcpy(buf, hdr->hvalue.ptr, len);
-  buf[len] = 0;
-  char* end = strchr(buf, '>');
+  pj_str_t hvalue;
+  pj_strdup_with_null(pool, &hvalue, &hdr->hvalue);
+  char* end = strchr(hvalue.ptr, '>');
   if (end != NULL)
   {
     *(end + 1) = '\0';
-    len = (end + 1 - buf);
+    hvalue.slen = (end + 1 - hvalue.ptr);
   }
-  return pjsip_parse_uri(pool, buf, len, 0);
+  return pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
 }
 
 
