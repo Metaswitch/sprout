@@ -151,9 +151,9 @@ public:
     return _as_chain->session_case();
   }
 
-  bool matches_target(pjsip_msg* msg) const
+  bool matches_target(pjsip_msg* msg, pj_pool_t* pool) const
   {
-    return _as_chain->matches_target(msg);
+    return _as_chain->matches_target(msg, pool);
   }
 
   /// Disposition of a request. Suggests what to do next.

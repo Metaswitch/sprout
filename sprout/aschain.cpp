@@ -105,9 +105,9 @@ bool AsChain::matches_target(pjsip_msg* msg,
   // the user-param), and by converting any escaped characters into
   // unescaped form.".
   const std::string& orig_uri = _served_user;
-  const std::string msg_uri = served_user_from_msg(SessionCase::Terminating,
-                                                   msg,
-                                                   pool);
+  const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
+                                                               msg,
+                                                               pool);
   return (orig_uri == msg_uri);
 }
 
