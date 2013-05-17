@@ -124,7 +124,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
     SAS::TrailId trail = get_trail(ok_response);
-    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg);
+    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, ok_response->pool);
     ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, received_register->msg_info.msg, trail, as_list);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());

@@ -45,9 +45,11 @@
 
 AsChain::AsChain(const SessionCase& session_case,
                  std::string served_user,
+                 bool is_registered,
                  std::vector<AsInvocation> application_servers) :
   _session_case(session_case),
   _served_user(served_user),
+  _is_registered(is_registered),
   _application_servers(application_servers)
 {
 }
@@ -110,21 +112,37 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     // Temporary code, supporting only one application server.
     std::string as_uri_str = _application_servers[0].server_name;
 
-    pjsip_uri* as_uri = PJUtils::uri_from_string(as_uri_str, tdata->pool);
+    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
+    pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
+    LOG_DEBUG("Invoking external AS %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str());
 
-    if (as_uri == NULL)
+    // Basic support for P-Asserted-Identity: strip any header(s) we've
+    // received, and set up to be the same as the From header. Full support will
+    // be added under sto125.
+    pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
+                                              PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
+                                              tdata->pool);
+    PJUtils::set_generic_header(tdata, &STR_P_ASSERTED_IDENTITY, &pai_str);
+
+    // Set P-Served-User, including session case and registration
+    // state, per RFC5502 and the extension in 3GPP TS 24.229
+    // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
+    // step 5 s5.4.3.3 step 4c.
+    std::string psu_string = "<" + _served_user + ">;sescase=" + _session_case.to_string();
+    if (_session_case != SessionCase::OriginatingCdiv)
     {
-      // @@@ would be good to check earlier, e.g., when parsing the iFCs.
-      LOG_WARNING("Badly formed URI %s in iFC", as_uri_str.c_str());
-      // @@@ hmm, should really simulate a 408 here.
-      return AsChain::Disposition::Next;
+      psu_string.append(";regstate=");
+      psu_string.append(_is_registered ? "reg" : "unreg");
     }
+    pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
+    PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
 
-    LOG_DEBUG("Invoking external AS %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, as_uri).c_str());
-
-    // @@@ P-A-I basic support
-
-    // @@@ P-Served-User support, including session case and registration state
+    // Unless this is the last AS in the chain, we don't want to allow
+    // the AS to fork the request - otherwise things will get very
+    // confused! Not required by 3GPP TS 24.229, but appears in
+    // MSF-IA-SIP.017 s3.2.17.
+    // @@@ KSW only do this if we're not the last in the chain.
+    PJUtils::set_generic_header(tdata, &STR_REQUEST_DISPOSITION, &STR_NO_FORK);
 
     // Start defining the new target.
     target* as_target = new target;
@@ -136,8 +154,8 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     // Set the AS URI as the topmost route header.  Set loose-route,
     // otherwise the headers get mucked up.
-    ((pjsip_sip_uri*)as_uri)->lr_param = 1;  // @@@ fixme cast
-    as_target->paths.push_back(as_uri);
+    as_uri->lr_param = 1;
+    as_target->paths.push_back((pjsip_uri*)as_uri);
 
     // Insert route header below it with an ODI in it.
     pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
@@ -145,7 +163,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
     pj_strdup2(tdata->pool, &self_uri->user, odi_token.c_str());
     self_uri->host = stack_data.local_host;
     self_uri->port = stack_data.trusted_port;
-    self_uri->transport_param = ((pjsip_sip_uri*)as_uri)->transport_param;  // Use same transport as AS, in case it can only cope with one. @@@ not sure if that's a good idea @@@ hack re cast - not good
+    self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 
     if (_session_case.is_originating())
@@ -160,13 +178,6 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     as_target->paths.push_back((pjsip_uri*)self_uri);
 
-    // @@@ to support demo AS's limitations (TCP not supported),
-    // record-route ourselves via UDP, before the AS.  This means that
-    // the AS only has to route to us (via the transport we specify),
-    // rather than to an arbitrary previous hop (e.g., bono over TCP
-    // for a simple 1-AS call).
-    PJUtils::add_record_route(tdata, "udp", stack_data.trusted_port, NULL);
-
     // Stop processing the chain and send the request out to the AS.
     *pre_target = as_target;
     return AsChain::Disposition::Skip;
@@ -179,7 +190,7 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 }
 
 
-/// See if we should be invoking our MMTEL AS.  Only valid after lookup_ifcs called.
+/// See if we should be invoking our MMTEL AS.
 // @returns true if we should invoke MMTEL, false if not.
 bool AsChain::is_mmtel(CallServices* call_services)
 {
@@ -200,7 +211,7 @@ bool AsChain::is_mmtel(CallServices* call_services)
   return local_mmtel;
 }
 
-/// @returns the served user. Only valid after lookup_ifcs called.
+/// @returns the served user.
 std::string AsChain::served_user() const
 {
   return _served_user;

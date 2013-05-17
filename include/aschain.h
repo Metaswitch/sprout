@@ -71,6 +71,7 @@ class AsChain
 public:
   AsChain(const SessionCase& session_case,
           std::string served_user,
+          bool is_registered,
           std::vector<AsInvocation> application_servers);
   ~AsChain();
 
@@ -109,6 +110,7 @@ private:
 
   const SessionCase& _session_case;
   std::string _served_user;
-  std::vector<AsInvocation> _application_servers; //< List of application servers.
+  bool _is_registered;
+  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
 };
 
