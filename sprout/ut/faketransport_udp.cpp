@@ -334,7 +334,6 @@ static pj_status_t fake_udp_send_msg( pjsip_transport *transport,
 				 pjsip_transport_callback callback)
 {
     struct fake_udp_transport *tp = (struct fake_udp_transport*)transport;
-    pj_ssize_t size;
     pj_status_t status;
 
     PJ_ASSERT_RETURN(transport && tdata, PJ_EINVAL);
@@ -350,7 +349,7 @@ static pj_status_t fake_udp_send_msg( pjsip_transport *transport,
     tdata->op_key.callback = callback;
 
     /* Send to ioqueue! */
-    size = tdata->buf.cur - tdata->buf.start;
+//    size = tdata->buf.cur - tdata->buf.start;
 //    status = pj_ioqueue_sendto(tp->key, (pj_ioqueue_op_key_t*)&tdata->op_key,
 //			       tdata->buf.start, &size, 0,
 //			       rem_addr, addr_len);
@@ -629,11 +628,8 @@ static pj_status_t register_to_ioqueue(struct fake_udp_transport *tp)
 /* Start ioqueue asynchronous reading to all rdata */
 static pj_status_t start_async_read(struct fake_udp_transport *tp)
 {
-    pj_ioqueue_t *ioqueue;
     int i;
     pj_status_t status;
-
-    ioqueue = pjsip_endpt_get_ioqueue(tp->base.endpt);
 
     /* Start reading the ioqueue. */
     for (i=0; i<tp->rdata_cnt; ++i) {
