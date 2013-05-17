@@ -1590,6 +1590,15 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     if (serving_state.original_dialog().is_set())
     {
       as_chain_link = serving_state.original_dialog();
+
+      if ((serving_state.session_case() == SessionCase::Terminating) &&
+          !as_chain_link.matches_target(rdata->msg))
+      {
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3.
+        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
+                                        true,
+                                        rdata);
+      }
     }
     else if (ifc_handler == NULL)
     {
