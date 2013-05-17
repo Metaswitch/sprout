@@ -88,6 +88,30 @@ size_t AsChain::size() const
 }
 
 
+/// @returns whether the given message has the same target as the
+// chain.  Used to detect the orig-cdiv case.  Only valid for
+// terminating chains.
+bool AsChain::matches_target(pjsip_msg* msg,
+                             pj_pool_t* pool) const
+{
+  pj_assert(_session_case == SessionCase::Terminating);
+
+  // We do not support alias URIs per 3GPP TS 24.229 s3.1 and 29.228
+  // sB.2.1. This is an explicit limitation.  So this step reduces to
+  // simple syntactic canonicalization.
+  //
+  // 3GPP TS 24.229 s5.4.3.3 note 3 says "The canonical form of the
+  // Request-URI is obtained by removing all URI parameters (including
+  // the user-param), and by converting any escaped characters into
+  // unescaped form.".
+  const std::string& orig_uri = _served_user;
+  const std::string msg_uri = served_user_from_msg(SessionCase::Terminating,
+                                                   msg,
+                                                   pool);
+  return (orig_uri == msg_uri);
+}
+
+
 /// Apply first AS (if any) to initial request.
 //
 // @Returns whether processing should stop, continue, or skip to the end.

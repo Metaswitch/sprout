@@ -1592,11 +1592,10 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       as_chain_link = serving_state.original_dialog();
 
       if ((serving_state.session_case() == SessionCase::Terminating) &&
-          !as_chain_link.matches_target(rdata->msg))
+          !as_chain_link.matches_target(rdata->msg, tdata->pool))
       {
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3.
         as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
-                                        true,
                                         rdata);
       }
     }
@@ -1607,7 +1606,6 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     else
     {
       as_chain_link = create_as_chain(serving_state.session_case(),
-                                      false,
                                       rdata);
     }
 
@@ -1678,7 +1676,6 @@ AsChainLink UASTransaction::move_to_terminating_chain(pjsip_rx_data* rdata,
   else
   {
     as_chain_link = create_as_chain(SessionCase::Terminating,
-                                    false,
                                     rdata);
   }
 
@@ -3066,13 +3063,11 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            bool is_retargeting, //< See IfcHandler::served_user_from_msg for explanation.
                                             pjsip_rx_data* rdata)
 {
   std::vector<AsInvocation> application_servers;
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
-                                                              is_retargeting,
                                                               rdata->msg_info.msg,
                                                               rdata->tp_info.pool);
 

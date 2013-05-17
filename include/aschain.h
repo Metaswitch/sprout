@@ -94,6 +94,7 @@ public:
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
+  bool matches_target(pjsip_msg* msg, pj_pool_t* pool) const;
 
 private:
   friend class AsChainLink;
@@ -148,6 +149,11 @@ public:
   const SessionCase& session_case() const
   {
     return _as_chain->session_case();
+  }
+
+  bool matches_target(pjsip_msg* msg) const
+  {
+    return _as_chain->matches_target(msg);
   }
 
   /// Disposition of a request. Suggests what to do next.

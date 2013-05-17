@@ -404,11 +404,6 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
 // local served user.
 std::string IfcHandler::served_user_from_msg(
   const SessionCase& session_case,
-  /// Apply retargeting processing? Only applicable if session case is
-  // terminating. If false, we look only in the req-URI. If true, we
-  // look elsewhere. See 3GPP TS 24.229 s5.4.3.3 steps 1 and 3a for
-  // details.
-  bool is_retargeting,
   pjsip_msg *msg,
   pj_pool_t* pool)
 {
@@ -433,15 +428,22 @@ std::string IfcHandler::served_user_from_msg(
 
   // For terminating:
   //
-  // Ultimately we should determine the served user as described in
-  // 3GPP TS 24.229 s5.4.3.3, steps 1 and 3b. This relies on Req-URI
-  // alone in step 1, and relies on History-Info (RFC4244) and
-  // P-Served-User (RFC5502) in step 3b. We should never respect
-  // P-Asserted-Identity. We implement the P-Served-User mechanism,
-  // but not the History-Info one - because it has fundamental
-  // problems, as outlined in RFC5502 appendix A.
+  // We determine the served user as described in 3GPP TS 24.229
+  // s5.4.3.3, step 1, i.e., purely on the Request-URI.
 
-  if (session_case.is_originating() || is_retargeting)
+  // For originating after retargeting (orig-cdiv):
+  //
+  // We should determine the served user as described in 3GPP TS
+  // 24.229 s5.4.3.3 step 3b. This relies on History-Info (RFC4244)
+  // and P-Served-User (RFC5502) in step 3b. We should never respect
+  // P-Asserted-Identity.
+  //
+  // We implement P-Served-User, and fall back on the From
+  // header. However, the History-Info mechanism has fundamental
+  // problems as outlined in RFC5502 appendix A, and we do not
+  // implement it.
+
+  if (session_case.is_originating())  // (includes orig-cdiv)
   {
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.

@@ -180,7 +180,6 @@ private:
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
   AsChainLink create_as_chain(const SessionCase& session_case,
-                              bool is_retargeting,
                               pjsip_rx_data* rdata);
 
   pjsip_transaction*   _tsx;
