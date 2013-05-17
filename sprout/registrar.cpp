@@ -426,7 +426,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  RegistrationUtils::register_with_application_servers(ifchandler, rdata, tdata, expiry, "");
+  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "");
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);

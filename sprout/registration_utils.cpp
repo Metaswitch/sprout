@@ -57,25 +57,23 @@ extern "C" {
 #define MAX_SIP_MSG_SIZE 65535
 
 void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, std::string);
-void deregister_with_application_servers(IfcHandler*, const std::string, int);
+void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string, int);
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
-                                         const std::string aor,
-                                         int expires)
+                                         RegData::Store* store,
+                                         const std::string aor)
 {
-  RegistrationUtils::register_with_application_servers(ifchandler, NULL, NULL, expires, aor);
+  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, aor);
 }
 
 void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
-                                       pjsip_rx_data *received_register, // Can only be NULL if expires is 0
+                                       RegData::Store* store,
+                                       pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
-                                       int expires, // Value of the Expires header on the REGISTER we send out
                                        const std::string aor) // Should be empty if we have a received_register
 {
   // Function preconditions
   if (received_register == NULL) {
-    // We only build a dummy message if we're deregistering
-    assert(expires == 0);
     // We should have both messages or neither
     assert(ok_response == NULL);
     // This shouldn't be defined if we have a message to build it from
@@ -87,10 +85,12 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     assert(ok_response != NULL);
   }
 
+  std::string served_user = aor;
+
   std::vector<AsInvocation> as_list;
   LOG_INFO("Looking up list of Application Servers");
-  if (received_register == NULL && expires == 0) {
-    LOG_INFO("Expires is 0: generating a fake REGISTER to send to IfcHandler using AOR %s", aor.c_str());
+  if (received_register == NULL) {
+    LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", aor.c_str());
     pj_status_t status;
     pjsip_method method;
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
@@ -112,22 +112,26 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     assert(status == PJ_SUCCESS);
 
-    // Choice of SessionCase::Originating is notarbitrary - we don't expect iFCs to specify SessionCase
+    // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
     // constraints for REGISTER messages, but we only get the served user from the From address in an
-    // Originating message, otherwise we use the Request-URI.
-    //
-    // If this is a problem, we could create a new SessionCase::Any.
-    std::string served_user = aor;
+    // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
     SAS::TrailId trail = SAS::new_trail(1);
     ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, tdata->msg, trail, as_list);
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
     SAS::TrailId trail = get_trail(ok_response);
-    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, ok_response->pool);
+    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, ok_response->pool);
     ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, received_register->msg_info.msg, trail, as_list);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
+
+  // Expire all outstanding bindings for this AoR, and get the time this AoR still has remaining - this
+  // is the most sensible value to pass to an AS, as they don't have any per-binding information.
+  RegData::AoR *aor_data = store->get_aor_data(served_user);
+  int now = time(NULL);
+  int expires = store->expire_bindings(aor_data, now) - now;
+  delete aor_data;
 
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
@@ -259,7 +263,7 @@ void notify_application_servers() {
   // TODO: implement as part of reg events package
 }
 
-int expire_bindings(RegData::Store *store, const std::string aor, const std::string binding_id)
+void expire_bindings(RegData::Store *store, const std::string aor, const std::string binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
   RegData::AoR *aor_data;
@@ -274,20 +278,15 @@ int expire_bindings(RegData::Store *store, const std::string aor, const std::str
       aor_data->remove_binding(binding_id);
     }
   } while (!store->set_aor_data(aor, aor_data));
-
-  time_t now = time(NULL);
-  int max_remaining_expiry = store->expire_bindings(aor_data, now);
-  delete aor_data;
-  return (max_remaining_expiry-now);
 };
 
 void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
 {
-  int max_remaining_expiry = expire_bindings(store, aor, binding_id);
+  expire_bindings(store, aor, binding_id);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifchandler, aor, max_remaining_expiry);
+  deregister_with_application_servers(ifchandler, store, aor);
   notify_application_servers();
 };
 

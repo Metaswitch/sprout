@@ -141,7 +141,7 @@ string Message::get()
   char buf[16384];
 
   int n = snprintf(buf, sizeof(buf),
-                   "%1$s sip:%2$s@%3$s SIP/2.0\r\n"
+                   "%1$s sip:%3$s SIP/2.0\r\n"
                    "%10$s"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
