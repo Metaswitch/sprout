@@ -1598,7 +1598,8 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     else
     {
       as_chain_link = create_as_chain(serving_state.session_case(),
-                                       rdata);
+                                      false,
+                                      rdata);
     }
 
     if (serving_state.session_case().is_originating() &&
@@ -1619,7 +1620,8 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       else
       {
         as_chain_link = create_as_chain(SessionCase::Terminating,
-                                         rdata);
+                                        false,
+                                        rdata);
       }
     }
   }
@@ -1656,7 +1658,8 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
     PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
     PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
     as_chain_link = create_as_chain(SessionCase::Terminating,
-                                     rdata);
+                                    false,
+                                    rdata);
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
@@ -3044,11 +3047,13 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                             pjsip_rx_data* rdata)
+                                            bool is_retargeting, //< See IfcHandler::served_user_from_msg for explanation.
+                                            pjsip_rx_data* rdata)
 {
   std::vector<AsInvocation> application_servers;
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
+                                                              is_retargeting,
                                                               rdata->msg_info.msg,
                                                               rdata->tp_info.pool);
 

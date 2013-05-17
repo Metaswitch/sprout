@@ -402,13 +402,21 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
-                                             pjsip_msg *msg,
-                                             pj_pool_t* pool)
+std::string IfcHandler::served_user_from_msg(
+  const SessionCase& session_case,
+  /// Apply retargeting processing? Only applicable if session case is
+  // terminating. If false, we look only in the req-URI. If true, we
+  // look elsewhere. See 3GPP TS 24.229 s5.4.3.3 steps 1 and 3a for
+  // details.
+  bool is_retargeting,
+  pjsip_msg *msg,
+  pj_pool_t* pool)
 {
   pjsip_uri* uri = NULL;
   std::string user;
 
+  // For originating:
+  //
   // Ultimately we should determine the served user as described in
   // 3GPP TS 24.229 s5.4.3.2, step 1. This first relies on
   // P-Served-User (RFC5502), if present (step 1a). We do implement
@@ -423,19 +431,32 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
   // these are intended for the AS, not the S-CSCF (which has other
   // means of determining these).
 
-  // Format is name-addr or addr-spec (containing a URI), followed by
-  // optional parameters.
-  pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-              pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+  // For terminating:
+  //
+  // Ultimately we should determine the served user as described in
+  // 3GPP TS 24.229 s5.4.3.3, steps 1 and 3b. This relies on Req-URI
+  // alone in step 1, and relies on History-Info (RFC4244) and
+  // P-Served-User (RFC5502) in step 3b. We should never respect
+  // P-Asserted-Identity. We implement the P-Served-User mechanism,
+  // but not the History-Info one - because it has fundamental
+  // problems, as outlined in RFC5502 appendix A.
 
-  if (served_user_hdr != NULL)
+  if (session_case.is_originating() || is_retargeting)
   {
-    uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+    // Inspect P-Served-User header. Format is name-addr or addr-spec
+    // (containing a URI), followed by optional parameters.
+    pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
+      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
-    if (uri == NULL)
+    if (served_user_hdr != NULL)
     {
-      LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-                  served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+
+      if (uri == NULL)
+      {
+        LOG_WARNING("Unable to parse P-Served-User header: %.*s",
+                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      }
     }
   }
 

@@ -71,6 +71,7 @@ public:
   ~IfcHandler();
 
   static std::string served_user_from_msg(const SessionCase& session_case,
+                                          bool is_retargeting,
                                           pjsip_msg *msg,
                                           pj_pool_t* pool);
 
