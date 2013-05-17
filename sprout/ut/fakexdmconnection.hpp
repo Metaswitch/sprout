@@ -48,6 +48,9 @@ public:
   FakeXDMConnection();
   ~FakeXDMConnection();
 
+  void put(const std::string& uri, const std::string& doc);
+  void flush_all();
+
 private:
   FakeHttpConnection* _fakehttp;  //< alias for _http, with more specific type.
 };

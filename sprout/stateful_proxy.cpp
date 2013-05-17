@@ -3060,8 +3060,10 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
 {
   if (ifc_handler == NULL)
   {
+    // LCOV_EXCL_START No easy way to hit.
     LOG_INFO("No IFC handler");
     return AsChainLink();
+    // LCOV_EXCL_STOP
   }
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,

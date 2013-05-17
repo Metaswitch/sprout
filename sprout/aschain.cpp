@@ -56,12 +56,14 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _is_registered(is_registered),
   _application_servers(application_servers)
 {
+  LOG_DEBUG("Creating AsChain %p", this);
   _as_chain_table->register_(this, _odi_tokens);
 }
 
 
 AsChain::~AsChain()
 {
+  LOG_DEBUG("Destroying AsChain %p", this);
   _as_chain_table->unregister(_odi_tokens);
 }
 
