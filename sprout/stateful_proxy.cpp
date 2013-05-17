@@ -1608,19 +1608,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
-      PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
-
-      if (ifc_handler == NULL)
-      {
-        LOG_INFO("No IFC handler");
-        as_chain_link = AsChainLink();
-      }
-      else
-      {
-        as_chain_link = create_as_chain(SessionCase::Terminating,
-                                         rdata);
-      }
+      as_chain_link = move_to_terminating_chain(rdata, tdata);
     }
   }
 
@@ -1653,14 +1641,37 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
     // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
-    PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
-    as_chain_link = create_as_chain(SessionCase::Terminating,
-                                     rdata);
+    as_chain_link = move_to_terminating_chain(rdata, tdata);
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
   return disposition;
+}
+
+
+/// Move from originating to terminating handling.
+AsChainLink UASTransaction::move_to_terminating_chain(pjsip_rx_data* rdata,
+                                                      pjsip_tx_data* tdata)
+{
+  AsChainLink as_chain_link;
+
+  // These headers name the originating user, so should not survive
+  // the changearound to the terminating chain.
+  PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
+  PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
+
+  if (ifc_handler == NULL)
+  {
+    LOG_INFO("No IFC handler");
+    as_chain_link = AsChainLink();
+  }
+  else
+  {
+    as_chain_link = create_as_chain(SessionCase::Terminating,
+                                     rdata);
+  }
+
+  return as_chain_link;
 }
 
 // Perform terminating handling.
