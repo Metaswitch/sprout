@@ -166,6 +166,29 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
 }
 
 
+/// Get the URI (either name-addr or addr-spec) from the string header
+/// (e.g., P-Served-User), ignoring any parameters. If it's a bare
+/// addr-spec, assume (like Contact) that parameters belong to the
+/// header, not to the URI.
+///
+/// @return URI, or NULL if cannot be parsed.
+pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
+                                           pj_pool_t *pool)
+{
+  // We must duplicate the string into memory from the specified pool first as
+  // pjsip_parse_uri does not clone the actual strings within the URI.
+  pj_str_t hvalue;
+  pj_strdup_with_null(pool, &hvalue, &hdr->hvalue);
+  char* end = strchr(hvalue.ptr, '>');
+  if (end != NULL)
+  {
+    *(end + 1) = '\0';
+    hvalue.slen = (end + 1 - hvalue.ptr);
+  }
+  return pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
+}
+
+
 std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
 {
   return (pjstr != NULL) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
@@ -225,6 +248,29 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)rr);
 
   LOG_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
+}
+
+
+/// Delete all existing copies of a header and replace with a new one.
+void PJUtils::set_generic_header(pjsip_tx_data* tdata,
+                                 const pj_str_t* name,
+                                 const pj_str_t* value)
+{
+  while (1)
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, name, NULL);
+    if (hdr)
+    {
+      pj_list_erase(hdr);
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(tdata->pool, name, value);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)new_hdr);
 }
 
 

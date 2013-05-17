@@ -36,7 +36,13 @@
 
 #include <boost/lexical_cast.hpp>
 
+extern "C" {
+#include <pjlib-util.h>
+#include <pjlib.h>
+}
+
 #include "log.h"
+#include "constants.h"
 #include "hssconnection.h"
 #include "stack.h"
 #include "pjutils.h"
@@ -342,6 +348,9 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
           {
             LOG_INFO("Found (triggered) server %s at priority %d", as_invocation.server_name.c_str(), (int)priority);
             as_map.insert(std::pair<int32_t, AsInvocation>(priority, as_invocation));
+            // @@@ KSW Parse the URI and ensure it is parsable and a
+            // SIP URI here. If it's invalid, ignore it (seems the
+            // only sensible option).
           }
         }
       } else {
@@ -393,22 +402,55 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(const SessionCase& session_case, pjsip_msg *msg)
+std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
+                                             pjsip_msg *msg,
+                                             pj_pool_t* pool)
 {
   pjsip_uri* uri = NULL;
   std::string user;
 
-  // @@@KSW tsk1030 - support other ways of specifying served user?
+  // Ultimately we should determine the served user as described in
+  // 3GPP TS 24.229 s5.4.3.2, step 1. This first relies on
+  // P-Served-User (RFC5502), if present (step 1a). We do implement
+  // this part. However, until sto125 (support for multiple identities
+  // for the same line) is implemented, bono doesn't set the
+  // P-Asserted-Identity header so it makes no sense to rely on it,
+  // let alone to select one of the identities based on local policy
+  // (step 1.b.ii). We therefore ignore P-Asserted-Identity entirely
+  // for now. Instead, we look at the From header or the request URI
+  // as appropriate for the session case.  Per 24.229, we ignore the
+  // session case and registration state parameters of P-Served-User;
+  // these are intended for the AS, not the S-CSCF (which has other
+  // means of determining these).
 
-  if (session_case.is_originating())
+  // Format is name-addr or addr-spec (containing a URI), followed by
+  // optional parameters.
+  pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
+              pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+
+  if (served_user_hdr != NULL)
   {
-    // For originating services, the user is parsed from the from header.
-    uri = PJSIP_MSG_FROM_HDR(msg)->uri;
+    uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+
+    if (uri == NULL)
+    {
+      LOG_WARNING("Unable to parse P-Served-User header: %.*s",
+                  served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+    }
   }
-  else
+
+  if (uri == NULL)
   {
-    // For terminating services, the user is parsed from the request URI.
-    uri = msg->line.req.uri;
+    if (session_case.is_originating())
+    {
+      // For originating services, the user is parsed from the from header.
+      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
+    }
+    else
+    {
+      // For terminating services, the user is parsed from the request URI.
+      uri = msg->line.req.uri;
+    }
   }
 
   // PJSIP URIs might have an irritating wrapper around them.

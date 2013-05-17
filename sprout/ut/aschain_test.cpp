@@ -78,17 +78,17 @@ public:
 TEST_F(AsChainTest, Basics)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   AsInvocation as2;
   as2.server_name = "sip:mmtel.homedomain";
   as_list.push_back(as2);
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   EXPECT_EQ("orig", as_chain.to_string());
   EXPECT_EQ(SessionCase::Originating, as_chain.session_case());
@@ -108,18 +108,18 @@ TEST_F(AsChainTest, Basics)
 TEST_F(AsChainTest, AsInvocation)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   as_list.clear();
   AsInvocation as2;
   as2.server_name = "::invalid:pancommunicon.cw-ngv.com";
   as_list.push_back(as2);
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", as_list);
+  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
 
@@ -157,7 +157,7 @@ TEST_F(AsChainTest, AsInvocation)
   ASSERT_TRUE(target != NULL);
   EXPECT_FALSE(target->from_store);
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
-  ASSERT_EQ(2, target->paths.size());
+  ASSERT_EQ(2u, target->paths.size());
   std::list<pjsip_uri*>::iterator it = target->paths.begin();
   EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
   ++it;
@@ -166,12 +166,6 @@ TEST_F(AsChainTest, AsInvocation)
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));
   delete target; target = NULL;
-
-  // Invalid AS URI. This should probably return an error, but for now the AS is ignored.
-  disposition = as_chain3.on_initial_request(NULL, NULL, NULL, tdata, &target);
-  EXPECT_EQ(AsChain::Disposition::Next, disposition);
-  EXPECT_TRUE(target == NULL);
-  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
 
   // MMTEL cases can't easily be tested here, because they construct
   // real CallServices objects.
