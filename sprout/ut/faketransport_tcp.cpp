@@ -259,7 +259,6 @@ PJ_DEF(pj_status_t) pjsip_fake_tcp_transport_start3(
 					)
 {
     pj_pool_t *pool;
-    pj_sock_t sock = PJ_INVALID_SOCKET;
     struct fake_tcp_listener *listener;
     pj_sockaddr *listener_addr;
     pj_status_t status;
@@ -1147,7 +1146,6 @@ static void fake_tcp_keep_alive_timer(pj_timer_heap_t *th, pj_timer_entry *e)
     struct fake_tcp_transport *fake_tcp = (struct fake_tcp_transport*) e->user_data;
     pj_time_val delay;
     pj_time_val now;
-    pj_ssize_t size;
     pj_status_t status;
 
     PJ_UNUSED_ARG(th);
@@ -1174,7 +1172,7 @@ static void fake_tcp_keep_alive_timer(pj_timer_heap_t *th, pj_timer_entry *e)
 	      fake_tcp->base.remote_name.port));
 
     /* Send the data */
-    size = fake_tcp->ka_pkt.slen;
+//    size = fake_tcp->ka_pkt.slen;
 //    status = pj_activesock_send(fake_tcp->asock, &fake_tcp->ka_op_key.key,
 //				fake_tcp->ka_pkt.ptr, &size, 0);
     status = PJ_SUCCESS;  // drop on floor!
