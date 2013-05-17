@@ -1597,6 +1597,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       {
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
         // so create new AS chain.
+        LOG_INFO("Request-URI has changed, retargeting");
         as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
                                         rdata);
       }

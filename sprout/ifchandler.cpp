@@ -384,7 +384,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
                              SAS::TrailId trail,               //< The SAS trail ID
                              std::vector<AsInvocation>& application_servers)  //< OUT the AS list
 {
-  LOG_DEBUG("Fetching IFC information for %s", served_user.c_str());
+  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
   std::string ifc_xml;
   if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
   {
