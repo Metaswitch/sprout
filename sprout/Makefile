@@ -16,7 +16,7 @@ TARGET_SOURCES := logger.cpp \
                   analyticslogger.cpp \
                   stack.cpp \
                   stateful_proxy.cpp \
-                  deregister.cpp \
+                  registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \
                   options.cpp \

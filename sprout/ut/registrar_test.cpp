@@ -46,7 +46,7 @@
 #include "analyticslogger.h"
 #include "stack.h"
 #include "registrar.h"
-#include "deregister.h"
+#include "registration_utils.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 
@@ -141,7 +141,7 @@ string Message::get()
   char buf[16384];
 
   int n = snprintf(buf, sizeof(buf),
-                   "%1$s sip:%3$s SIP/2.0\r\n"
+                   "%1$s sip:%2$s@%3$s SIP/2.0\r\n"
                    "%10$s"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
@@ -379,11 +379,10 @@ TEST_F(RegistrarTest, NoPath)
 }
 
 // Generate a REGISTER flow to app servers from the iFC.
-// First case - REGISTER is generated with a non-multipart body
+// First case - REGISTER is generated with a multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
-  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
-  _hss_connection->set_user_ifc("sip:homedomain",
+  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
@@ -434,6 +433,10 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  pj_str_t multipart = pj_str("multipart");
+  pj_str_t mixed = pj_str("mixed");
+  EXPECT_EQ(0, pj_strcmp(&multipart, &out->body->content_type.type));
+  EXPECT_EQ(0, pj_strcmp(&mixed, &out->body->content_type.subtype));
 
   tpAS.expect_target(current_txdata(), false);
 
@@ -443,8 +446,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
-  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
-  _hss_connection->set_user_ifc("sip:homedomain",
+  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
@@ -493,6 +495,10 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  pj_str_t message = pj_str("message");
+  pj_str_t sip = pj_str("sip");
+  EXPECT_EQ(0, pj_strcmp(&message, &out->body->content_type.type));
+  EXPECT_EQ(0, pj_strcmp(&sip, &out->body->content_type.subtype));
 
   tpAS.expect_target(current_txdata(), false);
 
@@ -502,8 +508,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
 /// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
-  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
-  _hss_connection->set_user_ifc("sip:homedomain",
+  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
@@ -551,17 +556,17 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
 
   free_txdata();
 }
 
-/// Check that the network-initiated deregistration code wors as expected
+/// Check that the network-initiated deregistration code works as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 {
-  //_hss_connection->set_user_ifc("sip:6505550231@homedomain",
-  _hss_connection->set_user_ifc("sip:homedomain",
+  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
                                 "  <InitialFilterCriteria>\n"
@@ -577,22 +582,23 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                                 "  </TriggerPoint>\n"
                                 "  <ApplicationServer>\n"
                                 "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile>");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
-  register_uri(_store, "6505551234", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
-  ASSERT_EQ(1, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
-  network_initiated_deregistration(_ifc_handler, _store, "sip:6505551234@homedomain", "*");
+  register_uri(_store, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  ASSERT_EQ(1, _store->get_aor_data("sip:6505550231@homedomain")->_bindings.size());
+  RegistrationUtils::network_initiated_deregistration(_ifc_handler, _store, "sip:6505550231@homedomain", "*");
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
   pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
 

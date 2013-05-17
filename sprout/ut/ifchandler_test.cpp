@@ -186,7 +186,7 @@ void IfcHandlerTest::doBaseTest(string description,
   if (application_servers.size())
   {
     EXPECT_EQ("sip:1.2.3.4:56789;transport=UDP", application_servers[0].server_name);
-    EXPECT_EQ("0", application_servers[0].default_handling);
+    EXPECT_EQ(0, application_servers[0].default_handling);
     if (third_party_reg)
     {
       EXPECT_EQ("banana", application_servers[0].service_info);

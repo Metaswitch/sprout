@@ -57,7 +57,7 @@ extern "C" {
 #include "memcachedstore.h"
 #include "ifchandler.h"
 #include "registrar.h"
-#include "deregister.h"
+#include "registration_utils.h"
 #include "constants.h"
 #include "log.h"
 
@@ -291,7 +291,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
           if (expiry == 0)
           {
-            user_initiated_deregistration(ifchandler, store, aor, binding_id);
+            RegistrationUtils::user_initiated_deregistration(ifchandler, store, aor, binding_id);
           } else {
             binding->_expires = now + expiry;
           }
@@ -426,7 +426,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  register_with_application_servers(ifchandler, rdata, tdata, expiry, "");
+  RegistrationUtils::register_with_application_servers(ifchandler, rdata, tdata, expiry, "");
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
@@ -450,15 +450,18 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
-  LOG_INFO("REGISTER transaction failed with code %d and event type %d (PJSIP_EVENT_TIMER is %d)", tsx->status_code, event->type, PJSIP_EVENT_TIMER);
-  if ((event->type == PJSIP_EVENT_TIMER) || 
-      ((event->type == PJSIP_EVENT_RX_MSG) && (
-        (tsx->status_code == 408) || ((tsx->status_code > 500) && (tsx->status_code < 600))))) {
-// LCOV_EXCL_START
-// Can't create an AS response in UT
+  if (((intptr_t)tsx->mod_data[0] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+      (event->type == PJSIP_EVENT_RX_MSG) && 
+      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
+    // Can't create an AS response in UT
+    // LCOV_EXCL_START
+    LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
     std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-    network_initiated_deregistration(ifchandler, store, aor, "*");
-// LCOV_EXCL_STOP
+
+    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
+    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
+    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*");
+    // LCOV_EXCL_STOP
   }
 }
 

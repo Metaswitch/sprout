@@ -1,5 +1,5 @@
 /**
- * @file deregister.cpp Deregistration functions
+ * @file registration_utils.cpp Registration and deregistration functions
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -43,38 +43,63 @@ extern "C" {
 
 
 #include <string>
+#include <cassert>
 #include "regdata.h"
+#include "constants.h"
 #include "ifchandler.h"
 #include "pjutils.h"
 #include "stack.h"
 #include "registrar.h"
-#include "deregister.h"
+#include "registration_utils.h"
 #include "log.h"
+#include <boost/lexical_cast.hpp>
+
+#define MAX_SIP_MSG_SIZE 65535
+
+void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, std::string);
+void deregister_with_application_servers(IfcHandler*, const std::string, int);
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
-                                         const std::string aor)
+                                         const std::string aor,
+                                         int expires)
 {
-  register_with_application_servers(ifchandler, NULL, NULL, 0, aor);
+  RegistrationUtils::register_with_application_servers(ifchandler, NULL, NULL, expires, aor);
 }
 
-void register_with_application_servers(IfcHandler *ifchandler,
+void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
                                        pjsip_rx_data *received_register, // Can only be NULL if expires is 0
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
                                        int expires, // Value of the Expires header on the REGISTER we send out
-                                       const std::string aor) // Not used if we have a received_register
+                                       const std::string aor) // Should be empty if we have a received_register
 {
+  // Function preconditions
+  if (received_register == NULL) {
+    // We only build a dummy message if we're deregistering
+    assert(expires == 0);
+    // We should have both messages or neither
+    assert(ok_response == NULL);
+    // This shouldn't be defined if we have a message to build it from
+    assert(aor.compare("") != 0);
+  } else {
+    // This should be defined if we don't have a message to build it from
+    assert(aor.compare("") == 0);
+    // We should have both messages or neither
+    assert(ok_response != NULL);
+  }
+
   std::vector<AsInvocation> as_list;
-  std::vector<AsInvocation>::iterator as_iter;
-  SAS::TrailId trail;
   LOG_INFO("Looking up list of Application Servers");
   if (received_register == NULL && expires == 0) {
     LOG_INFO("Expires is 0: generating a fake REGISTER to send to IfcHandler using AOR %s", aor.c_str());
+    pj_status_t status;
     pjsip_method method;
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
     pjsip_tx_data *tdata;
-    pj_str_t bono_uri = pj_str(strdup(std::string("<sip:"+std::string(pj_strbuf(&stack_data.home_domain), pj_strlen(&stack_data.home_domain))+">").c_str()));
-    pj_str_t aor_uri = pj_str(strdup(std::string("<"+aor+">").c_str()));
-    pjsip_endpt_create_request(stack_data.endpt,
+    std::string bono_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.home_domain), pj_strlen(&stack_data.home_domain))+">";
+    const pj_str_t bono_uri = pj_str(const_cast<char *>(bono_uri_string.c_str()));
+    std::string aor_uri_string = "<"+aor+">";
+    const pj_str_t aor_uri = pj_str(const_cast<char *>(aor_uri_string.c_str()));
+    status = pjsip_endpt_create_request(stack_data.endpt,
                                &method,       // Method
                                &bono_uri,     // Target
                                &aor_uri,      // From
@@ -84,25 +109,34 @@ void register_with_application_servers(IfcHandler *ifchandler,
                                1,             // CSeq
                                NULL,          // No body
                                &tdata);       // OUT
-    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Terminating, tdata->msg);
-    ifchandler->lookup_ifcs(SessionCase::Terminating, served_user, true, tdata->msg, trail, as_list);
-    pj_status_t status = pjsip_tx_data_dec_ref(tdata);
+
+    assert(status == PJ_SUCCESS);
+
+    // Choice of SessionCase::Originating is notarbitrary - we don't expect iFCs to specify SessionCase
+    // constraints for REGISTER messages, but we only get the served user from the From address in an
+    // Originating message, otherwise we use the Request-URI.
+    //
+    // If this is a problem, we could create a new SessionCase::Any.
+    std::string served_user = aor;
+    SAS::TrailId trail = SAS::new_trail(1);
+    ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, tdata->msg, trail, as_list);
+    status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
     SAS::TrailId trail = get_trail(ok_response);
-    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Terminating, received_register->msg_info.msg);
-    ifchandler->lookup_ifcs(SessionCase::Terminating, served_user, true, received_register->msg_info.msg, trail, as_list);
+    std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg);
+    ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, received_register->msg_info.msg, trail, as_list);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
-  for(as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-    send_register_to_as(received_register, ok_response, &*as_iter, expires, aor);
+  for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
+    send_register_to_as(received_register, ok_response, *as_iter, expires, aor);
   }
 
 }
 
-void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation *as, int expires, std::string aor)
+void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, std::string aor)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -110,59 +144,46 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
   pjsip_method method;
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
   std::string user_uri_string = aor;
-  char trusted_port[6];
-
-  snprintf(trusted_port, sizeof(trusted_port), "%d", stack_data.trusted_port);
 
   if (received_register) {
     user_uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR,
                                              (pjsip_uri *)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(received_register->msg_info.msg)->uri));
   }
 
-  pj_str_t user_uri = pj_str(strdup(user_uri_string.c_str()));
-  pj_str_t scscf_uri = pj_str(strdup(std::string(
-                                       "<sip:" +
-                                       PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) +
-                                       ":" + std::string(trusted_port) + ">").c_str()));
-  pj_str_t as_uri = pj_str(strdup(as->server_name.c_str()));
+  pj_str_t user_uri = pj_str(const_cast<char *>(user_uri_string.c_str()));
+  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.trusted_port) + ">";
+  pj_str_t scscf_uri = pj_str(const_cast<char *>(scscf_uri_string.c_str()));
+  pj_str_t as_uri = pj_str(const_cast<char *>(as.server_name.c_str()));
 
-  pjsip_endpt_create_request(stack_data.endpt,
+  status = pjsip_endpt_create_request(stack_data.endpt,
                              &method,      // Method
                              &as_uri,      // Target
                              &scscf_uri,   // From
-                             &user_uri,      // To
+                             &user_uri,    // To
                              &scscf_uri,   // Contact
                              NULL,         // Auto-generate Call-ID
                              1,            // CSeq
                              NULL,         // No body
                              &tdata);      // OUT
 
+  assert(status == PJ_SUCCESS);
+
   // Expires header based on 200 OK response
-  pj_str_t expires_pjstr = pj_str("Expires");
-  pjsip_hdr *expires_hdr = (pjsip_hdr *)pjsip_generic_int_hdr_create(tdata->pool, &expires_pjstr, expires);
-  pjsip_msg_add_hdr(tdata->msg, expires_hdr);
+  //
+  pjsip_expires_hdr_create(tdata->pool, expires);
+  pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expires);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
 
   // TODO: modify orig-ioi of P-Charging-Vector and remove term-ioi
   // TODO: Set P-Charging-Function-Addresses header based on HSS values
 
   if (received_register && ok_response) {
     // Copy P-Access-Network-Info and P-Visited-Network-Id from original message
-    pj_str_t pani_pjstr = pj_str("P-Access-Network-Info");
-    pjsip_hdr *original_pani_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(received_register->msg_info.msg, &pani_pjstr, NULL);
-    if (original_pani_hdr) {
-      pjsip_hdr *pani_hdr = (pjsip_hdr *)pjsip_hdr_clone(tdata->pool, original_pani_hdr);
-      pjsip_msg_add_hdr(tdata->msg, pani_hdr);
-    };
-
-    pj_str_t pvni_pjstr = pj_str("P-Visited-Network-Id");
-    pjsip_hdr *original_pvni_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(received_register->msg_info.msg, &pvni_pjstr, NULL);
-    if (original_pvni_hdr) {
-      pjsip_hdr *pvni_hdr = (pjsip_hdr *)pjsip_hdr_clone(tdata->pool, original_pvni_hdr);
-      pjsip_msg_add_hdr(tdata->msg, pvni_hdr);
-    };
+    PJUtils::clone_header(&STR_P_A_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_V_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
 
     // Generate a message body based on Filter Criteria values
-    char buf[8196];
+    char buf[MAX_SIP_MSG_SIZE];
     pj_str_t sip_type = pj_str("message");
     pj_str_t sip_subtype = pj_str("sip");
     pj_str_t xml_type = pj_str("application");
@@ -172,13 +193,14 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
     pjsip_msg_body *final_body = pjsip_multipart_create(tdata->pool, NULL, NULL);
 
     // If we only have one part, we don't want a multipart MIME body - store the reference to each one here to use instead
-    pjsip_msg_body *possible_final_body;
+    pjsip_msg_body *possible_final_body = NULL;
     int multipart_parts = 0;
 
-    if (!as->service_info.empty()) {
+    if (!as.service_info.empty()) {
       pjsip_multipart_part *xml_part = pjsip_multipart_create_part(tdata->pool);
-      std::string xml_str = "<ims-3gpp><service-info>"+as->service_info+"</service-info></ims-3gpp>";
-      pj_str_t xml_pj_str = pj_str(strdup(xml_str.c_str()));
+      std::string xml_str = "<ims-3gpp><service-info>"+as.service_info+"</service-info></ims-3gpp>";
+      pj_str_t xml_pj_str;
+      pj_cstr(&xml_pj_str, xml_str.c_str());
       xml_part->body = pjsip_msg_body_create(tdata->pool, &xml_type, &xml_subtype, &xml_pj_str),
       possible_final_body = xml_part->body;
       multipart_parts++;
@@ -187,9 +209,9 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
                                xml_part);
     }
 
-    if (as->include_register_request) {
+    if (as.include_register_request) {
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
-      pjsip_msg_print(received_register->msg_info.msg, buf, 8196);
+      pjsip_msg_print(received_register->msg_info.msg, buf, sizeof(buf));
       pj_str_t request_str = pj_str(buf);
       request_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &request_str),
       possible_final_body = request_part->body;
@@ -199,9 +221,9 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
                                request_part);
     };
 
-    if (as->include_register_response) {
+    if (as.include_register_response) {
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
-      pjsip_msg_print(ok_response->msg, buf, 8196);
+      pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
       pj_str_t response_str = pj_str(buf);
       response_part->body = pjsip_msg_body_create(tdata->pool, &sip_type, &sip_subtype, &response_str),
       possible_final_body = response_part->body;
@@ -223,17 +245,21 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
 
   }
 
-  char for_printing[8196];
-  pjsip_msg_print(tdata->msg, for_printing, 8186);
-  LOG_DEBUG("Outgoing REGISTER request to AS: %s\n", for_printing);
-
+  // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
+  // if it fails
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
+  // DefaultHandling has a value of 0 or 1, so we can store it directly in the pointer. Not perfect, but
+  // harmless if done right.
+  tsx->mod_data[0] = (void*)as.default_handling;
   status = pjsip_tsx_send_msg(tsx, tdata);
 }
 
-void notify_application_servers() {} // TODO: implement as part of reg events package
+void notify_application_servers() {
+  LOG_DEBUG("In dummy notify_application_servers function");
+  // TODO: implement as part of reg events package
+}
 
-void expire_bindings(RegData::Store *store, const std::string aor, const std::string binding_id)
+int expire_bindings(RegData::Store *store, const std::string aor, const std::string binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
   RegData::AoR *aor_data;
@@ -249,17 +275,25 @@ void expire_bindings(RegData::Store *store, const std::string aor, const std::st
     }
   } while (!store->set_aor_data(aor, aor_data));
 
+  time_t now = time(NULL);
+  int max_remaining_expiry = store->expire_bindings(aor_data, now);
   delete aor_data;
+  return (max_remaining_expiry-now);
 };
 
-void network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
+void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
 {
-  expire_bindings(store, aor, binding_id);
-  deregister_with_application_servers(ifchandler, aor);
+  int max_remaining_expiry = expire_bindings(store, aor, binding_id);
+
+  // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
+  // should be passed on the REGISTER message, so we don't need the binding ID.
+  deregister_with_application_servers(ifchandler, aor, max_remaining_expiry);
   notify_application_servers();
 };
 
-void user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
+void RegistrationUtils::user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
 {
   expire_bindings(store, aor, binding_id);
+  // No need to send a REGISTER message to the ASes - we hit this because we've received a REGISTER
+  // from the user with an expiry time of 0, and we'll have forwarded that on.
 };

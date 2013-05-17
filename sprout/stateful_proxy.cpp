@@ -124,7 +124,7 @@ extern "C" {
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "aschain.h"
-#include "deregister.h"
+#include "registration_utils.h"
 
 static RegData::Store* store;
 
@@ -2698,7 +2698,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      network_initiated_deregistration(ifc_handler, store, aor, binding_id);
+      RegistrationUtils::network_initiated_deregistration(ifc_handler, store, aor, binding_id);
     }
   }
 
