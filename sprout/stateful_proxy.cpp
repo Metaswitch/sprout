@@ -416,7 +416,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
       const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
-      AsChainStep original_dialog;
+      AsChainLink original_dialog;
       if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
       {
         // This is one of our original dialog identifier (ODI) tokens.
@@ -513,9 +513,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   // Perform common initial processing.
   uas_data->enter_context();
-  AsChainStep as_chain_step = uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
+  AsChainLink as_chain_link = uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
 
-  AsChainStep::Disposition disposition = AsChainStep::Disposition::Next;
+  AsChainLink::Disposition disposition = AsChainLink::Disposition::Next;
 
   if ((!edge_proxy) &&
       ((PJUtils::is_home_domain(tdata->msg->line.req.uri)) ||
@@ -525,19 +525,19 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // node/home domain.
 
     // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(as_chain_step, rdata, tdata, &target);
+    disposition = uas_data->handle_originating(as_chain_link, rdata, tdata, &target);
 
-    if (disposition == AsChainStep::Disposition::Next)
+    if (disposition == AsChainLink::Disposition::Next)
     {
       // Do outgoing (terminating) half.
       LOG_DEBUG("Terminating half");
-      disposition = uas_data->handle_terminating(as_chain_step, tdata, &target);
+      disposition = uas_data->handle_terminating(as_chain_link, tdata, &target);
     }
   }
 
   uas_data->exit_context();
 
-  if (disposition != AsChainStep::Disposition::Stop)
+  if (disposition != AsChainLink::Disposition::Stop)
   {
     // Perform common outgoing processing.
     uas_data->handle_outgoing_non_cancel(tdata, target);
@@ -1564,7 +1564,7 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 
 // Handle the incoming half of a non-CANCEL message.
-AsChainStep UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
+AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
                                                         pjsip_tx_data* tdata,
                                                         const ServingState& serving_state)
 {
@@ -1583,13 +1583,13 @@ AsChainStep UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(tdata);
 
-  AsChainStep as_chain_step;
+  AsChainLink as_chain_link;
 
   if (serving_state.is_set())
   {
     if (serving_state.original_dialog().is_set())
     {
-      as_chain_step = serving_state.original_dialog();
+      as_chain_link = serving_state.original_dialog();
     }
     else if (ifc_handler == NULL)
     {
@@ -1597,13 +1597,13 @@ AsChainStep UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
     }
     else
     {
-      as_chain_step = create_as_chain(serving_state.session_case(),
+      as_chain_link = create_as_chain(serving_state.session_case(),
                                        rdata);
     }
 
     if (serving_state.session_case().is_originating() &&
-        ((!as_chain_step.is_set()) ||
-         (as_chain_step.complete())))
+        ((!as_chain_link.is_set()) ||
+         (as_chain_link.complete())))
     {
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
@@ -1614,40 +1614,40 @@ AsChainStep UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       if (ifc_handler == NULL)
       {
         LOG_INFO("No IFC handler");
-        as_chain_step = AsChainStep();
+        as_chain_link = AsChainLink();
       }
       else
       {
-        as_chain_step = create_as_chain(SessionCase::Terminating,
+        as_chain_link = create_as_chain(SessionCase::Terminating,
                                          rdata);
       }
     }
   }
 
-  return as_chain_step;
+  return as_chain_link;
 }
 
 
 // Perform originating handling.
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChainStep::Disposition UASTransaction::handle_originating(AsChainStep& as_chain_step,
+AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chain_link,
                                                         pjsip_rx_data* rdata,
                                                         pjsip_tx_data* tdata,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
-  if (!(as_chain_step.is_set() && as_chain_step.session_case().is_originating()))
+  if (!(as_chain_link.is_set() && as_chain_link.session_case().is_originating()))
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
-    return AsChainStep::Disposition::Next;
+    return AsChainLink::Disposition::Next;
   }
 
   // Apply originating call services to the message
   LOG_DEBUG("Applying originating services");
-  AsChainStep::Disposition disposition;
-  disposition = as_chain_step.on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
+  AsChainLink::Disposition disposition;
+  disposition = as_chain_link.on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
 
-  if (disposition == AsChainStep::Disposition::Next)
+  if (disposition == AsChainLink::Disposition::Next)
   {
     // We've completed the originating half: switch to terminating
     // and look up iFCs again.  The served user changes here.
@@ -1655,7 +1655,7 @@ AsChainStep::Disposition UASTransaction::handle_originating(AsChainStep& as_chai
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
     PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
     PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
-    as_chain_step = create_as_chain(SessionCase::Terminating,
+    as_chain_link = create_as_chain(SessionCase::Terminating,
                                      rdata);
   }
 
@@ -1665,7 +1665,7 @@ AsChainStep::Disposition UASTransaction::handle_originating(AsChainStep& as_chai
 
 // Perform terminating handling.
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChainStep::Disposition UASTransaction::handle_terminating(AsChainStep& as_chain_step,
+AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chain_link,
                                                         pjsip_tx_data* tdata,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
@@ -1689,7 +1689,7 @@ AsChainStep::Disposition UASTransaction::handle_terminating(AsChainStep& as_chai
       // performing the defined mapping.  We therefore reject the request
       // with the not found status code and a specific reason phrase.
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-      return AsChainStep::Disposition::Stop;
+      return AsChainLink::Disposition::Stop;
     }
 
     if ((!PJUtils::is_home_domain(tdata->msg->line.req.uri)) &&
@@ -1701,17 +1701,17 @@ AsChainStep::Disposition UASTransaction::handle_terminating(AsChainStep& as_chai
       // most suitable for this case.
       LOG_INFO("Rejecting off-net call from user without E.164 address");
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-      return AsChainStep::Disposition::Stop;
+      return AsChainLink::Disposition::Stop;
     }
   }
 
-  AsChainStep::Disposition disposition = AsChainStep::Disposition::Next;
+  AsChainLink::Disposition disposition = AsChainLink::Disposition::Next;
 
-  if (as_chain_step.is_set() && as_chain_step.session_case().is_terminating())
+  if (as_chain_link.is_set() && as_chain_link.session_case().is_terminating())
   {
     // Apply terminating call services to the message
     LOG_DEBUG("Apply terminating services");
-    disposition = as_chain_step.on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
     // On return from on_initial_request, our _proxy pointer
     // may be NULL.  Don't use it without checking first.
   }
@@ -3043,7 +3043,7 @@ bool is_user_registered(std::string served_user)
 
 
 /// Factory method: create AsChain by looking up iFCs.
-AsChainStep UASTransaction::create_as_chain(const SessionCase& session_case,
+AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                              pjsip_rx_data* rdata)
 {
   std::vector<AsInvocation> application_servers;
@@ -3073,7 +3073,7 @@ AsChainStep UASTransaction::create_as_chain(const SessionCase& session_case,
                              application_servers);
   _victims.push_back(ret);
 
-  return AsChainStep(ret, 0u);
+  return AsChainLink(ret, 0u);
 }
 
 ///@}

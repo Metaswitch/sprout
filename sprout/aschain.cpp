@@ -91,8 +91,8 @@ size_t AsChain::size() const
 /// Apply first AS (if any) to initial request.
 //
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChainStep::Disposition
-AsChainStep::on_initial_request(CallServices* call_services,
+AsChainLink::Disposition
+AsChainLink::on_initial_request(CallServices* call_services,
                                 UASTransaction* uas_data,
                                 pjsip_msg* msg,
                                 pjsip_tx_data* tdata,
@@ -104,7 +104,7 @@ AsChainStep::on_initial_request(CallServices* call_services,
   if (complete())
   {
     LOG_DEBUG("No ASs left in chain");
-    return AsChainStep::Disposition::Next;
+    return AsChainLink::Disposition::Next;
   }
 
   AsInvocation application_server = _as_chain->_application_servers[_index];
@@ -118,7 +118,7 @@ AsChainStep::on_initial_request(CallServices* call_services,
       LOG_DEBUG("Invoke originating MMTEL services");
       CallServices::Originating originating(call_services, uas_data, msg, _as_chain->_served_user);
       bool proceed = originating.on_initial_invite(tdata);
-      return proceed ? AsChainStep::Disposition::Next : AsChainStep::Disposition::Stop;
+      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
     else
     {
@@ -129,7 +129,7 @@ AsChainStep::on_initial_request(CallServices* call_services,
         new CallServices::Terminating(call_services, uas_data, msg,_as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
-      return proceed ? AsChainStep::Disposition::Next : AsChainStep::Disposition::Stop;
+      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
     // LCOV_EXCL_STOP
   }
@@ -191,7 +191,7 @@ AsChainStep::on_initial_request(CallServices* call_services,
 
     // Stop processing the chain and send the request out to the AS.
     *pre_target = as_target;
-    return AsChainStep::Disposition::Skip;
+    return AsChainLink::Disposition::Skip;
   }
 }
 
@@ -220,7 +220,7 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
     std::string token;
     PJUtils::create_random_token(TOKEN_LENGTH, token);
     tokens.push_back(token);
-    _t2c_map[token] = AsChainStep(as_chain, i + 1);
+    _t2c_map[token] = AsChainLink(as_chain, i + 1);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -242,11 +242,11 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
 }
 
 
-AsChainStep AsChainTable::lookup(const std::string& token)
+AsChainLink AsChainTable::lookup(const std::string& token)
 {
   pthread_mutex_lock(&_lock);
-  std::map<std::string, AsChainStep>::const_iterator it = _t2c_map.find(token);
-  AsChainStep ret = (it == _t2c_map.end()) ? AsChainStep(NULL, 0) : it->second;
+  std::map<std::string, AsChainLink>::const_iterator it = _t2c_map.find(token);
+  AsChainLink ret = (it == _t2c_map.end()) ? AsChainLink(NULL, 0) : it->second;
   pthread_mutex_unlock(&_lock);
 
   return ret;

@@ -96,7 +96,7 @@ public:
   size_t size() const;
 
 private:
-  friend class AsChainStep;
+  friend class AsChainLink;
 
   AsChainTable* const _as_chain_table;
 
@@ -110,23 +110,23 @@ private:
 };
 
 
-/// A single step in the AsChain.
-class AsChainStep
+/// A single link in the AsChain.
+class AsChainLink
 {
 public:
-  AsChainStep() :
+  AsChainLink() :
     _as_chain(NULL),
     _index(0u)
   {
   }
 
-  AsChainStep(AsChain* as_chain, size_t index) :
+  AsChainLink(AsChain* as_chain, size_t index) :
     _as_chain(as_chain),
     _index(index)
   {
   }
 
-  ~AsChainStep()
+  ~AsChainLink()
   {
   }
 
@@ -173,7 +173,7 @@ public:
                                  target** target);
 
 private:
-  /// Returns the ODI token of the next AsChainStep in this chain.
+  /// Returns the ODI token of the next AsChainLink in this chain.
   const std::string& next_odi_token() const
   {
     return _as_chain->_odi_tokens[_index];
@@ -194,7 +194,7 @@ public:
   /// Lookup the next step to follow when receiving the given
   // token. The 0th token thus indicates the 1st step, the 1st token
   // the 2nd step, and so on.
-  AsChainStep lookup(const std::string& token);
+  AsChainLink lookup(const std::string& token);
 
 private:
   friend class AsChain;
@@ -205,6 +205,6 @@ private:
   static const int TOKEN_LENGTH = 10;
 
   /// Map from token to pair of (AsChain, index).
-  std::map<std::string, AsChainStep> _t2c_map;
+  std::map<std::string, AsChainLink> _t2c_map;
   pthread_mutex_t _lock;
 };

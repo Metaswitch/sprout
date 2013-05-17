@@ -73,7 +73,7 @@ public:
   }
 
   ServingState(const SessionCase* session_case,
-               AsChainStep original_dialog) :
+               AsChainLink original_dialog) :
     _session_case(session_case),
     _original_dialog(original_dialog)
   {
@@ -109,7 +109,7 @@ public:
 
   bool is_set() const { return _session_case != NULL; };
   const SessionCase& session_case() const { return *_session_case; };
-  AsChainStep original_dialog() const { return _original_dialog; };
+  AsChainLink original_dialog() const { return _original_dialog; };
 
 private:
 
@@ -121,7 +121,7 @@ private:
   // should continue handling the existing AS chain rather than
   // creating a new one. Index and pointer to that existing chain, or
   // !is_set() if none.
-  AsChainStep _original_dialog;
+  AsChainLink _original_dialog;
 };
 
 // This is the data that is attached to the UAS transaction
@@ -136,9 +136,9 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  AsChainStep handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
-  AsChainStep::Disposition handle_originating(AsChainStep& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  AsChainStep::Disposition handle_terminating(AsChainStep& as_chain, pjsip_tx_data* tdata, target** pre_target);
+  AsChainLink handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
+  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
+  AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
@@ -178,7 +178,7 @@ private:
   pj_status_t init_uac_transactions(pjsip_tx_data* tdata, target_list& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
-  AsChainStep create_as_chain(const SessionCase& session_case,
+  AsChainLink create_as_chain(const SessionCase& session_case,
                                pjsip_rx_data* rdata);
 
   pjsip_transaction*   _tsx;
