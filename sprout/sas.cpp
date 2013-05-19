@@ -1,6 +1,6 @@
 /**
- * @file sas.cpp Dummy implementation of SAS class used for reporting events
- * and markers to Service Assurance Server - does not actually do so
+ * @file sas.cpp Implementation of SAS class used for reporting events
+ * and markers to Service Assurance Server.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -83,8 +83,7 @@ SAS::Connection::Connection(const std::string& system_name, const std::string& s
   _sas_address(sas_address),
   _msg_q(),
   _writer(0),
-  _so(0),
-  _connected(false)
+  _sock(0)
 {
   // Spawn a thread to open and write to the SAS connection.
   int rc = pthread_create(&_writer, NULL, &writer_thread, this);
@@ -97,10 +96,11 @@ SAS::Connection::Connection(const std::string& system_name, const std::string& s
   }
 }
 
+
 SAS::Connection::~Connection()
 {
   // Close off the queue.
-  _connected = false;
+  _msg_q.close();
 
   if (_writer != 0)
   {
@@ -113,6 +113,7 @@ SAS::Connection::~Connection()
     _writer = 0;
   }
 }
+
 
 void* SAS::Connection::writer_thread(void* p)
 {
@@ -127,34 +128,34 @@ void SAS::Connection::writer()
 
   while (true)
   {
-    int reconnect_timeout = 10;  // If connect fail, retry every 10 seconds.
+    int reconnect_timeout = 10000;  // If connect fails, retry every 10 seconds.
 
     if (connect_init())
     {
       // Open the queue for input
-      _connected = true;
+      _msg_q.open();
 
       // Now can start dequeuing and sending data.
       std::string msg;
       while (_msg_q.pop(msg))
       {
         LOG_DEBUG("Dequeued SAS message (%d bytes)", msg.length());
-        rc = ::send(_so, msg.data(), msg.length(), 0);
+        rc = ::send(_sock, msg.data(), msg.length(), 0);
         if (rc < 0)
         {
           LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
-          ::close(_so);
+          ::close(_sock);
           break;
         }
         LOG_DEBUG("Sent SAS message (%d bytes)", msg.length());
       }
 
       // Close the input queue and flush it.
-      _connected = false;
+      _msq_q.close();
       _msg_q.flush();
 
       // Terminate the socket.
-      ::close(_so);
+      ::close(_sock);
 
       if (_msg_q.is_terminated())
       {
@@ -163,7 +164,7 @@ void SAS::Connection::writer()
       }
 
       // Try reconnecting after 1 second after a failure.
-      reconnect_timeout = 1;
+      reconnect_timeout = 1000;
     }
 
     // Wait on the input queue for the specified timeout before trying to
@@ -186,25 +187,25 @@ bool SAS::Connection::connect_init()
 
   LOG_STATUS("Attempting to connect to SAS %s", _sas_address.c_str());
 
-  if ((_so = ::socket(AF_INET, SOCK_STREAM, 0)) == -1)
+  if ((_sock = ::socket(AF_INET, SOCK_STREAM, 0)) == -1)
   {
     LOG_ERROR("Failed to open SAS socket: %d (%s)\n", errno, ::strerror(errno));
     return false;
   }
 
-  LOG_DEBUG("Created SAS socket %d", _so);
+  LOG_DEBUG("Created SAS socket %d", _sock);
 
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons(SAS_PORT);
   addr.sin_addr.s_addr = inet_addr(_sas_address.c_str());
 
-  rc = ::connect(_so, (struct sockaddr*)&addr, sizeof(addr));
+  rc = ::connect(_sock, (struct sockaddr*)&addr, sizeof(addr));
 
   if (rc != 0)
   {
     LOG_ERROR("Failed to connect to SAS %s:%d : %d %s\n", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
-    ::close(_so);
+    ::close(_sock);
     return false;
   }
 
@@ -225,7 +226,7 @@ bool SAS::Connection::connect_init()
 
   LOG_DEBUG("Sending SAS INIT message");
 
-  rc = ::send(_so, init.data(), init.length(), 0);
+  rc = ::send(_sock, init.data(), init.length(), 0);
   if (rc < 0)
   {
     LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
@@ -237,43 +238,32 @@ bool SAS::Connection::connect_init()
   return true;
 }
 
+
 void SAS::Connection::send_msg(std::string msg)
 {
-  if (_connected)
-  {
-    _msg_q.push_noblock(msg);
-  }
+  _msg_q.push_noblock(msg);
 }
 
 
 SAS::TrailId SAS::new_trail(uint32_t instance)
 {
-  TrailId trail = _next_trail_id++;
+  ????TrailId trail = _next_trail_id++;
   return trail;
 }
 
 
 void SAS::report_event(const Event& event)
 {
-  if ((_connection) && (_connection->is_connected()))
+  if (_connection)
   {
     _connection->send_msg(event.to_string());
   }
 }
 
 
-void SAS::report_marker(const Marker& marker)
-{
-  if ((_connection) && (_connection->is_connected()))
-  {
-    _connection->send_msg(marker.to_string(Marker::Scope::None));
-  }
-}
-
-
 void SAS::report_marker(const Marker& marker, Marker::Scope scope)
 {
-  if ((_connection) && (_connection->is_connected()))
+  if (_connection)
   {
     _connection->send_msg(marker.to_string(scope));
   }
@@ -291,7 +281,7 @@ void SAS::write_hdr(std::string& s, uint16_t msg_length, uint8_t msg_type)
 
 void SAS::write_int8(std::string& s, uint8_t c)
 {
-  s.append(1, c);
+  s.append((char*)&c, sizeof(uint8_t));
 }
 
 

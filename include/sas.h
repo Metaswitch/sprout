@@ -150,8 +150,7 @@ public:
   static void term();
   static TrailId new_trail(uint32_t instance);
   static void report_event(const Event& event);
-  static void report_marker(const Marker& marker);
-  static void report_marker(const Marker& marker, Marker::Scope scope);
+  static void report_marker(const Marker& marker, Marker::Scope scope=Marker::Scope::None);
 
 private:
   class Connection
@@ -160,7 +159,6 @@ private:
     Connection(const std::string& system_name, const std::string& sas_address);
     ~Connection();
 
-    bool is_connected() const { return _connected; };
     void send_msg(std::string msg);
 
     static void* writer_thread(void* p);
@@ -176,9 +174,8 @@ private:
 
     pthread_t _writer;
 
-    int _so;
-
-    std::atomic<bool> _connected;
+    // Socket for the connection.
+    int _sock;
   };
 
   static void write_hdr(std::string& s, uint16_t msg_length, uint8_t msg_type);

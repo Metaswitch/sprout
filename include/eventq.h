@@ -49,7 +49,8 @@ public:
   /// Create an event queue.
   ///
   /// @param max_queue maximum size of event queue, zero is unlimited.
-  eventq(unsigned int max_queue=0) :
+  eventq(unsigned int max_queue=0, bool open=true) :
+    _open(open),
     _max_queue(max_queue),
     _q(),
     _writers(0),
@@ -65,10 +66,23 @@ public:
   {
   };
 
+  /// Open the queue for new inputs.
+  void open()
+  {
+    _open = true;
+  }
+
+  /// Close the queue to new inputs.
+  void close()
+  {
+    _open = false;
+  }
+
   /// Send a termination signal via the queue.
   void terminate()
   {
     pthread_mutex_lock(&_m);
+
 
     _terminated = true;
 
@@ -93,8 +107,8 @@ public:
     return terminated;
   }
 
-  /// Flushes the queue.
-  void flush()
+  /// Purges all the events currently in the queue.
+  void purge()
   {
     pthread_mutex_lock(&_m);
     while (!_q.empty())
@@ -104,35 +118,43 @@ public:
     pthread_mutex_unlock(&_m);
   }
 
-
   /// Push an item on to the event queue.
   ///
-  /// This may block or fail if the queue is full.
-  void push(T item)
+  /// This may block if the queue is full, and will fail if the queue is closed.
+  bool push(T item)
   {
+    bool rc = false;
+
     pthread_mutex_lock(&_m);
 
-    if (_max_queue != 0)
+    if (_open)
     {
-      while (_q.size() >= _max_queue)
+      if (_max_queue != 0)
       {
-        // Queue is full, so writer must block.
-        ++_writers;
-        pthread_cond_wait(&_w_cond, &_m);
-        --_writers;
+        while (_q.size() >= _max_queue)
+        {
+          // Queue is full, so writer must block.
+          ++_writers;
+          pthread_cond_wait(&_w_cond, &_m);
+          --_writers;
+        }
       }
-    }
 
-    // Must be space on the queue now.
-    _q.push(item);
+      // Must be space on the queue now.
+      _q.push(item);
 
-    // Are there any readers waiting?
-    if (_readers > 0)
-    {
-      pthread_cond_signal(&_r_cond);
+      // Are there any readers waiting?
+      if (_readers > 0)
+      {
+        pthread_cond_signal(&_r_cond);
+      }
+
+      rc = true;
     }
 
     pthread_mutex_unlock(&_m);
+
+    return rc;
   };
 
   /// Push an item on to the event queue.
@@ -144,7 +166,7 @@ public:
 
     pthread_mutex_lock(&_m);
 
-    if ((_max_queue == 0) || (_q.size() < _max_queue))
+    if ((_open) && ((_max_queue == 0) || (_q.size() < _max_queue)))
     {
       // There is space on the queue.
       _q.push(item);
@@ -269,6 +291,7 @@ public:
 
 private:
 
+  bool _open;
   unsigned int _max_queue;
   std::queue<T> _q;
   int _writers;
