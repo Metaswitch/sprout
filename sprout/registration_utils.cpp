@@ -56,12 +56,12 @@ extern "C" {
 
 #define MAX_SIP_MSG_SIZE 65535
 
-void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, std::string);
-void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string, int);
+void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, const std::string&);
+void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string&, int);
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
                                          RegData::Store* store,
-                                         const std::string aor)
+                                         const std::string& aor)
 {
   RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, aor);
 }
@@ -70,7 +70,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
                                        RegData::Store* store,
                                        pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
-                                       const std::string aor) // Should be empty if we have a received_register
+                                       const std::string& aor) // Should be empty if we have a received_register
 {
   // Function preconditions
   if (received_register == NULL) {
@@ -140,7 +140,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
 }
 
-void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, std::string aor)
+void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, const std::string& aor)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -263,7 +263,7 @@ void notify_application_servers() {
   // TODO: implement as part of reg events package
 }
 
-void expire_bindings(RegData::Store *store, const std::string aor, const std::string binding_id)
+static void expire_bindings(RegData::Store *store, const std::string& aor, const std::string& binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
   RegData::AoR *aor_data;
@@ -280,7 +280,7 @@ void expire_bindings(RegData::Store *store, const std::string aor, const std::st
   } while (!store->set_aor_data(aor, aor_data));
 };
 
-void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
+void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
 {
   expire_bindings(store, aor, binding_id);
 
@@ -290,7 +290,7 @@ void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler,
   notify_application_servers();
 };
 
-void RegistrationUtils::user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string aor, const std::string binding_id)
+void RegistrationUtils::user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
 {
   expire_bindings(store, aor, binding_id);
   // No need to send a REGISTER message to the ASes - we hit this because we've received a REGISTER
