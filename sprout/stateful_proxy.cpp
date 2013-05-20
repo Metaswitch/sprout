@@ -798,14 +798,21 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           {
             LOG_DEBUG("Remove top route header");
             pj_list_erase(r1);
+            r1 = r2;
+            r2 = NULL;
           }
           else if (uri2->user.slen == 0)
           {
             LOG_DEBUG("Remove second route header");
             pj_list_erase(r2);
+            r2 = NULL;
           }
         }
       }
+    }
+    else
+    {
+      r1 = NULL;
     }
 
     // Work out whether the message has come from an implicitly trusted
@@ -915,6 +922,23 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         // If there is an authorization header remove it.
         pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
       }
+    }
+
+    if (r1 &&
+        pjsip_param_find(&r1->name_addr.uri->other_param, &STR_ORIG) &&
+        (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT))
+    {
+      // Local route header requests originating handling, but this is
+      // not a known client. Forbidden. 3GPP TS 24.229 s5.10.3.2,
+      // except that we implement a whitelist (only known Bono clients
+      // can pass this) rather than a blacklist (IBCF clients are
+      // forbidden).
+      LOG_WARNING("Request for originating handling but not from known client");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_FORBIDDEN,
+                                 NULL, NULL, NULL);
+      return PJ_ENOTFOUND;
     }
 
     // Do standard route header processing for the request.  This may
@@ -1125,6 +1149,7 @@ static
 #endif
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
+                             const TrustBoundary* trust,
                              target_list& targets,
                              int max_targets)
 {
@@ -1208,16 +1233,20 @@ void proxy_calculate_targets(pjsip_msg* msg,
       target.uri = (pjsip_uri*)req_uri;
     }
 
-    // Route upstream. Mark it as originating, so Sprout knows to
-    // apply originating handling.  In theory the UE ought to have
-    // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-    // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
-    // - but if we're here it didn't, so we do the work for it.
+    // Route upstream.
     pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, upstream_proxy);
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &orig_param->name, &STR_ORIG);
-    pj_strdup2(pool, &orig_param->value, "");
-    pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    if (_trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
+    {
+      // Mark it as originating, so Sprout knows to
+      // apply originating handling.  In theory the UE ought to have
+      // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+      // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
+      // - but if we're here it didn't, so we do the work for it.
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(pool, &orig_param->value, "");
+      pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    }
     target.paths.push_back((pjsip_uri*)upstream_uri);
 
     // Select a transport for the request.
@@ -1746,7 +1775,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
   else
   {
     // Find targets.
-    proxy_calculate_targets(tdata->msg, tdata->pool, targets, MAX_FORKING);
+    proxy_calculate_targets(tdata->msg, tdata->pool, _trust, targets, MAX_FORKING);
   }
 
   if (targets.size() == 0)
