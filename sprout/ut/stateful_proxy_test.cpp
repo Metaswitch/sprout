@@ -253,6 +253,7 @@ public:
     delete _call_services; _call_services = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
+    delete _xdm_connection; _xdm_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
     SipTest::TearDownTestCase();
