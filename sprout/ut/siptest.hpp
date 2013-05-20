@@ -121,6 +121,10 @@ protected:
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
 
+  /// Inject an inbound SIP message structure by passing it into the
+  /// stack.
+  void inject_msg(pjsip_msg* msg, TransportFlow* tp = _tp_default);
+
   /// Inject message directly into the specified module, bypassing other
   /// layers.  Allows testing which messages we accept into the module.
   pj_bool_t inject_msg_direct(const std::string& msg, pjsip_module* module);

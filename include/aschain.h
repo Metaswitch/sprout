@@ -65,15 +65,90 @@ struct target
 };
 typedef std::list<target> target_list;
 
+class AsChainTable;
+
 /// The AS chain.
+//
+// Lifetime:
+//
+// The AS chain is created when a request first comes in, or when a
+// request turns around from originating to terminating. We impose a
+// simplifying limitation: an ODI is only valid for as long as the
+// transaction that provided that ODI exists. This means that the AS
+// chain only needs to remain valid for as long as the longest-lived
+// Sprout->AS transaction. This is clearly the transaction which
+// created the AS chain in the first place, since it does not end
+// until all the chained transactions have ended. Hence the AS chain
+// is destroyed when the transaction which created it is destroyed.
+//
 class AsChain
 {
 public:
-  AsChain(const SessionCase& session_case,
-          std::string served_user,
+  AsChain(AsChainTable* as_chain_table,
+          const SessionCase& session_case,
+          const std::string& served_user,
           bool is_registered,
           std::vector<AsInvocation> application_servers);
   ~AsChain();
+
+  std::string to_string(size_t index) const;
+  const SessionCase& session_case() const;
+  size_t size() const;
+
+private:
+  friend class AsChainLink;
+
+  AsChainTable* const _as_chain_table;
+
+  /// ODI tokens, one for each step.
+  std::vector<std::string> _odi_tokens;
+
+  const SessionCase& _session_case;
+  const std::string _served_user;
+  const bool _is_registered;
+  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
+};
+
+
+/// A single link in the AsChain.
+class AsChainLink
+{
+public:
+  AsChainLink() :
+    _as_chain(NULL),
+    _index(0u)
+  {
+  }
+
+  AsChainLink(AsChain* as_chain, size_t index) :
+    _as_chain(as_chain),
+    _index(index)
+  {
+  }
+
+  ~AsChainLink()
+  {
+  }
+
+  bool is_set() const
+  {
+    return (_as_chain != NULL);
+  }
+
+  bool complete() const
+  {
+    return ((_as_chain == NULL) || (_index == _as_chain->size()));
+  }
+
+  std::string to_string() const
+  {
+    return is_set() ? _as_chain->to_string(_index) : "None";
+  }
+
+  const SessionCase& session_case() const
+  {
+    return _as_chain->session_case();
+  }
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
@@ -85,8 +160,6 @@ public:
     // server. Processing should skip to target processing,
     // omitting any subsequent stages.
     Skip,
-    // @@@ in Java I'd include the target in this as a field. Need to
-    // tidy up similarly somehow.
 
     /// The internal application server (if any) has processed the
     // message. Processing should continue with the next stage.
@@ -99,18 +172,39 @@ public:
                                  pjsip_tx_data* tdata,
                                  target** target);
 
-  std::string to_string() const;
-  std::string served_user() const;
-  const SessionCase& session_case() const;
-  bool complete() const;
-
-
 private:
-  bool is_mmtel(CallServices* call_services);
+  /// Returns the ODI token of the next AsChainLink in this chain.
+  const std::string& next_odi_token() const
+  {
+    return _as_chain->_odi_tokens[_index];
+  }
 
-  const SessionCase& _session_case;
-  std::string _served_user;
-  bool _is_registered;
-  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
+  AsChain* _as_chain;
+  size_t _index;
 };
 
+
+/// Lookup table of AsChain objects.
+class AsChainTable
+{
+public:
+  AsChainTable();
+  ~AsChainTable();
+
+  /// Lookup the next step to follow when receiving the given
+  // token. The 0th token thus indicates the 1st step, the 1st token
+  // the 2nd step, and so on.
+  AsChainLink lookup(const std::string& token);
+
+private:
+  friend class AsChain;
+
+  void register_(AsChain* as_chain, std::vector<std::string>& tokens);
+  void unregister(std::vector<std::string>& tokens);
+
+  static const int TOKEN_LENGTH = 10;
+
+  /// Map from token to pair of (AsChain, index).
+  std::map<std::string, AsChainLink> _t2c_map;
+  pthread_mutex_t _lock;
+};

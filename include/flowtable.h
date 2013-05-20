@@ -98,8 +98,6 @@ private:
 
   static const int TOKEN_LENGTH = 10;
 
-  static const char _b64[64];
-
   /// Increments the reference count on the flow.
   void inc_ref();
 
@@ -126,15 +124,15 @@ public:
   ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.
-  /// This may be called with parameters that match an existing flow, in 
+  /// This may be called with parameters that match an existing flow, in
   /// which case it will return the existing flow.
   Flow* find_create_flow(pjsip_transport* transport, const pj_sockaddr* raddr);
-  
+
   /// Find the flow corresponding to the specified received message using
   /// the transport the message was received on and the IP address/port
   /// if appropriate.
   Flow* find_flow(pjsip_transport* transport, const pj_sockaddr* raddr);
-  
+
   /// Find the flow corresponding to the specified flow token.
   Flow* find_flow(const std::string& token);
 
@@ -151,7 +149,7 @@ private:
   public:
     FlowKey(int transport_type, const pj_sockaddr* raddr) :
       _type(transport_type),
-      _raddr(*raddr)           
+      _raddr(*raddr)
     {
     }
 
@@ -163,7 +161,7 @@ private:
     bool operator< (const FlowKey& other) const
     {
       // Compare the transport type first.
-      if (_type < other._type) 
+      if (_type < other._type)
       {
         return true;
       }

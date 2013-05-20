@@ -251,14 +251,14 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 
-/// Delete all existing copies of a header and replace with a new one.
-void PJUtils::set_generic_header(pjsip_tx_data* tdata,
-                                 const pj_str_t* name,
-                                 const pj_str_t* value)
+/// Delete all existing copies of a header.  The header to delete must
+/// not be one that has an abbreviation.
+void PJUtils::delete_header(pjsip_msg* msg,
+                            const pj_str_t* name)
 {
   while (1)
   {
-    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, name, NULL);
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL);
     if (hdr)
     {
       pj_list_erase(hdr);
@@ -268,7 +268,15 @@ void PJUtils::set_generic_header(pjsip_tx_data* tdata,
       break;
     }
   }
+}
 
+/// Delete all existing copies of a header and replace with a new one.
+/// The header to delete must not be one that has an abbreviation.
+void PJUtils::set_generic_header(pjsip_tx_data* tdata,
+                                 const pj_str_t* name,
+                                 const pj_str_t* value)
+{
+  delete_header(tdata->msg, name);
   pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(tdata->pool, name, value);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)new_hdr);
 }
@@ -548,6 +556,18 @@ pjsip_tx_data *PJUtils::clone_tdata(pjsip_tx_data *tdata)
 bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs)
 {
   return (pj_sockaddr_cmp(&lhs, &rhs) < 0);
+}
+
+/// Generate a random base64-encoded token.
+void PJUtils::create_random_token(size_t length,       //< Number of characters.
+                                  std::string& token)  //< Destination. Must be empty.
+{
+  token.reserve(length);
+
+  for (size_t ii = 0; ii < length; ++ii)
+  {
+    token += _b64[rand() % 64];
+  }
 }
 
 void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool) {
