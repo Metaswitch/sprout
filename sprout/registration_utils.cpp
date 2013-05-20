@@ -268,12 +268,12 @@ void notify_application_servers() {
 static void expire_bindings(RegData::Store *store, const std::string& aor, const std::string& binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
-  for (;;)
+  for (;;)  // LCOV_EXCL_LINE No UT for retry loop.
   {
     RegData::AoR* aor_data = store->get_aor_data(aor);
     if (aor_data == NULL)
     {
-      break;
+      break;  // LCOV_EXCL_LINE No UT for lookup failure.
     }
 
     if (binding_id == "*") {
