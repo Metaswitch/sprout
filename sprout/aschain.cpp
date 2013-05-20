@@ -93,8 +93,7 @@ size_t AsChain::size() const
 /// @returns whether the given message has the same target as the
 // chain.  Used to detect the orig-cdiv case.  Only valid for
 // terminating chains.
-bool AsChain::matches_target(pjsip_msg* msg,
-                             pj_pool_t* pool) const
+bool AsChain::matches_target(pjsip_rx_data* rdata) const
 {
   pj_assert(_session_case == SessionCase::Terminating);
 
@@ -108,8 +107,7 @@ bool AsChain::matches_target(pjsip_msg* msg,
   // unescaped form.".
   const std::string& orig_uri = _served_user;
   const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
-                                                               msg,
-                                                               pool);
+                                                               rdata);
   return (orig_uri == msg_uri);
 }
 
