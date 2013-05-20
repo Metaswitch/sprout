@@ -1296,7 +1296,7 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
   parse_rxdata(rdata);
 
   target_list targets;
-  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, targets, max_targets);
+  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets);
 
   list<string> ret;
   for (target_list::const_iterator i = targets.begin();
@@ -1939,8 +1939,8 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
 
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
-  // This is originating; mark it so.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, true);
+  // This cannot be originating, because it's IBCF! It's a foreign domain.
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false);
 }
 
 // Test flows out of IBCF, in particular for header stripping.
@@ -2039,6 +2039,42 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted2)
   tdata = current_txdata();
   r1.matches(tdata->msg);
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
+
+  free_txdata();
+  delete tp;
+}
+
+// Check that ;orig on IBCF trunk is illegal.
+TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
+{
+  SCOPED_TRACE("");
+
+  // Set up default message.
+  Message msg;
+  msg._method = "INVITE";
+  msg._to = "testnode;orig";
+  msg._todomain = "";
+  msg._route = "sip:6505551000@homedomain";
+  msg._from = "+12125551212";
+  msg._fromdomain = "foreign-domain.example.com";
+
+  TransportFlow* tp;
+  pjsip_tx_data* tdata;
+  RespMatcher r1(403);
+  string actual;
+
+  // Get a connection from the other trusted host.
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.11", 36533);
+
+  // Send an INVITE from the trusted host.
+  msg._unique++;
+  inject_msg(msg.get_request(), tp);
+
+  // Check it's the right kind and method, and goes to the right place.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  r1.matches(tdata->msg);
+  tp->expect_target(tdata, true);  // to source
 
   free_txdata();
   delete tp;

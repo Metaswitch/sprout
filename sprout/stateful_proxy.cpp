@@ -925,14 +925,20 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     }
 
     if (r1 &&
-        pjsip_param_find(&r1->name_addr.uri->other_param, &STR_ORIG) &&
+        pjsip_param_find(&reinterpret_cast<pjsip_sip_uri*>(r1->name_addr.uri)->other_param, &STR_ORIG) &&
         (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT))
     {
       // Local route header requests originating handling, but this is
-      // not a known client. Forbidden. 3GPP TS 24.229 s5.10.3.2,
-      // except that we implement a whitelist (only known Bono clients
-      // can pass this) rather than a blacklist (IBCF clients are
-      // forbidden).
+      // not a known client. This is forbidden.
+      //
+      // This covers 3GPP TS 24.229 s5.10.3.2, except that we
+      // implement a whitelist (only known Bono clients can pass this)
+      // rather than a blacklist (IBCF clients are forbidden).
+      //
+      // All connections to our IBCF are untrusted (we don't implement
+      // any trusted ones) in the sense of s5.10.3.2, so this always
+      // applies and we never implement the step 4 and 5 behaviour of
+      // copying the ;orig parameter to the outgoing Route.
       LOG_WARNING("Request for originating handling but not from known client");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
@@ -1050,7 +1056,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
 
 /// Determine whether a source or destination IP address corresponds to
-/// a configured trusted peer.
+/// a configured trusted peer.  "Trusted" here simply means that it's
+/// known, not that we trust any headers it sets.
 static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 {
   // Check whether the source IP address of the message is in the list of
@@ -1235,13 +1242,14 @@ void proxy_calculate_targets(pjsip_msg* msg,
 
     // Route upstream.
     pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, upstream_proxy);
-    if (_trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
+    if (trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
     {
       // Mark it as originating, so Sprout knows to
       // apply originating handling.  In theory the UE ought to have
       // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
       // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
       // - but if we're here it didn't, so we do the work for it.
+      LOG_DEBUG("Mark originating");
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &orig_param->name, &STR_ORIG);
       pj_strdup2(pool, &orig_param->value, "");
