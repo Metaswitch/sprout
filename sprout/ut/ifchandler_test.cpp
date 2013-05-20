@@ -213,12 +213,12 @@ void IfcHandlerTest::doBaseTest(string description,
     if (third_party_reg)
     {
       EXPECT_EQ("banana", application_servers[0].service_info);
-      EXPECT_EQ(true, application_servers[0].include_register_request);
-      EXPECT_EQ(false, application_servers[0].include_register_response);
+      EXPECT_TRUE(application_servers[0].include_register_request);
+      EXPECT_FALSE(application_servers[0].include_register_response);
     } else {
       EXPECT_EQ("", application_servers[0].service_info);
-      EXPECT_EQ(false, application_servers[0].include_register_request);
-      EXPECT_EQ(false, application_servers[0].include_register_response);
+      EXPECT_FALSE(application_servers[0].include_register_request);
+      EXPECT_FALSE(application_servers[0].include_register_response);
     }
   }
 }

@@ -38,6 +38,7 @@
 ///----------------------------------------------------------------------------
 
 #include <string>
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "utils.h"
@@ -49,12 +50,14 @@
 #include "aschain.h"
 
 using namespace std;
+using testing::MatchesRegex;
 
 /// Fixture for AsChainTest
 class AsChainTest : public SipTest
 {
 public:
   FakeLogger _log;
+  AsChainTable* _as_chain_table;
 
   static void SetUpTestCase()
   {
@@ -68,58 +71,68 @@ public:
 
   AsChainTest() : SipTest(NULL)
   {
+    _as_chain_table = new AsChainTable();
   }
 
   ~AsChainTest()
   {
+    delete _as_chain_table; _as_chain_table = NULL;
   }
 };
 
 TEST_F(AsChainTest, Basics)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link(&as_chain, 0u);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link2(&as_chain2, 0u);
 
   AsInvocation as2;
   as2.server_name = "sip:mmtel.homedomain";
   as_list.push_back(as2);
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link3(&as_chain3, 0u);
 
-  EXPECT_EQ("orig", as_chain.to_string());
+  EXPECT_THAT(as_chain_link.to_string(), testing::MatchesRegex("AsChain-orig\\[0x[0-9a-f]+\\]:1/0"));
   EXPECT_EQ(SessionCase::Originating, as_chain.session_case());
-  EXPECT_EQ("sip:5755550011@homedomain", as_chain.served_user());
+  EXPECT_EQ("sip:5755550011@homedomain", as_chain._served_user);
 
-  EXPECT_TRUE(as_chain.complete());
-  EXPECT_FALSE(as_chain2.complete());
-  EXPECT_FALSE(as_chain3.complete());
+  EXPECT_TRUE(as_chain_link.complete()) << as_chain_link.to_string();
+  EXPECT_FALSE(as_chain_link2.complete()) << as_chain_link2.to_string();
+  EXPECT_FALSE(as_chain_link3.complete()) << as_chain_link3.to_string();
+
+  std::string token = as_chain_link2.next_odi_token();
+  AsChainLink res = _as_chain_table->lookup(token);
+  EXPECT_EQ(&as_chain2, res._as_chain);
+  EXPECT_EQ(1u, res._index);
+  EXPECT_TRUE(res.complete());
 
   CallServices calls(NULL);  // Not valid, but good enough for this UT.
-
-  EXPECT_FALSE(as_chain.is_mmtel(&calls));
-  EXPECT_FALSE(as_chain2.is_mmtel(&calls));
-  EXPECT_TRUE(as_chain3.is_mmtel(&calls));
 }
 
 TEST_F(AsChainTest, AsInvocation)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link(&as_chain, 0u);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link2(&as_chain2, 0u);
 
   as_list.clear();
   AsInvocation as2;
   as2.server_name = "::invalid:pancommunicon.cw-ngv.com";
   as_list.push_back(as2);
-  AsChain as_chain3(SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChainLink as_chain_link3(&as_chain3, 0u);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
 
@@ -141,19 +154,20 @@ TEST_F(AsChainTest, AsInvocation)
   ASSERT_EQ(PJ_SUCCESS, status);
 
   target *target;
-  AsChain::Disposition disposition;
+  AsChainLink::Disposition disposition;
 
   // Nothing to invoke. Just proceed.
   target = NULL;
-  disposition = as_chain.on_initial_request(NULL, NULL, NULL, tdata, &target);
-  EXPECT_EQ(AsChain::Disposition::Next, disposition);
+  disposition = as_chain_link.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  EXPECT_EQ(AsChainLink::Disposition::Next, disposition);
   EXPECT_TRUE(target == NULL);
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
 
   // Invoke external AS on originating side.
   target = NULL;
-  disposition = as_chain2.on_initial_request(NULL, NULL, NULL, tdata, &target);
-  EXPECT_EQ(AsChain::Disposition::Skip, disposition);
+  LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
+  disposition = as_chain_link2.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  EXPECT_EQ(AsChainLink::Disposition::Skip, disposition);
   ASSERT_TRUE(target != NULL);
   EXPECT_FALSE(target->from_store);
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
@@ -161,7 +175,7 @@ TEST_F(AsChainTest, AsInvocation)
   std::list<pjsip_uri*>::iterator it = target->paths.begin();
   EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
   ++it;
-  EXPECT_EQ("sip:odi_unity@testnode:5058;lr;orig", str_uri(*it));
+  EXPECT_EQ("sip:odi_" + as_chain_link2.next_odi_token() + "@testnode:5058;lr", str_uri(*it));
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));

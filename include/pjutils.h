@@ -57,6 +57,18 @@ extern "C" {
 
 namespace PJUtils
 {
+  static const char _b64[64] =
+    {
+      'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+      'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+      'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+      'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
+      'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n',
+      'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+      'w', 'x', 'y', 'z', '0', '1', '2', '3',
+      '4', '5', '6', '7', '8', '9', '+', '/'
+    };
+
   pj_bool_t is_home_domain(const pjsip_uri* uri);
   pj_bool_t is_uri_local(const pjsip_uri* uri);
 
@@ -88,6 +100,9 @@ namespace PJUtils
   /// and transport.  If the user parameter is NULL the user field is left
   /// blank.
   void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
+
+  void delete_header(pjsip_msg* msg,
+                     const pj_str_t* name);
 
   void set_generic_header(pjsip_tx_data* tdata,
                           const pj_str_t* name,
@@ -139,6 +154,8 @@ namespace PJUtils
   bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);
 
   typedef std::map<pj_sockaddr, bool, bool(*)(const pj_sockaddr&, const pj_sockaddr&)> host_list_t;
+
+  void create_random_token(size_t length, std::string& token);
 };
 
 #endif
