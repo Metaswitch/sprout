@@ -199,6 +199,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   pj_sockaddr_set_port(&remote_addr, _target.port);
 
   // Call TPMGR to create a new transport connection.
+  pjsip_transport* tp;
   pjsip_tpselector tp_sel;
   tp_sel.type = PJSIP_TPSELECTOR_LISTENER;
   tp_sel.u.listener = _tpfactory;
