@@ -1646,6 +1646,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
   if (disposition == AsChainLink::Disposition::Next)
   {
+    // @@@KSW We've done built-in services, but might need to proceed - what to do?
     // We've completed the originating half: switch to terminating
     // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
@@ -1727,6 +1728,8 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
     disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
     // On return from on_initial_request, our _proxy pointer
     // may be NULL.  Don't use it without checking first.
+
+    // @@@KSW may be Next, in which case we might need to do more.
   }
 
   LOG_INFO("Terminating services disposition %d", (int)disposition);
