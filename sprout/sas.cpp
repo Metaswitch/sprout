@@ -49,10 +49,10 @@ const int SAS_MSG_EVENT  = 3;
 const int SAS_MSG_MARKER = 4;
 
 // SAS message header sizes
-const int COMMON_HDR_SIZE = 12;
+const int COMMON_HDR_SIZE = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint64_t);
 const int INIT_HDR_SIZE   = COMMON_HDR_SIZE;
-const int EVENT_HDR_SIZE  = COMMON_HDR_SIZE + 18;
-const int MARKER_HDR_SIZE = COMMON_HDR_SIZE + 20;
+const int EVENT_HDR_SIZE  = COMMON_HDR_SIZE + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint16_t);
+const int MARKER_HDR_SIZE = COMMON_HDR_SIZE + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint16_t);
 
 const int SAS_PORT = 6761;
 
@@ -210,7 +210,7 @@ bool SAS::Connection::connect_init()
   // Send an init message to SAS.
   std::string init;
   std::string version("v0.1");
-  int init_len = INIT_HDR_SIZE + 1 + _system_name.length() + 4 + 1 + version.length();
+  int init_len = INIT_HDR_SIZE + sizeof(uint8_t) + _system_name.length() + sizeof(uint32_t) + sizeof(uint8_t) + version.length();
   init.reserve(init_len);
   write_hdr(init, init_len, SAS_MSG_INIT);
   write_int8(init, (uint8_t)_system_name.length());
