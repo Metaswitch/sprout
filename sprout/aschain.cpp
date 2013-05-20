@@ -56,12 +56,14 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _is_registered(is_registered),
   _application_servers(application_servers)
 {
+  LOG_DEBUG("Creating AsChain %p", this);
   _as_chain_table->register_(this, _odi_tokens);
 }
 
 
 AsChain::~AsChain()
 {
+  LOG_DEBUG("Destroying AsChain %p", this);
   _as_chain_table->unregister(_odi_tokens);
 }
 
@@ -85,6 +87,28 @@ const SessionCase& AsChain::session_case() const
 size_t AsChain::size() const
 {
   return _application_servers.size();
+}
+
+
+/// @returns whether the given message has the same target as the
+// chain.  Used to detect the orig-cdiv case.  Only valid for
+// terminating chains.
+bool AsChain::matches_target(pjsip_rx_data* rdata) const
+{
+  pj_assert(_session_case == SessionCase::Terminating);
+
+  // We do not support alias URIs per 3GPP TS 24.229 s3.1 and 29.228
+  // sB.2.1. This is an explicit limitation.  So this step reduces to
+  // simple syntactic canonicalization.
+  //
+  // 3GPP TS 24.229 s5.4.3.3 note 3 says "The canonical form of the
+  // Request-URI is obtained by removing all URI parameters (including
+  // the user-param), and by converting any escaped characters into
+  // unescaped form.".
+  const std::string& orig_uri = _served_user;
+  const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
+                                                               rdata);
+  return (orig_uri == msg_uri);
 }
 
 

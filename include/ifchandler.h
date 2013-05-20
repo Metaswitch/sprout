@@ -71,8 +71,7 @@ public:
   ~IfcHandler();
 
   static std::string served_user_from_msg(const SessionCase& session_case,
-                                          pjsip_msg *msg,
-                                          pj_pool_t* pool);
+                                          pjsip_rx_data* rdata);
 
   void lookup_ifcs(const SessionCase& session_case,
                    const std::string& served_user,
