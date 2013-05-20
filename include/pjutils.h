@@ -53,6 +53,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include "sas.h"
 
 namespace PJUtils
 {
@@ -148,6 +149,7 @@ namespace PJUtils
                                const pjsip_msg_body *body);
 
   pjsip_tx_data *clone_tdata(pjsip_tx_data *tdata);
+  void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
 
   bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);
 

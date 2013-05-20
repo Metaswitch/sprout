@@ -124,6 +124,7 @@ extern "C" {
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "aschain.h"
+#include "registration_utils.h"
 
 static RegData::Store* store;
 
@@ -2722,18 +2723,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         _from_store)
     {
       // We're the auth proxy and the flow we used failed, delete the
-      // record of the flow.  We need the retry loop to handle the store's
-      // compare-and-swap.
+      // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      RegData::AoR* aor_data;
-      do
-      {
-        aor_data = store->get_aor_data(aor);
-        aor_data->remove_binding(binding_id);
-      } while (!store->set_aor_data(aor, aor_data));
-
-      delete aor_data;
+      RegistrationUtils::network_initiated_deregistration(ifc_handler, store, aor, binding_id);
     }
   }
 

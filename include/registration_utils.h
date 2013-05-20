@@ -1,5 +1,5 @@
 /**
- * @file constants.h
+ * @file registration_utils.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,35 +34,19 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef CONSTANTS_H_
-#define CONSTANTS_H_
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
+}
 
-const pj_str_t STR_SUPPORTED = pj_str("Supported");
-const pj_str_t STR_REQUIRE = pj_str("Require");
-const pj_str_t STR_PATH = pj_str("Path");
-const pj_str_t STR_OUTBOUND = pj_str("outbound");
-const pj_str_t STR_PARAM_OB = pj_str("ob");
-const pj_str_t STR_SIP_INSTANCE = pj_str("+sip.instance");
-const pj_str_t STR_REG_ID = pj_str("reg-id");
-const pj_str_t STR_OB = pj_str("ob");
-const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
-const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
-const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
-const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
-const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
-const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
-const pj_str_t STR_ORIG = pj_str("orig");
-const pj_str_t STR_NO_FORK = pj_str("no-fork");
+#include <string>
+#include "regdata.h"
+#include "ifchandler.h"
 
-/// Prefix of ODI tokens we generate.
-const pj_str_t STR_ODI_PREFIX = pj_str("odi_");
-
-const int SIP_STATUS_FLOW_FAILED = 430;
-const pj_str_t SIP_REASON_FLOW_FAILED = pj_str("Flow failed");
-const pj_str_t SIP_REASON_ENUM_FAILED = pj_str("ENUM translation failed");
-const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str("Off-net calling not allowed");
-
-#define DEFAULT_HANDLING_SESSION_CONTINUED 0
-#define DEFAULT_HANDLING_SESSION_TERMINATED 1
-
-#endif /* CONSTANTS_H_ */
+namespace RegistrationUtils {
+void user_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
+void network_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
+void register_with_application_servers(IfcHandler*, RegData::Store* store, pjsip_rx_data*, pjsip_tx_data*, const std::string&);
+}
