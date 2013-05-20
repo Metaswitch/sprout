@@ -404,6 +404,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int untrusted_port,
                        const std::string& local_host,
                        const std::string& home_domain,
+                       const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads)
@@ -424,10 +425,12 @@ pj_status_t init_stack(const std::string& system_name,
   memset(&stack_data, 0, sizeof(stack_data));
   char* local_host_cstr = strdup(local_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
+  char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
   stack_data.trusted_port = trusted_port;
   stack_data.untrusted_port = untrusted_port;
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
+  stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
 
   // Initialize SAS logging.
   if (system_name != "")

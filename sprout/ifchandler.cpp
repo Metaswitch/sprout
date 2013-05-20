@@ -331,7 +331,7 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
           AsInvocation as_invocation;
           int32_t priority = (int32_t)parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max());
           as_invocation.server_name = get_first_node_value(as, "ServerName");
-          as_invocation.default_handling = get_first_node_value(as, "DefaultHandling");
+          as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
           as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
           xml_node<>* as_ext = as->first_node("Extension");
