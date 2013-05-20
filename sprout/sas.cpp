@@ -124,8 +124,6 @@ void* SAS::Connection::writer_thread(void* p)
 
 void SAS::Connection::writer()
 {
-  int rc;
-
   while (true)
   {
     int reconnect_timeout = 10000;  // If connect fails, retry every 10 seconds.
@@ -139,12 +137,22 @@ void SAS::Connection::writer()
       std::string msg;
       while (_msg_q.pop(msg))
       {
-        rc = ::send(_sock, msg.data(), msg.length(), 0);
-        if (rc < 0)
+        int len = msg.length();
+        char* buf = (char*)msg.data();
+        while (len > 0)
         {
-          LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
-          ::close(_sock);
-          break;
+          int nsent = ::send(_sock, buf, len, 0);
+          if (nsent > 0)
+          {
+            len -= nsent;
+            buf += nsent;
+          }
+          else if ((nsent < 0) && (errno != EINTR))
+          {
+            LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+            ::close(_sock);
+            break;
+          }
         }
       }
 
