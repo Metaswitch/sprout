@@ -85,6 +85,7 @@ struct options
   int                    untrusted_port;
   std::string            local_host;
   std::string            home_domain;
+  std::string            sprout_domain;
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
@@ -126,6 +127,7 @@ static void usage(void)
        " -u, --untrusted-port N     Set local untrusted listener port to N\n"
        " -l, --localhost <name>     Override the local host name\n"
        " -D, --domain <name>        Override the home domain name\n"
+       " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -e, --edge-proxy <name>[:<connections>[:<recycle time>]]\n"
        "                            Operate as an edge proxy using the specified node\n"
@@ -171,6 +173,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "untrusted-port",    required_argument, 0, 'u'},
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
+    { "sprout-domain",     required_argument, 0, 'c'},
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
@@ -223,6 +226,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'D':
       options->home_domain = std::string(pj_optarg);
       fprintf(stdout, "Override home domain set to %s\n", pj_optarg);
+      break;
+
+    case 'c':
+      options->sprout_domain = std::string(pj_optarg);
+      fprintf(stdout, "Override sprout cluster domain set to %s\n", pj_optarg);
       break;
 
     case 'n':
@@ -536,6 +544,7 @@ int main(int argc, char *argv[])
                       opt.untrusted_port,
                       opt.local_host,
                       opt.home_domain,
+                      opt.sprout_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads);
@@ -644,7 +653,7 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store, analytics_logger);
+    status = init_registrar(registrar_store, analytics_logger, ifc_handler);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing registrar, %s",

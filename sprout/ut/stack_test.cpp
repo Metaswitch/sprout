@@ -134,6 +134,7 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               9409,                         // untrusted port
                               dns,                          // local host
                               "woot.example.com",           // home domain
+                              "all-the-sprouts",            //sprout cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
                               7,                            // #PJsip threads
                               9);                           // #worker threads

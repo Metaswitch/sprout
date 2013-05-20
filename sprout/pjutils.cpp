@@ -549,3 +549,14 @@ bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs
 {
   return (pj_sockaddr_cmp(&lhs, &rhs) < 0);
 }
+
+void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool) {
+  pjsip_hdr *original_hdr = NULL;
+  pjsip_hdr *last_hdr = NULL;
+  while ((original_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr)) {
+    LOG_INFO("Cloning header! %ld", (long int)original_hdr);
+    pjsip_hdr *new_hdr = (pjsip_hdr *)pjsip_hdr_clone(pool, original_hdr);
+    pjsip_msg_add_hdr(new_msg, new_hdr);
+    last_hdr = original_hdr;
+  }
+}

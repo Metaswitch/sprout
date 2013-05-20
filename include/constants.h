@@ -47,6 +47,7 @@ const pj_str_t STR_REG_ID = pj_str("reg-id");
 const pj_str_t STR_OB = pj_str("ob");
 const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
 const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
+const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
 const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
 const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
@@ -60,5 +61,8 @@ const int SIP_STATUS_FLOW_FAILED = 430;
 const pj_str_t SIP_REASON_FLOW_FAILED = pj_str("Flow failed");
 const pj_str_t SIP_REASON_ENUM_FAILED = pj_str("ENUM translation failed");
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str("Off-net calling not allowed");
+
+#define DEFAULT_HANDLING_SESSION_CONTINUED 0
+#define DEFAULT_HANDLING_SESSION_TERMINATED 1
 
 #endif /* CONSTANTS_H_ */

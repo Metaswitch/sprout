@@ -46,11 +46,13 @@ extern "C" {
 
 #include "regdata.h"
 #include "analyticslogger.h"
+#include "ifchandler.h"
 
 extern pjsip_module mod_registrar;
 
 extern pj_status_t init_registrar(RegData::Store* registrar_store,
-                                  AnalyticsLogger* analytics_logger);
+                                  AnalyticsLogger* analytics_logger,
+                                  IfcHandler*);
 
 extern void destroy_registrar();
 
