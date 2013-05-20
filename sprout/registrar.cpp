@@ -187,9 +187,14 @@ void process_register_request(pjsip_rx_data* rdata)
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
-  RegData::AoR* aor_data;
+  RegData::AoR* aor_data = NULL;
   do
   {
+    if (aor_data != NULL)
+    {
+      delete aor_data;
+    }
+
     // Find the current bindings for the AoR.
     aor_data = store->get_aor_data(aor);
     LOG_DEBUG("Retrieved AoR data %p", aor_data);
@@ -338,6 +343,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - we only reject REGISTER if something goes wrong, and
     // we aren't covering any of those paths so we can't hit this either
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+    delete aor_data;
     return;
     // LCOV_EXCL_STOP
   }
@@ -451,7 +457,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
   if (((intptr_t)tsx->mod_data[0] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
-      (event->type == PJSIP_EVENT_RX_MSG) && 
+      (event->type == PJSIP_EVENT_RX_MSG) &&
       ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
     // Can't create an AS response in UT
     // LCOV_EXCL_START
