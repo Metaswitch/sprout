@@ -129,15 +129,17 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
   // Expire all outstanding bindings for this AoR, and get the time this AoR still has remaining - this
   // is the most sensible value to pass to an AS, as they don't have any per-binding information.
   RegData::AoR *aor_data = store->get_aor_data(served_user);
-  int now = time(NULL);
-  int expires = store->expire_bindings(aor_data, now) - now;
-  delete aor_data;
+  if (aor_data)
+  {
+    int now = time(NULL);
+    int expires = store->expire_bindings(aor_data, now) - now;
+    delete aor_data;
 
-  // Loop through the as_list
-  for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-    send_register_to_as(received_register, ok_response, *as_iter, expires, aor);
+    // Loop through the as_list
+    for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
+      send_register_to_as(received_register, ok_response, *as_iter, expires, aor);
+    }
   }
-
 }
 
 void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, const std::string& aor)
@@ -266,9 +268,14 @@ void notify_application_servers() {
 static void expire_bindings(RegData::Store *store, const std::string& aor, const std::string& binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
-  RegData::AoR *aor_data;
-  do {
-    aor_data = store->get_aor_data(aor);
+  for (;;)
+  {
+    RegData::AoR* aor_data = store->get_aor_data(aor);
+    if (aor_data == NULL)
+    {
+      break;
+    }
+
     if (binding_id == "*") {
       // We only use this when doing some network-initiated deregistrations;
       // when the user deregisters all bindings another code path clears them
@@ -277,7 +284,14 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
     } else {
       aor_data->remove_binding(binding_id);
     }
-  } while (!store->set_aor_data(aor, aor_data));
+
+    bool ok = store->set_aor_data(aor, aor_data);
+    delete aor_data;
+    if (ok)
+    {
+      break;
+    }
+  }
 };
 
 void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
