@@ -1,5 +1,6 @@
 /**
  * @file sas.h Definition of SAS class used for reporting events and markers
+ * to Service Assurance Server
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,19 +35,19 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-/// to Service Assurance Server
-///
-///
-
 #ifndef SAS_H__
 #define SAS_H__
 
+#include <stdint.h>
 #include <string.h>
+#include <atomic>
+
+#include "eventq.h"
 
 class SAS
 {
 public:
-  typedef unsigned long long TrailId;
+  typedef uint64_t TrailId;
 
   class Message
   {
@@ -54,7 +55,7 @@ public:
     static const int MAX_NUM_STATIC_PARAMS = 20;
     static const int MAX_NUM_VAR_PARAMS = 20;
 
-    inline Message(TrailId trail, unsigned long id, unsigned long instance)
+    inline Message(TrailId trail, uint32_t id, uint32_t instance)
     {
       _trail = trail;
       _msg.hdr.id = id;
@@ -64,34 +65,34 @@ public:
       _msg.hdr.var_data_array = _msg.var_data;
     }
 
-    inline Message& add_static_param(unsigned long param)
+    inline Message& add_static_param(uint32_t param)
     {
-      _msg.static_data[_msg.hdr.static_data_len / sizeof(unsigned long)] = param;
-      _msg.hdr.static_data_len += sizeof(unsigned long);
+      _msg.static_data[_msg.hdr.static_data_len / sizeof(uint32_t)] = param;
+      _msg.hdr.static_data_len += sizeof(uint32_t);
       return *this;
     }
 
-    inline Message& add_var_param(int len, unsigned char* data)
+    inline Message& add_var_param(size_t len, uint8_t* data)
     {
-      _msg.var_data[_msg.hdr.num_var_data].len = (unsigned long)len;
+      _msg.var_data[_msg.hdr.num_var_data].len = (uint32_t)len;
       _msg.var_data[_msg.hdr.num_var_data].ptr = data;
       ++_msg.hdr.num_var_data;
       return *this;
     }
 
-    inline Message& add_var_param(int len, char* s)
+    inline Message& add_var_param(size_t len, char* s)
     {
-      return add_var_param(len, (unsigned char*)s);
+      return add_var_param(len, (uint8_t*)s);
     }
 
     inline Message& add_var_param(char* s)
     {
-      return add_var_param(strlen(s), (unsigned char*)s);
+      return add_var_param(strlen(s), (uint8_t*)s);
     }
 
     inline Message& add_var_param(const std::string& s)
     {
-      return add_var_param(s.length(), (unsigned char*)s.data());
+      return add_var_param(s.length(), (uint8_t*)s.data());
     }
 
     friend class SAS;
@@ -102,16 +103,16 @@ public:
     {
       struct
       {
-        unsigned long id;
-        unsigned long instance;
-        unsigned long static_data_len;
-        unsigned long num_var_data;
+        uint32_t id;
+        uint32_t instance;
+        uint32_t static_data_len;
+        uint32_t num_var_data;
         void* var_data_array;
       } hdr;
-      unsigned long static_data[MAX_NUM_STATIC_PARAMS];
+      uint32_t static_data[MAX_NUM_STATIC_PARAMS];
       struct {
-        unsigned long len;
-        unsigned char* ptr;
+        uint32_t len;
+        uint8_t* ptr;
       } var_data[MAX_NUM_VAR_PARAMS];
     } _msg;
   };
@@ -119,33 +120,75 @@ public:
   class Event : public Message
   {
   public:
-    inline Event(TrailId trail, unsigned long event, unsigned long instance) :
+    inline Event(TrailId trail, uint32_t event, uint32_t instance) :
       Message(trail, event, instance)
     {
     }
+
+    std::string to_string() const;
   };
 
   class Marker : public Message
   {
   public:
-    inline Marker(TrailId trail, unsigned long marker, unsigned long instance) :
+    inline Marker(TrailId trail, uint32_t marker, uint32_t instance) :
       Message(trail, marker, instance)
     {
     }
 
     enum Scope
     {
+      None = 0,
       Branch = 1,
       TrailGroup = 2
     };
+
+    std::string to_string(Scope scope) const;
   };
 
   static void init(int system_name_length, const char* system_name, const std::string& sas_address);
   static void term();
-  static TrailId new_trail(unsigned long instance);
+  static TrailId new_trail(uint32_t instance);
   static void report_event(const Event& event);
-  static void report_marker(const Marker& marker);
-  static void report_marker(const Marker& marker, Marker::Scope scope);
+  static void report_marker(const Marker& marker, Marker::Scope scope=Marker::Scope::None);
+
+private:
+  class Connection
+  {
+  public:
+    Connection(const std::string& system_name, const std::string& sas_address);
+    ~Connection();
+
+    void send_msg(std::string msg);
+
+    static void* writer_thread(void* p);
+
+  private:
+    bool connect_init();
+    void writer();
+
+    std::string _system_name;
+    std::string _sas_address;
+
+    eventq<std::string> _msg_q;
+
+    pthread_t _writer;
+
+    // Socket for the connection.
+    int _sock;
+  };
+
+  static void write_hdr(std::string& s, uint16_t msg_length, uint8_t msg_type);
+  static void write_int8(std::string& s, uint8_t c);
+  static void write_int16(std::string& s, uint16_t v);
+  static void write_int32(std::string& s, uint32_t v);
+  static void write_int64(std::string& s, uint64_t v);
+  static void write_data(std::string& s, size_t length, const char* data);
+  static void write_timestamp(std::string& s);
+  static void write_trail(std::string& s, TrailId trail);
+
+  static std::atomic<TrailId> _next_trail_id;
+  static Connection* _connection;
 };
 
 #endif
