@@ -590,7 +590,12 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
   register_uri(_store, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
-  ASSERT_EQ(1, _store->get_aor_data("sip:6505550231@homedomain")->_bindings.size());
+  RegData::AoR* aor_data;
+  aor_data = _store->get_aor_data("sip:6505550231@homedomain");
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
+
   RegistrationUtils::network_initiated_deregistration(_ifc_handler, _store, "sip:6505550231@homedomain", "*");
 
   SCOPED_TRACE("deREGISTER");
@@ -604,5 +609,8 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   free_txdata();
   // Check that we deleted the binding
-  ASSERT_EQ(0, _store->get_aor_data("sip:6505551234@homedomain")->_bindings.size());
+  aor_data = _store->get_aor_data("sip:6505551234@homedomain");
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(0u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
 }
