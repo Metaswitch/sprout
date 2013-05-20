@@ -384,7 +384,7 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
                              SAS::TrailId trail,               //< The SAS trail ID
                              std::vector<AsInvocation>& application_servers)  //< OUT the AS list
 {
-  LOG_DEBUG("Fetching IFC information for %s", served_user.c_str());
+  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
   std::string ifc_xml;
   if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
   {
@@ -402,13 +402,15 @@ void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session c
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
-                                             pjsip_msg *msg,
-                                             pj_pool_t* pool)
+std::string IfcHandler::served_user_from_msg(
+  const SessionCase& session_case,
+  pjsip_rx_data* rdata)
 {
   pjsip_uri* uri = NULL;
   std::string user;
 
+  // For originating:
+  //
   // Ultimately we should determine the served user as described in
   // 3GPP TS 24.229 s5.4.3.2, step 1. This first relies on
   // P-Served-User (RFC5502), if present (step 1a). We do implement
@@ -423,19 +425,39 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
   // these are intended for the AS, not the S-CSCF (which has other
   // means of determining these).
 
-  // Format is name-addr or addr-spec (containing a URI), followed by
-  // optional parameters.
-  pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-              pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+  // For terminating:
+  //
+  // We determine the served user as described in 3GPP TS 24.229
+  // s5.4.3.3, step 1, i.e., purely on the Request-URI.
 
-  if (served_user_hdr != NULL)
+  // For originating after retargeting (orig-cdiv):
+  //
+  // We should determine the served user as described in 3GPP TS
+  // 24.229 s5.4.3.3 step 3b. This relies on History-Info (RFC4244)
+  // and P-Served-User (RFC5502) in step 3b. We should never respect
+  // P-Asserted-Identity.
+  //
+  // We implement P-Served-User, and fall back on the From
+  // header. However, the History-Info mechanism has fundamental
+  // problems as outlined in RFC5502 appendix A, and we do not
+  // implement it.
+
+  if (session_case.is_originating())  // (includes orig-cdiv)
   {
-    uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+    // Inspect P-Served-User header. Format is name-addr or addr-spec
+    // (containing a URI), followed by optional parameters.
+    pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
+      pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_P_SERVED_USER, NULL);
 
-    if (uri == NULL)
+    if (served_user_hdr != NULL)
     {
-      LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-                  served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      uri = PJUtils::uri_from_string_header(served_user_hdr, rdata->tp_info.pool);
+
+      if (uri == NULL)
+      {
+        LOG_WARNING("Unable to parse P-Served-User header: %.*s",
+                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      }
     }
   }
 
@@ -444,12 +466,12 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
     if (session_case.is_originating())
     {
       // For originating services, the user is parsed from the from header.
-      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
+      uri = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg)->uri;
     }
     else
     {
       // For terminating services, the user is parsed from the request URI.
-      uri = msg->line.req.uri;
+      uri = rdata->msg_info.msg->line.req.uri;
     }
   }
 

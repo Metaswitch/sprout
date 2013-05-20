@@ -38,6 +38,8 @@
 ///----------------------------------------------------------------------------
 
 #include <cstdio>
+
+#include "utils.h"
 #include "fakexdmconnection.hpp"
 
 using namespace std;
@@ -52,3 +54,12 @@ FakeXDMConnection::~FakeXDMConnection()
 {
 }
 
+void FakeXDMConnection::put(const std::string& uri, const std::string& doc)
+{
+  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0);
+}
+
+void FakeXDMConnection::flush_all()
+{
+  _fakehttp->flush_all();
+}

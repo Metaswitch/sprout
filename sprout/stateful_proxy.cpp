@@ -1590,16 +1590,24 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
   {
     if (serving_state.original_dialog().is_set())
     {
+      // Pick up existing AS chain.
       as_chain_link = serving_state.original_dialog();
-    }
-    else if (ifc_handler == NULL)
-    {
-      LOG_INFO("No IFC handler");
+
+      if ((serving_state.session_case() == SessionCase::Terminating) &&
+          !as_chain_link.matches_target(rdata))
+      {
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
+        // so create new AS chain.
+        LOG_INFO("Request-URI has changed, retargeting");
+        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
+                                        rdata);
+      }
     }
     else
     {
+      // No existing AS chain - create new.
       as_chain_link = create_as_chain(serving_state.session_case(),
-                                       rdata);
+                                      rdata);
     }
 
     if (serving_state.session_case().is_originating() &&
@@ -1661,16 +1669,9 @@ AsChainLink UASTransaction::move_to_terminating_chain(pjsip_rx_data* rdata,
   PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
   PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
-  if (ifc_handler == NULL)
-  {
-    LOG_INFO("No IFC handler");
-    as_chain_link = AsChainLink();
-  }
-  else
-  {
-    as_chain_link = create_as_chain(SessionCase::Terminating,
-                                     rdata);
-  }
+  // Create new terminating chain.
+  as_chain_link = create_as_chain(SessionCase::Terminating,
+                                  rdata);
 
   return as_chain_link;
 }
@@ -3048,14 +3049,20 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                             pjsip_rx_data* rdata)
+                                            pjsip_rx_data* rdata)
 {
-  std::vector<AsInvocation> application_servers;
+  if (ifc_handler == NULL)
+  {
+    // LCOV_EXCL_START No easy way to hit.
+    LOG_INFO("No IFC handler");
+    return AsChainLink();
+    // LCOV_EXCL_STOP
+  }
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
-                                                              rdata->msg_info.msg,
-                                                              rdata->tp_info.pool);
+                                                              rdata);
 
+  std::vector<AsInvocation> application_servers;
   bool is_registered = false;
 
   if (!served_user.empty())
