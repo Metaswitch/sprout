@@ -139,7 +139,6 @@ void SAS::Connection::writer()
       std::string msg;
       while (_msg_q.pop(msg))
       {
-        LOG_DEBUG("Dequeued SAS message (%d bytes)", msg.length());
         rc = ::send(_sock, msg.data(), msg.length(), 0);
         if (rc < 0)
         {
@@ -147,12 +146,11 @@ void SAS::Connection::writer()
           ::close(_sock);
           break;
         }
-        LOG_DEBUG("Sent SAS message (%d bytes)", msg.length());
       }
 
-      // Close the input queue and flush it.
-      _msq_q.close();
-      _msg_q.flush();
+      // Close the input queue and purge it.
+      _msg_q.close();
+      _msg_q.purge();
 
       // Terminate the socket.
       ::close(_sock);
@@ -192,8 +190,6 @@ bool SAS::Connection::connect_init()
     LOG_ERROR("Failed to open SAS socket: %d (%s)\n", errno, ::strerror(errno));
     return false;
   }
-
-  LOG_DEBUG("Created SAS socket %d", _sock);
 
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
@@ -247,7 +243,7 @@ void SAS::Connection::send_msg(std::string msg)
 
 SAS::TrailId SAS::new_trail(uint32_t instance)
 {
-  ????TrailId trail = _next_trail_id++;
+  TrailId trail = _next_trail_id++;
   return trail;
 }
 
@@ -356,8 +352,6 @@ std::string SAS::Event::to_string() const
     write_data(s, _msg.var_data[ii].len, (char *)_msg.var_data[ii].ptr);
   }
 
-  LOG_DEBUG("Built SAS event message (%d bytes)", s.length());
-
   return s;
 }
 
@@ -389,8 +383,6 @@ std::string SAS::Marker::to_string(Marker::Scope scope) const
     write_int16(s, _msg.var_data[ii].len);
     write_data(s, _msg.var_data[ii].len, (char *)_msg.var_data[ii].ptr);
   }
-
-  LOG_DEBUG("Built SAS marker message (%d bytes)", s.length());
 
   return s;
 }
