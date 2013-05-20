@@ -270,7 +270,7 @@ TEST_F(IfcHandlerTest, NoIfc)
   EXPECT_TRUE(_log.contains("No iFC found"));
 }
 
-TEST_F(IfcHandlerTest, NoPriority)
+TEST_F(IfcHandlerTest, DISABLED_NoPriority)
 {
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
