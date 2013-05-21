@@ -206,6 +206,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
 
+  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  {
+    // Received on the trusted port.  Let it through.
+    return PJ_FALSE;
+  }
+
   if ((tp_auth_supported) &&
       (PJSIP_TRANSPORT_IS_RELIABLE(rdata->tp_info.transport)))
   {
