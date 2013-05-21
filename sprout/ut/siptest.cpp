@@ -310,9 +310,9 @@ void SipTest::inject_msg(pjsip_msg* msg, TransportFlow* tp)
 
 /// Inject message directly into the registrar module, bypassing other
 /// layers.  Allows testing which messages we accept into the module.
-pj_bool_t SipTest::inject_msg_direct(const string& msg, pjsip_module* module, TransportFlow* tp)
+pj_bool_t SipTest::inject_msg_direct(const string& msg, pjsip_module* module)
 {
-  pjsip_rx_data* rdata = build_rxdata(msg, tp);
+  pjsip_rx_data* rdata = build_rxdata(msg);
   parse_rxdata(rdata);
   pj_bool_t ret = module->on_rx_request(rdata);
   return ret;
