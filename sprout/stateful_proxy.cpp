@@ -432,6 +432,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
                    uri->user.slen, uri->user.ptr,
                    original_dialog.to_string().c_str());
           session_case = &original_dialog.session_case();
+
+          // This message forms part of the AsChain trail.
+          set_trail(rdata, original_dialog.trail());
         }
         else
         {
@@ -3081,6 +3084,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                              session_case,
                              served_user,
                              is_registered,
+                             trail(),
                              application_servers);
   _victims.push_back(ret);
 

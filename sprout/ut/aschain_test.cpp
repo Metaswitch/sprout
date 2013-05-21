@@ -83,19 +83,19 @@ public:
 TEST_F(AsChainTest, Basics)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link(&as_chain, 0u);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
   AsInvocation as2;
   as2.server_name = "sip:mmtel.homedomain";
   as_list.push_back(as2);
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   EXPECT_THAT(as_chain_link.to_string(), testing::MatchesRegex("AsChain-orig\\[0x[0-9a-f]+\\]:1/0"));
@@ -118,20 +118,20 @@ TEST_F(AsChainTest, Basics)
 TEST_F(AsChainTest, AsInvocation)
 {
   std::vector<AsInvocation> as_list;
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link(&as_chain, 0u);
 
   AsInvocation as1;
   as1.server_name = "sip:pancommunicon.cw-ngv.com";
   as_list.push_back(as1);
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
   as_list.clear();
   AsInvocation as2;
   as2.server_name = "::invalid:pancommunicon.cw-ngv.com";
   as_list.push_back(as2);
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, as_list);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
