@@ -798,21 +798,14 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           {
             LOG_DEBUG("Remove top route header");
             pj_list_erase(r1);
-            r1 = r2;
-            r2 = NULL;
           }
           else if (uri2->user.slen == 0)
           {
             LOG_DEBUG("Remove second route header");
             pj_list_erase(r2);
-            r2 = NULL;
           }
         }
       }
-    }
-    else
-    {
-      r1 = NULL;
     }
 
     // Work out whether the message has come from an implicitly trusted
@@ -924,12 +917,17 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
     }
 
-    if (r1 &&
-        pjsip_param_find(&reinterpret_cast<pjsip_sip_uri*>(r1->name_addr.uri)->other_param, &STR_ORIG) &&
+    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    if (route_hdr &&
+        (PJSIP_URI_SCHEME_IS_SIP(route_hdr->name_addr.uri)) &&
+        (PJUtils::is_home_domain(route_hdr->name_addr.uri) ||
+         PJUtils::is_uri_local(route_hdr->name_addr.uri)) &&
+        pjsip_param_find(&reinterpret_cast<pjsip_sip_uri*>(pjsip_uri_get_uri(route_hdr->name_addr.uri))->other_param,
+                         &STR_ORIG) &&
         (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT))
     {
-      // Local route header requests originating handling, but this is
-      // not a known client. This is forbidden.
+      // Topmost route header points to us/Sprout and requests originating
+      // handling, but this is not a known client. This is forbidden.
       //
       // This covers 3GPP TS 24.229 s5.10.3.2, except that we
       // implement a whitelist (only known Bono clients can pass this)
@@ -939,6 +937,9 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       // any trusted ones) in the sense of s5.10.3.2, so this always
       // applies and we never implement the step 4 and 5 behaviour of
       // copying the ;orig parameter to the outgoing Route.
+      //
+      // We are slightly overloading TrustBoundary here - how to
+      // improve this is FFS.
       LOG_WARNING("Request for originating handling but not from known client");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
@@ -953,7 +954,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     // Work out the target for the message.  This will either be the URI in
     // the top route header, or the request URI.
-    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
     LOG_DEBUG("Destination is %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
     pjsip_uri* target = (route_hdr != NULL) ? route_hdr->name_addr.uri : tdata->msg->line.req.uri;
 
