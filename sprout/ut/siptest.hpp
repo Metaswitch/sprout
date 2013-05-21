@@ -127,7 +127,7 @@ protected:
 
   /// Inject message directly into the specified module, bypassing other
   /// layers.  Allows testing which messages we accept into the module.
-  pj_bool_t inject_msg_direct(const std::string& msg, pjsip_module* module);
+  pj_bool_t inject_msg_direct(const std::string& msg, pjsip_module* module, TransportFlow* tp = _tp_default);
 
   /// Inject message directly into the default module, bypassing other
   /// layers.  Allows testing which messages we accept into the module.

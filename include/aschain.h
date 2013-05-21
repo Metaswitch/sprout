@@ -88,6 +88,7 @@ public:
           const SessionCase& session_case,
           const std::string& served_user,
           bool is_registered,
+          SAS::TrailId trail,
           std::vector<AsInvocation> application_servers);
   ~AsChain();
 
@@ -95,6 +96,7 @@ public:
   const SessionCase& session_case() const;
   size_t size() const;
   bool matches_target(pjsip_rx_data* rdata) const;
+  SAS::TrailId trail() const;
 
 private:
   friend class AsChainLink;
@@ -107,6 +109,7 @@ private:
   const SessionCase& _session_case;
   const std::string _served_user;
   const bool _is_registered;
+  const SAS::TrailId _trail;
   std::vector<AsInvocation> _application_servers; //< List of application server URIs.
 };
 
@@ -139,6 +142,11 @@ public:
   bool complete() const
   {
     return ((_as_chain == NULL) || (_index == _as_chain->size()));
+  }
+
+  SAS::TrailId trail() const
+  {
+    return ((_as_chain == NULL) ? 0 : _as_chain->trail());
   }
 
   std::string to_string() const

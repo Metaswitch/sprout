@@ -48,12 +48,14 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  const SessionCase& session_case,
                  const std::string& served_user,
                  bool is_registered,
+                 SAS::TrailId trail,
                  std::vector<AsInvocation> application_servers) :
   _as_chain_table(as_chain_table),
   _odi_tokens(),
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
+  _trail(trail),
   _application_servers(application_servers)
 {
   LOG_DEBUG("Creating AsChain %p", this);
@@ -109,6 +111,12 @@ bool AsChain::matches_target(pjsip_rx_data* rdata) const
   const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
                                                                rdata);
   return (orig_uri == msg_uri);
+}
+
+
+SAS::TrailId AsChain::trail() const
+{
+  return _trail;
 }
 
 
