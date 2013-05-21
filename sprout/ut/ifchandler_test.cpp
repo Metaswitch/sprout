@@ -270,7 +270,7 @@ TEST_F(IfcHandlerTest, NoIfc)
   EXPECT_TRUE(_log.contains("No iFC found"));
 }
 
-TEST_F(IfcHandlerTest, DISABLED_NoPriority)
+TEST_F(IfcHandlerTest, NoPriority)
 {
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -286,9 +286,8 @@ TEST_F(IfcHandlerTest, DISABLED_NoPriority)
              "sip:5755550033@homedomain",
              true,
              SessionCase::Originating,
-             false,
+             true,
              false);
-  EXPECT_TRUE(_log.contains("Missing mandatory value for iFC priority"));
 }
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)
