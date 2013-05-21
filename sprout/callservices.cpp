@@ -229,7 +229,8 @@ unsigned int CallServices::get_media_type_conditions(pjsip_msg *msg)
 
   // First, check if the message body is SDP - if not, we can't tell what the
   // media types are (and assume they're 0).
-  if ((!pj_stricmp2(&msg->body->content_type.type, "application")) &&
+  if (msg->body &&
+      (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
       (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
   {
     // Parse the SDP, using a temporary pool.
