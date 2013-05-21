@@ -48,7 +48,7 @@ class FakeHttpConnection : public HttpConnection
 {
 public:
   FakeHttpConnection();
-  ~FakeHttpConnection();
+  virtual ~FakeHttpConnection();
 
   void flush_all();
 

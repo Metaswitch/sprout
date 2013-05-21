@@ -53,7 +53,7 @@ class HttpConnection
 {
 public:
   HttpConnection(const std::string& server, bool assertUser, int sasEventBase, const std::string& statName);
-  ~HttpConnection();
+  virtual ~HttpConnection();
 
   virtual bool get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
 
