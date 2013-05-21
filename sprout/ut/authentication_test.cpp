@@ -176,11 +176,26 @@ string AuthenticationMessage::get()
 
 TEST_F(AuthenticationTest, NoAuthorization)
 {
+  TransportFlow tp_untrusted(TransportFlow::Protocol::TCP,
+                             TransportFlow::Trust::UNTRUSTED,
+                             "0.0.0.0",
+                             5060);
+
   AuthenticationMessage msg;
   msg._auth_hdr = false;
-  pj_bool_t ret = inject_msg_direct(msg.get());
+  pj_bool_t ret = inject_msg_direct(msg.get(), _module, &tp_untrusted);
   EXPECT_EQ(PJ_TRUE, ret);
   ASSERT_EQ(1u, _out.size());
   pjsip_msg* out = _out.front()->msg;
   RespMatcher(401).matches(out);
+}
+
+
+TEST_F(AuthenticationTest, NoAuthorizationTrusted)
+{
+  AuthenticationMessage msg;
+  msg._auth_hdr = false;
+  pj_bool_t ret = inject_msg_direct(msg.get(), _module, _tp_default);
+  EXPECT_EQ(PJ_FALSE, ret);
+  ASSERT_EQ(0u, _out.size());
 }
