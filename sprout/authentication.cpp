@@ -226,20 +226,35 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // Check to see if the message has already been integrity protected?
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-  if (auth_hdr != NULL)
+  if (auth_hdr == NULL)
   {
-    LOG_DEBUG("Authorization header in message");
-    pjsip_param* integrity =
-           pjsip_param_find(&auth_hdr->credential.digest.other_param,
-                            &STR_INTEGRITY_PROTECTED);
+    // No authentication header, so the message must have arrived from a node
+    // within the trust zone that doesn't need us to do authentication.
+    LOG_DEBUG("No authorization header, so accept message");
+    return PJ_FALSE;
+  }
 
-    if ((integrity != NULL) &&
-        (pj_stricmp2(&integrity->value, "yes")==0))
-    {
-      // Message is already integrity protected, so let it through/
-      LOG_INFO("Request integrity protected by edge proxy");
-      return PJ_FALSE;
-    }
+  LOG_DEBUG("Authorization header in message");
+  pjsip_param* integrity =
+         pjsip_param_find(&auth_hdr->credential.digest.other_param,
+                          &STR_INTEGRITY_PROTECTED);
+
+  if ((integrity != NULL) &&
+      ((pj_stricmp2(&integrity->value, "yes") == 0) ||
+       (pj_stricmp2(&integrity->value, "tls-yes") == 0) ||
+       (pj_stricmp2(&integrity->value, "ip-assoc-yes") == 0)))
+  {
+    // Message is already integrity protected, so let it through.
+    LOG_INFO("Request integrity protected by edge proxy/IBCF");
+    return PJ_FALSE;
+  }
+
+  if (auth_hdr->credential.digest.response.slen == 0)
+  {
+    // No response, so the authorization header was likely added by Bono, so
+    // remove it.
+    LOG_DEBUG("Remove authorization header added by Bono");
+    pj_list_erase(auth_hdr);
   }
 
   int sc;
