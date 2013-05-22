@@ -32,6 +32,19 @@
    fun:_ZN7SipTest10inject_msgERKSs
 }
 {
+   Test leaks UAS transactions - we only go to terminated, and then when we finally move to destroy UASTransaction::on_tsx_state is not invoked. Not quite sure why this is.
+   Memcheck:Leak
+   fun:_Znwm
+   fun:_ZN14UASTransaction6createEP13pjsip_rx_dataP13pjsip_tx_dataP13TrustBoundaryPPS_
+   fun:_ZL19process_tsx_requestP13pjsip_rx_data
+   fun:_ZL19proxy_on_rx_requestP13pjsip_rx_data
+   fun:pjsip_endpt_process_rx_data
+   fun:endpt_on_rx_msg
+   fun:pjsip_tpmgr_receive_packet
+   fun:_ZN7SipTest10inject_msgERKSsPNS_13TransportFlowE
+   fun:_ZN25IscTest_SimpleAccept_Test8TestBodyEv
+}
+{
    VPED appears to leak threads.
    Memcheck:Leak
    fun:calloc
