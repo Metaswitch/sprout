@@ -138,7 +138,7 @@ public:
 
   AsChainLink handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  AsChainLink move_to_terminating_chain(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+  void move_to_terminating_chain(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata);
   AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 

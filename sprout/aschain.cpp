@@ -51,6 +51,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  SAS::TrailId trail,
                  std::vector<AsInvocation> application_servers) :
   _as_chain_table(as_chain_table),
+  _refs(2),
   _odi_tokens(),
   _session_case(session_case),
   _served_user(served_user),
@@ -58,7 +59,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _trail(trail),
   _application_servers(application_servers)
 {
-  LOG_DEBUG("Creating AsChain %p", this);
+  LOG_DEBUG("Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
 }
 
@@ -66,7 +67,15 @@ AsChain::AsChain(AsChainTable* as_chain_table,
 AsChain::~AsChain()
 {
   LOG_DEBUG("Destroying AsChain %p", this);
+}
+
+
+/// Remove AsChain from the AsChainTable, as soon as practical.
+void AsChain::request_destroy()
+{
+  LOG_DEBUG("Removing AsChain %p from map", this);
   _as_chain_table->unregister(_odi_tokens);
+  dec_ref();
 }
 
 
@@ -119,6 +128,28 @@ SAS::TrailId AsChain::trail() const
   return _trail;
 }
 
+
+/// Create a new AsChain and return a link pointing at the start of
+// it. Caller MUST eventually call both:
+//
+// * release() when it is finished with the link, and
+// * as_chain()->request_destroy() when it is finished with the
+//   underlying chain.
+AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
+                                         const SessionCase& session_case,
+                                         const std::string& served_user,
+                                         bool is_registered,
+                                         SAS::TrailId trail,
+                                         std::vector<AsInvocation> application_servers)
+{
+  AsChain* as_chain = new AsChain(as_chain_table,
+                                  session_case,
+                                  served_user,
+                                  is_registered,
+                                  trail,
+                                  application_servers);
+  return AsChainLink(as_chain, 0u);
+}
 
 /// Apply first AS (if any) to initial request.
 //
@@ -274,12 +305,23 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
 }
 
 
+/// Retrieve an existing AsChainLink based on ODI token.
+//
+// If the returned link is_set(), caller MUST call release() when it
+// is finished with the link.
 AsChainLink AsChainTable::lookup(const std::string& token)
 {
   pthread_mutex_lock(&_lock);
   std::map<std::string, AsChainLink>::const_iterator it = _t2c_map.find(token);
-  AsChainLink ret = (it == _t2c_map.end()) ? AsChainLink(NULL, 0) : it->second;
-  pthread_mutex_unlock(&_lock);
-
-  return ret;
+  if (it == _t2c_map.end())
+  {
+    pthread_mutex_unlock(&_lock);
+    return AsChainLink(NULL, 0);
+  }
+  else
+  {
+    it->second._as_chain->inc_ref();
+    pthread_mutex_unlock(&_lock);
+    return it->second;
+  }
 }
