@@ -329,7 +329,9 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
         if (as)
         {
           AsInvocation as_invocation;
-          int32_t priority = (int32_t)parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max());
+          int32_t priority = (int32_t)((priority_node) ?
+                                       parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                       0);
           as_invocation.server_name = get_first_node_value(as, "ServerName");
           as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
           as_invocation.service_info = get_first_node_value(as, "ServiceInfo");

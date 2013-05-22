@@ -286,9 +286,8 @@ TEST_F(IfcHandlerTest, NoPriority)
              "sip:5755550033@homedomain",
              true,
              SessionCase::Originating,
-             false,
+             true,
              false);
-  EXPECT_TRUE(_log.contains("Missing mandatory value for iFC priority"));
 }
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)
