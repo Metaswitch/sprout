@@ -518,10 +518,9 @@ std::string IfcHandler::user_from_uri(pjsip_uri *uri)
 // returning the result or throwing.
 long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value)
 {
-  if (!node)
-  {
-    throw ifc_error("Missing mandatory value for " + description);
-  }
+  // Node must be non-NULL - caller should check for this prior to calling
+  // this method.
+  assert(node != NULL);
 
   const char* nptr = node->value();
   char* endptr = NULL;
