@@ -176,11 +176,9 @@ string AuthenticationMessage::get()
 
 TEST_F(AuthenticationTest, NoAuthorization)
 {
+  // Test that Sprout accepts messages with no authorization header.
   AuthenticationMessage msg;
   msg._auth_hdr = false;
   pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_TRUE, ret);
-  ASSERT_EQ(1u, _out.size());
-  pjsip_msg* out = _out.front()->msg;
-  RespMatcher(401).matches(out);
+  EXPECT_EQ(PJ_FALSE, ret);
 }

@@ -1397,9 +1397,9 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
     xoBareToken = xoToken.substr(0, xoToken.find(':', xoToken.find(':')));
   }
 
-  // No integrity marking.
+  // Check integrity=no marking.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551234@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
 
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
@@ -2002,7 +2002,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   // particular header is a bit weird; feel free to relax the test if
   // you understand what's going on.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", nonce=\"\", response=\"\",integrity-protected=\"yes\"", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=yes", actual);
 
   // Send a reply.
   inject_msg(respond_to_current_txdata(200));
@@ -2115,7 +2115,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 
   // Check it is *not* authorized.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
 
   free_txdata();
   delete tp;

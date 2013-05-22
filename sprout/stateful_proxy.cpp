@@ -588,20 +588,33 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Send the 200 OK statefully.
   PJUtils::respond_stateful(stack_data.endpt, tsx, rdata, 200, NULL, NULL, NULL);
 
-  pj_bool_t integrity_protected = PJ_FALSE;
+  PJUtils::Integrity integrity = PJUtils::Integrity::YES;
 
-  if (edge_proxy)
+  if ((edge_proxy) &&
+      (rdata->tp_info.transport->local_name.port != stack_data.trusted_port))
   {
-    // Check whether the CANCEL has arrived on an integrity protected
-    // connection.  The CANCEL isn't rejected if it hasn't because it may
-    // have come from a Sprout node anyway - but we need to know whether
-    // to mark the ongoing CANCELs as integrity protected.
+    // CANCEL has come on untrusted port, so check whether it has come on
+    // a trusted flow or from a trusted peer.
     Flow* flow_data = flow_table->find_flow(rdata->tp_info.transport,
                                             &rdata->pkt_info.src_addr);
 
     if ((flow_data != NULL) && (flow_data->authenticated()))
     {
-      integrity_protected = PJ_TRUE;
+      // Request from an authenticated client.
+      integrity = PJUtils::Integrity::YES;
+    }
+    else if ((ibcf) &&
+             (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+    {
+      // Request from a trusted peer.
+      integrity = PJUtils::Integrity::YES;
+    }
+    else
+    {
+      // The request is from an untrusted/unauthenticated source.  We still
+      // pass it on as Sprout may be able to authenticate it if the client
+      // has included credentials in the request.
+      integrity = PJUtils::Integrity::NO;
     }
   }
 
@@ -610,7 +623,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // we receive final response from the UAC INVITE transaction.
   LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
-  uas_data->cancel_pending_uac_tsx(0, integrity_protected);
+  uas_data->cancel_pending_uac_tsx(0, integrity);
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -755,7 +768,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
-      PJUtils::add_integrity_protected_indication(tdata);
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+    }
+    else
+    {
+      // The client flow hasn't yet been authenticated, so add an integrity-protected
+      // indicator so Sprout will challenge and/or authenticate. it
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
     }
 
     // Remove the reference to the source flow since we have finished with it
@@ -828,7 +847,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
         *trust = &TrustBoundary::INBOUND_TRUNK;
-        PJUtils::add_integrity_protected_indication(tdata);
+        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
       }
       else
       {
@@ -846,7 +865,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // purposes of routing SIP messages and don't need to challenge
             // again.
             trusted = true;
-            PJUtils::add_integrity_protected_indication(tdata);
+            PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+          }
+          else
+          {
+            // Client has not been authenticated, so add indicator to force
+            // Sprout to challenge.
+            PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
           }
         }
         else
@@ -855,6 +880,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           // unknown client for the purposes of header stripping.
           LOG_DEBUG("Message received from unknown client");
           *trust = &TrustBoundary::UNKNOWN_EDGE_CLIENT;
+          PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
         }
       }
     }
@@ -1517,7 +1543,7 @@ UASTransaction::~UASTransaction()
   {
     // INVITE transaction has been terminated.  If there are any
     // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0, PJ_TRUE);
+    cancel_pending_uac_tsx(0, PJUtils::Integrity::YES);
   }
 
   // Disconnect all UAC transactions from the UAS transaction.
@@ -2079,7 +2105,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, PJ_TRUE);
+      cancel_pending_uac_tsx(0, PJUtils::Integrity::YES);
     }
     _tsx->mod_data[mod_tu.id] = NULL;
     _tsx = NULL;
@@ -2393,7 +2419,7 @@ pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
 }
 
 // Cancels all pending UAC transactions associated with this UAS transaction.
-void UASTransaction::cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_protected)
+void UASTransaction::cancel_pending_uac_tsx(int st_code, PJUtils::Integrity integrity)
 {
   enter_context();
 
@@ -2418,7 +2444,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_pro
     if (uac_data != NULL)
     {
       // Found a UAC transaction that is still active, so send a CANCEL.
-      uac_data->cancel_pending_tsx(st_code, integrity_protected);
+      uac_data->cancel_pending_tsx(st_code, integrity);
 
       // Leave the UAC transaction connected to the UAS transaction so the
       // 487 response gets passed through.
@@ -2482,7 +2508,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   if (num_history_infos < MAX_HISTORY_INFOS)
   {
     // Cancel pending UAC transactions and notify the originator.
-    cancel_pending_uac_tsx(code, PJ_TRUE);
+    cancel_pending_uac_tsx(code, PJUtils::Integrity::YES);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
@@ -2694,7 +2720,7 @@ void UACTransaction::send_request()
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
-void UACTransaction::cancel_pending_tsx(int st_code, pj_bool_t integrity_protected)
+void UACTransaction::cancel_pending_tsx(int st_code, PJUtils::Integrity integrity)
 {
   if (_tsx != NULL)
   {
@@ -2716,11 +2742,11 @@ void UACTransaction::cancel_pending_tsx(int st_code, pj_bool_t integrity_protect
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
       }
-      if ((edge_proxy) && (integrity_protected))
+      if (edge_proxy)
       {
         // Add integrity protected indication to the request so Sprout will
         // accept it.
-        PJUtils::add_integrity_protected_indication(cancel);
+        PJUtils::add_integrity_protected_indication(cancel, integrity);
       }
       set_trail(cancel, trail());
 

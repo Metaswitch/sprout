@@ -39,9 +39,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef STATEFUL_PROXY_H__
 #define STATEFUL_PROXY_H__
 
@@ -51,6 +48,7 @@ class UACTransaction;
 
 #include <list>
 
+#include "pjutils.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
@@ -145,7 +143,7 @@ public:
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
   void on_tsx_state(pjsip_event* event);
-  void cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_protected=PJ_FALSE);
+  void cancel_pending_uac_tsx(int st_code, PJUtils::Integrity integrity);
   pj_status_t handle_final_response();
 
   void register_proxy(CallServices::Terminating* proxy);
@@ -214,7 +212,7 @@ public:
 
   void set_target(const struct target& target);
   void send_request();
-  void cancel_pending_tsx(int st_code, pj_bool_t integrity_protected);
+  void cancel_pending_tsx(int st_code, PJUtils::Integrity integrity);
   void on_tsx_state(pjsip_event* event);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
