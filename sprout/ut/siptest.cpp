@@ -126,7 +126,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   init_pjsip();
 
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
-                                                   Statistic::known_stats());
+                                                   Statistic::known_stats(),
+                                                   10);  // Short period to reduce shutdown delays.
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_siptest);
 }
@@ -584,11 +585,24 @@ std::string SipTest::respond_to_txdata(pjsip_tx_data* tdata, int st_code, string
 
 void SipTest::poll()
 {
-  pj_time_val delay = { 0, 100 }; // 100ms
+  pj_time_val delay = { 0, 0 }; // zero milliseconds
   unsigned count;
   pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
   LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
 }
+
+
+string SipTest::timestamp()
+{
+  pj_time_val tv;
+  pj_gettimeofday(&tv);
+  pj_parsed_time pt;
+  pj_time_decode(&tv, &pt);
+  char buf[1000];
+  snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03d", pt.hour, pt.min, pt.sec, pt.msec);
+  return buf;
+}
+
 
 /// Copy of structure from sip_transaction.c. Nasty but required.
 struct mod_tsx_layer_t {
