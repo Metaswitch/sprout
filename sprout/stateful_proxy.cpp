@@ -3114,13 +3114,14 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   if (!served_user.empty())
   {
     is_registered = is_user_registered(served_user);
-
-    ifc_handler->lookup_ifcs(session_case,
-                             served_user,
-                             is_registered,
-                             rdata->msg_info.msg,
-                             trail(),
-                             application_servers);
+    Ifcs* ifcs = ifc_handler->lookup_ifcs(session_case,
+                                          served_user,
+                                          trail());
+    ifcs->interpret(session_case,
+                    is_registered,
+                    rdata->msg_info.msg,
+                    application_servers);
+    delete ifcs;
   }
 
   // Create the AsChain, and schedule its destruction.  AsChain

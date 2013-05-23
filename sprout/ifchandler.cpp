@@ -96,10 +96,10 @@ IfcHandler::~IfcHandler()
 // evaluates the service point trigger in the node.
 // @return true if the SPT matches, false if not
 // @throw ifc_error if there is a problem evaluating the trigger.
-bool IfcHandler::spt_matches(const SessionCase& session_case,  //< The session case
-                             bool is_registered,               //< The registration state
-                             pjsip_msg *msg,                   //< The message being matched
-                             xml_node<>* spt)                  //< The Service Point Trigger node
+bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
+                      bool is_registered,               //< The registration state
+                      pjsip_msg *msg,                   //< The message being matched
+                      xml_node<>* spt)                  //< The Service Point Trigger node
 {
   // Find the class node.
   xml_node<>* node = spt->first_node();
@@ -195,9 +195,9 @@ bool IfcHandler::spt_matches(const SessionCase& session_case,  //< The session c
 //
 // @return true if the message matches, false if not.
 // @throw ifc_error if there is a problem evaluating the criterion.
-bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg, xml_node<>* ifc)
+bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg) const
 {
-  xml_node<>* profile_part_indicator = ifc->first_node("ProfilePartIndicator");
+  xml_node<>* profile_part_indicator = _ifc->first_node("ProfilePartIndicator");
   if (profile_part_indicator)
   {
     bool reg = parse_integer(profile_part_indicator, "ProfilePartIndicator", 0, 1) == 0;
@@ -208,7 +208,7 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
     }
   }
 
-  xml_node<>* trigger = ifc->first_node("TriggerPoint");
+  xml_node<>* trigger = _ifc->first_node("TriggerPoint");
   if (!trigger)
   {
     LOG_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
@@ -261,103 +261,151 @@ bool IfcHandler::filter_matches(const SessionCase& session_case, bool is_registe
   return ret;
 }
 
+
 // Gets the first child node of "node" with name "name". Returns an empty string if there
 // is no such node, otherwise returns its value (which is the empty string if
 // it has no value).
 std::string get_first_node_value(xml_node<>* node, std::string name) {
   xml_node<>* first_node = node->first_node(name.c_str());
-  if (first_node == NULL)
-  {
-    return "";
-  };
-  return first_node->value();
+  return (first_node) ? first_node->value() : "";
 }
+
 
 bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
   xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
-   if (child_node == NULL)
-   {
-     return false;
-   } else {
-     return true;
-   };
+  return (child_node != NULL);
 }
 
 
-/// Determines the list of application servers to apply this message to, given
-// the supplied incoming filter criteria.
-void IfcHandler::calculate_application_servers(const SessionCase& session_case,
-                                               bool is_registered,
-                                               pjsip_msg *msg,
-                                               std::string& ifc_xml,
-                                               std::vector<AsInvocation>& as_list)
+/// Return the AsInvocation corresponding to this iFC.
+AsInvocation Ifc::as_invocation() const
 {
-  xml_document<> ifc_doc;
-  try
+  xml_node<>* as = _ifc->first_node("ApplicationServer");
+
+  if (as == NULL)
   {
-    ifc_doc.parse<0>(ifc_doc.allocate_string(ifc_xml.c_str()));
-  }
-  catch (parse_error err)
-  {
-    LOG_ERROR("iFCs parse error: %s", err.what());
-    ifc_doc.clear();
+    throw ifc_error("iFC missing ApplicationServer element");
   }
 
-  xml_node<>* sp = ifc_doc.first_node("ServiceProfile");
+  AsInvocation as_invocation;
+  as_invocation.server_name = get_first_node_value(as, "ServerName");
+  if (as_invocation.server_name.empty())
+  {
+    throw ifc_error("iFC has no ServerName");
+  }
+  // @@@ KSW Parse the URI and ensure it is parsable and a SIP URI
+  // here. If it's invalid, ignore it (seems the only sensible
+  // option).
+
+  as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
+  as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
+
+  xml_node<>* as_ext = as->first_node("Extension");
+  if (as_ext)
+  {
+    as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
+    as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
+  } else {
+    as_invocation.include_register_request = false;
+    as_invocation.include_register_response = false;
+  };
+
+  LOG_INFO("Found (triggered) server %s", as_invocation.server_name.c_str());
+  return as_invocation;
+}
+
+
+/// Determines whether a particular iFC applies to this message.
+//
+// Handles any parsing errors by ignoring the iFC and logging an error.
+boost::optional<AsInvocation>
+Ifc::interpret(const SessionCase& session_case,
+               bool is_registered,
+               pjsip_msg *msg) const
+{
+  boost::optional<AsInvocation> ret;
+
+  try
+  {
+    if (filter_matches(session_case, is_registered, msg))
+    {
+      ret = as_invocation();
+    } else {
+      LOG_INFO("Filter did not match!");
+    }
+  }
+  catch (ifc_error err)
+  {
+    // Ignore individual criteria which can't be parsed.
+    LOG_ERROR("iFC evaluation error: %s", err.what());
+  }
+
+  return ret;
+}
+
+
+/// Get the list of iFCs from the specified subscriber, ready to apply
+/// to messages in this original dialog. If there are no iFCs, the
+/// list will be empty.
+Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
+                              const std::string& served_user,   //< The served user
+                              SAS::TrailId trail)               //< The SAS trail ID
+{
+  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
+
+  xml_document<>* ifc_doc = new xml_document<>();
+  std::string ifc_xml;
+  if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
+  {
+    LOG_INFO("No iFC found - no processing will be applied");
+  }
+  else
+  {
+    try
+    {
+      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
+    }
+    catch (parse_error err)
+    {
+      LOG_ERROR("iFCs parse error: %s", err.what());
+      ifc_doc->clear();
+    }
+  }
+
+  return new Ifcs(ifc_doc);
+}
+
+
+/// Construct a set of iFCs. Takes ownership of the ifc_doc.
+//
+// If there are any errors, yields an empty iFC doc (but does not fail).
+Ifcs::Ifcs(xml_document<>* ifc_doc) :
+  _ifc_doc(ifc_doc)
+{
+  xml_node<>* sp = ifc_doc->first_node("ServiceProfile");
   if (!sp)
   {
     // Failed to find the ServiceProfile node so this document is invalid.
+    LOG_ERROR("iFCs missing ServiceProfile node");
     return;
   }
 
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
-  std::multimap<int32_t, AsInvocation> as_map;
+  std::multimap<int32_t, Ifc> ifc_map;
 
-  // Spin through the list of filter criteria, checking whether each matches
-  // and adding the application server to the list if so.
+  // Spin through the list of filter criteria, adding each to the list.
   for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");
        ifc;
        ifc = ifc->next_sibling("InitialFilterCriteria"))
   {
     try
     {
-      if (filter_matches(session_case, is_registered, msg, ifc))
-      {
-        xml_node<>* priority_node = ifc->first_node("Priority");
-        xml_node<>* as = ifc->first_node("ApplicationServer");
-        if (as)
-        {
-          AsInvocation as_invocation;
-          int32_t priority = (int32_t)((priority_node) ?
-                                       parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
-                                       0);
-          as_invocation.server_name = get_first_node_value(as, "ServerName");
-          as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
-          as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
-
-          xml_node<>* as_ext = as->first_node("Extension");
-          if (as_ext)
-          {
-            as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
-            as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
-          } else {
-            as_invocation.include_register_request = false;
-            as_invocation.include_register_response = false;
-          };
-
-          if (!as_invocation.server_name.empty())
-          {
-            LOG_INFO("Found (triggered) server %s at priority %d", as_invocation.server_name.c_str(), (int)priority);
-            as_map.insert(std::pair<int32_t, AsInvocation>(priority, as_invocation));
-            // @@@ KSW Parse the URI and ensure it is parsable and a
-            // SIP URI here. If it's invalid, ignore it (seems the
-            // only sensible option).
-          }
-        }
-      } else {
-        LOG_INFO("Filter did not match!");
-     }
+      xml_node<>* priority_node = ifc->first_node("Priority");
+      int32_t priority = (int32_t)((priority_node) ?
+                                   parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                   0);
+      ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
     }
     catch (ifc_error err)
     {
@@ -367,34 +415,38 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
     }
   }
 
-  for (std::multimap<int32_t, AsInvocation>::iterator it = as_map.begin();
-       it != as_map.end();
+  for (std::multimap<int32_t, Ifc>::iterator it = ifc_map.begin();
+       it != ifc_map.end();
        ++it)
   {
-    as_list.push_back(it->second);
+    _ifcs.push_back(it->second);
   }
 }
 
 
-/// Get the served user and list of application servers that should
-// apply to this message, by inspecting the relevant subscriber's
-// iFCs. If there are no iFCs, the list will be empty.
-void IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
-                             const std::string& served_user,   //< The served user
-                             bool is_registered,               //< Whether the served user is registered
-                             pjsip_msg *msg,                   //< The message starting the dialog
-                             SAS::TrailId trail,               //< The SAS trail ID
-                             std::vector<AsInvocation>& application_servers)  //< OUT the AS list
+Ifcs::~Ifcs()
 {
-  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
-  std::string ifc_xml;
-  if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
+  delete _ifc_doc;
+}
+
+
+/// Get the list of application servers that should
+// apply to this message, given a list of iFCs to consider.
+void Ifcs::interpret(const SessionCase& session_case,  //< The session case
+                     bool is_registered,               //< Whether the served user is registered
+                     pjsip_msg *msg,                   //< The message starting the dialog
+                     std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
+{
+  LOG_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
+  for (std::vector<Ifc>::const_iterator it = _ifcs.begin();
+       it != _ifcs.end();
+       ++it)
   {
-    LOG_INFO("No iFC found - no processing will be applied");
-  }
-  else
-  {
-    calculate_application_servers(session_case, is_registered, msg, ifc_xml, application_servers);
+    boost::optional<AsInvocation> as = (*it).interpret(session_case, is_registered, msg);
+    if (as)
+    {
+      application_servers.push_back(*as);
+    }
   }
 }
 

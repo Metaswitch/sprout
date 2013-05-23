@@ -153,6 +153,10 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
 
 /// Apply first AS (if any) to initial request.
 //
+// See 3GPP TS 23.218, especially s5.2 and s6, for an overview of how
+// this works, and 3GPP TS 24.229 s5.4.3.2 and s5.4.3.3 for
+// step-by-step details.
+//
 // @Returns whether processing should stop, continue, or skip to the end.
 AsChainLink::Disposition
 AsChainLink::on_initial_request(CallServices* call_services,

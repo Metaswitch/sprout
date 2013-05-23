@@ -47,6 +47,7 @@ extern "C" {
 
 #include <string>
 #include <vector>
+#include <boost/optional.hpp>
 
 #include "rapidxml/rapidxml.hpp"
 
@@ -54,6 +55,10 @@ extern "C" {
 #include "regdata.h"
 #include "sessioncase.h"
 
+
+/// An invocation of an AS - the result of a matching iFC.
+//
+// Has no dependency on the iFCs used to create it.
 struct AsInvocation
 {
     std::string server_name;
@@ -62,6 +67,56 @@ struct AsInvocation
     bool include_register_request;
     bool include_register_response;
 };
+
+
+/// A single Initial Filter Criterion (iFC).
+class Ifc
+{
+public:
+  Ifc(rapidxml::xml_node<>* ifc) :
+    _ifc(ifc)
+  {
+  }
+
+  boost::optional<AsInvocation>
+    interpret(const SessionCase& session_case,
+              bool is_registered,
+              pjsip_msg* msg) const;
+
+  bool filter_matches(const SessionCase& session_case,
+                      bool is_registered,
+                      pjsip_msg* msg) const;
+
+  AsInvocation as_invocation() const;
+
+private:
+  static bool spt_matches(const SessionCase& session_case,
+                          bool is_registered,
+                          pjsip_msg *msg,
+                          rapidxml::xml_node<>* spt);
+
+  rapidxml::xml_node<>* _ifc;
+};
+
+/// A set of iFCs.
+//
+// Owns the iFCs document, and provides access to each iFC within it.
+class Ifcs
+{
+public:
+  Ifcs(rapidxml::xml_document<>* ifc_doc);
+  ~Ifcs();
+
+  void interpret(const SessionCase& session_case,
+                 bool is_registered,
+                 pjsip_msg *msg,
+                 std::vector<AsInvocation>& application_servers) const;
+
+private:
+  const rapidxml::xml_document<>* _ifc_doc;
+  std::vector<Ifc> _ifcs;
+};
+
 
 /// iFC handler.
 class IfcHandler
@@ -73,27 +128,11 @@ public:
   static std::string served_user_from_msg(const SessionCase& session_case,
                                           pjsip_rx_data* rdata);
 
-  void lookup_ifcs(const SessionCase& session_case,
-                   const std::string& served_user,
-                   bool is_registered,
-                   pjsip_msg* msg,
-                   SAS::TrailId trail,
-                   std::vector<AsInvocation>& application_servers);
+  Ifcs* lookup_ifcs(const SessionCase& session_case,
+                    const std::string& served_user,
+                    SAS::TrailId trail);
 
 private:
-  static bool spt_matches(const SessionCase& session_case,
-                          bool is_registered,
-                          pjsip_msg *msg,
-                          rapidxml::xml_node<>* spt);
-  static bool filter_matches(const SessionCase& session_case,
-                             bool is_registered,
-                             pjsip_msg* msg,
-                             rapidxml::xml_node<>* ifc);
-  static void calculate_application_servers(const SessionCase& session_case,
-                                            bool is_registered,
-                                            pjsip_msg* msg,
-                                            std::string& ifc_xml,
-                                            std::vector<AsInvocation>& as_list);
   static std::string user_from_uri(pjsip_uri *uri);
 
   HSSConnection* _hss;
