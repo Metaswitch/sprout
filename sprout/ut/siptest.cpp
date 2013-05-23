@@ -584,7 +584,7 @@ std::string SipTest::respond_to_txdata(pjsip_tx_data* tdata, int st_code, string
 
 void SipTest::poll()
 {
-  pj_time_val delay = { 0, 100 }; // 100ms
+  pj_time_val delay = { 0, 0 }; // zero milliseconds
   unsigned count;
   pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
   LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
