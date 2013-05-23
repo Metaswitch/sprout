@@ -590,6 +590,19 @@ void SipTest::poll()
   LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
 }
 
+
+string SipTest::timestamp()
+{
+  pj_time_val tv;
+  pj_gettimeofday(&tv);
+  pj_parsed_time pt;
+  pj_time_decode(&tv, &pt);
+  char buf[1000];
+  snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%03d", pt.hour, pt.min, pt.sec, pt.msec);
+  return buf;
+}
+
+
 /// Copy of structure from sip_transaction.c. Nasty but required.
 struct mod_tsx_layer_t {
   struct pjsip_module  mod;
