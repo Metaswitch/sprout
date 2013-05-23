@@ -61,11 +61,11 @@ extern "C" {
 // Has no dependency on the iFCs used to create it.
 struct AsInvocation
 {
-    std::string server_name;
-    intptr_t default_handling;
-    std::string service_info;
-    bool include_register_request;
-    bool include_register_response;
+  std::string server_name;
+  intptr_t default_handling;
+  std::string service_info;
+  bool include_register_request;
+  bool include_register_response;
 };
 
 

@@ -296,6 +296,9 @@ AsInvocation Ifc::as_invocation() const
   // @@@ KSW Parse the URI and ensure it is parsable and a SIP URI
   // here. If it's invalid, ignore it (seems the only sensible
   // option).
+  //
+  // That means each AsInvocation would have to belong to a pool,
+  // though, and that's not easy in the current architecture.
 
   as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
