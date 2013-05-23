@@ -28,7 +28,7 @@ On Ubuntu 12.04,
 
 3.  install the required packages
 
-        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl0 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev libev-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils rubygems
+        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl0 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils rubygems
 
 ## Getting the Code
 
