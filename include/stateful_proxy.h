@@ -266,6 +266,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
+                             const TrustBoundary* trust,
                              target_list& targets,
                              int max_targets);
 #endif
