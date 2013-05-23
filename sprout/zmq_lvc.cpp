@@ -53,7 +53,12 @@
  * subscriber registers interest.  This allows a client to poll the last known value easily.
  */
 LastValueCache::LastValueCache(int statcount,
-                               std::string *statnames) : _statcount(statcount), _statnames(statnames), _terminate(false)
+                               std::string *statnames,
+                               long poll_timeout) :  //< Poll period in milliseconds
+  _statcount(statcount),
+  _statnames(statnames),
+  _poll_timeout(poll_timeout),
+  _terminate(false)
 {
   LOG_DEBUG("Initializing statistics aggregator");
   _context = zmq_ctx_new();
@@ -148,7 +153,7 @@ void LastValueCache::run()
 
     // Poll for an event
     LOG_DEBUG("Poll for %d items", _statcount + 1);
-    int rc = zmq_poll(items, _statcount + 1, 1000);
+    int rc = zmq_poll(items, _statcount + 1, _poll_timeout);
     assert(rc >= 0 || errno == EINTR);
 
     for (int ii = 0; ii < _statcount; ii++)

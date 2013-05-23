@@ -553,7 +553,8 @@ pj_status_t init_stack(const std::string& system_name,
   }
 
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
-                                                   Statistic::known_stats());
+                                                   Statistic::known_stats(),
+                                                   1000);
 
   return PJ_SUCCESS;
 }
