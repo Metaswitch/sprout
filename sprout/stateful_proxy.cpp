@@ -3108,20 +3108,19 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
                                                               rdata);
 
-  std::vector<AsInvocation> application_servers;
+  Ifcs* ifcs;
   bool is_registered = false;
 
-  if (!served_user.empty())
+  if (served_user.empty())
+  {
+    ifcs = new Ifcs();
+  }
+  else
   {
     is_registered = is_user_registered(served_user);
-    Ifcs* ifcs = ifc_handler->lookup_ifcs(session_case,
-                                          served_user,
-                                          trail());
-    ifcs->interpret(session_case,
-                    is_registered,
-                    rdata->msg_info.msg,
-                    application_servers);
-    delete ifcs;
+    ifcs = ifc_handler->lookup_ifcs(session_case,
+                                    served_user,
+                                    trail());
   }
 
   // Create the AsChain, and schedule its destruction.  AsChain
@@ -3160,7 +3159,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                  served_user,
                                                  is_registered,
                                                  trail(),
-                                                 application_servers);
+                                                 ifcs);
   _victims.push_back(ret.as_chain());
   return ret;
 }

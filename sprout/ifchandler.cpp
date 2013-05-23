@@ -379,6 +379,13 @@ Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session 
 }
 
 
+/// Construct an empty set of iFCs.
+Ifcs::Ifcs() :
+  _ifc_doc(NULL)
+{
+}
+
+
 /// Construct a set of iFCs. Takes ownership of the ifc_doc.
 //
 // If there are any errors, yields an empty iFC doc (but does not fail).
@@ -433,8 +440,13 @@ Ifcs::~Ifcs()
 }
 
 
-/// Get the list of application servers that should
-// apply to this message, given a list of iFCs to consider.
+/// Get the list of application servers that should apply to this
+// message, given a list of iFCs to consider.
+//
+// Only for use in third-party registration; in the normal case, an
+// iFC should be evaluated according to the message as processed by
+// all ASs so far, rather than the initial message as it arrived at
+// Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      bool is_registered,               //< Whether the served user is registered
                      pjsip_msg *msg,                   //< The message starting the dialog

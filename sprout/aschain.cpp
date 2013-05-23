@@ -44,12 +44,16 @@
 #include "aschain.h"
 #include "ifchandler.h"
 
+
+/// Create an AsChain.
+//
+// Ownership of `ifcs` passes to this object.
 AsChain::AsChain(AsChainTable* as_chain_table,
                  const SessionCase& session_case,
                  const std::string& served_user,
                  bool is_registered,
                  SAS::TrailId trail,
-                 std::vector<AsInvocation> application_servers) :
+                 Ifcs* ifcs) :
   _as_chain_table(as_chain_table),
   _refs(2),
   _odi_tokens(),
@@ -57,7 +61,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _served_user(served_user),
   _is_registered(is_registered),
   _trail(trail),
-  _application_servers(application_servers)
+  _ifcs(ifcs)
 {
   LOG_DEBUG("Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
@@ -83,7 +87,7 @@ std::string AsChain::to_string(size_t index) const
 {
   return ("AsChain-" + _session_case.to_string() +
           "[" + boost::lexical_cast<std::string>((void*)this) + "]:" +
-          boost::lexical_cast<std::string>(index + 1) + "/" + boost::lexical_cast<std::string>(_application_servers.size()));
+          boost::lexical_cast<std::string>(index + 1) + "/" + boost::lexical_cast<std::string>(size()));
 }
 
 
@@ -97,7 +101,7 @@ const SessionCase& AsChain::session_case() const
 /// @returns the number of elements in this chain
 size_t AsChain::size() const
 {
-  return _application_servers.size();
+  return _ifcs->size();
 }
 
 
@@ -135,19 +139,21 @@ SAS::TrailId AsChain::trail() const
 // * release() when it is finished with the link, and
 // * as_chain()->request_destroy() when it is finished with the
 //   underlying chain.
+//
+// Ownership of `ifcs` passes to this object.
 AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          const SessionCase& session_case,
                                          const std::string& served_user,
                                          bool is_registered,
                                          SAS::TrailId trail,
-                                         std::vector<AsInvocation> application_servers)
+                                         Ifcs* ifcs)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
                                   served_user,
                                   is_registered,
                                   trail,
-                                  application_servers);
+                                  ifcs);
   return AsChainLink(as_chain, 0u);
 }
 
@@ -174,15 +180,23 @@ AsChainLink::on_initial_request(CallServices* call_services,
     return AsChainLink::Disposition::Next;
   }
 
-  AsInvocation application_server = _as_chain->_application_servers[_index];
+  const Ifc& ifc = (*(_as_chain->_ifcs))[_index];
+  boost::optional<AsInvocation> application_server = ifc.interpret(_as_chain->session_case(),
+                                                                   _as_chain->_is_registered,
+                                                                   msg);
   std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
 
-  if (call_services && call_services->is_mmtel(application_server.server_name))
+  if (!application_server)
+  {
+    LOG_DEBUG("No match for %s", to_string().c_str());
+    return AsChainLink::Disposition::Next;
+  }
+  else if (call_services && call_services->is_mmtel(application_server->server_name))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
     if (_as_chain->_session_case.is_originating())
     {
-      LOG_DEBUG("Invoke originating MMTEL services");
+      LOG_INFO("Invoke originating MMTEL services for %s", to_string().c_str());
       CallServices::Originating originating(call_services, uas_data, msg, _as_chain->_served_user);
       bool proceed = originating.on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
@@ -191,7 +205,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
     {
       // MMTEL terminating call services need to insert themselves into
       // the signalling path.
-      LOG_DEBUG("Invoke terminating MMTEL services");
+      LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
         new CallServices::Terminating(call_services, uas_data, msg,_as_chain->_served_user);
       uas_data->register_proxy(terminating);
@@ -202,14 +216,14 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
   else
   {
-    std::string as_uri_str = application_server.server_name;
+    std::string as_uri_str = application_server->server_name;
 
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
-    LOG_DEBUG("Invoking external AS %s with token %s for %s",
-              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),
-              odi_value.c_str(),
-              to_string().c_str());
+    LOG_INFO("Invoking external AS %s with token %s for %s",
+             PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),
+             odi_value.c_str(),
+             to_string().c_str());
 
     // Basic support for P-Asserted-Identity: strip any header(s) we've
     // received, and set up to be the same as the From header. Full support will

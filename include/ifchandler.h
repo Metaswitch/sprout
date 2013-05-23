@@ -104,8 +104,19 @@ private:
 class Ifcs
 {
 public:
+  Ifcs();
   Ifcs(rapidxml::xml_document<>* ifc_doc);
   ~Ifcs();
+
+  size_t size() const
+  {
+    return _ifcs.size();
+  }
+
+  const Ifc& operator[](size_t index) const
+  {
+    return _ifcs[index];
+  }
 
   void interpret(const SessionCase& session_case,
                  bool is_registered,
