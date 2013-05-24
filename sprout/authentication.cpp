@@ -243,10 +243,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     if (auth_hdr->credential.digest.response.slen == 0)
     {
-      // No response, so the authorization header was likely added by Bono, so
-			// remove it.
-			LOG_DEBUG("Remove authorization header added by Bono");
-			pj_list_erase(auth_hdr);
+      // No response supplied, don't use this authorization header for
+      // digest attempt.
+      LOG_DEBUG("Remove authorization header without response");
+      pj_list_erase(auth_hdr);
     }
   }
 
