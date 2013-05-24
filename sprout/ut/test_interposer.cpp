@@ -39,6 +39,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 #include <map>
 #include <string>
@@ -48,8 +49,9 @@
 /// The map we use.
 static std::map<std::string, std::string> host_map;
 
-/// The current time offset.
+/// The current time offset, and the lock which guards it.
 static struct timespec time_offset = { 0, 0 };
+static pthread_mutex_t time_offset_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /// The real functions we are interposing.
 static int (*real_getaddrinfo)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
@@ -80,14 +82,18 @@ void cwtest_clear_host_mapping()
 void cwtest_advance_time_ms(long delta_ms)  ///< Delta to add to the current offset applied to returned times (in ms).
 {
   struct timespec delta = { delta_ms / 1000, (delta_ms % 1000) * 1000L * 1000L };
+  pthread_mutex_lock(&time_offset_lock);
   ts_add(time_offset, delta, time_offset);
+  pthread_mutex_unlock(&time_offset_lock);
 }
 
 /// Restore the fabric of space-time.
 void cwtest_reset_time()
 {
+  pthread_mutex_lock(&time_offset_lock);
   time_offset.tv_sec = 0;
   time_offset.tv_nsec = 0;
+  pthread_mutex_unlock(&time_offset_lock);
 }
 
 /// Lookup helper.  If there is a mapping of this host in host_mapping
@@ -143,7 +149,9 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
   if (!rc)
   {
+    pthread_mutex_lock(&time_offset_lock);
     ts_add(*tp, time_offset, *tp);
+    pthread_mutex_unlock(&time_offset_lock);
   }
 
   return rc;
