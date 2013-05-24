@@ -115,7 +115,7 @@ private:
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
-  bool matches_target(pjsip_rx_data* rdata) const;
+  bool matches_target(pjsip_tx_data* tdata) const;
   SAS::TrailId trail() const;
 
   AsChainTable* const _as_chain_table;
@@ -196,9 +196,9 @@ public:
     return _as_chain->session_case();
   }
 
-  bool matches_target(pjsip_rx_data* rdata) const
+  bool matches_target(pjsip_tx_data* tdata) const
   {
-    return _as_chain->matches_target(rdata);
+    return _as_chain->matches_target(tdata);
   }
 
   /// Disposition of a request. Suggests what to do next.
@@ -231,7 +231,6 @@ public:
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,
-                                 pjsip_msg* msg,
                                  pjsip_tx_data* tdata,
                                  target** target);
 

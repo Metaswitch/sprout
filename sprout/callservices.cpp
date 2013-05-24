@@ -85,7 +85,7 @@ bool CallServices::is_mmtel(std::string uri)
 // @returns The simservs object if it is relevant and present.  If there is
 // no simservs configuration for the user, returns a default simservs object
 // with all services disabled.
-simservs *CallServices::get_user_services(pjsip_msg *msg, std::string public_id, SAS::TrailId trail)
+simservs *CallServices::get_user_services(std::string public_id, SAS::TrailId trail)
 {
   // Fetch the user's simservs configuration from the XDMS
   LOG_DEBUG("Fetching simservs configuration for %s", public_id.c_str());
@@ -401,7 +401,7 @@ CallServices::Originating::Originating(CallServices* callServices,
                                        std::string served_user) :  //< Public ID of served user
   CallServices::CallServiceBase("1", uas_data)
 {
-  _user_services = callServices->get_user_services(msg, served_user, uas_data->trail());
+  _user_services = callServices->get_user_services(served_user, uas_data->trail());
 }
 
 CallServices::Originating::~Originating()
@@ -504,7 +504,7 @@ CallServices::Terminating::Terminating(CallServices* callServices,
   CallServices::CallServiceBase("1", uas_data),
   _ringing(false)
 {
-  _user_services = callServices->get_user_services(msg, served_user, uas_data->trail());
+  _user_services = callServices->get_user_services(served_user, uas_data->trail());
 
   // Determine the media type conditions, in case they're needed later.
   if (msg->line.req.method.id == PJSIP_INVITE_METHOD)

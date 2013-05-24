@@ -529,7 +529,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // node/home domain.
 
     // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(as_chain_link, rdata, tdata, &target);
+    disposition = uas_data->handle_originating(as_chain_link, tdata, &target);
 
     if (disposition == AsChainLink::Disposition::Complete)
     {
@@ -539,7 +539,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         // terminating chain: switch to terminating and look up iFCs
         // again.  The served user changes here.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        uas_data->move_to_terminating_chain(as_chain_link, rdata, tdata);
+        uas_data->move_to_terminating_chain(as_chain_link, tdata);
       }
 
       // Do outgoing (terminating) half.
@@ -1618,9 +1618,9 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 
 // Handle the incoming half of a non-CANCEL message.
-AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
-                                                        pjsip_tx_data* tdata,
-                                                        const ServingState& serving_state)
+AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //< The real incoming message, in case we need to reply to it.
+                                                       pjsip_tx_data* tdata,
+                                                       const ServingState& serving_state)
 {
   if ((!edge_proxy) &&
       (method() == PJSIP_INVITE_METHOD))
@@ -1647,21 +1647,21 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       as_chain_link = serving_state.original_dialog();
 
       if ((serving_state.session_case() == SessionCase::Terminating) &&
-          !as_chain_link.matches_target(rdata))
+          !as_chain_link.matches_target(tdata))
       {
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
         // so create new AS chain.
         LOG_INFO("Request-URI has changed, retargeting");
         as_chain_link.release();
         as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
-                                        rdata);
+                                        tdata);
       }
     }
     else
     {
       // No existing AS chain - create new.
       as_chain_link = create_as_chain(serving_state.session_case(),
-                                      rdata);
+                                      tdata);
     }
   }
 
@@ -1675,10 +1675,9 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chain_link,
-                                                        pjsip_rx_data* rdata,
-                                                        pjsip_tx_data* tdata,
-                                                        // OUT: target, if disposition is Skip
-                                                        target** target)
+                                                            pjsip_tx_data* tdata,
+                                                            // OUT: target, if disposition is Skip
+                                                            target** target)
 {
   if (!(as_chain_link.is_set() && as_chain_link.session_case().is_originating()))
   {
@@ -1691,7 +1690,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata, target);
 
     if (disposition == AsChainLink::Disposition::Next)
     {
@@ -1711,18 +1710,16 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
 /// Move from originating to terminating handling.
 void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link,
-                                               pjsip_rx_data* rdata,
                                                pjsip_tx_data* tdata)
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
-  PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
   PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
   as_chain_link.release();
   as_chain_link = create_as_chain(SessionCase::Terminating,
-                                  rdata);
+                                  tdata);
 }
 
 // Perform terminating handling.
@@ -1779,7 +1776,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata, target);
     // On return from on_initial_request, our _proxy pointer may be
     // NULL.  Don't use it without checking first.
 
@@ -3114,7 +3111,7 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            pjsip_rx_data* rdata)
+                                            pjsip_tx_data* tdata)
 {
   if (ifc_handler == NULL)
   {
@@ -3125,7 +3122,8 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   }
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
-                                                              rdata);
+                                                              tdata->msg,
+                                                              tdata->pool);
 
   Ifcs* ifcs;
   bool is_registered = false;

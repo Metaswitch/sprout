@@ -473,7 +473,8 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 // local served user.
 std::string IfcHandler::served_user_from_msg(
   const SessionCase& session_case,
-  pjsip_rx_data* rdata)
+  pjsip_msg* msg,
+  pj_pool_t* pool)
 {
   pjsip_uri* uri = NULL;
   std::string user;
@@ -516,11 +517,11 @@ std::string IfcHandler::served_user_from_msg(
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_P_SERVED_USER, NULL);
+      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
-      uri = PJUtils::uri_from_string_header(served_user_hdr, rdata->tp_info.pool);
+      uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
 
       if (uri == NULL)
       {
@@ -535,12 +536,12 @@ std::string IfcHandler::served_user_from_msg(
     if (session_case.is_originating())
     {
       // For originating services, the user is parsed from the from header.
-      uri = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg)->uri;
+      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
     }
     else
     {
       // For terminating services, the user is parsed from the request URI.
-      uri = rdata->msg_info.msg->line.req.uri;
+      uri = msg->line.req.uri;
     }
   }
 

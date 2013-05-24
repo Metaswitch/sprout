@@ -108,7 +108,7 @@ size_t AsChain::size() const
 /// @returns whether the given message has the same target as the
 // chain.  Used to detect the orig-cdiv case.  Only valid for
 // terminating chains.
-bool AsChain::matches_target(pjsip_rx_data* rdata) const
+bool AsChain::matches_target(pjsip_tx_data* tdata) const
 {
   pj_assert(_session_case == SessionCase::Terminating);
 
@@ -122,7 +122,8 @@ bool AsChain::matches_target(pjsip_rx_data* rdata) const
   // unescaped form.".
   const std::string& orig_uri = _served_user;
   const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
-                                                               rdata);
+                                                               tdata->msg,
+                                                               tdata->pool);
   return (orig_uri == msg_uri);
 }
 
@@ -167,7 +168,6 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
 AsChainLink::Disposition
 AsChainLink::on_initial_request(CallServices* call_services,
                                 UASTransaction* uas_data,
-                                pjsip_msg* msg,
                                 pjsip_tx_data* tdata,
                                 // OUT: target to use, if disposition
                                 // is Skip. Dynamically allocated, to
@@ -183,7 +183,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
   const Ifc& ifc = (*(_as_chain->_ifcs))[_index];
   boost::optional<AsInvocation> application_server = ifc.interpret(_as_chain->session_case(),
                                                                    _as_chain->_is_registered,
-                                                                   msg);
+                                                                   tdata->msg);
   std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
 
   if (!application_server)
@@ -197,7 +197,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
     if (_as_chain->_session_case.is_originating())
     {
       LOG_INFO("Invoke originating MMTEL services for %s", to_string().c_str());
-      CallServices::Originating originating(call_services, uas_data, msg, _as_chain->_served_user);
+      CallServices::Originating originating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       bool proceed = originating.on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
@@ -207,7 +207,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
       // the signalling path.
       LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, msg,_as_chain->_served_user);
+        new CallServices::Terminating(call_services, uas_data, tdata->msg,_as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;

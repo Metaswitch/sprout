@@ -137,8 +137,8 @@ public:
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
   AsChainLink handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  void move_to_terminating_chain(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
+  void move_to_terminating_chain(AsChainLink& as_chain, pjsip_tx_data* tdata);
   AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 
@@ -180,7 +180,7 @@ private:
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
   AsChainLink create_as_chain(const SessionCase& session_case,
-                              pjsip_rx_data* rdata);
+                              pjsip_tx_data* tdata);
 
   pjsip_transaction*   _tsx;
   int                  _num_targets;

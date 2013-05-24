@@ -132,7 +132,7 @@ private:
   XDMConnection* _xdmc;
   std::string _mmtel_uri; //< URI of built-in MMTEL AS.
 
-  simservs *get_user_services(pjsip_msg *msg, std::string public_id, SAS::TrailId trail);
+  simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 
   static int parse_privacy_headers(pjsip_generic_array_hdr *header_array);
   static void build_privacy_header(pjsip_tx_data *tx_data, int fields);
