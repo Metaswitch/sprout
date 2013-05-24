@@ -436,6 +436,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pj_strdup(tdata->pool,
             &service_route_uri->host,
             &stack_data.sprout_cluster_domain);
+  service_route_uri->port = stack_data.trusted_port;
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
