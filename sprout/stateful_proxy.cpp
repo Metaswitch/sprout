@@ -600,6 +600,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
                                             &rdata->pkt_info.src_addr);
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
 
+    // @@@TODO Use P-Asserted-Identity for authentication (?)
     if ((flow_data != NULL) && (flow_data->authenticated(from_hdr->uri)))
     {
       integrity_protected = PJ_TRUE;
@@ -752,6 +753,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // clients will support STUN keepalive so we don't rely on this.
     src_flow->keepalive();
 
+    // @@@TODO Use P-Asserted-Identity for authentication (?)
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
     if (src_flow->authenticated(from_hdr->uri))
     {
@@ -842,6 +844,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           LOG_DEBUG("Message received on known client flow");
           *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
 
+          // @@@TODO Use P-Asserted-Identity for authentication (?)
           pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
           if (src_flow->authenticated(from_hdr->uri))
           {
@@ -1446,6 +1449,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         if (pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL) != NULL)
         {
           // There are active contacts, so consider the flow authenticated.
+          // @@@TODO Also authenticate any attached P-Associated-ID headers.
           LOG_INFO("Mark client flow as authenticated");
           flow_data->set_authenticated(from_hdr->uri);
         }
