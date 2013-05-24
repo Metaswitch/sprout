@@ -240,6 +240,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       LOG_INFO("Request integrity protected by edge proxy");
       return PJ_FALSE;
     }
+
+    if (auth_hdr->credential.digest.response.slen == 0)
+    {
+      // No response, so the authorization header was likely added by Bono, so
+			// remove it.
+			LOG_DEBUG("Remove authorization header added by Bono");
+			pj_list_erase(auth_hdr);
+    }
   }
 
   int sc;
