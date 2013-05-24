@@ -3021,13 +3021,13 @@ TEST_F(IscTest, Cdiv)
 // Test attempted AS chain link after chain has expired.
 TEST_F(IscTest, ExpiredChain)
 {
-  if (RUNNING_ON_VALGRIND)
-  {
-    // This test doesn't work with Valgrind, presumably due to some
-    // interaction with the clock_gettime call interposing we do at
-    // cwtest_advance_time_ms below.
-    return;
-  }
+//  if (RUNNING_ON_VALGRIND)
+//  {
+//    // This test doesn't work with Valgrind, presumably due to some
+//    // interaction with the clock_gettime call interposing we do at
+//    // cwtest_advance_time_ms below.
+//    return;
+//  }
 
   register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",

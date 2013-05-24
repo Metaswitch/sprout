@@ -54,10 +54,10 @@
  */
 LastValueCache::LastValueCache(int statcount,
                                std::string *statnames,
-                               long poll_timeout) :  //< Poll period in milliseconds
+                               long poll_timeout_ms) :  //< Poll period in milliseconds
   _statcount(statcount),
   _statnames(statnames),
-  _poll_timeout(poll_timeout),
+  _poll_timeout_ms(poll_timeout_ms),
   _terminate(false)
 {
   LOG_DEBUG("Initializing statistics aggregator");
@@ -153,7 +153,7 @@ void LastValueCache::run()
 
     // Poll for an event
     LOG_DEBUG("Poll for %d items", _statcount + 1);
-    int rc = zmq_poll(items, _statcount + 1, _poll_timeout);
+    int rc = zmq_poll(items, _statcount + 1, _poll_timeout_ms);
     assert(rc >= 0 || errno == EINTR);
 
     for (int ii = 0; ii < _statcount; ii++)
