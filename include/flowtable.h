@@ -49,6 +49,7 @@ extern "C" {
 // Common STL includes.
 #include <cassert>
 #include <map>
+#include <set>
 #include <string>
 
 #include "statistic.h"
@@ -68,13 +69,13 @@ public:
   inline const std::string& token() const { return _token; };
 
   /// Returns true if this flow has been authenticated.
-  inline bool authenticated(pjsip_uri *aor) const { return (_authenticated_uri == PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
+  inline bool authenticated(pjsip_uri *aor) const { return (_authenticated_uris.find(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)) != _authenticated_uris.end()); };
 
   /// Marks the flow as authenticated.
-  inline void set_authenticated(pjsip_uri *aor) { _authenticated_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor); };
+  inline void set_authenticated(pjsip_uri *aor) { _authenticated_uris.insert(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
 
   /// Marks the flow as unauthenticated.
-  inline void set_unauthenticated() { _authenticated_uri = ""; };
+  inline void set_unauthenticated(pjsip_uri *aor) { _authenticated_uris.erase(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
 
   /// Flags that a keepalive has been received on this flow.
   void keepalive();
@@ -106,7 +107,7 @@ private:
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  std::string _authenticated_uri;
+  std::set<std::string> _authenticated_uris;
   pjsip_uri _user;
   int _refs;
   pj_timer_entry _ka_timer;
