@@ -35,7 +35,7 @@ On Ubuntu 12.04,
 The sprout code is all in the `sprout` repository, and its submodules, which
 are in the `modules` subdirectory.
 
-To get all the code, clone the sprout repository with the --recursive flag to
+To get all the code, clone the sprout repository with the `--recursive` flag to
 indicate that submodules should be cloned too.
 
     git clone --recursive git@bitbucket.org:metaswitch/sprout.git
