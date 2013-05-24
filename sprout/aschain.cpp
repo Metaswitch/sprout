@@ -177,7 +177,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
   if (complete())
   {
     LOG_DEBUG("No ASs left in chain");
-    return AsChainLink::Disposition::Next;
+    return AsChainLink::Disposition::Complete;
   }
 
   const Ifc& ifc = (*(_as_chain->_ifcs))[_index];

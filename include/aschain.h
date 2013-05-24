@@ -165,6 +165,13 @@ public:
     return ((_as_chain == NULL) || (_index == _as_chain->size()));
   }
 
+  /// Get the next link in the chain.
+  AsChainLink next() const
+  {
+    pj_assert(!complete());
+    return AsChainLink(_as_chain, _index + 1);
+  }
+
   /// Caller has finished using this link.
   void release()
   {
@@ -205,8 +212,13 @@ public:
     // omitting any subsequent stages.
     Skip,
 
+    /// There are no links left on the chain. Processing should
+    // continue with the next stage.
+    Complete,
+
     /// The internal application server (if any) has processed the
-    // message. Processing should continue with the next stage.
+    // message according to the curren link. Processing should
+    // continue with the next link.
     Next
   };
 

@@ -186,7 +186,7 @@ TEST_F(AsChainTest, AsInvocation)
   // Nothing to invoke. Just proceed.
   target = NULL;
   disposition = as_chain_link.on_initial_request(NULL, NULL, NULL, tdata, &target);
-  EXPECT_EQ(AsChainLink::Disposition::Next, disposition);
+  EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
   EXPECT_TRUE(target == NULL);
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
 
