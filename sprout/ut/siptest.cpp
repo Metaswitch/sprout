@@ -586,8 +586,12 @@ void SipTest::poll()
 {
   pj_time_val delay = { 0, 100 }; // 100ms
   unsigned count;
-  pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
-  LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
+  do
+  {
+    pj_status_t status = pjsip_endpt_handle_events2(stack_data.endpt, &delay, &count);
+    LOG_INFO("Poll found %d events, status %d\n", (int)count, (int)status);
+  }
+  while (count != 0);
 }
 
 /// Copy of structure from sip_transaction.c. Nasty but required.
