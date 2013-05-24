@@ -429,6 +429,28 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
+  // Construct a Service-Route header pointing at the sprout cluster.  We don't
+  // care which sprout handles the subsequent requests as they all have access 
+  // to all subscriber information.
+  pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
+  pj_strdup(tdata->pool,
+            &service_route_uri->host,
+            &stack_data.sprout_cluster_domain);
+  service_route_uri->transport_param = pj_str("TCP");
+  service_route_uri->lr_param = 1;
+
+  char buf[500];
+  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR,
+                            service_route_uri,
+                            buf,
+                            sizeof(buf));
+  pj_str_t service_route = {buf, len};
+  pjsip_hdr* service_route_hdr =
+    (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
+                                                &STR_SERVICE_ROUTE,
+                                                &service_route);
+  pjsip_msg_insert_first_hdr(tdata->msg, service_route_hdr);
+
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
