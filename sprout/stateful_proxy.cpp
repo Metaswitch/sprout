@@ -517,7 +517,15 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   // Perform common initial processing.
   uas_data->enter_context();
-  AsChainLink as_chain_link = uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
+
+  /// @@@KSW Extract into a separate method.
+  /// @@@KSW Perhaps make this into a trampoline.
+
+  // as_chain_link is deliberately *not* a member variable, because it
+  // is only required during this initial request - it is not used
+  // during the remainder of the transaction (hence *initial* filter
+  // criteria).
+  AsChainLink as_chain_link = uas_data->handle_incoming_non_cancel(rdata, serving_state);
 
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
 
@@ -529,7 +537,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // node/home domain.
 
     // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(as_chain_link, tdata, &target);
+    disposition = uas_data->handle_originating(as_chain_link, &target);
 
     if (disposition == AsChainLink::Disposition::Complete)
     {
@@ -539,12 +547,12 @@ void process_tsx_request(pjsip_rx_data* rdata)
         // terminating chain: switch to terminating and look up iFCs
         // again.  The served user changes here.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        uas_data->move_to_terminating_chain(as_chain_link, tdata);
+        uas_data->move_to_terminating_chain(as_chain_link);
       }
 
       // Do outgoing (terminating) half.
       LOG_DEBUG("Terminating half");
-      disposition = uas_data->handle_terminating(as_chain_link, tdata, &target);
+      disposition = uas_data->handle_terminating(as_chain_link, &target);
     }
   }
 
@@ -554,7 +562,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   if (disposition != AsChainLink::Disposition::Stop)
   {
     // Perform common outgoing processing.
-    uas_data->handle_outgoing_non_cancel(tdata, target);
+    uas_data->handle_outgoing_non_cancel(target);
   }
 
   delete target;
@@ -1619,7 +1627,6 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 // Handle the incoming half of a non-CANCEL message.
 AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //< The real incoming message, in case we need to reply to it.
-                                                       pjsip_tx_data* tdata,
                                                        const ServingState& serving_state)
 {
   if ((!edge_proxy) &&
@@ -1635,7 +1642,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //
   }
 
   // Strip any untrusted headers as required, so we don't pass them on.
-  _trust->process_request(tdata);
+  _trust->process_request(_req);
 
   AsChainLink as_chain_link;
 
@@ -1647,21 +1654,19 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //
       as_chain_link = serving_state.original_dialog();
 
       if ((serving_state.session_case() == SessionCase::Terminating) &&
-          !as_chain_link.matches_target(tdata))
+          !as_chain_link.matches_target(_req))
       {
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
         // so create new AS chain.
         LOG_INFO("Request-URI has changed, retargeting");
         as_chain_link.release();
-        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
-                                        tdata);
+        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv);
       }
     }
     else
     {
       // No existing AS chain - create new.
-      as_chain_link = create_as_chain(serving_state.session_case(),
-                                      tdata);
+      as_chain_link = create_as_chain(serving_state.session_case());
     }
   }
 
@@ -1675,7 +1680,6 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chain_link,
-                                                            pjsip_tx_data* tdata,
                                                             // OUT: target, if disposition is Skip
                                                             target** target)
 {
@@ -1690,7 +1694,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata, target);
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
 
     if (disposition == AsChainLink::Disposition::Next)
     {
@@ -1709,17 +1713,15 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
 
 /// Move from originating to terminating handling.
-void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link,
-                                               pjsip_tx_data* tdata)
+void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link)
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
-  PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
+  PJUtils::delete_header(_req->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
   as_chain_link.release();
-  as_chain_link = create_as_chain(SessionCase::Terminating,
-                                  tdata);
+  as_chain_link = create_as_chain(SessionCase::Terminating);
 }
 
 // Perform terminating handling.
@@ -1727,7 +1729,6 @@ void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link,
 // @returns whether processing should `Stop`, `Skip` to the end, or
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chain_link,
-                                                        pjsip_tx_data* tdata,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
@@ -1735,8 +1736,8 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
 
   if (!edge_proxy &&
       (enum_service) &&
-      (PJUtils::is_home_domain(tdata->msg->line.req.uri)) &&
-      (!is_uri_routeable(tdata->msg->line.req.uri)))
+      (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+      (!is_uri_routeable(_req->msg->line.req.uri)))
   {
     // Request is targeted at this domain but URI is not currently
     // routeable, so translate it to a routeable URI.
@@ -1753,8 +1754,8 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
       return AsChainLink::Disposition::Stop;
     }
 
-    if ((!PJUtils::is_home_domain(tdata->msg->line.req.uri)) &&
-        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(tdata->msg)->uri))))
+    if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
     {
       // The URI has been translated to an off-net domain, but the user does
       // not have a valid E.164 number that can be used to make off-net calls.
@@ -1776,7 +1777,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata, target);
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
     // On return from on_initial_request, our _proxy pointer may be
     // NULL.  Don't use it without checking first.
 
@@ -1796,7 +1797,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
 }
 
 // Handle the outgoing half of a non-CANCEL message.
-void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* target)
+void UASTransaction::handle_outgoing_non_cancel(target* target)
 {
   // Calculate targets
   target_list targets;
@@ -1808,7 +1809,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
   else
   {
     // Find targets.
-    proxy_calculate_targets(tdata->msg, tdata->pool, _trust, targets, MAX_FORKING);
+    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING);
   }
 
   if (targets.size() == 0)
@@ -1823,7 +1824,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
 
   // Now set up the data structures and transactions required to
   // process the request.
-  pj_status_t status = init_uac_transactions(tdata, targets);
+  pj_status_t status = init_uac_transactions(targets);
 
   if (status != PJ_SUCCESS)
   {
@@ -2315,8 +2316,7 @@ void UASTransaction::log_on_tsx_complete()
 // Initializes UAC transactions to each of the specified targets.
 //
 // @returns a status code indicating whether or not the operation succeeded.
-pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
-                                                  target_list& targets)
+pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
 {
   pj_status_t status = PJ_EUNKNOWN;
   pjsip_transaction *uac_tsx;
@@ -2333,7 +2333,7 @@ pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
     {
       // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", ii);
-      uac_tdata = PJUtils::clone_tdata(tdata);
+      uac_tdata = PJUtils::clone_tdata(_req);
 
       if (uac_tdata == NULL)
       {
@@ -2504,7 +2504,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
-    _req->msg->line.req.uri = target;
+    _req->msg->line.req.uri = target;  // @@@KSW does some interesting things to _req
 
     // Create a History-Info header.
     pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
@@ -2555,7 +2555,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
     // Kick off outgoing processing for the new request.
-    handle_outgoing_non_cancel(_req, NULL);
+    handle_outgoing_non_cancel(NULL);  // @@@KSW needs to go to {1}
   }
   else
   {
@@ -3110,8 +3110,7 @@ bool is_user_registered(std::string served_user)
 
 
 /// Factory method: create AsChain by looking up iFCs.
-AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            pjsip_tx_data* tdata)
+AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case)
 {
   if (ifc_handler == NULL)
   {
@@ -3122,8 +3121,8 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   }
 
   std::string served_user = ifc_handler->served_user_from_msg(session_case,
-                                                              tdata->msg,
-                                                              tdata->pool);
+                                                              _req->msg,
+                                                              _req->pool);
 
   Ifcs* ifcs;
   bool is_registered = false;
