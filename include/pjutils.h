@@ -93,12 +93,28 @@ namespace PJUtils
   std::string pj_status_to_string(const pj_status_t status);
 
   /// Adds a header indicating the message is integrity protected because it
-  /// was received on a transport that has already been authenticated.
+  // was received on a transport that has already been authenticated.
   void add_integrity_protected_indication(pjsip_tx_data* tdata);
 
-  /// Adds a Record-Route header to the message with the specified user name
-  /// and transport.  If the user parameter is NULL the user field is left
-  /// blank.
+  /// Returns the next hop for a SIP request.  This will either be the
+  // URI in the top-most Route header, or the RequestURI if there are no
+  // Route headers.
+  pjsip_uri* next_hop(pjsip_msg* msg);
+
+  /// Checks whether the next route header in the message refers to this node,
+  // and optionally returns the header.
+  pj_bool_t is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr);
+
+  /// Checks whether the top route header in the message refers to this node,
+  // and optionally returns the headers.
+  inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
+  {
+    return is_next_route_local(msg, NULL, hdr);
+  }
+
+  /// Adds a Record-Route header to the message with the specified user name,
+  // port and transport.  If the user parameter is NULL the user field is left
+  // blank.
   void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
 
   void delete_header(pjsip_msg* msg,
