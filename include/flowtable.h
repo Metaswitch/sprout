@@ -68,13 +68,13 @@ public:
   inline const std::string& token() const { return _token; };
 
   /// Returns true if this flow has been authenticated.
-  inline bool authenticated() const { return _authenticated; };
+  inline bool authenticated(pjsip_uri *aor) const { return (_authenticated_uri == PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
 
   /// Marks the flow as authenticated.
-  inline void set_authenticated() { _authenticated = true; };
+  inline void set_authenticated(pjsip_uri *aor) { _authenticated_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor); };
 
   /// Marks the flow as unauthenticated.
-  inline void set_unauthenticated() { _authenticated = false; };
+  inline void set_unauthenticated() { _authenticated_uri = ""; };
 
   /// Flags that a keepalive has been received on this flow.
   void keepalive();
@@ -106,7 +106,7 @@ private:
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  pj_bool_t _authenticated;
+  std::string _authenticated_uri;
   pjsip_uri _user;
   int _refs;
   pj_timer_entry _ka_timer;
