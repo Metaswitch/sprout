@@ -50,7 +50,7 @@ extern "C" {
 class LastValueCache
 {
 public:
-  LastValueCache(int statcount, std::string *statnames, long poll_timeout);
+  LastValueCache(int statcount, std::string *statnames, long poll_timeout_ms = 1000);
   ~LastValueCache();
   void* get_internal_publisher(std::string statname);
   void run();
@@ -66,7 +66,7 @@ private:
   void *_context;
   int _statcount;
   std::string *_statnames;
-  const long _poll_timeout;
+  const long _poll_timeout_ms;
   volatile bool _terminate;
 
   /// A bound 0MQ socket per statistic, for use by the internal
