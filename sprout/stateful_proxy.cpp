@@ -2140,9 +2140,10 @@ pj_status_t UASTransaction::handle_final_response()
 }
 
 
-/// Register a proxy to handle future responses.  Ownership passes to
-/// this transaction; it will be deleted when this transaction is
-/// deleted.
+/// Register a proxy to handle future responses received from our
+// child UAC transaction or generated internally.  Ownership passes
+// to this transaction; it will be deleted when this transaction is
+// deleted.
 void UASTransaction::register_proxy(CallServices::Terminating* proxy)
 {
   pj_assert(_proxy == NULL);

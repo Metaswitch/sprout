@@ -53,6 +53,7 @@ const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
 const pj_str_t STR_ORIG = pj_str("orig");
 const pj_str_t STR_NO_FORK = pj_str("no-fork");
+const pj_str_t STR_PRIVACY = pj_str("Privacy");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");
