@@ -600,8 +600,9 @@ void process_cancel_request(pjsip_rx_data* rdata)
                                             &rdata->pkt_info.src_addr);
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
 
-    // @@@TODO Use P-Asserted-Identity for authentication (?)
-    if ((flow_data != NULL) && (flow_data->authenticated(from_hdr->uri)))
+    // @@@TODO Use P-Asserted-Identity for authentication
+    if ((flow_data != NULL) &&
+        (flow_data->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri))))
     {
       integrity_protected = PJ_TRUE;
     }
@@ -753,9 +754,9 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // clients will support STUN keepalive so we don't rely on this.
     src_flow->keepalive();
 
-    // @@@TODO Use P-Asserted-Identity for authentication (?)
+    // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated(from_hdr->uri))
+    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
@@ -844,9 +845,9 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           LOG_DEBUG("Message received on known client flow");
           *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
 
-          // @@@TODO Use P-Asserted-Identity for authentication (?)
+          // @@@TODO Use P-Asserted-Identity for authentication
           pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-          if (src_flow->authenticated(from_hdr->uri))
+          if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
           {
             // Client has been authenticated, so we can trust it for the
             // purposes of routing SIP messages and don't need to challenge
@@ -1419,7 +1420,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+  pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
@@ -1451,7 +1452,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
           // There are active contacts, so consider the flow authenticated.
           // @@@TODO Also authenticate any attached P-Associated-ID headers.
           LOG_INFO("Mark client flow as authenticated");
-          flow_data->set_authenticated(from_hdr->uri);
+          flow_data->set_authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
         }
         else
         {

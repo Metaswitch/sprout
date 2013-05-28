@@ -68,13 +68,13 @@ public:
   /// Returns a reference to the flow token.
   inline const std::string& token() const { return _token; };
 
-  /// Returns true if this flow has been authenticated.
+  /// Returns true if this flow has been authenticated for the given identity.
   inline bool authenticated(pjsip_uri *aor) const { return (_authenticated_uris.find(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)) != _authenticated_uris.end()); };
 
-  /// Marks the flow as authenticated.
+  /// Marks the flow as authenticated for the given identity.
   inline void set_authenticated(pjsip_uri *aor) { _authenticated_uris.insert(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
 
-  /// Marks the flow as unauthenticated.
+  /// Marks the flow as unauthenticated for the given identity.
   inline void set_unauthenticated(pjsip_uri *aor) { _authenticated_uris.erase(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
 
   /// Flags that a keepalive has been received on this flow.
