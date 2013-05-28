@@ -51,6 +51,7 @@ const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
 const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
 const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
+const pj_str_t STR_SERVICE_ROUTE = pj_str("Service-Route");
 const pj_str_t STR_ORIG = pj_str("orig");
 const pj_str_t STR_NO_FORK = pj_str("no-fork");
 

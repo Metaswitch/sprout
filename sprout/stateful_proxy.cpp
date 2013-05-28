@@ -539,6 +539,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
+  as_chain_link.release();
   uas_data->exit_context();
 
   if (disposition != AsChainLink::Disposition::Stop)
@@ -1563,12 +1564,14 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
+  // Request destruction of any AsChains scheduled for destruction
+  // along with this transaction. They are not actually deleted until
+  // any concurrent threads have finished using them.
   for (std::list<AsChain*>::iterator it = _victims.begin();
        it != _victims.end();
        ++it)
   {
-    LOG_DEBUG("Delete AsChain");
-    delete *it;
+    (*it)->request_destroy();
   }
   _victims.clear();
 
@@ -1649,6 +1652,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
         // so create new AS chain.
         LOG_INFO("Request-URI has changed, retargeting");
+        as_chain_link.release();
         as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
                                         rdata);
       }
@@ -1667,7 +1671,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      as_chain_link = move_to_terminating_chain(rdata, tdata);
+      move_to_terminating_chain(as_chain_link, rdata, tdata);
     }
   }
 
@@ -1701,7 +1705,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
     // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    as_chain_link = move_to_terminating_chain(rdata, tdata);
+    move_to_terminating_chain(as_chain_link, rdata, tdata);
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
@@ -1710,21 +1714,19 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
 
 /// Move from originating to terminating handling.
-AsChainLink UASTransaction::move_to_terminating_chain(pjsip_rx_data* rdata,
-                                                      pjsip_tx_data* tdata)
+void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link,
+                                               pjsip_rx_data* rdata,
+                                               pjsip_tx_data* tdata)
 {
-  AsChainLink as_chain_link;
-
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
   PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
   PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
+  as_chain_link.release();
   as_chain_link = create_as_chain(SessionCase::Terminating,
                                   rdata);
-
-  return as_chain_link;
 }
 
 // Perform terminating handling.
@@ -3130,15 +3132,45 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                              application_servers);
   }
 
-  AsChain* ret = new AsChain(as_chain_table,
-                             session_case,
-                             served_user,
-                             is_registered,
-                             trail(),
-                             application_servers);
-  _victims.push_back(ret);
+  // Create the AsChain, and schedule its destruction.  AsChain
+  // lifetime is tied to the lifetime of the creating transaction.
+  //
+  // Rationale:
+  //
+  // Consider two successive Sprout UAS transactions Ai and Ai+1 in
+  // the chain. Sprout creates Ai+1 in response to it receiving the Ai
+  // ODI token from the AS.
+  //
+  // (1) Ai+1 can only be created if the ODI is valid at the point
+  // Sprout receives the transaction-creating message.
+  //
+  // (2) Before the point Sprout creates Ai+1, the ODI’s lifetime
+  // cannot be dependent on Ai+1, but only on Ai (and previous
+  // transactions).
+  //
+  // (3) Hence at the point Ai+1 is created, Ai must still be live.
+  //
+  // (4) This applies transitively, so the lifetime of A0 bounds the
+  // lifetime of Aj for all j.
+  //
+  // This means that there’s a constraint on B2BUA AS behaviour: it
+  // must not give a final response to the inbound transaction before
+  // receiving a final response from the outbound transaction.
+  //
+  // While this constraint is not stated explicitly in 24.229, there
+  // is no other sensible lifetime for the ODI token. The alternative
+  // would allow B2BUAs that gave a final response to the caller, and
+  // then at some arbitrary time later did some action that continued
+  // the original AS chain, which is nonsensical.
 
-  return AsChainLink(ret, 0u);
+  AsChainLink ret = AsChainLink::create_as_chain(as_chain_table,
+                                                 session_case,
+                                                 served_user,
+                                                 is_registered,
+                                                 trail(),
+                                                 application_servers);
+  _victims.push_back(ret.as_chain());
+  return ret;
 }
 
 ///@}

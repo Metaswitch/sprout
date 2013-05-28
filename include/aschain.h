@@ -69,21 +69,26 @@ class AsChainTable;
 
 /// The AS chain.
 //
-// Lifetime:
+// Clients should use AsChainLink, not this class directly.
 //
-// The AS chain is created when a request first comes in, or when a
-// request turns around from originating to terminating. We impose a
-// simplifying limitation: an ODI is only valid for as long as the
-// transaction that provided that ODI exists. This means that the AS
-// chain only needs to remain valid for as long as the longest-lived
-// Sprout->AS transaction. This is clearly the transaction which
-// created the AS chain in the first place, since it does not end
-// until all the chained transactions have ended. Hence the AS chain
-// is destroyed when the transaction which created it is destroyed.
+// AsChain objects are constructed by AsChainLink::create_as_chain,
+// which also returns a reference to the created object.
+//
+// References can also be obtained via AsChainTable::lookup().
+//
+// References are released by AsChainLink::release().
+//
+// AsChain objects are destroyed by AsChain::request_destroy().
 //
 class AsChain
 {
 public:
+  void request_destroy();
+
+private:
+  friend class AsChainLink;
+  friend class AsChainTable;
+
   AsChain(AsChainTable* as_chain_table,
           const SessionCase& session_case,
           const std::string& served_user,
@@ -92,16 +97,29 @@ public:
           std::vector<AsInvocation> application_servers);
   ~AsChain();
 
+  void inc_ref()
+  {
+    ++_refs;
+  }
+
+  void dec_ref()
+  {
+    int count = --_refs;
+    pj_assert(count >= 0);
+    if (count == 0)
+    {
+      delete this;
+    }
+  }
+
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
   bool matches_target(pjsip_rx_data* rdata) const;
   SAS::TrailId trail() const;
 
-private:
-  friend class AsChainLink;
-
   AsChainTable* const _as_chain_table;
+  std::atomic<int> _refs;
 
   /// ODI tokens, one for each step.
   std::vector<std::string> _odi_tokens;
@@ -114,7 +132,11 @@ private:
 };
 
 
-/// A single link in the AsChain.
+/// A single link in the AsChain. Clients always access an AsChain
+// through one of these.
+//
+// AsChainLink also acts as a context: until release() is called, the
+// underlying AsChain object cannot be deleted.
 class AsChainLink
 {
 public:
@@ -124,14 +146,13 @@ public:
   {
   }
 
-  AsChainLink(AsChain* as_chain, size_t index) :
-    _as_chain(as_chain),
-    _index(index)
+  ~AsChainLink()
   {
   }
 
-  ~AsChainLink()
+  AsChain* as_chain() const
   {
+    return _as_chain;
   }
 
   bool is_set() const
@@ -142,6 +163,15 @@ public:
   bool complete() const
   {
     return ((_as_chain == NULL) || (_index == _as_chain->size()));
+  }
+
+  /// Caller has finished using this link.
+  void release()
+  {
+    if (_as_chain != NULL)
+    {
+      _as_chain->dec_ref();
+    }
   }
 
   SAS::TrailId trail() const
@@ -180,6 +210,13 @@ public:
     Next
   };
 
+  static AsChainLink create_as_chain(AsChainTable* as_chain_table,
+                                     const SessionCase& session_case,
+                                     const std::string& served_user,
+                                     bool is_registered,
+                                     SAS::TrailId trail,
+                                     std::vector<AsInvocation> application_servers);
+
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,
                                  pjsip_msg* msg,
@@ -187,6 +224,14 @@ public:
                                  target** target);
 
 private:
+  friend class AsChainTable;
+
+  AsChainLink(AsChain* as_chain, size_t index) :
+    _as_chain(as_chain),
+    _index(index)
+  {
+  }
+
   /// Returns the ODI token of the next AsChainLink in this chain.
   const std::string& next_odi_token() const
   {
