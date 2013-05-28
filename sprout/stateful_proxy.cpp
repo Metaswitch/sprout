@@ -557,7 +557,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   as_chain_link.release();
-  uas_data->exit_context();
 
   if (disposition != AsChainLink::Disposition::Stop)
   {
@@ -565,6 +564,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     uas_data->handle_outgoing_non_cancel(target);
   }
 
+  uas_data->exit_context();
   delete target;
 }
 
