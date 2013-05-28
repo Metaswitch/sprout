@@ -366,7 +366,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   pjsip_tx_data* tdata;
   UASTransaction* uas_data;
   ServingState serving_state;
-  target* target = NULL;
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
 
   // Verify incoming request.
@@ -515,57 +514,24 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Perform common initial processing.
   uas_data->enter_context();
 
-  /// @@@KSW Extract into a separate method.
-  /// @@@KSW Perhaps make this into a trampoline.
-
-  // as_chain_link is deliberately *not* a member variable, because it
-  // is only required during this initial request - it is not used
-  // during the remainder of the transaction (hence *initial* filter
-  // criteria).
-  AsChainLink as_chain_link = uas_data->handle_incoming_non_cancel(rdata, serving_state);
-
-  AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
-
   if ((!edge_proxy) &&
-      ((PJUtils::is_home_domain(tdata->msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(tdata->msg->line.req.uri))))
+      (uas_data->method() == PJSIP_INVITE_METHOD))
   {
-    // Do services and translation processing for requests targeted at this
-    // node/home domain.
-
-    // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(as_chain_link, &target);
-
-    if (disposition == AsChainLink::Disposition::Complete)
-    {
-      if (!as_chain_link.is_set() || !as_chain_link.session_case().is_terminating())
-      {
-        // We've completed the originating half and we don't yet have a
-        // terminating chain: switch to terminating and look up iFCs
-        // again.  The served user changes here.
-        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        uas_data->move_to_terminating_chain(as_chain_link);
-      }
-
-      // Do outgoing (terminating) half.
-      LOG_DEBUG("Terminating half");
-      disposition = uas_data->handle_terminating(as_chain_link, &target);
-    }
+    // If running in routing proxy mode send the 100 Trying response before
+    // applying services and routing the request as both may involve
+    // interacting with external databases.  When running in edge proxy
+    // mode we hold off sending the 100 Trying until we've received one from
+    // upstream so we can be sure we could route a subsequent CANCEL to the
+    // right place.
+    uas_data->send_trying(rdata);
   }
 
-  as_chain_link.release();
-
-  if (disposition != AsChainLink::Disposition::Stop)
-  {
-    // Perform common outgoing processing.
-    uas_data->handle_outgoing_non_cancel(target);
-  }
+  // Perform common initial processing.
+  uas_data->handle_non_cancel(serving_state);
 
   uas_data->exit_context();
-  delete target;
 }
 
 
@@ -1625,22 +1591,62 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 }
 
 
-// Handle the incoming half of a non-CANCEL message.
-AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,  //< The real incoming message, in case we need to reply to it.
-                                                       const ServingState& serving_state)
+/// Handle a non-CANCEL message.
+void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
+  /// @@@KSW Perhaps make this into a trampoline.
+
+  // as_chain_link is deliberately *not* a member variable, because it
+  // is only required during this initial request - it is not used
+  // during the remainder of the transaction (hence *initial* filter
+  // criteria).
+  AsChainLink as_chain_link = handle_incoming_non_cancel(serving_state);
+
+  AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
+  target* target = NULL;
+
   if ((!edge_proxy) &&
-      (method() == PJSIP_INVITE_METHOD))
+      ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
+       (PJUtils::is_uri_local(_req->msg->line.req.uri))))
   {
-    // If running in routing proxy mode send the 100 Trying response before
-    // applying services and routing the request as both may involve
-    // interacting with external databases.  When running in edge proxy
-    // mode we hold off sending the 100 Trying until we've received one from
-    // upstream so we can be sure we could route a subsequent CANCEL to the
-    // right place.
-    PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
+    // Do services and translation processing for requests targeted at this
+    // node/home domain.
+
+    // Do incoming (originating) half.
+    disposition = handle_originating(as_chain_link, &target);
+
+    if (disposition == AsChainLink::Disposition::Complete)
+    {
+      if (!as_chain_link.is_set() || !as_chain_link.session_case().is_terminating())
+      {
+        // We've completed the originating half and we don't yet have a
+        // terminating chain: switch to terminating and look up iFCs
+        // again.  The served user changes here.
+        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+        move_to_terminating_chain(as_chain_link);
+      }
+
+      // Do outgoing (terminating) half.
+      LOG_DEBUG("Terminating half");
+      disposition = handle_terminating(as_chain_link, &target);
+    }
   }
 
+  as_chain_link.release();
+
+  if (disposition != AsChainLink::Disposition::Stop)
+  {
+    // Perform common outgoing processing.
+    handle_outgoing_non_cancel(target);
+  }
+
+  delete target;
+}
+
+
+// Handle the incoming half of a non-CANCEL message.
+AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
+{
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
 
@@ -2148,6 +2154,14 @@ void UASTransaction::register_proxy(CallServices::Terminating* proxy)
 {
   pj_assert(_proxy == NULL);
   _proxy = proxy;
+}
+
+
+// Sends a 100 Trying response to the given rdata, in this transaction.
+// @Returns whether or not the send was a success.
+pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
+{
+  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
 }
 
 
