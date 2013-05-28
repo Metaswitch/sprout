@@ -239,7 +239,8 @@ AsChainLink::on_initial_request(CallServices* call_services,
 
     // Start defining the new target.
     target* as_target = new target;
-    as_target->from_store = false;
+    as_target->from_store = PJ_FALSE;
+    as_target->upstream_route = PJ_FALSE;
     as_target->transport = NULL;
 
     // Request-URI should remain unchanged

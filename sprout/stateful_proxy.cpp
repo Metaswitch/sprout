@@ -1177,6 +1177,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
     LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
     target.transport = NULL;
     targets.push_back(target);
@@ -1193,6 +1194,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
     LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
     target.transport = NULL;
 
@@ -1222,16 +1224,18 @@ void proxy_calculate_targets(pjsip_msg* msg,
 
   if (edge_proxy)
   {
-    // We're an edge proxy and there wasn't a defined route in the message,
+    // We're an edge proxy and there wasn't a route mandated by the message,
     // forward it to the upstream proxy to deal with.  We do this by adding
     // a target with the existing request URI and a path to the upstream
-    // proxy.  If the request URI is a SIP URI with a domain/host that is not
+    // proxy and stripping any loose routes that might have been added by the
+    // UA.  If the request URI is a SIP URI with a domain/host that is not
     // the home domain, change it to use the home domain.
     LOG_INFO("Route request to upstream proxy %.*s",
              ((pjsip_sip_uri*)upstream_proxy)->host.slen,
              ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_TRUE;
     if ((PJSIP_URI_SCHEME_IS_SIP(req_uri)) &&
         (!PJUtils::is_home_domain((pjsip_uri*)req_uri)))
     {
@@ -1328,6 +1332,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
       bool useable_contact = true;
       target target;
       target.from_store = PJ_TRUE;
+      target.upstream_route = PJ_FALSE;
       target.aor = aor;
       target.binding_id = i->first;
       target.uri = PJUtils::uri_from_string(binding->_uri, pool);
@@ -2616,6 +2621,22 @@ void UACTransaction::set_target(const struct target& target)
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
   _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
+
+  // If the target is routing to the upstream device (we're acting as an edge
+  // proxy), strip any extra loose routes on the message to prevent accidental
+  // double routing.
+  if (target.upstream_route)
+  {
+     LOG_DEBUG("Stripping loose routes from proxied message");
+
+     // Tight loop to strip all route headers.
+     while (pjsip_msg_find_remove_hdr(_tdata->msg,
+                                      PJSIP_H_ROUTE,
+                                      NULL) != NULL)
+     {
+       // Tight loop.
+     };
+  }
 
   for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
        pit != target.paths.end();
