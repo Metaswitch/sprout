@@ -187,6 +187,9 @@ protected:
   /// Wait briefly for any pending events.
   static void poll();
 
+  /// Get current time, formatted for display.
+  string timestamp();
+
   /// Assert all transactions completed.
   void expect_all_tsx_done();
 

@@ -539,6 +539,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
+  as_chain_link.release();
   uas_data->exit_context();
 
   if (disposition != AsChainLink::Disposition::Stop)
@@ -946,13 +947,44 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
     }
 
+    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    if (route_hdr &&
+        (PJSIP_URI_SCHEME_IS_SIP(route_hdr->name_addr.uri)) &&
+        (PJUtils::is_home_domain(route_hdr->name_addr.uri) ||
+         PJUtils::is_uri_local(route_hdr->name_addr.uri)) &&
+        pjsip_param_find(&reinterpret_cast<pjsip_sip_uri*>(pjsip_uri_get_uri(route_hdr->name_addr.uri))->other_param,
+                         &STR_ORIG) &&
+        (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT))
+    {
+      // Topmost route header points to us/Sprout and requests originating
+      // handling, but this is not a known client. This is forbidden.
+      //
+      // This covers 3GPP TS 24.229 s5.10.3.2, except that we
+      // implement a whitelist (only known Bono clients can pass this)
+      // rather than a blacklist (IBCF clients are forbidden).
+      //
+      // All connections to our IBCF are untrusted (we don't implement
+      // any trusted ones) in the sense of s5.10.3.2, so this always
+      // applies and we never implement the step 4 and 5 behaviour of
+      // copying the ;orig parameter to the outgoing Route.
+      //
+      // We are slightly overloading TrustBoundary here - how to
+      // improve this is FFS.
+      LOG_WARNING("Request for originating handling but not from known client");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_FORBIDDEN,
+                                 NULL, NULL, NULL);
+      return PJ_ENOTFOUND;
+    }
+
     // Do standard route header processing for the request.  This may
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
     // Work out the target for the message.  This will either be the URI in
     // the top route header, or the request URI.
-    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
     LOG_DEBUG("Destination is %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
     pjsip_uri* target = (route_hdr != NULL) ? route_hdr->name_addr.uri : tdata->msg->line.req.uri;
 
@@ -1055,7 +1087,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
 
 /// Determine whether a source or destination IP address corresponds to
-/// a configured trusted peer.
+/// a configured trusted peer.  "Trusted" here simply means that it's
+/// known, not that we trust any headers it sets.
 static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 {
   // Check whether the source IP address of the message is in the list of
@@ -1154,6 +1187,7 @@ static
 #endif
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
+                             const TrustBoundary* trust,
                              target_list& targets,
                              int max_targets)
 {
@@ -1237,16 +1271,21 @@ void proxy_calculate_targets(pjsip_msg* msg,
       target.uri = (pjsip_uri*)req_uri;
     }
 
-    // Route upstream. Mark it as originating, so Sprout knows to
-    // apply originating handling.  In theory the UE ought to have
-    // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-    // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
-    // - but if we're here it didn't, so we do the work for it.
+    // Route upstream.
     pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, upstream_proxy);
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &orig_param->name, &STR_ORIG);
-    pj_strdup2(pool, &orig_param->value, "");
-    pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    if (trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
+    {
+      // Mark it as originating, so Sprout knows to
+      // apply originating handling.  In theory the UE ought to have
+      // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+      // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
+      // - but if we're here it didn't, so we do the work for it.
+      LOG_DEBUG("Mark originating");
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(pool, &orig_param->value, "");
+      pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    }
     target.paths.push_back((pjsip_uri*)upstream_uri);
 
     // Select a transport for the request.
@@ -1542,12 +1581,14 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
+  // Request destruction of any AsChains scheduled for destruction
+  // along with this transaction. They are not actually deleted until
+  // any concurrent threads have finished using them.
   for (std::list<AsChain*>::iterator it = _victims.begin();
        it != _victims.end();
        ++it)
   {
-    LOG_DEBUG("Delete AsChain");
-    delete *it;
+    (*it)->request_destroy();
   }
   _victims.clear();
 
@@ -1628,6 +1669,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
         // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
         // so create new AS chain.
         LOG_INFO("Request-URI has changed, retargeting");
+        as_chain_link.release();
         as_chain_link = create_as_chain(SessionCase::OriginatingCdiv,
                                         rdata);
       }
@@ -1646,7 +1688,7 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
       // We've completed the originating half: switch to terminating
       // and look up again.  The served user changes here.
       LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      as_chain_link = move_to_terminating_chain(rdata, tdata);
+      move_to_terminating_chain(as_chain_link, rdata, tdata);
     }
   }
 
@@ -1675,11 +1717,12 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
   if (disposition == AsChainLink::Disposition::Next)
   {
+    // @@@KSW We've done built-in services, but might need to proceed - what to do?
     // We've completed the originating half: switch to terminating
     // and look up iFCs again.  The served user changes here.
     // @@@KSW fix this up to loop if necessary
     LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    as_chain_link = move_to_terminating_chain(rdata, tdata);
+    move_to_terminating_chain(as_chain_link, rdata, tdata);
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
@@ -1688,21 +1731,19 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
 
 /// Move from originating to terminating handling.
-AsChainLink UASTransaction::move_to_terminating_chain(pjsip_rx_data* rdata,
-                                                      pjsip_tx_data* tdata)
+void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link,
+                                               pjsip_rx_data* rdata,
+                                               pjsip_tx_data* tdata)
 {
-  AsChainLink as_chain_link;
-
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
   PJUtils::delete_header(rdata->msg_info.msg, &STR_P_SERVED_USER);
   PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
+  as_chain_link.release();
   as_chain_link = create_as_chain(SessionCase::Terminating,
                                   rdata);
-
-  return as_chain_link;
 }
 
 // Perform terminating handling.
@@ -1756,6 +1797,8 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
     disposition = as_chain_link.on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
     // On return from on_initial_request, our _proxy pointer
     // may be NULL.  Don't use it without checking first.
+
+    // @@@KSW may be Next, in which case we might need to do more.
   }
 
   LOG_INFO("Terminating services disposition %d", (int)disposition);
@@ -1775,7 +1818,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
   else
   {
     // Find targets.
-    proxy_calculate_targets(tdata->msg, tdata->pool, targets, MAX_FORKING);
+    proxy_calculate_targets(tdata->msg, tdata->pool, _trust, targets, MAX_FORKING);
   }
 
   if (targets.size() == 0)
@@ -3106,15 +3149,45 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                              application_servers);
   }
 
-  AsChain* ret = new AsChain(as_chain_table,
-                             session_case,
-                             served_user,
-                             is_registered,
-                             trail(),
-                             application_servers);
-  _victims.push_back(ret);
+  // Create the AsChain, and schedule its destruction.  AsChain
+  // lifetime is tied to the lifetime of the creating transaction.
+  //
+  // Rationale:
+  //
+  // Consider two successive Sprout UAS transactions Ai and Ai+1 in
+  // the chain. Sprout creates Ai+1 in response to it receiving the Ai
+  // ODI token from the AS.
+  //
+  // (1) Ai+1 can only be created if the ODI is valid at the point
+  // Sprout receives the transaction-creating message.
+  //
+  // (2) Before the point Sprout creates Ai+1, the ODI’s lifetime
+  // cannot be dependent on Ai+1, but only on Ai (and previous
+  // transactions).
+  //
+  // (3) Hence at the point Ai+1 is created, Ai must still be live.
+  //
+  // (4) This applies transitively, so the lifetime of A0 bounds the
+  // lifetime of Aj for all j.
+  //
+  // This means that there’s a constraint on B2BUA AS behaviour: it
+  // must not give a final response to the inbound transaction before
+  // receiving a final response from the outbound transaction.
+  //
+  // While this constraint is not stated explicitly in 24.229, there
+  // is no other sensible lifetime for the ODI token. The alternative
+  // would allow B2BUAs that gave a final response to the caller, and
+  // then at some arbitrary time later did some action that continued
+  // the original AS chain, which is nonsensical.
 
-  return AsChainLink(ret, 0u);
+  AsChainLink ret = AsChainLink::create_as_chain(as_chain_table,
+                                                 session_case,
+                                                 served_user,
+                                                 is_registered,
+                                                 trail(),
+                                                 application_servers);
+  _victims.push_back(ret.as_chain());
+  return ret;
 }
 
 ///@}

@@ -136,7 +136,7 @@ public:
 
   AsChainLink handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  AsChainLink move_to_terminating_chain(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+  void move_to_terminating_chain(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata);
   AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
   void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
 
@@ -264,6 +264,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
+                             const TrustBoundary* trust,
                              target_list& targets,
                              int max_targets);
 #endif

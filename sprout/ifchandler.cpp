@@ -329,7 +329,9 @@ void IfcHandler::calculate_application_servers(const SessionCase& session_case,
         if (as)
         {
           AsInvocation as_invocation;
-          int32_t priority = (int32_t)parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max());
+          int32_t priority = (int32_t)((priority_node) ?
+                                       parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                       0);
           as_invocation.server_name = get_first_node_value(as, "ServerName");
           as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
           as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
@@ -516,10 +518,9 @@ std::string IfcHandler::user_from_uri(pjsip_uri *uri)
 // returning the result or throwing.
 long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value)
 {
-  if (!node)
-  {
-    throw ifc_error("Missing mandatory value for " + description);
-  }
+  // Node must be non-NULL - caller should check for this prior to calling
+  // this method.
+  assert(node != NULL);
 
   const char* nptr = node->value();
   char* endptr = NULL;
