@@ -71,6 +71,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
 AsChain::~AsChain()
 {
   LOG_DEBUG("Destroying AsChain %p", this);
+  delete _ifcs;
 }
 
 

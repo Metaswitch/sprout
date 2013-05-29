@@ -142,9 +142,6 @@ TEST_F(AsChainTest, Basics)
   EXPECT_TRUE(res.complete());
 
   CallServices calls(NULL);  // Not valid, but good enough for this UT.
-  delete ifcs1;
-  delete ifcs2;
-  delete ifcs3;
 }
 
 TEST_F(AsChainTest, AsInvocation)
@@ -207,10 +204,6 @@ TEST_F(AsChainTest, AsInvocation)
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));
   delete target; target = NULL;
-
-  delete ifcs1;
-  delete ifcs2;
-  delete ifcs3;
 
   // MMTEL cases can't easily be tested here, because they construct
   // real CallServices objects.
