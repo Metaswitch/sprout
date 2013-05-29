@@ -202,8 +202,6 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 }
 
 
-/// Adds a header indicating the message is integrity protected because it
-/// was received on a transport that has already been authenticated.
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata)
 {
   LOG_INFO("Adding integrity-protected indicator to message");
@@ -225,8 +223,45 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata)
 }
 
 
-/// Adds a Record-Route header to the message with the specified user name
-/// and transport.  If the user parameter is NULL the user field is left
+/// Returns the next hop for a SIP request.  This will either be the
+/// URI in the top-most Route header, or the RequestURI if there are no
+/// Route headers.
+pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
+{
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
+  LOG_DEBUG("Next hop node is encoded in %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
+  return (route_hdr != NULL) ? route_hdr->name_addr.uri : msg->line.req.uri;
+}
+
+
+/// Checks whether the next Route header in the message refers to this node,
+/// and optionally returns the header.  If there are no Route headers it
+/// returns false.
+pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr)
+{
+  bool rc = false;
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, start);
+
+  if (route_hdr != NULL)
+  {
+    // Found the next Route header, so check whether the URI corresponds to
+    // this node or one of its aliases.
+    pjsip_uri* uri = route_hdr->name_addr.uri;
+    if ((is_home_domain(uri)) || (is_uri_local(uri)))
+    {
+      rc = true;
+      if (hdr != NULL)
+      {
+        *hdr = route_hdr;
+      }
+    }
+  }
+  return rc;
+}
+
+
+/// Adds a Record-Route header to the message with the specified user name,
+/// port and transport.  If the user parameter is NULL the user field is left
 /// blank.
 void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* transport,
@@ -270,6 +305,7 @@ void PJUtils::delete_header(pjsip_msg* msg,
     }
   }
 }
+
 
 /// Delete all existing copies of a header and replace with a new one.
 /// The header to delete must not be one that has an abbreviation.
