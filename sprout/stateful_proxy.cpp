@@ -403,10 +403,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   else
   {
     // Process route information for routing proxy.
-    pjsip_route_hdr* hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if ((hroute) &&
-        ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-         (PJUtils::is_uri_local(hroute->name_addr.uri))))
+    pjsip_route_hdr* hroute;
+    if (PJUtils::is_top_route_local(tdata->msg, &hroute))
     {
       // This is our own Route header, containing a SIP URI.  Check for an
       // ODI token.  We need to determine the session case: is
@@ -780,43 +778,33 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   }
   else
   {
-    // Non-register request.  First check for double-record routing and remove
+    // Non-register request.  First check for double Record-Routing and remove
     // extra Route header.
-    pjsip_route_hdr* r1 = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    pjsip_route_hdr* r1 = NULL;
+    pjsip_route_hdr* r2 = NULL;
 
-    if ((r1) &&
-        (PJSIP_URI_SCHEME_IS_SIP(r1->name_addr.uri)) &&
-        (PJUtils::is_uri_local(r1->name_addr.uri)))
+    if ((PJUtils::is_top_route_local(tdata->msg, &r1)) &&
+        (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
     {
-      // The top route header was added by this node.  Check for cases
-      // of double Record Routing and remove the extra Route header.
-      LOG_DEBUG("Check for double Record-Routing");
-      pjsip_route_hdr* r2 = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, r1->next);
-
-      if ((r2) &&
-          (PJSIP_URI_SCHEME_IS_SIP(r2->name_addr.uri)) &&
-          (PJUtils::is_uri_local(r2->name_addr.uri)))
+      // The top two Route headers were both added by this node, so check for
+      // different transports or ports.
+      pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
+      pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
+      if ((uri1->port != uri2->port) ||
+          (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
       {
-        // Second route header was also added by this node, so check for
-        // different transports or ports.
-        pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
-        pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
-        if ((uri1->port != uri2->port) ||
-            (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
+        // Possible double record routing.  If one of the route headers doesn't
+        // have a flow token it can safely be removed.
+        LOG_DEBUG("Host names are the same and transports are different");
+        if (uri1->user.slen == 0)
         {
-          // Possible double record routing.  If one of the route headers doesn't
-          // have a flow token it can safely be removed.
-          LOG_DEBUG("Host names are the same and transports are different");
-          if (uri1->user.slen == 0)
-          {
-            LOG_DEBUG("Remove top route header");
-            pj_list_erase(r1);
-          }
-          else if (uri2->user.slen == 0)
-          {
-            LOG_DEBUG("Remove second route header");
-            pj_list_erase(r2);
-          }
+          LOG_DEBUG("Remove top route header");
+          pj_list_erase(r1);
+        }
+        else if (uri2->user.slen == 0)
+        {
+          LOG_DEBUG("Remove second route header");
+          pj_list_erase(r2);
         }
       }
     }
@@ -875,11 +863,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       trusted = true;
 
       // See if the message is destined for a client.
-      pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-
-      if ((route_hdr) &&
-          (PJSIP_URI_SCHEME_IS_SIP(route_hdr->name_addr.uri)) &&
-          (PJUtils::is_uri_local(route_hdr->name_addr.uri)) &&
+      pjsip_route_hdr* route_hdr;
+      if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
           (((pjsip_sip_uri*)route_hdr->name_addr.uri)->user.slen > 0))
       {
         // The user part is present, it should hold our token, so validate the
@@ -930,14 +915,11 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
     }
 
-    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if (route_hdr &&
-        (PJSIP_URI_SCHEME_IS_SIP(route_hdr->name_addr.uri)) &&
-        (PJUtils::is_home_domain(route_hdr->name_addr.uri) ||
-         PJUtils::is_uri_local(route_hdr->name_addr.uri)) &&
-        pjsip_param_find(&reinterpret_cast<pjsip_sip_uri*>(pjsip_uri_get_uri(route_hdr->name_addr.uri))->other_param,
-                         &STR_ORIG) &&
-        (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT))
+
+    pjsip_route_hdr* route_hdr;
+    if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
+        (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT) &&
+        (pjsip_param_find(&(((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param), &STR_ORIG)))
     {
       // Topmost route header points to us/Sprout and requests originating
       // handling, but this is not a known client. This is forbidden.
@@ -965,15 +947,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // Work out the target for the message.  This will either be the URI in
+    // Work out the next hop target for the message.  This will either be the URI in
     // the top route header, or the request URI.
-    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    LOG_DEBUG("Destination is %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
-    pjsip_uri* target = (route_hdr != NULL) ? route_hdr->name_addr.uri : tdata->msg->line.req.uri;
+    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
     if ((!trusted) &&
-        (!PJUtils::is_home_domain((pjsip_uri*)target)) &&
-        (!PJUtils::is_uri_local((pjsip_uri*)target)))
+        (!PJUtils::is_home_domain((pjsip_uri*)next_hop)) &&
+        (!PJUtils::is_uri_local((pjsip_uri*)next_hop)))
     {
       // Message is from an untrusted source and destination is not Sprout, so
       // reject it.
@@ -994,13 +974,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     if ((ibcf) &&
         (tgt_flow == NULL) &&
-        (PJSIP_URI_SCHEME_IS_SIP(target)))
+        (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
     {
       // Check if the message is destined for a SIP trunk
       LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
-                ((pjsip_sip_uri*)target)->host.slen, ((pjsip_sip_uri*)target)->host.ptr);
+                ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
       pj_sockaddr dest;
-      if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)target)->host, &dest) == PJ_SUCCESS)
+      if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)next_hop)->host, &dest) == PJ_SUCCESS)
       {
         // Target host name is an IP address, so check against the IBCF trusted
         // peers.
@@ -1148,10 +1128,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
   // If the first value in the Route header field indicates this proxy or
   // home domain, the proxy MUST remove that value from the request.
-  hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-  if ((hroute) &&
-      ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-       (PJUtils::is_uri_local(hroute->name_addr.uri))))
+  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
     pj_list_erase(hroute);
   }
