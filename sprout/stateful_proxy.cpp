@@ -1040,7 +1040,17 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                               &req_uri->host,
                               &addr) == PJ_SUCCESS)
         {
-          pj_sockaddr_set_port(&addr, req_uri->port - 1);
+          int target_port = req_uri->port;;
+          if (target_port == 7001)
+          {
+            target_port = 7000;
+          }
+          else if (target_port == 7000)
+          {
+            target_port = 7001;
+          }
+
+          pj_sockaddr_set_port(&addr, target_port);
           pj_str_t protocol = sip_path_uri->transport_param;
           if (pj_strlen(&protocol) == 0)
           {
@@ -1068,7 +1078,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
           pjsip_tpmgr* tpmgr = tgt_flow->transport()->tpmgr;
           pjsip_transport* req_uri_transport;
-          LOG_DEBUG("Locating transport for port %d", req_uri->port - 1);
+          LOG_DEBUG("Locating transport for port %d", target_port);
 
           status = pjsip_tpmgr_acquire_transport(tpmgr,
                                                  type,
