@@ -48,6 +48,9 @@
 /// Create an AsChain.
 //
 // Ownership of `ifcs` passes to this object.
+//
+// See `AsChainLink::create_as_chain` for rules re releasing the
+// created references.
 AsChain::AsChain(AsChainTable* as_chain_table,
                  const SessionCase& session_case,
                  const std::string& served_user,
@@ -55,7 +58,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  SAS::TrailId trail,
                  Ifcs* ifcs) :
   _as_chain_table(as_chain_table),
-  _refs(2),
+  _refs(2),  // one for the chain being returned,
+             // and one for the reference in the table.
   _odi_tokens(),
   _session_case(session_case),
   _served_user(served_user),
