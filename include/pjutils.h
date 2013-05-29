@@ -96,6 +96,24 @@ std::string pj_status_to_string(const pj_status_t status);
 typedef enum {YES, NO, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
 
+/// Returns the next hop for a SIP request.  This will either be the
+// URI in the top-most Route header, or the RequestURI if there are no
+// Route headers.
+pjsip_uri* next_hop(pjsip_msg* msg);
+
+/// Checks whether the next Route header in the message refers to this node,
+// and optionally returns the header.  If there are no Route headers it
+// returns false.
+pj_bool_t is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr);
+
+/// Checks whether the top route header in the message refers to this node,
+// and optionally returns the headers.  If there no Route headers it returns
+// false.
+inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
+{
+  return is_next_route_local(msg, NULL, hdr);
+}
+
 /// Adds a Record-Route header to the message with the specified user name
 // and transport.  If the user parameter is NULL the user field is left
 // blank.
