@@ -46,6 +46,7 @@ const pj_str_t STR_SIP_INSTANCE = pj_str("+sip.instance");
 const pj_str_t STR_REG_ID = pj_str("reg-id");
 const pj_str_t STR_OB = pj_str("ob");
 const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
+const pj_str_t STR_PRIVACY = pj_str("Privacy");
 const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
 const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
 const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
