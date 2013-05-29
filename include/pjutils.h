@@ -39,8 +39,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #ifndef PJUTILS_H__
 #define PJUTILS_H__
 
@@ -92,13 +90,8 @@ namespace PJUtils
 
   std::string pj_status_to_string(const pj_status_t status);
 
-  /// Adds a header indicating the message is integrity protected because it
-  /// was received on a transport that has already been authenticated.
   void add_integrity_protected_indication(pjsip_tx_data* tdata);
 
-  /// Adds a Record-Route header to the message with the specified user name
-  /// and transport.  If the user parameter is NULL the user field is left
-  /// blank.
   void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
 
   void delete_header(pjsip_msg* msg,
@@ -108,11 +101,8 @@ namespace PJUtils
                           const pj_str_t* name,
                           const pj_str_t* value);
 
-  /// Checks whether the supplied message contains the extension in the
-  /// Supported header.
   pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
-  /// @return PJ_TRUE if the message is reaching us on its first hop.
   pj_bool_t is_first_hop(pjsip_msg* msg);
 
   pj_status_t create_response(pjsip_endpoint *endpt,
