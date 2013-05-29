@@ -859,6 +859,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // trunk), or a source we can now trust because it has been authenticated
     // (that is, a client flow).
     bool trusted = false;
+    pj_bool_t send_to_req_uri = PJ_FALSE;
 
     if (rdata->tp_info.transport->local_name.port != stack_data.trusted_port)
     {
@@ -1025,17 +1026,83 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           return PJ_ENOTFOUND;
         }
 
+        // Check if we have an open transport to the address given in the ReqURI
+        // (so long as it's not a local address). 
+        //
+        // If so, send it over that connection.
+        pjsip_transport *target_transport;
+        const pj_sockaddr *target_addr;
+        pjsip_sip_uri* req_uri =
+          (pjsip_sip_uri*)rdata->msg_info.msg->line.req.uri;
+        pj_sockaddr addr;
+        if (pj_sockaddr_parse(pj_AF_UNSPEC(),
+                              0,
+                              &req_uri->host,
+                              &addr) == PJ_SUCCESS)
+        {
+          // ReqURI is an IP address, try to find a matching transport.
+          //
+          // First, work out the transport and convert to a transport_type_e.
+          pj_str_t protocol = sip_path_uri->transport_param;
+          if (pj_strlen(&protocol) == 0)
+          {
+            protocol = pj_str("UDP");
+          }
+          pjsip_transport_type_e type =
+            pjsip_transport_get_type_from_name(&protocol);
+
+/*
+          // Here we have to query the transport manager for the target flow 
+          // since the same manager is responsible for the other inbound, 
+          // client-side connections to Bono.
+          pjsip_transport_key key;
+          int key_len;
+
+          pj_bzero(&key, sizeof(key));
+          key_len = sizeof(key.type) + sizeof(pj_sockaddr);
+
+          key.type = type;
+          pj_memcpy(&key.rem_addr, &addr, sizeof(pj_sockaddr));
+
+          req_uri_transport = (pjsip_transport*)
+            pj_hash_get(tpmgr->table, &key, key_len, NULL);
+*/
+          pjsip_tpmgr* tpmgr = tgt_flow->transport()->tpmgr;
+          pjsip_transport* req_uri_transport;
+          status = pjsip_tpmgr_acquire_transport(tpmgr,
+                                                 type,
+                                                 &addr,
+                                                 sizeof(addr),
+                                                 NULL,
+                                                 &req_uri_transport);
+
+          if (status == PJ_SUCCESS)
+          {
+            LOG_DEBUG("Forwarding message direct to ReqURI");
+            send_to_req_uri = true;
+
+            target_transport = req_uri_transport;
+            target_addr = &addr;
+          }
+        }
+
+        if (!send_to_req_uri)
+        {
+          LOG_DEBUG("Inbound request for client with flow identifier in Route header");
+          target_transport = tgt_flow->transport();
+          target_addr = tgt_flow->remote_addr();
+        }
+
         // This must be a request for a client, so make sure it is routed
         // over the appropriate flow.
-        LOG_DEBUG("Inbound request for client with flow identifier in Route header");
         pjsip_tpselector tp_selector;
         tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-        tp_selector.u.transport = tgt_flow->transport();
+        tp_selector.u.transport = target_transport;
         pjsip_tx_data_set_transport(tdata, &tp_selector);
 
         tdata->dest_info.addr.count = 1;
-        tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)tgt_flow->transport()->key.type;
-        pj_memcpy(&tdata->dest_info.addr.entry[0].addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
+        tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target_transport->key.type;
+        pj_memcpy(&tdata->dest_info.addr.entry[0].addr, target_addr, sizeof(pj_sockaddr));
         tdata->dest_info.addr.entry[0].addr_len =
              (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
              sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
