@@ -228,7 +228,7 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata)
 pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
 {
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
-  LOG_DEBUG("Destination is %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
+  LOG_DEBUG("Next hop node is encoded in %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
   return (route_hdr != NULL) ? route_hdr->name_addr.uri : msg->line.req.uri;
 }
 

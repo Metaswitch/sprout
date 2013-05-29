@@ -770,8 +770,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   {
     // Non-register request.  First check for double Record-Routing and remove
     // extra Route header.
-    pjsip_route_hdr* r1;
-    pjsip_route_hdr* r2;
+    pjsip_route_hdr* r1 = NULL;
+    pjsip_route_hdr* r2 = NULL;
 
     if ((PJUtils::is_top_route_local(tdata->msg, &r1)) &&
         (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
