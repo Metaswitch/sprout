@@ -500,9 +500,12 @@ std::string IfcHandler::served_user_from_msg(
   // We determine the served user as described in 3GPP TS 24.229
   // s5.4.3.3, step 1, i.e., purely on the Request-URI.
 
-  // For originating after retargeting (orig-cdiv):
+  // For originating after retargeting (orig-cdiv), we normally don't
+  // call this method at all, because we can pick up the served user
+  // from the existing AsChain. If this method is called, however, the
+  // following logic applies:
   //
-  // We should determine the served user as described in 3GPP TS
+  // We could determine the served user as described in 3GPP TS
   // 24.229 s5.4.3.3 step 3b. This relies on History-Info (RFC4244)
   // and P-Served-User (RFC5502) in step 3b. We should never respect
   // P-Asserted-Identity.

@@ -1662,11 +1662,13 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& servi
       if ((serving_state.session_case() == SessionCase::Terminating) &&
           !as_chain_link.matches_target(_req))
       {
-        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3,
-        // so create new AS chain.
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
+        // create new AS chain with session case orig-cdiv and the
+        // terminating user as served user.
         LOG_INFO("Request-URI has changed, retargeting");
+        std::string served_user = as_chain_link.served_user();
         as_chain_link.release();
-        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv);
+        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, served_user);
       }
     }
     else
@@ -2189,7 +2191,9 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 // status code.
 //
 // @returns whether the call should continue as it was.
-bool UASTransaction::redirect(std::string target, int code)
+bool UASTransaction::redirect(std::string target,
+                              int code,
+                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
 {
   pjsip_uri* target_uri = PJUtils::uri_from_string(target, _req->pool);
 
@@ -2200,7 +2204,7 @@ bool UASTransaction::redirect(std::string target, int code)
     return true;
   }
 
-  return redirect_int(target_uri, code);
+  return redirect_int(target_uri, code, odi);
 }
 
 // Enters this transaction's context.  While in the transaction's
@@ -2236,9 +2240,11 @@ void UASTransaction::exit_context()
 // status code.
 //
 // @returns whether the call should continue as it was (always false).
-bool UASTransaction::redirect(pjsip_uri* target, int code)
+bool UASTransaction::redirect(pjsip_uri* target,
+                              int code,
+                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
 {
-  return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code);
+  return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code, odi);
 }
 
 // Generate analytics logs relating to a new transaction starting.
@@ -2478,7 +2484,9 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
 // must have been allocated from a suitable pool.
 //
 // @returns whether the call should continue as it was (always false).
-bool UASTransaction::redirect_int(pjsip_uri* target, int code)
+bool UASTransaction::redirect_int(pjsip_uri* target,
+                                  int code,
+                                  const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
   static const pj_str_t STR_REASON = pj_str("Reason");
@@ -2489,6 +2497,14 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
   // Default the code to 480 Temporarily Unavailable.
   code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+
+  ServingState serving_state;
+
+  if (odi)
+  {
+    // Save off the serving state, because it's about to be deleted.
+    serving_state = ServingState(&SessionCase::Terminating, odi->duplicate());
+  }
 
   // Clear out any proxy.  Once we've done a redirect (or failed a
   // redirect), we can't apply further call services for the original
@@ -2519,7 +2535,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
-    _req->msg->line.req.uri = target;  // @@@KSW does some interesting things to _req
+    _req->msg->line.req.uri = target;
 
     // Create a History-Info header.
     pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
@@ -2570,7 +2586,17 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
     // Kick off outgoing processing for the new request.
-    handle_outgoing_non_cancel(NULL);  // @@@KSW needs to go to {1}
+    if (serving_state.is_set())
+    {
+      // We are in an existing AsChain - continue it. This will
+      // trigger orig-cdiv handling.
+      handle_non_cancel(serving_state);
+    }
+    else
+    {
+      // No existing AsChain - just do standard outgoing handling.
+      handle_outgoing_non_cancel(NULL);
+    }
   }
   else
   {
@@ -3125,7 +3151,8 @@ bool is_user_registered(std::string served_user)
 
 
 /// Factory method: create AsChain by looking up iFCs.
-AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case)
+AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
+                                            std::string served_user)  //< Served user, if already known, else ""
 {
   if (ifc_handler == NULL)
   {
@@ -3135,9 +3162,12 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case)
     // LCOV_EXCL_STOP
   }
 
-  std::string served_user = ifc_handler->served_user_from_msg(session_case,
-                                                              _req->msg,
-                                                              _req->pool);
+  if (served_user.empty())
+  {
+    served_user = ifc_handler->served_user_from_msg(session_case,
+                                                    _req->msg,
+                                                    _req->pool);
+  }
 
   Ifcs* ifcs;
   bool is_registered = false;

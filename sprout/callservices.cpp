@@ -499,9 +499,11 @@ bool CallServices::Originating::apply_ob_call_barring(pjsip_tx_data *tx_data)
 // Terminating Call Services constructor.
 CallServices::Terminating::Terminating(CallServices* callServices,
                                        UASTransaction* uas_data,
+                                       const AsChainLink& odi,  //< This is copied and need not remain valid after return.
                                        pjsip_msg* msg,
                                        std::string served_user) :  //< Public ID of served user
   CallServices::CallServiceBase("1", uas_data),
+  _odi(odi.duplicate()),
   _ringing(false)
 {
   _user_services = callServices->get_user_services(served_user, uas_data->trail());
@@ -534,6 +536,8 @@ CallServices::Terminating::~Terminating()
   {
     delete _user_services;
   }
+
+  _odi.release();  // @@@KSW can we do this earlier?
 }
 
 // Apply terminating call service processing on initial invite.
@@ -597,7 +601,7 @@ bool CallServices::Terminating::on_response(pjsip_msg *msg)
     pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
     if (contact_hdr != NULL)
     {
-      return _uas_data->redirect(contact_hdr->uri, code);
+      return _uas_data->redirect(contact_hdr->uri, code, NULL);
     }
     break;
   }
@@ -772,7 +776,7 @@ bool CallServices::Terminating::check_call_diversion_rules(unsigned int conditio
     if ((rule->conditions() & ~conditions) == 0)
     {
       LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-      return _uas_data->redirect(rule->forward_target(), code);
+      return _uas_data->redirect(rule->forward_target(), code, &_odi);
     }
   }
   return true;

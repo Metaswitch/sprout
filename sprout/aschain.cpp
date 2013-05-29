@@ -207,7 +207,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
       // the signalling path.
       LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, tdata->msg,_as_chain->_served_user);
+        new CallServices::Terminating(call_services, uas_data, next(), tdata->msg, _as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
@@ -218,7 +218,8 @@ AsChainLink::on_initial_request(CallServices* call_services,
   {
     std::string as_uri_str = application_server->server_name;
 
-    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler.
+    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
+    // except that ifchandler doesn't have a handy pool to use.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
     LOG_INFO("Invoking external AS %s with token %s for %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),

@@ -48,6 +48,7 @@
 #include "stack.h"
 
 #include "aschain.h"
+#include "callservices.h"
 
 using namespace std;
 using testing::MatchesRegex;

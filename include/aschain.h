@@ -48,10 +48,14 @@ extern "C" {
 #include <string>
 #include <vector>
 
-#include "callservices.h"
+#include "log.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
 
+
+// Forward declarations.
+class CallServices;
+class UASTransaction;
 
 /// Short-lived data structure holding the details of a calculated target.
 struct target
@@ -100,11 +104,13 @@ private:
   void inc_ref()
   {
     ++_refs;
+    LOG_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
   }
 
   void dec_ref()
   {
     int count = --_refs;
+    LOG_DEBUG("AsChain dec ref %p -> %d", this, count);
     pj_assert(count >= 0);
     if (count == 0)
     {
@@ -172,8 +178,19 @@ public:
     return AsChainLink(_as_chain, _index + 1);
   }
 
+  /// Create a new reference to the underlying AsChain object.  Caller
+  // must call release() when they have finished using this duplicate.
+  AsChainLink duplicate() const
+  {
+    if (_as_chain != NULL)
+    {
+      _as_chain->inc_ref();
+    }
+    return *this;
+  }
+
   /// Caller has finished using this link.
-  void release()
+  void release() const
   {
     if (_as_chain != NULL)
     {
@@ -194,6 +211,11 @@ public:
   const SessionCase& session_case() const
   {
     return _as_chain->session_case();
+  }
+
+  const std::string& served_user() const
+  {
+    return _as_chain->_served_user;
   }
 
   bool matches_target(pjsip_tx_data* tdata) const
