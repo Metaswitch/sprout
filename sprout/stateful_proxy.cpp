@@ -1594,8 +1594,6 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 /// Handle a non-CANCEL message.
 void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
-  /// @@@KSW Perhaps make this into a trampoline.
-
   // as_chain_link is deliberately *not* a member variable, because it
   // is only required during this initial request - it is not used
   // during the remainder of the transaction (hence *initial* filter
@@ -2187,13 +2185,15 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
   }
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
+//
+// If a proxy is set, it is deleted by this method.  Beware!
 //
 // @returns whether the call should continue as it was.
 bool UASTransaction::redirect(std::string target,
                               int code,
-                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
+                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).  Copied immediately.
 {
   pjsip_uri* target_uri = PJUtils::uri_from_string(target, _req->pool);
 
@@ -2236,13 +2236,15 @@ void UASTransaction::exit_context()
   }
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
+//
+// If a proxy is set, it is deleted by this method.  Beware!
 //
 // @returns whether the call should continue as it was (always false).
 bool UASTransaction::redirect(pjsip_uri* target,
                               int code,
-                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
+                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).  Copied immediately.
 {
   return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code, odi);
 }
@@ -2477,16 +2479,18 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
   _uac_data[uac_data->_target] = NULL;
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
 //
 // This internal version of the method does not clone the provided URI, so it
 // must have been allocated from a suitable pool.
 //
+// If a proxy is set, it is deleted by this method.  Beware!
+//
 // @returns whether the call should continue as it was (always false).
 bool UASTransaction::redirect_int(pjsip_uri* target,
                                   int code,
-                                  const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).
+                                  const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL). Copied immediately.
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
   static const pj_str_t STR_REASON = pj_str("Reason");

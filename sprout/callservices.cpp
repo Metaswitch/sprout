@@ -537,7 +537,7 @@ CallServices::Terminating::~Terminating()
     delete _user_services;
   }
 
-  _odi.release();  // @@@KSW can we do this earlier?
+  _odi.release();
 }
 
 // Apply terminating call service processing on initial invite.
