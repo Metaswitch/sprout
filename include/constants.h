@@ -53,6 +53,7 @@ const pj_str_t STR_TLS_PENDING = pj_str("tls-pending");
 const pj_str_t STR_IP_ASSOC_YES = pj_str("ip-assoc-yes");
 const pj_str_t STR_IP_ASSOC_PENDING = pj_str("ip-assoc-pending");
 const pj_str_t STR_AUTH_DONE = pj_str("auth-done");
+const pj_str_t STR_PRIVACY = pj_str("Privacy");
 const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
 const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
 const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
