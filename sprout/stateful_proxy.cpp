@@ -1040,9 +1040,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                               &req_uri->host,
                               &addr) == PJ_SUCCESS)
         {
-          // ReqURI is an IP address, try to find a matching transport.
-          //
-          // First, work out the transport and convert to a transport_type_e.
+          pj_sockaddr_set_port(&addr, req_uri->port - 1);
           pj_str_t protocol = sip_path_uri->transport_param;
           if (pj_strlen(&protocol) == 0)
           {
@@ -1067,22 +1065,37 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           req_uri_transport = (pjsip_transport*)
             pj_hash_get(tpmgr->table, &key, key_len, NULL);
 */
+
           pjsip_tpmgr* tpmgr = tgt_flow->transport()->tpmgr;
           pjsip_transport* req_uri_transport;
+          LOG_DEBUG("Locating transport for port %d", req_uri->port - 1);
+
           status = pjsip_tpmgr_acquire_transport(tpmgr,
                                                  type,
                                                  &addr,
-                                                 sizeof(addr),
+                                                 sizeof(pj_sockaddr_in),
                                                  NULL,
                                                  &req_uri_transport);
 
           if (status == PJ_SUCCESS)
           {
             LOG_DEBUG("Forwarding message direct to ReqURI");
+            LOG_DEBUG("Found transport %s (%.*s:%d to %.*s:%d)",
+                      req_uri_transport->obj_name,
+                      (int)req_uri_transport->local_name.host.slen,
+                      req_uri_transport->local_name.host.ptr,
+                      req_uri_transport->local_name.port,
+                      (int)req_uri_transport->remote_name.host.slen,
+                      req_uri_transport->remote_name.host.ptr,
+                      req_uri_transport->remote_name.port);
             send_to_req_uri = true;
 
             target_transport = req_uri_transport;
             target_addr = &addr;
+          }
+          else
+          {
+            LOG_ERROR("Failed to find special send-connection");
           }
         }
 
