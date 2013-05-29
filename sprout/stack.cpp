@@ -54,6 +54,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
+#include "constants.h"
 #include "eventq.h"
 #include "pjutils.h"
 #include "log.h"
@@ -98,7 +99,17 @@ static pjsip_module mod_stack =
 };
 
 
-// PJSIP threads are donated to PJSIP to handle receiving at transport level
+/// Custom parser for Privacy header.  This is registered with PJSIP when
+// we initialize the stack.
+static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
+{
+    pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
+    pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
+    return (pjsip_hdr*)privacy;
+}
+
+
+/// PJSIP threads are donated to PJSIP to handle receiving at transport level
 // and timers.
 static int pjsip_thread(void *p)
 {
@@ -119,7 +130,7 @@ static int pjsip_thread(void *p)
 }
 
 
-// Worker threads handle most SIP message processing.
+/// Worker threads handle most SIP message processing.
 //
 static int worker_thread(void* p)
 {
@@ -474,6 +485,11 @@ pj_status_t init_stack(const std::string& system_name,
   // Register the stack module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
+
+  // Register custom header parsers (currently only Privacy, but add any others
+  // here).
+  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Create listening transports for trusted and untrusted ports.
   if (stack_data.trusted_port != 0)
