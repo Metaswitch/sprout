@@ -613,7 +613,7 @@ int main(int argc, char *argv[])
       opt.auth_realm = opt.local_host;
     }
     LOG_STATUS("Enabling %s authentication", opt.auth_config.c_str());
-    status = init_authentication(opt.auth_realm, false, opt.auth_config, hss_connection, analytics_logger);
+    status = init_authentication(opt.auth_realm, opt.auth_config, hss_connection, analytics_logger);
   }
 
   if (!opt.edge_proxy)

@@ -206,6 +206,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        TrustBoundary **trust);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
+static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 
 
 // Helper functions.
@@ -570,14 +571,20 @@ void process_cancel_request(pjsip_rx_data* rdata)
     return;
   }
 
+  if (!proxy_trusted_source(rdata))
+  {
+    // The CANCEL request has not come from a trusted source, so reject it
+    // (can't challenge a CANCEL).
+    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+    return;
+  }
+
   // Respond 200 OK to CANCEL.  Must do this statefully.
   pjsip_transaction* tsx;
   pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &tsx);
   if (status != PJ_SUCCESS)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL, NULL, NULL);
+    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_INTERNAL_SERVER_ERROR, NULL, NULL, NULL);
     return;
   }
 
@@ -587,42 +594,12 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Send the 200 OK statefully.
   PJUtils::respond_stateful(stack_data.endpt, tsx, rdata, 200, NULL, NULL, NULL);
 
-  PJUtils::Integrity integrity = PJUtils::Integrity::YES;
-
-  if ((edge_proxy) &&
-      (rdata->tp_info.transport->local_name.port != stack_data.trusted_port))
-  {
-    // CANCEL has come on untrusted port, so check whether it has come on
-    // a trusted flow or from a trusted peer.
-    Flow* flow_data = flow_table->find_flow(rdata->tp_info.transport,
-                                            &rdata->pkt_info.src_addr);
-
-    if ((flow_data != NULL) && (flow_data->authenticated()))
-    {
-      // Request from an authenticated client.
-      integrity = PJUtils::Integrity::YES;
-    }
-    else if ((ibcf) &&
-             (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
-    {
-      // Request from a trusted peer.
-      integrity = PJUtils::Integrity::YES;
-    }
-    else
-    {
-      // The request is from an untrusted/unauthenticated source.  We still
-      // pass it on as Sprout may be able to authenticate it if the client
-      // has included credentials in the request.
-      integrity = PJUtils::Integrity::NO;
-    }
-  }
-
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
   LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
-  uas_data->cancel_pending_uac_tsx(0, integrity);
+  uas_data->cancel_pending_uac_tsx(0);
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -690,6 +667,80 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
 }
 
 
+/// Checks whether the request was received from a trusted source.
+static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
+{
+  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  {
+    // Request received on trusted port.
+    LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
+    return PJ_TRUE;
+  }
+
+  LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
+
+  // Request received on untrusted port, so see if it came over a trunk.
+  if ((ibcf) &&
+      (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+  {
+    LOG_DEBUG("Request received on configured SIP trunk");
+    return PJ_TRUE;;
+  }
+
+  Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
+                                         &rdata->pkt_info.src_addr);
+  if (src_flow != NULL)
+  {
+    // Request received on a known flow, so check it is authenticated.
+    if (src_flow->authenticated())
+    {
+      LOG_DEBUG("Request received on authenticated client flow.");
+      src_flow->dec_ref();
+      return PJ_TRUE;
+    }
+    src_flow->dec_ref();
+  }
+
+  return PJ_FALSE;
+}
+
+
+/// Checks for double Record-Routing and removes superfluous Route header to
+/// avoid request spirals.
+void proxy_handle_double_rr(pjsip_tx_data* tdata)
+{
+  pjsip_route_hdr* r1 = NULL;
+  pjsip_route_hdr* r2 = NULL;
+
+  if ((PJUtils::is_top_route_local(tdata->msg, &r1)) &&
+      (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
+  {
+    // The top two Route headers were both added by this node, so check for
+    // different transports or ports.
+    LOG_DEBUG("Top two route headers added by this node, checking transports and ports");
+    pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
+    pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
+    if ((uri1->port != uri2->port) ||
+        (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
+    {
+      // Possible double record routing.  If one of the route headers doesn't
+      // have a flow token it can safely be removed.
+      LOG_DEBUG("Host names are the same and transports are different");
+      if (uri1->user.slen == 0)
+      {
+        LOG_DEBUG("Remove top route header");
+        pj_list_erase(r1);
+      }
+      else if (uri2->user.slen == 0)
+      {
+        LOG_DEBUG("Remove second route header");
+        pj_list_erase(r2);
+      }
+    }
+  }
+}
+
+
 /// Perform edge-proxy-specific routing.
 #ifndef UNIT_TEST
 static
@@ -701,7 +752,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
-
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
@@ -788,38 +838,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   }
   else
   {
-    // Non-register request.  First check for double Record-Routing and remove
-    // extra Route header.
-    pjsip_route_hdr* r1 = NULL;
-    pjsip_route_hdr* r2 = NULL;
+    // Check for double Record-Routing and remove extra Route header.
+    proxy_handle_double_rr(tdata);
 
-    if ((PJUtils::is_top_route_local(tdata->msg, &r1)) &&
-        (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
-    {
-      // The top two Route headers were both added by this node, so check for
-      // different transports or ports.
-      pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
-      pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
-      if ((uri1->port != uri2->port) ||
-          (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
-      {
-        // Possible double record routing.  If one of the route headers doesn't
-        // have a flow token it can safely be removed.
-        LOG_DEBUG("Host names are the same and transports are different");
-        if (uri1->user.slen == 0)
-        {
-          LOG_DEBUG("Remove top route header");
-          pj_list_erase(r1);
-        }
-        else if (uri2->user.slen == 0)
-        {
-          LOG_DEBUG("Remove second route header");
-          pj_list_erase(r2);
-        }
-      }
-    }
-
-    // Work out whether the message has come from an implicitly trusted
+       // Work out whether the message has come from an implicitly trusted
     // source (that is, from within the trust zone, or over a known SIP
     // trunk), or a source we can now trust because it has been authenticated
     // (that is, a client flow).
@@ -836,7 +858,32 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
         *trust = &TrustBoundary::INBOUND_TRUNK;
-        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+
+        pjsip_route_hdr* route_hdr;
+        if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
+            (pjsip_param_find(&(((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param), &STR_ORIG)))
+        {
+          // Topmost route header points to us/Sprout and requests originating
+          // handling, but this is not a known client. This is forbidden.
+          //
+          // This covers 3GPP TS 24.229 s5.10.3.2, except that we
+          // implement a whitelist (only known Bono clients can pass this)
+          // rather than a blacklist (IBCF clients are forbidden).
+          //
+          // All connections to our IBCF are untrusted (we don't implement
+          // any trusted ones) in the sense of s5.10.3.2, so this always
+          // applies and we never implement the step 4 and 5 behaviour of
+          // copying the ;orig parameter to the outgoing Route.
+          //
+          // We are slightly overloading TrustBoundary here - how to
+          // improve this is FFS.
+          LOG_WARNING("Request for originating handling but not from known client");
+          PJUtils::respond_stateless(stack_data.endpt,
+                                     rdata,
+                                     PJSIP_SC_FORBIDDEN,
+                                     NULL, NULL, NULL);
+          return PJ_ENOTFOUND;
+        }
       }
       else
       {
@@ -854,22 +901,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // purposes of routing SIP messages and don't need to challenge
             // again.
             trusted = true;
-            PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
           }
-          else
-          {
-            // Client has not been authenticated, so add indicator to force
-            // Sprout to challenge.
-            PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
-          }
-        }
-        else
-        {
-          // Message was not received on a known flow, so treat it as an
-          // unknown client for the purposes of header stripping.
-          LOG_DEBUG("Message received from unknown client");
-          *trust = &TrustBoundary::UNKNOWN_EDGE_CLIENT;
-          PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
         }
       }
     }
@@ -932,55 +964,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
     }
 
-
-    pjsip_route_hdr* route_hdr;
-    if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
-        (*trust != &TrustBoundary::INBOUND_EDGE_CLIENT) &&
-        (pjsip_param_find(&(((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param), &STR_ORIG)))
+    if (!trusted)
     {
-      // Topmost route header points to us/Sprout and requests originating
-      // handling, but this is not a known client. This is forbidden.
-      //
-      // This covers 3GPP TS 24.229 s5.10.3.2, except that we
-      // implement a whitelist (only known Bono clients can pass this)
-      // rather than a blacklist (IBCF clients are forbidden).
-      //
-      // All connections to our IBCF are untrusted (we don't implement
-      // any trusted ones) in the sense of s5.10.3.2, so this always
-      // applies and we never implement the step 4 and 5 behaviour of
-      // copying the ;orig parameter to the outgoing Route.
-      //
-      // We are slightly overloading TrustBoundary here - how to
-      // improve this is FFS.
-      LOG_WARNING("Request for originating handling but not from known client");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_FORBIDDEN,
-                                 NULL, NULL, NULL);
-      return PJ_ENOTFOUND;
-    }
-
-    // Do standard route header processing for the request.  This may
-    // remove the top route header if it corresponds to this node.
-    proxy_process_routing(tdata);
-
-    // Work out the next hop target for the message.  This will either be the URI in
-    // the top route header, or the request URI.
-    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
-
-    if ((!trusted) &&
-        (!PJUtils::is_home_domain((pjsip_uri*)next_hop)) &&
-        (!PJUtils::is_uri_local((pjsip_uri*)next_hop)))
-    {
-      // Message is from an untrusted source and destination is not Sprout, so
-      // reject it.
+      // Request is not from a trusted source, so reject or discard it.
       if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
-        LOG_WARNING("Rejecting message from untrusted source not directed to Sprout");
-        PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_FORBIDDEN,
-                                   NULL, NULL, NULL);
+        LOG_WARNING("Rejecting request from untrusted source");
+        PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
       }
       else
       {
@@ -988,6 +978,14 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
       return PJ_ENOTFOUND;
     }
+
+    // Do standard route header processing for the request.  This may
+    // remove the top route header if it corresponds to this node.
+    proxy_process_routing(tdata);
+
+    // Work out the next hop target for the message.  This will either be the
+    // URI in the top route header, or the request URI.
+    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
     if ((ibcf) &&
         (tgt_flow == NULL) &&
@@ -1521,7 +1519,7 @@ UASTransaction::~UASTransaction()
   {
     // INVITE transaction has been terminated.  If there are any
     // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0, PJUtils::Integrity::YES);
+    cancel_pending_uac_tsx(0);
   }
 
   // Disconnect all UAC transactions from the UAS transaction.
@@ -2084,7 +2082,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, PJUtils::Integrity::YES);
+      cancel_pending_uac_tsx(0);
     }
     _tsx->mod_data[mod_tu.id] = NULL;
     _tsx = NULL;
@@ -2398,7 +2396,7 @@ pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
 }
 
 // Cancels all pending UAC transactions associated with this UAS transaction.
-void UASTransaction::cancel_pending_uac_tsx(int st_code, PJUtils::Integrity integrity)
+void UASTransaction::cancel_pending_uac_tsx(int st_code)
 {
   enter_context();
 
@@ -2423,7 +2421,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, PJUtils::Integrity inte
     if (uac_data != NULL)
     {
       // Found a UAC transaction that is still active, so send a CANCEL.
-      uac_data->cancel_pending_tsx(st_code, integrity);
+      uac_data->cancel_pending_tsx(st_code);
 
       // Leave the UAC transaction connected to the UAS transaction so the
       // 487 response gets passed through.
@@ -2487,7 +2485,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   if (num_history_infos < MAX_HISTORY_INFOS)
   {
     // Cancel pending UAC transactions and notify the originator.
-    cancel_pending_uac_tsx(code, PJUtils::Integrity::YES);
+    cancel_pending_uac_tsx(code);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
@@ -2699,7 +2697,7 @@ void UACTransaction::send_request()
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
-void UACTransaction::cancel_pending_tsx(int st_code, PJUtils::Integrity integrity)
+void UACTransaction::cancel_pending_tsx(int st_code)
 {
   if (_tsx != NULL)
   {
@@ -2720,12 +2718,6 @@ void UACTransaction::cancel_pending_tsx(int st_code, PJUtils::Integrity integrit
         pj_str_t reason_val = pj_str(reason_val_str);
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
-      }
-      if (edge_proxy)
-      {
-        // Add integrity protected indication to the request so Sprout will
-        // accept it.
-        PJUtils::add_integrity_protected_indication(cancel, integrity);
       }
       set_trail(cancel, trail());
 

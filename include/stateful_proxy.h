@@ -143,7 +143,7 @@ public:
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
   void on_tsx_state(pjsip_event* event);
-  void cancel_pending_uac_tsx(int st_code, PJUtils::Integrity integrity);
+  void cancel_pending_uac_tsx(int st_code);
   pj_status_t handle_final_response();
 
   void register_proxy(CallServices::Terminating* proxy);
@@ -212,7 +212,7 @@ public:
 
   void set_target(const struct target& target);
   void send_request();
-  void cancel_pending_tsx(int st_code, PJUtils::Integrity integrity);
+  void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
