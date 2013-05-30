@@ -104,6 +104,9 @@ void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, con
 void delete_header(pjsip_msg* msg,
                    const pj_str_t* name);
 
+void delete_header(pjsip_msg* msg,
+                   pjsip_hdr_e name);
+
 void set_generic_header(pjsip_tx_data* tdata,
                         const pj_str_t* name,
                         const pj_str_t* value);

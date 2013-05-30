@@ -198,6 +198,10 @@ AsChainLink::on_initial_request(CallServices* call_services,
     pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
     PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
 
+    // @@@KSW For CFS, remove Authorization header. Investigate
+    // whether this makes sense in general or not.
+    PJUtils::delete_header(tdata->msg, PJSIP_H_AUTHORIZATION);
+
     // Start defining the new target.
     target* as_target = new target;
     as_target->from_store = false;

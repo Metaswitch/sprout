@@ -300,6 +300,27 @@ void PJUtils::delete_header(pjsip_msg* msg,
   }
 }
 
+
+/// Delete all existing copies of a header.  The header to delete must
+/// not be one that has an abbreviation.
+void PJUtils::delete_header(pjsip_msg* msg,
+                            pjsip_hdr_e name)
+{
+  while (1)
+  {
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr(msg, name, NULL);
+    if (hdr)
+    {
+      pj_list_erase(hdr);
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
+
 /// Delete all existing copies of a header and replace with a new one.
 /// The header to delete must not be one that has an abbreviation.
 void PJUtils::set_generic_header(pjsip_tx_data* tdata,
