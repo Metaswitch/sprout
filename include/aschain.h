@@ -94,7 +94,7 @@ private:
           const std::string& served_user,
           bool is_registered,
           SAS::TrailId trail,
-          std::vector<AsInvocation> application_servers);
+          Ifcs* ifcs);
   ~AsChain();
 
   void inc_ref()
@@ -128,7 +128,7 @@ private:
   const std::string _served_user;
   const bool _is_registered;
   const SAS::TrailId _trail;
-  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
+  const Ifcs* _ifcs;  //< List of iFCs. Owned by this object.
 };
 
 
@@ -163,6 +163,13 @@ public:
   bool complete() const
   {
     return ((_as_chain == NULL) || (_index == _as_chain->size()));
+  }
+
+  /// Get the next link in the chain.
+  AsChainLink next() const
+  {
+    pj_assert(!complete());
+    return AsChainLink(_as_chain, _index + 1);
   }
 
   /// Caller has finished using this link.
@@ -205,8 +212,13 @@ public:
     // omitting any subsequent stages.
     Skip,
 
+    /// There are no links left on the chain. Processing should
+    // continue with the next stage.
+    Complete,
+
     /// The internal application server (if any) has processed the
-    // message. Processing should continue with the next stage.
+    // message according to the curren link. Processing should
+    // continue with the next link.
     Next
   };
 
@@ -215,7 +227,7 @@ public:
                                      const std::string& served_user,
                                      bool is_registered,
                                      SAS::TrailId trail,
-                                     std::vector<AsInvocation> application_servers);
+                                     Ifcs* ifcs);
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,

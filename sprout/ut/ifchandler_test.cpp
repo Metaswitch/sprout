@@ -201,12 +201,14 @@ void IfcHandlerTest::doBaseTest(string description,
   }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  _ifc_handler->lookup_ifcs(sescase,
-                            served_user,
-                            reg,
-                            msg,
-                            0,
-                            application_servers);
+  Ifcs* ifcs = _ifc_handler->lookup_ifcs(sescase,
+                                         served_user,
+                                         0);
+  ifcs->interpret(sescase,
+                  reg,
+                  msg,
+                  application_servers);
+  delete ifcs;
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
@@ -288,6 +290,93 @@ TEST_F(IfcHandlerTest, NoPriority)
              SessionCase::Originating,
              true,
              false);
+}
+
+TEST_F(IfcHandlerTest, GarbagePriority)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>Mu</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("Can't parse iFC priority as integer"));
+}
+
+TEST_F(IfcHandlerTest, NoAS)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <XapplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </XapplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("missing ApplicationServer element"));
+}
+
+TEST_F(IfcHandlerTest, NoServerName1)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName></ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("has no ServerName"));
+}
+
+TEST_F(IfcHandlerTest, NoServerName2)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("has no ServerName"));
 }
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)
