@@ -2170,7 +2170,7 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 // @returns whether the call should continue as it was.
 bool UASTransaction::redirect(std::string target,
                               int code,
-                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).  Copied immediately.
+                              const AsChainLink& odi)  //< Token identifying original dialog to continue.  Copied immediately.
 {
   pjsip_uri* target_uri = PJUtils::uri_from_string(target, _req->pool);
 
@@ -2221,7 +2221,7 @@ void UASTransaction::exit_context()
 // @returns whether the call should continue as it was (always false).
 bool UASTransaction::redirect(pjsip_uri* target,
                               int code,
-                              const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL).  Copied immediately.
+                              const AsChainLink& odi)  //< Token identifying original dialog to continue.  Copied immediately.
 {
   return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code, odi);
 }
@@ -2467,7 +2467,7 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
 // @returns whether the call should continue as it was (always false).
 bool UASTransaction::redirect_int(pjsip_uri* target,
                                   int code,
-                                  const AsChainLink* odi)  //< Optional: token identifying original dialog to continue (else NULL). Copied immediately.
+                                  const AsChainLink& odi)  //< Token identifying original dialog to continue. Copied immediately.
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
   static const pj_str_t STR_REASON = pj_str("Reason");
@@ -2479,13 +2479,8 @@ bool UASTransaction::redirect_int(pjsip_uri* target,
   // Default the code to 480 Temporarily Unavailable.
   code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
 
-  ServingState serving_state;
-
-  if (odi)
-  {
-    // Save off the serving state, because it's about to be deleted.
-    serving_state = ServingState(&SessionCase::Terminating, odi->duplicate());
-  }
+  // Save off the serving state, because it's about to be deleted.
+  ServingState serving_state(&SessionCase::Terminating, odi.duplicate());
 
   // Clear out any proxy.  Once we've done a redirect (or failed a
   // redirect), we can't apply further call services for the original
@@ -2566,18 +2561,9 @@ bool UASTransaction::redirect_int(pjsip_uri* target,
     // Add the History-Info header to the request.
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
-    // Kick off outgoing processing for the new request.
-    if (serving_state.is_set())
-    {
-      // We are in an existing AsChain - continue it. This will
-      // trigger orig-cdiv handling.
-      handle_non_cancel(serving_state);
-    }
-    else
-    {
-      // No existing AsChain - just do standard outgoing handling.
-      handle_outgoing_non_cancel(NULL);
-    }
+    // Kick off outgoing processing for the new request.  Continue the
+    // existing AsChain. This will trigger orig-cdiv handling.
+    handle_non_cancel(serving_state);
   }
   else
   {
