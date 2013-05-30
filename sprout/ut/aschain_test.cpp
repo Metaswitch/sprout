@@ -80,22 +80,51 @@ public:
   }
 };
 
+
+Ifcs* simple_ifcs(int count, ...)
+{
+  std::string xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+                       <ServiceProfile>)";
+
+
+
+  va_list args;
+  va_start(args, count);
+  for (int i = 0; i < count; i++)
+  {
+    const char* name = va_arg(args, const char*);
+    xml += R"(<InitialFilterCriteria>
+                <Priority>1</Priority>
+                <ApplicationServer>
+                  <ServerName>)";
+    xml += name;
+    xml +=     R"(</ServerName>
+                  <DefaultHandling>0</DefaultHandling>
+                </ApplicationServer>
+              </InitialFilterCriteria>)";
+  }
+  va_end(args);
+
+  xml += "</ServiceProfile>";
+
+  rapidxml::xml_document<>* ifc_doc = new rapidxml::xml_document<>();
+  ifc_doc->parse<0>(ifc_doc->allocate_string(xml.c_str()));
+  return new Ifcs(ifc_doc);
+}
+
+
 TEST_F(AsChainTest, Basics)
 {
-  std::vector<AsInvocation> as_list;
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs1 = simple_ifcs(0);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
   AsChainLink as_chain_link(&as_chain, 0u);
 
-  AsInvocation as1;
-  as1.server_name = "sip:pancommunicon.cw-ngv.com";
-  as_list.push_back(as1);
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
-  AsInvocation as2;
-  as2.server_name = "sip:mmtel.homedomain";
-  as_list.push_back(as2);
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs3 = simple_ifcs(2, "sip:pancommunicon.cw-ngv.com", "sip:mmtel.homedomain");
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   EXPECT_THAT(as_chain_link.to_string(), testing::MatchesRegex("AsChain-orig\\[0x[0-9a-f]+\\]:1/0"));
@@ -117,21 +146,16 @@ TEST_F(AsChainTest, Basics)
 
 TEST_F(AsChainTest, AsInvocation)
 {
-  std::vector<AsInvocation> as_list;
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs1 = simple_ifcs(0);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
   AsChainLink as_chain_link(&as_chain, 0u);
 
-  AsInvocation as1;
-  as1.server_name = "sip:pancommunicon.cw-ngv.com";
-  as_list.push_back(as1);
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
-  as_list.clear();
-  AsInvocation as2;
-  as2.server_name = "::invalid:pancommunicon.cw-ngv.com";
-  as_list.push_back(as2);
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, as_list);
+  Ifcs* ifcs3 = simple_ifcs(1, "::invalid:pancommunicon.cw-ngv.com");
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
@@ -159,7 +183,7 @@ TEST_F(AsChainTest, AsInvocation)
   // Nothing to invoke. Just proceed.
   target = NULL;
   disposition = as_chain_link.on_initial_request(NULL, NULL, NULL, tdata, &target);
-  EXPECT_EQ(AsChainLink::Disposition::Next, disposition);
+  EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
   EXPECT_TRUE(target == NULL);
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
 
