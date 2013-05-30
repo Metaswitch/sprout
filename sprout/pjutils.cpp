@@ -237,16 +237,17 @@ pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
 /// Checks whether the next Route header in the message refers to this node,
 /// and optionally returns the header.  If there are no Route headers it
 /// returns false.
-pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr)
+pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr)
 {
   bool rc = false;
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, start);
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, (start != NULL) ? start->next : NULL);
 
   if (route_hdr != NULL)
   {
     // Found the next Route header, so check whether the URI corresponds to
     // this node or one of its aliases.
     pjsip_uri* uri = route_hdr->name_addr.uri;
+    LOG_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
     if ((is_home_domain(uri)) || (is_uri_local(uri)))
     {
       rc = true;
