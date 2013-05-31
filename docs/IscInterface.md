@@ -279,26 +279,35 @@ For precise chapter and verse supporting individual functions and
 behaviour, please see comments throughout the code.
 
 We have followed the latest available version of each document; at the
-time of writing this was typically version 11 or 12.
+time of writing this was typically version 11 or 12. The links are to
+the official specs, which are ZIPped Word documents, sometimes with
+ancillary materials. We have also provided links to the parallel ETSI
+specs, which contain the same content under a different number, as
+PDF.
 
-*[3GPP TS 24.229](http://www.3gpp.org/ftp/Specs/archive/24_series/24.229/24229-b50.zip)
-s5.4* is the key reference for what Sprout must
-do. Look here for precise details of how and when ASs are invoked, how
+[3GPP TS 24.229](http://www.3gpp.org/ftp/Specs/archive/24_series/24.229/24229-b50.zip)
+([ETSI PDF](http://www.etsi.org/deliver/etsi_ts/124200_124299/124229/11.05.00_60/ts_124229v110500p.pdf),
+[3GPP all versions](http://www.3gpp.org/ftp/Specs/html-info/24229.htm))
+is the key reference for what each component must do with SIP traffic.
+Look here for precise details of how and when ASs are invoked, how
 ODIs are recognised, which headers to set and strip, etc.
 
-* *s5.4.1* (especially *s5.4.1.7*) covers registration handling.
+* For Sprout, *s5.4* is the most important section.
 
-* *s5.4.3.1* covers how to determine the session case.
+    * *s5.4.1* (especially *s5.4.1.7*) covers registration handling.
 
-* *s5.4.3.2* covers originating handling.
+    * *s5.4.3.1* covers how to determine the session case.
 
-* *s5.4.3.3* covers terminating handling.
+    * *s5.4.3.2* covers originating handling.
 
-*[3GPP TS 24.229](http://www.3gpp.org/ftp/Specs/archive/24_series/24.229/24229-b50.zip)
-s5.7* covers correct AS behaviour; Sprout's behaviour should be
+    * *s5.4.3.3* covers terminating handling.
+
+*s5.7* covers correct AS behaviour; Sprout's behaviour should be
 complementary.
 
-*[3GPP TS 23.218](http://www.3gpp.org/ftp/Specs/archive/23_series/23.218/23218-c10.zip)*
+[3GPP TS 23.218](http://www.3gpp.org/ftp/Specs/archive/23_series/23.218/23218-c10.zip)
+([ETSI PDF - older version only](http://www.etsi.org/deliver/etsi_ts/123200_123299/123218/11.05.00_60/ts_123218v110500p.pdf),
+[3GPP all versions](http://www.3gpp.org/ftp/Specs/html-info/23218.htm))
 gives an overview of application server invocation.
 
 * *s5.2* and *s6.9.2* cover how iFCs are interpreted.
@@ -308,7 +317,9 @@ gives an overview of application server invocation.
 
 * *s9* discusses the various modes of operation of an AS.
 
-*[3GPP TS 29.228](http://www.3gpp.org/ftp/Specs/archive/29_series/29.228/29228-b70.zip)*
+[3GPP TS 29.228](http://www.3gpp.org/ftp/Specs/archive/29_series/29.228/29228-b70.zip)
+([ETSI PDF](http://www.etsi.org/deliver/etsi_ts/129200_129299/129228/11.07.00_60/ts_129228v110700p.pdf),
+[3GPP all versions](http://www.3gpp.org/ftp/Specs/html-info/29228.htm))
 defines the format and meaning of iFCs.
 
 * The XML schema *CxData_Type_Rel11.xsd* attached to the spec defines
