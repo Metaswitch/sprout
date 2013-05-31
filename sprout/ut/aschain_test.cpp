@@ -48,6 +48,7 @@
 #include "stack.h"
 
 #include "aschain.h"
+#include "callservices.h"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -182,7 +183,7 @@ TEST_F(AsChainTest, AsInvocation)
 
   // Nothing to invoke. Just proceed.
   target = NULL;
-  disposition = as_chain_link.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  disposition = as_chain_link.on_initial_request(NULL, NULL, tdata, &target);
   EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
   EXPECT_TRUE(target == NULL);
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
@@ -190,7 +191,7 @@ TEST_F(AsChainTest, AsInvocation)
   // Invoke external AS on originating side.
   target = NULL;
   LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
-  disposition = as_chain_link2.on_initial_request(NULL, NULL, NULL, tdata, &target);
+  disposition = as_chain_link2.on_initial_request(NULL, NULL, tdata, &target);
   EXPECT_EQ(AsChainLink::Disposition::Skip, disposition);
   ASSERT_TRUE(target != NULL);
   EXPECT_FALSE(target->from_store);
