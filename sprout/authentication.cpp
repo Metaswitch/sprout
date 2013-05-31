@@ -193,9 +193,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
                             &STR_INTEGRITY_PROTECTED);
 
     if ((integrity != NULL) &&
-        ((pj_stricmp2(&integrity->value, "yes") == 0) ||
-         (pj_stricmp2(&integrity->value, "tls-yes") == 0) ||
-         (pj_stricmp2(&integrity->value, "ip-assoc-yes") == 0)))
+        ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
+         (pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+         (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
     {
       // Request is already integrity protected, so let it through.
       LOG_INFO("Request integrity protected by edge proxy");

@@ -667,7 +667,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
       (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
   {
     LOG_DEBUG("Request received on configured SIP trunk");
-    return PJ_TRUE;;
+    return PJ_TRUE;
   }
 
   Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
@@ -700,7 +700,10 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
       (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
   {
     // The top two Route headers were both added by this node, so check for
-    // different transports or ports.
+    // different transports or ports.  We don't act on all Route header pairs
+    // that look like a spiral, only ones that look like the result of
+    // double Record-Routing, and we only do that if the transport and/or port
+    // are different.
     LOG_DEBUG("Top two route headers added by this node, checking transports and ports");
     pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
     pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
@@ -798,7 +801,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     src_flow->keepalive();
 
     // @@@TODO Use P-Asserted-Identity for authentication
-    pjsip_to_hdr *to_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
     {
       // The message was received on a client flow that has already been
@@ -827,7 +830,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // Check for double Record-Routing and remove extra Route header.
     proxy_handle_double_rr(tdata);
 
-       // Work out whether the message has come from an implicitly trusted
+    // Work out whether the message has come from an implicitly trusted
     // source (that is, from within the trust zone, or over a known SIP
     // trunk), or a source we can now trust because it has been authenticated
     // (that is, a client flow).
@@ -879,7 +882,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         {
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
-          *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
 
           // @@@TODO Use P-Asserted-Identity for authentication
           pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
@@ -888,6 +890,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // Client has been authenticated, so we can trust it for the
             // purposes of routing SIP messages and don't need to challenge
             // again.
+            *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
             trusted = true;
           }
         }
