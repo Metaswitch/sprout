@@ -299,6 +299,10 @@ public:
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
     // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
     poll();
 
     // Stop and restart the layer just in case
