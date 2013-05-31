@@ -39,8 +39,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #include "pjutils.h"
 
 extern "C" {
@@ -53,7 +51,7 @@ extern "C" {
 #include "constants.h"
 
 
-// Utility to determine if this URI belongs to the home domain.
+/// Utility to determine if this URI belongs to the home domain.
 pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
   if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
@@ -65,7 +63,7 @@ pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 }
 
 
-// Utility to determine if URI is local to this host.
+/// Utility to determine if URI is local to this host.
 pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
@@ -94,7 +92,7 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
 }
 
 
-// Utility to determine if a user field contains a valid E.164 number
+/// Utility to determine if a user field contains a valid E.164 number
 pj_bool_t PJUtils::is_e164(const pj_str_t* user)
 {
   if ((user->slen < 1) || (user->ptr[0] != '+'))
@@ -116,7 +114,7 @@ pj_bool_t PJUtils::is_e164(const pj_str_t* user)
 }
 
 
-// Utility to determine if URI contains a valid E.164 number
+/// Utility to determine if URI contains a valid E.164 number
 pj_bool_t PJUtils::is_e164(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
@@ -225,6 +223,9 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata)
 }
 
 
+/// Returns the next hop for a SIP request.  This will either be the
+/// URI in the top-most Route header, or the RequestURI if there are no
+/// Route headers.
 pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
 {
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
@@ -233,16 +234,20 @@ pjsip_uri* PJUtils::next_hop(pjsip_msg* msg)
 }
 
 
-pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr)
+/// Checks whether the next Route header in the message refers to this node,
+/// and optionally returns the header.  If there are no Route headers it
+/// returns false.
+pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr)
 {
   bool rc = false;
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, start);
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, (start != NULL) ? start->next : NULL);
 
   if (route_hdr != NULL)
   {
     // Found the next Route header, so check whether the URI corresponds to
     // this node or one of its aliases.
     pjsip_uri* uri = route_hdr->name_addr.uri;
+    LOG_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
     if ((is_home_domain(uri)) || (is_uri_local(uri)))
     {
       rc = true;
@@ -256,6 +261,9 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, const void* start, 
 }
 
 
+/// Adds a Record-Route header to the message with the specified user name,
+/// port and transport.  If the user parameter is NULL the user field is left
+/// blank.
 void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* transport,
                                int port,
@@ -299,6 +307,7 @@ void PJUtils::delete_header(pjsip_msg* msg,
   }
 }
 
+
 /// Delete all existing copies of a header and replace with a new one.
 /// The header to delete must not be one that has an abbreviation.
 void PJUtils::set_generic_header(pjsip_tx_data* tdata,
@@ -311,6 +320,8 @@ void PJUtils::set_generic_header(pjsip_tx_data* tdata,
 }
 
 
+/// Checks whether the supplied message contains the extension in the
+/// Supported header.
 pj_bool_t PJUtils::msg_supports_extension(pjsip_msg* msg, const char* extension)
 {
   pjsip_supported_hdr* supported_hdr = (pjsip_supported_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_SUPPORTED, NULL);
@@ -404,9 +415,9 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint *endpt,
 }
 
 
-// This is a clone of the PJSIP pjsip_endpt_respond_stateless function,
-// with the addition of code to reflect the trail on the request on to the
-// response.  All sprout application code should use this method instead.
+/// This is a clone of the PJSIP pjsip_endpt_respond_stateless function,
+/// with the addition of code to reflect the trail on the request on to the
+/// response.  All sprout application code should use this method instead.
 pj_status_t PJUtils::respond_stateless(pjsip_endpoint *endpt,
                                        pjsip_rx_data *rdata,
                                        int st_code,
@@ -468,9 +479,9 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint *endpt,
 }
 
 
-// This is analogous to respond_stateless, although in this case to
-// respond statefully on an existing transaction.  Strangely there is
-// equivalent PJSIP API.
+/// This is analogous to respond_stateless, although in this case to
+/// respond statefully on an existing transaction.  Strangely there is
+/// no equivalent PJSIP API.
 pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
                                       pjsip_transaction* uas_tsx,
                                       pjsip_rx_data* rdata,
@@ -582,10 +593,12 @@ pjsip_tx_data *PJUtils::clone_tdata(pjsip_tx_data *tdata)
   return cloned_tdata;
 }
 
+
 bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs)
 {
   return (pj_sockaddr_cmp(&lhs, &rhs) < 0);
 }
+
 
 /// Generate a random base64-encoded token.
 void PJUtils::create_random_token(size_t length,       //< Number of characters.
@@ -599,10 +612,13 @@ void PJUtils::create_random_token(size_t length,       //< Number of characters.
   }
 }
 
-void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool) {
+
+void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool)
+{
   pjsip_hdr *original_hdr = NULL;
   pjsip_hdr *last_hdr = NULL;
-  while ((original_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr)) {
+  while ((original_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr))
+  {
     LOG_INFO("Cloning header! %ld", (long int)original_hdr);
     pjsip_hdr *new_hdr = (pjsip_hdr *)pjsip_hdr_clone(pool, original_hdr);
     pjsip_msg_add_hdr(new_msg, new_hdr);

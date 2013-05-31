@@ -186,17 +186,18 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
 
   const Ifc& ifc = (*(_as_chain->_ifcs))[_index];
-  boost::optional<AsInvocation> application_server = ifc.interpret(_as_chain->session_case(),
-                                                                   _as_chain->_is_registered,
-                                                                   tdata->msg);
-  std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
-
-  if (!application_server)
+  if (!ifc.filter_matches(_as_chain->session_case(),
+                          _as_chain->_is_registered,
+                          tdata->msg))
   {
     LOG_DEBUG("No match for %s", to_string().c_str());
     return AsChainLink::Disposition::Next;
   }
-  else if (call_services && call_services->is_mmtel(application_server->server_name))
+
+  AsInvocation application_server = ifc.as_invocation();
+  std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
+
+  if (call_services && call_services->is_mmtel(application_server.server_name))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
     if (_as_chain->_session_case.is_originating())
@@ -221,7 +222,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
   else
   {
-    std::string as_uri_str = application_server->server_name;
+    std::string as_uri_str = application_server.server_name;
 
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
     // except that ifchandler doesn't have a handy pool to use.
