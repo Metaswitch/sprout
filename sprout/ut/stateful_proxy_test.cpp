@@ -299,6 +299,10 @@ public:
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
     // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
     poll();
 
     // Stop and restart the layer just in case
@@ -1192,10 +1196,12 @@ TEST_F(StatefulProxyTest, TestForkedFlow3)
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
   // Nothing happens yet!
+  poll();
   ASSERT_EQ(0, txdata_count());
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
+  poll();
 
   // Gets acknowledged directly by us
   ASSERT_EQ(1, txdata_count());
