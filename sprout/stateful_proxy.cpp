@@ -675,7 +675,8 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   if (src_flow != NULL)
   {
     // Request received on a known flow, so check it is authenticated.
-    if (src_flow->authenticated())
+    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
     {
       LOG_DEBUG("Request received on authenticated client flow.");
       src_flow->dec_ref();
@@ -797,8 +798,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     src_flow->keepalive();
 
     // @@@TODO Use P-Asserted-Identity for authentication
-    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+    pjsip_to_hdr *to_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
