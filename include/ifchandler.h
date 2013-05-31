@@ -47,7 +47,6 @@ extern "C" {
 
 #include <string>
 #include <vector>
-#include <boost/optional.hpp>
 
 #include "rapidxml/rapidxml.hpp"
 
@@ -77,11 +76,6 @@ public:
     _ifc(ifc)
   {
   }
-
-  boost::optional<AsInvocation>
-    interpret(const SessionCase& session_case,
-              bool is_registered,
-              pjsip_msg* msg) const;
 
   bool filter_matches(const SessionCase& session_case,
                       bool is_registered,

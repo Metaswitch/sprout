@@ -52,8 +52,10 @@ extern "C" {
 using namespace rapidxml;
 
 // Forward declarations.
-long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value);
-bool parse_bool(xml_node<>* node, std::string description);
+static long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value);
+static bool parse_bool(xml_node<>* node, std::string description);
+static std::string get_first_node_value(xml_node<>* node, std::string name);
+static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name);
 
 
 /// Exception thrown internally during interpretation of filter
@@ -194,105 +196,128 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-// @throw ifc_error if there is a problem evaluating the criterion.
 bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg) const
 {
-  xml_node<>* profile_part_indicator = _ifc->first_node("ProfilePartIndicator");
-  if (profile_part_indicator)
+  try
   {
-    bool reg = parse_integer(profile_part_indicator, "ProfilePartIndicator", 0, 1) == 0;
-    if (reg != is_registered)
+    xml_node<>* profile_part_indicator = _ifc->first_node("ProfilePartIndicator");
+    if (profile_part_indicator)
     {
-      LOG_DEBUG("iFC ProfilePartIndicator %s doesn't match", reg ? "reg" : "unreg");
-      return false;
-    }
-  }
-
-  xml_node<>* trigger = _ifc->first_node("TriggerPoint");
-  if (!trigger)
-  {
-    LOG_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
-    return true;
-  }
-
-  bool cnf = parse_bool(trigger->first_node("ConditionTypeCNF"), "ConditionTypeCNF");
-
-  // In CNF (conjunct-of-disjuncts, i.e., big-AND of ORs), as we
-  // work through each SPT we OR it into its group(s). At the end,
-  // we AND all the groups together. In DNF we do the converse.
-  std::map<int32_t, bool> groups;
-
-  for (xml_node<>* spt = trigger->first_node("SPT");
-     spt;
-     spt = spt->next_sibling("SPT"))
-  {
-    xml_node<>* neg_node = spt->first_node("ConditionNegated");
-    bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
-    bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
-
-    for (xml_node<>* group_node = spt->first_node("Group");
-         group_node;
-         group_node = group_node->next_sibling("Group"))
-    {
-      int32_t group = parse_integer(group_node, "Group ID", 0, std::numeric_limits<int32_t>::max());
-      LOG_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
-      if (groups.find(group) == groups.end())
+      bool reg = parse_integer(profile_part_indicator, "ProfilePartIndicator", 0, 1) == 0;
+      if (reg != is_registered)
       {
-        groups[group] = val;
-      }
-      else
-      {
-        groups[group] = cnf ? (groups[group] || val) : (groups[group] && val);
+        LOG_DEBUG("iFC ProfilePartIndicator %s doesn't match", reg ? "reg" : "unreg");
+        return false;
       }
     }
+
+    xml_node<>* as = _ifc->first_node("ApplicationServer");
+    if (as == NULL)
+    {
+      throw ifc_error("iFC missing ApplicationServer element");
+    }
+
+    std::string server_name = get_first_node_value(as, "ServerName");
+    if (server_name.empty())
+    {
+      throw ifc_error("iFC has no ServerName");
+    }
+
+    // @@@ KSW Parse the URI and ensure it is parsable and a SIP URI
+    // here. If it's invalid, ignore it (seems the only sensible
+    // option).
+    //
+    // That means each AsInvocation would have to belong to a pool,
+    // though, and that's not easy in the current architecture.
+
+    xml_node<>* trigger = _ifc->first_node("TriggerPoint");
+    if (!trigger)
+    {
+      LOG_DEBUG("iFC has no trigger point - unconditional match");  // 3GPP TS 29.228 sB.2.2
+      return true;
+    }
+
+    bool cnf = parse_bool(trigger->first_node("ConditionTypeCNF"), "ConditionTypeCNF");
+
+    // In CNF (conjunct-of-disjuncts, i.e., big-AND of ORs), as we
+    // work through each SPT we OR it into its group(s). At the end,
+    // we AND all the groups together. In DNF we do the converse.
+    std::map<int32_t, bool> groups;
+
+    for (xml_node<>* spt = trigger->first_node("SPT");
+       spt;
+       spt = spt->next_sibling("SPT"))
+    {
+      xml_node<>* neg_node = spt->first_node("ConditionNegated");
+      bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
+      bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
+
+      for (xml_node<>* group_node = spt->first_node("Group");
+           group_node;
+           group_node = group_node->next_sibling("Group"))
+      {
+        int32_t group = parse_integer(group_node, "Group ID", 0, std::numeric_limits<int32_t>::max());
+        LOG_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
+        if (groups.find(group) == groups.end())
+        {
+          groups[group] = val;
+        }
+        else
+        {
+          groups[group] = cnf ? (groups[group] || val) : (groups[group] && val);
+        }
+      }
+    }
+
+    bool ret = cnf;
+
+    for (std::map<int32_t, bool>::iterator it = groups.begin();
+         it != groups.end();
+         ++it)
+    {
+      LOG_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
+      ret = cnf ? (ret && it->second) : (ret || it->second);
+    }
+
+    LOG_DEBUG("iFC %s", ret ? "matches" : "does not match");
+    return ret;
   }
-
-  bool ret = cnf;
-
-  for (std::map<int32_t, bool>::iterator it = groups.begin();
-       it != groups.end();
-       ++it)
+  catch (ifc_error err)
   {
-    LOG_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
-    ret = cnf ? (ret && it->second) : (ret || it->second);
+    // Ignore individual criteria which can't be parsed.
+    LOG_ERROR("iFC evaluation error: %s", err.what());
+    return false;
   }
-
-  LOG_DEBUG("iFC %s", ret ? "matches" : "does not match");
-  return ret;
 }
 
 
-// Gets the first child node of "node" with name "name". Returns an empty string if there
+/// Gets the first child node of "node" with name "name". Returns an empty string if there
 // is no such node, otherwise returns its value (which is the empty string if
 // it has no value).
-std::string get_first_node_value(xml_node<>* node, std::string name) {
+static std::string get_first_node_value(xml_node<>* node, std::string name) {
   xml_node<>* first_node = node->first_node(name.c_str());
   return (first_node) ? first_node->value() : "";
 }
 
 
-bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
+static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
   xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
   return (child_node != NULL);
 }
 
 
 /// Return the AsInvocation corresponding to this iFC.
+//
+// Only safe to call if filter_matches has returned true (to validate
+// the iFC).
 AsInvocation Ifc::as_invocation() const
 {
   xml_node<>* as = _ifc->first_node("ApplicationServer");
-
-  if (as == NULL)
-  {
-    throw ifc_error("iFC missing ApplicationServer element");
-  }
+  pj_assert(as != NULL);
 
   AsInvocation as_invocation;
   as_invocation.server_name = get_first_node_value(as, "ServerName");
-  if (as_invocation.server_name.empty())
-  {
-    throw ifc_error("iFC has no ServerName");
-  }
+
   // @@@ KSW Parse the URI and ensure it is parsable and a SIP URI
   // here. If it's invalid, ignore it (seems the only sensible
   // option).
@@ -315,35 +340,6 @@ AsInvocation Ifc::as_invocation() const
 
   LOG_INFO("Found (triggered) server %s", as_invocation.server_name.c_str());
   return as_invocation;
-}
-
-
-/// Determines whether a particular iFC applies to this message.
-//
-// Handles any parsing errors by ignoring the iFC and logging an error.
-boost::optional<AsInvocation>
-Ifc::interpret(const SessionCase& session_case,
-               bool is_registered,
-               pjsip_msg *msg) const
-{
-  boost::optional<AsInvocation> ret;
-
-  try
-  {
-    if (filter_matches(session_case, is_registered, msg))
-    {
-      ret = as_invocation();
-    } else {
-      LOG_INFO("Filter did not match!");
-    }
-  }
-  catch (ifc_error err)
-  {
-    // Ignore individual criteria which can't be parsed.
-    LOG_ERROR("iFC evaluation error: %s", err.what());
-  }
-
-  return ret;
 }
 
 
@@ -457,10 +453,9 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
        it != _ifcs.end();
        ++it)
   {
-    boost::optional<AsInvocation> as = (*it).interpret(session_case, is_registered, msg);
-    if (as)
+    if (it->filter_matches(session_case, is_registered, msg))
     {
-      application_servers.push_back(*as);
+      application_servers.push_back(it->as_invocation());
     }
   }
 }
@@ -583,7 +578,7 @@ std::string IfcHandler::user_from_uri(pjsip_uri *uri)
 
 /// Attempt to parse the content of the node as a bounded integer
 // returning the result or throwing.
-long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value)
+static long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value)
 {
   // Node must be non-NULL - caller should check for this prior to calling
   // this method.
@@ -609,7 +604,7 @@ long parse_integer(xml_node<>* node, std::string description, long min_value, lo
 }
 
 /// Parse an xs:boolean value.
-bool parse_bool(xml_node<>* node, std::string description)
+static bool parse_bool(xml_node<>* node, std::string description)
 {
   if (!node)
   {
