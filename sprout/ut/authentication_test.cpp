@@ -65,7 +65,7 @@ public:
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("ut.cw-ngv.com", true, "sip-digest", _hss_connection, _analytics);
+    pj_status_t ret = init_authentication("ut.cw-ngv.com", "sip-digest", _hss_connection, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -99,6 +99,7 @@ AnalyticsLogger* AuthenticationTest::_analytics;
 class AuthenticationMessage
 {
 public:
+  string _method;
   string _user;
   string _domain;
   bool _auth_hdr;
@@ -111,7 +112,8 @@ public:
   string _opaque;
   string _integ_prot;
 
-  AuthenticationMessage() :
+  AuthenticationMessage(std::string method) :
+    _method(method),
     _user("6505550001"),
     _domain("ut.cw-ngv.com"),
     _auth_hdr(true),
@@ -134,26 +136,27 @@ string AuthenticationMessage::get()
   char buf[16384];
 
   int n = snprintf(buf, sizeof(buf),
-                   "REGISTER sip:%2$s SIP/2.0\r\n"
+                   "%1$s sip:%3$s SIP/2.0\r\n"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "Max-Forwards: 68\r\n"
                    "Supported: outbound, path\r\n"
-                   "To: <sip:%1$s@%2$s>\r\n"
-                   "From: <sip:%1$s@%2$s>;tag=fc614d9c\r\n"
+                   "To: <sip:%2$s@%3$s>\r\n"
+                   "From: <sip:%2$s@%3$s>;tag=fc614d9c\r\n"
                    "Call-ID: OWZiOGFkZDQ4MGI1OTljNjlkZDkwNTdlMTE0NmUyOTY.\r\n"
-                   "CSeq: 1 REGISTER\r\n"
+                   "CSeq: 1 %1$s\r\n"
                    "Expires: 300\r\n"
                    "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n"
                    "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
-                   "Contact: <sip:%1$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP>\r\n"
+                   "Contact: <sip:%2$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP>\r\n"
                    "Route: <sip:sprout.ut.cw-ngv.com;transport=tcp;lr>\r\n"
-                   "%3$s"
+                   "%4$s"
                    "Content-Length: 0\r\n"
                    "\r\n",
-                   /*  1 */ _user.c_str(),
-                   /*  2 */ _domain.c_str(),
-                   /*  3 */ _auth_hdr ?
+                   /*  1 */ _method.c_str(),
+                   /*  2 */ _user.c_str(),
+                   /*  3 */ _domain.c_str(),
+                   /*  4 */ _auth_hdr ?
                               string("Authorization: Digest ")
                                 .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\",") : "")
                                 .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\",") : "")
@@ -174,13 +177,11 @@ string AuthenticationMessage::get()
 }
 
 
-TEST_F(AuthenticationTest, NoAuthorization)
+TEST_F(AuthenticationTest, NoAuthorizationNonReg)
 {
-  AuthenticationMessage msg;
+  // Test that Sprout accepts non-REGISTER requests with no authorization header.
+  AuthenticationMessage msg("INVITE");
   msg._auth_hdr = false;
   pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_TRUE, ret);
-  ASSERT_EQ(1u, _out.size());
-  pjsip_msg* out = _out.front()->msg;
-  RespMatcher(401).matches(out);
+  EXPECT_EQ(PJ_FALSE, ret);
 }
