@@ -308,7 +308,8 @@ static bool does_child_node_exist(xml_node<>* parent_node, std::string child_nod
 
 /// Return the AsInvocation corresponding to this iFC.
 //
-// Assumes filter_matches has been invoked to validate the iFC.
+// Only safe to call if filter_matches has returned true (to validate
+// the iFC).
 AsInvocation Ifc::as_invocation() const
 {
   xml_node<>* as = _ifc->first_node("ApplicationServer");
@@ -339,27 +340,6 @@ AsInvocation Ifc::as_invocation() const
 
   LOG_INFO("Found (triggered) server %s", as_invocation.server_name.c_str());
   return as_invocation;
-}
-
-
-/// Determines whether a particular iFC applies to this message.
-//
-// Handles any parsing errors by ignoring the iFC and logging an error.
-boost::optional<AsInvocation>
-Ifc::interpret(const SessionCase& session_case,
-               bool is_registered,
-               pjsip_msg *msg) const
-{
-  boost::optional<AsInvocation> ret;
-
-  if (filter_matches(session_case, is_registered, msg))
-  {
-    ret = as_invocation();
-  } else {
-    LOG_INFO("Filter did not match!");
-  }
-
-  return ret;
 }
 
 
@@ -473,10 +453,9 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
        it != _ifcs.end();
        ++it)
   {
-    boost::optional<AsInvocation> as = (*it).interpret(session_case, is_registered, msg);
-    if (as)
+    if (it->filter_matches(session_case, is_registered, msg))
     {
-      application_servers.push_back(*as);
+      application_servers.push_back(it->as_invocation());
     }
   }
 }
