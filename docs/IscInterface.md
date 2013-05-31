@@ -1,52 +1,30 @@
 ISC Interface
 =============
 
-This document walks through the design and implementation of the ISC
-interface in Sprout.  For specification details, see the
+The *ISC interface* is the interface between Sprout (acting as the
+S-CSCF) and an application server (AS, also referred to as a
+TAS). This document gives an overview of the interface itself and how
+it works, and then walks through the design and implementation of this
+interface in Sprout.
+
+For specification details, see the
 [Application Server Guide in the wiki](https://github.com/Metaswitch/clearwater-docs/wiki/Application-Server-Guide).
 
-References
-==========
+Contents
+--------
 
-This is a summary of the key places to look in the 3GPP docs. For
-precise chapter and verse, please see comments throughout the code.
-
-*3GPP TS 24.229 s5.4* is the key reference for what Sprout must
-do. Look here for precise details of how and when ASs are invoked, how
-ODIs are recognised, which headers to set and strip, etc.
-
-* *s5.4.1* (especially *s5.4.1.7*) covers registration handling.
-
-* *s5.4.3.1* covers how to determine the session case.
-
-* *s5.4.3.2* covers originating handling.
-
-* *s5.4.3.3* covers terminating handling.
-
-*3GPP TS 24.229 s5.7* covers correct AS behaviour; Sprout's behaviour
- should be complementary.
-
-*3GPP TS 23.218* gives an overview of application server invocation.
-
-* *s5.2* and *s6.9.2* cover how iFCs are interpreted.
-
-* *s6.3 - s6.5* cover how registration, originating, and terminating
-  requests are handled by Sprout.
-
-* *s9* discusses the various modes of operation of an AS.
-
-*3GPP TS 29.228* defines the format and meaning of iFCs.
-
-* The attached XML schema *CxData_Type_Rel11.xsd* defines the exact
-  format of the iFCs.
-
-* *sB.2.2 - sB.2.3* give a UML model of the iFCs and explain what the
-  fields mean.
-
-* *sC* gives a simple example set of iFCs.
-
-* *sF* gives the definition of each SPT and how to interpret it.
-
+* [Overview](#overview)
+    * [Basic call flow](#basic-call-flow)
+    * [Application Servers](#application-servers)
+    * [S-CSCF call processing](#s-cscf-call-processing)
+    * [Application Server Interface](#application-server-interface)
+    * [Initial Filter Criteria](#initial-filter-criteria)
+* [The Sprout implementation](#the-sprout-implementation)
+    * [AS chains](#as-chains)
+    * [Internal MMTEL AS](#internal-mmtel-as)
+    * [Detailed AS chain handling](#detailed-as-chain-handling)
+    * [Third-party registration](#third-party-registration)
+* [References](#references)
 
 Overview
 ========
@@ -74,12 +52,12 @@ An *application server* (AS) is a SIP network entity which can observe
 or modify calls as they go through Sprout. It receives an initial
 request from Sprout, and chooses whether to
 
-* Route (stateless proxy) the request back to Sprout for subsequent
-  processing, optionally with modifications to headers or body.
+* Route (proxy) the request back to Sprout for subsequent processing,
+  optionally with modifications to headers or body.
 
 * Act as a
   [B2BUA](https://en.wikipedia.org/wiki/Back-to-back_user_agent)
-  (stateful proxy), passing the request back to Sprout as directed by
+  passing the request back to Sprout as directed by
   its internal business logic. It may fork the call, divert it to an
   alternate destination, etc.
 
@@ -88,11 +66,12 @@ request from Sprout, and chooses whether to
   and in particular does not reach a terminating UE.
 
 An application server may also initiate calls, but this is not handled
-specially within Sprout. It must set the `;orig` parameter if it
-requires originating handling on its request (in addition to
-terminating handling which is always applied).
+specially within Sprout. It must set the `;orig` parameter on the URI
+in the `Route:` header pointing at Sprout if it requires originating
+handling on its request (in addition to terminating handling which is
+always applied).
 
-Sprout call processing
+S-CSCF call processing
 ----------------------
 
 Within Sprout, an initial request receives
@@ -128,23 +107,21 @@ Application Server Interface
 ----------------------------
 
 Sprout interacts with application servers over *ISC*, the application
-server interface. This is just SIP, with some specified details.
+server interface. This is just SIP with some specified details,
+including the following:
 
 * The `Route:` of the initial request must be preserved by the AS when
   it sends any subsequent requests. This happens automatically for a
-  routing (stateless proxy) AS, but a B2BUA (stateful proxy) AS must
-  take special care to preserve the route. The topmost `Route:` header
-  contains the *ODI token* within the URI, a special value which
-  indicates to Sprout what stage it is at in the processing of this
-  call. ODI stands for *original dialog identifier*. It allows the AS
-  to change the details of the request, or fork it, without upsetting
-  Sprout's processing of the call.
+  routing AS, but a B2BUA AS must take special care to preserve the
+  route. The topmost `Route:` header contains the *ODI token* within
+  the URI, a special value which indicates to Sprout what stage it is
+  at in the processing of this call. ODI stands for *original dialog
+  identifier*. It allows the AS to change the details of the request,
+  or fork it, without upsetting Sprout's processing of the call.
 
 * The `P-Served-User:` is set by Sprout to inform the AS of the user
   it is to serve the registration state of that user, and the session
   case under which it is serving them.
-
-* Various other headers are set as well.
 
 Initial Filter Criteria
 -----------------------
@@ -162,6 +139,10 @@ and NOT. Each SPT is a condition on the SIP method, session case,
 request URI, SIP headers, or SDP lines of the initial request. The
 action of the iFC is the URI of an application server, along with some
 additional information.
+
+
+The Sprout implementation
+=========================
 
 AS chains
 ---------
@@ -282,4 +263,61 @@ simultaneously. That request is based on the received request as
 usual, plus appropriate headers, but in its body it may contain the
 request and the response, and other information as indicated by the
 iFC.
+
+
+References
+==========
+
+The ISC interface is part of the IMS specification defined by the
+[3GPP](http://www.3gpp.org/). The
+[specification](http://www.3gpp.org/specification-numbering) can be
+tricky to navigate, so this section contains a summary of the key
+places to look in the 3GPP docs. The terminology used here is defined
+elsewhere in this document.
+
+For precise chapter and verse supporting individual functions and
+behaviour, please see comments throughout the code.
+
+We have followed the latest available version of each document; at the
+time of writing this was typically version 11 or 12.
+
+*[3GPP TS 24.229](http://www.3gpp.org/ftp/Specs/archive/24_series/24.229/24229-b50.zip)
+s5.4* is the key reference for what Sprout must
+do. Look here for precise details of how and when ASs are invoked, how
+ODIs are recognised, which headers to set and strip, etc.
+
+* *s5.4.1* (especially *s5.4.1.7*) covers registration handling.
+
+* *s5.4.3.1* covers how to determine the session case.
+
+* *s5.4.3.2* covers originating handling.
+
+* *s5.4.3.3* covers terminating handling.
+
+*[3GPP TS 24.229](http://www.3gpp.org/ftp/Specs/archive/24_series/24.229/24229-b50.zip)
+s5.7* covers correct AS behaviour; Sprout's behaviour should be
+complementary.
+
+*[3GPP TS 23.218](http://www.3gpp.org/ftp/Specs/archive/23_series/23.218/23218-c10.zip)*
+gives an overview of application server invocation.
+
+* *s5.2* and *s6.9.2* cover how iFCs are interpreted.
+
+* *s6.3 - s6.5* cover how registration, originating, and terminating
+  requests are handled by Sprout.
+
+* *s9* discusses the various modes of operation of an AS.
+
+*[3GPP TS 29.228](http://www.3gpp.org/ftp/Specs/archive/29_series/29.228/29228-b70.zip)*
+defines the format and meaning of iFCs.
+
+* The XML schema *CxData_Type_Rel11.xsd* attached to the spec defines
+  the exact format of the iFCs.
+
+* *sB.2.2 - sB.2.3* give a UML model of the iFCs and explain what the
+  fields mean.
+
+* *sC* gives a simple example set of iFCs.
+
+* *sF* gives the definition of each SPT and how to interpret it.
 
