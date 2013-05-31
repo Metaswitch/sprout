@@ -1409,8 +1409,10 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!xoToken.empty())
   {
     r = "Path: ";
-    r.append(xoToken);
+    r.append(xoToken).append("\n");
   }
+  // Must include a contact header otherwise the flow won't be marked as authenticated.
+  r.append("Contact: sip:wuntootreefower@").append(xiTp->to_string(true)).append(";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
   inject_msg(respond_to_current_txdata(200, "", r));
   ASSERT_EQ(1, txdata_count());
 
@@ -1998,11 +2000,9 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   r1.matches(tdata->msg);
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
 
-  // Check it is marked authorized and integrity-protected. This
-  // particular header is a bit weird; feel free to relax the test if
-  // you understand what's going on.
+  // Check there is no Authorization header added.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=yes", actual);
+  EXPECT_EQ("", actual);
 
   // Send a reply.
   inject_msg(respond_to_current_txdata(200));
@@ -2064,7 +2064,6 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
 
   TransportFlow* tp;
   pjsip_tx_data* tdata;
-  RespMatcher r1(403);
   string actual;
 
   // Get a connection from the other trusted host.
@@ -2077,6 +2076,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   // Check it's the right kind and method, and goes to the right place.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
+  RespMatcher r1(403);
   r1.matches(tdata->msg);
   tp->expect_target(tdata, true);  // to source
 
@@ -2097,7 +2097,6 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 
   TransportFlow* tp;
   pjsip_tx_data* tdata;
-  ReqMatcher r1("INVITE");
   string actual;
 
   // Get a connection from some other random (untrusted) host.
@@ -2107,15 +2106,12 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
   msg._unique++;
   inject_msg(msg.get_request(), tp);
 
-  // Check it's the right kind and method, and goes to the right place.
+  // Check it is rejected with a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
+  RespMatcher r1(403);
   r1.matches(tdata->msg);
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
-
-  // Check it is *not* authorized.
-  actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
+  tp->expect_target(tdata, true);  // to source
 
   free_txdata();
   delete tp;
