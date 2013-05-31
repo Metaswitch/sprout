@@ -80,7 +80,9 @@ log_directory=/var/log/$NAME
 #
 get_settings()
 {
-        # Pull in the settings for this node.
+        # Set up defaults and then pull in the settings for this node.
+        enum_server=127.0.0.1
+        sas_server=0.0.0.0
         . /etc/clearwater/config
 
         # Pull in the current cluster configuration (creating a default if it does not exist).
