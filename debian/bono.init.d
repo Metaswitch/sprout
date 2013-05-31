@@ -80,7 +80,8 @@ log_directory=/var/log/$NAME
 #
 get_settings()
 {
-        # Pull in the settings for this node.
+        # Set up defaults and then pull in the settings for this node.
+        sas_server=0.0.0.0
         . /etc/clearwater/config
 
         # Set up defaults for user settings then pull in any overrides.
