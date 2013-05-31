@@ -1352,6 +1352,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   // Register a client with the edge proxy.
   Message msg;
   msg._method = "REGISTER";
+  msg._to = msg._from;        // To header contains AoR in REGISTER requests.
   msg._first_hop = firstHop;
   msg._via = via.empty() ? xiTp->to_string(false) : via;
   msg._extra = "Contact: sip:wuntootreefower@";
@@ -1400,7 +1401,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
 
   // Check integrity=no marking.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551234@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
 
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
