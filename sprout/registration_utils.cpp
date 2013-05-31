@@ -125,7 +125,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
     SAS::TrailId trail = get_trail(ok_response);
-    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register);
+    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
     delete ifcs;

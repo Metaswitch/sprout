@@ -136,11 +136,7 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  AsChainLink handle_incoming_non_cancel(pjsip_rx_data* rdata, pjsip_tx_data* tdata, const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata, target** pre_target);
-  void move_to_terminating_chain(AsChainLink& as_chain, pjsip_rx_data* rdata, pjsip_tx_data* tdata);
-  AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, pjsip_tx_data* tdata, target** pre_target);
-  void handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* pre_target);
+  void handle_non_cancel(const ServingState& serving_state);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
@@ -150,9 +146,10 @@ public:
 
   void register_proxy(CallServices::Terminating* proxy);
 
+  pj_status_t send_trying(pjsip_rx_data* rdata);
   pj_status_t send_response(int st_code, const pj_str_t* st_text=NULL);
-  bool redirect(std::string, int);
-  bool redirect(pjsip_uri*, int);
+  bool redirect(std::string, int, const AsChainLink& odi);
+  bool redirect(pjsip_uri*, int, const AsChainLink& odi);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -176,19 +173,24 @@ private:
                  TrustBoundary* trust);
   void log_on_tsx_start(const pjsip_rx_data* rdata);
   void log_on_tsx_complete();
-  pj_status_t init_uac_transactions(pjsip_tx_data* tdata, target_list& targets);
+  pj_status_t init_uac_transactions(target_list& targets);
   void dissociate(UACTransaction *uac_data);
-  bool redirect_int(pjsip_uri* target, int code);
-  AsChainLink create_as_chain(const SessionCase& session_case,
-                              pjsip_rx_data* rdata);
+  bool redirect_int(pjsip_uri* target, int code, const AsChainLink& odi);
+  AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
+
+  AsChainLink handle_incoming_non_cancel(const ServingState& serving_state);
+  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, target** pre_target);
+  void move_to_terminating_chain(AsChainLink& as_chain);
+  AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, target** pre_target);
+  void handle_outgoing_non_cancel(target* pre_target);
 
   pjsip_transaction*   _tsx;
   int                  _num_targets;
   int                  _pending_targets;
   pj_bool_t            _ringing;
-  pjsip_tx_data*       _req;
-  pjsip_tx_data*       _best_rsp;
-  TrustBoundary*       _trust;  //< Trust-boundary processing for this B2BUA to apply.
+  pjsip_tx_data*       _req;       //< Request to forward on to next element.
+  pjsip_tx_data*       _best_rsp;  //< Response to send back to caller.
+  TrustBoundary*       _trust;     //< Trust-boundary processing for this B2BUA to apply.
 #define MAX_FORKING 10
   UACTransaction*      _uac_data[MAX_FORKING];
   struct
@@ -200,7 +202,7 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
-  std::list<AsChain*> _victims;  //< Objects to die along with the transaction. Never more than 2.
+  std::list<AsChain*> _victims;  //< Objects to die along with the transaction.
 };
 
 // This is the data that is attached to the UAC transaction

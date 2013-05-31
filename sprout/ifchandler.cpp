@@ -468,7 +468,8 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 // local served user.
 std::string IfcHandler::served_user_from_msg(
   const SessionCase& session_case,
-  pjsip_rx_data* rdata)
+  pjsip_msg* msg,
+  pj_pool_t* pool)
 {
   pjsip_uri* uri = NULL;
   std::string user;
@@ -494,9 +495,12 @@ std::string IfcHandler::served_user_from_msg(
   // We determine the served user as described in 3GPP TS 24.229
   // s5.4.3.3, step 1, i.e., purely on the Request-URI.
 
-  // For originating after retargeting (orig-cdiv):
+  // For originating after retargeting (orig-cdiv), we normally don't
+  // call this method at all, because we can pick up the served user
+  // from the existing AsChain. If this method is called, however, the
+  // following logic applies:
   //
-  // We should determine the served user as described in 3GPP TS
+  // We could determine the served user as described in 3GPP TS
   // 24.229 s5.4.3.3 step 3b. This relies on History-Info (RFC4244)
   // and P-Served-User (RFC5502) in step 3b. We should never respect
   // P-Asserted-Identity.
@@ -511,11 +515,11 @@ std::string IfcHandler::served_user_from_msg(
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_P_SERVED_USER, NULL);
+      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
-      uri = PJUtils::uri_from_string_header(served_user_hdr, rdata->tp_info.pool);
+      uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
 
       if (uri == NULL)
       {
@@ -530,12 +534,12 @@ std::string IfcHandler::served_user_from_msg(
     if (session_case.is_originating())
     {
       // For originating services, the user is parsed from the from header.
-      uri = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg)->uri;
+      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
     }
     else
     {
       // For terminating services, the user is parsed from the request URI.
-      uri = rdata->msg_info.msg->line.req.uri;
+      uri = msg->line.req.uri;
     }
   }
 
