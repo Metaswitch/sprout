@@ -95,7 +95,7 @@ void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity
 
 pjsip_uri* next_hop(pjsip_msg* msg);
 
-pj_bool_t is_next_route_local(const pjsip_msg* msg, const void* start, pjsip_route_hdr** hdr);
+pj_bool_t is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr);
 
 /// Checks whether the top route header in the message refers to this node,
 /// and optionally returns the headers.  If there no Route headers it returns

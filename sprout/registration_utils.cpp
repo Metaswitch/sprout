@@ -115,14 +115,20 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
     // constraints for REGISTER messages, but we only get the served user from the From address in an
     // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
+    // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
     SAS::TrailId trail = SAS::new_trail(1);
-    ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, tdata->msg, trail, as_list);
+    std::vector<Ifc> ifc_list;
+    Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
+    ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
+    delete ifcs;
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
     SAS::TrailId trail = get_trail(ok_response);
-    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register);
-    ifchandler->lookup_ifcs(SessionCase::Originating, served_user, true, received_register->msg_info.msg, trail, as_list);
+    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
+    Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
+    ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
+    delete ifcs;
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 

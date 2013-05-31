@@ -85,7 +85,7 @@ bool CallServices::is_mmtel(std::string uri)
 // @returns The simservs object if it is relevant and present.  If there is
 // no simservs configuration for the user, returns a default simservs object
 // with all services disabled.
-simservs *CallServices::get_user_services(pjsip_msg *msg, std::string public_id, SAS::TrailId trail)
+simservs *CallServices::get_user_services(std::string public_id, SAS::TrailId trail)
 {
   // Fetch the user's simservs configuration from the XDMS
   LOG_DEBUG("Fetching simservs configuration for %s", public_id.c_str());
@@ -401,7 +401,7 @@ CallServices::Originating::Originating(CallServices* callServices,
                                        std::string served_user) :  //< Public ID of served user
   CallServices::CallServiceBase("1", uas_data)
 {
-  _user_services = callServices->get_user_services(msg, served_user, uas_data->trail());
+  _user_services = callServices->get_user_services(served_user, uas_data->trail());
 }
 
 CallServices::Originating::~Originating()
@@ -499,12 +499,14 @@ bool CallServices::Originating::apply_ob_call_barring(pjsip_tx_data *tx_data)
 // Terminating Call Services constructor.
 CallServices::Terminating::Terminating(CallServices* callServices,
                                        UASTransaction* uas_data,
+                                       const AsChainLink& odi,  //< This is copied and need not remain valid after return.
                                        pjsip_msg* msg,
                                        std::string served_user) :  //< Public ID of served user
   CallServices::CallServiceBase("1", uas_data),
+  _odi(odi.duplicate()),
   _ringing(false)
 {
-  _user_services = callServices->get_user_services(msg, served_user, uas_data->trail());
+  _user_services = callServices->get_user_services(served_user, uas_data->trail());
 
   // Determine the media type conditions, in case they're needed later.
   if (msg->line.req.method.id == PJSIP_INVITE_METHOD)
@@ -534,6 +536,8 @@ CallServices::Terminating::~Terminating()
   {
     delete _user_services;
   }
+
+  _odi.release();
 }
 
 // Apply terminating call service processing on initial invite.
@@ -593,11 +597,12 @@ bool CallServices::Terminating::on_response(pjsip_msg *msg)
 
   case PJSIP_SC_MOVED_TEMPORARILY:
     // Handle 302 redirect by parsing the contact header and diverting to that
-    // address.
+    // address.  Pass the ODI header so we correctly invoke originating-cdiv
+    // and then terminating handling.
     pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
     if (contact_hdr != NULL)
     {
-      return _uas_data->redirect(contact_hdr->uri, code);
+      return _uas_data->redirect(contact_hdr->uri, code, _odi);
     }
     break;
   }
@@ -772,7 +777,7 @@ bool CallServices::Terminating::check_call_diversion_rules(unsigned int conditio
     if ((rule->conditions() & ~conditions) == 0)
     {
       LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-      return _uas_data->redirect(rule->forward_target(), code);
+      return _uas_data->redirect(rule->forward_target(), code, _odi);
     }
   }
   return true;

@@ -48,10 +48,14 @@ extern "C" {
 #include <string>
 #include <vector>
 
-#include "callservices.h"
+#include "log.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
 
+
+// Forward declarations.
+class CallServices;
+class UASTransaction;
 
 /// Short-lived data structure holding the details of a calculated target.
 struct target
@@ -94,17 +98,19 @@ private:
           const std::string& served_user,
           bool is_registered,
           SAS::TrailId trail,
-          std::vector<AsInvocation> application_servers);
+          Ifcs* ifcs);
   ~AsChain();
 
   void inc_ref()
   {
     ++_refs;
+    LOG_DEBUG("AsChain inc ref %p -> %d", this, _refs.load());
   }
 
   void dec_ref()
   {
     int count = --_refs;
+    LOG_DEBUG("AsChain dec ref %p -> %d", this, count);
     pj_assert(count >= 0);
     if (count == 0)
     {
@@ -115,7 +121,7 @@ private:
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
-  bool matches_target(pjsip_rx_data* rdata) const;
+  bool matches_target(pjsip_tx_data* tdata) const;
   SAS::TrailId trail() const;
 
   AsChainTable* const _as_chain_table;
@@ -128,7 +134,7 @@ private:
   const std::string _served_user;
   const bool _is_registered;
   const SAS::TrailId _trail;
-  std::vector<AsInvocation> _application_servers; //< List of application server URIs.
+  const Ifcs* _ifcs;  //< List of iFCs. Owned by this object.
 };
 
 
@@ -165,8 +171,26 @@ public:
     return ((_as_chain == NULL) || (_index == _as_chain->size()));
   }
 
+  /// Get the next link in the chain.
+  AsChainLink next() const
+  {
+    pj_assert(!complete());
+    return AsChainLink(_as_chain, _index + 1);
+  }
+
+  /// Create a new reference to the underlying AsChain object.  Caller
+  // must call release() when they have finished using this duplicate.
+  AsChainLink duplicate() const
+  {
+    if (_as_chain != NULL)
+    {
+      _as_chain->inc_ref();
+    }
+    return *this;
+  }
+
   /// Caller has finished using this link.
-  void release()
+  void release() const
   {
     if (_as_chain != NULL)
     {
@@ -189,9 +213,14 @@ public:
     return _as_chain->session_case();
   }
 
-  bool matches_target(pjsip_rx_data* rdata) const
+  const std::string& served_user() const
   {
-    return _as_chain->matches_target(rdata);
+    return _as_chain->_served_user;
+  }
+
+  bool matches_target(pjsip_tx_data* tdata) const
+  {
+    return _as_chain->matches_target(tdata);
   }
 
   /// Disposition of a request. Suggests what to do next.
@@ -205,8 +234,13 @@ public:
     // omitting any subsequent stages.
     Skip,
 
+    /// There are no links left on the chain. Processing should
+    // continue with the next stage.
+    Complete,
+
     /// The internal application server (if any) has processed the
-    // message. Processing should continue with the next stage.
+    // message according to the curren link. Processing should
+    // continue with the next link.
     Next
   };
 
@@ -215,11 +249,10 @@ public:
                                      const std::string& served_user,
                                      bool is_registered,
                                      SAS::TrailId trail,
-                                     std::vector<AsInvocation> application_servers);
+                                     Ifcs* ifcs);
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,
-                                 pjsip_msg* msg,
                                  pjsip_tx_data* tdata,
                                  target** target);
 

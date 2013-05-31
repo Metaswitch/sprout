@@ -144,34 +144,34 @@ TEST_F(IfcHandlerTest, ServedUser)
   pjsip_rx_data* rdata = build_rxdata(str);
   parse_rxdata(rdata);
 
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata));
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata));
-  EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata));
+  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"), "$2", "");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@remotenode"), "$2", "");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata));
+  EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   // Should obey P-Served-User URI and ignore other fields (and also ignore sescase and regstate on P-S-U), but only on originating sessions.
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
                                 "$2", "P-Served-User: Billy Bob <sip:billy-bob@homedomain>;sescase=term;regstate=unreg\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata));
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata));
+  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
                                 "$2", "P-Served-User: sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata));
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata));
+  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   // Should ignore (with warning) if URI is unparseable.
   FakeLogger log;
@@ -179,7 +179,7 @@ TEST_F(IfcHandlerTest, ServedUser)
                                 "$2", "P-Served-User: <sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata));
+  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
   EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
 }
 
@@ -201,12 +201,14 @@ void IfcHandlerTest::doBaseTest(string description,
   }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  _ifc_handler->lookup_ifcs(sescase,
-                            served_user,
-                            reg,
-                            msg,
-                            0,
-                            application_servers);
+  Ifcs* ifcs = _ifc_handler->lookup_ifcs(sescase,
+                                         served_user,
+                                         0);
+  ifcs->interpret(sescase,
+                  reg,
+                  msg,
+                  application_servers);
+  delete ifcs;
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
@@ -288,6 +290,93 @@ TEST_F(IfcHandlerTest, NoPriority)
              SessionCase::Originating,
              true,
              false);
+}
+
+TEST_F(IfcHandlerTest, GarbagePriority)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>Mu</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("Can't parse iFC priority as integer"));
+}
+
+TEST_F(IfcHandlerTest, NoAS)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <XapplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </XapplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("missing ApplicationServer element"));
+}
+
+TEST_F(IfcHandlerTest, NoServerName1)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName></ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("has no ServerName"));
+}
+
+TEST_F(IfcHandlerTest, NoServerName2)
+{
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             false,
+             false);
+  EXPECT_TRUE(_log.contains("has no ServerName"));
 }
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)

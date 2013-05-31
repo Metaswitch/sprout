@@ -206,7 +206,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     {
       // There's no response in the header, so remove it to ensure we issue
       // a challenge.
-      LOG_DEBUG("Remove authorization header added by Bono");
+      LOG_DEBUG("Remove authorization header without response field");
       pj_list_erase(auth_hdr);
     }
   }
