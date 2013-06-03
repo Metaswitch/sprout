@@ -61,6 +61,7 @@ class UASTransaction;
 struct target
 {
   pj_bool_t from_store;
+  pj_bool_t upstream_route;
   std::string aor;
   std::string binding_id;
   pjsip_uri* uri;
