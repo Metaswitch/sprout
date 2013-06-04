@@ -151,8 +151,28 @@ void process_register_request(pjsip_rx_data* rdata)
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
 
-  // Get the Address of Record from the URI in the To header.
-  std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri));
+  // Get the URI from the To header and check it is a SIP or SIPS URI.
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+
+  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // whether 404 is the right status code - it says 404 should be used if
+    // the AoR isn't valid for the domain in the RequestURI).
+    // LCOV_EXCL_START
+    LOG_ERROR("Rejecting register request using non SIP URI");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_FOUND,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Canonicalize Get the Address of Record from the URI in the To header.
+  std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
@@ -430,7 +450,7 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Construct a Service-Route header pointing at the sprout cluster.  We don't
-  // care which sprout handles the subsequent requests as they all have access 
+  // care which sprout handles the subsequent requests as they all have access
   // to all subscriber information.
   pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
   pj_strdup(tdata->pool,
