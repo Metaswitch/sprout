@@ -68,21 +68,15 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    int port = (((pjsip_sip_uri*)uri)->port != 0) ? ((pjsip_sip_uri*)uri)->port : 5060;
+    // Check the list of host names.
     pj_str_t host = ((pjsip_sip_uri*)uri)->host;
-
-    if ((port == stack_data.trusted_port) ||
-        (port == stack_data.untrusted_port))
+    unsigned i;
+    for (i=0; i<stack_data.name_cnt; ++i)
     {
-      // Port matches, check the list of host names.
-      unsigned i;
-      for (i=0; i<stack_data.name_cnt; ++i)
+      if (pj_stricmp(&host, &stack_data.name[i])==0)
       {
-        if (pj_stricmp(&host, &stack_data.name[i])==0)
-        {
-          /* Match */
-          return PJ_TRUE;
-        }
+        /* Match */
+        return PJ_TRUE;
       }
     }
   }
