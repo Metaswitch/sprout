@@ -202,6 +202,27 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 }
 
 
+/// Returns a canonical SIP address of record from a URI, as per the rules
+/// in RFC3261 s10.3 step 5.  In particular, strip all parameters and the
+/// password before rendering the URI to a string.
+std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
+{
+  pjsip_sip_uri aor;
+  memcpy((char *)&aor, (char*)uri, sizeof(pjsip_sip_uri));
+  aor.passwd.slen = 0;
+  aor.port = 0;
+  aor.user_param.slen = 0;
+  aor.method_param.slen = 0;
+  aor.transport_param.slen = 0;
+  aor.ttl_param = -1;
+  aor.lr_param = 0;
+  aor.maddr_param.slen = 0;
+  aor.other_param.next = NULL;
+  aor.header_param.next = NULL;
+  return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+}
+
+
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
   LOG_INFO("Adding integrity-protected indicator to message");

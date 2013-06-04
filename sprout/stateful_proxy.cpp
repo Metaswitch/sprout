@@ -1272,7 +1272,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
   if (store)
   {
     // Look up the target in the registration data store.
-    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)req_uri);
+    std::string aor = PJUtils::aor_from_uri(req_uri);
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
     RegData::AoR* aor_data = store->get_aor_data(aor);
 
