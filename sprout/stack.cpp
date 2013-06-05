@@ -354,7 +354,7 @@ static void pjsip_log_handler(int level,
   default: level = 5; break;
   }
 
-  Log::write(level, "pjsip", data);
+  Log::write(level, "pjsip", 0, data);
 }
 
 
