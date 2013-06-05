@@ -40,19 +40,19 @@
 
 #include "logger.h"
 
-#define LOG_ERROR(...) Log::write(0, __FILE__, __VA_ARGS__)
-#define LOG_WARNING(...) Log::write(1, __FILE__, __VA_ARGS__)
-#define LOG_STATUS(...) Log::write(2, __FILE__, __VA_ARGS__)
-#define LOG_INFO(...) Log::write(3, __FILE__, __VA_ARGS__)
-#define LOG_VERBOSE(...) Log::write(4, __FILE__, __VA_ARGS__)
-#define LOG_DEBUG(...) Log::write(5, __FILE__, __VA_ARGS__)
+#define LOG_ERROR(...) Log::write(0, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_WARNING(...) Log::write(1, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_STATUS(...) Log::write(2, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...) Log::write(3, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_VERBOSE(...) Log::write(4, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_DEBUG(...) Log::write(5, __FILE__, __LINE__, __VA_ARGS__)
 #define LOG_BACKTRACE(...) Log::backtrace(__VA_ARGS__)
 
 namespace Log
 {
   void setLoggingLevel(int level);
   void setLogger(Logger *log);
-  void write(int level, const char *module, const char *fmt, ...);
+  void write(int level, const char *module, int line_number, const char *fmt, ...);
   void backtrace(const char *fmt, ...);
 };  
 
