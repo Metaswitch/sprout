@@ -314,12 +314,7 @@ void process_register_request(pjsip_rx_data* rdata)
             expiry = 300;
           }
 
-          if (expiry == 0)
-          {
-            RegistrationUtils::user_initiated_deregistration(ifchandler, store, aor, binding_id);
-          } else {
-            binding->_expires = now + expiry;
-          }
+          binding->_expires = now + expiry;
 
           if (analytics != NULL)
           {
