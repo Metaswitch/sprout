@@ -1450,8 +1450,8 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
           // The are no active contacts, so the client is effectively
           // unregistered.  Clear the authenticated flag, so the next
           // REGISTER is challenged.
-          //LOG_INFO("Mark client flow as un-authenticated");
-          //flow_data->set_unauthenticated();
+          LOG_INFO("Mark client flow as un-authenticated");
+          flow_data->set_unauthenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
         }
 
         // Decrement the reference to the flow data
