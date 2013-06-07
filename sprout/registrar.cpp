@@ -212,7 +212,8 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     if (aor_data != NULL)
     {
-      delete aor_data;
+      delete aor_data; // LCOV_EXCL_LINE - Single-threaded tests mean we'll
+                       //                  always pass CAS.
     }
 
     // Find the current bindings for the AoR.

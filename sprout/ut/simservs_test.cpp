@@ -212,7 +212,7 @@ TEST_F(SimServsTest, InvalidXml1) {
   simservs ss(xml);
   ss_values exp;
   expect_ss(exp, ss);
-  EXPECT_TRUE(_log.contains("Error simservs.cpp: Parse error"));
+  EXPECT_TRUE(_log.contains("Parse error"));
 }
 
 TEST_F(SimServsTest, Typical)

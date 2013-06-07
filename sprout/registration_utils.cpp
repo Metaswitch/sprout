@@ -288,7 +288,9 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
       LOG_INFO("Clearing all bindings!");
       aor_data->clear();
     } else {
-      aor_data->remove_binding(binding_id);
+      aor_data->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
+                                            // initiated deregistration of a 
+                                            // single binding (flow failed).
     }
 
     bool ok = store->set_aor_data(aor, aor_data);
@@ -308,11 +310,4 @@ void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler,
   // should be passed on the REGISTER message, so we don't need the binding ID.
   deregister_with_application_servers(ifchandler, store, aor);
   notify_application_servers();
-};
-
-void RegistrationUtils::user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
-{
-  expire_bindings(store, aor, binding_id);
-  // No need to send a REGISTER message to the ASes - we hit this because we've received a REGISTER
-  // from the user with an expiry time of 0, and we'll have forwarded that on.
 };
