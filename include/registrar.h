@@ -50,7 +50,7 @@ extern "C" {
 
 // Maximum registration time 5 minutes (300 seconds).
 // @@@TODO Temporarily raise this for IMS bench interop
-#define REG_MAX_EXPIRES 3000
+#define REG_MAX_EXPIRES 30000
 
 extern pjsip_module mod_registrar;
 
