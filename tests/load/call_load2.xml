@@ -91,6 +91,61 @@
   </recv>
   <Reference variables="dummy" />
 
+  <send>
+    <![CDATA[
+
+      REGISTER sip:[$peer_dn]@[service] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];rport;branch=[branch]-[$peer_dn]-[$reg_repeat]
+      Route: <sip:[service];transport=[transport];lr>
+      Max-Forwards: 70
+      From: <sip:[$peer_dn]@[service]>;tag=[pid]SIPpTag00[call_number]
+      To: <sip:[$peer_dn]@[service]>
+      Call-ID: [$peer_dn]///[call_id]
+      CSeq: [cseq] REGISTER
+      User-Agent: Accession 4.0.0.0
+      Supported: outbound, path
+      Contact: <sip:[$peer_dn]@[local_ip]:[local_port];transport=[transport];ob>;+sip.ice;reg-id=1;+sip.instance="<urn:uuid:00000000-0000-0000-0000-000000000001>"
+      Expires: 3600
+      Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="401" auth="true">
+    <action>
+      <add assign_to="reg_repeat" value="1" />
+    </action>
+  </recv>
+
+  <send>
+    <![CDATA[
+
+      REGISTER sip:[$peer_dn]@[service] SIP/2.0
+      Via: SIP/2.0/[transport] [local_ip]:[local_port];rport;branch=[branch]-[$peer_dn]-[$reg_repeat]
+      Route: <sip:[service];transport=[transport];lr>
+      Max-Forwards: 70
+      From: <sip:[$peer_dn]@[service]>;tag=[pid]SIPpTag00[call_number]
+      To: <sip:[$peer_dn]@[service]>
+      Call-ID: [$peer_dn]///[call_id]
+      CSeq: [cseq] REGISTER
+      User-Agent: Accession 4.0.0.0
+      Supported: outbound, path
+      Contact: <sip:[$peer_dn]@[local_ip]:[local_port];transport=[transport];ob>;+sip.ice;reg-id=1;+sip.instance="<urn:uuid:00000000-0000-0000-0000-000000000001>"
+      Expires: 3600
+      [field3]
+      Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="200">
+    <action>
+      <add assign_to="reg_repeat" value="1" />
+    </action>
+  </recv>
+
   <label id="1"/>
 
   <send start_rtd="register">
