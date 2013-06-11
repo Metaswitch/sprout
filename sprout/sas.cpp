@@ -81,7 +81,7 @@ void SAS::term()
 SAS::Connection::Connection(const std::string& system_name, const std::string& sas_address) :
   _system_name(system_name),
   _sas_address(sas_address),
-  _msg_q(),
+  _msg_q(0, false),
   _writer(0),
   _sock(0)
 {
@@ -177,6 +177,7 @@ void SAS::Connection::writer()
     // reconnect.  We wait on the queue so we get a kick if the term function
     // is called.
     std::string msg;
+    LOG_DEBUG("Waiting to reconnect to SAS - timeout = %d", reconnect_timeout);
     if (!_msg_q.pop(msg, reconnect_timeout))
     {
       // Received a termination signal on the queue, so exit.
