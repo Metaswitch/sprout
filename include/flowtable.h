@@ -49,7 +49,7 @@ extern "C" {
 // Common STL includes.
 #include <cassert>
 #include <map>
-#include <set>
+#include <unordered_set>
 #include <string>
 
 #include "statistic.h"
@@ -107,7 +107,7 @@ private:
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  std::set<std::string> _authenticated_uris;
+  std::unordered_set<std::string> _authenticated_uris;
   pjsip_uri _user;
   int _refs;
   pj_timer_entry _ka_timer;
