@@ -1864,188 +1864,192 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
   {
     enter_context();
 
-  pjsip_tx_data *tdata;
-  pj_status_t status;
-  int status_code = rdata->msg_info.msg->line.status.code;
+    pjsip_tx_data *tdata;
+    pj_status_t status;
+    int status_code = rdata->msg_info.msg->line.status.code;
 
-  if ((!edge_proxy) &&
-      (method() == PJSIP_INVITE_METHOD) &&
-      (status_code == 100))
-  {
-    // In routing proxy mode, don't forward 100 response for INVITE as it has
-    // already been sent.
+    if ((!edge_proxy) &&
+        (method() == PJSIP_INVITE_METHOD) &&
+        (status_code == 100))
+    {
+      // In routing proxy mode, don't forward 100 response for INVITE as it has
+      // already been sent.
       LOG_DEBUG("%s - Discard 100/INVITE response", uac_data->name());
-    return;
-  }
-
-  if ((edge_proxy) &&
-      (method() == PJSIP_REGISTER_METHOD) &&
-      (status_code == 200))
-  {
-    // Pass the REGISTER response to the edge proxy code to see if
-    // the associated client flow has been authenticated.
-    proxy_process_register_response(rdata);
-  }
-
-  status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0,
-                                          &tdata);
-  if (status != PJ_SUCCESS)
-  {
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return;
-  }
-
-  // Strip any untrusted headers as required, so we don't pass them on.
-  _trust->process_response(tdata);
-
-  if ((_proxy != NULL) &&
-      (!_proxy->on_response(tdata->msg)))
-  {
-    // Proxy has taken control.  Stop processing now.
-    pjsip_tx_data_dec_ref(tdata);
-    return;
-  }
-
-  if (_num_targets > 1)
-  {
-    // Do special response filtering for forked transactions.
-    if ((method() == PJSIP_INVITE_METHOD) &&
-        (status_code == 180) &&
-        (!_ringing))
-    {
-        LOG_DEBUG("%s - 180/INVITE Ringing response", uac_data->name());
-      // We special case the first ringing response to an INVITE,
-      // sending a ringing response to the originating UAC, but
-      // pretending the response is from a UAS co-resident with the
-      // proxy.
-      pjsip_fromto_hdr *to;
-
-      _ringing = PJ_TRUE;
-
-      // Change the tag in the To header.
-      to = (pjsip_fromto_hdr* )pjsip_msg_find_hdr(tdata->msg,
-                                                  PJSIP_H_TO, NULL);
-      if (to == NULL)
-      {
-        LOG_ERROR("No To header in INVITE response", 0);
-        return;
-      }
-
-      to->tag = pj_str("xyz");
-
-      // Contact header???
-
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
+      exit_context();
+      return;
     }
-    else if ((method() == PJSIP_INVITE_METHOD) &&
-             (status_code > 100) &&
-             (status_code < 199))
+
+    if ((edge_proxy) &&
+        (method() == PJSIP_REGISTER_METHOD) &&
+        (status_code == 200))
     {
-      // Discard all other provisional responses to INVITE
-      // transactions.
-        LOG_DEBUG("%s - Discard 1xx/INVITE response", uac_data->name());
+      // Pass the REGISTER response to the edge proxy code to see if
+      // the associated client flow has been authenticated.
+      proxy_process_register_response(rdata);
+    }
+
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0,
+                                            &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      exit_context();
+      return;
+    }
+
+    // Strip any untrusted headers as required, so we don't pass them on.
+    _trust->process_response(tdata);
+
+    if ((_proxy != NULL) &&
+        (!_proxy->on_response(tdata->msg)))
+    {
+      // Proxy has taken control.  Stop processing now.
       pjsip_tx_data_dec_ref(tdata);
+      exit_context();
+      return;
     }
-    else if ((status_code > 100) &&
-             (status_code < 199))
+
+    if (_num_targets > 1)
     {
-      // Forward all provisional responses to non-INVITE transactions.
+      // Do special response filtering for forked transactions.
+      if ((method() == PJSIP_INVITE_METHOD) &&
+          (status_code == 180) &&
+          (!_ringing))
+      {
+        LOG_DEBUG("%s - 180/INVITE Ringing response", uac_data->name());
+        // We special case the first ringing response to an INVITE,
+        // sending a ringing response to the originating UAC, but
+        // pretending the response is from a UAS co-resident with the
+        // proxy.
+        pjsip_fromto_hdr *to;
+
+        _ringing = PJ_TRUE;
+
+        // Change the tag in the To header.
+        to = (pjsip_fromto_hdr* )pjsip_msg_find_hdr(tdata->msg,
+                                                    PJSIP_H_TO, NULL);
+        if (to == NULL)
+        {
+          LOG_ERROR("No To header in INVITE response", 0);
+          exit_context();
+          return;
+        }
+
+        to->tag = pj_str("xyz");
+
+        // Contact header???
+
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else if ((method() == PJSIP_INVITE_METHOD) &&
+               (status_code > 100) &&
+               (status_code < 199))
+      {
+        // Discard all other provisional responses to INVITE
+        // transactions.
+        LOG_DEBUG("%s - Discard 1xx/INVITE response", uac_data->name());
+        pjsip_tx_data_dec_ref(tdata);
+      }
+      else if ((status_code > 100) &&
+               (status_code < 199))
+      {
+        // Forward all provisional responses to non-INVITE transactions.
         LOG_DEBUG("%s - Forward 1xx/non-INVITE response", uac_data->name());
 
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
-    }
-    else if (status_code == 200)
-    {
-      // 200 OK.
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else if (status_code == 200)
+      {
+        // 200 OK.
         LOG_DEBUG("%s - Forward 200 OK response", name());
 
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
 
-      // Disconnect the UAC data from the UAS data so no further
-      // events get passed between the two.
-      dissociate(uac_data);
+        // Disconnect the UAC data from the UAS data so no further
+        // events get passed between the two.
+        dissociate(uac_data);
 
-      if (method() == PJSIP_INVITE_METHOD)
-      {
-        // Terminate the UAS transaction (this needs to be done
-        // manually for INVITE 200 OK response, otherwise the
-        // transaction layer will wait for an ACK.  This will also
-        // cause all other pending UAC transactions to be cancelled.
+        if (method() == PJSIP_INVITE_METHOD)
+        {
+          // Terminate the UAS transaction (this needs to be done
+          // manually for INVITE 200 OK response, otherwise the
+          // transaction layer will wait for an ACK.  This will also
+          // cause all other pending UAC transactions to be cancelled.
           LOG_DEBUG("%s - Terminate UAS INVITE transaction (forking case)", name());
-        pjsip_tsx_terminate(_tsx, 200);
+          pjsip_tsx_terminate(_tsx, 200);
+        }
+      }
+      else
+      {
+        // Final, non-OK response.  Is this the "best" response
+        // received so far?
+        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
+        pj_grp_lock_acquire(_tsx->grp_lock);
+        if ((_best_rsp == NULL) ||
+            (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+        {
+          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
+
+          if (_best_rsp != NULL)
+          {
+            pjsip_tx_data_dec_ref(_best_rsp);
+          }
+
+          _best_rsp = tdata;
+        }
+        else
+        {
+          pjsip_tx_data_dec_ref(tdata);
+        }
+
+        // Disconnect the UAC data from the UAS data so no further
+        // events get passed between the two.
+        dissociate(uac_data);
+
+        if (--_pending_targets == 0)
+        {
+          // Received responses on every UAC transaction, so check terminating
+          // call services and then send the best response on the UAS
+          // transaction.
+          LOG_DEBUG("%s - All UAC responded", name());
+          pj_grp_lock_release(_tsx->grp_lock);
+          handle_final_response();
+        }
+        else
+        {
+          pj_grp_lock_release(_tsx->grp_lock);
+        }
       }
     }
     else
     {
-      // Final, non-OK response.  Is this the "best" response
-      // received so far?
-        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
-      pj_grp_lock_acquire(_tsx->grp_lock);
-      if ((_best_rsp == NULL) ||
-          (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+      // Non-forked transaction.  Create response to be forwarded upstream
+      // (Via will be stripped here)
+      if (rdata->msg_info.msg->line.status.code < 200)
       {
-          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
-
+        // Forward provisional response with the UAS transaction.
+        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else
+      {
+        // Forward final response.  Disconnect the UAC data from
+        // the UAS data so no further events get passed between the two.
+        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
         if (_best_rsp != NULL)
         {
           pjsip_tx_data_dec_ref(_best_rsp);
         }
-
         _best_rsp = tdata;
-      }
-      else
-      {
-        pjsip_tx_data_dec_ref(tdata);
-      }
-
-      // Disconnect the UAC data from the UAS data so no further
-      // events get passed between the two.
-      dissociate(uac_data);
-
-      if (--_pending_targets == 0)
-      {
-        // Received responses on every UAC transaction, so check terminating
-        // call services and then send the best response on the UAS
-        // transaction.
-          LOG_DEBUG("%s - All UAC responded", name());
-        pj_grp_lock_release(_tsx->grp_lock);
+        _pending_targets--;
+        dissociate(uac_data);
         handle_final_response();
       }
-      else
-      {
-        pj_grp_lock_release(_tsx->grp_lock);
-      }
     }
-  }
-  else
-  {
-    // Non-forked transaction.  Create response to be forwarded upstream
-    // (Via will be stripped here)
-    if (rdata->msg_info.msg->line.status.code < 200)
-    {
-      // Forward provisional response with the UAS transaction.
-        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
-      pjsip_tsx_send_msg(_tsx, tdata);
-    }
-    else
-    {
-      // Forward final response.  Disconnect the UAC data from
-      // the UAS data so no further events get passed between the two.
-        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
-      if (_best_rsp != NULL)
-      {
-        pjsip_tx_data_dec_ref(_best_rsp);
-      }
-      _best_rsp = tdata;
-      _pending_targets--;
-      dissociate(uac_data);
-      handle_final_response();
-    }
-  }
 
     exit_context();
   }
@@ -2058,40 +2062,40 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
   {
     enter_context();
 
-  if (_num_targets > 1)
-  {
-    // UAC transaction has timed out or hit a transport error.  If
-    // we've not received a response from on any other UAC
-    // transactions then keep this as the best response.
-      LOG_DEBUG("%s - Forked request", uac_data->name());
-    pj_grp_lock_acquire(_tsx->grp_lock);
-
-    if (--_pending_targets == 0)
+    if (_num_targets > 1)
     {
-      // Received responses on every UAC transaction, so
-      // send the best response on the UAS transaction.
+      // UAC transaction has timed out or hit a transport error.  If
+      // we've not received a response from on any other UAC
+      // transactions then keep this as the best response.
+      LOG_DEBUG("%s - Forked request", uac_data->name());
+      pj_grp_lock_acquire(_tsx->grp_lock);
+
+      if (--_pending_targets == 0)
+      {
+        // Received responses on every UAC transaction, so
+        // send the best response on the UAS transaction.
         LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
-      pj_grp_lock_release(_tsx->grp_lock);
-      handle_final_response();
+        pj_grp_lock_release(_tsx->grp_lock);
+        handle_final_response();
+      }
+      else
+      {
+        pj_grp_lock_release(_tsx->grp_lock);
+      }
     }
     else
     {
-      pj_grp_lock_release(_tsx->grp_lock);
-    }
-  }
-  else
-  {
-    // UAC transaction has timed out or hit a transport error for
-    // non-forked request.  Send a 408 on the UAS transaction.
+      // UAC transaction has timed out or hit a transport error for
+      // non-forked request.  Send a 408 on the UAS transaction.
       LOG_DEBUG("%s - Not forked request", uac_data->name());
-    --_pending_targets;
-    handle_final_response();
-  }
+      --_pending_targets;
+      handle_final_response();
+    }
 
-  // Disconnect the UAC data from the UAS data so no further
-  // events get passed between the two.
+    // Disconnect the UAC data from the UAS data so no further
+    // events get passed between the two.
     LOG_DEBUG("%s - Disconnect UAS tsx from UAC tsx", uac_data->name());
-  dissociate(uac_data);
+    dissociate(uac_data);
 
     exit_context();
   }
