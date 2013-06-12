@@ -61,6 +61,8 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses.clear();
     fakecurl_responses["http://narcissus/credentials/pubid42/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
     fakecurl_responses["http://narcissus/credentials/pubid42/privid_corrupt/digest"] = "{\"digest\"; \"myhashhere\"}";
+    fakecurl_responses["http://narcissus/associateduris/privid69"] = "[\"123@example.com\", \"456@example.com\"]";
+    fakecurl_responses["http://narcissus/associateduris/privid70"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/filtercriteria/pubid42"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ServiceProfile>"
@@ -102,6 +104,22 @@ TEST_F(HssConnectionTest, CorruptDigest)
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
   delete actual;
+}
+
+TEST_F(HssConnectionTest, SimpleAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("privid69", 0);
+  ASSERT_TRUE(actual != NULL);
+  EXPECT_EQ(2u, actual->size());
+  EXPECT_EQ("123@example.com", actual->get((Json::Value::ArrayIndex)0, "").asString());
+  EXPECT_EQ("456@example.com", actual->get((Json::Value::ArrayIndex)1, "").asString());
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, ErrorAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("privid70", 0);
+  ASSERT_TRUE(actual == NULL);
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)

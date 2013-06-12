@@ -76,6 +76,16 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 }
 
 
+/// Retrieve user's associated URIs as JSON object. Caller is responsible for deleting.
+Json::Value* HSSConnection::get_associated_uris(const std::string& private_user_identity,
+                                                SAS::TrailId trail)
+{
+  std::string path = "/associateduris/" +
+                     Utils::url_escape(private_user_identity);
+  return get_object(path, trail);
+}
+
+
 /// Retrieve user's initial filter criteria as JSON object. Caller is responsible for deleting.
 bool HSSConnection::get_user_ifc(const std::string& public_user_identity,
                                  std::string& xml_data,
