@@ -1782,8 +1782,11 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   free_txdata();
 
   // Now try a message from the client to the R.O.W.
+  // Include a parameter in the From URI to check that this is correctly stripped
+  // out for authentication checks.
   Message msg2;
   msg2._method = "INVITE";
+  msg2._fromdomain += ";user=phone";
   msg2._first_hop = true;
   inject_msg(msg2.get_request(), tp);
 
@@ -1818,6 +1821,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   // home domain). Edge proxy should silently correct this.
   msg2._unique++;
   msg2._todomain = "testnode";
+  msg2._fromdomain += ";user=phone";
   inject_msg(msg2.get_request(), tp);
 
   ASSERT_EQ(1, txdata_count());
