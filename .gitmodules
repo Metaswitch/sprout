@@ -27,7 +27,7 @@
 	url = git@github.com:Metaswitch/libre-upstream.git
 [submodule "modules/openssl"]
 	path = modules/openssl
-	url = git://git.openssl.org/openssl.git
+	url = git@github.com:openssl/openssl.git
 [submodule "modules/pjsip"]
 	path = modules/pjsip
 	url = git@github.com:Metaswitch/pjsip-upstream.git
