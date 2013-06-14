@@ -456,17 +456,12 @@ void process_register_request(pjsip_rx_data* rdata)
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
-  char buf[500];
-  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR,
-                            service_route_uri,
-                            buf,
-                            sizeof(buf));
-  pj_str_t service_route = {buf, len};
-  pjsip_hdr* service_route_hdr =
-    (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
-                                                &STR_SERVICE_ROUTE,
-                                                &service_route);
-  pjsip_msg_insert_first_hdr(tdata->msg, service_route_hdr);
+  pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
+  service_route->name = STR_SERVICE_ROUTE;
+  service_route->sname = pj_str("");
+  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
+
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
 
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
