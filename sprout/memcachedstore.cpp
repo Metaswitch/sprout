@@ -97,10 +97,16 @@ namespace RegData {
     {
       options += "--SERVER=" + (*i) + " ";
     }
-    options += "--BINARY-PROTOCOL";
+    //options += "--BINARY-PROTOCOL";
+    options += "--SUPPORT-CAS";
     options += " --POOL-MIN=" + to_string<int>(pool_size, std::dec) + " --POOL-MAX=" + to_string<int>(pool_size, std::dec);
 
     _pool = memcached_pool(options.c_str(), options.length());
+
+    if (_pool == NULL)
+    {
+      LOG_ERROR("Failed to connected to memcached store: %s", options.c_str());
+    }
   }
 
   MemcachedStore::~MemcachedStore()
