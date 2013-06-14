@@ -223,7 +223,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _transport(transport),
   _remote_addr(*remote_addr),
   _token(),
-  _authenticated_uris(),
+  _authenticated_ids(),
   _refs(1)
 {
   // Create a random base64 encoded token for the flow.

@@ -69,13 +69,22 @@ public:
   inline const std::string& token() const { return _token; };
 
   /// Returns true if this flow has been authenticated for the given identity.
-  inline bool authenticated(pjsip_uri *aor) const { return (_authenticated_uris.find(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)) != _authenticated_uris.end()); };
+  inline bool authenticated(pjsip_uri *uri) const
+  {
+    return (_authenticated_ids.find(PJUtils::aor_from_uri((pjsip_sip_uri*)uri)) != _authenticated_ids.end());
+  };
 
   /// Marks the flow as authenticated for the given identity.
-  inline void set_authenticated(pjsip_uri *aor) { _authenticated_uris.insert(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
+  inline void set_authenticated(pjsip_uri *uri)
+  {
+    _authenticated_ids.insert(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
+  };
 
   /// Marks the flow as unauthenticated for the given identity.
-  inline void set_unauthenticated(pjsip_uri *aor) { _authenticated_uris.erase(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, aor)); };
+  inline void set_unauthenticated(pjsip_uri *uri)
+  {
+    _authenticated_ids.erase(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
+  };
 
   /// Flags that a keepalive has been received on this flow.
   void keepalive();
@@ -107,7 +116,7 @@ private:
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  std::unordered_set<std::string> _authenticated_uris;
+  std::unordered_set<std::string> _authenticated_ids;
   pjsip_uri _user;
   int _refs;
   pj_timer_entry _ka_timer;
