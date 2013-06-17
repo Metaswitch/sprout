@@ -41,9 +41,6 @@ int main (int argc, char *argv[])
   Log::setLoggingLevel(2);
   Log::setLogger(new Logger());
 
-  //stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
-  //                                                 Statistic::known_stats());
-
   // Open the store.
   std::list<std::string> server_list;
   Utils::split_string(servers, ',', server_list, 0, true);
