@@ -38,6 +38,7 @@
 
 #include <string>
 #include <json/reader.h>
+#include <json/writer.h>
 
 #include "utils.h"
 #include "log.h"
@@ -80,9 +81,32 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 Json::Value* HSSConnection::get_associated_uris(const std::string& private_user_identity,
                                                 SAS::TrailId trail)
 {
-  std::string path = "/associateduris/" +
+  std::string path = "/associatedpublic/" +
                      Utils::url_escape(private_user_identity);
-  return get_object(path, trail);
+  Json::Value* root = get_object(path, trail);
+  Json::Value* uris = NULL;
+  if (root != NULL)
+  {
+    if (root->isObject())
+    {
+      uris = new Json::Value;
+      *uris = root->get("public_ids", Json::Value::null);
+      if (!uris->isArray())
+      {
+        Json::FastWriter writer;
+        LOG_ERROR("Failed to find \"public_ids\" array in Homestead response:\n %s\n %s\n", path.c_str(), writer.write(*root).c_str());
+        delete uris;
+        uris = NULL;
+      }
+    }
+    else
+    {
+      Json::FastWriter writer;
+      LOG_ERROR("Homestead response is not JSON object:\n %s\n %s\n", path.c_str(), writer.write(*root).c_str());
+    }
+    delete root;
+  }
+  return uris;
 }
 
 

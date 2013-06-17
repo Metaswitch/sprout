@@ -61,8 +61,10 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses.clear();
     fakecurl_responses["http://narcissus/credentials/pubid42/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
     fakecurl_responses["http://narcissus/credentials/pubid42/privid_corrupt/digest"] = "{\"digest\"; \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/associateduris/privid69"] = "[\"123@example.com\", \"456@example.com\"]";
-    fakecurl_responses["http://narcissus/associateduris/privid70"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://narcissus/associatedpublic/privid69"] = "{\"private_id\":\"privid69\",\"public_ids\":[\"sip:123@example.com\", \"sip:456@example.com\"]}";
+    fakecurl_responses["http://narcissus/associatedpublic/privid_notobject"] = "[]";
+    fakecurl_responses["http://narcissus/associatedpublic/privid_nopublicids"] = "{\"private_id\":\"privid69\"}";
+    fakecurl_responses["http://narcissus/associatedpublic/privid_notfound"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/filtercriteria/pubid42"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ServiceProfile>"
@@ -111,14 +113,26 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
   Json::Value* actual = _hss.get_associated_uris("privid69", 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ(2u, actual->size());
-  EXPECT_EQ("123@example.com", actual->get((Json::Value::ArrayIndex)0, "").asString());
-  EXPECT_EQ("456@example.com", actual->get((Json::Value::ArrayIndex)1, "").asString());
+  EXPECT_EQ("sip:123@example.com", actual->get((Json::Value::ArrayIndex)0, "").asString());
+  EXPECT_EQ("sip:456@example.com", actual->get((Json::Value::ArrayIndex)1, "").asString());
   delete actual;
 }
 
-TEST_F(HssConnectionTest, ErrorAssociatedUris)
+TEST_F(HssConnectionTest, NotObjectAssociatedUris)
 {
-  Json::Value* actual = _hss.get_associated_uris("privid70", 0);
+  Json::Value* actual = _hss.get_associated_uris("privid_notobject", 0);
+  ASSERT_TRUE(actual == NULL);
+}
+
+TEST_F(HssConnectionTest, NoPublicIdsAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("privid_nopublicids", 0);
+  ASSERT_TRUE(actual == NULL);
+}
+
+TEST_F(HssConnectionTest, NotFoundAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("privid_notfound", 0);
   ASSERT_TRUE(actual == NULL);
 }
 
