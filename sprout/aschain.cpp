@@ -232,14 +232,6 @@ AsChainLink::on_initial_request(CallServices* call_services,
              odi_value.c_str(),
              to_string().c_str());
 
-    // Basic support for P-Asserted-Identity: strip any header(s) we've
-    // received, and set up to be the same as the From header. Full support will
-    // be added under sto125.
-    pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
-                                              PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
-                                              tdata->pool);
-    PJUtils::set_generic_header(tdata, &STR_P_ASSERTED_IDENTITY, &pai_str);
-
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
     // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
