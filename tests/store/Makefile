@@ -15,10 +15,8 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/usr/include
 
 LDFLAGS += -L${ROOT}/usr/lib
-LDFLAGS += -lmemcached \
-           -lmemcachedutil \
-           -ldl \
-					 -lrt \
+LDFLAGS += -ldl \
+           -lrt \
            -lboost_regex \
            -lboost_system \
            -lboost_thread \
@@ -37,10 +35,10 @@ $(OBJ_DIR):
 	mkdir $(OBJ_DIR)
 
 store-read : $(OBJS_READ)
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(ROOT)/usr/lib/libmemcached.a $(ROOT)/usr/lib/libmemcachedutil.a $(ROOT)/usr/lib/libmemcachedprotocol.a $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
 store-write : $(OBJS_WRITE)
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(ROOT)/usr/lib/libmemcached.a $(ROOT)/usr/lib/libmemcachedutil.a $(ROOT)/usr/lib/libmemcachedprotocol.a $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
 $(OBJ_DIR)/%.o : %.cpp
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
