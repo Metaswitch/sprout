@@ -653,7 +653,7 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store, analytics_logger, ifc_handler);
+    status = init_registrar(registrar_store, hss_connection, analytics_logger, ifc_handler);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing registrar, %s",

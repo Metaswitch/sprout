@@ -55,6 +55,7 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "memcachedstore.h"
+#include "hssconnection.h"
 #include "ifchandler.h"
 #include "registrar.h"
 #include "registration_utils.h"
@@ -63,6 +64,9 @@ extern "C" {
 
 
 static RegData::Store* store;
+
+// Connection to the HSS service for retrieving associated public URIs.
+static HSSConnection* hss;
 
 static IfcHandler* ifchandler;
 
@@ -510,11 +514,12 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
   }
 }
 
-pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
+pj_status_t init_registrar(RegData::Store* registrar_store, HSSConnection* hss_connection, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
 {
   pj_status_t status;
 
   store = registrar_store;
+  hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
 
