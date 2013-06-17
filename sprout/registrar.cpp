@@ -171,7 +171,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
-  // Canonicalize Get the Address of Record from the URI in the To header.
+  // Canonicalize the Address of Record from the URI in the To header.
   std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
 
