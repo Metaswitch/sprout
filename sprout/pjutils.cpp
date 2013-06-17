@@ -145,6 +145,9 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 }
 
 
+/// Parse the supplied string to a PJSIP URI structure.  Note that if this
+/// finds a name-addr instead of a URI it will parse it to a pjsip_name_addr
+/// structure, so you must use pjsip_uri_get_uri to get to the URI piece.
 pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
                                     pj_pool_t *pool)
 {
@@ -155,29 +158,6 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
   memcpy(buf, uri_s.data(), len);
   buf[len] = 0;
   return pjsip_parse_uri(pool, buf, len, 0);
-}
-
-
-/// Get the URI (either name-addr or addr-spec) from the string header
-/// (e.g., P-Served-User), ignoring any parameters. If it's a bare
-/// addr-spec, assume (like Contact) that parameters belong to the
-/// header, not to the URI.
-///
-/// @return URI, or NULL if cannot be parsed.
-pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
-                                           pj_pool_t *pool)
-{
-  // We must duplicate the string into memory from the specified pool first as
-  // pjsip_parse_uri does not clone the actual strings within the URI.
-  pj_str_t hvalue;
-  pj_strdup_with_null(pool, &hvalue, &hdr->hvalue);
-  char* end = strchr(hvalue.ptr, '>');
-  if (end != NULL)
-  {
-    *(end + 1) = '\0';
-    hvalue.slen = (end + 1 - hvalue.ptr);
-  }
-  return pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
 }
 
 
