@@ -795,11 +795,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
-    // Treat the REGISTER request as a keepalive.  In theory we should
-    // support STUN keepalives from clients, but only outbound aware
-    // clients will support STUN keepalive so we don't rely on this.
-    src_flow->keepalive();
-
     // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
@@ -1411,7 +1406,6 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
@@ -1438,12 +1432,45 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
       if (flow_data != NULL)
       {
         // The response correlates to an active flow.
-        if (pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL) != NULL)
+        pjsip_contact_hdr* contact = (pjsip_contact_hdr*)
+                    pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+        if (contact != NULL)
         {
           // There are active contacts, so consider the flow authenticated.
-          // @@@TODO Also authenticate any attached P-Associated-ID headers.
           LOG_INFO("Mark client flow as authenticated");
-          flow_data->set_authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          std::vector<pjsip_uri*> uris;
+
+          pjsip_generic_array_hdr* p_assoc_uri = (pjsip_generic_array_hdr*)
+                               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                          &STR_P_ASSOCIATED_URI,
+                                                          NULL);
+          if (p_assoc_uri != NULL)
+          {
+            // Use P-Associated-URIs list as list of authenticated URIs.
+            for (size_t ii = 0; ii < p_assoc_uri->count; ++ii)
+            {
+              pjsip_uri* uri = pjsip_parse_uri(rdata->tp_info.pool,
+                                               p_assoc_uri->values[ii].ptr,
+                                               p_assoc_uri->values[ii].slen,
+                                               0);
+              if (uri != NULL)
+              {
+                uris.push_back(uri);
+              }
+            }
+          }
+          else
+          {
+            // Use URI in To header as authenticated URIs.
+            uris.push_back(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+          }
+          flow_data->set_authenticated(uris);
+
+          // Treat the REGISTER response as a keepalive.  In theory we should
+          // support STUN keepalives from clients, but only outbound aware
+          // clients will support STUN keepalive so we don't rely on this.
+          flow_data->keepalive();
         }
         else
         {
@@ -1451,7 +1478,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
           // unregistered. Remove the user from the authenticated set, so
           // the next REGISTER is challenged.
           LOG_INFO("Mark client flow as un-authenticated");
-          flow_data->set_unauthenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          flow_data->set_unauthenticated();
         }
 
         // Decrement the reference to the flow data

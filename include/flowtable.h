@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
 
 #ifndef FLOWTABLE_H__
 #define FLOWTABLE_H__
@@ -49,7 +47,7 @@ extern "C" {
 // Common STL includes.
 #include <cassert>
 #include <map>
-#include <unordered_set>
+#include <unordered_map>
 #include <string>
 
 #include "statistic.h"
@@ -69,22 +67,13 @@ public:
   inline const std::string& token() const { return _token; };
 
   /// Returns true if this flow has been authenticated for the given identity.
-  inline bool authenticated(pjsip_uri *uri) const
-  {
-    return (_authenticated_ids.find(PJUtils::aor_from_uri((pjsip_sip_uri*)uri)) != _authenticated_ids.end());
-  };
+  bool authenticated(pjsip_uri* uri) const;
 
-  /// Marks the flow as authenticated for the given identity.
-  inline void set_authenticated(pjsip_uri *uri)
-  {
-    _authenticated_ids.insert(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
-  };
+  /// Marks the flow as authenticated for the given identities.
+  void set_authenticated(std::vector<pjsip_uri*> uris);
 
-  /// Marks the flow as unauthenticated for the given identity.
-  inline void set_unauthenticated(pjsip_uri *uri)
-  {
-    _authenticated_ids.erase(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
-  };
+  /// Marks the flow as unauthenticated.
+  void set_unauthenticated();
 
   /// Flags that a keepalive has been received on this flow.
   void keepalive();
@@ -112,17 +101,26 @@ private:
   void inc_ref();
 
   FlowTable* _flow_table;
-  uint64_t _id;
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  std::unordered_set<std::string> _authenticated_ids;
-  pjsip_uri _user;
-  int _refs;
+
+  /// Timer used to expire the flow when the associated registration bindings
+  /// expire.
   pj_timer_entry _ka_timer;
 
-  // This expiry timeout is set to 10 minutes, which is twice the maximum
-  // REGISTER expiry enforced by Sprout.
+  /// Map holding the authenticated identifiers for this flow.  The key
+  /// is a normalized address of record/public identity, the value is the
+  /// full name-addr that should be used in P-Asserted-ID.
+  std::unordered_map<std::string, std::string> _authenticated_ids;
+
+  /// The default identifier for this flow.
+  std::string _default_id;
+
+  /// Counts the references to this Flow.  This can only be updated or tested
+  /// by a thread which currently holds the FlowTable::_flow_map_lock.
+  int _refs;
+
   static const int EXPIRY_TIMEOUT = 600;
 };
 

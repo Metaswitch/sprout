@@ -100,7 +100,7 @@ static pjsip_module mod_stack =
 
 
 /// Custom parser for Privacy header.  This is registered with PJSIP when
-// we initialize the stack.
+/// we initialize the stack.
 static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
 {
     pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
@@ -109,8 +109,18 @@ static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
 }
 
 
+/// Custom parser for P-Associated-URI header.  This is registered with PJSIP when
+/// we initialize the stack.
+static pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
+{
+    pjsip_generic_array_hdr *p_assoc_uri = pjsip_generic_array_hdr_create(ctx->pool, &STR_P_ASSOCIATED_URI);
+    pjsip_parse_generic_array_hdr_imp(p_assoc_uri, ctx->scanner);
+    return (pjsip_hdr*)p_assoc_uri;
+}
+
+
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
-// and timers.
+/// and timers.
 static int pjsip_thread(void *p)
 {
   pj_time_val delay = {0, 10};
@@ -131,7 +141,6 @@ static int pjsip_thread(void *p)
 
 
 /// Worker threads handle most SIP message processing.
-//
 static int worker_thread(void* p)
 {
   // Set up data to always process incoming messages at the first PJSIP
@@ -486,9 +495,11 @@ pj_status_t init_stack(const std::string& system_name,
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
 
-  // Register custom header parsers (currently only Privacy, but add any others
-  // here).
+  // Register custom header parsers (currently only Privacy and P-Associated-URI,
+  // but add any others here).
   status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Create listening transports for trusted and untrusted ports.

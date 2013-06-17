@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
@@ -52,6 +50,7 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "flowtable.h"
+
 
 FlowTable::FlowTable() :
   _tp2flow_map(),
@@ -210,6 +209,7 @@ void FlowTable::remove_flow(Flow* flow)
   pthread_mutex_unlock(&_flow_map_lock);
 }
 
+
 void FlowTable::report_flow_count()
 {
   LOG_DEBUG("Reporting current flow count: %d", _tp2flow_map.size());
@@ -218,12 +218,14 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
+
 Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr* remote_addr) :
   _flow_table(flow_table),
   _transport(transport),
   _remote_addr(*remote_addr),
   _token(),
   _authenticated_ids(),
+  _default_id(),
   _refs(1)
 {
   // Create a random base64 encoded token for the flow.
@@ -243,16 +245,10 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
                                        &listener_key);
     LOG_DEBUG("Added transport listener for flow %p", this);
   }
-  else
-  {
-    // We run our own keepalive timer on non-reliable transports, so start the
-    // timer.
-    pj_timer_entry_init(&_ka_timer, PJ_FALSE, (void*)this, &on_ka_timer_expiry);
-    pj_time_val delay = {EXPIRY_TIMEOUT, 0};
-    pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay);
-    _ka_timer.id = PJ_TRUE;
-    LOG_DEBUG("Started keepalive timer for flow %p", this);
-  }
+
+  // Start the keepalive timer.
+  pj_timer_entry_init(&_ka_timer, PJ_FALSE, (void*)this, &on_ka_timer_expiry);
+  keepalive();
 }
 
 
@@ -263,7 +259,8 @@ Flow::~Flow()
     // We incremented the ref count when we put it in the map.
     pjsip_transport_dec_ref(_transport);
   }
-  else
+
+  if (_ka_timer.id)
   {
     // Stop the keepalive timer.
     pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
@@ -272,24 +269,62 @@ Flow::~Flow()
 }
 
 
+/// Returns true if this flow has been authenticated for the given identity.
+bool Flow::authenticated(pjsip_uri* uri) const
+{
+  return (_authenticated_ids.find(PJUtils::aor_from_uri((pjsip_sip_uri*)uri)) != _authenticated_ids.end());
+}
+
+
+/// Marks the flow as authenticated for the given list of identities.
+void Flow::set_authenticated(std::vector<pjsip_uri*> uris)
+{
+  _authenticated_ids.clear();
+
+  // The associated URIs are potentially full name-addr elements including
+  // display names and URI parameters, and we have to store the whole thing
+  // for substituting in as P-Asserted-Identity.
+  for (size_t ii = 0; ii < uris.size(); ++ii)
+  {
+    // Get the key as just the bare URI, stripped of the display name and any
+    // parameters.
+    std::string key = PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(uris[ii]));
+
+    // Get the value as the fully rendered name-addr field.
+    std::string value = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uris[ii]);
+
+    _authenticated_ids.insert(std::make_pair(key, value));
+
+    if (ii == 0)
+    {
+      // Store the first key as the default for this flow.
+      _default_id = key;
+    }
+  }
+}
+
+
+/// Marks the flow as unauthenticated for the given identity.
+void Flow::set_unauthenticated()
+{
+  _authenticated_ids.clear();
+}
+
+
 void Flow::keepalive()
 {
-  // We only run keepalive times on non-reliable transport flows.
-  if (!PJSIP_TRANSPORT_IS_RELIABLE(_transport))
+  if (_ka_timer.id)
   {
-    if (_ka_timer.id)
-    {
-      // Stop the existing keepalive timer.
-      pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
-      _ka_timer.id = PJ_FALSE;
-    }
-
-    // Start the keepalive timer.
-    pj_time_val delay = {EXPIRY_TIMEOUT, 0};
-    pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay);
-    _ka_timer.id = PJ_TRUE;
-    LOG_DEBUG("(Re)started keepalive timer for flow %p", this);
+    // Stop the existing keepalive timer.
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
+    _ka_timer.id = PJ_FALSE;
   }
+
+  // Start the keepalive timer.
+  pj_time_val delay = {EXPIRY_TIMEOUT, 0};
+  pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay);
+  _ka_timer.id = PJ_TRUE;
+  LOG_DEBUG("(Re)started keepalive timer for flow %p", this);
 }
 
 
