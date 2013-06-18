@@ -96,12 +96,6 @@ static AnalyticsLogger* analytics;
 pjsip_auth_srv auth_srv;
 
 
-// Do IMS compliant user lookup?  If this flag is set, the lookup uses
-// both public and private user identities in the user lookup.  Otherwise,
-// the lookup uses only the private user identity.
-bool ims_auth;
-
-
 pj_status_t user_lookup(pj_pool_t *pool,
                         const pjsip_auth_lookup_cred_param *param,
                         pjsip_cred_info *cred_info)
@@ -115,35 +109,16 @@ pj_status_t user_lookup(pj_pool_t *pool,
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
   Json::Value* data;
 
-  std::string private_id;
-  std::string public_id;
-  if (ims_auth)
-  {
-    // For IMS authentication use both the private and public user identities
-    // in the user lookup.  The private user identity comes from the username
-    // field of the Authentication header, and the public user identity from
-    // the request-URI of the request.
-    private_id = PJUtils::pj_str_to_string(acc_name);
-    public_id = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR,
-                                       rdata->msg_info.msg->line.req.uri);
+  // The private user identity comes from the username field of the
+  // Authentication header, and the public user identity from the request-URI
+  // of the request.
+  std::string private_id = PJUtils::pj_str_to_string(acc_name);
+  std::string public_id = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR,
+                                                 rdata->msg_info.msg->line.req.uri);
 
-    LOG_DEBUG("Retrieve IMS digest for user %s/%s in realm %.*s",
-              private_id.c_str(), public_id.c_str(),
-              realm->slen, realm->ptr);
-  }
-  else
-  {
-    // For SIP authentication use only the username from the Authentication
-    // header for the user lookup.  The username field contains the private
-    // user identity and the public user identity can be deduced by adding
-    // a sip: prefix.
-    private_id = PJUtils::pj_str_to_string(acc_name);
-    public_id = "sip:" + private_id;
-
-    LOG_DEBUG("Retrieve SIP digest for user %s/%s in realm %.*s",
-              private_id.c_str(), public_id.c_str(),
-              realm->slen, realm->ptr);
-  }
+  LOG_DEBUG("Retrieve digest for user %s/%s in realm %.*s",
+            private_id.c_str(), public_id.c_str(),
+            realm->slen, realm->ptr);
 
   data = hss->get_digest_data(private_id, public_id, trail);
 
@@ -332,7 +307,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
 
 pj_status_t init_authentication(const std::string& realm_name,
-                                const std::string& auth_config,
                                 HSSConnection* hss_connection,
                                 AnalyticsLogger* analytics_logger)
 {
@@ -340,20 +314,6 @@ pj_status_t init_authentication(const std::string& realm_name,
 
   hss = hss_connection;
   analytics = analytics_logger;
-
-  if (auth_config == "sip-digest")
-  {
-    ims_auth = false;
-  }
-  else if (auth_config == "ims-digest")
-  {
-    ims_auth = true;
-  }
-  else
-  {
-    LOG_ERROR("Unsupported authentication configuration %s", auth_config.c_str());
-    return 1;
-  }
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.
