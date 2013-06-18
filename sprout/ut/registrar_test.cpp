@@ -65,6 +65,10 @@ public:
     _store = RegData::create_local_store();
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
+    Json::Value uris;
+    Json::Reader reader;
+    ASSERT_EQ(reader.parse(std::string("{\"private_id\":\"6505550231@homedomain\",\"public_ids\":[\"sip:6505550231@homedomain\"]}"), uris), true);
+    _hss_connection->set_object(std::string("/associatedpublic/6505550231%40homedomain"), uris, 1L);
     _ifc_handler = new IfcHandler(_hss_connection, _store);
     delete _analytics->_logger;
     _analytics->_logger = NULL;
@@ -613,4 +617,16 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
+}
+
+/// Homestead fails associated URI request
+TEST_F(RegistrarTest, ErrorAssociatedUris)
+{
+  Message msg;
+  msg._user = "6505550232";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(403, out->line.status.code);
+  EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
 }

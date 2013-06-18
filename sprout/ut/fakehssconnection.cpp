@@ -62,7 +62,7 @@ Json::Value* FakeHSSConnection::get_object(const std::string& url, SAS::TrailId 
   std::map<std::string, Json::Value>::iterator i = _json_db.find(url);
   if (i != _json_db.end())
   {
-    return &i->second;
+    return new Json::Value(i->second);
   }
   return NULL;
 }

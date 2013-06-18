@@ -150,6 +150,55 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 }
 
 
+bool get_private_id(pjsip_rx_data* rdata, std::string& id)
+{
+  bool success = false;
+
+  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+  if (auth_hdr != NULL)
+  {
+    if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)
+    {
+      id = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+      success = true;
+    }
+    else
+    {
+      LOG_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
+                  auth_hdr->scheme.slen, auth_hdr->scheme.ptr);
+    }
+  }
+
+  if (!success)
+  {
+    pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+    if (PJSIP_URI_SCHEME_IS_SIP(to_uri) ||
+        PJSIP_URI_SCHEME_IS_SIPS(to_uri))
+    {
+      pjsip_sip_uri* to_sip_uri = (pjsip_sip_uri*)to_uri;
+      if (to_sip_uri->user.slen > 0)
+      {
+        id = PJUtils::pj_str_to_string(&to_sip_uri->user) + "@" + PJUtils::pj_str_to_string(&to_sip_uri->host);
+      }
+      else
+      {
+        id = PJUtils::pj_str_to_string(&to_sip_uri->host);
+      }
+      success = true;
+    } 
+    else
+    {
+      const pj_str_t* scheme = pjsip_uri_get_scheme(to_uri);
+      LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
+                  scheme->slen, scheme->ptr);
+    }
+  }
+
+  return success;
+}
+
+
 void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
@@ -179,6 +228,11 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
 
+  // Get the private ID.  Failure is impossible because we've already checked
+  // that the To header contains a SIP or SIPS URI.
+  std::string private_id;
+  (void)get_private_id(rdata, private_id);
+
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
   int cseq = rdata->msg_info.cseq->cseq;
@@ -199,6 +253,23 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::Marker cid_marker(trail, SASMarker::SIP_CALL_ID, 1u);
   cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
+
+  // Query the HSS for the associated URIs.
+  Json::Value* uris = hss->get_associated_uris(private_id, trail);
+  if (uris == NULL)
+  {
+    // We failed to get the list of associated URIs.  This indicates that the
+    // HSS is unavailable, the public identity doesn't exist or the public
+    // identity doesn't belong to the private identity.  Reject with 403.
+    LOG_ERROR("Rejecting register request with invalid public/private identity");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_FORBIDDEN,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+  }
 
   // Find the contact and expires headers in the message.
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
