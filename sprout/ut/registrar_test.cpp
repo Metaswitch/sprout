@@ -602,7 +602,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
-  register_uri(_store, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
   RegData::AoR* aor_data;
   aor_data = _store->get_aor_data("sip:6505550231@homedomain");
   ASSERT_TRUE(aor_data != NULL);

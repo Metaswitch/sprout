@@ -625,7 +625,8 @@ int main(int argc, char *argv[])
                                opt.trusted_hosts,
                                analytics_logger,
                                enum_service,
-                               bgcf_service);
+                               bgcf_service,
+                               hss_connection);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",

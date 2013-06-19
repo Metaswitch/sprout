@@ -141,6 +141,7 @@ static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
 static AsChainTable* as_chain_table;
+static HSSConnection* hss;
 
 static bool ibcf = false;
 
@@ -1155,7 +1156,8 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
                              const TrustBoundary* trust,
                              target_list& targets,
-                             int max_targets)
+                             int max_targets,
+                             SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
@@ -1269,100 +1271,110 @@ void proxy_calculate_targets(pjsip_msg* msg,
   // described above, this implies that the element is responsible for the
   // domain in the Request-URI, and the element MAY use whatever mechanism
   // it desires to determine where to send the request.
-  if (store)
+  if ((store) && (hss))
   {
-    // Look up the target in the registration data store.
-    std::string aor = PJUtils::aor_from_uri(req_uri);
-    LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegData::AoR* aor_data = store->get_aor_data(aor);
-
-    // Pick up to max_targets bindings to attempt to contact.  Since
-    // some of these may be stale, and we don't want stale bindings to
-    // push live bindings out, we sort by expiry time and pick those
-    // with the most distant expiry times.  See bug 45.
-    std::list<RegData::AoR::Bindings::value_type> target_bindings;
-    if (aor_data != NULL)
+    // Determine the canonical public ID, and look up the set of associated
+    // URIs on the HSS.
+    std::string public_id = PJUtils::aor_from_uri(req_uri);
+    Json::Value* uris = hss->get_associated_uris(public_id, trail);
+    if ((uris != NULL) &&
+        (uris->size() > 0))
     {
-      const RegData::AoR::Bindings& bindings = aor_data->bindings();
-      if ((int)bindings.size() <= max_targets)
+      // Take the first associated URI as the AOR.
+      std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+
+      // Look up the target in the registration data store.
+      LOG_INFO("Look up targets in registration store: %s", aor.c_str());
+      RegData::AoR* aor_data = store->get_aor_data(aor);
+
+      // Pick up to max_targets bindings to attempt to contact.  Since
+      // some of these may be stale, and we don't want stale bindings to
+      // push live bindings out, we sort by expiry time and pick those
+      // with the most distant expiry times.  See bug 45.
+      std::list<RegData::AoR::Bindings::value_type> target_bindings;
+      if (aor_data != NULL)
       {
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-             i != bindings.end();
-             ++i)
+        const RegData::AoR::Bindings& bindings = aor_data->bindings();
+        if ((int)bindings.size() <= max_targets)
         {
-          target_bindings.push_back(*i);
+          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+               i != bindings.end();
+               ++i)
+          {
+            target_bindings.push_back(*i);
+          }
         }
-      }
-      else
-      {
-        std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-             i != bindings.end();
-             ++i)
+        else
         {
-          std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
-          ordered.insert(p);
-        }
+          std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
+          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+               i != bindings.end();
+               ++i)
+          {
+            std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
+            ordered.insert(p);
+          }
 
         int num_contacts = 0;
         for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
              num_contacts < max_targets;
              ++i)
-        {
-          target_bindings.push_back(i->second);
-          num_contacts++;
-        }
-      }
-    }
-
-    for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
-         i != target_bindings.end();
-         ++i)
-    {
-      RegData::AoR::Binding* binding = i->second;
-      LOG_DEBUG("Target = %s", binding->_uri.c_str());
-      bool useable_contact = true;
-      target target;
-      target.from_store = PJ_TRUE;
-      target.upstream_route = PJ_FALSE;
-      target.aor = aor;
-      target.binding_id = i->first;
-      target.uri = PJUtils::uri_from_string(binding->_uri, pool);
-      target.transport = NULL;
-      if (target.uri == NULL)
-      {
-        LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
-                    binding->_uri.c_str(), aor.c_str());
-        useable_contact = false;
-      }
-      else
-      {
-        for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
-             j != binding->_path_headers.end();
-             ++j)
-        {
-          pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
-          if (path != NULL)
           {
-            target.paths.push_back(PJUtils::uri_from_string(*j, pool));
-          }
-          else
-          {
-            LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
-                        binding->_uri.c_str(), aor.c_str(), (*j).c_str());
-            useable_contact = false;
-            break;
+            target_bindings.push_back(i->second);
+            num_contacts++;
           }
         }
       }
 
-      if (useable_contact)
+      for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
+           i != target_bindings.end();
+           ++i)
       {
-        targets.push_back(target);
-      }
-    }
+        RegData::AoR::Binding* binding = i->second;
+        LOG_DEBUG("Target = %s", binding->_uri.c_str());
+        bool useable_contact = true;
+        target target;
+        target.from_store = PJ_TRUE;
+        target.upstream_route = PJ_FALSE;
+        target.aor = aor;
+        target.binding_id = i->first;
+        target.uri = PJUtils::uri_from_string(binding->_uri, pool);
+        target.transport = NULL;
+        if (target.uri == NULL)
+        {
+          LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
+                      binding->_uri.c_str(), aor.c_str());
+          useable_contact = false;
+        }
+        else
+        {
+          for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
+               j != binding->_path_headers.end();
+               ++j)
+          {
+            pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
+            if (path != NULL)
+            {
+              target.paths.push_back(PJUtils::uri_from_string(*j, pool));
+            }
+            else
+            {
+              LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
+                          binding->_uri.c_str(), aor.c_str(), (*j).c_str());
+              useable_contact = false;
+              break;
+            }
+          }
+        }
 
-    delete aor_data;
+        if (useable_contact)
+        {
+          targets.push_back(target);
+        }
+      }
+
+      delete aor_data;
+    }
   }
 }
 
@@ -1831,7 +1843,7 @@ void UASTransaction::handle_outgoing_non_cancel(target* target)
   else
   {
     // Find targets.
-    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING);
+    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING, trail());
   }
 
   if (targets.size() == 0)
@@ -2948,7 +2960,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
-                                BgcfService *bgcfService)
+                                BgcfService *bgcfService,
+                                HSSConnection* hss_connection)
 {
   pj_status_t status;
 
@@ -3017,6 +3030,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
   enum_service = enumService;
   bgcf_service = bgcfService;
+  hss = hss_connection;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
