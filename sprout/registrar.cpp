@@ -490,7 +490,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
-  if (((intptr_t)tsx->mod_data[0] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
       ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
     // Can't create an AS response in UT

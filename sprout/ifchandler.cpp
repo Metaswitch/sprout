@@ -325,7 +325,7 @@ AsInvocation Ifc::as_invocation() const
   // That means each AsInvocation would have to belong to a pool,
   // though, and that's not easy in the current architecture.
 
-  as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
+  as_invocation.default_handling = boost::lexical_cast<bool>(get_first_node_value(as, "DefaultHandling"));
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
   xml_node<>* as_ext = as->first_node("Extension");
