@@ -61,7 +61,7 @@ extern "C" {
 struct AsInvocation
 {
   std::string server_name;
-  intptr_t default_handling;
+  bool default_handling;
   std::string service_info;
   bool include_register_request;
   bool include_register_response;
