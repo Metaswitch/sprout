@@ -224,9 +224,9 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
-  // Canonicalize the Address of Record from the URI in the To header.
-  std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
+  // Canonicalize the public ID from the URI in the To header.
+  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the private ID.  Failure is impossible because we've already checked
   // that the To header contains a SIP or SIPS URI.
@@ -256,7 +256,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Query the HSS for the associated URIs.
   Json::Value* uris = hss->get_associated_uris(private_id, trail);
-  if (uris == NULL)
+  if ((uris == NULL) ||
+      (uris->size() == 0))
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
@@ -270,6 +271,10 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL);
     return;
   }
+
+  // Determine the AOR from the first entry in the uris array.
+  std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+  LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Find the contact and expires headers in the message.
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
@@ -543,6 +548,18 @@ void process_register_request(pjsip_rx_data* rdata)
                                                 &service_route);
   pjsip_msg_insert_first_hdr(tdata->msg, service_route_hdr);
 
+  // Add P-Associated-URI headers for all of the associated URIs.
+  static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
+  for (Json::ValueIterator it = uris->begin(); it != uris->end(); it++)
+  {
+    pj_str_t associated_uri = {(char*)(*it).asCString(), strlen((*it).asCString())};
+    pjsip_hdr* associated_uri_hdr =
+      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
+                                                  &p_associated_uri_hdr_name,
+                                                  &associated_uri);
+    pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
+  }
+
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
@@ -605,5 +622,4 @@ void destroy_registrar()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_registrar);
 }
-
 

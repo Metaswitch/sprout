@@ -112,6 +112,8 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     assert(status == PJ_SUCCESS);
 
+    // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
+
     // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
     // constraints for REGISTER messages, but we only get the served user from the From address in an
     // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
