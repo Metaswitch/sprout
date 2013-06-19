@@ -255,7 +255,7 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
   // Query the HSS for the associated URIs.
-  Json::Value* uris = hss->get_associated_uris(private_id, trail);
+  Json::Value* uris = hss->get_associated_uris(public_id, trail);
   if ((uris == NULL) ||
       (uris->size() == 0))
   {

@@ -65,8 +65,8 @@ public:
     _store = RegData::create_local_store();
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
-    _hss_connection->set_json(std::string("/associatedpublic/6505550231%40homedomain"),
-                              std::string("{\"private_id\":\"6505550231@homedomain\",\"public_ids\":[\"sip:6505550231@homedomain\"]}"));
+    _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550231%40homedomain"),
+                              std::string("{\"public_ids\":[\"sip:6505550231@homedomain\"]}"));
     _ifc_handler = new IfcHandler(_hss_connection, _store);
     delete _analytics->_logger;
     _analytics->_logger = NULL;
@@ -645,9 +645,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
 {
   Message msg;
   msg._user = "6505550233";
-  _hss_connection->set_json(std::string("/associatedpublic/6505550233%40homedomain"),
-                            std::string("{\"private_id\":\"6505550233@homedomain\","
-                                         "\"public_ids\":[\"sip:6505550233@homedomain\","
+  _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550233%40homedomain"),
+                            std::string("{\"public_ids\":[\"sip:6505550233@homedomain\","
                                                          "\"sip:6505550234@homedomain\"]}"));
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -664,9 +663,8 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
-  _hss_connection->set_json(std::string("/associatedpublic/6505550234%40homedomain"),
-                            std::string("{\"private_id\":\"6505550234@homedomain\","
-                                         "\"public_ids\":[\"sip:6505550233@homedomain\","
+  _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550234%40homedomain"),
+                            std::string("{\"public_ids\":[\"sip:6505550233@homedomain\","
                                                          "\"sip:6505550234@homedomain\"]}"));
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
