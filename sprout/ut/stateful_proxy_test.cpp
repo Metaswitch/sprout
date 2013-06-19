@@ -332,7 +332,8 @@ protected:
                      bool expect_100,
                      bool pani_AB,
                      bool pani_BA,
-                     bool expect_orig);
+                     bool expect_orig,
+                     bool pcpi);
 };
 
 RegData::Store* StatefulProxyTestBase::_store;
@@ -584,7 +585,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool pani_AB,        //< Should P-A-N-I be passed on requests?
                                           bool pani_BA,        //< Should P-A-N-I be passed on responses?
-                                          bool expect_orig)    //< Should we expect the INVITE to be marked originating?
+                                          bool expect_orig,    //< Should we expect the INVITE to be marked originating?
+                                          bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
   SCOPED_TRACE("doTestHeaders");
   pjsip_msg* out;
@@ -635,6 +637,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   {
     EXPECT_THAT(get_headers(out, "Route"), Not(HasSubstr(";orig")));
   }
+
+  // Check P-Called-Party-ID
+  EXPECT_EQ(pcpi ? "P-Called-Party-ID: " + msg._toscheme + ":" + msg._to + "@" + msg._todomain : "", get_headers(out, "P-Called-Party-ID"));
 
   invite = pop_txdata();
 
@@ -935,7 +940,7 @@ TEST_F(StatefulProxyTest, TestMainlineHeadersSprout)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false);
+  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false, true);
 }
 
 TEST_F(StatefulProxyTest, TestNotRegisteredTo)
@@ -1869,7 +1874,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), first hop, in particular for header stripping.
@@ -1889,7 +1894,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   msg._via = "10.83.18.37:36531;transport=tcp";
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true, false);
 }
 
 // Test flows out of Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -1911,7 +1916,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -1932,7 +1937,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   // the right address.
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true, false);
 }
 
 
@@ -1954,7 +1959,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
   // This cannot be originating, because it's IBCF! It's a foreign domain.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false, false);
 }
 
 // Test flows out of IBCF, in particular for header stripping.
@@ -1975,7 +1980,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false, false);
 }
 
 // Check configured trusted host is respected

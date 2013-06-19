@@ -2680,6 +2680,26 @@ void UACTransaction::set_target(const struct target& target)
 {
   enter_context();
 
+  if (target.from_store)
+  {
+    // This target came from the registration store.  Before we overwrite the
+    // URI, extract its AOR and write it to the P-Called-Party-ID header.
+    static const pj_str_t called_party_id_hdr_name = pj_str("P-Called-Party-ID");
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(_tdata->msg, &called_party_id_hdr_name, NULL);
+    if (hdr)
+    {
+      pj_list_erase(hdr);
+    }
+    pj_str_t called_party_id;
+    pj_strdup2(_tdata->pool,
+               &called_party_id,
+               PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri).c_str());
+    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(_tdata->pool,
+                                                      &called_party_id_hdr_name,
+                                                      &called_party_id);
+    pjsip_msg_add_hdr(_tdata->msg, hdr);
+  }
+
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
   _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
