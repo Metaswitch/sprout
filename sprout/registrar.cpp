@@ -255,6 +255,9 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
   // Query the HSS for the associated URIs.
+  // This should really include the private ID, but we don't yet have a
+  // homestead API for it.  Homestead won't be able to query a third-party HSS
+  // without the private ID.
   Json::Value* uris = hss->get_associated_uris(public_id, trail);
   if ((uris == NULL) ||
       (uris->size() == 0))
