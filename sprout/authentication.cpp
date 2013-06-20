@@ -113,8 +113,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
   // Authentication header, and the public user identity from the request-URI
   // of the request.
   std::string private_id = PJUtils::pj_str_to_string(acc_name);
-  std::string public_id = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR,
-                                                 rdata->msg_info.msg->line.req.uri);
+  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
 
   LOG_DEBUG("Retrieve digest for user %s/%s in realm %.*s",
             private_id.c_str(), public_id.c_str(),
