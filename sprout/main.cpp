@@ -598,10 +598,10 @@ int main(int argc, char *argv[])
   // Initialise the OPTIONS handling module.
   status = init_options();
 
-  status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
-
   if (!opt.edge_proxy)
   {
+    status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_file.empty())
     {
