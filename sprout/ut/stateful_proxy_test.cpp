@@ -400,7 +400,14 @@ public:
   }
 
 protected:
-  void doRegisterEdge(TransportFlow* xiTp, string& xoToken, string& xoBareToken, bool firstHop = false, string supported = "outbound, path", bool expectPath = true, string via = "");
+  void doRegisterEdge(TransportFlow* xiTp,
+                      string& xoToken,
+                      string& xoBareToken,
+                      string extraRspHeaders = "",
+                      bool firstHop = false,
+                      string supported = "outbound, path",
+                      bool expectPath = true,
+                      string via = "");
   SP::Message doInviteEdge(string token);
 };
 
@@ -1348,6 +1355,7 @@ TEST_F(StatefulProxyTest, TestProxyCalcTargets2)
 void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport to register on
                                            string& xoToken, //^ out: token (parsed from Path)
                                            string& xoBareToken, //^ out: bare token (parsed from Path)
+                                           string extraRspHeaders, //^ extra headers to be included in response
                                            bool firstHop,  //^ is this the first hop? If not, there was a previous hop to get here.
                                            string supported, //^ Supported: header value, or empty if none
                                            bool expectPath, //^ do we expect a Path: response? If false, don't parse token
@@ -1421,6 +1429,11 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   }
   // Must include a contact header otherwise the flow won't be marked as authenticated.
   r.append("Contact: sip:wuntootreefower@").append(xiTp->to_string(true)).append(";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+
+  // Add any extra response headers.
+  r.append(extraRspHeaders);
+
+  // Pass the response back.
   inject_msg(respond_to_current_txdata(200, "", r));
   ASSERT_EQ(1, txdata_count());
 
@@ -1449,7 +1462,7 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   return msg;
 }
 
-TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFW)
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 {
   SCOPED_TRACE("");
 
@@ -1460,7 +1473,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFW)
                                         49152);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken);
+  doRegisterEdge(tp, token, baretoken,
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Do two invites - the first time, the token is created; the second
   // time, we reuse the existing token.
@@ -1698,7 +1712,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.38",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "");
+  doRegisterEdge(tp, token, baretoken, "", true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
@@ -1706,13 +1720,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.39",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "10.22.3.4:9999");
+  doRegisterEdge(tp, token, baretoken, "", true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
   // Client 3: Doesn't declare outbound support (no attr), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "path", false, "");
+  //doRegisterEdge(tp, token, baretoken, "", true, "path", false, "");
   //delete tp;
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
@@ -1720,13 +1734,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "path", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, "", true, "path", true, "10.22.3.5:8888");
   delete tp;
 
   // Client 5: Doesn't declare outbound support (no header), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "", false, "");
+  //doRegisterEdge(tp, token, baretoken, "", true, "", false, "");
   //delete tp;
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
@@ -1734,7 +1748,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, "", true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
@@ -1746,7 +1760,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, true);
+  doRegisterEdge(tp, token, baretoken, "", true);
 
   // This is first hop, so should be marked
   EXPECT_THAT(token, HasSubstr(";ob"));
@@ -1865,7 +1879,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, "", true);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1885,7 +1899,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, "", true);
 
   // INVITE from client via bono to Sprout, first hop
   Message msg;
@@ -1905,7 +1919,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1927,7 +1941,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from client via bono to Sprout, not first hop
   Message msg;

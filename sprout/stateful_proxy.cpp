@@ -676,7 +676,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   {
     // Request received on a known flow, so check it is authenticated.
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
     {
       LOG_DEBUG("Request received on authenticated client flow.");
       src_flow->dec_ref();
@@ -726,6 +726,70 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
     }
   }
 }
+
+
+#if 0
+static pj_bool_t proxy_process_edge_identities(Flow* src_flow,
+                                               pjsip_rx_data* rdata,
+                                               pjsip_tx_data* tdata)
+{
+  // Find the P-Preferred-Identity header if present
+  pjsip_generic_string_hdr* p_preferred_id;
+  p_preferred_id = (pjsip_generic_array_hdr*)
+                       pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                  &STR_P_PREFERRED_IDENTITY,
+                                                  p_preferred_id);
+
+  if (p_preferred_id != NULL)
+  {
+    pjsip_uri* pref_id;
+    pjsip_uri* alt_id;
+
+    if (p_preferred_id->count == 1)
+    {
+      pref_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
+                                            p_preferred_id->values[0].ptr,
+                                            p_preferred_id->values[0].slen,
+                                            0);
+      alt_id = NULL;
+    }
+    else if (p_preferred_id->count == 2)
+    {
+      pref_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
+                                            p_preferred_id->values[0].ptr,
+                                            p_preferred_id->values[0].slen,
+                                            0);
+      alt_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
+                                           p_preferred_id->values[1].ptr,
+                                           p_preferred_id->values[1].slen,
+                                           0);
+      if (((PJSIP_URI_SCHEME_IS_SIP(pref_id)) && (PJSIP_URI_SCHEME_IS_SIP(alt_id))) ||
+          ((PJSIP_URI_SCHEME_IS_TEL(pref_id)) && (PJSIP_URI_SCHEME_IS_TEL(alt_id))))
+      {
+        // Preferred and alternate URIs must be different schemes.
+      }
+    }
+    else
+    {
+      // Must have one or two identities.
+
+    }
+
+    // Check that the client is authorized to use these identities.
+    pref_id
+
+
+
+
+  }
+
+  // @@@TODO Use P-Asserted-Identity for authentication
+  pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+  if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+  {
+  }
+}
+#endif
 
 
 /// Perform edge-proxy-specific routing.
@@ -797,7 +861,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
@@ -878,9 +942,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
 
-          // @@@TODO Use P-Asserted-Identity for authentication
-          pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-          if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+          if (src_flow->asserted_identity(PJSIP_MSG_FROM_HDR(rdata->msg_info.msg)->uri).length() > 0)
           {
             // Client has been authenticated, so we can trust it for the
             // purposes of routing SIP messages and don't need to challenge
@@ -1431,54 +1493,39 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
 
       if (flow_data != NULL)
       {
-        // The response correlates to an active flow.
-        pjsip_contact_hdr* contact = (pjsip_contact_hdr*)
-                    pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+        // The response correlates to an active flow.  Check the contact
+        // headers and expiry header to find when the last contacts will
+        // expire.
+        int max_expires = PJUtils::max_expires(rdata->msg_info.msg);
+        LOG_DEBUG("Maximum contact expiry is %d", max_expires);
 
-        if (contact != NULL)
+        // Go through the list of URIs covered by this registration setting
+        // them on the flow.  This is either the list in the P-Associated-URI
+        // header, if supplied, or the URI in the To header.
+        pjsip_route_hdr* p_assoc_uri = (pjsip_route_hdr*)
+                             pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                        &STR_P_ASSOCIATED_URI,
+                                                        NULL);
+        if (p_assoc_uri != NULL)
         {
-          // There are active contacts, so consider the flow authenticated.
-          LOG_INFO("Mark client flow as authenticated");
-          std::vector<pjsip_uri*> uris;
-
-          pjsip_generic_array_hdr* p_assoc_uri = (pjsip_generic_array_hdr*)
-                               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                          &STR_P_ASSOCIATED_URI,
-                                                          NULL);
-          if (p_assoc_uri != NULL)
+          // Use P-Associated-URIs list as list of authenticated URIs.
+          LOG_DEBUG("Found P-Associated-URI header");
+          bool is_default = true;
+          while (p_assoc_uri != NULL)
           {
-            // Use P-Associated-URIs list as list of authenticated URIs.
-            for (size_t ii = 0; ii < p_assoc_uri->count; ++ii)
-            {
-              pjsip_uri* uri = pjsip_parse_uri(rdata->tp_info.pool,
-                                               p_assoc_uri->values[ii].ptr,
-                                               p_assoc_uri->values[ii].slen,
-                                               0);
-              if (uri != NULL)
-              {
-                uris.push_back(uri);
-              }
-            }
+            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr, is_default, max_expires);
+            p_assoc_uri = (pjsip_route_hdr*)
+                        pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                   &STR_P_ASSOCIATED_URI,
+                                                   p_assoc_uri->next);
+            is_default = false;
           }
-          else
-          {
-            // Use URI in To header as authenticated URIs.
-            uris.push_back(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
-          }
-          flow_data->set_authenticated(uris);
-
-          // Treat the REGISTER response as a keepalive.  In theory we should
-          // support STUN keepalives from clients, but only outbound aware
-          // clients will support STUN keepalive so we don't rely on this.
-          flow_data->keepalive();
         }
         else
         {
-          // The are no active contacts, so the client is effectively
-          // unregistered. Remove the user from the authenticated set, so
-          // the next REGISTER is challenged.
-          LOG_INFO("Mark client flow as un-authenticated");
-          flow_data->set_unauthenticated();
+          // Use URI in To header as authenticated URIs.
+          LOG_DEBUG("No P-Associated-URI, use URI in To header.");
+          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri, true, max_expires);
         }
 
         // Decrement the reference to the flow data

@@ -224,7 +224,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _transport(transport),
   _remote_addr(*remote_addr),
   _token(),
-  _authenticated_ids(),
+  _authorized_ids(),
   _default_id(),
   _refs(1)
 {
@@ -246,9 +246,12 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
     LOG_DEBUG("Added transport listener for flow %p", this);
   }
 
-  // Start the keepalive timer.
-  pj_timer_entry_init(&_ka_timer, PJ_FALSE, (void*)this, &on_ka_timer_expiry);
-  keepalive();
+  // Initialize the timer.
+  pj_timer_entry_init(&_timer, PJ_FALSE, (void*)this, &on_timer_expiry);
+  _timer.id = 0;
+
+  // Start the timer as an idle timer.
+  restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
 }
 
 
@@ -260,86 +263,208 @@ Flow::~Flow()
     pjsip_transport_dec_ref(_transport);
   }
 
-  if (_ka_timer.id)
+  if (_timer.id)
   {
     // Stop the keepalive timer.
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
-    _ka_timer.id = PJ_FALSE;
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_timer);
+    _timer.id = 0;
   }
 }
 
 
-/// Returns true if this flow has been authenticated for the given identity.
-bool Flow::authenticated(pjsip_uri* uri) const
+/// Returns the full asserted identity corresponding to the specified
+/// preferred identity, or an empty string if the preferred identity is not
+// authorized on this flow.
+std::string Flow::asserted_identity(pjsip_uri* preferred_identity) const
 {
-  return (_authenticated_ids.find(PJUtils::aor_from_uri((pjsip_sip_uri*)uri)) != _authenticated_ids.end());
+  std::string aor = PJUtils::puid_from_uri((pjsip_uri*)pjsip_uri_get_uri(preferred_identity));
+
+  auth_id_map::const_iterator i = _authorized_ids.find(aor);
+
+  if (i != _authorized_ids.end())
+  {
+    // Found the corresponding identity.
+    return i->second.name_addr;
+  }
+  return std::string();
 }
 
 
-/// Marks the flow as authenticated for the given list of identities.
-void Flow::set_authenticated(std::vector<pjsip_uri*> uris)
+/// Returns a default identity for this flow.  Note that a single flow
+/// may have multiple default identities.  Return an empty string if no
+/// identities are authorized on this flow.
+std::string Flow::default_identity() const
 {
-  _authenticated_ids.clear();
+  return std::string();
+}
 
-  // The associated URIs are potentially full name-addr elements including
-  // display names and URI parameters, and we have to store the whole thing
-  // for substituting in as P-Asserted-Identity.
-  for (size_t ii = 0; ii < uris.size(); ++ii)
+
+/// Sets the specified identities as authorized for this flow.
+void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
+{
+  int now = time(NULL);
+
+  // Render the URI to an AoR suitable to look up in the map.
+  std::string aor = PJUtils::puid_from_uri((pjsip_uri*)pjsip_uri_get_uri(uri));
+
+  LOG_DEBUG("Setting identity %s on flow %p, expires = %d", aor.c_str(), this, expires);
+
+  // Convert the expiry time to an absolute time.
+  expires += now;
+
+  if (expires > now)
   {
-    // Get the key as just the bare URI, stripped of the display name and any
-    // parameters.
-    std::string key = PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(uris[ii]));
+    // Find or create the entry for this aor.
+    AuthId& aid = _authorized_ids[aor];
 
-    // Get the value as the fully rendered name-addr field.
-    std::string value = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uris[ii]);
+    // Store the name_addr rendered from the received URI.
+    aid.name_addr = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
 
-    _authenticated_ids.insert(std::make_pair(key, value));
+    // Update the expiry time.
+    aid.expires = expires;
 
-    if (ii == 0)
+    // Set the default_id flag
+    aid.default_id = is_default;
+
+    if ((aid.default_id) && (_default_id == ""))
     {
-      // Store the first key as the default for this flow.
-      _default_id = key;
+      // This is the first default_id to be set.
+      _default_id = aor;
+    }
+
+    // May need to (re)start the timer if either it's not running, or it's
+    // running as an idle timer, or the expires time for these identities is
+    // earlier than the timer will next pop.
+    if ((_timer.id != EXPIRY_TIMER) ||
+        (_timer._timer_value.sec > expires))
+    {
+      restart_timer(EXPIRY_TIMER, expires - time(NULL));
+    }
+  }
+  else
+  {
+    LOG_DEBUG("Deleting identity %s", aor.c_str());
+    auth_id_map::iterator i = _authorized_ids.find(aor);
+
+    if ((i->second.default_id) && (i->first == _default_id))
+    {
+      // This was our default ID, so remove it.
+      _default_id = "";
+    }
+    _authorized_ids.erase(i);
+
+    if (_default_id == "")
+    {
+      // We've lost our default identity, so scan the list to see if there is
+      // another one we can use.
+      select_default_identity();
     }
   }
 }
 
 
-/// Marks the flow as unauthenticated for the given identity.
-void Flow::set_unauthenticated()
+/// Called when the expiry timer pops.
+void Flow::expiry_timer()
 {
-  _authenticated_ids.clear();
-}
-
-
-void Flow::keepalive()
-{
-  if (_ka_timer.id)
+  // Scan through all the identities deleting any that have passed their
+  // expiry time.  This is done as a simple scan because we don't expect
+  // a single flow to have a large number of identities.  This may not be
+  // a valid assumption if a downstream SBC or AGCF muxes a large number of
+  // clients over a single flow.
+  int now = time(NULL);
+  int min_expires = 0;
+  for (auth_id_map::const_iterator i = _authorized_ids.begin();
+       i != _authorized_ids.end();
+       ++i)
   {
-    // Stop the existing keepalive timer.
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_ka_timer);
-    _ka_timer.id = PJ_FALSE;
+    if (i->second.expires <= now)
+    {
+      LOG_DEBUG("Expiring identity %s", i->first.c_str());
+      if ((i->second.default_id) && (i->first == _default_id))
+      {
+        // This was our default ID, so remove it.
+        _default_id = "";
+      }
+      _authorized_ids.erase(i);
+    }
+    else
+    {
+      // This entry hasn't expired yet, so use to to work out when we next
+      // need the expiry timer to pop.
+      if ((min_expires == 0) || (i->second.expires < min_expires))
+      {
+        min_expires = i->second.expires;
+      }
+    }
   }
 
-  // Start the keepalive timer.
-  pj_time_val delay = {EXPIRY_TIMEOUT, 0};
-  pjsip_endpt_schedule_timer(stack_data.endpt, &_ka_timer, &delay);
-  _ka_timer.id = PJ_TRUE;
-  LOG_DEBUG("(Re)started keepalive timer for flow %p", this);
+  if (_default_id == "")
+  {
+    // We've lost our default identity, so scan the list to see if there is
+    // another one we can use.
+    select_default_identity();
+  }
+
+  if ((_authorized_ids.size() == 0) &&
+      (!PJSIP_TRANSPORT_IS_RELIABLE(_transport)))
+  {
+    // No active registrations on a non-reliable transport, so restart the
+    // timer as an idle timer.
+    restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
+    LOG_DEBUG("Started idle timer for flow %p", this);
+  }
+  else if (min_expires > now)
+  {
+    // Restart the timer to pop when the next identity(s) will expire.
+    restart_timer(EXPIRY_TIMER, min_expires - now);
+  }
 }
 
 
+/// Scan the list of identity for a default candidate.
+void Flow::select_default_identity()
+{
+  for (auth_id_map::const_iterator i = _authorized_ids.begin();
+       i != _authorized_ids.end();
+       ++i)
+  {
+    if (i->second.default_id)
+    {
+      // Found a candidate default identity.
+      _default_id = i->first;
+    }
+  }
+}
+
+
+/// Restart the timer using the specified id and timeout.
+void Flow::restart_timer(int id, int timeout)
+{
+  if (_timer.id)
+  {
+    // Stop the existing timer.
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_timer);
+    _timer.id = 0;
+  }
+
+  pj_time_val delay = {timeout, 0};
+  pjsip_endpt_schedule_timer(stack_data.endpt, &_timer, &delay);
+  _timer.id = id;
+}
+
+
+/// Increment the reference count on the flow.  This is always called when
+/// the flowtable lock is held, so no need to lock.
 void Flow::inc_ref()
 {
-  // Increment the reference count on the flow.  This is always called when
-  // the flowtable lock is held, so no need to lock.
   ++_refs;
 }
 
 
+/// Decrements the reference count on the flow, and suicides if it gets
+/// to zero.
 void Flow::dec_ref()
 {
-  // Decrement the reference count on the flow, and suicides if it gets
-  // to zero.
   pthread_mutex_lock(&_flow_table->_flow_map_lock);
 
   if ((--_refs) == 0)
@@ -354,6 +479,7 @@ void Flow::dec_ref()
 }
 
 
+/// Called by PJSIP when a reliable transport connection changes state.
 void Flow::on_transport_state_changed(pjsip_transport *tp,
                                       pjsip_transport_state state,
                                       const pjsip_transport_state_info *info)
@@ -369,13 +495,21 @@ void Flow::on_transport_state_changed(pjsip_transport *tp,
 }
 
 
-void Flow::on_ka_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
+/// Called by PJSIP when the expiry/idle timer expires.
+void Flow::on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e)
 {
-  LOG_DEBUG("Keepalive timer expired for flow %p", e->user_data);
-  if (e->id)
+  LOG_DEBUG("%s timer expired for flow %p",
+            (e->id == EXPIRY_TIMER) ? "Expiry" : "Idle",
+            e->user_data);
+  if (e->id == EXPIRY_TIMER)
   {
-    // The keepalive timer has not been cancelled, so decrement the reference
-    // count so the flow will eventually get deleted.
+    // Timer is an expiry timer.
+    ((Flow*)e->user_data)->expiry_timer();
+  }
+  else
+  {
+    // Timer is an idle timer, so decrement the reference count so the flow
+    // will get deleted when there are no more references.
     ((Flow*)e->user_data)->dec_ref();
   }
 }

@@ -66,28 +66,19 @@ public:
   /// Returns a reference to the flow token.
   inline const std::string& token() const { return _token; };
 
-  /// Returns true if this flow has been authenticated for the given identity.
-  bool authenticated(pjsip_uri* uri) const;
+  std::string asserted_identity(pjsip_uri* preferred_identity) const;
 
-  /// Marks the flow as authenticated for the given identities.
-  void set_authenticated(std::vector<pjsip_uri*> uris);
+  std::string default_identity() const;
 
-  /// Marks the flow as unauthenticated.
-  void set_unauthenticated();
+  void set_identity(const pjsip_uri* uri, bool is_default, int expires);
 
-  /// Flags that a keepalive has been received on this flow.
-  void keepalive();
-
-  /// Decrements the reference count on the flow.
   void dec_ref();
 
-  /// Called by PJSIP when a reliable transport connection changes state.
   static void on_transport_state_changed(pjsip_transport *tp,
                                          pjsip_transport_state state,
                                          const pjsip_transport_state_info *info);
 
-  /// Called by PJSIP when the keepalive timer expires.
-  static void on_ka_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e);
+  static void on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e);
 
   friend class FlowTable;
 
@@ -97,7 +88,10 @@ private:
 
   static const int TOKEN_LENGTH = 10;
 
-  /// Increments the reference count on the flow.
+  void select_default_identity();
+  void restart_timer(int id, int timeout);
+  void expiry_timer();
+
   void inc_ref();
 
   FlowTable* _flow_table;
@@ -105,23 +99,44 @@ private:
   pj_sockaddr _remote_addr;
   std::string _token;
 
-  /// Timer used to expire the flow when the associated registration bindings
-  /// expire.
-  pj_timer_entry _ka_timer;
+  /// Timer used to expire the associated registration bindings.  This is also
+  /// used to expire idle UDP flows (ie. when there are no more associated
+  /// registration bindings.
+  pj_timer_entry _timer;
 
-  /// Map holding the authenticated identifiers for this flow.  The key
+  /// Lock used to protect accesses to the various data structures managing
+  /// the identifiers authorized on this flow.
+  pthread_mutex_t _flow_lock;
+
+  /// Map holding all the authenticated identifiers for this flow.  The key
   /// is a normalized address of record/public identity, the value is the
-  /// full name-addr that should be used in P-Asserted-ID.
-  std::unordered_map<std::string, std::string> _authenticated_ids;
+  /// full name-addr that should be used in P-Asserted-ID, the expiry
+  /// time, and whether this identity can be used as a default identity.
+  struct AuthId
+  {
+    std::string name_addr;
+    int expires;
+    bool default_id;
+  };
 
-  /// The default identifier for this flow.
+  typedef std::unordered_map<std::string, struct AuthId> auth_id_map;
+  auth_id_map _authorized_ids;
+
+  /// The default identity for this flow.
   std::string _default_id;
 
   /// Counts the references to this Flow.  This can only be updated or tested
   /// by a thread which currently holds the FlowTable::_flow_map_lock.
   int _refs;
 
-  static const int EXPIRY_TIMEOUT = 600;
+  /// Timer identifiers - the timer either runs as an expiry timer (when there
+  /// are active identities) or an idle timer (when there are no active
+  /// identities on a non-reliable flow).
+  static const int EXPIRY_TIMER = 1;
+  static const int IDLE_TIMER = 2;
+
+  /// Timeout used to delete idle non-reliable flows.
+  static const int IDLE_TIMEOUT = 600;
 };
 
 

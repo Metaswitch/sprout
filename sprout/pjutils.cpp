@@ -197,6 +197,43 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 }
 
 
+/// Returns a canonical IMS public user identity from a URI as per TS 23.003
+/// 13.4.
+std::string PJUtils::puid_from_uri(const pjsip_uri* uri)
+{
+  if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    pjsip_sip_uri puid;
+    memcpy((char*)&puid, (char*)uri, sizeof(pjsip_sip_uri));
+    puid.passwd.slen = 0;
+    puid.port = 0;
+    puid.user_param.slen = 0;
+    puid.method_param.slen = 0;
+    puid.transport_param.slen = 0;
+    puid.ttl_param = -1;
+    puid.lr_param = 0;
+    puid.maddr_param.slen = 0;
+    puid.other_param.next = NULL;
+    puid.header_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&puid);
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    pjsip_tel_uri puid;
+    memcpy((char*)&puid, (char*)uri, sizeof(pjsip_tel_uri));
+    puid.context.slen = 0;
+    puid.ext_param.slen = 0;
+    puid.isub_param.slen = 0;
+    puid.other_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&puid);
+  }
+  else
+  {
+    return std::string();
+  }
+}
+
+
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
   LOG_INFO("Adding integrity-protected indicator to message");
@@ -380,6 +417,34 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
                                                        via_hdr->next);
   return first_hop;
 }
+
+
+/// Gets the maximum expires value from all contacts in a REGISTER message
+/// (request or response).
+int PJUtils::max_expires(pjsip_msg* msg)
+{
+  int max_expires = 0;
+
+  // Check for an expires header (this will specify the default expiry for
+  // any contacts that don't specify their own expiry).
+  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 0;
+
+  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact != NULL)
+  {
+    int expires = (contact->expires != -1) ? contact->expires : default_expires;
+    if (expires > max_expires)
+    {
+      max_expires = expires;
+    }
+    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+  }
+
+  return max_expires;
+}
+
 
 
 pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
