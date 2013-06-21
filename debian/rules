@@ -23,8 +23,11 @@ export DH_OPTIONS
 override_dh_auto_clean:
 override_dh_auto_build:
 override_dh_auto_test:
+	mkdir debian/tmp
+
 override_dh_auto_install:
 	mkdir debian/tmp
+	cp build/bin/sprout build/bin/bono
 
 # Don't start - monit does that for us.
 override_dh_installinit:
