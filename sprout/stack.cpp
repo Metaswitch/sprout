@@ -54,6 +54,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
+#include "constants.h"
 #include "eventq.h"
 #include "pjutils.h"
 #include "log.h"
@@ -98,7 +99,17 @@ static pjsip_module mod_stack =
 };
 
 
-// PJSIP threads are donated to PJSIP to handle receiving at transport level
+/// Custom parser for Privacy header.  This is registered with PJSIP when
+// we initialize the stack.
+static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
+{
+    pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
+    pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
+    return (pjsip_hdr*)privacy;
+}
+
+
+/// PJSIP threads are donated to PJSIP to handle receiving at transport level
 // and timers.
 static int pjsip_thread(void *p)
 {
@@ -119,7 +130,7 @@ static int pjsip_thread(void *p)
 }
 
 
-// Worker threads handle most SIP message processing.
+/// Worker threads handle most SIP message processing.
 //
 static int worker_thread(void* p)
 {
@@ -343,7 +354,7 @@ static void pjsip_log_handler(int level,
   default: level = 5; break;
   }
 
-  Log::write(level, "pjsip", data);
+  Log::write(level, "pjsip", 0, data);
 }
 
 
@@ -404,6 +415,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int untrusted_port,
                        const std::string& local_host,
                        const std::string& home_domain,
+                       const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads)
@@ -424,10 +436,12 @@ pj_status_t init_stack(const std::string& system_name,
   memset(&stack_data, 0, sizeof(stack_data));
   char* local_host_cstr = strdup(local_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
+  char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
   stack_data.trusted_port = trusted_port;
   stack_data.untrusted_port = untrusted_port;
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
+  stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
 
   // Initialize SAS logging.
   if (system_name != "")
@@ -471,6 +485,11 @@ pj_status_t init_stack(const std::string& system_name,
   // Register the stack module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
+
+  // Register custom header parsers (currently only Privacy, but add any others
+  // here).
+  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Create listening transports for trusted and untrusted ports.
   if (stack_data.trusted_port != 0)

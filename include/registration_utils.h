@@ -1,5 +1,5 @@
 /**
- * @file fakexdmconnection.cpp Fake XDM Connection (for testing).
+ * @file registration_utils.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,32 +34,19 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
-#include <cstdio>
-
-#include "utils.h"
-#include "fakexdmconnection.hpp"
-
-using namespace std;
-
-FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection()),
-  _fakehttp((FakeHttpConnection*)_http)
-{
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
 }
 
-FakeXDMConnection::~FakeXDMConnection()
-{
-}
+#include <string>
+#include "regdata.h"
+#include "ifchandler.h"
 
-void FakeXDMConnection::put(const std::string& uri, const std::string& doc)
-{
-  _fakehttp->put("/org.etsi.ngn.simservs/users/" + Utils::url_escape(uri) + "/simservs.xml", doc, "", 0);
-}
-
-void FakeXDMConnection::flush_all()
-{
-  _fakehttp->flush_all();
+namespace RegistrationUtils {
+void user_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
+void network_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
+void register_with_application_servers(IfcHandler*, RegData::Store* store, pjsip_rx_data*, pjsip_tx_data*, const std::string&);
 }

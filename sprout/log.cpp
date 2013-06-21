@@ -71,7 +71,7 @@ Log::setLogger(Logger *log)
 }
 
 void
-Log::write(int level, const char *module, const char *fmt, ...)
+Log::write(int level, const char *module, int line_number, const char *fmt, ...)
 {
   if (!Log::logger) {
     return;
@@ -94,7 +94,13 @@ Log::write(int level, const char *module, const char *fmt, ...)
     default: logLevel = LL_DEBUG_STRING; break;
   }
 
-  int written = snprintf(logline, MAX_LOGLINE - 2, "%s %s: ", logLevel, module);
+  int written = 0;
+  
+  if (line_number) {
+    written = snprintf(logline, MAX_LOGLINE - 2, "%s %s:%d: ", logLevel, module, line_number);
+  } else {
+    written = snprintf(logline, MAX_LOGLINE - 2, "%s %s: ", logLevel, module);
+  }
 
   va_start(args, fmt);
   written += vsnprintf(logline + written, MAX_LOGLINE - written - 2, fmt, args);

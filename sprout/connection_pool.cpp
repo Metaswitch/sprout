@@ -78,7 +78,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
 
 ConnectionPool::~ConnectionPool()
 {
-  if (_recycler) 
+  if (_recycler)
   {
     // Set the terminated flag to signal the recycler thread to exit.
     _terminated = true;
@@ -95,12 +95,12 @@ ConnectionPool::~ConnectionPool()
 void ConnectionPool::init()
 {
   // Create an initial set of connections.
-  for (int ii = 0; ii < _num_connections; ++ii) 
+  for (int ii = 0; ii < _num_connections; ++ii)
   {
     create_connection(ii);
   }
 
-  if (_recycle_period != 0) 
+  if (_recycle_period != 0)
   {
     // Spawn a thread to recycle connections
     pj_status_t status = pj_thread_create(_pool, "recycler",
@@ -123,16 +123,16 @@ pjsip_transport* ConnectionPool::get_connection()
 
   pthread_mutex_lock(&_tp_hash_lock);
 
-  if (_active_connections > 0) 
+  if (_active_connections > 0)
   {
-    // Select a transport by starting at a random point in the hash and 
+    // Select a transport by starting at a random point in the hash and
     // stepping through the hash until a connected entry is found.
     int start_slot = rand() % _num_connections;
     int ii = start_slot;
     while (_tp_hash[ii].state == PJSIP_TP_STATE_DISCONNECTED)
     {
       ii = (ii + 1) % _num_connections;
-      if (ii == start_slot) 
+      if (ii == start_slot)
       {
         break;
       }
@@ -188,33 +188,35 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   pj_sockaddr remote_addr;
   pj_status_t status = resolve_host(&_target.host, &remote_addr);
 
-  if (status != PJ_SUCCESS) 
+  if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to resolve %.*s to an IP address - %s",
-              _target.host.slen, _target.host.ptr, 
+              _target.host.slen, _target.host.ptr,
               PJUtils::pj_status_to_string(status).c_str());
     return status;
   }
 
   pj_sockaddr_set_port(&remote_addr, _target.port);
 
-  // Call the factory to create a new transport connection.
+  // Call TPMGR to create a new transport connection.
   pjsip_transport* tp;
-  status = _tpfactory->create_transport(_tpfactory,
-                                        pjsip_endpt_get_tpmgr(_endpt),
-                                        _endpt,
-                                        &remote_addr,
-                                        sizeof(pj_sockaddr_in),
-                                        &tp);
+  pjsip_tpselector tp_sel;
+  tp_sel.type = PJSIP_TPSELECTOR_LISTENER;
+  tp_sel.u.listener = _tpfactory;
+  status = pjsip_tpmgr_acquire_transport(pjsip_endpt_get_tpmgr(_endpt),
+                                         PJSIP_TRANSPORT_TCP,
+                                         &remote_addr,
+                                         sizeof(pj_sockaddr_in),
+                                         &tp_sel,
+                                         &tp);
 
-  if (status != PJ_SUCCESS) 
+  if (status != PJ_SUCCESS)
   {
     return status;
   }
 
-  // Add a reference to the new transport to stop it being destroyed while we
-  // have pointers referencing it.
-  pjsip_transport_add_ref(tp);
+  // TPMGR will have already added a reference to the new transport to stop it
+  // being destroyed while we have pointers referencing it.
 
   LOG_DEBUG("Created transport %s in slot %d (%.*s:%d to %.*s:%d)",
             tp->obj_name,
@@ -252,7 +254,7 @@ void ConnectionPool::quiesce_connection(int hash_slot)
 
   if (tp != NULL)
   {
-    if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED) 
+    if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED)
     {
       // Connection was established, so update statistics.
       --_active_connections;
@@ -263,7 +265,7 @@ void ConnectionPool::quiesce_connection(int hash_slot)
     _tp_hash[hash_slot].tp = NULL;
     _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
     _tp_map.erase(tp);
-    
+
     // Release the lock now so we don't have a deadlock if pjsip_transport_shutdown
     // calls the transport state listener.
     pthread_mutex_unlock(&_tp_hash_lock);
@@ -284,7 +286,7 @@ void ConnectionPool::quiesce_connection(int hash_slot)
 
 void ConnectionPool::quiesce_connections()
 {
-  for (int ii = 0; ii < _num_connections; ii++) 
+  for (int ii = 0; ii < _num_connections; ii++)
   {
     quiesce_connection(ii);
   }
@@ -298,7 +300,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
 
   std::map<pjsip_transport*, int>::const_iterator i = _tp_map.find(tp);
 
-  if (i != _tp_map.end()) 
+  if (i != _tp_map.end())
   {
     int hash_slot = i->second;
 
@@ -317,7 +319,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       // connect.
       LOG_DEBUG("Transport %s in slot %d has failed", tp->obj_name, hash_slot);
 
-      if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED) 
+      if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED)
       {
         // A connection has failed, so update the statistics.
         --_active_connections;
@@ -343,7 +345,7 @@ void ConnectionPool::recycle_connections()
   // The recycler periodically recycles the connections so that any new nodes
   // in the upstream proxy cluster get used reasonably soon after they are
   // active.  To avoid mucking around with variable length waits, the
-  // algorithm waits for a fixed period (one second) then recycles a 
+  // algorithm waits for a fixed period (one second) then recycles a
   // number of connections.
   //
   // Logically the algorithm runs an independent trial for each hash slot
@@ -359,7 +361,7 @@ void ConnectionPool::recycle_connections()
   std::default_random_engine rand;
   std::binomial_distribution<int> rbinomial(_num_connections, 1.0/_recycle_period);
 
-  while (!_terminated) 
+  while (!_terminated)
   {
     sleep(1);
 
@@ -367,13 +369,13 @@ void ConnectionPool::recycle_connections()
 
     LOG_INFO("Recycling %d connections to %.*s:%d", recycle, _target.host.slen, _target.host.ptr, _target.port);
 
-    for (int ii = 0; ii < recycle; ++ii) 
+    for (int ii = 0; ii < recycle; ++ii)
     {
       // Pick a hash slot at random, and quiesce the connection (if active).
       int hash_slot = rand() % _num_connections;
       quiesce_connection(hash_slot);
 
-      // Create a new connection for this hash slot. 
+      // Create a new connection for this hash slot.
       create_connection(hash_slot);
     }
 

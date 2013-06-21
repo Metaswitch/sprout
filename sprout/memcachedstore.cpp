@@ -160,6 +160,7 @@ namespace RegData {
         {
           aor_data = deserialize_aor(std::string(memcached_result_value(&result), memcached_result_length(&result)));
           aor_data->set_cas(memcached_result_cas(&result));
+          memcached_result_free(&result);
           int now = time(NULL);
           expire_bindings(aor_data, now);
         }

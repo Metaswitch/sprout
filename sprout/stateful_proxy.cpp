@@ -124,6 +124,7 @@ extern "C" {
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "aschain.h"
+#include "registration_utils.h"
 
 static RegData::Store* store;
 
@@ -139,6 +140,7 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
+static AsChainTable* as_chain_table;
 
 static bool ibcf = false;
 
@@ -204,6 +206,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        TrustBoundary **trust);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
+static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 
 
 // Helper functions.
@@ -213,10 +216,6 @@ static pj_bool_t is_user_numeric(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
-static AsChain* create_as_chain(IfcHandler* ifc_handler,
-                                const SessionCase& session_case,
-                                pjsip_msg* msg,
-                                SAS::TrailId trail);
 
 
 ///@{
@@ -368,7 +367,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   pjsip_tx_data* tdata;
   UASTransaction* uas_data;
   ServingState serving_state;
-  target* target = NULL;
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
 
   // Verify incoming request.
@@ -405,10 +403,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   else
   {
     // Process route information for routing proxy.
-    pjsip_route_hdr* hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if ((hroute) &&
-        ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-         (PJUtils::is_uri_local(hroute->name_addr.uri))))
+    pjsip_route_hdr* hroute;
+    if (PJUtils::is_top_route_local(tdata->msg, &hroute))
     {
       // This is our own Route header, containing a SIP URI.  Check for an
       // ODI token.  We need to determine the session case: is
@@ -417,21 +413,45 @@ void process_tsx_request(pjsip_rx_data* rdata)
       // proxy_calculate_targets as an edge proxy.
       pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
       pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
-      SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
+      const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
-      std::string user = PJUtils::pj_str_to_string(&uri->user);
-      bool original_dialog = false;
+      AsChainLink original_dialog;
       if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
       {
         // This is one of our original dialog identifier (ODI) tokens.
         // See 3GPP TS 24.229 s5.4.3.4.
-        // @@@ For now we just flag it; later we will look up the existing object.
-        original_dialog = true;
+        std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
+                                            uri->user.slen - STR_ODI_PREFIX.slen);
+        original_dialog = as_chain_table->lookup(odi_token);
+
+        if (original_dialog.is_set())
+        {
+          LOG_INFO("Original dialog for %.*s found: %s",
+                   uri->user.slen, uri->user.ptr,
+                   original_dialog.to_string().c_str());
+          session_case = &original_dialog.session_case();
+
+          // This message forms part of the AsChain trail.
+          set_trail(rdata, original_dialog.trail());
+        }
+        else
+        {
+          // We're in the middle of an AS chain, but we've lost our
+          // reference to the rest of the chain. We must not carry on
+          // - fail the request with a suitable error code.
+          LOG_ERROR("Original dialog lookup for %.*s not found",
+                    uri->user.slen, uri->user.ptr);
+          pjsip_tx_data_dec_ref(tdata);
+          PJUtils::respond_stateless(stack_data.endpt, rdata,
+                                     PJSIP_SC_BAD_REQUEST, NULL,
+                                     NULL, NULL);
+          return;
+        }
       }
 
       LOG_DEBUG("Got our Route header, session case %s, OD=%s",
                 session_case->to_string().c_str(),
-                original_dialog ? "y" : "n");
+                original_dialog.to_string().c_str());
       serving_state = ServingState(session_case, original_dialog);
     }
 
@@ -493,39 +513,24 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Perform common initial processing.
   uas_data->enter_context();
-  uas_data->handle_incoming_non_cancel(rdata, tdata, serving_state);
-
-  AsChain::Disposition disposition = AsChain::Disposition::Next;
 
   if ((!edge_proxy) &&
-      ((PJUtils::is_home_domain(tdata->msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(tdata->msg->line.req.uri))))
+      (uas_data->method() == PJSIP_INVITE_METHOD))
   {
-    // Do services and translation processing for requests targeted at this
-    // node/home domain.
-
-    // Do incoming (originating) half.
-    disposition = uas_data->handle_originating(rdata, tdata, &target);
-
-    if (disposition == AsChain::Disposition::Next)
-    {
-      // Do outgoing (terminating) half.
-      LOG_DEBUG("Terminating half");
-      disposition = uas_data->handle_terminating(tdata, &target);
-    }
+    // If running in routing proxy mode send the 100 Trying response before
+    // applying services and routing the request as both may involve
+    // interacting with external databases.  When running in edge proxy
+    // mode we hold off sending the 100 Trying until we've received one from
+    // upstream so we can be sure we could route a subsequent CANCEL to the
+    // right place.
+    uas_data->send_trying(rdata);
   }
+
+  // Perform common initial processing.
+  uas_data->handle_non_cancel(serving_state);
 
   uas_data->exit_context();
-
-  if (disposition != AsChain::Disposition::Stop)
-  {
-    // Perform common outgoing processing.
-    uas_data->handle_outgoing_non_cancel(tdata, target);
-  }
-
-  delete target;
 }
 
 
@@ -549,14 +554,20 @@ void process_cancel_request(pjsip_rx_data* rdata)
     return;
   }
 
+  if (!proxy_trusted_source(rdata))
+  {
+    // The CANCEL request has not come from a trusted source, so reject it
+    // (can't challenge a CANCEL).
+    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+    return;
+  }
+
   // Respond 200 OK to CANCEL.  Must do this statefully.
   pjsip_transaction* tsx;
   pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &tsx);
   if (status != PJ_SUCCESS)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL, NULL, NULL);
+    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_INTERNAL_SERVER_ERROR, NULL, NULL, NULL);
     return;
   }
 
@@ -566,29 +577,12 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Send the 200 OK statefully.
   PJUtils::respond_stateful(stack_data.endpt, tsx, rdata, 200, NULL, NULL, NULL);
 
-  pj_bool_t integrity_protected = PJ_FALSE;
-
-  if (edge_proxy)
-  {
-    // Check whether the CANCEL has arrived on an integrity protected
-    // connection.  The CANCEL isn't rejected if it hasn't because it may
-    // have come from a Sprout node anyway - but we need to know whether
-    // to mark the ongoing CANCELs as integrity protected.
-    Flow* flow_data = flow_table->find_flow(rdata->tp_info.transport,
-                                            &rdata->pkt_info.src_addr);
-
-    if ((flow_data != NULL) && (flow_data->authenticated()))
-    {
-      integrity_protected = PJ_TRUE;
-    }
-  }
-
   // Send CANCEL to cancel the UAC transactions.
   // The UAS INVITE transaction will get final response when
   // we receive final response from the UAC INVITE transaction.
   LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
-  uas_data->cancel_pending_uac_tsx(0, integrity_protected);
+  uas_data->cancel_pending_uac_tsx(0);
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -656,6 +650,84 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
 }
 
 
+/// Checks whether the request was received from a trusted source.
+static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
+{
+  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  {
+    // Request received on trusted port.
+    LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
+    return PJ_TRUE;
+  }
+
+  LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
+
+  // Request received on untrusted port, so see if it came over a trunk.
+  if ((ibcf) &&
+      (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+  {
+    LOG_DEBUG("Request received on configured SIP trunk");
+    return PJ_TRUE;
+  }
+
+  Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
+                                         &rdata->pkt_info.src_addr);
+  if (src_flow != NULL)
+  {
+    // Request received on a known flow, so check it is authenticated.
+    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+    {
+      LOG_DEBUG("Request received on authenticated client flow.");
+      src_flow->dec_ref();
+      return PJ_TRUE;
+    }
+    src_flow->dec_ref();
+  }
+
+  return PJ_FALSE;
+}
+
+
+/// Checks for double Record-Routing and removes superfluous Route header to
+/// avoid request spirals.
+void proxy_handle_double_rr(pjsip_tx_data* tdata)
+{
+  pjsip_route_hdr* r1 = NULL;
+  pjsip_route_hdr* r2 = NULL;
+
+  if ((PJUtils::is_top_route_local(tdata->msg, &r1)) &&
+      (PJUtils::is_next_route_local(tdata->msg, r1, &r2)))
+  {
+    // The top two Route headers were both added by this node, so check for
+    // different transports or ports.  We don't act on all Route header pairs
+    // that look like a spiral, only ones that look like the result of
+    // double Record-Routing, and we only do that if the transport and/or port
+    // are different.
+    LOG_DEBUG("Top two route headers added by this node, checking transports and ports");
+    pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
+    pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
+    if ((uri1->port != uri2->port) ||
+        (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
+    {
+      // Possible double record routing.  If one of the route headers doesn't
+      // have a flow token it can safely be removed.
+      LOG_DEBUG("Host names are the same and transports are different");
+      if (uri1->user.slen == 0)
+      {
+        LOG_DEBUG("Remove top route header");
+        pj_list_erase(r1);
+      }
+      else if (uri2->user.slen == 0)
+      {
+        LOG_DEBUG("Remove second route header");
+        pj_list_erase(r2);
+      }
+    }
+  }
+}
+
+
 /// Perform edge-proxy-specific routing.
 #ifndef UNIT_TEST
 static
@@ -667,7 +739,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
-
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
@@ -729,11 +800,19 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // clients will support STUN keepalive so we don't rely on this.
     src_flow->keepalive();
 
-    if (src_flow->authenticated())
+    // @@@TODO Use P-Asserted-Identity for authentication
+    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
-      PJUtils::add_integrity_protected_indication(tdata);
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+    }
+    else
+    {
+      // The client flow hasn't yet been authenticated, so add an integrity-protected
+      // indicator so Sprout will challenge and/or authenticate. it
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
     }
 
     // Remove the reference to the source flow since we have finished with it
@@ -748,46 +827,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   }
   else
   {
-    // Non-register request.  First check for double-record routing and remove
-    // extra Route header.
-    pjsip_route_hdr* r1 = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-
-    if ((r1) &&
-        (PJSIP_URI_SCHEME_IS_SIP(r1->name_addr.uri)) &&
-        (PJUtils::is_uri_local(r1->name_addr.uri)))
-    {
-      // The top route header was added by this node.  Check for cases
-      // of double Record Routing and remove the extra Route header.
-      LOG_DEBUG("Check for double Record-Routing");
-      pjsip_route_hdr* r2 = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, r1->next);
-
-      if ((r2) &&
-          (PJSIP_URI_SCHEME_IS_SIP(r2->name_addr.uri)) &&
-          (PJUtils::is_uri_local(r2->name_addr.uri)))
-      {
-        // Second route header was also added by this node, so check for
-        // different transports or ports.
-        pjsip_sip_uri* uri1 = (pjsip_sip_uri*)r1->name_addr.uri;
-        pjsip_sip_uri* uri2 = (pjsip_sip_uri*)r2->name_addr.uri;
-        if ((uri1->port != uri2->port) ||
-            (pj_stricmp(&uri1->transport_param, &uri2->transport_param) != 0))
-        {
-          // Possible double record routing.  If one of the route headers doesn't
-          // have a flow token it can safely be removed.
-          LOG_DEBUG("Host names are the same and transports are different");
-          if (uri1->user.slen == 0)
-          {
-            LOG_DEBUG("Remove top route header");
-            pj_list_erase(r1);
-          }
-          else if (uri2->user.slen == 0)
-          {
-            LOG_DEBUG("Remove second route header");
-            pj_list_erase(r2);
-          }
-        }
-      }
-    }
+    // Check for double Record-Routing and remove extra Route header.
+    proxy_handle_double_rr(tdata);
 
     // Work out whether the message has come from an implicitly trusted
     // source (that is, from within the trust zone, or over a known SIP
@@ -806,7 +847,32 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
         *trust = &TrustBoundary::INBOUND_TRUNK;
-        PJUtils::add_integrity_protected_indication(tdata);
+
+        pjsip_route_hdr* route_hdr;
+        if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
+            (pjsip_param_find(&(((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param), &STR_ORIG)))
+        {
+          // Topmost route header points to us/Sprout and requests originating
+          // handling, but this is not a known client. This is forbidden.
+          //
+          // This covers 3GPP TS 24.229 s5.10.3.2, except that we
+          // implement a whitelist (only known Bono clients can pass this)
+          // rather than a blacklist (IBCF clients are forbidden).
+          //
+          // All connections to our IBCF are untrusted (we don't implement
+          // any trusted ones) in the sense of s5.10.3.2, so this always
+          // applies and we never implement the step 4 and 5 behaviour of
+          // copying the ;orig parameter to the outgoing Route.
+          //
+          // We are slightly overloading TrustBoundary here - how to
+          // improve this is FFS.
+          LOG_WARNING("Request for originating handling but not from known client");
+          PJUtils::respond_stateless(stack_data.endpt,
+                                     rdata,
+                                     PJSIP_SC_FORBIDDEN,
+                                     NULL, NULL, NULL);
+          return PJ_ENOTFOUND;
+        }
       }
       else
       {
@@ -816,23 +882,17 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
         {
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
-          *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
 
-          if (src_flow->authenticated())
+          // @@@TODO Use P-Asserted-Identity for authentication
+          pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+          if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
           {
             // Client has been authenticated, so we can trust it for the
             // purposes of routing SIP messages and don't need to challenge
             // again.
+            *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
             trusted = true;
-            PJUtils::add_integrity_protected_indication(tdata);
           }
-        }
-        else
-        {
-          // Message was not received on a known flow, so treat it as an
-          // unknown client for the purposes of header stripping.
-          LOG_DEBUG("Message received from unknown client");
-          *trust = &TrustBoundary::UNKNOWN_EDGE_CLIENT;
         }
       }
     }
@@ -843,11 +903,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       trusted = true;
 
       // See if the message is destined for a client.
-      pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-
-      if ((route_hdr) &&
-          (PJSIP_URI_SCHEME_IS_SIP(route_hdr->name_addr.uri)) &&
-          (PJUtils::is_uri_local(route_hdr->name_addr.uri)) &&
+      pjsip_route_hdr* route_hdr;
+      if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
           (((pjsip_sip_uri*)route_hdr->name_addr.uri)->user.slen > 0))
       {
         // The user part is present, it should hold our token, so validate the
@@ -898,29 +955,13 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
     }
 
-    // Do standard route header processing for the request.  This may
-    // remove the top route header if it corresponds to this node.
-    proxy_process_routing(tdata);
-
-    // Work out the target for the message.  This will either be the URI in
-    // the top route header, or the request URI.
-    pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    LOG_DEBUG("Destination is %s", (route_hdr != NULL) ? "top route header" : "Request-URI");
-    pjsip_uri* target = (route_hdr != NULL) ? route_hdr->name_addr.uri : tdata->msg->line.req.uri;
-
-    if ((!trusted) &&
-        (!PJUtils::is_home_domain((pjsip_uri*)target)) &&
-        (!PJUtils::is_uri_local((pjsip_uri*)target)))
+    if (!trusted)
     {
-      // Message is from an untrusted source and destination is not Sprout, so
-      // reject it.
+      // Request is not from a trusted source, so reject or discard it.
       if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
-        LOG_WARNING("Rejecting message from untrusted source not directed to Sprout");
-        PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_FORBIDDEN,
-                                   NULL, NULL, NULL);
+        LOG_WARNING("Rejecting request from untrusted source");
+        PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
       }
       else
       {
@@ -929,15 +970,23 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
+    // Do standard route header processing for the request.  This may
+    // remove the top route header if it corresponds to this node.
+    proxy_process_routing(tdata);
+
+    // Work out the next hop target for the message.  This will either be the
+    // URI in the top route header, or the request URI.
+    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
+
     if ((ibcf) &&
         (tgt_flow == NULL) &&
-        (PJSIP_URI_SCHEME_IS_SIP(target)))
+        (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
     {
       // Check if the message is destined for a SIP trunk
       LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
-                ((pjsip_sip_uri*)target)->host.slen, ((pjsip_sip_uri*)target)->host.ptr);
+                ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
       pj_sockaddr dest;
-      if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)target)->host, &dest) == PJ_SUCCESS)
+      if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)next_hop)->host, &dest) == PJ_SUCCESS)
       {
         // Target host name is an IP address, so check against the IBCF trusted
         // peers.
@@ -1007,7 +1056,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
 
 /// Determine whether a source or destination IP address corresponds to
-/// a configured trusted peer.
+/// a configured trusted peer.  "Trusted" here simply means that it's
+/// known, not that we trust any headers it sets.
 static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 {
   // Check whether the source IP address of the message is in the list of
@@ -1084,10 +1134,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
   // If the first value in the Route header field indicates this proxy or
   // home domain, the proxy MUST remove that value from the request.
-  hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-  if ((hroute) &&
-      ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-       (PJUtils::is_uri_local(hroute->name_addr.uri))))
+  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
     pj_list_erase(hroute);
   }
@@ -1106,6 +1153,7 @@ static
 #endif
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
+                             const TrustBoundary* trust,
                              target_list& targets,
                              int max_targets)
 {
@@ -1121,6 +1169,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
     LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
     target.transport = NULL;
     targets.push_back(target);
@@ -1137,6 +1186,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
     LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
     target.transport = NULL;
 
@@ -1166,16 +1216,18 @@ void proxy_calculate_targets(pjsip_msg* msg,
 
   if (edge_proxy)
   {
-    // We're an edge proxy and there wasn't a defined route in the message,
+    // We're an edge proxy and there wasn't a route mandated by the message,
     // forward it to the upstream proxy to deal with.  We do this by adding
     // a target with the existing request URI and a path to the upstream
-    // proxy.  If the request URI is a SIP URI with a domain/host that is not
+    // proxy and stripping any loose routes that might have been added by the
+    // UA.  If the request URI is a SIP URI with a domain/host that is not
     // the home domain, change it to use the home domain.
     LOG_INFO("Route request to upstream proxy %.*s",
              ((pjsip_sip_uri*)upstream_proxy)->host.slen,
              ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
     target target;
     target.from_store = PJ_FALSE;
+    target.upstream_route = PJ_TRUE;
     if ((PJSIP_URI_SCHEME_IS_SIP(req_uri)) &&
         (!PJUtils::is_home_domain((pjsip_uri*)req_uri)))
     {
@@ -1189,16 +1241,21 @@ void proxy_calculate_targets(pjsip_msg* msg,
       target.uri = (pjsip_uri*)req_uri;
     }
 
-    // Route upstream. Mark it as originating, so Sprout knows to
-    // apply originating handling.  In theory the UE ought to have
-    // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-    // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
-    // - but if we're here it didn't, so we do the work for it.
+    // Route upstream.
     pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, upstream_proxy);
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &orig_param->name, &STR_ORIG);
-    pj_strdup2(pool, &orig_param->value, "");
-    pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    if (trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
+    {
+      // Mark it as originating, so Sprout knows to
+      // apply originating handling.  In theory the UE ought to have
+      // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+      // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
+      // - but if we're here it didn't, so we do the work for it.
+      LOG_DEBUG("Mark originating");
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(pool, &orig_param->value, "");
+      pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    }
     target.paths.push_back((pjsip_uri*)upstream_uri);
 
     // Select a transport for the request.
@@ -1215,7 +1272,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
   if (store)
   {
     // Look up the target in the registration data store.
-    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)req_uri);
+    std::string aor = PJUtils::aor_from_uri(req_uri);
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
     RegData::AoR* aor_data = store->get_aor_data(aor);
 
@@ -1267,6 +1324,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
       bool useable_contact = true;
       target target;
       target.from_store = PJ_TRUE;
+      target.upstream_route = PJ_FALSE;
       target.aor = aor;
       target.binding_id = i->first;
       target.uri = PJUtils::uri_from_string(binding->_uri, pool);
@@ -1353,6 +1411,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
+  pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
@@ -1382,16 +1441,17 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         if (pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL) != NULL)
         {
           // There are active contacts, so consider the flow authenticated.
+          // @@@TODO Also authenticate any attached P-Associated-ID headers.
           LOG_INFO("Mark client flow as authenticated");
-          flow_data->set_authenticated();
+          flow_data->set_authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
         }
         else
         {
           // The are no active contacts, so the client is effectively
-          // unregistered.  Clear the authenticated flag, so the next
-          // REGISTER is challenged.
-          //LOG_INFO("Mark client flow as un-authenticated");
-          //flow_data->set_unauthenticated();
+          // unregistered. Remove the user from the authenticated set, so
+          // the next REGISTER is challenged.
+          LOG_INFO("Mark client flow as un-authenticated");
+          flow_data->set_unauthenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
         }
 
         // Decrement the reference to the flow data
@@ -1415,7 +1475,6 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
                                                          _req(tdata),
                                                          _best_rsp(NULL),
                                                          _trust(trust),
-                                                         _as_chain(NULL),
                                                          _proxy(NULL),
                                                          _pending_destroy(false),
                                                          _context_count(0)
@@ -1458,7 +1517,7 @@ UASTransaction::~UASTransaction()
   {
     // INVITE transaction has been terminated.  If there are any
     // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0, PJ_TRUE);
+    cancel_pending_uac_tsx(0);
   }
 
   // Disconnect all UAC transactions from the UAS transaction.
@@ -1495,12 +1554,16 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
-  if (_as_chain != NULL)
+  // Request destruction of any AsChains scheduled for destruction
+  // along with this transaction. They are not actually deleted until
+  // any concurrent threads have finished using them.
+  for (std::list<AsChain*>::iterator it = _victims.begin();
+       it != _victims.end();
+       ++it)
   {
-    LOG_DEBUG("Free AS chain");
-    delete _as_chain;
-    _as_chain = NULL;
+    (*it)->request_destroy();
   }
+  _victims.clear();
 
   LOG_DEBUG("UASTransaction destructor completed");
 }
@@ -1544,113 +1607,150 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 }
 
 
-// Handle the incoming half of a non-CANCEL message.
-void UASTransaction::handle_incoming_non_cancel(pjsip_rx_data* rdata,
-                                                pjsip_tx_data* tdata,
-                                                const ServingState& serving_state)
+/// Handle a non-CANCEL message.
+void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
+  // as_chain_link is deliberately *not* a member variable, because it
+  // is only required during this initial request - it is not used
+  // during the remainder of the transaction (hence *initial* filter
+  // criteria).
+  AsChainLink as_chain_link = handle_incoming_non_cancel(serving_state);
+
+  AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
+  target* target = NULL;
+
   if ((!edge_proxy) &&
-      (method() == PJSIP_INVITE_METHOD))
+      ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
+       (PJUtils::is_uri_local(_req->msg->line.req.uri))))
   {
-    // If running in routing proxy mode send the 100 Trying response before
-    // applying services and routing the request as both may involve
-    // interacting with external databases.  When running in edge proxy
-    // mode we hold off sending the 100 Trying until we've received one from
-    // upstream so we can be sure we could route a subsequent CANCEL to the
-    // right place.
-    PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
+    // Do services and translation processing for requests targeted at this
+    // node/home domain.
+
+    // Do incoming (originating) half.
+    disposition = handle_originating(as_chain_link, &target);
+
+    if (disposition == AsChainLink::Disposition::Complete)
+    {
+      if (!as_chain_link.is_set() || !as_chain_link.session_case().is_terminating())
+      {
+        // We've completed the originating half and we don't yet have a
+        // terminating chain: switch to terminating and look up iFCs
+        // again.  The served user changes here.
+        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+        move_to_terminating_chain(as_chain_link);
+      }
+
+      // Do outgoing (terminating) half.
+      LOG_DEBUG("Terminating half");
+      disposition = handle_terminating(as_chain_link, &target);
+    }
   }
 
-  // Strip any untrusted headers as required, so we don't pass them on.
-  _trust->process_request(tdata);
+  as_chain_link.release();
 
-  if (serving_state.is_set())
+  if (disposition != AsChainLink::Disposition::Stop)
   {
-    if (serving_state.original_dialog())
-    {
-      LOG_DEBUG("Already complete");
-
-      // @@@ to support demo AS's limitations (TCP not supported),
-      // record-route ourselves via UDP, after the AS.  This means
-      // that the AS only has to route to us (via the transport we
-      // specify), rather than to an arbitrary next hop (e.g., bono
-      // over TCP for a simple 1-AS call).
-      PJUtils::add_record_route(tdata, "udp", stack_data.trusted_port, NULL);
-    }
-    else if (ifc_handler == NULL)
-    {
-      LOG_INFO("No IFC handler");
-    }
-    else
-    {
-      _as_chain = create_as_chain(ifc_handler,
-                                  serving_state.session_case(),
-                                  rdata->msg_info.msg,
-                                  trail());
-    }
-
-    if (serving_state.session_case().is_originating() &&
-        ((_as_chain == NULL) ||
-         (_as_chain->complete())))
-    {
-      // We've completed the originating half: switch to terminating
-      // and look up again.
-      LOG_DEBUG("Originating AS chain complete, move to terminating chain (1)");
-      delete _as_chain;
-
-      if (ifc_handler == NULL)
-      {
-        LOG_INFO("No IFC handler");
-      }
-      else
-      {
-        _as_chain = create_as_chain(ifc_handler,
-                                    SessionCase::Terminating,
-                                    rdata->msg_info.msg,
-                                    trail());
-      }
-    }
+    // Perform common outgoing processing.
+    handle_outgoing_non_cancel(target);
   }
+
+  delete target;
 }
 
 
-// Perform originating handling.
-// @Returns whether processing should stop, continue, or skip to the end.
-AsChain::Disposition UASTransaction::handle_originating(pjsip_rx_data* rdata,
-                                                        pjsip_tx_data* tdata,
-                                                        // OUT: target, if disposition is Skip
-                                                        target** target)
+// Handle the incoming half of a non-CANCEL message.
+AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
 {
-  if (!(_as_chain && _as_chain->session_case().is_originating()))
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
+
+  AsChainLink as_chain_link;
+
+  if (serving_state.is_set())
+  {
+    if (serving_state.original_dialog().is_set())
+    {
+      // Pick up existing AS chain.
+      as_chain_link = serving_state.original_dialog();
+
+      if ((serving_state.session_case() == SessionCase::Terminating) &&
+          !as_chain_link.matches_target(_req))
+      {
+        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
+        // create new AS chain with session case orig-cdiv and the
+        // terminating user as served user.
+        LOG_INFO("Request-URI has changed, retargeting");
+        std::string served_user = as_chain_link.served_user();
+        as_chain_link.release();
+        as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, served_user);
+      }
+    }
+    else
+    {
+      // No existing AS chain - create new.
+      as_chain_link = create_as_chain(serving_state.session_case());
+    }
+  }
+
+  return as_chain_link;
+}
+
+
+/// Perform originating handling.
+//
+// @returns whether processing should `Stop`, `Skip` to the end, or
+// continue to next chain because the current chain is
+// `Complete`. Never returns `Next`.
+AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chain_link,
+                                                            // OUT: target, if disposition is Skip
+                                                            target** target)
+{
+  if (!(as_chain_link.is_set() && as_chain_link.session_case().is_originating()))
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
-    return AsChain::Disposition::Next;
+    return AsChainLink::Disposition::Complete;
   }
 
   // Apply originating call services to the message
   LOG_DEBUG("Applying originating services");
-  AsChain::Disposition disposition;
-  disposition = _as_chain->on_initial_request(call_services_handler, this, rdata->msg_info.msg, tdata, target);
-
-  if (disposition == AsChain::Disposition::Next)
+  AsChainLink::Disposition disposition;
+  for (;;)
   {
-    // We've completed the originating half: switch to terminating
-    // and look up iFCs again.
-    LOG_DEBUG("Originating AS chain complete, move to terminating chain (2)");
-    delete _as_chain;
-    _as_chain = create_as_chain(ifc_handler,
-                                SessionCase::Terminating,
-                                rdata->msg_info.msg,
-                                trail());
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
+
+    if (disposition == AsChainLink::Disposition::Next)
+    {
+      as_chain_link = as_chain_link.next();
+      LOG_DEBUG("Done internal step - advance link to %s and go around again", as_chain_link.to_string().c_str());
+    }
+    else
+    {
+      break;
+    }
   }
 
   LOG_INFO("Originating services disposition %d", (int)disposition);
   return disposition;
 }
 
+
+/// Move from originating to terminating handling.
+void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link)
+{
+  // These headers name the originating user, so should not survive
+  // the changearound to the terminating chain.
+  PJUtils::delete_header(_req->msg, &STR_P_SERVED_USER);
+
+  // Create new terminating chain.
+  as_chain_link.release();
+  as_chain_link = create_as_chain(SessionCase::Terminating);
+}
+
 // Perform terminating handling.
-// @Returns whether processing should stop, continue, or skip to the end.
-AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
+//
+// @returns whether processing should `Stop`, `Skip` to the end, or
+// is now `Complete`. Never returns `Next`.
+AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chain_link,
                                                         // OUT: target, if disposition is Skip
                                                         target** target)
 {
@@ -1658,8 +1758,8 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
 
   if (!edge_proxy &&
       (enum_service) &&
-      (PJUtils::is_home_domain(tdata->msg->line.req.uri)) &&
-      (!is_uri_routeable(tdata->msg->line.req.uri)))
+      (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+      (!is_uri_routeable(_req->msg->line.req.uri)))
   {
     // Request is targeted at this domain but URI is not currently
     // routeable, so translate it to a routeable URI.
@@ -1673,11 +1773,11 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
       // performing the defined mapping.  We therefore reject the request
       // with the not found status code and a specific reason phrase.
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-      return AsChain::Disposition::Stop;
+      return AsChainLink::Disposition::Stop;
     }
 
-    if ((!PJUtils::is_home_domain(tdata->msg->line.req.uri)) &&
-        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(tdata->msg)->uri))))
+    if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
     {
       // The URI has been translated to an off-net domain, but the user does
       // not have a valid E.164 number that can be used to make off-net calls.
@@ -1685,19 +1785,33 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
       // most suitable for this case.
       LOG_INFO("Rejecting off-net call from user without E.164 address");
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-      return AsChain::Disposition::Stop;
+      return AsChainLink::Disposition::Stop;
     }
   }
 
-  AsChain::Disposition disposition = AsChain::Disposition::Next;
-
-  if (_as_chain && _as_chain->session_case().is_terminating())
+  if (!(as_chain_link.is_set() && as_chain_link.session_case().is_terminating()))
   {
-    // Apply terminating call services to the message
-    LOG_DEBUG("Apply terminating services");
-    disposition = _as_chain->on_initial_request(call_services_handler, this, tdata->msg, tdata, target);
-    // On return from on_initial_request, our _proxy pointer
-    // may be NULL.  Don't use it without checking first.
+    return AsChainLink::Disposition::Complete;
+  }
+
+  // Apply terminating call services to the message
+  LOG_DEBUG("Apply terminating services");
+  AsChainLink::Disposition disposition;
+  for (;;)
+  {
+    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
+    // On return from on_initial_request, our _proxy pointer may be
+    // NULL.  Don't use it without checking first.
+
+    if (disposition == AsChainLink::Disposition::Next)
+    {
+      as_chain_link = as_chain_link.next();
+      LOG_DEBUG("Done internal step - advance link to %s and go around again", as_chain_link.to_string().c_str());
+    }
+    else
+    {
+      break;
+    }
   }
 
   LOG_INFO("Terminating services disposition %d", (int)disposition);
@@ -1705,7 +1819,7 @@ AsChain::Disposition UASTransaction::handle_terminating(pjsip_tx_data* tdata,
 }
 
 // Handle the outgoing half of a non-CANCEL message.
-void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* target)
+void UASTransaction::handle_outgoing_non_cancel(target* target)
 {
   // Calculate targets
   target_list targets;
@@ -1717,7 +1831,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
   else
   {
     // Find targets.
-    proxy_calculate_targets(tdata->msg, tdata->pool, targets, MAX_FORKING);
+    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING);
   }
 
   if (targets.size() == 0)
@@ -1732,7 +1846,7 @@ void UASTransaction::handle_outgoing_non_cancel(pjsip_tx_data* tdata, target* ta
 
   // Now set up the data structures and transactions required to
   // process the request.
-  pj_status_t status = init_uac_transactions(tdata, targets);
+  pj_status_t status = init_uac_transactions(targets);
 
   if (status != PJ_SUCCESS)
   {
@@ -1750,188 +1864,192 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
   {
     enter_context();
 
-  pjsip_tx_data *tdata;
-  pj_status_t status;
-  int status_code = rdata->msg_info.msg->line.status.code;
+    pjsip_tx_data *tdata;
+    pj_status_t status;
+    int status_code = rdata->msg_info.msg->line.status.code;
 
-  if ((!edge_proxy) &&
-      (method() == PJSIP_INVITE_METHOD) &&
-      (status_code == 100))
-  {
-    // In routing proxy mode, don't forward 100 response for INVITE as it has
-    // already been sent.
+    if ((!edge_proxy) &&
+        (method() == PJSIP_INVITE_METHOD) &&
+        (status_code == 100))
+    {
+      // In routing proxy mode, don't forward 100 response for INVITE as it has
+      // already been sent.
       LOG_DEBUG("%s - Discard 100/INVITE response", uac_data->name());
-    return;
-  }
-
-  if ((edge_proxy) &&
-      (method() == PJSIP_REGISTER_METHOD) &&
-      (status_code == 200))
-  {
-    // Pass the REGISTER response to the edge proxy code to see if
-    // the associated client flow has been authenticated.
-    proxy_process_register_response(rdata);
-  }
-
-  status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0,
-                                          &tdata);
-  if (status != PJ_SUCCESS)
-  {
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return;
-  }
-
-  // Strip any untrusted headers as required, so we don't pass them on.
-  _trust->process_response(tdata);
-
-  if ((_proxy != NULL) &&
-      (!_proxy->on_response(tdata->msg)))
-  {
-    // Proxy has taken control.  Stop processing now.
-    pjsip_tx_data_dec_ref(tdata);
-    return;
-  }
-
-  if (_num_targets > 1)
-  {
-    // Do special response filtering for forked transactions.
-    if ((method() == PJSIP_INVITE_METHOD) &&
-        (status_code == 180) &&
-        (!_ringing))
-    {
-        LOG_DEBUG("%s - 180/INVITE Ringing response", uac_data->name());
-      // We special case the first ringing response to an INVITE,
-      // sending a ringing response to the originating UAC, but
-      // pretending the response is from a UAS co-resident with the
-      // proxy.
-      pjsip_fromto_hdr *to;
-
-      _ringing = PJ_TRUE;
-
-      // Change the tag in the To header.
-      to = (pjsip_fromto_hdr* )pjsip_msg_find_hdr(tdata->msg,
-                                                  PJSIP_H_TO, NULL);
-      if (to == NULL)
-      {
-        LOG_ERROR("No To header in INVITE response", 0);
-        return;
-      }
-
-      to->tag = pj_str("xyz");
-
-      // Contact header???
-
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
+      exit_context();
+      return;
     }
-    else if ((method() == PJSIP_INVITE_METHOD) &&
-             (status_code > 100) &&
-             (status_code < 199))
+
+    if ((edge_proxy) &&
+        (method() == PJSIP_REGISTER_METHOD) &&
+        (status_code == 200))
     {
-      // Discard all other provisional responses to INVITE
-      // transactions.
-        LOG_DEBUG("%s - Discard 1xx/INVITE response", uac_data->name());
+      // Pass the REGISTER response to the edge proxy code to see if
+      // the associated client flow has been authenticated.
+      proxy_process_register_response(rdata);
+    }
+
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0,
+                                            &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      exit_context();
+      return;
+    }
+
+    // Strip any untrusted headers as required, so we don't pass them on.
+    _trust->process_response(tdata);
+
+    if ((_proxy != NULL) &&
+        (!_proxy->on_response(tdata->msg)))
+    {
+      // Proxy has taken control.  Stop processing now.
       pjsip_tx_data_dec_ref(tdata);
+      exit_context();
+      return;
     }
-    else if ((status_code > 100) &&
-             (status_code < 199))
+
+    if (_num_targets > 1)
     {
-      // Forward all provisional responses to non-INVITE transactions.
+      // Do special response filtering for forked transactions.
+      if ((method() == PJSIP_INVITE_METHOD) &&
+          (status_code == 180) &&
+          (!_ringing))
+      {
+        LOG_DEBUG("%s - 180/INVITE Ringing response", uac_data->name());
+        // We special case the first ringing response to an INVITE,
+        // sending a ringing response to the originating UAC, but
+        // pretending the response is from a UAS co-resident with the
+        // proxy.
+        pjsip_fromto_hdr *to;
+
+        _ringing = PJ_TRUE;
+
+        // Change the tag in the To header.
+        to = (pjsip_fromto_hdr* )pjsip_msg_find_hdr(tdata->msg,
+                                                    PJSIP_H_TO, NULL);
+        if (to == NULL)
+        {
+          LOG_ERROR("No To header in INVITE response", 0);
+          exit_context();
+          return;
+        }
+
+        to->tag = pj_str("xyz");
+
+        // Contact header???
+
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else if ((method() == PJSIP_INVITE_METHOD) &&
+               (status_code > 100) &&
+               (status_code < 199))
+      {
+        // Discard all other provisional responses to INVITE
+        // transactions.
+        LOG_DEBUG("%s - Discard 1xx/INVITE response", uac_data->name());
+        pjsip_tx_data_dec_ref(tdata);
+      }
+      else if ((status_code > 100) &&
+               (status_code < 199))
+      {
+        // Forward all provisional responses to non-INVITE transactions.
         LOG_DEBUG("%s - Forward 1xx/non-INVITE response", uac_data->name());
 
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
-    }
-    else if (status_code == 200)
-    {
-      // 200 OK.
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else if (status_code == 200)
+      {
+        // 200 OK.
         LOG_DEBUG("%s - Forward 200 OK response", name());
 
-      // Forward response with the UAS transaction
-      pjsip_tsx_send_msg(_tsx, tdata);
+        // Forward response with the UAS transaction
+        pjsip_tsx_send_msg(_tsx, tdata);
 
-      // Disconnect the UAC data from the UAS data so no further
-      // events get passed between the two.
-      dissociate(uac_data);
+        // Disconnect the UAC data from the UAS data so no further
+        // events get passed between the two.
+        dissociate(uac_data);
 
-      if (method() == PJSIP_INVITE_METHOD)
-      {
-        // Terminate the UAS transaction (this needs to be done
-        // manually for INVITE 200 OK response, otherwise the
-        // transaction layer will wait for an ACK.  This will also
-        // cause all other pending UAC transactions to be cancelled.
+        if (method() == PJSIP_INVITE_METHOD)
+        {
+          // Terminate the UAS transaction (this needs to be done
+          // manually for INVITE 200 OK response, otherwise the
+          // transaction layer will wait for an ACK.  This will also
+          // cause all other pending UAC transactions to be cancelled.
           LOG_DEBUG("%s - Terminate UAS INVITE transaction (forking case)", name());
-        pjsip_tsx_terminate(_tsx, 200);
+          pjsip_tsx_terminate(_tsx, 200);
+        }
+      }
+      else
+      {
+        // Final, non-OK response.  Is this the "best" response
+        // received so far?
+        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
+        pj_grp_lock_acquire(_tsx->grp_lock);
+        if ((_best_rsp == NULL) ||
+            (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+        {
+          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
+
+          if (_best_rsp != NULL)
+          {
+            pjsip_tx_data_dec_ref(_best_rsp);
+          }
+
+          _best_rsp = tdata;
+        }
+        else
+        {
+          pjsip_tx_data_dec_ref(tdata);
+        }
+
+        // Disconnect the UAC data from the UAS data so no further
+        // events get passed between the two.
+        dissociate(uac_data);
+
+        if (--_pending_targets == 0)
+        {
+          // Received responses on every UAC transaction, so check terminating
+          // call services and then send the best response on the UAS
+          // transaction.
+          LOG_DEBUG("%s - All UAC responded", name());
+          pj_grp_lock_release(_tsx->grp_lock);
+          handle_final_response();
+        }
+        else
+        {
+          pj_grp_lock_release(_tsx->grp_lock);
+        }
       }
     }
     else
     {
-      // Final, non-OK response.  Is this the "best" response
-      // received so far?
-        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
-      pj_grp_lock_acquire(_tsx->grp_lock);
-      if ((_best_rsp == NULL) ||
-          (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+      // Non-forked transaction.  Create response to be forwarded upstream
+      // (Via will be stripped here)
+      if (rdata->msg_info.msg->line.status.code < 200)
       {
-          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_data->name());
-
+        // Forward provisional response with the UAS transaction.
+        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
+        pjsip_tsx_send_msg(_tsx, tdata);
+      }
+      else
+      {
+        // Forward final response.  Disconnect the UAC data from
+        // the UAS data so no further events get passed between the two.
+        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
         if (_best_rsp != NULL)
         {
           pjsip_tx_data_dec_ref(_best_rsp);
         }
-
         _best_rsp = tdata;
-      }
-      else
-      {
-        pjsip_tx_data_dec_ref(tdata);
-      }
-
-      // Disconnect the UAC data from the UAS data so no further
-      // events get passed between the two.
-      dissociate(uac_data);
-
-      if (--_pending_targets == 0)
-      {
-        // Received responses on every UAC transaction, so check terminating
-        // call services and then send the best response on the UAS
-        // transaction.
-          LOG_DEBUG("%s - All UAC responded", name());
-        pj_grp_lock_release(_tsx->grp_lock);
+        _pending_targets--;
+        dissociate(uac_data);
         handle_final_response();
       }
-      else
-      {
-        pj_grp_lock_release(_tsx->grp_lock);
-      }
     }
-  }
-  else
-  {
-    // Non-forked transaction.  Create response to be forwarded upstream
-    // (Via will be stripped here)
-    if (rdata->msg_info.msg->line.status.code < 200)
-    {
-      // Forward provisional response with the UAS transaction.
-        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_data->name());
-      pjsip_tsx_send_msg(_tsx, tdata);
-    }
-    else
-    {
-      // Forward final response.  Disconnect the UAC data from
-      // the UAS data so no further events get passed between the two.
-        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_data->name());
-      if (_best_rsp != NULL)
-      {
-        pjsip_tx_data_dec_ref(_best_rsp);
-      }
-      _best_rsp = tdata;
-      _pending_targets--;
-      dissociate(uac_data);
-      handle_final_response();
-    }
-  }
 
     exit_context();
   }
@@ -1944,40 +2062,40 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
   {
     enter_context();
 
-  if (_num_targets > 1)
-  {
-    // UAC transaction has timed out or hit a transport error.  If
-    // we've not received a response from on any other UAC
-    // transactions then keep this as the best response.
-      LOG_DEBUG("%s - Forked request", uac_data->name());
-    pj_grp_lock_acquire(_tsx->grp_lock);
-
-    if (--_pending_targets == 0)
+    if (_num_targets > 1)
     {
-      // Received responses on every UAC transaction, so
-      // send the best response on the UAS transaction.
+      // UAC transaction has timed out or hit a transport error.  If
+      // we've not received a response from on any other UAC
+      // transactions then keep this as the best response.
+      LOG_DEBUG("%s - Forked request", uac_data->name());
+      pj_grp_lock_acquire(_tsx->grp_lock);
+
+      if (--_pending_targets == 0)
+      {
+        // Received responses on every UAC transaction, so
+        // send the best response on the UAS transaction.
         LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
-      pj_grp_lock_release(_tsx->grp_lock);
-      handle_final_response();
+        pj_grp_lock_release(_tsx->grp_lock);
+        handle_final_response();
+      }
+      else
+      {
+        pj_grp_lock_release(_tsx->grp_lock);
+      }
     }
     else
     {
-      pj_grp_lock_release(_tsx->grp_lock);
-    }
-  }
-  else
-  {
-    // UAC transaction has timed out or hit a transport error for
-    // non-forked request.  Send a 408 on the UAS transaction.
+      // UAC transaction has timed out or hit a transport error for
+      // non-forked request.  Send a 408 on the UAS transaction.
       LOG_DEBUG("%s - Not forked request", uac_data->name());
-    --_pending_targets;
-    handle_final_response();
-  }
+      --_pending_targets;
+      handle_final_response();
+    }
 
-  // Disconnect the UAC data from the UAS data so no further
-  // events get passed between the two.
+    // Disconnect the UAC data from the UAS data so no further
+    // events get passed between the two.
     LOG_DEBUG("%s - Disconnect UAS tsx from UAC tsx", uac_data->name());
-  dissociate(uac_data);
+    dissociate(uac_data);
 
     exit_context();
   }
@@ -2006,7 +2124,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, PJ_TRUE);
+      cancel_pending_uac_tsx(0);
     }
     _tsx->mod_data[mod_tu.id] = NULL;
     _tsx = NULL;
@@ -2048,13 +2166,22 @@ pj_status_t UASTransaction::handle_final_response()
 }
 
 
-/// Register a proxy to handle future responses.  Ownership passes to
-/// this transaction; it will be deleted when this transaction is
-/// deleted.
+/// Register a proxy to handle future responses received from our
+// child UAC transaction or generated internally.  Ownership passes
+// to this transaction; it will be deleted when this transaction is
+// deleted.
 void UASTransaction::register_proxy(CallServices::Terminating* proxy)
 {
   pj_assert(_proxy == NULL);
   _proxy = proxy;
+}
+
+
+// Sends a 100 Trying response to the given rdata, in this transaction.
+// @Returns whether or not the send was a success.
+pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
+{
+  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
 }
 
 
@@ -2078,11 +2205,15 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
   }
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
 //
+// If a proxy is set, it is deleted by this method.  Beware!
+//
 // @returns whether the call should continue as it was.
-bool UASTransaction::redirect(std::string target, int code)
+bool UASTransaction::redirect(std::string target,
+                              int code,
+                              const AsChainLink& odi)  //< Token identifying original dialog to continue.  Copied immediately.
 {
   pjsip_uri* target_uri = PJUtils::uri_from_string(target, _req->pool);
 
@@ -2093,7 +2224,7 @@ bool UASTransaction::redirect(std::string target, int code)
     return true;
   }
 
-  return redirect_int(target_uri, code);
+  return redirect_int(target_uri, code, odi);
 }
 
 // Enters this transaction's context.  While in the transaction's
@@ -2125,13 +2256,17 @@ void UASTransaction::exit_context()
   }
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
 //
+// If a proxy is set, it is deleted by this method.  Beware!
+//
 // @returns whether the call should continue as it was (always false).
-bool UASTransaction::redirect(pjsip_uri* target, int code)
+bool UASTransaction::redirect(pjsip_uri* target,
+                              int code,
+                              const AsChainLink& odi)  //< Token identifying original dialog to continue.  Copied immediately.
 {
-  return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code);
+  return redirect_int((pjsip_uri*)pjsip_uri_clone(_req->pool, target), code, odi);
 }
 
 // Generate analytics logs relating to a new transaction starting.
@@ -2224,8 +2359,7 @@ void UASTransaction::log_on_tsx_complete()
 // Initializes UAC transactions to each of the specified targets.
 //
 // @returns a status code indicating whether or not the operation succeeded.
-pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
-                                                  target_list& targets)
+pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
 {
   pj_status_t status = PJ_EUNKNOWN;
   pjsip_transaction *uac_tsx;
@@ -2242,7 +2376,7 @@ pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
     {
       // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", ii);
-      uac_tdata = PJUtils::clone_tdata(tdata);
+      uac_tdata = PJUtils::clone_tdata(_req);
 
       if (uac_tdata == NULL)
       {
@@ -2320,7 +2454,7 @@ pj_status_t UASTransaction::init_uac_transactions(pjsip_tx_data* tdata,
 }
 
 // Cancels all pending UAC transactions associated with this UAS transaction.
-void UASTransaction::cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_protected)
+void UASTransaction::cancel_pending_uac_tsx(int st_code)
 {
   enter_context();
 
@@ -2345,7 +2479,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_pro
     if (uac_data != NULL)
     {
       // Found a UAC transaction that is still active, so send a CANCEL.
-      uac_data->cancel_pending_tsx(st_code, integrity_protected);
+      uac_data->cancel_pending_tsx(st_code);
 
       // Leave the UAC transaction connected to the UAS transaction so the
       // 487 response gets passed through.
@@ -2365,14 +2499,18 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
   _uac_data[uac_data->_target] = NULL;
 }
 
-// Redirects the call to the specified target, for the reason specified in the
+/// Redirects the call to the specified target, for the reason specified in the
 // status code.
 //
 // This internal version of the method does not clone the provided URI, so it
 // must have been allocated from a suitable pool.
 //
+// If a proxy is set, it is deleted by this method.  Beware!
+//
 // @returns whether the call should continue as it was (always false).
-bool UASTransaction::redirect_int(pjsip_uri* target, int code)
+bool UASTransaction::redirect_int(pjsip_uri* target,
+                                  int code,
+                                  const AsChainLink& odi)  //< Token identifying original dialog to continue. Copied immediately.
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
   static const pj_str_t STR_REASON = pj_str("Reason");
@@ -2383,6 +2521,9 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
   // Default the code to 480 Temporarily Unavailable.
   code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+
+  // Save off the serving state, because it's about to be deleted.
+  ServingState serving_state(&SessionCase::Terminating, odi.duplicate());
 
   // Clear out any proxy.  Once we've done a redirect (or failed a
   // redirect), we can't apply further call services for the original
@@ -2409,7 +2550,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   if (num_history_infos < MAX_HISTORY_INFOS)
   {
     // Cancel pending UAC transactions and notify the originator.
-    cancel_pending_uac_tsx(code, PJ_TRUE);
+    cancel_pending_uac_tsx(code);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
@@ -2463,8 +2604,9 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     // Add the History-Info header to the request.
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
-    // Kick off outgoing processing for the new request.
-    handle_outgoing_non_cancel(_req, NULL);
+    // Kick off outgoing processing for the new request.  Continue the
+    // existing AsChain. This will trigger orig-cdiv handling.
+    handle_non_cancel(serving_state);
   }
   else
   {
@@ -2541,6 +2683,22 @@ void UACTransaction::set_target(const struct target& target)
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
   _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
+
+  // If the target is routing to the upstream device (we're acting as an edge
+  // proxy), strip any extra loose routes on the message to prevent accidental
+  // double routing.
+  if (target.upstream_route)
+  {
+     LOG_DEBUG("Stripping loose routes from proxied message");
+
+     // Tight loop to strip all route headers.
+     while (pjsip_msg_find_remove_hdr(_tdata->msg,
+                                      PJSIP_H_ROUTE,
+                                      NULL) != NULL)
+     {
+       // Tight loop.
+     };
+  }
 
   for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
        pit != target.paths.end();
@@ -2621,7 +2779,7 @@ void UACTransaction::send_request()
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
-void UACTransaction::cancel_pending_tsx(int st_code, pj_bool_t integrity_protected)
+void UACTransaction::cancel_pending_tsx(int st_code)
 {
   if (_tsx != NULL)
   {
@@ -2642,12 +2800,6 @@ void UACTransaction::cancel_pending_tsx(int st_code, pj_bool_t integrity_protect
         pj_str_t reason_val = pj_str(reason_val_str);
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
-      }
-      if ((edge_proxy) && (integrity_protected))
-      {
-        // Add integrity protected indication to the request so Sprout will
-        // accept it.
-        PJUtils::add_integrity_protected_indication(cancel);
       }
       set_trail(cancel, trail());
 
@@ -2694,18 +2846,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         _from_store)
     {
       // We're the auth proxy and the flow we used failed, delete the
-      // record of the flow.  We need the retry loop to handle the store's
-      // compare-and-swap.
+      // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      RegData::AoR* aor_data;
-      do
-      {
-        aor_data = store->get_aor_data(aor);
-        aor_data->remove_binding(binding_id);
-      } while (!store->set_aor_data(aor, aor_data));
-
-      delete aor_data;
+      RegistrationUtils::network_initiated_deregistration(ifc_handler, store, aor, binding_id);
     }
   }
 
@@ -2845,6 +2989,12 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
       }
     }
   }
+  else
+  {
+    // Routing proxy (Sprout).
+
+    as_chain_table = new AsChainTable;
+  }
 
   enum_service = enumService;
   bgcf_service = bgcfService;
@@ -2865,10 +3015,14 @@ void destroy_stateful_proxy()
   {
     // Destroy the upstream connection pool.  This will quiesce all the TCP
     // connections.
-    delete upstream_conn_pool;
+    delete upstream_conn_pool; upstream_conn_pool = NULL;
 
     // Destroy the flow table.
-    delete flow_table;
+    delete flow_table; flow_table = NULL;
+  }
+  else
+  {
+    delete as_chain_table; as_chain_table = NULL;
   }
 
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
@@ -2996,22 +3150,101 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   return PJ_SUCCESS;
 }
 
-/// Factory method: create AsChain by looking up iFCs.
-AsChain* create_as_chain(IfcHandler* ifc_handler,
-                         const SessionCase& session_case,
-                         pjsip_msg* msg,
-                         SAS::TrailId trail)
+
+/// Determine if the given user is registered in the registration data
+/// store.
+bool is_user_registered(std::string served_user)
 {
-  std::string served_user;
-  std::vector<std::string> application_servers;
-  ifc_handler->lookup_ifcs(session_case,
-                           msg,
-                           trail,
-                           served_user,
-                           application_servers);
-  return new AsChain(session_case,
-                     served_user,
-                     application_servers);
+  bool is_registered = false;
+
+  if (store)
+  {
+    std::string aor = served_user;
+    RegData::AoR* aor_data = store->get_aor_data(aor);
+    is_registered = (aor_data != NULL) &&
+      (aor_data->bindings().size() != 0u);
+    delete aor_data; aor_data = NULL;
+    LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
+  }
+
+  return is_registered;
+}
+
+
+/// Factory method: create AsChain by looking up iFCs.
+AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
+                                            std::string served_user)  //< Served user, if already known, else ""
+{
+  if (ifc_handler == NULL)
+  {
+    // LCOV_EXCL_START No easy way to hit.
+    LOG_INFO("No IFC handler");
+    return AsChainLink();
+    // LCOV_EXCL_STOP
+  }
+
+  if (served_user.empty())
+  {
+    served_user = ifc_handler->served_user_from_msg(session_case,
+                                                    _req->msg,
+                                                    _req->pool);
+  }
+
+  Ifcs* ifcs;
+  bool is_registered = false;
+
+  if (served_user.empty())
+  {
+    ifcs = new Ifcs();
+  }
+  else
+  {
+    is_registered = is_user_registered(served_user);
+    ifcs = ifc_handler->lookup_ifcs(session_case,
+                                    served_user,
+                                    trail());
+  }
+
+  // Create the AsChain, and schedule its destruction.  AsChain
+  // lifetime is tied to the lifetime of the creating transaction.
+  //
+  // Rationale:
+  //
+  // Consider two successive Sprout UAS transactions Ai and Ai+1 in
+  // the chain. Sprout creates Ai+1 in response to it receiving the Ai
+  // ODI token from the AS.
+  //
+  // (1) Ai+1 can only be created if the ODI is valid at the point
+  // Sprout receives the transaction-creating message.
+  //
+  // (2) Before the point Sprout creates Ai+1, the ODI’s lifetime
+  // cannot be dependent on Ai+1, but only on Ai (and previous
+  // transactions).
+  //
+  // (3) Hence at the point Ai+1 is created, Ai must still be live.
+  //
+  // (4) This applies transitively, so the lifetime of A0 bounds the
+  // lifetime of Aj for all j.
+  //
+  // This means that there’s a constraint on B2BUA AS behaviour: it
+  // must not give a final response to the inbound transaction before
+  // receiving a final response from the outbound transaction.
+  //
+  // While this constraint is not stated explicitly in 24.229, there
+  // is no other sensible lifetime for the ODI token. The alternative
+  // would allow B2BUAs that gave a final response to the caller, and
+  // then at some arbitrary time later did some action that continued
+  // the original AS chain, which is nonsensical.
+
+  AsChainLink ret = AsChainLink::create_as_chain(as_chain_table,
+                                                 session_case,
+                                                 served_user,
+                                                 is_registered,
+                                                 trail(),
+                                                 ifcs);
+  _victims.push_back(ret.as_chain());
+  LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
+  return ret;
 }
 
 ///@}

@@ -34,6 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include <boost/lexical_cast.hpp>
 
 #include "log.h"
 #include "pjutils.h"
@@ -41,24 +42,59 @@
 #include "constants.h"
 #include "stateful_proxy.h"
 #include "aschain.h"
+#include "ifchandler.h"
 
-AsChain::AsChain(const SessionCase& session_case,
-                 std::string served_user,
-                 std::vector<std::string> application_servers) :
+
+/// Create an AsChain.
+//
+// Ownership of `ifcs` passes to this object.
+//
+// See `AsChainLink::create_as_chain` for rules re releasing the
+// created references.
+AsChain::AsChain(AsChainTable* as_chain_table,
+                 const SessionCase& session_case,
+                 const std::string& served_user,
+                 bool is_registered,
+                 SAS::TrailId trail,
+                 Ifcs* ifcs) :
+  _as_chain_table(as_chain_table),
+  _refs(2),  // one for the chain being returned,
+             // and one for the reference in the table.
+  _odi_tokens(),
   _session_case(session_case),
   _served_user(served_user),
-  _application_servers(application_servers)
+  _is_registered(is_registered),
+  _trail(trail),
+  _ifcs(ifcs)
 {
+  LOG_DEBUG("Creating AsChain %p and adding to map", this);
+  _as_chain_table->register_(this, _odi_tokens);
 }
+
 
 AsChain::~AsChain()
 {
+  LOG_DEBUG("Destroying AsChain %p", this);
+  delete _ifcs;
 }
 
-std::string AsChain::to_string() const
+
+/// Remove AsChain from the AsChainTable, as soon as practical.
+void AsChain::request_destroy()
 {
-  return _session_case.to_string();
+  LOG_DEBUG("Removing AsChain %p from map", this);
+  _as_chain_table->unregister(_odi_tokens);
+  dec_ref();
 }
+
+
+std::string AsChain::to_string(size_t index) const
+{
+  return ("AsChain-" + _session_case.to_string() +
+          "[" + boost::lexical_cast<std::string>((void*)this) + "]:" +
+          boost::lexical_cast<std::string>(index + 1) + "/" + boost::lexical_cast<std::string>(size()));
+}
+
 
 /// @returns the session case
 const SessionCase& AsChain::session_case() const
@@ -66,66 +102,162 @@ const SessionCase& AsChain::session_case() const
   return _session_case;
 }
 
+
+/// @returns the number of elements in this chain
+size_t AsChain::size() const
+{
+  return _ifcs->size();
+}
+
+
+/// @returns whether the given message has the same target as the
+// chain.  Used to detect the orig-cdiv case.  Only valid for
+// terminating chains.
+bool AsChain::matches_target(pjsip_tx_data* tdata) const
+{
+  pj_assert(_session_case == SessionCase::Terminating);
+
+  // We do not support alias URIs per 3GPP TS 24.229 s3.1 and 29.228
+  // sB.2.1. This is an explicit limitation.  So this step reduces to
+  // simple syntactic canonicalization.
+  //
+  // 3GPP TS 24.229 s5.4.3.3 note 3 says "The canonical form of the
+  // Request-URI is obtained by removing all URI parameters (including
+  // the user-param), and by converting any escaped characters into
+  // unescaped form.".
+  const std::string& orig_uri = _served_user;
+  const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
+                                                               tdata->msg,
+                                                               tdata->pool);
+  return (orig_uri == msg_uri);
+}
+
+
+SAS::TrailId AsChain::trail() const
+{
+  return _trail;
+}
+
+
+/// Create a new AsChain and return a link pointing at the start of
+// it. Caller MUST eventually call both:
+//
+// * release() when it is finished with the link, and
+// * as_chain()->request_destroy() when it is finished with the
+//   underlying chain.
+//
+// Ownership of `ifcs` passes to this object.
+AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
+                                         const SessionCase& session_case,
+                                         const std::string& served_user,
+                                         bool is_registered,
+                                         SAS::TrailId trail,
+                                         Ifcs* ifcs)
+{
+  AsChain* as_chain = new AsChain(as_chain_table,
+                                  session_case,
+                                  served_user,
+                                  is_registered,
+                                  trail,
+                                  ifcs);
+  return AsChainLink(as_chain, 0u);
+}
+
 /// Apply first AS (if any) to initial request.
 //
+// See 3GPP TS 23.218, especially s5.2 and s6, for an overview of how
+// this works, and 3GPP TS 24.229 s5.4.3.2 and s5.4.3.3 for
+// step-by-step details.
+//
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
-                                                 UASTransaction* uas_data,
-                                                 pjsip_msg* msg,
-                                                 pjsip_tx_data* tdata,
-                                                 // OUT: target to
-                                                 // use, if
-                                                 // disposition is
-                                                 // Skip. Dynamically
-                                                 // allocated, to be
-                                                 // freed by caller.
-                                                 target** pre_target)
+AsChainLink::Disposition
+AsChainLink::on_initial_request(CallServices* call_services,
+                                UASTransaction* uas_data,
+                                pjsip_tx_data* tdata,
+                                // OUT: target to use, if disposition
+                                // is Skip. Dynamically allocated, to
+                                // be freed by caller.
+                                target** pre_target)
 {
-  if (call_services && is_mmtel(call_services))
+  if (complete())
   {
-    if (_session_case.is_originating())
+    LOG_DEBUG("No ASs left in chain");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  const Ifc& ifc = (*(_as_chain->_ifcs))[_index];
+  if (!ifc.filter_matches(_as_chain->session_case(),
+                          _as_chain->_is_registered,
+                          tdata->msg))
+  {
+    LOG_DEBUG("No match for %s", to_string().c_str());
+    return AsChainLink::Disposition::Next;
+  }
+
+  AsInvocation application_server = ifc.as_invocation();
+  std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
+
+  if (call_services && call_services->is_mmtel(application_server.server_name))
+  {
+    // LCOV_EXCL_START No test coverage for MMTEL AS yet.
+    if (_as_chain->_session_case.is_originating())
     {
-      LOG_DEBUG("Invoke originating MMTEL services");
-      CallServices::Originating originating(call_services, uas_data, msg, served_user());
+      LOG_INFO("Invoke originating MMTEL services for %s", to_string().c_str());
+      CallServices::Originating originating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       bool proceed = originating.on_initial_invite(tdata);
-      return proceed ? AsChain::Disposition::Next : AsChain::Disposition::Stop;
+      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
     else
     {
       // MMTEL terminating call services need to insert themselves into
       // the signalling path.
-      LOG_DEBUG("Invoke terminating MMTEL services");
+      LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, msg, served_user());
+        new CallServices::Terminating(call_services, uas_data, next(), tdata->msg, _as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
-      return proceed ? AsChain::Disposition::Next : AsChain::Disposition::Stop;
+      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
+    // LCOV_EXCL_STOP
   }
-  else if (!_application_servers.empty())
+  else
   {
-    // Temporary code, supporting only one application server.
-    std::string as_uri_str = _application_servers[0];
+    std::string as_uri_str = application_server.server_name;
 
-    pjsip_uri* as_uri = PJUtils::uri_from_string(as_uri_str, tdata->pool);
+    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
+    // except that ifchandler doesn't have a handy pool to use.
+    pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
+    LOG_INFO("Invoking external AS %s with token %s for %s",
+             PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),
+             odi_value.c_str(),
+             to_string().c_str());
 
-    if (as_uri == NULL)
+    // Basic support for P-Asserted-Identity: strip any header(s) we've
+    // received, and set up to be the same as the From header. Full support will
+    // be added under sto125.
+    pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
+                                              PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
+                                              tdata->pool);
+    PJUtils::set_generic_header(tdata, &STR_P_ASSERTED_IDENTITY, &pai_str);
+
+    // Set P-Served-User, including session case and registration
+    // state, per RFC5502 and the extension in 3GPP TS 24.229
+    // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
+    // step 5 s5.4.3.3 step 4c.
+    std::string psu_string = "<" + _as_chain->_served_user +
+                             ">;sescase=" + _as_chain->_session_case.to_string();
+    if (_as_chain->_session_case != SessionCase::OriginatingCdiv)
     {
-      // @@@ would be good to check earlier, e.g., when parsing the iFCs.
-      LOG_WARNING("Badly formed URI %s in iFC", as_uri_str.c_str());
-      // @@@ hmm, should really simulate a 408 here.
-      return AsChain::Disposition::Next;
+      psu_string.append(";regstate=");
+      psu_string.append(_as_chain->_is_registered ? "reg" : "unreg");
     }
-
-    LOG_DEBUG("Invoking external AS %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, as_uri).c_str());
-
-    // @@@ P-A-I basic support
-
-    // @@@ P-Served-User support, including session case and registration state
+    pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
+    PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
 
     // Start defining the new target.
     target* as_target = new target;
-    as_target->from_store = false;
+    as_target->from_store = PJ_FALSE;
+    as_target->upstream_route = PJ_FALSE;
     as_target->transport = NULL;
 
     // Request-URI should remain unchanged
@@ -133,79 +265,89 @@ AsChain::Disposition AsChain::on_initial_request(CallServices* call_services,
 
     // Set the AS URI as the topmost route header.  Set loose-route,
     // otherwise the headers get mucked up.
-    ((pjsip_sip_uri*)as_uri)->lr_param = 1;  // @@@ fixme cast
-    as_target->paths.push_back(as_uri);
+    as_uri->lr_param = 1;
+    as_target->paths.push_back((pjsip_uri*)as_uri);
 
     // Insert route header below it with an ODI in it.
     pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
-    std::string odi_token = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + "unity";
-    pj_strdup2(tdata->pool, &self_uri->user, odi_token.c_str());
+    pj_strdup2(tdata->pool, &self_uri->user, odi_value.c_str());
     self_uri->host = stack_data.local_host;
     self_uri->port = stack_data.trusted_port;
-    self_uri->transport_param = ((pjsip_sip_uri*)as_uri)->transport_param;  // Use same transport as AS, in case it can only cope with one. @@@ not sure if that's a good idea @@@ hack re cast - not good
+    self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
-
-    if (_session_case.is_originating())
-    {
-      // @@@ Until we have proper AS chain processing, we need to put
-      // the session case into the ODI URI.
-      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
-      pj_strdup2(tdata->pool, &orig_param->value, "");
-      pj_list_insert_after(&self_uri->other_param, orig_param);
-    }
 
     as_target->paths.push_back((pjsip_uri*)self_uri);
 
-    // @@@ to support demo AS's limitations (TCP not supported),
-    // record-route ourselves via UDP, before the AS.  This means that
-    // the AS only has to route to us (via the transport we specify),
-    // rather than to an arbitrary previous hop (e.g., bono over TCP
-    // for a simple 1-AS call).
-    PJUtils::add_record_route(tdata, "udp", stack_data.trusted_port, NULL);
-
     // Stop processing the chain and send the request out to the AS.
     *pre_target = as_target;
-    return AsChain::Disposition::Skip;
+    return AsChainLink::Disposition::Skip;
+  }
+}
+
+
+AsChainTable::AsChainTable()
+{
+  pthread_mutex_init(&_lock, NULL);
+}
+
+
+AsChainTable::~AsChainTable()
+{
+  pthread_mutex_destroy(&_lock);
+}
+
+
+/// Create the tokens for the given AsChain, and register them to
+/// point at the next step in each case.
+void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens)
+{
+  size_t len = as_chain->size();
+  pthread_mutex_lock(&_lock);
+
+  for (size_t i = 0; i < len; i++)
+  {
+    std::string token;
+    PJUtils::create_random_token(TOKEN_LENGTH, token);
+    tokens.push_back(token);
+    _t2c_map[token] = AsChainLink(as_chain, i + 1);
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+
+void AsChainTable::unregister(std::vector<std::string>& tokens)
+{
+  pthread_mutex_lock(&_lock);
+
+  for (std::vector<std::string>::iterator it = tokens.begin();
+       it != tokens.end();
+       ++it)
+  {
+    _t2c_map.erase(*it);
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+
+/// Retrieve an existing AsChainLink based on ODI token.
+//
+// If the returned link is_set(), caller MUST call release() when it
+// is finished with the link.
+AsChainLink AsChainTable::lookup(const std::string& token)
+{
+  pthread_mutex_lock(&_lock);
+  std::map<std::string, AsChainLink>::const_iterator it = _t2c_map.find(token);
+  if (it == _t2c_map.end())
+  {
+    pthread_mutex_unlock(&_lock);
+    return AsChainLink(NULL, 0);
   }
   else
   {
-    LOG_DEBUG("No application servers configured");
-    return AsChain::Disposition::Next;
+    it->second._as_chain->inc_ref();
+    pthread_mutex_unlock(&_lock);
+    return it->second;
   }
-}
-
-
-/// See if we should be invoking our MMTEL AS.  Only valid after lookup_ifcs called.
-// @returns true if we should invoke MMTEL, false if not.
-bool AsChain::is_mmtel(CallServices* call_services)
-{
-  // Check if we're supposed to be supplying local MMTel services
-  bool local_mmtel = false;
-  for (std::vector<std::string>::const_iterator ii = _application_servers.begin();
-       ii < _application_servers.end();
-       ii++)
-  {
-    if (call_services->is_mmtel(*ii))
-    {
-      LOG_DEBUG("Got local MMTel services");
-      local_mmtel = true;
-      break;
-    }
-  }
-
-  return local_mmtel;
-}
-
-/// @returns the served user. Only valid after lookup_ifcs called.
-std::string AsChain::served_user() const
-{
-  return _served_user;
-}
-
-
-/// @returns true if this AS chain has been completed (no ASs left), false otherwise.
-bool AsChain::complete() const
-{
-  return _application_servers.empty();
 }

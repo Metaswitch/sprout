@@ -46,8 +46,22 @@ const pj_str_t STR_SIP_INSTANCE = pj_str("+sip.instance");
 const pj_str_t STR_REG_ID = pj_str("reg-id");
 const pj_str_t STR_OB = pj_str("ob");
 const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
+const pj_str_t STR_YES = pj_str("yes");
+const pj_str_t STR_NO = pj_str("no");
+const pj_str_t STR_TLS_YES = pj_str("tls-yes");
+const pj_str_t STR_TLS_PENDING = pj_str("tls-pending");
+const pj_str_t STR_IP_ASSOC_YES = pj_str("ip-assoc-yes");
+const pj_str_t STR_IP_ASSOC_PENDING = pj_str("ip-assoc-pending");
+const pj_str_t STR_AUTH_DONE = pj_str("auth-done");
+const pj_str_t STR_PRIVACY = pj_str("Privacy");
 const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
+const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
+const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
+const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
+const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
+const pj_str_t STR_SERVICE_ROUTE = pj_str("Service-Route");
 const pj_str_t STR_ORIG = pj_str("orig");
+const pj_str_t STR_NO_FORK = pj_str("no-fork");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");
@@ -56,5 +70,8 @@ const int SIP_STATUS_FLOW_FAILED = 430;
 const pj_str_t SIP_REASON_FLOW_FAILED = pj_str("Flow failed");
 const pj_str_t SIP_REASON_ENUM_FAILED = pj_str("ENUM translation failed");
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str("Off-net calling not allowed");
+
+#define DEFAULT_HANDLING_SESSION_CONTINUED 0
+#define DEFAULT_HANDLING_SESSION_TERMINATED 1
 
 #endif /* CONSTANTS_H_ */

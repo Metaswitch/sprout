@@ -49,6 +49,7 @@ extern "C" {
 // Common STL includes.
 #include <cassert>
 #include <map>
+#include <unordered_set>
 #include <string>
 
 #include "statistic.h"
@@ -67,14 +68,23 @@ public:
   /// Returns a reference to the flow token.
   inline const std::string& token() const { return _token; };
 
-  /// Returns true if this flow has been authenticated.
-  inline bool authenticated() const { return _authenticated; };
+  /// Returns true if this flow has been authenticated for the given identity.
+  inline bool authenticated(pjsip_uri *uri) const
+  {
+    return (_authenticated_ids.find(PJUtils::aor_from_uri((pjsip_sip_uri*)uri)) != _authenticated_ids.end());
+  };
 
-  /// Marks the flow as authenticated.
-  inline void set_authenticated() { _authenticated = true; };
+  /// Marks the flow as authenticated for the given identity.
+  inline void set_authenticated(pjsip_uri *uri)
+  {
+    _authenticated_ids.insert(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
+  };
 
-  /// Marks the flow as unauthenticated.
-  inline void set_unauthenticated() { _authenticated = false; };
+  /// Marks the flow as unauthenticated for the given identity.
+  inline void set_unauthenticated(pjsip_uri *uri)
+  {
+    _authenticated_ids.erase(PJUtils::aor_from_uri((pjsip_sip_uri*)uri));
+  };
 
   /// Flags that a keepalive has been received on this flow.
   void keepalive();
@@ -98,8 +108,6 @@ private:
 
   static const int TOKEN_LENGTH = 10;
 
-  static const char _b64[64];
-
   /// Increments the reference count on the flow.
   void inc_ref();
 
@@ -108,7 +116,7 @@ private:
   pjsip_transport* _transport;
   pj_sockaddr _remote_addr;
   std::string _token;
-  pj_bool_t _authenticated;
+  std::unordered_set<std::string> _authenticated_ids;
   pjsip_uri _user;
   int _refs;
   pj_timer_entry _ka_timer;
@@ -126,15 +134,15 @@ public:
   ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.
-  /// This may be called with parameters that match an existing flow, in 
+  /// This may be called with parameters that match an existing flow, in
   /// which case it will return the existing flow.
   Flow* find_create_flow(pjsip_transport* transport, const pj_sockaddr* raddr);
-  
+
   /// Find the flow corresponding to the specified received message using
   /// the transport the message was received on and the IP address/port
   /// if appropriate.
   Flow* find_flow(pjsip_transport* transport, const pj_sockaddr* raddr);
-  
+
   /// Find the flow corresponding to the specified flow token.
   Flow* find_flow(const std::string& token);
 
@@ -151,7 +159,7 @@ private:
   public:
     FlowKey(int transport_type, const pj_sockaddr* raddr) :
       _type(transport_type),
-      _raddr(*raddr)           
+      _raddr(*raddr)
     {
     }
 
@@ -163,7 +171,7 @@ private:
     bool operator< (const FlowKey& other) const
     {
       // Compare the transport type first.
-      if (_type < other._type) 
+      if (_type < other._type)
       {
         return true;
       }

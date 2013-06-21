@@ -46,6 +46,7 @@ extern "C" {
 
 #include "log.h"
 #include "constants.h"
+#include "pjutils.h"
 #include "trustboundary.h"
 
 /// Strip headers as appropriate when crossing a trust boundary.
@@ -53,14 +54,8 @@ static void proxy_strip_trusted(pjsip_tx_data *tdata)
 {
   LOG_DEBUG("Strip trusted headers");
 
-  // Strip P-Access-Network-Info header if present.
-  pjsip_generic_string_hdr* hdr = (pjsip_generic_string_hdr*)
-    pjsip_msg_find_hdr_by_name(tdata->msg, &STR_P_A_N_I, NULL);
-
-  if (hdr != NULL)
-  {
-    pj_list_erase(hdr);
-  }
+  PJUtils::delete_header(tdata->msg, &STR_P_A_N_I);
+  PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 }
 
 TrustBoundary::TrustBoundary(std::string description, pj_bool_t strip_request, pj_bool_t strip_response) :

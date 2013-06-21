@@ -55,22 +55,25 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "memcachedstore.h"
+#include "ifchandler.h"
 #include "registrar.h"
+#include "registration_utils.h"
 #include "constants.h"
 #include "log.h"
 
 
 static RegData::Store* store;
 
+static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
-
 
 //
 // mod_registrar is the module to receive SIP REGISTER requests.  This
 // must get invoked before the proxy UA module.
 //
 static pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata);
+static void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event);
 
 pjsip_module mod_registrar =
 {
@@ -86,7 +89,7 @@ pjsip_module mod_registrar =
   NULL,                               // on_rx_response()
   NULL,                               // on_tx_request()
   NULL,                               // on_tx_response()
-  NULL,                               // on_tsx_state()
+  &registrar_on_tsx_state,            // on_tsx_state()
 };
 
 
@@ -148,8 +151,28 @@ void process_register_request(pjsip_rx_data* rdata)
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
 
-  // Get the Address of Record from the URI in the To header.
-  std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri));
+  // Get the URI from the To header and check it is a SIP or SIPS URI.
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+
+  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // whether 404 is the right status code - it says 404 should be used if
+    // the AoR isn't valid for the domain in the RequestURI).
+    // LCOV_EXCL_START
+    LOG_ERROR("Rejecting register request using non SIP URI");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_FOUND,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Canonicalize Get the Address of Record from the URI in the To header.
+  std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
@@ -179,13 +202,20 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
+  int expiry = 0;
 
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
-  RegData::AoR* aor_data;
+  RegData::AoR* aor_data = NULL;
   do
   {
+    if (aor_data != NULL)
+    {
+      delete aor_data; // LCOV_EXCL_LINE - Single-threaded tests mean we'll
+                       //                  always pass CAS.
+    }
+
     // Find the current bindings for the AoR.
     aor_data = store->get_aor_data(aor);
     LOG_DEBUG("Retrieved AoR data %p", aor_data);
@@ -277,13 +307,14 @@ void process_register_request(pjsip_rx_data* rdata)
           }
 
           // Calculate the expiry period for the updated binding.
-          int expiry = (contact->expires != -1) ? contact->expires :
+          expiry = (contact->expires != -1) ? contact->expires :
                        (expires != NULL) ? expires->ivalue : 300;
           if (expiry > 300)
           {
             // Expiry is too long, set it to the maximum of 300 seconds (5 minutes).
             expiry = 300;
           }
+
           binding->_expires = now + expiry;
 
           if (analytics != NULL)
@@ -328,6 +359,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - we only reject REGISTER if something goes wrong, and
     // we aren't covering any of those paths so we can't hit this either
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+    delete aor_data;
     return;
     // LCOV_EXCL_STOP
   }
@@ -413,8 +445,28 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
+  // Construct a Service-Route header pointing at the sprout cluster.  We don't
+  // care which sprout handles the subsequent requests as they all have access
+  // to all subscriber information.
+  pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
+  pj_strdup(tdata->pool,
+            &service_route_uri->host,
+            &stack_data.sprout_cluster_domain);
+  service_route_uri->port = stack_data.trusted_port;
+  service_route_uri->transport_param = pj_str("TCP");
+  service_route_uri->lr_param = 1;
+
+  pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
+  service_route->name = STR_SERVICE_ROUTE;
+  service_route->sname = pj_str("");
+  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
+
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
+
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "");
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
@@ -437,13 +489,29 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
+void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
+  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+      (event->type == PJSIP_EVENT_RX_MSG) &&
+      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
+    // Can't create an AS response in UT
+    // LCOV_EXCL_START
+    LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
+    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
 
-pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger)
+    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
+    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
+    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*");
+    // LCOV_EXCL_STOP
+  }
+}
+
+pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
 {
   pj_status_t status;
 
   store = registrar_store;
   analytics = analytics_logger;
+  ifchandler = ifchandler_ref;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

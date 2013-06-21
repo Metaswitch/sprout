@@ -92,19 +92,6 @@ static HSSConnection* hss;
 static AnalyticsLogger* analytics;
 
 
-// Flag that records whether authentication/authorization of transport
-// connections is supported.  If so, once authentication has been
-// successful on the connection subsequent requests will be accepted on the
-// connection without checking or challenging credentials.
-bool tp_auth_supported;
-
-
-// Map for storing information about authenticated/authorized transport
-// connections.
-pj_mutex_t* tp_auth_lock;
-std::map<pjsip_transport*, bool> tp_auth_map;
-
-
 // PJSIP structure for control server authentication functions.
 pjsip_auth_srv auth_srv;
 
@@ -150,7 +137,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
     // header for the user lookup.  The username field contains the private
     // user identity and the public user identity can be deduced by adding
     // a sip: prefix.
-    //
     private_id = PJUtils::pj_str_to_string(acc_name);
     public_id = "sip:" + private_id;
 
@@ -184,61 +170,44 @@ pj_status_t user_lookup(pj_pool_t *pool,
 }
 
 
-static void transport_state(pjsip_transport *tp, pjsip_transport_state state, const pjsip_transport_state_info *info)
-{
-  if (state == PJSIP_TP_STATE_DISCONNECTED)
-  {
-    // Transport connection has disconnected, so remove it from the authorized
-    // map if it is there.
-    pj_mutex_lock(tp_auth_lock);
-    std::map<pjsip_transport*, bool>::iterator i = tp_auth_map.find(tp);
-    if (i != tp_auth_map.end())
-    {
-      LOG_INFO("%s - Removing disconnected transport from authorized list", tp->obj_name);
-      tp_auth_map.erase(i);
-    }
-    pj_mutex_unlock(tp_auth_lock);
-  }
-}
-
-
 pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
 
-  if ((tp_auth_supported) &&
-      (PJSIP_TRANSPORT_IS_RELIABLE(rdata->tp_info.transport)))
+  if (rdata->msg_info.msg->line.req.method.id != PJSIP_REGISTER_METHOD)
   {
-    // The server supports authorization of reliable transport connections, so
-    // check to see if this transport is already authenticated and authorized.
-    pj_mutex_lock(tp_auth_lock);
-    std::map<pjsip_transport*, bool>::const_iterator i = tp_auth_map.find(rdata->tp_info.transport);
-    if (i != tp_auth_map.end())
-    {
-      // Message received on authorized transport, so let it through.
-      pj_mutex_unlock(tp_auth_lock);
-      return PJ_FALSE;
-
-    }
-    pj_mutex_unlock(tp_auth_lock);
+    // Non-REGISTER request, so don't do authentication as it must have come
+    // from an authenticated or trusted source.
+    return PJ_FALSE;
   }
 
-  // Check to see if the message has already been integrity protected?
+  // Check to see if the request has already been integrity protected?
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+
   if (auth_hdr != NULL)
   {
-    LOG_DEBUG("Authorization header in message");
+    LOG_DEBUG("Authorization header in request");
     pjsip_param* integrity =
            pjsip_param_find(&auth_hdr->credential.digest.other_param,
                             &STR_INTEGRITY_PROTECTED);
 
     if ((integrity != NULL) &&
-        (pj_stricmp2(&integrity->value, "yes")==0))
+        ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
+         (pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+         (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
     {
-      // Message is already integrity protected, so let it through/
+      // Request is already integrity protected, so let it through.
       LOG_INFO("Request integrity protected by edge proxy");
       return PJ_FALSE;
+    }
+
+    if (auth_hdr->credential.digest.response.slen == 0)
+    {
+      // There's no response in the header, so remove it to ensure we issue
+      // a challenge.
+      LOG_DEBUG("Remove authorization header without response field");
+      pj_list_erase(auth_hdr);
     }
   }
 
@@ -250,20 +219,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // The authentication information in the request was verified, so let
     // the message through.
     LOG_DEBUG("Request authenticated successfully");
-    if ((tp_auth_supported) &&
-        (PJSIP_TRANSPORT_IS_RELIABLE(rdata->tp_info.transport)))
-    {
-      // Message received on a reliable transport and transport authorization
-      // is supported, so add this to the map, and register as a state
-      // listener on the transport.
-      LOG_INFO("%s - Adding transport to authorized list",
-               rdata->tp_info.transport->obj_name);
-      pj_mutex_lock(tp_auth_lock);
-      tp_auth_map.insert(std::make_pair(rdata->tp_info.transport, true));
-      pj_mutex_unlock(tp_auth_lock);
-      pjsip_tp_state_listener_key* key;
-      status = pjsip_transport_add_state_listener(rdata->tp_info.transport, &transport_state, NULL, &key);
-    }
     return PJ_FALSE;
 
   }
@@ -377,14 +332,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
 
 pj_status_t init_authentication(const std::string& realm_name,
-                                bool tp_auth,
                                 const std::string& auth_config,
                                 HSSConnection* hss_connection,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
 
-  tp_auth_supported = tp_auth;
   hss = hss_connection;
   analytics = analytics_logger;
 
@@ -401,8 +354,6 @@ pj_status_t init_authentication(const std::string& realm_name,
     LOG_ERROR("Unsupported authentication configuration %s", auth_config.c_str());
     return 1;
   }
-
-  status = pj_mutex_create_simple(stack_data.pool, "tp_auth_lock", &tp_auth_lock);
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.
@@ -424,7 +375,5 @@ pj_status_t init_authentication(const std::string& realm_name,
 void destroy_authentication()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_auth);
-  tp_auth_map.clear();
-  pj_mutex_destroy(tp_auth_lock);
 }
 

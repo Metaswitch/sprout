@@ -1,2 +1,2 @@
-../../build/bin/bono usr/share/clearwater/bin
-../../bono.root/* /
+build/bin/bono usr/share/clearwater/bin
+bono.root/* /
