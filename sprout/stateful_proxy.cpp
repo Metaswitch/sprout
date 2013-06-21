@@ -2922,6 +2922,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& edge_upstream_proxy,
+                                int edge_upstream_proxy_port,
                                 int edge_upstream_proxy_connections,
                                 int edge_upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
@@ -2944,7 +2945,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     // Create a URI for the upstream proxy to use in Route headers.
     upstream_proxy = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, PJ_FALSE);
     ((pjsip_sip_uri*)upstream_proxy)->host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    ((pjsip_sip_uri*)upstream_proxy)->port = stack_data.trusted_port;
+    ((pjsip_sip_uri*)upstream_proxy)->port = edge_upstream_proxy_port;
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
@@ -2954,7 +2955,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
     pool_target.host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    pool_target.port = stack_data.trusted_port;
+    pool_target.port = edge_upstream_proxy_port;
     upstream_conn_pool = new ConnectionPool(&pool_target,
                                             edge_upstream_proxy_connections,
                                             edge_upstream_proxy_recycle,

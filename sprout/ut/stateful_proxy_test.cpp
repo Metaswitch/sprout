@@ -230,6 +230,7 @@ public:
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
+                                          stack_data.trusted_port,
                                           10,
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
