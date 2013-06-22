@@ -295,7 +295,7 @@ std::string Flow::asserted_identity(pjsip_uri* preferred_identity) const
 /// identities are authorized on this flow.
 std::string Flow::default_identity() const
 {
-  return std::string();
+  return _default_id;
 }
 
 

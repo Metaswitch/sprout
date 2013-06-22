@@ -124,28 +124,12 @@ static int identity_hdr_print(pjsip_routing_hdr *hdr, char *buf, pj_size_t size)
 static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
 static pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
 
-static pjsip_hdr_vptr identity_hdr_vptr =
+pjsip_hdr_vptr identity_hdr_vptr =
 {
   (clone_fptr) &identity_hdr_clone,
   (clone_fptr) &identity_hdr_shallow_clone,
   (print_fptr) &identity_hdr_print,
 };
-
-
-static pjsip_routing_hdr* identity_hdr_create(pj_pool_t *pool, const pj_str_t name)
-{
-  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
-
-  pj_list_init(hdr);
-  hdr->vptr = &identity_hdr_vptr;
-  hdr->type = PJSIP_H_OTHER;
-  hdr->name = name;
-  hdr->sname = pj_str("");
-  pjsip_name_addr_init(&hdr->name_addr);
-  pj_list_init(&hdr->other_param);
-
-  return hdr;
-}
 
 
 /// Custom create, clone and print functions used for the P-Associated-URI,
@@ -190,7 +174,7 @@ static int identity_hdr_print(pjsip_routing_hdr *hdr,
 static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool,
                                              const pjsip_routing_hdr *rhs)
 {
-  pjsip_routing_hdr *hdr = identity_hdr_create(pool, rhs->name);
+  pjsip_routing_hdr *hdr = PJUtils::identity_hdr_create(pool, rhs->name);
   pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
   pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
   return hdr;
@@ -214,13 +198,12 @@ static pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
   // The P-Associated-URI header is a comma separated list of name-addrs
   // with optional parameters, so we parse it to multiple header structures,
   // using the pjsip_route_hdr structure for each.
-  LOG_DEBUG("Parse P-Associated-URI header");
   pjsip_route_hdr *first = NULL;
   pj_scanner *scanner = ctx->scanner;
 
   do
   {
-    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
     if (!first)
     {
       first = hdr;
@@ -268,7 +251,7 @@ static pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx *ctx)
 
   do
   {
-    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
     if (!first)
     {
       first = hdr;
@@ -309,7 +292,7 @@ static pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx *ctx)
 
   do
   {
-    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
     if (!first)
     {
       first = hdr;

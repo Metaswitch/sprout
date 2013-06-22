@@ -728,68 +728,26 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
 }
 
 
-#if 0
-static pj_bool_t proxy_process_edge_identities(Flow* src_flow,
-                                               pjsip_rx_data* rdata,
-                                               pjsip_tx_data* tdata)
+/// Find and remove P-Preferred-Identity headers from the message.
+static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip_uri*>& identities)
 {
-  // Find the P-Preferred-Identity header if present
-  pjsip_generic_string_hdr* p_preferred_id;
-  p_preferred_id = (pjsip_generic_array_hdr*)
-                       pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+  pjsip_routing_hdr* p_preferred_id;
+  p_preferred_id = (pjsip_routing_hdr*)
+                       pjsip_msg_find_hdr_by_name(tdata->msg,
                                                   &STR_P_PREFERRED_IDENTITY,
-                                                  p_preferred_id);
+                                                  NULL);
 
-  if (p_preferred_id != NULL)
+  while (p_preferred_id != NULL)
   {
-    pjsip_uri* pref_id;
-    pjsip_uri* alt_id;
+    identities.push_back((pjsip_uri*)&p_preferred_id->name_addr);
 
-    if (p_preferred_id->count == 1)
-    {
-      pref_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
-                                            p_preferred_id->values[0].ptr,
-                                            p_preferred_id->values[0].slen,
-                                            0);
-      alt_id = NULL;
-    }
-    else if (p_preferred_id->count == 2)
-    {
-      pref_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
-                                            p_preferred_id->values[0].ptr,
-                                            p_preferred_id->values[0].slen,
-                                            0);
-      alt_id = (pjsip_uri*)pjsip_parse_uri(rdata->tp_info.pool,
-                                           p_preferred_id->values[1].ptr,
-                                           p_preferred_id->values[1].slen,
-                                           0);
-      if (((PJSIP_URI_SCHEME_IS_SIP(pref_id)) && (PJSIP_URI_SCHEME_IS_SIP(alt_id))) ||
-          ((PJSIP_URI_SCHEME_IS_TEL(pref_id)) && (PJSIP_URI_SCHEME_IS_TEL(alt_id))))
-      {
-        // Preferred and alternate URIs must be different schemes.
-      }
-    }
-    else
-    {
-      // Must have one or two identities.
+    void* next_hdr = p_preferred_id->next;
 
-    }
+    pj_list_erase(p_preferred_id);
 
-    // Check that the client is authorized to use these identities.
-    pref_id
-
-
-
-
-  }
-
-  // @@@TODO Use P-Asserted-Identity for authentication
-  pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-  if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
-  {
+    p_preferred_id = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &STR_P_PREFERRED_IDENTITY, next_hdr);
   }
 }
-#endif
 
 
 /// Perform edge-proxy-specific routing.
@@ -859,7 +817,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
-    // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
     {
@@ -942,13 +899,84 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
 
-          if (src_flow->asserted_identity(PJSIP_MSG_FROM_HDR(rdata->msg_info.msg)->uri).length() > 0)
+          // Get all the preferred identities from the message and remove
+          // the P-Preferred-Identity headers.
+          std::vector<pjsip_uri*> identities;
+          extract_preferred_identities(tdata, identities);
+
+          if (identities.size() > 2)
           {
-            // Client has been authenticated, so we can trust it for the
-            // purposes of routing SIP messages and don't need to challenge
-            // again.
-            *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
-            trusted = true;
+            // Cannot have more than two preferred identities.
+            LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
+            PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            return PJ_ENOTFOUND;
+          }
+          else if (identities.size() == 0)
+          {
+            // No identities specified, so check there is valid default identity
+            // and use it for the P-Asserted-Identity.
+            LOG_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
+            std::string aid = src_flow->default_identity();
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 1)
+          {
+            // Only one preferred identity specified.
+            LOG_DEBUG("Request has one P-Preferred-Identity");
+            if ((!PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                (!PJSIP_URI_SCHEME_IS_TEL(identities[0])))
+            {
+              // Preferred identity must be sip, sips or tel URI.
+              LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check the preferred identity is authorized and get the corresponding
+            // asserted identity.
+            std::string aid = src_flow->asserted_identity(identities[0]);
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 2)
+          {
+            // Two preferred identities specified.
+            LOG_DEBUG("Request has two P-Preferred-Identitys");
+            if (!(((PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_TEL(identities[1]))) ||
+                  ((PJSIP_URI_SCHEME_IS_TEL(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_SIP(identities[1])))))
+            {
+              // One identity must be sip or sips URI and the other must be
+              // tel URI
+              LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check both preferred identities are authorized and get the
+            // corresponding asserted identities.
+            std::string aid1 = src_flow->asserted_identity(identities[0]);
+            std::string aid2 = src_flow->asserted_identity(identities[1]);
+
+            if ((aid1.length() > 0) && (aid2.length() > 0))
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid1);
+              PJUtils::add_asserted_identity(tdata, aid2);
+            }
           }
         }
       }
@@ -1022,7 +1050,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
       else
       {
-        LOG_WARNING("Discard ACK from untrusted source no directed to Sprout");
+        LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
       }
       return PJ_ENOTFOUND;
     }

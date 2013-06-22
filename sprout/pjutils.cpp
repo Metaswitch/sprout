@@ -149,7 +149,8 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 /// finds a name-addr instead of a URI it will parse it to a pjsip_name_addr
 /// structure, so you must use pjsip_uri_get_uri to get to the URI piece.
 pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
-                                    pj_pool_t *pool)
+                                    pj_pool_t *pool,
+                                    pj_bool_t force_name_addr)
 {
   // We must duplicate the string into memory from the specified pool first as
   // pjsip_parse_uri does not clone the actual strings within the URI.
@@ -157,7 +158,7 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
   char* buf = (char*)pj_pool_alloc(pool, len + 1);
   memcpy(buf, uri_s.data(), len);
   buf[len] = 0;
-  return pjsip_parse_uri(pool, buf, len, 0);
+  return pjsip_parse_uri(pool, buf, len, (force_name_addr) ? PJSIP_PARSE_URI_AS_NAMEADDR : 0);
 }
 
 
@@ -284,6 +285,40 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
       break;
   }
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
+}
+
+
+/// Adds a P-Asserted-Identity header to the message.
+void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid)
+{
+  LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
+  pjsip_routing_hdr* p_asserted_id =
+                      identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
+
+  pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, tdata->pool, true);
+  memcpy(&p_asserted_id->name_addr, temp, sizeof(pjsip_name_addr));
+
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_asserted_id);
+}
+
+
+extern pjsip_hdr_vptr identity_hdr_vptr;
+
+/// Creates an identity header (so either P-Associated-URI, P-Asserted-Identity
+/// or P-Preferred-Identity)
+pjsip_routing_hdr* PJUtils::identity_hdr_create(pj_pool_t *pool, const pj_str_t& name)
+{
+  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
+
+  pj_list_init(hdr);
+  hdr->vptr = &identity_hdr_vptr;
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = name;
+  hdr->sname = pj_str("");
+  pjsip_name_addr_init(&hdr->name_addr);
+  pj_list_init(&hdr->other_param);
+
+  return hdr;
 }
 
 
