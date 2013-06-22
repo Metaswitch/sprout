@@ -216,7 +216,8 @@ void IfcHandlerTest::doBaseTest(string description,
     EXPECT_EQ(0, application_servers[0].default_handling);
     if (third_party_reg)
     {
-      EXPECT_EQ("banana", application_servers[0].service_info);
+      // Verify that no XML entities are translated
+      EXPECT_EQ("&lt;banana&amp;gt;", application_servers[0].service_info);
       EXPECT_TRUE(application_servers[0].include_register_request);
       EXPECT_FALSE(application_servers[0].include_register_response);
     } else {
@@ -389,7 +390,7 @@ TEST_F(IfcHandlerTest, ThirdPartyRegistration)
                  "    <ApplicationServer>\n"
                  "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
                  "      <DefaultHandling>0</DefaultHandling>\n"
-                 "      <ServiceInfo>banana</ServiceInfo>\n"
+                 "      <ServiceInfo>&lt;banana&amp;gt;</ServiceInfo>\n"
                  "      <Extension>\n"
                  "        <IncludeRegisterRequest />\n"
                  "      </Extension>\n"
