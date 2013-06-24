@@ -362,7 +362,7 @@ Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session 
   {
     try
     {
-      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
+      ifc_doc->parse<parse_no_entity_translation>(ifc_doc->allocate_string(ifc_xml.c_str()));
     }
     catch (parse_error err)
     {
