@@ -401,7 +401,16 @@ public:
   }
 
 protected:
-  void doRegisterEdge(TransportFlow* xiTp, string& xoToken, string& xoBareToken, bool firstHop = false, string supported = "outbound, path", bool expectPath = true, string via = "");
+  void doRegisterEdge(TransportFlow* xiTp,
+                      string& xoToken,
+                      string& xoBareToken,
+                      int expiry = 300,
+                      string integrity = "no",
+                      string extraRspHeaders = "",
+                      bool firstHop = false,
+                      string supported = "outbound, path",
+                      bool expectPath = true,
+                      string via = "");
   SP::Message doInviteEdge(string token);
 };
 
@@ -1349,6 +1358,9 @@ TEST_F(StatefulProxyTest, TestProxyCalcTargets2)
 void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport to register on
                                            string& xoToken, //^ out: token (parsed from Path)
                                            string& xoBareToken, //^ out: bare token (parsed from Path)
+                                           int expires, //^ expiry period
+                                           string integrity, //^ expected integrity marking in authorization header
+                                           string extraRspHeaders, //^ extra headers to be included in response
                                            bool firstHop,  //^ is this the first hop? If not, there was a previous hop to get here.
                                            string supported, //^ Supported: header value, or empty if none
                                            bool expectPath, //^ do we expect a Path: response? If false, don't parse token
@@ -1363,7 +1375,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   msg._first_hop = firstHop;
   msg._via = via.empty() ? xiTp->to_string(false) : via;
   msg._extra = "Contact: sip:wuntootreefower@";
-  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
   if (!supported.empty())
   {
     msg._extra.append("\r\n").append("Supported: ").append(supported);
@@ -1403,12 +1415,13 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
     EXPECT_THAT(xoToken, MatchesRegex(expect));
 
     // Get the bare token as just the user@host part of the URI.
-    xoBareToken = xoToken.substr(0, xoToken.find(':', xoToken.find(':')));
+    xoBareToken = xoToken.substr(xoToken.find(':')+1);
+    xoBareToken = xoBareToken.substr(0, xoBareToken.find(':'));
   }
 
-  // Check integrity=no marking.
+  // Check integrity=? marking.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=no", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
 
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
@@ -1421,7 +1434,12 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
     r.append(xoToken).append("\n");
   }
   // Must include a contact header otherwise the flow won't be marked as authenticated.
-  r.append("Contact: sip:wuntootreefower@").append(xiTp->to_string(true)).append(";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  r.append("Contact: sip:wuntootreefower@").append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+
+  // Add any extra response headers.
+  r.append(extraRspHeaders);
+
+  // Pass the response back.
   inject_msg(respond_to_current_txdata(200, "", r));
   ASSERT_EQ(1, txdata_count());
 
@@ -1450,7 +1468,7 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   return msg;
 }
 
-TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFW)
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 {
   SCOPED_TRACE("");
 
@@ -1603,6 +1621,267 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWUDP)
   delete tp;
 }
 
+TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  pjsip_tx_data* tdata;
+  pjsip_msg* out;
+  string actual;
+
+  // Register client.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        49150);
+
+  // Register a client, with four associated URIs.
+  SCOPED_TRACE("");
+  string token;
+  string baretoken;
+  doRegisterEdge(tp, token, baretoken, 300, "no",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Send an INVITE from the client specifying one of the valid identities in
+  // a P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // P-Preferred-Identity header has been converted to P-Asserted-Identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:+16505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // A P-Asserted-Identity header has been added with the default identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:6505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with two P-Preferred-Identitys.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>, <tel:+16505551000>");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // P-Asserted-Identity headers have been added with both identities.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:+16505551000@homedomain>\r\nP-Asserted-Identity: <tel:+16505551000>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with an unauthorized P-Preferred-Identity.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551001@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an INVITE from the client with two sip: P-Preferred-Identitys.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>, <sip:6505551000@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Refresh the registration.
+  SCOPED_TRACE("");
+  doRegisterEdge(tp, token, baretoken, 300, "yes",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Check that authorization is still in place by sending an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // A P-Asserted-Identity header has been added with the default identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:6505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Expire the registration.
+  SCOPED_TRACE("");
+  doRegisterEdge(tp, token, baretoken, 0, "yes",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Check that authorization is gone by sending an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  delete tp;
+}
+
 TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 {
   SCOPED_TRACE("");
@@ -1699,7 +1978,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.38",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
@@ -1707,13 +1986,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.39",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "10.22.3.4:9999");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
   // Client 3: Doesn't declare outbound support (no attr), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "path", false, "");
+  //doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", false, "");
   //delete tp;
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
@@ -1721,13 +2000,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "path", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", true, "10.22.3.5:8888");
   delete tp;
 
   // Client 5: Doesn't declare outbound support (no header), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "", false, "");
+  //doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", false, "");
   //delete tp;
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
@@ -1735,7 +2014,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
@@ -1747,7 +2026,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, true);
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true);
 
   // This is first hop, so should be marked
   EXPECT_THAT(token, HasSubstr(";ob"));
@@ -1866,7 +2145,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1886,7 +2165,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
 
   // INVITE from client via bono to Sprout, first hop
   Message msg;
@@ -1906,7 +2185,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1928,7 +2207,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from client via bono to Sprout, not first hop
   Message msg;
