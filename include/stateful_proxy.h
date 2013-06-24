@@ -214,7 +214,7 @@ public:
 
   void set_target(const struct target& target);
   void send_request();
-  void cancel_pending_tsx(int st_code);
+  void cancel_pending_tsx(int st_code, bool dissociatei_uac=false);
   void on_tsx_state(pjsip_event* event);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }

@@ -1517,7 +1517,7 @@ UASTransaction::~UASTransaction()
   {
     // INVITE transaction has been terminated.  If there are any
     // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0);
+    cancel_pending_uac_tsx(0, true);
   }
 
   // Disconnect all UAC transactions from the UAS transaction.
@@ -2124,7 +2124,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0);
+      cancel_pending_uac_tsx(0, true);
     }
     _tsx->mod_data[mod_tu.id] = NULL;
     _tsx = NULL;
@@ -2454,7 +2454,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
 }
 
 // Cancels all pending UAC transactions associated with this UAS transaction.
-void UASTransaction::cancel_pending_uac_tsx(int st_code)
+void UASTransaction::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
 {
   enter_context();
 
@@ -2481,8 +2481,17 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code)
       // Found a UAC transaction that is still active, so send a CANCEL.
       uac_data->cancel_pending_tsx(st_code);
 
-      // Leave the UAC transaction connected to the UAS transaction so the
-      // 487 response gets passed through.
+      // Normal behaviour (that is, on receipt of a CANCEL on the UAS
+      // transaction, is to leave the UAC transaction connected to the UAS
+      // transaction so the 487 response gets passed through.  However, in
+      // cases where the CANCEL is initiated on this node (for example,
+      // because the UAS transaction has already failed, or in call forwarding
+      // scenarios) we dissociate immediately so the 487 response gets
+      // swallowed on this node
+      if (dissociate_uac)
+      {
+        dissociate(uac_data);
+      }
     }
   }
 
@@ -2550,7 +2559,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target,
   if (num_history_infos < MAX_HISTORY_INFOS)
   {
     // Cancel pending UAC transactions and notify the originator.
-    cancel_pending_uac_tsx(code);
+    cancel_pending_uac_tsx(code, true);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
     // Set up the new target URI.
