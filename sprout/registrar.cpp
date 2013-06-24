@@ -196,8 +196,7 @@ void process_register_request(pjsip_rx_data* rdata)
   cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
-  // Find the contact and expires headers in the message.
-  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+  // Find the expire headers in the message.
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
 
   // Get the system time in seconds for calculating absolute expiry times.
@@ -234,6 +233,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
+    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
     while (contact != NULL)
     {
       if (contact->star)

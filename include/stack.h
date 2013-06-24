@@ -124,7 +124,10 @@ extern pj_status_t init_stack(const std::string& system_name,
                               int num_worker_threads);
 extern pj_status_t start_stack();
 extern void stop_stack();
-void unregister_stack_modules(void);
+extern void unregister_stack_modules(void);
 extern void destroy_stack();
+extern pj_status_t init_pjsip();
+extern void term_pjsip();
+
 
 #endif

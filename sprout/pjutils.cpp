@@ -145,8 +145,12 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 }
 
 
+/// Parse the supplied string to a PJSIP URI structure.  Note that if this
+/// finds a name-addr instead of a URI it will parse it to a pjsip_name_addr
+/// structure, so you must use pjsip_uri_get_uri to get to the URI piece.
 pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
-                                    pj_pool_t *pool)
+                                    pj_pool_t *pool,
+                                    pj_bool_t force_name_addr)
 {
   // We must duplicate the string into memory from the specified pool first as
   // pjsip_parse_uri does not clone the actual strings within the URI.
@@ -154,30 +158,7 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
   char* buf = (char*)pj_pool_alloc(pool, len + 1);
   memcpy(buf, uri_s.data(), len);
   buf[len] = 0;
-  return pjsip_parse_uri(pool, buf, len, 0);
-}
-
-
-/// Get the URI (either name-addr or addr-spec) from the string header
-/// (e.g., P-Served-User), ignoring any parameters. If it's a bare
-/// addr-spec, assume (like Contact) that parameters belong to the
-/// header, not to the URI.
-///
-/// @return URI, or NULL if cannot be parsed.
-pjsip_uri* PJUtils::uri_from_string_header(pjsip_generic_string_hdr* hdr,
-                                           pj_pool_t *pool)
-{
-  // We must duplicate the string into memory from the specified pool first as
-  // pjsip_parse_uri does not clone the actual strings within the URI.
-  pj_str_t hvalue;
-  pj_strdup_with_null(pool, &hvalue, &hdr->hvalue);
-  char* end = strchr(hvalue.ptr, '>');
-  if (end != NULL)
-  {
-    *(end + 1) = '\0';
-    hvalue.slen = (end + 1 - hvalue.ptr);
-  }
-  return pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
+  return pjsip_parse_uri(pool, buf, len, (force_name_addr) ? PJSIP_PARSE_URI_AS_NAMEADDR : 0);
 }
 
 
@@ -214,6 +195,43 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
   return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+}
+
+
+/// Returns a canonical IMS public user identity from a URI as per TS 23.003
+/// 13.4.
+std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
+{
+  if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    pjsip_sip_uri public_id;
+    memcpy((char*)&public_id, (char*)uri, sizeof(pjsip_sip_uri));
+    public_id.passwd.slen = 0;
+    public_id.port = 0;
+    public_id.user_param.slen = 0;
+    public_id.method_param.slen = 0;
+    public_id.transport_param.slen = 0;
+    public_id.ttl_param = -1;
+    public_id.lr_param = 0;
+    public_id.maddr_param.slen = 0;
+    public_id.other_param.next = NULL;
+    public_id.header_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    pjsip_tel_uri public_id;
+    memcpy((char*)&public_id, (char*)uri, sizeof(pjsip_tel_uri));
+    public_id.context.slen = 0;
+    public_id.ext_param.slen = 0;
+    public_id.isub_param.slen = 0;
+    public_id.other_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
+  }
+  else
+  {
+    return std::string();
+  }
 }
 
 
@@ -267,6 +285,40 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
       break;
   }
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
+}
+
+
+/// Adds a P-Asserted-Identity header to the message.
+void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid)
+{
+  LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
+  pjsip_routing_hdr* p_asserted_id =
+                      identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
+
+  pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, tdata->pool, true);
+  memcpy(&p_asserted_id->name_addr, temp, sizeof(pjsip_name_addr));
+
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_asserted_id);
+}
+
+
+extern pjsip_hdr_vptr identity_hdr_vptr;
+
+/// Creates an identity header (so either P-Associated-URI, P-Asserted-Identity
+/// or P-Preferred-Identity)
+pjsip_routing_hdr* PJUtils::identity_hdr_create(pj_pool_t *pool, const pj_str_t& name)
+{
+  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
+
+  pj_list_init(hdr);
+  hdr->vptr = &identity_hdr_vptr;
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = name;
+  hdr->sname = pj_str("");
+  pjsip_name_addr_init(&hdr->name_addr);
+  pj_list_init(&hdr->other_param);
+
+  return hdr;
 }
 
 
@@ -400,6 +452,34 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
                                                        via_hdr->next);
   return first_hop;
 }
+
+
+/// Gets the maximum expires value from all contacts in a REGISTER message
+/// (request or response).
+int PJUtils::max_expires(pjsip_msg* msg)
+{
+  int max_expires = 0;
+
+  // Check for an expires header (this will specify the default expiry for
+  // any contacts that don't specify their own expiry).
+  pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 300;
+
+  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact != NULL)
+  {
+    int expires = (contact->expires != -1) ? contact->expires : default_expires;
+    if (expires > max_expires)
+    {
+      max_expires = expires;
+    }
+    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+  }
+
+  return max_expires;
+}
+
 
 
 pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
