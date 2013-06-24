@@ -274,10 +274,10 @@ Flow::~Flow()
 
 /// Returns the full asserted identity corresponding to the specified
 /// preferred identity, or an empty string if the preferred identity is not
-// authorized on this flow.
+/// authorized on this flow.
 std::string Flow::asserted_identity(pjsip_uri* preferred_identity) const
 {
-  std::string aor = PJUtils::puid_from_uri((pjsip_uri*)pjsip_uri_get_uri(preferred_identity));
+  std::string aor = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(preferred_identity));
 
   auth_id_map::const_iterator i = _authorized_ids.find(aor);
 
@@ -305,7 +305,7 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
   int now = time(NULL);
 
   // Render the URI to an AoR suitable to look up in the map.
-  std::string aor = PJUtils::puid_from_uri((pjsip_uri*)pjsip_uri_get_uri(uri));
+  std::string aor = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(uri));
 
   LOG_DEBUG("Setting identity %s on flow %p, expires = %d", aor.c_str(), this, expires);
 
@@ -346,6 +346,10 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
     LOG_DEBUG("Deleting identity %s", aor.c_str());
     auth_id_map::iterator i = _authorized_ids.find(aor);
 
+    // Check to see whether this was the current default identity we are
+    // using for this flow.  We could do the string comparision in all cases
+    // but it is only necessary if the identity is marked as a default
+    // candidate.
     if ((i->second.default_id) && (i->first == _default_id))
     {
       // This was our default ID, so remove it.
@@ -359,6 +363,12 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
       // another one we can use.
       select_default_identity();
     }
+
+    // No need to restart the timer here.  It may pop earlier than necessary
+    // next time (if the entry we just deleted was the first to expire) but
+    // that won't cause any problems.  Restarting it here would require
+    // a scan through all the entries looking for the next one to expire,
+    // so would be no more efficient.
   }
 }
 
@@ -380,6 +390,11 @@ void Flow::expiry_timer()
     if (i->second.expires <= now)
     {
       LOG_DEBUG("Expiring identity %s", i->first.c_str());
+
+      // Check to see whether this was the current default identity we are
+      // using for this flow.  We could do the string comparision in all cases
+      // but it is only necessary if the identity is marked as a default
+      // candidate.
       if ((i->second.default_id) && (i->first == _default_id))
       {
         // This was our default ID, so remove it.

@@ -90,7 +90,7 @@ std::string pj_status_to_string(const pj_status_t status);
 
 std::string aor_from_uri(const pjsip_sip_uri* uri);
 
-std::string puid_from_uri(const pjsip_uri* uri);
+std::string public_id_from_uri(const pjsip_uri* uri);
 
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);

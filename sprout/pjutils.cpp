@@ -200,33 +200,33 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 
 /// Returns a canonical IMS public user identity from a URI as per TS 23.003
 /// 13.4.
-std::string PJUtils::puid_from_uri(const pjsip_uri* uri)
+std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    pjsip_sip_uri puid;
-    memcpy((char*)&puid, (char*)uri, sizeof(pjsip_sip_uri));
-    puid.passwd.slen = 0;
-    puid.port = 0;
-    puid.user_param.slen = 0;
-    puid.method_param.slen = 0;
-    puid.transport_param.slen = 0;
-    puid.ttl_param = -1;
-    puid.lr_param = 0;
-    puid.maddr_param.slen = 0;
-    puid.other_param.next = NULL;
-    puid.header_param.next = NULL;
-    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&puid);
+    pjsip_sip_uri public_id;
+    memcpy((char*)&public_id, (char*)uri, sizeof(pjsip_sip_uri));
+    public_id.passwd.slen = 0;
+    public_id.port = 0;
+    public_id.user_param.slen = 0;
+    public_id.method_param.slen = 0;
+    public_id.transport_param.slen = 0;
+    public_id.ttl_param = -1;
+    public_id.lr_param = 0;
+    public_id.maddr_param.slen = 0;
+    public_id.other_param.next = NULL;
+    public_id.header_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
-    pjsip_tel_uri puid;
-    memcpy((char*)&puid, (char*)uri, sizeof(pjsip_tel_uri));
-    puid.context.slen = 0;
-    puid.ext_param.slen = 0;
-    puid.isub_param.slen = 0;
-    puid.other_param.next = NULL;
-    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&puid);
+    pjsip_tel_uri public_id;
+    memcpy((char*)&public_id, (char*)uri, sizeof(pjsip_tel_uri));
+    public_id.context.slen = 0;
+    public_id.ext_param.slen = 0;
+    public_id.isub_param.slen = 0;
+    public_id.other_param.next = NULL;
+    return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
   }
   else
   {
@@ -463,7 +463,7 @@ int PJUtils::max_expires(pjsip_msg* msg)
   // Check for an expires header (this will specify the default expiry for
   // any contacts that don't specify their own expiry).
   pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 0;
+  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 300;
 
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 
