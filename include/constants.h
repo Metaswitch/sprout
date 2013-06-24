@@ -37,6 +37,7 @@
 #ifndef CONSTANTS_H_
 #define CONSTANTS_H_
 
+const pj_str_t STR_DIVERSION = pj_str("Diversion");
 const pj_str_t STR_SUPPORTED = pj_str("Supported");
 const pj_str_t STR_REQUIRE = pj_str("Require");
 const pj_str_t STR_PATH = pj_str("Path");

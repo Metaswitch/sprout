@@ -2553,6 +2553,22 @@ bool UASTransaction::redirect_int(pjsip_uri* target,
     cancel_pending_uac_tsx(code);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
+    // Add a Diversion header with the original request URI and the reason
+    // for the diversion.
+    std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _req->msg->line.req.uri);
+    div += ";reason=";
+    div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
+           (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+           (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
+           (code == 0) ? "unconditional" :
+           "unknown";
+    pj_str_t sdiv;
+    pjsip_generic_string_hdr* diversion =
+                    pjsip_generic_string_hdr_create(_req->pool,
+                                                    &STR_DIVERSION,
+                                                    pj_cstr(&sdiv, div.c_str()));
+    pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)diversion);
+
     // Set up the new target URI.
     _req->msg->line.req.uri = target;
 
