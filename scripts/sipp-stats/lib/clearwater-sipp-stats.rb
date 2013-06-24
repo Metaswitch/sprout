@@ -92,7 +92,7 @@ loop do
   begin 
     line = f.readline
     fields = line.split ';'
-    stats = fields.values_at(4, 16, 32, 84)
+    stats = fields.values_at(4, 28, 44, 92)
 
     # Calculate the deltas.  If we've not yet seen two real sets of values
     # then we should report zeros otherwise the first non-zero result will 
