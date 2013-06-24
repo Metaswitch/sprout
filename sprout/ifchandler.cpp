@@ -325,7 +325,7 @@ AsInvocation Ifc::as_invocation() const
   // That means each AsInvocation would have to belong to a pool,
   // though, and that's not easy in the current architecture.
 
-  as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
+  as_invocation.default_handling = boost::lexical_cast<bool>(get_first_node_value(as, "DefaultHandling"));
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
   xml_node<>* as_ext = as->first_node("Extension");
@@ -362,7 +362,7 @@ Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session 
   {
     try
     {
-      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
+      ifc_doc->parse<parse_no_entity_translation>(ifc_doc->allocate_string(ifc_xml.c_str()));
     }
     catch (parse_error err)
     {
@@ -515,7 +515,21 @@ std::string IfcHandler::served_user_from_msg(
 
     if (served_user_hdr != NULL)
     {
-      uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+      // Remove parameters before parsing the URI.  If there are URI parameters,
+      // the URI must be enclosed in angle brackets, so we can either remove
+      // everything after the first closing angle bracket, or everything after
+      // the first semo-colon.
+      char* end = pj_strchr(&served_user_hdr->hvalue, '>');
+      if (end == NULL)
+      {
+        end = pj_strchr(&served_user_hdr->hvalue, ';');
+      }
+      if (end != NULL)
+      {
+        served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
+      }
+
+      uri = pjsip_parse_uri(pool, served_user_hdr->hvalue.ptr, served_user_hdr->hvalue.slen, 0);
 
       if (uri == NULL)
       {
@@ -558,42 +572,18 @@ std::string IfcHandler::served_user_from_msg(
     }
   }
 
-  // PJSIP URIs might have an irritating wrapper around them.
+  // Get the URI if it was encoded within a name-addr.
   uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
-    user = user_from_uri(uri);
+    user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   }
 
   return user;
 }
 
-
-// Determines the user ID string from a URI.
-//
-// @returns the user ID
-std::string IfcHandler::user_from_uri(pjsip_uri *uri)
-{
-  // Get the base URI, ignoring any display name.
-  uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
-
-  // If this is a SIP URI, copy the user and host (only) out into a temporary
-  // structure SIP URI and use this instead.  This strips any parameters.
-  pjsip_sip_uri local_sip_uri;
-  if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-    pjsip_sip_uri_init(&local_sip_uri, PJSIP_URI_SCHEME_IS_SIPS(uri));
-    local_sip_uri.user = sip_uri->user;
-    local_sip_uri.host = sip_uri->host;
-    uri = (pjsip_uri*)&local_sip_uri;
-  }
-
-  // Return the resulting string.
-  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
-}
 
 /// Attempt to parse the content of the node as a bounded integer
 // returning the result or throwing.

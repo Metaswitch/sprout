@@ -89,6 +89,7 @@ struct options
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
+  int                    upstream_proxy_port;
   int                    upstream_proxy_connections;
   int                    upstream_proxy_recycle;
   pj_bool_t              ibcf;
@@ -129,12 +130,13 @@ static void usage(void)
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -e, --edge-proxy <name>[:<connections>[:<recycle time>]]\n"
+       " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an edge proxy using the specified node\n"
-       "                            as the upstream proxy.  Optionally specifies the\n"
-       "                            number of parallel connections to create, and how\n"
-       "                            often to recycle these connections (by default\n"
-       "                            a single connection is used and never recycled).\n"
+       "                            as the upstream proxy.  Optionally specifies the port,\n"
+       "                            the number of parallel connections to create, and how\n"
+       "                            often to recycle these connections (by default a\n"
+       "                            single connection to the trusted port is used and never\n"
+       "                            recycled).\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
@@ -241,17 +243,27 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         std::vector<std::string> upstream_proxy_options;
         Utils::split_string(std::string(pj_optarg), ':', upstream_proxy_options, 0, false);
         options->upstream_proxy = upstream_proxy_options[0];
+        options->upstream_proxy_port = 0;
         options->upstream_proxy_connections = 1;
         options->upstream_proxy_recycle = 0;
         if (upstream_proxy_options.size() > 1)
         {
-          options->upstream_proxy_connections = atoi(upstream_proxy_options[1].c_str());
+          options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
           if (upstream_proxy_options.size() > 2)
           {
-            options->upstream_proxy_recycle = atoi(upstream_proxy_options[2].c_str());
+            options->upstream_proxy_connections = atoi(upstream_proxy_options[1].c_str());
+            if (upstream_proxy_options.size() > 3)
+            {
+              options->upstream_proxy_recycle = atoi(upstream_proxy_options[2].c_str());
+            }
           }
         }
-        fprintf(stdout, "Upstream proxy is set to %s\n", options->upstream_proxy.c_str());
+        fprintf(stdout, "Upstream proxy is set to %s", options->upstream_proxy.c_str());
+        if (options->upstream_proxy_port != 0)
+        {
+          fprintf(stdout, ":%d", options->upstream_proxy_port);
+        }
+        fprintf(stdout, "\n");
         fprintf(stdout, "  connections = %d\n", options->upstream_proxy_connections);
         fprintf(stdout, "  recycle time = %d seconds\n", options->upstream_proxy_recycle);
         options->edge_proxy = PJ_TRUE;
@@ -347,6 +359,14 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Unknown option. Run with --help for help.\n");
       return -1;
     }
+  }
+
+  // If the upstream proxy port is not set, default it to the trusted port.
+  // We couldn't do this earlier because the trusted port might be set after
+  // the upstream proxy.
+  if (options->upstream_proxy_port == 0)
+  {
+    options->upstream_proxy_port = options->trusted_port;
   }
 
   return PJ_SUCCESS;
@@ -619,6 +639,7 @@ int main(int argc, char *argv[])
                                ifc_handler,
                                opt.edge_proxy,
                                opt.upstream_proxy,
+                               opt.upstream_proxy_port,
                                opt.upstream_proxy_connections,
                                opt.upstream_proxy_recycle,
                                opt.ibcf,

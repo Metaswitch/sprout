@@ -264,7 +264,7 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
   // DefaultHandling has a value of 0 or 1, so we can store it directly in the pointer. Not perfect, but
   // harmless if done right.
-  tsx->mod_data[0] = (void*)as.default_handling;
+  tsx->mod_data[mod_registrar.id] = (void*)as.default_handling;
   status = pjsip_tsx_send_msg(tsx, tdata);
 }
 

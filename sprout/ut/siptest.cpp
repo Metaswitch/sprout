@@ -123,7 +123,31 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
 
+  // Sort out logging.
+  init_pjsip_logging(99, false, "");
+
+  // Initialise PJSIP and associated resources.
   init_pjsip();
+
+  // Initialise the trusted port.
+  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
+
+  // Initialise the untrusted port.
+  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
+
+  // Set the TCP factory used by Bono to create connections to Sprout.
+  stack_data.tcp_factory = _tcp_tpfactory_trusted;
+
+  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
+  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
+                                  TransportFlow::Trust::TRUSTED,
+                                  "0.0.0.0",
+                                  5060);
+  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
+  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
+                                  TransportFlow::Trust::TRUSTED,
+                                  "0.0.0.0",
+                                  5060);
 
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats(),
@@ -138,6 +162,11 @@ void SipTest::TearDownTestCase()
   FakeLogger _log(false);  // swallow logs during this method
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
+
+  // Delete the default transport
+  delete _tp_default;
+
+  // Terminate PJSIP
   term_pjsip();
 }
 
@@ -172,11 +201,9 @@ void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tc
   ASSERT_EQ(PJ_SUCCESS, status);
 }
 
+#if 0
 void SipTest::init_pjsip()
 {
-  // Sort out logging:
-  init_pjsip_logging(99, false, "");
-
   // Must init PJLIB first:
   pj_status_t status = pj_init();
   ASSERT_EQ(PJ_SUCCESS, status);
@@ -197,20 +224,6 @@ void SipTest::init_pjsip()
   status = pjsip_tsx_layer_init_module(stack_data.endpt);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  // Initialise the trusted port.
-  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
-
-  // Initialise the untrusted port.
-  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
-
-  // Set the TCP factory used by Bono to create connections to Sprout.
-  stack_data.tcp_factory = _tcp_tpfactory_trusted;
-
-  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
-  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
-                                  TransportFlow::Trust::TRUSTED,
-                                  "0.0.0.0",
-                                  5060);
 }
 
 void SipTest::term_pjsip()
@@ -221,6 +234,7 @@ void SipTest::term_pjsip()
   pj_caching_pool_destroy(&stack_data.cp);
   pj_shutdown();
 }
+#endif
 
 SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char* addr, int port)
 {

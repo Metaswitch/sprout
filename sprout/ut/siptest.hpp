@@ -113,12 +113,6 @@ protected:
   /// Initialise the UDP and TCP transports for the specified port.
   static void init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory);
 
-  /// Initialise PJSIP for testing.
-  static void init_pjsip();
-
-  /// Terminate PJSIP.
-  static void term_pjsip();
-
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
 

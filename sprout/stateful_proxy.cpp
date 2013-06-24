@@ -677,7 +677,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   {
     // Request received on a known flow, so check it is authenticated.
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
     {
       LOG_DEBUG("Request received on authenticated client flow.");
       src_flow->dec_ref();
@@ -725,6 +725,28 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
         pj_list_erase(r2);
       }
     }
+  }
+}
+
+
+/// Find and remove P-Preferred-Identity headers from the message.
+static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip_uri*>& identities)
+{
+  pjsip_routing_hdr* p_preferred_id;
+  p_preferred_id = (pjsip_routing_hdr*)
+                       pjsip_msg_find_hdr_by_name(tdata->msg,
+                                                  &STR_P_PREFERRED_IDENTITY,
+                                                  NULL);
+
+  while (p_preferred_id != NULL)
+  {
+    identities.push_back((pjsip_uri*)&p_preferred_id->name_addr);
+
+    void* next_hdr = p_preferred_id->next;
+
+    pj_list_erase(p_preferred_id);
+
+    p_preferred_id = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &STR_P_PREFERRED_IDENTITY, next_hdr);
   }
 }
 
@@ -796,14 +818,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
-    // Treat the REGISTER request as a keepalive.  In theory we should
-    // support STUN keepalives from clients, but only outbound aware
-    // clients will support STUN keepalive so we don't rely on this.
-    src_flow->keepalive();
-
-    // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
@@ -884,15 +900,84 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
 
-          // @@@TODO Use P-Asserted-Identity for authentication
-          pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-          if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+          // Get all the preferred identities from the message and remove
+          // the P-Preferred-Identity headers.
+          std::vector<pjsip_uri*> identities;
+          extract_preferred_identities(tdata, identities);
+
+          if (identities.size() > 2)
           {
-            // Client has been authenticated, so we can trust it for the
-            // purposes of routing SIP messages and don't need to challenge
-            // again.
-            *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
-            trusted = true;
+            // Cannot have more than two preferred identities.
+            LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
+            PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            return PJ_ENOTFOUND;
+          }
+          else if (identities.size() == 0)
+          {
+            // No identities specified, so check there is valid default identity
+            // and use it for the P-Asserted-Identity.
+            LOG_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
+            std::string aid = src_flow->default_identity();
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 1)
+          {
+            // Only one preferred identity specified.
+            LOG_DEBUG("Request has one P-Preferred-Identity");
+            if ((!PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                (!PJSIP_URI_SCHEME_IS_TEL(identities[0])))
+            {
+              // Preferred identity must be sip, sips or tel URI.
+              LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check the preferred identity is authorized and get the corresponding
+            // asserted identity.
+            std::string aid = src_flow->asserted_identity(identities[0]);
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 2)
+          {
+            // Two preferred identities specified.
+            LOG_DEBUG("Request has two P-Preferred-Identitys");
+            if (!(((PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_TEL(identities[1]))) ||
+                  ((PJSIP_URI_SCHEME_IS_TEL(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_SIP(identities[1])))))
+            {
+              // One identity must be sip or sips URI and the other must be
+              // tel URI
+              LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check both preferred identities are authorized and get the
+            // corresponding asserted identities.
+            std::string aid1 = src_flow->asserted_identity(identities[0]);
+            std::string aid2 = src_flow->asserted_identity(identities[1]);
+
+            if ((aid1.length() > 0) && (aid2.length() > 0))
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid1);
+              PJUtils::add_asserted_identity(tdata, aid2);
+            }
           }
         }
       }
@@ -966,7 +1051,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
       else
       {
-        LOG_WARNING("Discard ACK from untrusted source no directed to Sprout");
+        LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
       }
       return PJ_ENOTFOUND;
     }
@@ -1423,7 +1508,6 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
@@ -1449,21 +1533,39 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
 
       if (flow_data != NULL)
       {
-        // The response correlates to an active flow.
-        if (pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL) != NULL)
+        // The response correlates to an active flow.  Check the contact
+        // headers and expiry header to find when the last contacts will
+        // expire.
+        int max_expires = PJUtils::max_expires(rdata->msg_info.msg);
+        LOG_DEBUG("Maximum contact expiry is %d", max_expires);
+
+        // Go through the list of URIs covered by this registration setting
+        // them on the flow.  This is either the list in the P-Associated-URI
+        // header, if supplied, or the URI in the To header.
+        pjsip_route_hdr* p_assoc_uri = (pjsip_route_hdr*)
+                             pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                        &STR_P_ASSOCIATED_URI,
+                                                        NULL);
+        if (p_assoc_uri != NULL)
         {
-          // There are active contacts, so consider the flow authenticated.
-          // @@@TODO Also authenticate any attached P-Associated-ID headers.
-          LOG_INFO("Mark client flow as authenticated");
-          flow_data->set_authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          // Use P-Associated-URIs list as list of authenticated URIs.
+          LOG_DEBUG("Found P-Associated-URI header");
+          bool is_default = true;
+          while (p_assoc_uri != NULL)
+          {
+            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr, is_default, max_expires);
+            p_assoc_uri = (pjsip_route_hdr*)
+                        pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                   &STR_P_ASSOCIATED_URI,
+                                                   p_assoc_uri->next);
+            is_default = false;
+          }
         }
         else
         {
-          // The are no active contacts, so the client is effectively
-          // unregistered. Remove the user from the authenticated set, so
-          // the next REGISTER is challenged.
-          LOG_INFO("Mark client flow as un-authenticated");
-          flow_data->set_unauthenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          // Use URI in To header as authenticated URIs.
+          LOG_DEBUG("No P-Associated-URI, use URI in To header.");
+          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri, true, max_expires);
         }
 
         // Decrement the reference to the flow data
@@ -2954,6 +3056,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& edge_upstream_proxy,
+                                int edge_upstream_proxy_port,
                                 int edge_upstream_proxy_connections,
                                 int edge_upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
@@ -2977,7 +3080,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     // Create a URI for the upstream proxy to use in Route headers.
     upstream_proxy = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, PJ_FALSE);
     ((pjsip_sip_uri*)upstream_proxy)->host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    ((pjsip_sip_uri*)upstream_proxy)->port = stack_data.trusted_port;
+    ((pjsip_sip_uri*)upstream_proxy)->port = edge_upstream_proxy_port;
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
@@ -2987,7 +3090,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
     pool_target.host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    pool_target.port = stack_data.trusted_port;
+    pool_target.port = edge_upstream_proxy_port;
     upstream_conn_pool = new ConnectionPool(&pool_target,
                                             edge_upstream_proxy_connections,
                                             edge_upstream_proxy_recycle,

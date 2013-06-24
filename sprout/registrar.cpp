@@ -279,8 +279,7 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
   LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
-  // Find the contact and expires headers in the message.
-  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+  // Find the expire headers in the message.
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
 
   // Get the system time in seconds for calculating absolute expiry times.
@@ -317,6 +316,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
+    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
     while (contact != NULL)
     {
       if (contact->star)
@@ -539,17 +539,12 @@ void process_register_request(pjsip_rx_data* rdata)
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
-  char buf[500];
-  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR,
-                            service_route_uri,
-                            buf,
-                            sizeof(buf));
-  pj_str_t service_route = {buf, len};
-  pjsip_hdr* service_route_hdr =
-    (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
-                                                &STR_SERVICE_ROUTE,
-                                                &service_route);
-  pjsip_msg_insert_first_hdr(tdata->msg, service_route_hdr);
+  pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
+  service_route->name = STR_SERVICE_ROUTE;
+  service_route->sname = pj_str("");
+  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
+
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
 
   // Add P-Associated-URI headers for all of the associated URIs.
   static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
@@ -590,7 +585,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
-  if (((intptr_t)tsx->mod_data[0] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
       ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
     // Can't create an AS response in UT
