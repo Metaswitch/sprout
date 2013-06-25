@@ -143,11 +143,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
                                   TransportFlow::Trust::TRUSTED,
                                   "0.0.0.0",
                                   5060);
-  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
-  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
-                                  TransportFlow::Trust::TRUSTED,
-                                  "0.0.0.0",
-                                  5060);
 
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats(),
