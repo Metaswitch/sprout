@@ -650,7 +650,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   }
 
   // Check P-Called-Party-ID
-  EXPECT_EQ(pcpi ? "P-Called-Party-ID: " + msg._toscheme + ":" + msg._to + "@" + msg._todomain : "", get_headers(out, "P-Called-Party-ID"));
+  EXPECT_EQ(pcpi ? "P-Called-Party-ID: <" + msg._toscheme + ":" + msg._to + "@" + msg._todomain + ">" : "", get_headers(out, "P-Called-Party-ID"));
 
   invite = pop_txdata();
 
