@@ -1460,6 +1460,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
 
       delete aor_data;
     }
+    delete uris;
   }
 }
 

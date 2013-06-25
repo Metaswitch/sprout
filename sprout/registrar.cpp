@@ -557,6 +557,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                                   &associated_uri);
     pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
   }
+  delete uris;
 
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
