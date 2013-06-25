@@ -160,7 +160,7 @@ TEST_F(IfcHandlerTest, ServedUser)
 
   // Should obey P-Served-User URI and ignore other fields (and also ignore sescase and regstate on P-S-U), but only on originating sessions.
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
-                                "$2", "P-Served-User: Billy Bob <sip:billy-bob@homedomain>;sescase=term;regstate=unreg\n");
+                                "$2", "P-Served-User: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
@@ -176,11 +176,19 @@ TEST_F(IfcHandlerTest, ServedUser)
   // Should ignore (with warning) if URI is unparseable.
   FakeLogger log;
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
-                                "$2", "P-Served-User: <sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
+                                "$2", "P-Served-User: <sip:billy-bob@homedomain\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
   EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
+
+  // If no P-Served-User, try P-Asserted-Identity.
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+                                "$2", "P-Asserted-Identity: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
 /// Test an iFC.
