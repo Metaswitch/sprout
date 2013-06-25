@@ -477,10 +477,15 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri(RegData::Store* store, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
+void SipTest::register_uri(RegData::Store* store, FakeHSSConnection* hss, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
 {
   string uri("sip:");
   uri.append(user).append("@").append(domain);
+  if (hss)
+  {
+    hss->set_json(std::string("/associatedpublicbypublic/" + Utils::url_escape(uri)),
+                  std::string("{\"public_ids\":[\"" + uri + "\"]}"));
+  }
   RegData::AoR* aor = store->get_aor_data(uri);
   RegData::AoR::Binding* binding = aor->get_binding(contact);
   binding->_uri = contact;

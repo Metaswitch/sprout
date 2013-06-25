@@ -325,7 +325,7 @@ AsInvocation Ifc::as_invocation() const
   // That means each AsInvocation would have to belong to a pool,
   // though, and that's not easy in the current architecture.
 
-  as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
+  as_invocation.default_handling = boost::lexical_cast<bool>(get_first_node_value(as, "DefaultHandling"));
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
   xml_node<>* as_ext = as->first_node("Extension");
@@ -362,7 +362,7 @@ Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session 
   {
     try
     {
-      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
+      ifc_doc->parse<parse_no_entity_translation>(ifc_doc->allocate_string(ifc_xml.c_str()));
     }
     catch (parse_error err)
     {
@@ -476,19 +476,15 @@ std::string IfcHandler::served_user_from_msg(
 
   // For originating:
   //
-  // Ultimately we should determine the served user as described in
-  // 3GPP TS 24.229 s5.4.3.2, step 1. This first relies on
-  // P-Served-User (RFC5502), if present (step 1a). We do implement
-  // this part. However, until sto125 (support for multiple identities
-  // for the same line) is implemented, bono doesn't set the
-  // P-Asserted-Identity header so it makes no sense to rely on it,
-  // let alone to select one of the identities based on local policy
-  // (step 1.b.ii). We therefore ignore P-Asserted-Identity entirely
-  // for now. Instead, we look at the From header or the request URI
-  // as appropriate for the session case.  Per 24.229, we ignore the
-  // session case and registration state parameters of P-Served-User;
-  // these are intended for the AS, not the S-CSCF (which has other
-  // means of determining these).
+  // We determine the served user as described in 3GPP TS 24.229 s5.4.3.2,
+  // step 1. This first relies on P-Served-User (RFC5502), if present
+  // (step 1a). If not (step 1b), we then look at P-Asserted-Identity.
+  // For compliance with non-IMS devices (and contrary to the IMS spec),
+  // if there is no P-Asserted-Identity we then look at the From header
+  // or the request URI as appropriate for the session case.  Per 24.229,
+  // we ignore the session case and registration state parameters of
+  // P-Served-User; these are intended for the AS, not the S-CSCF (which
+  // has other means of determining these).
 
   // For terminating:
   //
@@ -539,6 +535,19 @@ std::string IfcHandler::served_user_from_msg(
       {
         LOG_WARNING("Unable to parse P-Served-User header: %.*s",
                     served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      }
+    }
+
+    if (uri == NULL)
+    {
+      // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
+      // header.
+      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
+        pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
+
+      if (asserted_id_hdr != NULL)
+      {
+        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
       }
     }
   }

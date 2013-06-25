@@ -202,7 +202,7 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
-                            bool hss)
+                            bool ifcs)
   {
     SipTest::SetUpTestCase(false);
 
@@ -211,9 +211,9 @@ public:
     delete _analytics->_logger;
     _analytics->_logger = NULL;
     _call_services = NULL;
-    if (hss)
+    _hss_connection = new FakeHSSConnection();
+    if (ifcs)
     {
-      _hss_connection = new FakeHSSConnection();
       _xdm_connection = new FakeXDMConnection();
       _ifc_handler = new IfcHandler(_hss_connection, _store);
       _call_services = new CallServices(_xdm_connection);
@@ -230,13 +230,15 @@ public:
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
+                                          stack_data.trusted_port,
                                           10,
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
-                                          _bgcf_service);
+                                          _bgcf_service,
+                                          _hss_connection);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -332,7 +334,8 @@ protected:
                      bool expect_100,
                      bool pani_AB,
                      bool pani_BA,
-                     bool expect_orig);
+                     bool expect_orig,
+                     bool pcpi);
 };
 
 RegData::Store* StatefulProxyTestBase::_store;
@@ -593,7 +596,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool pani_AB,        //< Should P-A-N-I be passed on requests?
                                           bool pani_BA,        //< Should P-A-N-I be passed on responses?
-                                          bool expect_orig)    //< Should we expect the INVITE to be marked originating?
+                                          bool expect_orig,    //< Should we expect the INVITE to be marked originating?
+                                          bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
   SCOPED_TRACE("doTestHeaders");
   pjsip_msg* out;
@@ -644,6 +648,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   {
     EXPECT_THAT(get_headers(out, "Route"), Not(HasSubstr(";orig")));
   }
+
+  // Check P-Called-Party-ID
+  EXPECT_EQ(pcpi ? "P-Called-Party-ID: " + msg._toscheme + ":" + msg._to + "@" + msg._todomain : "", get_headers(out, "P-Called-Party-ID"));
 
   invite = pop_txdata();
 
@@ -928,7 +935,7 @@ void StatefulProxyTest::doSlowFailureFlow(Message& msg, int st_code)
 TEST_F(StatefulProxyTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -938,13 +945,13 @@ TEST_F(StatefulProxyTest, TestSimpleMainline)
 TEST_F(StatefulProxyTest, TestMainlineHeadersSprout)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false);
+  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false, true);
 }
 
 TEST_F(StatefulProxyTest, TestNotRegisteredTo)
@@ -957,7 +964,7 @@ TEST_F(StatefulProxyTest, TestNotRegisteredTo)
 TEST_F(StatefulProxyTest, TestBadScheme)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._toscheme = "tel";
   msg._to = "+16505551234";
@@ -968,7 +975,7 @@ TEST_F(StatefulProxyTest, TestBadScheme)
 TEST_F(StatefulProxyTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 1;
   doFastFailureFlow(msg, 483); // too many hops
@@ -977,7 +984,7 @@ TEST_F(StatefulProxyTest, TestNoMoreForwards)
 TEST_F(StatefulProxyTest, TestNoMoreForwards2)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 0;
   doFastFailureFlow(msg, 483); // too many hops
@@ -987,7 +994,7 @@ TEST_F(StatefulProxyTest, TestNoMoreForwards2)
 TEST_F(StatefulProxyTest, TestProxyRequire)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._extra = "Proxy-Require: privacy";
   doFastFailureFlow(msg, 420);  // bad extension
@@ -1047,9 +1054,9 @@ TEST_F(StatefulProxyTest, TestExternal)
 void StatefulProxyTest::setupForkedFlow(SP::Message& msg)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  register_uri(_store, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
   pjsip_msg* out;
 
   // Send INVITE
@@ -1305,18 +1312,18 @@ TEST_F(StatefulProxyTest, TestForkedFlow4)
 list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 3600);
-  register_uri(_store, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", 3500);
-  register_uri(_store, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob", 3200);
-  register_uri(_store, "6505551234", "homedomain", "sip:bah@10.114.61.213:5061;transport=tcp;ob", 3300);
-  register_uri(_store, "6505551234", "homedomain", "sip:humbug@10.114.61.213:5061;transport=tcp;ob", 3400);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 3600);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", 3500);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob", 3200);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:bah@10.114.61.213:5061;transport=tcp;ob", 3300);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:humbug@10.114.61.213:5061;transport=tcp;ob", 3400);
 
   Message msg;
   pjsip_rx_data* rdata = build_rxdata(msg.get_request());
   parse_rxdata(rdata);
 
   target_list targets;
-  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets);
+  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;
   for (target_list::const_iterator i = targets.begin();
@@ -2152,7 +2159,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), first hop, in particular for header stripping.
@@ -2172,7 +2179,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   msg._via = "10.83.18.37:36531;transport=tcp";
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true, false);
 }
 
 // Test flows out of Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -2194,7 +2201,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -2215,7 +2222,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   // the right address.
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true, false);
 }
 
 
@@ -2237,7 +2244,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
   // This cannot be originating, because it's IBCF! It's a foreign domain.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false, false);
 }
 
 // Test flows out of IBCF, in particular for header stripping.
@@ -2258,7 +2265,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false, false);
 }
 
 // Check configured trusted host is respected
@@ -2411,7 +2418,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 // Test basic ISC (AS) flow.
 TEST_F(IscTest, SimpleMainline)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2503,7 +2510,7 @@ TEST_F(IscTest, SimpleMainline)
 // Test basic ISC (AS) flow with a single "Next" on the originating side.
 TEST_F(IscTest, SimpleNextOrigFlow)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2609,7 +2616,7 @@ TEST_F(IscTest, SimpleNextOrigFlow)
 // Test basic ISC (AS) rejection flow.
 TEST_F(IscTest, SimpleReject)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2695,7 +2702,7 @@ TEST_F(IscTest, SimpleReject)
 // Test basic ISC (AS) terminating-only flow: call comes from non-local user.
 TEST_F(IscTest, SimpleNonLocalReject)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2782,7 +2789,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
 // Test basic ISC (AS) final acceptance flow (AS sinks request).
 TEST_F(IscTest, SimpleAccept)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2868,7 +2875,7 @@ TEST_F(IscTest, SimpleAccept)
 // Test basic ISC (AS) redirection flow.
 TEST_F(IscTest, SimpleRedirect)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2955,7 +2962,7 @@ TEST_F(IscTest, SimpleRedirect)
 // Test more interesting ISC (AS) flow.
 TEST_F(IscTest, InterestingAs)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3199,7 +3206,7 @@ TEST_F(IscTest, InterestingAs)
 // Test AS-originated flow - orig.
 void IscTest::doAsOriginated(Message& msg, bool expect_orig)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3369,8 +3376,8 @@ TEST_F(IscTest, AsOriginatedTerm)
 // Test call-diversion AS flow.
 TEST_F(IscTest, Cdiv)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3519,8 +3526,8 @@ TEST_F(IscTest, Cdiv)
 // Test call-diversion AS flow, where MMTEL does the diversion.
 TEST_F(IscTest, MmtelCdiv)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3668,7 +3675,7 @@ TEST_F(IscTest, MmtelCdiv)
 // Test call-diversion AS flow, where MMTEL does the diversion - twice.
 TEST_F(IscTest, MmtelDoubleCdiv)
 {
-  register_uri(_store, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3878,7 +3885,7 @@ TEST_F(IscTest, ExpiredChain)
 //    return;
 //  }
 
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -3985,7 +3992,7 @@ TEST_F(IscTest, ExpiredChain)
 // Test a simple MMTEL flow.
 TEST_F(IscTest, MmtelFlow)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -4122,7 +4129,7 @@ TEST_F(IscTest, MmtelFlow)
 //
 TEST_F(IscTest, MmtelThenExternal)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -4342,7 +4349,7 @@ TEST_F(IscTest, MmtelThenExternal)
 //
 TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
