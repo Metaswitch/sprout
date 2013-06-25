@@ -542,18 +542,12 @@ std::string IfcHandler::served_user_from_msg(
     {
       // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
       // header.
-      pjsip_generic_string_hdr* asserted_id_hdr = (pjsip_generic_string_hdr*)
+      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
         pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
 
       if (asserted_id_hdr != NULL)
       {
-        uri = PJUtils::uri_from_string_header(asserted_id_hdr, pool);
-
-        if (uri == NULL)
-        {
-          LOG_WARNING("Unable to parse P-Asserted-Identity header: %.*s",
-                      asserted_id_hdr->hvalue.slen, asserted_id_hdr->hvalue.ptr);
-        }
+        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
       }
     }
   }
