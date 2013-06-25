@@ -2805,10 +2805,11 @@ void UACTransaction::set_target(const struct target& target)
     {
       pj_list_erase(hdr);
     }
+    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri) + ">");
     pj_str_t called_party_id;
     pj_strdup2(_tdata->pool,
                &called_party_id,
-               PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri).c_str());
+               name_addr_str.c_str());
     hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(_tdata->pool,
                                                       &called_party_id_hdr_name,
                                                       &called_party_id);
