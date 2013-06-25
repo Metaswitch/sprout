@@ -37,6 +37,8 @@
 ///
 ///----------------------------------------------------------------------------
 
+#pragma once
+
 #include <string>
 #include "log.h"
 #include "sas.h"
@@ -57,6 +59,8 @@ public:
 
   void set_user_ifc(const std::string& public_user_identity,
                     const std::string& xml_data);
+
+  void set_json(const std::string& url, const std::string& json);
 
 private:
   Json::Value* get_object(const std::string& url, SAS::TrailId trail);

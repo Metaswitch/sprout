@@ -65,7 +65,7 @@ public:
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("ut.cw-ngv.com", "sip-digest", _hss_connection, _analytics);
+    pj_status_t ret = init_authentication("ut.cw-ngv.com", _hss_connection, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 

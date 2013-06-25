@@ -257,7 +257,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 const std::string& trusted_hosts,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
-                                BgcfService *bgcfService);
+                                BgcfService *bgcfService,
+                                HSSConnection* hss_connection);
 
 void destroy_stateful_proxy();
 
@@ -269,7 +270,8 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
                              const TrustBoundary* trust,
                              target_list& targets,
-                             int max_targets);
+                             int max_targets,
+                             SAS::TrailId trail);
 #endif
 
 #endif

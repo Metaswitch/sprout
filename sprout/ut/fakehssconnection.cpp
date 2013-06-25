@@ -39,6 +39,8 @@
 
 #include <cstdio>
 #include "fakehssconnection.hpp"
+#include <json/reader.h>
+#include "gtest/gtest.h"
 
 using namespace std;
 
@@ -62,13 +64,22 @@ Json::Value* FakeHSSConnection::get_object(const std::string& url, SAS::TrailId 
   std::map<std::string, Json::Value>::iterator i = _json_db.find(url);
   if (i != _json_db.end())
   {
-    return &i->second;
+    return new Json::Value(i->second);
   }
   return NULL;
 }
 
 void FakeHSSConnection::set_object(const std::string& url, Json::Value& object, SAS::TrailId trail)
 {
+  _json_db[url] = object;
+}
+
+void FakeHSSConnection::set_json(const std::string& url, const std::string& json)
+{
+  Json::Value object;
+  Json::Reader reader;
+  bool json_parse_success = reader.parse(json, object);
+  ASSERT_TRUE(json_parse_success);
   _json_db[url] = object;
 }
 

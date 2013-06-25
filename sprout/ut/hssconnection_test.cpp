@@ -61,6 +61,10 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses.clear();
     fakecurl_responses["http://narcissus/credentials/pubid42/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
     fakecurl_responses["http://narcissus/credentials/pubid42/privid_corrupt/digest"] = "{\"digest\"; \"myhashhere\"}";
+    fakecurl_responses["http://narcissus/associatedpublicbypublic/sip%3A123%40example.com"] = "{\"public_ids\":[\"sip:123@example.com\", \"sip:456@example.com\"]}";
+    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_notobject"] = "[]";
+    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_nopublicids"] = "{}";
+    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_notfound"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/filtercriteria/pubid42"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ServiceProfile>"
@@ -102,6 +106,34 @@ TEST_F(HssConnectionTest, CorruptDigest)
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
   delete actual;
+}
+
+TEST_F(HssConnectionTest, SimpleAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("sip:123@example.com", 0);
+  ASSERT_TRUE(actual != NULL);
+  EXPECT_EQ(2u, actual->size());
+  EXPECT_EQ("sip:123@example.com", actual->get((Json::Value::ArrayIndex)0, "").asString());
+  EXPECT_EQ("sip:456@example.com", actual->get((Json::Value::ArrayIndex)1, "").asString());
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, NotObjectAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("pubid_notobject", 0);
+  ASSERT_TRUE(actual == NULL);
+}
+
+TEST_F(HssConnectionTest, NoPublicIdsAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("pubid_nopublicids", 0);
+  ASSERT_TRUE(actual == NULL);
+}
+
+TEST_F(HssConnectionTest, NotFoundAssociatedUris)
+{
+  Json::Value* actual = _hss.get_associated_uris("pubid_notfound", 0);
+  ASSERT_TRUE(actual == NULL);
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)
