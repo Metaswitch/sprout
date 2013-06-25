@@ -92,7 +92,12 @@ loop do
   begin 
     line = f.readline
     fields = line.split ';'
-    stats = fields.values_at(4, 16, 32, 84)
+    # Pull out fields
+    #  4 - "2_REGISTER_Sent", i.e. number of initial REGISTERs sent
+    # 28 - "10_REGISTER_Sent", i.e. number of re-REGISTERs sent
+    # 44 - "17_INVITE_Sent", i.e. number of INVITEs sent
+    # 92 - "35_200_Recv", i.e. number of 200 OKs to BYEs received
+    stats = fields.values_at(4, 28, 44, 92)
 
     # Calculate the deltas.  If we've not yet seen two real sets of values
     # then we should report zeros otherwise the first non-zero result will 
