@@ -1440,7 +1440,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
             pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
             if (path != NULL)
             {
-              target.paths.push_back(PJUtils::uri_from_string(*j, pool));
+              target.paths.push_back(path);
             }
             else
             {
