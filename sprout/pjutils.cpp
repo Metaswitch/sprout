@@ -46,6 +46,7 @@ extern "C" {
 #include <pjlib.h>
 }
 
+#include <boost/algorithm/string.hpp>
 #include "stack.h"
 #include "log.h"
 #include "constants.h"
@@ -751,4 +752,18 @@ void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_m
     pjsip_msg_add_hdr(new_msg, new_hdr);
     last_hdr = original_hdr;
   }
+}
+
+std::string PJUtils::get_header_value(pjsip_hdr* header) {
+#define MAX_HDR_SIZE 65535
+  char buf[MAX_HDR_SIZE];
+  char* buf2 = buf;
+  int len = pjsip_hdr_print_on(header, buf2, MAX_HDR_SIZE);
+  printf("%d\n", len);
+  printf("%s\n", buf2);
+  while (*(++buf2) != ':') {--len;};
+  while (*(++buf2) == ' ') {--len;};
+  printf("%d\n", len);
+  buf2[len] = '\0';
+  return std::string(buf2, len);
 }
