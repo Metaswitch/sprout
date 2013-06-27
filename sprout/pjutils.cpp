@@ -46,6 +46,7 @@ extern "C" {
 #include <pjlib.h>
 }
 
+#include <boost/algorithm/string.hpp>
 #include "stack.h"
 #include "log.h"
 #include "constants.h"
@@ -149,7 +150,7 @@ std::string PJUtils::uri_to_string(pjsip_uri_context_e context,
 /// finds a name-addr instead of a URI it will parse it to a pjsip_name_addr
 /// structure, so you must use pjsip_uri_get_uri to get to the URI piece.
 pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
-                                    pj_pool_t *pool,
+                                    pj_pool_t* pool,
                                     pj_bool_t force_name_addr)
 {
   // We must duplicate the string into memory from the specified pool first as
@@ -183,7 +184,7 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 {
   pjsip_sip_uri aor;
-  memcpy((char *)&aor, (char*)uri, sizeof(pjsip_sip_uri));
+  memcpy((char*)&aor, (char*)uri, sizeof(pjsip_sip_uri));
   aor.passwd.slen = 0;
   aor.port = 0;
   aor.user_param.slen = 0;
@@ -239,7 +240,7 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
 {
   LOG_INFO("Adding integrity-protected indicator to message");
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-                   pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+                                      pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
 
   if (auth_hdr == NULL)
   {
@@ -253,36 +254,36 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   new_param->name = STR_INTEGRITY_PROTECTED;
   switch (integrity)
   {
-    case Integrity::YES:
-      new_param->value = STR_YES;
-      break;
+  case Integrity::YES:
+    new_param->value = STR_YES;
+    break;
 
-    case Integrity::NO:
-      new_param->value = STR_NO;
-      break;
+  case Integrity::NO:
+    new_param->value = STR_NO;
+    break;
 
-    case Integrity::TLS_YES:
-      new_param->value = STR_TLS_YES;
-      break;
+  case Integrity::TLS_YES:
+    new_param->value = STR_TLS_YES;
+    break;
 
-    case Integrity::TLS_PENDING:
-      new_param->value = STR_TLS_PENDING;
-      break;
+  case Integrity::TLS_PENDING:
+    new_param->value = STR_TLS_PENDING;
+    break;
 
-    case Integrity::IP_ASSOC_YES:
-      new_param->value = STR_IP_ASSOC_YES;
-      break;
+  case Integrity::IP_ASSOC_YES:
+    new_param->value = STR_IP_ASSOC_YES;
+    break;
 
-    case Integrity::IP_ASSOC_PENDING:
-      new_param->value = STR_IP_ASSOC_PENDING;
-      break;
+  case Integrity::IP_ASSOC_PENDING:
+    new_param->value = STR_IP_ASSOC_PENDING;
+    break;
 
-    case Integrity::AUTH_DONE:
-      new_param->value = STR_AUTH_DONE;
-      break;
+  case Integrity::AUTH_DONE:
+    new_param->value = STR_AUTH_DONE;
+    break;
 
-    default:
-      break;
+  default:
+    break;
   }
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
@@ -293,7 +294,7 @@ void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid
 {
   LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
   pjsip_routing_hdr* p_asserted_id =
-                      identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
+    identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
 
   pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, tdata->pool, true);
   memcpy(&p_asserted_id->name_addr, temp, sizeof(pjsip_name_addr));
@@ -306,7 +307,7 @@ extern pjsip_hdr_vptr identity_hdr_vptr;
 
 /// Creates an identity header (so either P-Associated-URI, P-Asserted-Identity
 /// or P-Preferred-Identity)
-pjsip_routing_hdr* PJUtils::identity_hdr_create(pj_pool_t *pool, const pj_str_t& name)
+pjsip_routing_hdr* PJUtils::identity_hdr_create(pj_pool_t* pool, const pj_str_t& name)
 {
   pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
 
@@ -445,11 +446,11 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
   // We're the first hop if there's exactly one Via header in the
   // message we received.
   pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg,
-                                                              PJSIP_H_VIA,
-                                                              NULL);
+                           PJSIP_H_VIA,
+                           NULL);
   pj_bool_t first_hop = via_hdr && !pjsip_msg_find_hdr(msg,
-                                                       PJSIP_H_VIA,
-                                                       via_hdr->next);
+                        PJSIP_H_VIA,
+                        via_hdr->next);
   return first_hop;
 }
 
@@ -482,17 +483,17 @@ int PJUtils::max_expires(pjsip_msg* msg)
 
 
 
-pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
-                                     const pjsip_rx_data *rdata,
+pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
+                                     const pjsip_rx_data* rdata,
                                      int st_code,
-                                     const pj_str_t *st_text,
-                                     pjsip_tx_data **p_tdata)
+                                     const pj_str_t* st_text,
+                                     pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response(endpt,
-                                                   rdata,
-                                                   st_code,
-                                                   st_text,
-                                                   p_tdata);
+                       rdata,
+                       st_code,
+                       st_text,
+                       p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -502,19 +503,19 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
 }
 
 
-pj_status_t PJUtils::create_request_fwd(pjsip_endpoint *endpt,
-                                        pjsip_rx_data *rdata,
-                                        const pjsip_uri *uri,
-                                        const pj_str_t *branch,
+pj_status_t PJUtils::create_request_fwd(pjsip_endpoint* endpt,
+                                        pjsip_rx_data* rdata,
+                                        const pjsip_uri* uri,
+                                        const pj_str_t* branch,
                                         unsigned options,
-                                        pjsip_tx_data **p_tdata)
+                                        pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_request_fwd(endpt,
-                                                      rdata,
-                                                      uri,
-                                                      branch,
-                                                      options,
-                                                      p_tdata);
+                       rdata,
+                       uri,
+                       branch,
+                       options,
+                       p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -524,15 +525,15 @@ pj_status_t PJUtils::create_request_fwd(pjsip_endpoint *endpt,
 }
 
 
-pj_status_t PJUtils::create_response_fwd(pjsip_endpoint *endpt,
-                                         pjsip_rx_data *rdata,
-                                         unsigned options,
-                                         pjsip_tx_data **p_tdata)
+pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
+    pjsip_rx_data* rdata,
+    unsigned options,
+    pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response_fwd(endpt,
-                                                       rdata,
-                                                       options,
-                                                       p_tdata);
+                       rdata,
+                       options,
+                       p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -545,12 +546,12 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint *endpt,
 /// This is a clone of the PJSIP pjsip_endpt_respond_stateless function,
 /// with the addition of code to reflect the trail on the request on to the
 /// response.  All sprout application code should use this method instead.
-pj_status_t PJUtils::respond_stateless(pjsip_endpoint *endpt,
-                                       pjsip_rx_data *rdata,
+pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
+                                       pjsip_rx_data* rdata,
                                        int st_code,
-                                       const pj_str_t *st_text,
-                                       const pjsip_hdr *hdr_list,
-                                       const pjsip_msg_body *body)
+                                       const pj_str_t* st_text,
+                                       const pjsip_hdr* hdr_list,
+                                       const pjsip_msg_body* body)
 {
   pj_status_t status;
   pjsip_response_addr res_addr;
@@ -566,7 +567,7 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint *endpt,
   // Add the message headers, if any
   if (hdr_list)
   {
-    const pjsip_hdr *hdr = hdr_list->next;
+    const pjsip_hdr* hdr = hdr_list->next;
     while (hdr != hdr_list)
     {
       pjsip_msg_add_hdr(tdata->msg,
@@ -613,9 +614,9 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
                                       pjsip_transaction* uas_tsx,
                                       pjsip_rx_data* rdata,
                                       int st_code,
-                                      const pj_str_t *st_text,
-                                      const pjsip_hdr *hdr_list,
-                                      const pjsip_msg_body *body)
+                                      const pj_str_t* st_text,
+                                      const pjsip_hdr* hdr_list,
+                                      const pjsip_msg_body* body)
 {
   pj_status_t status;
   pjsip_tx_data* tdata;
@@ -629,7 +630,7 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
   // Add the message headers, if any
   if (hdr_list)
   {
-    const pjsip_hdr *hdr = hdr_list->next;
+    const pjsip_hdr* hdr = hdr_list->next;
     while (hdr != hdr_list)
     {
       pjsip_msg_add_hdr(tdata->msg,
@@ -655,9 +656,9 @@ pj_status_t PJUtils::respond_stateful(pjsip_endpoint* endpt,
 }
 
 
-pjsip_tx_data *PJUtils::clone_tdata(pjsip_tx_data *tdata)
+pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
 {
-  pjsip_tx_data *cloned_tdata;
+  pjsip_tx_data* cloned_tdata;
   pj_status_t status;
 
   status = pjsip_endpt_create_tdata(stack_data.endpt, &cloned_tdata);
@@ -685,10 +686,10 @@ pjsip_tx_data *PJUtils::clone_tdata(pjsip_tx_data *tdata)
   {
     // Substitute the branch value in the top Via header with a unique
     // branch identifier.
-    pjsip_via_hdr *via = (pjsip_via_hdr*)
-      pjsip_msg_find_hdr(cloned_tdata->msg, PJSIP_H_VIA, NULL);
+    pjsip_via_hdr* via = (pjsip_via_hdr*)
+                         pjsip_msg_find_hdr(cloned_tdata->msg, PJSIP_H_VIA, NULL);
     via->branch_param.ptr = (char*)
-      pj_pool_alloc(cloned_tdata->pool, PJSIP_MAX_BRANCH_LEN);
+                            pj_pool_alloc(cloned_tdata->pool, PJSIP_MAX_BRANCH_LEN);
     via->branch_param.slen = PJSIP_RFC3261_BRANCH_LEN;
     pj_memcpy(via->branch_param.ptr,
               PJSIP_RFC3261_BRANCH_ID, PJSIP_RFC3261_BRANCH_LEN);
@@ -713,7 +714,8 @@ pjsip_tx_data *PJUtils::clone_tdata(pjsip_tx_data *tdata)
   }
 
   // If the message has any addr in dest_info, copy that
-  if (tdata->dest_info.addr.count != 0) {
+  if (tdata->dest_info.addr.count != 0)
+  {
     pj_memcpy(&cloned_tdata->dest_info, &tdata->dest_info, sizeof(cloned_tdata->dest_info));
   }
 
@@ -742,13 +744,31 @@ void PJUtils::create_random_token(size_t length,       //< Number of characters.
 
 void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool)
 {
-  pjsip_hdr *original_hdr = NULL;
-  pjsip_hdr *last_hdr = NULL;
-  while ((original_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr))
+  pjsip_hdr* original_hdr = NULL;
+  pjsip_hdr* last_hdr = NULL;
+  while ((original_hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(old_msg, hdr_name, original_hdr)) && (last_hdr != original_hdr))
   {
     LOG_INFO("Cloning header! %ld", (long int)original_hdr);
-    pjsip_hdr *new_hdr = (pjsip_hdr *)pjsip_hdr_clone(pool, original_hdr);
+    pjsip_hdr* new_hdr = (pjsip_hdr*)pjsip_hdr_clone(pool, original_hdr);
     pjsip_msg_add_hdr(new_msg, new_hdr);
     last_hdr = original_hdr;
   }
+}
+
+std::string PJUtils::get_header_value(pjsip_hdr* header)
+{
+#define MAX_HDR_SIZE 4096
+  char buf[MAX_HDR_SIZE];
+  char* buf2 = buf;
+
+  int len = pjsip_hdr_print_on(header, buf2, MAX_HDR_SIZE);
+  // pjsip_hdr_print_on doesn't appear to null-terminate the string - do this by hand
+  buf2[len] = '\0';
+
+  // Skip over all text up to the colon, then any whitespace following it
+  while ((*buf2 != ':') || (*buf2 == ' '))
+  {
+    buf2++;
+  }
+  return std::string(buf2, len);
 }
