@@ -74,8 +74,9 @@ public:
   }
 
   virtual const char* what() const throw()
+  // LCOV_EXCL_START work around unexplained gcov behaviour
   {
-    // LCOV_EXCL_LINE work around unexplained gcov behaviour
+    // LCOV_EXCL_STOP
     return _what.c_str();
   }
 

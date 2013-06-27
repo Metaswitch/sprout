@@ -1262,6 +1262,60 @@ TEST_F(IfcHandlerTest, SIPHeaderExtensionIgnored)
          true);
 }
 
+TEST_F(IfcHandlerTest, SIPHeaderNoHeader)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Extension>words</Extension></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+  EXPECT_TRUE(_log.contains("Missing Header element for SIPHeader service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>*</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Header element for SIPHeader service point trigger"));
+
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>.*</Header><Content>?</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
+
+}
+
+
 
 
 
