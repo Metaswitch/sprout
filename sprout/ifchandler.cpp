@@ -74,7 +74,8 @@ public:
   }
 
   virtual const char* what() const throw()
-  { // LCOV_EXCL_LINE work around unexplained gcov behaviour
+  {
+    // LCOV_EXCL_LINE work around unexplained gcov behaviour
     return _what.c_str();
   }
 
@@ -101,7 +102,7 @@ IfcHandler::~IfcHandler()
 // @throw ifc_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                       bool is_registered,               //< The registration state
-                      pjsip_msg *msg,                   //< The message being matched
+                      pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt)                  //< The Service Point Trigger node
 {
   // Find the class node.
@@ -143,7 +144,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
   }
   else if (strcmp("SIPHeader", name) == 0)
   {
-    xml_node<>* spt_header = node->first_node(); 
+    xml_node<>* spt_header = node->first_node();
     xml_node<>* spt_content = NULL;
     boost::regex header_regex;
     boost::regex content_regex;
@@ -185,22 +186,23 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
         {
           // We've found a matching header, and don't have to match on content
           ret = true;
-        } 
+        }
         else
         {
           std::string header_value = PJUtils::get_header_value(header);
-          if (boost::regex_search(header_value, content_regex)) {
+          if (boost::regex_search(header_value, content_regex))
+          {
             // We've found a matching header, and have matching content in one field
             ret = true;
           }
         }
-    }
-        if (ret)
-        {
-          // Stop processing other headers once we have a match
-          break;
-        }
       }
+      if (ret)
+      {
+        // Stop processing other headers once we have a match
+        break;
+      }
+    }
   }
   else if (strcmp("SessionCase", name) == 0)
   {
@@ -208,39 +210,39 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     int direction = parse_integer(node, "session case", 0, 4);
     switch (direction)
     {
-      case 0: // ORIGINATING_REGISTERED
-        {
-          ret = (session_case == SessionCase::Originating) && is_registered;
-        }
-        break;
-      case 1: // TERMINATING_REGISTERED
-        {
-          ret = (session_case == SessionCase::Terminating) && is_registered;
-        }
-        break;
-      case 2: // TERMINATING_UNREGISTERED
-        {
-          ret = (session_case == SessionCase::Terminating) && !is_registered;
-        }
-        break;
-      case 3: // ORIGINATING_UNREGISTERED
-        {
-          ret = (session_case == SessionCase::Originating) && !is_registered;
-        }
-        break;
-      case 4: // ORIGINATING_CDIV
-        {
-          ret = (session_case == SessionCase::OriginatingCdiv);
-        }
-        break;
-      default:
-        // LCOV_EXCL_START Unreachable
-        {
-          LOG_WARNING("Impossible case %d", direction);
-          ret = false;
-        }
-        break;
-        // LCOV_EXCL_STOP
+    case 0: // ORIGINATING_REGISTERED
+    {
+      ret = (session_case == SessionCase::Originating) && is_registered;
+    }
+    break;
+    case 1: // TERMINATING_REGISTERED
+    {
+      ret = (session_case == SessionCase::Terminating) && is_registered;
+    }
+    break;
+    case 2: // TERMINATING_UNREGISTERED
+    {
+      ret = (session_case == SessionCase::Terminating) && !is_registered;
+    }
+    break;
+    case 3: // ORIGINATING_UNREGISTERED
+    {
+      ret = (session_case == SessionCase::Originating) && !is_registered;
+    }
+    break;
+    case 4: // ORIGINATING_CDIV
+    {
+      ret = (session_case == SessionCase::OriginatingCdiv);
+    }
+    break;
+    default:
+      // LCOV_EXCL_START Unreachable
+    {
+      LOG_WARNING("Impossible case %d", direction);
+      ret = false;
+    }
+    break;
+    // LCOV_EXCL_STOP
     }
   }
   else
@@ -258,7 +260,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg) const
+bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg* msg) const
 {
   try
   {
@@ -307,16 +309,16 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     std::map<int32_t, bool> groups;
 
     for (xml_node<>* spt = trigger->first_node("SPT");
-        spt;
-        spt = spt->next_sibling("SPT"))
+         spt;
+         spt = spt->next_sibling("SPT"))
     {
       xml_node<>* neg_node = spt->first_node("ConditionNegated");
       bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
       bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
 
       for (xml_node<>* group_node = spt->first_node("Group");
-          group_node;
-          group_node = group_node->next_sibling("Group"))
+           group_node;
+           group_node = group_node->next_sibling("Group"))
       {
         int32_t group = parse_integer(group_node, "Group ID", 0, std::numeric_limits<int32_t>::max());
         LOG_DEBUG("Add to group %d val %s", (int)group, val ? "true" : "false");
@@ -334,8 +336,8 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     bool ret = cnf;
 
     for (std::map<int32_t, bool>::iterator it = groups.begin();
-        it != groups.end();
-        ++it)
+         it != groups.end();
+         ++it)
     {
       LOG_DEBUG("Result group %d val %s", (int)it->first, it->second ? "true" : "false");
       ret = cnf ? (ret && it->second) : (ret || it->second);
@@ -356,13 +358,15 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
 /// Gets the first child node of "node" with name "name". Returns an empty string if there
 // is no such node, otherwise returns its value (which is the empty string if
 // it has no value).
-static std::string get_first_node_value(xml_node<>* node, std::string name) {
+static std::string get_first_node_value(xml_node<>* node, std::string name)
+{
   xml_node<>* first_node = node->first_node(name.c_str());
   return (first_node) ? first_node->value() : "";
 }
 
 
-static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
+static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
+{
   xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
   return (child_node != NULL);
 }
@@ -395,7 +399,9 @@ AsInvocation Ifc::as_invocation() const
   {
     as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
     as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
-  } else {
+  }
+  else
+  {
     as_invocation.include_register_request = false;
     as_invocation.include_register_response = false;
   };
@@ -409,8 +415,8 @@ AsInvocation Ifc::as_invocation() const
 /// to messages in this original dialog. If there are no iFCs, the
 /// list will be empty.
 Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
-    const std::string& served_user,   //< The served user
-    SAS::TrailId trail)               //< The SAS trail ID
+                              const std::string& served_user,   //< The served user
+                              SAS::TrailId trail)               //< The SAS trail ID
 {
   LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
 
@@ -464,15 +470,15 @@ Ifcs::Ifcs(xml_document<>* ifc_doc) :
 
   // Spin through the list of filter criteria, adding each to the list.
   for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");
-      ifc;
-      ifc = ifc->next_sibling("InitialFilterCriteria"))
+       ifc;
+       ifc = ifc->next_sibling("InitialFilterCriteria"))
   {
     try
     {
       xml_node<>* priority_node = ifc->first_node("Priority");
       int32_t priority = (int32_t)((priority_node) ?
-          parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
-          0);
+                                   parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                   0);
       ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
     }
     catch (ifc_error err)
@@ -484,8 +490,8 @@ Ifcs::Ifcs(xml_document<>* ifc_doc) :
   }
 
   for (std::multimap<int32_t, Ifc>::iterator it = ifc_map.begin();
-      it != ifc_map.end();
-      ++it)
+       it != ifc_map.end();
+       ++it)
   {
     _ifcs.push_back(it->second);
   }
@@ -506,14 +512,14 @@ Ifcs::~Ifcs()
 // all ASs so far, rather than the initial message as it arrived at
 // Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
-    bool is_registered,               //< Whether the served user is registered
-    pjsip_msg *msg,                   //< The message starting the dialog
-    std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
+                     bool is_registered,               //< Whether the served user is registered
+                     pjsip_msg* msg,                   //< The message starting the dialog
+                     std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
 {
   LOG_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
   for (std::vector<Ifc>::const_iterator it = _ifcs.begin();
-      it != _ifcs.end();
-      ++it)
+       it != _ifcs.end();
+       ++it)
   {
     if (it->filter_matches(session_case, is_registered, msg))
     {
@@ -529,9 +535,9 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
 std::string IfcHandler::served_user_from_msg(
-    const SessionCase& session_case,
-    pjsip_msg* msg,
-    pj_pool_t* pool)
+  const SessionCase& session_case,
+  pjsip_msg* msg,
+  pj_pool_t* pool)
 {
   pjsip_uri* uri = NULL;
   std::string user;
@@ -573,7 +579,7 @@ std::string IfcHandler::served_user_from_msg(
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
@@ -596,7 +602,7 @@ std::string IfcHandler::served_user_from_msg(
       if (uri == NULL)
       {
         LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-            served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
       }
     }
 
@@ -605,7 +611,7 @@ std::string IfcHandler::served_user_from_msg(
       // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
       // header.
       pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
-        pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
+                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
 
       if (asserted_id_hdr != NULL)
       {
@@ -661,8 +667,8 @@ static long parse_integer(xml_node<>* node, std::string description, long min_va
   if ((n < min_value) || (n > max_value))
   {
     throw ifc_error(description + " out of allowable range " +
-        boost::lexical_cast<std::string>(min_value) + ".." +
-        boost::lexical_cast<std::string>(max_value));
+                    boost::lexical_cast<std::string>(min_value) + ".." +
+                    boost::lexical_cast<std::string>(max_value));
   }
 
   return n;
