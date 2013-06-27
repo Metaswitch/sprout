@@ -169,16 +169,6 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       throw ifc_error("Invalid regular expression in Header element for SIPHeader service point trigger");
     }
 
-
-    if (spt_content)
-    {
-      content_regex = boost::regex(spt_content->value(), boost::regex_constants::no_except);
-      if (content_regex.status())
-      {
-        throw ifc_error("Invalid regular expression in Content element for SIPHeader service point trigger");
-      }
-    }
-
     for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
     {
       if (boost::regex_search(PJUtils::pj_str_to_string(&(header->name)), header_regex))
@@ -191,6 +181,16 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
         else
         {
           std::string header_value = PJUtils::get_header_value(header);
+          // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once
+          if (content_regex.status())
+          {
+            content_regex = boost::regex(spt_content->value(), boost::regex_constants::no_except);
+            if (content_regex.status())
+            {
+              throw ifc_error("Invalid regular expression in Content element for SIPHeader service point trigger");
+            }
+          }
+
           if (boost::regex_search(header_value, content_regex))
           {
             // We've found a matching header, and have matching content in one field

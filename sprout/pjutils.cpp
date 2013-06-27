@@ -766,13 +766,9 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   buf2[len] = '\0';
 
   // Skip over all text up to the colon, then any whitespace following it
-  while (*(++buf2) != ':')
+  while ((*buf2 != ':') || (*buf2 == ' '))
   {
-    ;
-  }
-  while (*(++buf2) == ' ')
-  {
-    ;
+    buf2++;
   }
   return std::string(buf2, len);
 }
