@@ -101,7 +101,7 @@ public:
                "Call-Info    : foo,\n"
                "               bar\n"
                "Accept: baz\n"
-               "Accept: quux\n"
+               "Accept: quux, foo\n"
                "Content-Length: 0\n\n");
     pjsip_rx_data* rdata = build_rxdata(str);
     parse_rxdata(rdata);
@@ -1137,7 +1137,7 @@ TEST_F(IfcHandlerTest, CommaContentMatch)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SIPHeader><Header>Call-Info</Header><Content>bar</Content></SIPHeader>\n"
+         "      <SIPHeader><Header>Call-Info</Header><Content>foo, bar</Content></SIPHeader>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -1177,6 +1177,52 @@ TEST_F(IfcHandlerTest, MultilineHeaderContentMatch)
          SessionCase::Terminating,
          true);
 }
+
+TEST_F(IfcHandlerTest, HeaderContentSubstring)
+{
+  doTest("Test that requiring the substring 'qu' succeeds",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>qu</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+
+  doTest("Test that requiring the word 'qu' fails",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>\\bqu\\b</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+
+  doTest("Test that requiring the word 'quux' succeeds",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>\\bquux\\b</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
 
 TEST_F(IfcHandlerTest, MultilineHeaderContentMismatch)
 {

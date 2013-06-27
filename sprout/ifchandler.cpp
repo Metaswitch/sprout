@@ -179,7 +179,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
     for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
     {
-      if (boost::regex_match(PJUtils::pj_str_to_string(&(header->name)), header_regex))
+      if (boost::regex_search(PJUtils::pj_str_to_string(&(header->name)), header_regex))
       {
         if (!spt_content)
         {
@@ -189,21 +189,18 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
         else
         {
           std::string header_value = PJUtils::get_header_value(header);
-          printf("%s:%s\n", spt_header->value(), header_value.c_str());
-          if (boost::regex_match(header_value, content_regex)) {
+          if (boost::regex_search(header_value, content_regex)) {
             // We've found a matching header, and have matching content in one field
             ret = true;
-            // Stop processing values once we have a match.
-            break;
           }
         }
+    }
         if (ret)
         {
           // Stop processing other headers once we have a match
           break;
         }
       }
-    }
   }
   else if (strcmp("SessionCase", name) == 0)
   {

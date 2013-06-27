@@ -755,15 +755,16 @@ void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_m
 }
 
 std::string PJUtils::get_header_value(pjsip_hdr* header) {
-#define MAX_HDR_SIZE 65535
+#define MAX_HDR_SIZE 4096
   char buf[MAX_HDR_SIZE];
   char* buf2 = buf;
+
   int len = pjsip_hdr_print_on(header, buf2, MAX_HDR_SIZE);
-  printf("%d\n", len);
-  printf("%s\n", buf2);
-  while (*(++buf2) != ':') {--len;};
-  while (*(++buf2) == ' ') {--len;};
-  printf("%d\n", len);
+  // pjsip_hdr_print_on doesn't appear to null-terminate the string - do this by hand
   buf2[len] = '\0';
+
+  // Skip over all text up to the colon, then any whitespace following it
+  while (*(++buf2) != ':');
+  while (*(++buf2) == ' ');
   return std::string(buf2, len);
 }
