@@ -7,6 +7,8 @@ This repository contains the core Clearwater SIP function, specifically
 *   restund, the STUN/TURN server used by Clearwater
 *   sipp, a SIP stress tool used for testing Clearwater.
 
+Project Clearwater is an open-source IMS core, developed by [Metaswitch Networks](http://www.metaswitch.com) and released under the [GNU GPLv3](http://www.projectclearwater.org/download/license/). You can find more information about it on [our website](http://www.projectclearwater.org/) or [our wiki](https://github.com/Metaswitch/clearwater-docs/wiki).
+
 ## Sprout and Bono
 
 Sprout is Clearwater's SIP router.  It provides most of Clearwater's S-CSCF
