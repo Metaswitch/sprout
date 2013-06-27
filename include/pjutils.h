@@ -168,6 +168,8 @@ typedef std::map<pj_sockaddr, bool, bool(*)(const pj_sockaddr&, const pj_sockadd
 
 void create_random_token(size_t length, std::string& token);
 
+std::string get_header_value(pjsip_hdr*);
+
 } // namespace PJUtils
 
 #endif

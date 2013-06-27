@@ -35,6 +35,7 @@
  */
 
 #include <boost/lexical_cast.hpp>
+#include <boost/regex.hpp>
 
 extern "C" {
 #include <pjlib-util.h>
@@ -73,7 +74,9 @@ public:
   }
 
   virtual const char* what() const throw()
-  { // LCOV_EXCL_LINE work around unexplained gcov behaviour
+  // LCOV_EXCL_START work around unexplained gcov behaviour
+  {
+    // LCOV_EXCL_STOP
     return _what.c_str();
   }
 
@@ -100,7 +103,7 @@ IfcHandler::~IfcHandler()
 // @throw ifc_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                       bool is_registered,               //< The registration state
-                      pjsip_msg *msg,                   //< The message being matched
+                      pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt)                  //< The Service Point Trigger node
 {
   // Find the class node.
@@ -140,6 +143,68 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     // check to see if they match the registration type.
     ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
   }
+  else if (strcmp("SIPHeader", name) == 0)
+  {
+    xml_node<>* spt_header = node->first_node();
+    xml_node<>* spt_content = NULL;
+    boost::regex header_regex;
+    boost::regex content_regex;
+    pjsip_hdr* header = NULL;
+
+    if (!spt_header || (strcmp(spt_header->name(), "Header") != 0))
+    {
+      throw ifc_error("Missing Header element for SIPHeader service point trigger");
+    }
+
+    spt_content = spt_header->next_sibling();
+    // The second node might be an Extension header rather than a Content header - if so, ignore it.
+    if (spt_content && (strcmp(spt_content->name(), "Content") != 0))
+    {
+      spt_content = NULL;
+    }
+
+    header_regex = boost::regex(spt_header->value(), boost::regex_constants::no_except);
+    if (header_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Header element for SIPHeader service point trigger");
+    }
+
+    for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
+    {
+      if (boost::regex_search(PJUtils::pj_str_to_string(&(header->name)), header_regex))
+      {
+        if (!spt_content)
+        {
+          // We've found a matching header, and don't have to match on content
+          ret = true;
+        }
+        else
+        {
+          std::string header_value = PJUtils::get_header_value(header);
+          // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once
+          if (content_regex.status())
+          {
+            content_regex = boost::regex(spt_content->value(), boost::regex_constants::no_except);
+            if (content_regex.status())
+            {
+              throw ifc_error("Invalid regular expression in Content element for SIPHeader service point trigger");
+            }
+          }
+
+          if (boost::regex_search(header_value, content_regex))
+          {
+            // We've found a matching header, and have matching content in one field
+            ret = true;
+          }
+        }
+      }
+      if (ret)
+      {
+        // Stop processing other headers once we have a match
+        break;
+      }
+    }
+  }
   else if (strcmp("SessionCase", name) == 0)
   {
     // Enum values are per CxData_Type_Rel11.xsd.
@@ -178,7 +243,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       ret = false;
     }
     break;
-      // LCOV_EXCL_STOP
+    // LCOV_EXCL_STOP
     }
   }
   else
@@ -196,7 +261,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg) const
+bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg* msg) const
 {
   try
   {
@@ -245,8 +310,8 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     std::map<int32_t, bool> groups;
 
     for (xml_node<>* spt = trigger->first_node("SPT");
-       spt;
-       spt = spt->next_sibling("SPT"))
+         spt;
+         spt = spt->next_sibling("SPT"))
     {
       xml_node<>* neg_node = spt->first_node("ConditionNegated");
       bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
@@ -294,13 +359,15 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
 /// Gets the first child node of "node" with name "name". Returns an empty string if there
 // is no such node, otherwise returns its value (which is the empty string if
 // it has no value).
-static std::string get_first_node_value(xml_node<>* node, std::string name) {
+static std::string get_first_node_value(xml_node<>* node, std::string name)
+{
   xml_node<>* first_node = node->first_node(name.c_str());
   return (first_node) ? first_node->value() : "";
 }
 
 
-static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
+static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
+{
   xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
   return (child_node != NULL);
 }
@@ -333,7 +400,9 @@ AsInvocation Ifc::as_invocation() const
   {
     as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
     as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
-  } else {
+  }
+  else
+  {
     as_invocation.include_register_request = false;
     as_invocation.include_register_response = false;
   };
@@ -445,7 +514,7 @@ Ifcs::~Ifcs()
 // Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      bool is_registered,               //< Whether the served user is registered
-                     pjsip_msg *msg,                   //< The message starting the dialog
+                     pjsip_msg* msg,                   //< The message starting the dialog
                      std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
 {
   LOG_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
@@ -511,7 +580,7 @@ std::string IfcHandler::served_user_from_msg(
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
@@ -543,7 +612,7 @@ std::string IfcHandler::served_user_from_msg(
       // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
       // header.
       pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
-        pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
+                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
 
       if (asserted_id_hdr != NULL)
       {
