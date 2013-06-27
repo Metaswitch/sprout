@@ -251,10 +251,10 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
           options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
           if (upstream_proxy_options.size() > 2)
           {
-            options->upstream_proxy_connections = atoi(upstream_proxy_options[1].c_str());
+            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
             if (upstream_proxy_options.size() > 3)
             {
-              options->upstream_proxy_recycle = atoi(upstream_proxy_options[2].c_str());
+              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
             }
           }
         }
