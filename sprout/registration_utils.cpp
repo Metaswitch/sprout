@@ -56,7 +56,13 @@ extern "C" {
 
 #define MAX_SIP_MSG_SIZE 65535
 
-void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, const std::string&);
+void send_register_to_as(pjsip_rx_data* received_register,
+    pjsip_tx_data* ok_response,
+    AsInvocation& as,
+    int expires,
+    const std::string&,
+    SAS::TrailId);
+
 void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string&, int);
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
@@ -86,6 +92,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
   }
 
   std::string served_user = aor;
+  SAS::TrailId trail;
 
   std::vector<AsInvocation> as_list;
   LOG_INFO("Looking up list of Application Servers");
@@ -118,7 +125,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     // constraints for REGISTER messages, but we only get the served user from the From address in an
     // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
     // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
-    SAS::TrailId trail = SAS::new_trail(1);
+    trail = SAS::new_trail(1u);
     std::vector<Ifc> ifc_list;
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
@@ -126,7 +133,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    SAS::TrailId trail = get_trail(ok_response);
+    trail = get_trail(ok_response);
     served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
@@ -145,12 +152,17 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     // Loop through the as_list
     for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-      send_register_to_as(received_register, ok_response, *as_iter, expires, aor);
+      send_register_to_as(received_register, ok_response, *as_iter, expires, aor, trail);
     }
   }
 }
 
-void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, const std::string& aor)
+void send_register_to_as(pjsip_rx_data *received_register,
+    pjsip_tx_data *ok_response,
+    AsInvocation& as,
+    int expires,
+    const std::string& aor,
+    SAS::TrailId trail)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -258,13 +270,14 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
     tdata->msg->body = final_body;
 
   }
-
+  
   // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
   // if it fails
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
   // DefaultHandling has a value of 0 or 1, so we can store it directly in the pointer. Not perfect, but
   // harmless if done right.
   tsx->mod_data[mod_registrar.id] = (void*)as.default_handling;
+  set_trail(tdata, trail);
   status = pjsip_tsx_send_msg(tsx, tdata);
 }
 
