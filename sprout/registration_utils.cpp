@@ -133,7 +133,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    trail = get_trail(ok_response);
+    trail = get_trail(received_register);
     served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
@@ -278,6 +278,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   // harmless if done right.
   tsx->mod_data[mod_registrar.id] = (void*)as.default_handling;
   set_trail(tdata, trail);
+  set_trail(tsx, trail);
   status = pjsip_tsx_send_msg(tsx, tdata);
 }
 
