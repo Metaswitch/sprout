@@ -41,7 +41,6 @@
 extern pjsip_module mod_auth;
 
 pj_status_t init_authentication(const std::string& realm_name,
-                                const std::string& auth_config,
                                 HSSConnection* hss_connection,
                                 AnalyticsLogger* analytics_logger);
 

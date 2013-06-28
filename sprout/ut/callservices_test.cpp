@@ -96,14 +96,6 @@ protected:
 FakeHSSConnection* CallServicesTest::_hss_connection;
 FakeXDMConnection* CallServicesTest::_xdm_connection;
 
-TEST_F(CallServicesTest, UserFromUri)
-{
-  char* s = "sip:bob:secret@example.org:9876;user=john;method=urk;lr;wotsit=thingy";
-  pjsip_uri* uri = pjsip_parse_uri(stack_data.pool, s, strlen(s), 0);
-  string actual = IfcHandler::user_from_uri(uri);
-  EXPECT_EQ("sip:bob@example.org", actual);
-}
-
 TEST_F(CallServicesTest, IsOurs)
 {
   EXPECT_TRUE(_calls.is_mmtel("sip:mmtel.homedomain"));

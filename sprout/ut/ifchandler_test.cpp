@@ -75,8 +75,10 @@ public:
   static void TearDownTestCase()
   {
     RegData::destroy_local_store(_store);
-    delete _ifc_handler; _ifc_handler = NULL;
-    delete _hss_connection; _hss_connection = NULL;
+    delete _ifc_handler;
+    _ifc_handler = NULL;
+    delete _hss_connection;
+    _hss_connection = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -98,6 +100,10 @@ public:
                "Call-ID: 1-13919@10.151.20.48\n"
                "CSeq: 4 INVITE\n"
                "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+               "Call-Info    : foo,\n"
+               "               bar\n"
+               "Accept: baz\n"
+               "Accept: quux, foo\n"
                "Content-Length: 0\n\n");
     pjsip_rx_data* rdata = build_rxdata(str);
     parse_rxdata(rdata);
@@ -131,15 +137,15 @@ IfcHandler* IfcHandlerTest::_ifc_handler;
 TEST_F(IfcHandlerTest, ServedUser)
 {
   string str0("INVITE $1 SIP/2.0\n"
-             "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
-             "Max-Forwards: 69\n"
-             "From: <sip:5755550018@homedomain>;tag=13919SIPpTag0011234\n"
-             "To: <sip:5755550099@homedomain>\n"
-             "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
-             "Call-ID: 1-13919@10.151.20.48\n"
-             "CSeq: 4 INVITE\n"
-             "Route: <sip:testnode;transport=TCP;lr;orig>\n"
-             "Content-Length: 0\n$2\n");
+              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+              "Max-Forwards: 69\n"
+              "From: <sip:5755550018@homedomain>;tag=13919SIPpTag0011234\n"
+              "To: <sip:5755550099@homedomain>\n"
+              "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
+              "Call-ID: 1-13919@10.151.20.48\n"
+              "CSeq: 4 INVITE\n"
+              "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+              "Content-Length: 0\n$2\n");
   string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@homedomain"), "$2", "");
   pjsip_rx_data* rdata = build_rxdata(str);
   parse_rxdata(rdata);
@@ -160,7 +166,7 @@ TEST_F(IfcHandlerTest, ServedUser)
 
   // Should obey P-Served-User URI and ignore other fields (and also ignore sescase and regstate on P-S-U), but only on originating sessions.
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
-                                "$2", "P-Served-User: Billy Bob <sip:billy-bob@homedomain>;sescase=term;regstate=unreg\n");
+                                "$2", "P-Served-User: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
@@ -176,11 +182,19 @@ TEST_F(IfcHandlerTest, ServedUser)
   // Should ignore (with warning) if URI is unparseable.
   FakeLogger log;
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
-                                "$2", "P-Served-User: <sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
+                                "$2", "P-Served-User: <sip:billy-bob@homedomain\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
   EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
+
+  // If no P-Served-User, try P-Asserted-Identity.
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+                                "$2", "P-Asserted-Identity: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
 /// Test an iFC.
@@ -216,10 +230,13 @@ void IfcHandlerTest::doBaseTest(string description,
     EXPECT_EQ(0, application_servers[0].default_handling);
     if (third_party_reg)
     {
-      EXPECT_EQ("banana", application_servers[0].service_info);
+      // Verify that no XML entities are translated
+      EXPECT_EQ("&lt;banana&amp;gt;", application_servers[0].service_info);
       EXPECT_TRUE(application_servers[0].include_register_request);
       EXPECT_FALSE(application_servers[0].include_register_response);
-    } else {
+    }
+    else
+    {
       EXPECT_EQ("", application_servers[0].service_info);
       EXPECT_FALSE(application_servers[0].include_register_request);
       EXPECT_FALSE(application_servers[0].include_register_response);
@@ -381,27 +398,27 @@ TEST_F(IfcHandlerTest, NoServerName2)
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)
 {
-      doBaseTest("",
-                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                 "<ServiceProfile>\n"
-                 "  <InitialFilterCriteria>\n"
-                 "    <Priority>1</Priority>\n"
-                 "    <ApplicationServer>\n"
-                 "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                 "      <DefaultHandling>0</DefaultHandling>\n"
-                 "      <ServiceInfo>banana</ServiceInfo>\n"
-                 "      <Extension>\n"
-                 "        <IncludeRegisterRequest />\n"
-                 "      </Extension>\n"
-                 "    </ApplicationServer>\n"
-                 "  </InitialFilterCriteria>\n"
-                 "</ServiceProfile>",
-                 TEST_MSG,
-                 "sip:5755550033@homedomain",
-                 true,
-                 SessionCase::Originating,
-                 true,
-                 true);
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "    <ApplicationServer>\n"
+             "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "      <DefaultHandling>0</DefaultHandling>\n"
+             "      <ServiceInfo>&lt;banana&amp;gt;</ServiceInfo>\n"
+             "      <Extension>\n"
+             "        <IncludeRegisterRequest />\n"
+             "      </Extension>\n"
+             "    </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             TEST_MSG,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             true,
+             true);
 }
 
 
@@ -584,7 +601,7 @@ void IfcHandlerTest::doCaseTest(string description,
     bool reg = i % 2;
     const SessionCase& sescase = ((i/2) == 0) ? SessionCase::Originating :
                                  ((i/2) == 1) ? SessionCase::Terminating :
-                                               SessionCase::OriginatingCdiv;
+                                 SessionCase::OriginatingCdiv;
     string desc = description;
     desc.append(reg ? " reg " : " unreg ");
     desc.append(sescase.to_string());
@@ -962,6 +979,344 @@ TEST_F(IfcHandlerTest, OrSubAnd1)
          SessionCase::Originating,
          true);
 }
+
+TEST_F(IfcHandlerTest, HeaderMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contact</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, NegatedHeaderMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>1</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contact</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, HeaderMismatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contaaaaaact</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, NegatedHeaderMismatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>1</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contaaaaaact</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, RegexContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contact</Header><Content>.*5755550018.*</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, ContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Call-ID</Header><Content>1-13919@10.151.20.48</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, ContentMismatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contact</Header><Content>.*111111.*</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, HeaderMismatchContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contaaaaact</Header><Content>.*5755550018.*</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, TerminatingHeaderMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Contact</Header><Content>.*5755550018.*</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, CommaContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Call-Info</Header><Content>foo, bar</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
+
+TEST_F(IfcHandlerTest, MultilineHeaderContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>baz</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>quux</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, HeaderContentSubstring)
+{
+  doTest("Test that requiring the substring 'qu' succeeds",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>qu</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+
+  doTest("Test that requiring the word 'qu' fails",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>\\bqu\\b</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+
+  doTest("Test that requiring the word 'quux' succeeds",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>\\bquux\\b</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
+
+TEST_F(IfcHandlerTest, MultilineHeaderContentMismatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Content>null</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SIPHeaderExtensionIgnored)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>Accept</Header><Extension>words</Extension></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SIPHeaderNoHeader)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Extension>words</Extension></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+  EXPECT_TRUE(_log.contains("Missing Header element for SIPHeader service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>*</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Header element for SIPHeader service point trigger"));
+
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>.*</Header><Content>?</Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         false);
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
+
+}
+
+
+
 
 
 // @@@ iFC XML parse error

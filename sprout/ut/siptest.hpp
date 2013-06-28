@@ -47,6 +47,7 @@ extern "C" {
 
 #include "utils.h"
 #include "regdata.h"
+#include "fakehssconnection.hpp"
 
 using std::string;
 
@@ -112,12 +113,6 @@ protected:
   /// Initialise the UDP and TCP transports for the specified port.
   static void init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory);
 
-  /// Initialise PJSIP for testing.
-  static void init_pjsip();
-
-  /// Terminate PJSIP.
-  static void term_pjsip();
-
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
 
@@ -152,7 +147,7 @@ protected:
   static SipTest* _current_instance;
 
   /// Register the specified URI.
-  void register_uri(RegData::Store* store, const string& user, const string& domain, const string& contact, int lifetime = 3600);
+  void register_uri(RegData::Store* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600);
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default);
