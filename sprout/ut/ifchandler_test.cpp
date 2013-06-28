@@ -230,7 +230,7 @@ void IfcHandlerTest::doBaseTest(string description,
     EXPECT_EQ(0, application_servers[0].default_handling);
     if (third_party_reg)
     {
-      // Verify that no XML entities are translated
+      // Verify that no XML entities are translated within a CDATA block
       EXPECT_EQ("&lt;banana&amp;gt;", application_servers[0].service_info);
       EXPECT_TRUE(application_servers[0].include_register_request);
       EXPECT_FALSE(application_servers[0].include_register_response);
@@ -406,7 +406,8 @@ TEST_F(IfcHandlerTest, ThirdPartyRegistration)
              "    <ApplicationServer>\n"
              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
              "      <DefaultHandling>0</DefaultHandling>\n"
-             "      <ServiceInfo>&lt;banana&amp;gt;</ServiceInfo>\n"
+             "      <ServiceInfo>\n"
+             "        <![CDATA[&lt;banana&amp;gt;]]></ServiceInfo>\n"
              "      <Extension>\n"
              "        <IncludeRegisterRequest />\n"
              "      </Extension>\n"
@@ -1124,7 +1125,7 @@ TEST_F(IfcHandlerTest, TerminatingHeaderMatch)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SIPHeader><Header>Contact</Header><Content>.*5755550018.*</Content></SIPHeader>\n"
+         "      <SIPHeader><Header>Contact</Header><Content>&lt;sip:5755550018@10.16.62.109:58309;transport=TCP;ob&gt;</Content></SIPHeader>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -1132,6 +1133,24 @@ TEST_F(IfcHandlerTest, TerminatingHeaderMatch)
          SessionCase::Terminating,
          true);
 }
+
+TEST_F(IfcHandlerTest, CDataHeaderMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header><![CDATA[Contact]]></Header><Content><![CDATA[<sip:5755550018@10.16.62.109:58309;transport=TCP;ob]]></Content></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Terminating,
+         true);
+}
+
 
 TEST_F(IfcHandlerTest, CommaContentMatch)
 {
@@ -1314,10 +1333,6 @@ TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
   EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
 
 }
-
-
-
-
 
 // @@@ iFC XML parse error
 // @@@ lookup_ifcs gets no served user

@@ -56,6 +56,7 @@ using namespace rapidxml;
 static long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value);
 static bool parse_bool(xml_node<>* node, std::string description);
 static std::string get_first_node_value(xml_node<>* node, std::string name);
+static std::string get_text_or_cdata(xml_node<>* node);
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name);
 
 
@@ -145,25 +146,18 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
   }
   else if (strcmp("SIPHeader", name) == 0)
   {
-    xml_node<>* spt_header = node->first_node();
-    xml_node<>* spt_content = NULL;
+    xml_node<>* spt_header = node->first_node("Header");
+    xml_node<>* spt_content = node->first_node("Content");
     boost::regex header_regex;
     boost::regex content_regex;
     pjsip_hdr* header = NULL;
 
-    if (!spt_header || (strcmp(spt_header->name(), "Header") != 0))
+    if (!spt_header)
     {
       throw ifc_error("Missing Header element for SIPHeader service point trigger");
     }
 
-    spt_content = spt_header->next_sibling();
-    // The second node might be an Extension header rather than a Content header - if so, ignore it.
-    if (spt_content && (strcmp(spt_content->name(), "Content") != 0))
-    {
-      spt_content = NULL;
-    }
-
-    header_regex = boost::regex(spt_header->value(), boost::regex_constants::no_except);
+    header_regex = boost::regex(get_text_or_cdata(spt_header), boost::regex_constants::no_except);
     if (header_regex.status())
     {
       throw ifc_error("Invalid regular expression in Header element for SIPHeader service point trigger");
@@ -184,7 +178,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
           // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once
           if (content_regex.status())
           {
-            content_regex = boost::regex(spt_content->value(), boost::regex_constants::no_except);
+            content_regex = boost::regex(get_text_or_cdata(spt_content), boost::regex_constants::no_except);
             if (content_regex.status())
             {
               throw ifc_error("Invalid regular expression in Content element for SIPHeader service point trigger");
@@ -362,8 +356,34 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
 static std::string get_first_node_value(xml_node<>* node, std::string name)
 {
   xml_node<>* first_node = node->first_node(name.c_str());
-  return (first_node) ? first_node->value() : "";
+  if (!first_node)
+  {
+    return "";
+  }
+  else
+  {
+    return get_text_or_cdata(first_node);
+  }
 }
+
+// Takes an XML node containing ONLY text or CDATA (not both) and returns the value of that text or
+// CDATA.
+//
+// This is necesary because RapidXML's value() function only returns the text of the first data node,
+// not the first CDATA node.
+static std::string get_text_or_cdata(xml_node<>* node)
+{
+  xml_node<>* first_data_node = node->first_node();
+  if (!first_data_node || ((first_data_node->type() != node_cdata) && (first_data_node->type() != node_data)))
+  {
+    return "";
+  }
+  else
+  {
+    return first_data_node->value();
+  }
+}
+
 
 
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
@@ -431,7 +451,7 @@ Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session 
   {
     try
     {
-      ifc_doc->parse<parse_no_entity_translation>(ifc_doc->allocate_string(ifc_xml.c_str()));
+      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
     }
     catch (parse_error err)
     {
