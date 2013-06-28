@@ -541,7 +541,13 @@ int main(int argc, char *argv[])
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    Log::setLogger(new Logger(opt.log_directory, "sprout"));
+    // Work out the program name from argv[0], stripping anything before the final slash.
+    char* prog_name = argv[0];
+    char* slash_ptr = rindex(argv[0], '/');
+    if (slash_ptr != NULL) {
+      prog_name = slash_ptr + 1;
+    }
+    Log::setLogger(new Logger(opt.log_directory, prog_name));
   }
 
   if (opt.analytics_enabled)
