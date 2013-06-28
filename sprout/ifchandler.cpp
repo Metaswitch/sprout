@@ -374,13 +374,13 @@ static std::string get_first_node_value(xml_node<>* node, std::string name)
 static std::string get_text_or_cdata(xml_node<>* node)
 {
   xml_node<>* first_data_node = node->first_node();
-  if (!first_data_node || ((first_data_node->type() != node_cdata) && (first_data_node->type() != node_data)))
+  if (first_data_node && ((first_data_node->type() != node_cdata) || (first_data_node->type() != node_data)))
   {
-    return "";
+    return first_data_node->value();
   }
   else
   {
-    return first_data_node->value();
+    return "";
   }
 }
 
