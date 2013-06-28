@@ -559,10 +559,15 @@ void process_register_request(pjsip_rx_data* rdata)
   }
   delete uris;
 
-  // Send the response.
+  // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
+  // ASes of the 200 OK response we sent.
+  pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
   RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "");
+
+  // Now we can free the tdata.
+  pjsip_tx_data_dec_ref(tdata);
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
