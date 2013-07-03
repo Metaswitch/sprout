@@ -514,8 +514,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  uas_data->enter_context();
-
   if ((!edge_proxy) &&
       (uas_data->method() == PJSIP_INVITE_METHOD))
   {
@@ -1599,6 +1597,10 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
     _uac_data[ii] = NULL;
   }
 
+  // Reference the transaction's group lock.
+  _lock = tsx->grp_lock;
+  pj_grp_lock_add_ref(tsx->grp_lock);
+
   // Set the trail identifier for the transaction using the trail ID on
   // the original message.
   set_trail(_tsx, get_trail(rdata));
@@ -1625,7 +1627,7 @@ UASTransaction::~UASTransaction()
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (method() == PJSIP_INVITE_METHOD)
@@ -1680,10 +1682,14 @@ UASTransaction::~UASTransaction()
   }
   _victims.clear();
 
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
+
   LOG_DEBUG("UASTransaction destructor completed");
 }
 
-// Creates a PJSIP transaction and a corresponding UASTransaction.
+// Creates a PJSIP transaction and a corresponding UASTransaction.  On
+// success, we will be in the transaction's context.
 //
 // This should all be done in the UASTransaction constructor, but creating a
 // PJSIP transaction can fail, and it's hard to fail a constructor.
@@ -1694,19 +1700,38 @@ pj_status_t UASTransaction::create(pjsip_rx_data* rdata,
                                    TrustBoundary* trust,
                                    UASTransaction** uas_data_ptr)
 {
+  // Create a group lock, and take it.  This avoids the transaction being
+  // destroyed before we even get our hands on it.
+  pj_grp_lock_t* lock;
+  pj_status_t status = pj_grp_lock_create(stack_data.pool, NULL, &lock);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+  pj_grp_lock_add_ref(lock);
+  pj_grp_lock_acquire(lock);
+
   // Create a transaction for the UAS side.  We do this before looking
   // up targets because calculating targets may involve interacting
   // with an external database, and we need the transaction in place
   // early to ensure CANCEL gets handled correctly.
   pjsip_transaction* uas_tsx;
-  pj_status_t status = pjsip_tsx_create_uas(&mod_tu, rdata, &uas_tsx);
+  status = pjsip_tsx_create_uas2(&mod_tu, rdata, lock, &uas_tsx);
   if (status != PJ_SUCCESS)
   {
+    pj_grp_lock_release(lock);
+    pj_grp_lock_dec_ref(lock);
     return status;
   }
 
   // Allocate UAS data to keep track of the transaction.
   *uas_data_ptr = new UASTransaction(uas_tsx, rdata, tdata, trust);
+
+  // Enter the transaction's context, and then release our copy of the
+  // group lock.
+  (*uas_data_ptr)->enter_context();
+  pj_grp_lock_release(lock);
+  pj_grp_lock_dec_ref(lock);
 
   return PJ_SUCCESS;
 }
@@ -2103,7 +2128,6 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
         // Final, non-OK response.  Is this the "best" response
         // received so far?
         LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
-        pj_grp_lock_acquire(_tsx->grp_lock);
         if ((_best_rsp == NULL) ||
             (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
         {
@@ -2131,12 +2155,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
           // call services and then send the best response on the UAS
           // transaction.
           LOG_DEBUG("%s - All UAC responded", name());
-          pj_grp_lock_release(_tsx->grp_lock);
           handle_final_response();
-        }
-        else
-        {
-          pj_grp_lock_release(_tsx->grp_lock);
         }
       }
     }
@@ -2183,19 +2202,13 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
       // we've not received a response from on any other UAC
       // transactions then keep this as the best response.
       LOG_DEBUG("%s - Forked request", uac_data->name());
-      pj_grp_lock_acquire(_tsx->grp_lock);
 
       if (--_pending_targets == 0)
       {
         // Received responses on every UAC transaction, so
         // send the best response on the UAS transaction.
         LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
-        pj_grp_lock_release(_tsx->grp_lock);
         handle_final_response();
-      }
-      else
-      {
-        pj_grp_lock_release(_tsx->grp_lock);
       }
     }
     else
@@ -2347,6 +2360,9 @@ bool UASTransaction::redirect(std::string target,
 // exit_context must be called before the end of the method.
 void UASTransaction::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -2367,7 +2383,13 @@ void UASTransaction::exit_context()
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
   {
+    // Deleting the transaction implicitly releases the group lock.
     delete this;
+  }
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
   }
 }
 
@@ -2501,7 +2523,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
         break;
       }
 
-      status = pjsip_tsx_create_uac2(&mod_tu, uac_tdata, _tsx->grp_lock, &uac_tsx);
+      status = pjsip_tsx_create_uac2(&mod_tu, uac_tdata, _lock, &uac_tsx);
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Failed to create UAC transaction, %s",
@@ -2746,6 +2768,10 @@ UACTransaction::UACTransaction(UASTransaction* uas_data,
                                                        _pending_destroy(false),
                                                        _context_count(0)
 {
+  // Reference the transaction's group lock.
+  _lock = tsx->grp_lock;
+  pj_grp_lock_add_ref(tsx->grp_lock);
+
   _tsx->mod_data[mod_tu.id] = this;
 }
 
@@ -2755,7 +2781,7 @@ UACTransaction::~UACTransaction()
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (_uas_data != NULL)
@@ -2777,6 +2803,9 @@ UACTransaction::~UACTransaction()
   }
 
   _tsx = NULL;
+
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
 }
 
 // Gets a UACTransaction from a PJSIP transaction, if one exists.
@@ -2917,12 +2946,10 @@ void UACTransaction::send_request()
 // Reason header.
 void UACTransaction::cancel_pending_tsx(int st_code)
 {
+  enter_context();
   if (_tsx != NULL)
   {
-    enter_context();
-
     LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
-    pj_grp_lock_acquire(_tsx->grp_lock);
     if (_tsx->status_code < 200)
     {
       pjsip_tx_data *cancel;
@@ -2953,10 +2980,8 @@ void UACTransaction::cancel_pending_tsx(int st_code)
         LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());
       }
     }
-    pj_grp_lock_release(_tsx->grp_lock);
-
-    exit_context();
   }
+  exit_context();
 }
 
 // Notification that the underlying PJSIP transaction has changed state.
@@ -3025,6 +3050,9 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 // exit_context must be called before the end of the method.
 void UACTransaction::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -3045,7 +3073,13 @@ void UACTransaction::exit_context()
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
   {
+    // Deleting the transaction implicitly releases the group lock.
     delete this;
+  } 
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
   }
 }
 
