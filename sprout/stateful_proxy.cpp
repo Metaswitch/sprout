@@ -501,7 +501,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Create the transaction.  This implicitly enters its context, so we're
-  // sage to operate on it (and have to exit its context below).
+  // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, &uas_data);
   if (status != PJ_SUCCESS)
   {
