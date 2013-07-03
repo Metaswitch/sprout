@@ -67,6 +67,20 @@ struct target
   pjsip_uri* uri;
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
+  int liveness_timeout;
+
+  // Default constructor.
+  target() :
+    from_store(PJ_FALSE),
+    upstream_route(PJ_FALSE),
+    aor(),
+    binding_id(),
+    uri(NULL),
+    paths(),
+    transport(NULL),
+    liveness_timeout(0)
+  {
+  }
 };
 typedef std::list<target> target_list;
 
@@ -274,6 +288,12 @@ private:
 
   AsChain* _as_chain;
   size_t _index;
+  bool _default_handling;
+
+  /// Application server timeouts (in seconds).
+  static const int AS_TIMEOUT_CONTINUE = 2;
+  static const int AS_TIMEOUT_TERMINATE = 4;
+
 };
 
 

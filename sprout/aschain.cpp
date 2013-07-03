@@ -224,6 +224,9 @@ AsChainLink::on_initial_request(CallServices* call_services,
   {
     std::string as_uri_str = application_server.server_name;
 
+    // Store the default handling as we may need it later.
+    _default_handling = application_server.default_handling;
+
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
     // except that ifchandler doesn't have a handy pool to use.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
@@ -248,9 +251,18 @@ AsChainLink::on_initial_request(CallServices* call_services,
 
     // Start defining the new target.
     target* as_target = new target;
-    as_target->from_store = PJ_FALSE;
-    as_target->upstream_route = PJ_FALSE;
-    as_target->transport = NULL;
+
+    // Set the liveness timeout value based on the default handling defined
+    // on the application server.  (Don't use ?: as it hits a GCC bug in
+    // UT builds.)
+    if (_default_handling)
+    {
+      as_target->liveness_timeout = AS_TIMEOUT_CONTINUE;
+    }
+    else
+    {
+      as_target->liveness_timeout = AS_TIMEOUT_TERMINATE;
+    }
 
     // Request-URI should remain unchanged
     as_target->uri = tdata->msg->line.req.uri;

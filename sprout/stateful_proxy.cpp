@@ -1255,10 +1255,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
   {
     LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
     target target;
-    target.from_store = PJ_FALSE;
-    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
-    target.transport = NULL;
     targets.push_back(target);
     return;
   }
@@ -1272,10 +1269,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
   {
     LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
     target target;
-    target.from_store = PJ_FALSE;
-    target.upstream_route = PJ_FALSE;
     target.uri = (pjsip_uri*)req_uri;
-    target.transport = NULL;
 
     if ((bgcf_service) &&
         (PJSIP_URI_SCHEME_IS_SIP(req_uri)))
@@ -1313,7 +1307,6 @@ void proxy_calculate_targets(pjsip_msg* msg,
              ((pjsip_sip_uri*)upstream_proxy)->host.slen,
              ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
     target target;
-    target.from_store = PJ_FALSE;
     target.upstream_route = PJ_TRUE;
     if ((PJSIP_URI_SCHEME_IS_SIP(req_uri)) &&
         (!PJUtils::is_home_domain((pjsip_uri*)req_uri)))
@@ -1400,10 +1393,10 @@ void proxy_calculate_targets(pjsip_msg* msg,
             ordered.insert(p);
           }
 
-        int num_contacts = 0;
-        for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
-             num_contacts < max_targets;
-             ++i)
+          int num_contacts = 0;
+          for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
+               num_contacts < max_targets;
+               ++i)
           {
             target_bindings.push_back(i->second);
             num_contacts++;
@@ -1420,11 +1413,9 @@ void proxy_calculate_targets(pjsip_msg* msg,
         bool useable_contact = true;
         target target;
         target.from_store = PJ_TRUE;
-        target.upstream_route = PJ_FALSE;
         target.aor = aor;
         target.binding_id = i->first;
         target.uri = PJUtils::uri_from_string(binding->_uri, pool);
-        target.transport = NULL;
         if (target.uri == NULL)
         {
           LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
@@ -1583,16 +1574,16 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
                                pjsip_rx_data* rdata,
                                pjsip_tx_data* tdata,
                                TrustBoundary* trust) :
-                                                         _tsx(tsx),
-                                                         _num_targets(0),
-                                                         _pending_targets(0),
-                                                         _ringing(PJ_FALSE),
-                                                         _req(tdata),
-                                                         _best_rsp(NULL),
-                                                         _trust(trust),
-                                                         _proxy(NULL),
-                                                         _pending_destroy(false),
-                                                         _context_count(0)
+  _tsx(tsx),
+  _num_targets(0),
+  _pending_targets(0),
+  _ringing(PJ_FALSE),
+  _req(tdata),
+  _best_rsp(NULL),
+  _trust(trust),
+  _proxy(NULL),
+  _pending_destroy(false),
+  _context_count(0)
 {
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1625,7 +1616,7 @@ UASTransaction::~UASTransaction()
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (method() == PJSIP_INVITE_METHOD)
@@ -2736,17 +2727,22 @@ bool UASTransaction::redirect_int(pjsip_uri* target,
 UACTransaction::UACTransaction(UASTransaction* uas_data,
                                int target,
                                pjsip_transaction* tsx,
-                               pjsip_tx_data *tdata) : _uas_data(uas_data),
-                                                       _target(target),
-                                                       _tsx(tsx),
-                                                       _tdata(tdata),
-                                                       _from_store(false),
-                                                       _aor(),
-                                                       _binding_id(),
-                                                       _pending_destroy(false),
-                                                       _context_count(0)
+                               pjsip_tx_data *tdata) :
+  _uas_data(uas_data),
+  _target(target),
+  _tsx(tsx),
+  _tdata(tdata),
+  _from_store(false),
+  _aor(),
+  _binding_id(),
+  _pending_destroy(false),
+  _context_count(0)
 {
+  // Set a reference from the PJSIP transaction to this object.
   _tsx->mod_data[mod_tu.id] = this;
+
+  // Initialise the liveness timer.
+  pj_timer_entry_init(&_liveness_timer, 0, (void*)this, &liveness_timer_callback);
 }
 
 UACTransaction::~UACTransaction()
@@ -2755,7 +2751,7 @@ UACTransaction::~UACTransaction()
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (_uas_data != NULL)
@@ -2767,6 +2763,12 @@ UACTransaction::~UACTransaction()
   {
     pjsip_tx_data_dec_ref(_tdata);
     _tdata = NULL;
+  }
+
+  if (_liveness_timer.id == LIVENESS_TIMER)
+  {
+    // The liveness timer is running, so cancel it.
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
   }
 
   if ((_tsx != NULL) &&
@@ -2836,11 +2838,14 @@ void UACTransaction::set_target(const struct target& target)
      };
   }
 
+  // Store the liveness timeout.
+  _liveness_timeout = target.liveness_timeout;
+
+  // Add all the paths as a sequence of Route headers.
   for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
        pit != target.paths.end();
        ++pit)
   {
-    // We've got a path that should be added as a Route header.
     LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s",
               ((pjsip_sip_uri*)*pit)->user.slen, ((pjsip_sip_uri*)*pit)->user.ptr,
               (((pjsip_sip_uri*)*pit)->user.slen != 0) ? "@" : "",
@@ -2907,6 +2912,16 @@ void UACTransaction::send_request()
 
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.
+  }
+  else
+  {
+    // Send the request successfully.
+    if (_liveness_timeout != 0)
+    {
+      _liveness_timer.id = LIVENESS_TIMER;
+      pj_time_val delay = {_liveness_timeout, 0};
+      pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
+    }
   }
   _tdata = NULL;
 
@@ -2978,8 +2993,8 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
     _uas_data->on_new_client_response(this, rdata);
 
-    if (rdata->msg_info.msg->line.status.code == SIP_STATUS_FLOW_FAILED &&
-        _from_store)
+    if ((rdata->msg_info.msg->line.status.code == SIP_STATUS_FLOW_FAILED) &&
+        (_from_store))
     {
       // We're the auth proxy and the flow we used failed, delete the
       // record of the flow.
@@ -3019,6 +3034,36 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
   exit_context();
 }
+
+
+/// Handle the liveness timer expiring on this transaction.
+void UACTransaction::liveness_timer_expired()
+{
+  enter_context();
+
+  if ((_tsx->state == PJSIP_TSX_STATE_NULL) ||
+      (_tsx->state == PJSIP_TSX_STATE_CALLING))
+  {
+    // The transaction is still in NULL or CALLING state, so we've not
+    // received any response (provisional or final) from the downstream UAS.
+    // Terminate the transaction and send a timeout response upstream.
+    pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
+  }
+
+  exit_context();
+}
+
+
+/// Static method called by PJSIP when a liveness timer expires.  The instance
+/// is stored in the user_data field of the timer entry.
+void UACTransaction::liveness_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
+{
+  if (entry->id == LIVENESS_TIMER)
+  {
+    ((UACTransaction*)entry->user_data)->liveness_timer_expired();
+  }
+}
+
 
 // Enters this transaction's context.  While in the transaction's
 // context, it will not be destroyed.  Whenever enter_context is called,

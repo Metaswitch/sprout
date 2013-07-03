@@ -220,6 +220,10 @@ public:
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
+  void liveness_timer_expired();
+
+  static void liveness_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
+
   // Enters/exits this transaction's context.  While in the transaction's
   // context, it will not be destroyed.  enter_context and exit_context should
   // always be called at the start and end of any entry point (e.g. call from
@@ -233,16 +237,20 @@ public:
   friend class UASTransaction;
 
 private:
-  UASTransaction      *_uas_data;
+  UASTransaction*      _uas_data;
   int                  _target;
-  pjsip_transaction   *_tsx;
-  pjsip_tx_data       *_tdata;
+  pjsip_transaction*   _tsx;
+  pjsip_tx_data*       _tdata;
   pj_bool_t            _from_store; /* If true, the aor and binding_id
                                        identify the binding. */
   pj_str_t             _aor;
   pj_str_t             _binding_id;
   bool                 _pending_destroy;
   int                  _context_count;
+
+  int                  _liveness_timeout;
+  pj_timer_entry       _liveness_timer;
+  static const int LIVENESS_TIMER = 1;
 };
 
 pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
