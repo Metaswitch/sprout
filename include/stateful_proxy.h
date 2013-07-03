@@ -182,7 +182,7 @@ private:
   AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
-  pj_grp_lock_t*       _lock;
+  pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
   int                  _pending_targets;
@@ -236,7 +236,7 @@ public:
 private:
   UASTransaction      *_uas_data;
   int                  _target;
-  pj_grp_lock_t       *_lock;
+  pj_grp_lock_t       *_lock;       //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction   *_tsx;
   pjsip_tx_data       *_tdata;
   pj_bool_t            _from_store; /* If true, the aor and binding_id

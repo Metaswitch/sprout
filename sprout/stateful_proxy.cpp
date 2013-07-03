@@ -500,6 +500,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // Create the transaction.  This implicitly enters its context, so we're
+  // sage to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, &uas_data);
   if (status != PJ_SUCCESS)
   {
@@ -1619,6 +1621,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _tsx->mod_data[mod_tu.id] = this;
 }
 
+/// UASTransaction destructor.  On entry, the group lock must be held.  On
+/// exit, it will have been released (and possibly destroyed).
 UASTransaction::~UASTransaction()
 {
   LOG_DEBUG("UASTransaction destructor");
@@ -2775,6 +2779,8 @@ UACTransaction::UACTransaction(UASTransaction* uas_data,
   _tsx->mod_data[mod_tu.id] = this;
 }
 
+/// UACTransaction destructor.  On entry, the group lock must be held.  On
+/// exit, it will have been released (and possibly destroyed).
 UACTransaction::~UACTransaction()
 {
   pj_assert(_context_count == 0);
