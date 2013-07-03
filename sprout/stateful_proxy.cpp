@@ -2360,8 +2360,10 @@ bool UASTransaction::redirect(std::string target,
 }
 
 // Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+// context, processing on this and associated transactions will be
+// single-threaded and the transaction will not be destroyed.  Whenever
+// enter_context is called, exit_context must be called before the end of the
+// method.
 void UASTransaction::enter_context()
 {
   // Take the group lock.
@@ -3052,8 +3054,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 }
 
 // Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+// context, processing on this and associated transactions will be
+// single-threaded and the transaction will not be destroyed.  Whenever
+// enter_context is called, exit_context must be called before the end of the
+// method.
 void UACTransaction::enter_context()
 {
   // Take the group lock.
