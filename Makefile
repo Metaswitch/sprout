@@ -17,7 +17,7 @@ DEB_NAMES := sprout-libs sprout sprout-dbg bono bono-dbg restund clearwater-sip-
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := pjsip jsoncpp c-ares curl libevent libmemcached libre restund openssl websocketpp sipp
+SUBMODULES := pjsip jsoncpp c-ares curl libevent libmemcached libre restund openssl websocketpp sipp thrift cassandra
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk

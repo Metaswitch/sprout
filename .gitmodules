@@ -40,3 +40,9 @@
 [submodule "modules/websocketpp"]
 	path = modules/websocketpp
 	url = git@github.com:zaphoyd/websocketpp.git
+[submodule "modules/thrift"]
+	path = modules/thrift
+	url = https://git-wip-us.apache.org/repos/asf/thrift.git
+[submodule "modules/cassandra"]
+	path = modules/cassandra
+	url = http://git-wip-us.apache.org/repos/asf/cassandra.git
