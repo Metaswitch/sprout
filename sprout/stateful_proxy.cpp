@@ -1772,6 +1772,8 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& servi
 {
   AsChainLink as_chain_link;
 
+  LOG_DEBUG("Handle incoming transaction request, serving state = %s", serving_state.to_string().c_str());
+
   if (serving_state.is_set())
   {
     if (serving_state.original_dialog().is_set())
@@ -2269,7 +2271,8 @@ pj_status_t UASTransaction::handle_final_response()
       _best_rsp->msg->line.status.code = PJSIP_SC_REQUEST_TIMEOUT;
 
       // Redirect the dialog to the next AS in the chain.
-      ServingState serving_state(&_as_chain_link.session_case(), _as_chain_link);
+      ServingState serving_state(&_as_chain_link.session_case(),
+                                 _as_chain_link.next());
       handle_non_cancel(serving_state);
     }
     else
