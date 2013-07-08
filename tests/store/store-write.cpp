@@ -245,7 +245,7 @@ int main (int argc, char *argv[])
   long end_time = time(NULL);
 
   printf("Completed writing %d records in %ld seconds\n", num_records * num_threads, end_time - start_time);
-  printf("  = %2g r/w operations per second\n", (double)(num_records * num_threads) / (double)(end_time - start_time));
+  printf("  = %2g read/write operations per second\n", (double)(num_records * num_threads) / (double)(end_time - start_time));
 
   exit(0);
 }
