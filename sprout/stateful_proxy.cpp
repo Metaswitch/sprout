@@ -141,6 +141,7 @@ static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
 static AsChainTable* as_chain_table;
+static HSSConnection* hss;
 
 static bool ibcf = false;
 
@@ -499,6 +500,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // Create the transaction.  This implicitly enters its context, so we're
+  // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, &uas_data);
   if (status != PJ_SUCCESS)
   {
@@ -512,8 +515,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
                                NULL, NULL);
     return;
   }
-
-  uas_data->enter_context();
 
   if ((!edge_proxy) &&
       (uas_data->method() == PJSIP_INVITE_METHOD))
@@ -676,7 +677,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   {
     // Request received on a known flow, so check it is authenticated.
     pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
     {
       LOG_DEBUG("Request received on authenticated client flow.");
       src_flow->dec_ref();
@@ -724,6 +725,28 @@ void proxy_handle_double_rr(pjsip_tx_data* tdata)
         pj_list_erase(r2);
       }
     }
+  }
+}
+
+
+/// Find and remove P-Preferred-Identity headers from the message.
+static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip_uri*>& identities)
+{
+  pjsip_routing_hdr* p_preferred_id;
+  p_preferred_id = (pjsip_routing_hdr*)
+                       pjsip_msg_find_hdr_by_name(tdata->msg,
+                                                  &STR_P_PREFERRED_IDENTITY,
+                                                  NULL);
+
+  while (p_preferred_id != NULL)
+  {
+    identities.push_back((pjsip_uri*)&p_preferred_id->name_addr);
+
+    void* next_hdr = p_preferred_id->next;
+
+    pj_list_erase(p_preferred_id);
+
+    p_preferred_id = (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &STR_P_PREFERRED_IDENTITY, next_hdr);
   }
 }
 
@@ -795,14 +818,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
-    // Treat the REGISTER request as a keepalive.  In theory we should
-    // support STUN keepalives from clients, but only outbound aware
-    // clients will support STUN keepalive so we don't rely on this.
-    src_flow->keepalive();
-
-    // @@@TODO Use P-Asserted-Identity for authentication
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)))
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
@@ -883,15 +900,84 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
           // Message on a known client flow.
           LOG_DEBUG("Message received on known client flow");
 
-          // @@@TODO Use P-Asserted-Identity for authentication
-          pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-          if (src_flow->authenticated((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)))
+          // Get all the preferred identities from the message and remove
+          // the P-Preferred-Identity headers.
+          std::vector<pjsip_uri*> identities;
+          extract_preferred_identities(tdata, identities);
+
+          if (identities.size() > 2)
           {
-            // Client has been authenticated, so we can trust it for the
-            // purposes of routing SIP messages and don't need to challenge
-            // again.
-            *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
-            trusted = true;
+            // Cannot have more than two preferred identities.
+            LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
+            PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            return PJ_ENOTFOUND;
+          }
+          else if (identities.size() == 0)
+          {
+            // No identities specified, so check there is valid default identity
+            // and use it for the P-Asserted-Identity.
+            LOG_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
+            std::string aid = src_flow->default_identity();
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 1)
+          {
+            // Only one preferred identity specified.
+            LOG_DEBUG("Request has one P-Preferred-Identity");
+            if ((!PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                (!PJSIP_URI_SCHEME_IS_TEL(identities[0])))
+            {
+              // Preferred identity must be sip, sips or tel URI.
+              LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check the preferred identity is authorized and get the corresponding
+            // asserted identity.
+            std::string aid = src_flow->asserted_identity(identities[0]);
+
+            if (aid.length() > 0)
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid);
+            }
+          }
+          else if (identities.size() == 2)
+          {
+            // Two preferred identities specified.
+            LOG_DEBUG("Request has two P-Preferred-Identitys");
+            if (!(((PJSIP_URI_SCHEME_IS_SIP(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_TEL(identities[1]))) ||
+                  ((PJSIP_URI_SCHEME_IS_TEL(identities[0])) &&
+                   (PJSIP_URI_SCHEME_IS_SIP(identities[1])))))
+            {
+              // One identity must be sip or sips URI and the other must be
+              // tel URI
+              LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
+              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              return PJ_ENOTFOUND;
+            }
+
+            // Check both preferred identities are authorized and get the
+            // corresponding asserted identities.
+            std::string aid1 = src_flow->asserted_identity(identities[0]);
+            std::string aid2 = src_flow->asserted_identity(identities[1]);
+
+            if ((aid1.length() > 0) && (aid2.length() > 0))
+            {
+              *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+              trusted = true;
+              PJUtils::add_asserted_identity(tdata, aid1);
+              PJUtils::add_asserted_identity(tdata, aid2);
+            }
           }
         }
       }
@@ -965,7 +1051,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       }
       else
       {
-        LOG_WARNING("Discard ACK from untrusted source no directed to Sprout");
+        LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
       }
       return PJ_ENOTFOUND;
     }
@@ -1155,7 +1241,8 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
                              const TrustBoundary* trust,
                              target_list& targets,
-                             int max_targets)
+                             int max_targets,
+                             SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
@@ -1269,100 +1356,111 @@ void proxy_calculate_targets(pjsip_msg* msg,
   // described above, this implies that the element is responsible for the
   // domain in the Request-URI, and the element MAY use whatever mechanism
   // it desires to determine where to send the request.
-  if (store)
+  if ((store) && (hss))
   {
-    // Look up the target in the registration data store.
-    std::string aor = PJUtils::aor_from_uri(req_uri);
-    LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegData::AoR* aor_data = store->get_aor_data(aor);
-
-    // Pick up to max_targets bindings to attempt to contact.  Since
-    // some of these may be stale, and we don't want stale bindings to
-    // push live bindings out, we sort by expiry time and pick those
-    // with the most distant expiry times.  See bug 45.
-    std::list<RegData::AoR::Bindings::value_type> target_bindings;
-    if (aor_data != NULL)
+    // Determine the canonical public ID, and look up the set of associated
+    // URIs on the HSS.
+    std::string public_id = PJUtils::aor_from_uri(req_uri);
+    Json::Value* uris = hss->get_associated_uris(public_id, trail);
+    if ((uris != NULL) &&
+        (uris->size() > 0))
     {
-      const RegData::AoR::Bindings& bindings = aor_data->bindings();
-      if ((int)bindings.size() <= max_targets)
+      // Take the first associated URI as the AOR.
+      std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+
+      // Look up the target in the registration data store.
+      LOG_INFO("Look up targets in registration store: %s", aor.c_str());
+      RegData::AoR* aor_data = store->get_aor_data(aor);
+
+      // Pick up to max_targets bindings to attempt to contact.  Since
+      // some of these may be stale, and we don't want stale bindings to
+      // push live bindings out, we sort by expiry time and pick those
+      // with the most distant expiry times.  See bug 45.
+      std::list<RegData::AoR::Bindings::value_type> target_bindings;
+      if (aor_data != NULL)
       {
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-             i != bindings.end();
-             ++i)
+        const RegData::AoR::Bindings& bindings = aor_data->bindings();
+        if ((int)bindings.size() <= max_targets)
         {
-          target_bindings.push_back(*i);
+          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+               i != bindings.end();
+               ++i)
+          {
+            target_bindings.push_back(*i);
+          }
         }
-      }
-      else
-      {
-        std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-             i != bindings.end();
-             ++i)
+        else
         {
-          std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
-          ordered.insert(p);
-        }
+          std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
+          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+               i != bindings.end();
+               ++i)
+          {
+            std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
+            ordered.insert(p);
+          }
 
         int num_contacts = 0;
         for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
              num_contacts < max_targets;
              ++i)
-        {
-          target_bindings.push_back(i->second);
-          num_contacts++;
-        }
-      }
-    }
-
-    for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
-         i != target_bindings.end();
-         ++i)
-    {
-      RegData::AoR::Binding* binding = i->second;
-      LOG_DEBUG("Target = %s", binding->_uri.c_str());
-      bool useable_contact = true;
-      target target;
-      target.from_store = PJ_TRUE;
-      target.upstream_route = PJ_FALSE;
-      target.aor = aor;
-      target.binding_id = i->first;
-      target.uri = PJUtils::uri_from_string(binding->_uri, pool);
-      target.transport = NULL;
-      if (target.uri == NULL)
-      {
-        LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
-                    binding->_uri.c_str(), aor.c_str());
-        useable_contact = false;
-      }
-      else
-      {
-        for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
-             j != binding->_path_headers.end();
-             ++j)
-        {
-          pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
-          if (path != NULL)
           {
-            target.paths.push_back(PJUtils::uri_from_string(*j, pool));
-          }
-          else
-          {
-            LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
-                        binding->_uri.c_str(), aor.c_str(), (*j).c_str());
-            useable_contact = false;
-            break;
+            target_bindings.push_back(i->second);
+            num_contacts++;
           }
         }
       }
 
-      if (useable_contact)
+      for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
+           i != target_bindings.end();
+           ++i)
       {
-        targets.push_back(target);
-      }
-    }
+        RegData::AoR::Binding* binding = i->second;
+        LOG_DEBUG("Target = %s", binding->_uri.c_str());
+        bool useable_contact = true;
+        target target;
+        target.from_store = PJ_TRUE;
+        target.upstream_route = PJ_FALSE;
+        target.aor = aor;
+        target.binding_id = i->first;
+        target.uri = PJUtils::uri_from_string(binding->_uri, pool);
+        target.transport = NULL;
+        if (target.uri == NULL)
+        {
+          LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
+                      binding->_uri.c_str(), aor.c_str());
+          useable_contact = false;
+        }
+        else
+        {
+          for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
+               j != binding->_path_headers.end();
+               ++j)
+          {
+            pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
+            if (path != NULL)
+            {
+              target.paths.push_back(path);
+            }
+            else
+            {
+              LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
+                          binding->_uri.c_str(), aor.c_str(), (*j).c_str());
+              useable_contact = false;
+              break;
+            }
+          }
+        }
 
-    delete aor_data;
+        if (useable_contact)
+        {
+          targets.push_back(target);
+        }
+      }
+
+      delete aor_data;
+    }
+    delete uris;
   }
 }
 
@@ -1411,7 +1509,6 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
   pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
@@ -1437,21 +1534,39 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
 
       if (flow_data != NULL)
       {
-        // The response correlates to an active flow.
-        if (pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL) != NULL)
+        // The response correlates to an active flow.  Check the contact
+        // headers and expiry header to find when the last contacts will
+        // expire.
+        int max_expires = PJUtils::max_expires(rdata->msg_info.msg);
+        LOG_DEBUG("Maximum contact expiry is %d", max_expires);
+
+        // Go through the list of URIs covered by this registration setting
+        // them on the flow.  This is either the list in the P-Associated-URI
+        // header, if supplied, or the URI in the To header.
+        pjsip_route_hdr* p_assoc_uri = (pjsip_route_hdr*)
+                             pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                        &STR_P_ASSOCIATED_URI,
+                                                        NULL);
+        if (p_assoc_uri != NULL)
         {
-          // There are active contacts, so consider the flow authenticated.
-          // @@@TODO Also authenticate any attached P-Associated-ID headers.
-          LOG_INFO("Mark client flow as authenticated");
-          flow_data->set_authenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          // Use P-Associated-URIs list as list of authenticated URIs.
+          LOG_DEBUG("Found P-Associated-URI header");
+          bool is_default = true;
+          while (p_assoc_uri != NULL)
+          {
+            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr, is_default, max_expires);
+            p_assoc_uri = (pjsip_route_hdr*)
+                        pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                   &STR_P_ASSOCIATED_URI,
+                                                   p_assoc_uri->next);
+            is_default = false;
+          }
         }
         else
         {
-          // The are no active contacts, so the client is effectively
-          // unregistered. Remove the user from the authenticated set, so
-          // the next REGISTER is challenged.
-          LOG_INFO("Mark client flow as un-authenticated");
-          flow_data->set_unauthenticated((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri));
+          // Use URI in To header as authenticated URIs.
+          LOG_DEBUG("No P-Associated-URI, use URI in To header.");
+          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri, true, max_expires);
         }
 
         // Decrement the reference to the flow data
@@ -1484,6 +1599,10 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
     _uac_data[ii] = NULL;
   }
 
+  // Reference the transaction's group lock.
+  _lock = tsx->grp_lock;
+  pj_grp_lock_add_ref(tsx->grp_lock);
+
   // Set the trail identifier for the transaction using the trail ID on
   // the original message.
   set_trail(_tsx, get_trail(rdata));
@@ -1502,6 +1621,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _tsx->mod_data[mod_tu.id] = this;
 }
 
+/// UASTransaction destructor.  On entry, the group lock must be held.  On
+/// exit, it will have been released (and possibly destroyed).
 UASTransaction::~UASTransaction()
 {
   LOG_DEBUG("UASTransaction destructor");
@@ -1510,7 +1631,7 @@ UASTransaction::~UASTransaction()
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (method() == PJSIP_INVITE_METHOD)
@@ -1565,10 +1686,14 @@ UASTransaction::~UASTransaction()
   }
   _victims.clear();
 
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
+
   LOG_DEBUG("UASTransaction destructor completed");
 }
 
-// Creates a PJSIP transaction and a corresponding UASTransaction.
+// Creates a PJSIP transaction and a corresponding UASTransaction.  On
+// success, we will be in the transaction's context.
 //
 // This should all be done in the UASTransaction constructor, but creating a
 // PJSIP transaction can fail, and it's hard to fail a constructor.
@@ -1579,19 +1704,38 @@ pj_status_t UASTransaction::create(pjsip_rx_data* rdata,
                                    TrustBoundary* trust,
                                    UASTransaction** uas_data_ptr)
 {
+  // Create a group lock, and take it.  This avoids the transaction being
+  // destroyed before we even get our hands on it.
+  pj_grp_lock_t* lock;
+  pj_status_t status = pj_grp_lock_create(stack_data.pool, NULL, &lock);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+  pj_grp_lock_add_ref(lock);
+  pj_grp_lock_acquire(lock);
+
   // Create a transaction for the UAS side.  We do this before looking
   // up targets because calculating targets may involve interacting
   // with an external database, and we need the transaction in place
   // early to ensure CANCEL gets handled correctly.
   pjsip_transaction* uas_tsx;
-  pj_status_t status = pjsip_tsx_create_uas(&mod_tu, rdata, &uas_tsx);
+  status = pjsip_tsx_create_uas2(&mod_tu, rdata, lock, &uas_tsx);
   if (status != PJ_SUCCESS)
   {
+    pj_grp_lock_release(lock);
+    pj_grp_lock_dec_ref(lock);
     return status;
   }
 
   // Allocate UAS data to keep track of the transaction.
   *uas_data_ptr = new UASTransaction(uas_tsx, rdata, tdata, trust);
+
+  // Enter the transaction's context, and then release our copy of the
+  // group lock.
+  (*uas_data_ptr)->enter_context();
+  pj_grp_lock_release(lock);
+  pj_grp_lock_dec_ref(lock);
 
   return PJ_SUCCESS;
 }
@@ -1831,7 +1975,7 @@ void UASTransaction::handle_outgoing_non_cancel(target* target)
   else
   {
     // Find targets.
-    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING);
+    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING, trail());
   }
 
   if (targets.size() == 0)
@@ -1988,7 +2132,6 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
         // Final, non-OK response.  Is this the "best" response
         // received so far?
         LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_data->name());
-        pj_grp_lock_acquire(_tsx->grp_lock);
         if ((_best_rsp == NULL) ||
             (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
         {
@@ -2016,12 +2159,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
           // call services and then send the best response on the UAS
           // transaction.
           LOG_DEBUG("%s - All UAC responded", name());
-          pj_grp_lock_release(_tsx->grp_lock);
           handle_final_response();
-        }
-        else
-        {
-          pj_grp_lock_release(_tsx->grp_lock);
         }
       }
     }
@@ -2068,19 +2206,13 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
       // we've not received a response from on any other UAC
       // transactions then keep this as the best response.
       LOG_DEBUG("%s - Forked request", uac_data->name());
-      pj_grp_lock_acquire(_tsx->grp_lock);
 
       if (--_pending_targets == 0)
       {
         // Received responses on every UAC transaction, so
         // send the best response on the UAS transaction.
         LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
-        pj_grp_lock_release(_tsx->grp_lock);
         handle_final_response();
-      }
-      else
-      {
-        pj_grp_lock_release(_tsx->grp_lock);
       }
     }
     else
@@ -2228,10 +2360,15 @@ bool UASTransaction::redirect(std::string target,
 }
 
 // Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+// context, processing on this and associated transactions will be
+// single-threaded and the transaction will not be destroyed.  Whenever
+// enter_context is called, exit_context must be called before the end of the
+// method.
 void UASTransaction::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -2252,7 +2389,13 @@ void UASTransaction::exit_context()
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
   {
+    // Deleting the transaction implicitly releases the group lock.
     delete this;
+  }
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
   }
 }
 
@@ -2386,7 +2529,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
         break;
       }
 
-      status = pjsip_tsx_create_uac2(&mod_tu, uac_tdata, _tsx->grp_lock, &uac_tsx);
+      status = pjsip_tsx_create_uac2(&mod_tu, uac_tdata, _lock, &uac_tsx);
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Failed to create UAC transaction, %s",
@@ -2640,16 +2783,22 @@ UACTransaction::UACTransaction(UASTransaction* uas_data,
                                                        _pending_destroy(false),
                                                        _context_count(0)
 {
+  // Reference the transaction's group lock.
+  _lock = tsx->grp_lock;
+  pj_grp_lock_add_ref(tsx->grp_lock);
+
   _tsx->mod_data[mod_tu.id] = this;
 }
 
+/// UACTransaction destructor.  On entry, the group lock must be held.  On
+/// exit, it will have been released (and possibly destroyed).
 UACTransaction::~UACTransaction()
 {
   pj_assert(_context_count == 0);
 
   if (_tsx != NULL)
   {
-  _tsx->mod_data[mod_tu.id] = NULL;
+    _tsx->mod_data[mod_tu.id] = NULL;
   }
 
   if (_uas_data != NULL)
@@ -2671,6 +2820,9 @@ UACTransaction::~UACTransaction()
   }
 
   _tsx = NULL;
+
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
 }
 
 // Gets a UACTransaction from a PJSIP transaction, if one exists.
@@ -2688,6 +2840,27 @@ UACTransaction* UACTransaction::get_from_tsx(pjsip_transaction* tsx)
 void UACTransaction::set_target(const struct target& target)
 {
   enter_context();
+
+  if (target.from_store)
+  {
+    // This target came from the registration store.  Before we overwrite the
+    // URI, extract its AOR and write it to the P-Called-Party-ID header.
+    static const pj_str_t called_party_id_hdr_name = pj_str("P-Called-Party-ID");
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(_tdata->msg, &called_party_id_hdr_name, NULL);
+    if (hdr)
+    {
+      pj_list_erase(hdr);
+    }
+    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri) + ">");
+    pj_str_t called_party_id;
+    pj_strdup2(_tdata->pool,
+               &called_party_id,
+               name_addr_str.c_str());
+    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(_tdata->pool,
+                                                      &called_party_id_hdr_name,
+                                                      &called_party_id);
+    pjsip_msg_add_hdr(_tdata->msg, hdr);
+  }
 
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
@@ -2790,12 +2963,10 @@ void UACTransaction::send_request()
 // Reason header.
 void UACTransaction::cancel_pending_tsx(int st_code)
 {
+  enter_context();
   if (_tsx != NULL)
   {
-    enter_context();
-
     LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
-    pj_grp_lock_acquire(_tsx->grp_lock);
     if (_tsx->status_code < 200)
     {
       pjsip_tx_data *cancel;
@@ -2826,10 +2997,8 @@ void UACTransaction::cancel_pending_tsx(int st_code)
         LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());
       }
     }
-    pj_grp_lock_release(_tsx->grp_lock);
-
-    exit_context();
   }
+  exit_context();
 }
 
 // Notification that the underlying PJSIP transaction has changed state.
@@ -2894,10 +3063,15 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 }
 
 // Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+// context, processing on this and associated transactions will be
+// single-threaded and the transaction will not be destroyed.  Whenever
+// enter_context is called, exit_context must be called before the end of the
+// method.
 void UACTransaction::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -2918,7 +3092,13 @@ void UACTransaction::exit_context()
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
   {
+    // Deleting the transaction implicitly releases the group lock.
     delete this;
+  } 
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
   }
 }
 
@@ -2938,7 +3118,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
-                                BgcfService *bgcfService)
+                                BgcfService *bgcfService,
+                                HSSConnection* hss_connection)
 {
   pj_status_t status;
 
@@ -3007,6 +3188,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
   enum_service = enumService;
   bgcf_service = bgcfService;
+  hss = hss_connection;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

@@ -139,8 +139,6 @@ static void usage(void)
        "                            recycled).\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
-       " -A, --auth <sip-digest|ims-digest>\n"
-       "                            Use authentication\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
        " -M, --memstore <servers>   Use memcached store on comma-separated list of\n"
@@ -253,10 +251,10 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
           options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
           if (upstream_proxy_options.size() > 2)
           {
-            options->upstream_proxy_connections = atoi(upstream_proxy_options[1].c_str());
+            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
             if (upstream_proxy_options.size() > 3)
             {
-              options->upstream_proxy_recycle = atoi(upstream_proxy_options[2].c_str());
+              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
             }
           }
         }
@@ -276,12 +274,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->ibcf = PJ_TRUE;
       options->trusted_hosts = std::string(pj_optarg);
       fprintf(stdout, "IBCF mode enabled, trusted hosts = %s\n", pj_optarg);
-      break;
-
-    case 'A':
-      options->auth_enabled = PJ_TRUE;
-      options->auth_config = pj_optarg;
-      fprintf(stdout, "Enabling authentication %s\n", pj_optarg);
       break;
 
     case 'R':
@@ -549,7 +541,13 @@ int main(int argc, char *argv[])
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    Log::setLogger(new Logger(opt.log_directory, "sprout"));
+    // Work out the program name from argv[0], stripping anything before the final slash.
+    char* prog_name = argv[0];
+    char* slash_ptr = rindex(argv[0], '/');
+    if (slash_ptr != NULL) {
+      prog_name = slash_ptr + 1;
+    }
+    Log::setLogger(new Logger(opt.log_directory, prog_name));
   }
 
   if (opt.analytics_enabled)
@@ -626,18 +624,10 @@ int main(int argc, char *argv[])
   // Initialise the OPTIONS handling module.
   status = init_options();
 
-  if (opt.auth_enabled)
-  {
-    if (opt.auth_realm == "")
-    {
-      opt.auth_realm = opt.local_host;
-    }
-    LOG_STATUS("Enabling %s authentication", opt.auth_config.c_str());
-    status = init_authentication(opt.auth_realm, opt.auth_config, hss_connection, analytics_logger);
-  }
-
   if (!opt.edge_proxy)
   {
+    status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_file.empty())
     {
@@ -662,7 +652,8 @@ int main(int argc, char *argv[])
                                opt.trusted_hosts,
                                analytics_logger,
                                enum_service,
-                               bgcf_service);
+                               bgcf_service,
+                               hss_connection);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",
@@ -674,7 +665,7 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store, analytics_logger, ifc_handler);
+    status = init_registrar(registrar_store, hss_connection, analytics_logger, ifc_handler);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing registrar, %s",
