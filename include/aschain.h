@@ -238,6 +238,11 @@ public:
     return _as_chain->matches_target(tdata);
   }
 
+  bool default_handling() const
+  {
+    return _default_handling;
+  }
+
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
     /// The request has been completely handled. Processing should

@@ -1583,7 +1583,9 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _trust(trust),
   _proxy(NULL),
   _pending_destroy(false),
-  _context_count(0)
+  _context_count(0),
+  _as_chain_link(),
+  _victims()
 {
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1660,6 +1662,11 @@ UASTransaction::~UASTransaction()
     _proxy = NULL;
   }
 
+  if (_as_chain_link.is_set())
+  {
+    _as_chain_link.release();
+  }
+
   // Request destruction of any AsChains scheduled for destruction
   // along with this transaction. They are not actually deleted until
   // any concurrent threads have finished using them.
@@ -1716,14 +1723,11 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 /// Handle a non-CANCEL message.
 void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
-  // as_chain_link is deliberately *not* a member variable, because it
-  // is only required during this initial request - it is not used
-  // during the remainder of the transaction (hence *initial* filter
-  // criteria).
-  AsChainLink as_chain_link = handle_incoming_non_cancel(serving_state);
-
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   target* target = NULL;
+
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
 
   if ((!edge_proxy) &&
       ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
@@ -1731,28 +1735,27 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
   {
     // Do services and translation processing for requests targeted at this
     // node/home domain.
+    _as_chain_link = handle_incoming_non_cancel(serving_state);
 
     // Do incoming (originating) half.
-    disposition = handle_originating(as_chain_link, &target);
+    disposition = handle_originating(_as_chain_link, &target);
 
     if (disposition == AsChainLink::Disposition::Complete)
     {
-      if (!as_chain_link.is_set() || !as_chain_link.session_case().is_terminating())
+      if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
       {
         // We've completed the originating half and we don't yet have a
         // terminating chain: switch to terminating and look up iFCs
         // again.  The served user changes here.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        move_to_terminating_chain(as_chain_link);
+        move_to_terminating_chain(_as_chain_link);
       }
 
       // Do outgoing (terminating) half.
       LOG_DEBUG("Terminating half");
-      disposition = handle_terminating(as_chain_link, &target);
+      disposition = handle_terminating(_as_chain_link, &target);
     }
   }
-
-  as_chain_link.release();
 
   if (disposition != AsChainLink::Disposition::Stop)
   {
@@ -1767,9 +1770,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 // Handle the incoming half of a non-CANCEL message.
 AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
 {
-  // Strip any untrusted headers as required, so we don't pass them on.
-  _trust->process_request(_req);
-
   AsChainLink as_chain_link;
 
   if (serving_state.is_set())
@@ -2252,20 +2252,44 @@ pj_status_t UASTransaction::handle_final_response()
   {
     pjsip_tx_data *best_rsp = _best_rsp;
     int st_code = best_rsp->msg->line.status.code;
-    _best_rsp = NULL;
-    set_trail(best_rsp, trail());
-    rc = pjsip_tsx_send_msg(_tsx, best_rsp);
 
-    if ((method() == PJSIP_INVITE_METHOD) &&
-        (st_code == 200))
+    if (((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
+         ((st_code >= 500) && (st_code < 600))) &&
+        (_as_chain_link.is_set()) &&
+        (!_as_chain_link.complete()) &&
+        (_as_chain_link.default_handling()))
     {
-      // Terminate the UAS transaction (this needs to be done
-      // manually for INVITE 200 OK response, otherwise the
-      // transaction layer will wait for an ACK).  This will also
-      // cause all other pending UAC transactions to be cancelled.
-      LOG_DEBUG("%s - Terminate UAS INVITE transaction (non-forking case)",
-                _tsx->obj_name);
-      pjsip_tsx_terminate(_tsx, 200);
+      // Default handling was set to continue, and the status code is a
+      // failure that triggers default handling.
+      LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+
+      // Reset the best response to a 408 response to use if none of the targets responds.
+      // @TODO - what about other headers?  Also, do we need to do this in other
+      // redirect cases?
+      _best_rsp->msg->line.status.code = PJSIP_SC_REQUEST_TIMEOUT;
+
+      // Redirect the dialog to the next AS in the chain.
+      ServingState serving_state(&_as_chain_link.session_case(), _as_chain_link);
+      handle_non_cancel(serving_state);
+    }
+    else
+    {
+      // Send the best response back on the UAS transaction.
+      _best_rsp = NULL;
+      set_trail(best_rsp, trail());
+      rc = pjsip_tsx_send_msg(_tsx, best_rsp);
+
+      if ((method() == PJSIP_INVITE_METHOD) &&
+          (st_code == 200))
+      {
+        // Terminate the UAS transaction (this needs to be done
+        // manually for INVITE 200 OK response, otherwise the
+        // transaction layer will wait for an ACK).  This will also
+        // cause all other pending UAC transactions to be cancelled.
+        LOG_DEBUG("%s - Terminate UAS INVITE transaction (non-forking case)",
+                  _tsx->obj_name);
+        pjsip_tsx_terminate(_tsx, 200);
+      }
     }
   }
   return rc;

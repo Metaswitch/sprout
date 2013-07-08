@@ -67,7 +67,7 @@ class ServingState
 public:
   ServingState() :
     _session_case(NULL)
-    {
+  {
   }
 
   ServingState(const SessionCase* session_case,
@@ -200,6 +200,7 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
+  AsChainLink         _as_chain_link;
   std::list<AsChain*> _victims;  //< Objects to die along with the transaction.
 };
 
