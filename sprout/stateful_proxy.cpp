@@ -2482,7 +2482,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
       uac_data->cancel_pending_tsx(st_code);
 
       // Normal behaviour (that is, on receipt of a CANCEL on the UAS
-      // transaction, is to leave the UAC transaction connected to the UAS
+      // transaction), is to leave the UAC transaction connected to the UAS
       // transaction so the 487 response gets passed through.  However, in
       // cases where the CANCEL is initiated on this node (for example,
       // because the UAS transaction has already failed, or in call forwarding
