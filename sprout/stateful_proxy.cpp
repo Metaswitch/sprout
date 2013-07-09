@@ -583,7 +583,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // we receive final response from the UAC INVITE transaction.
   LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
-  uas_data->cancel_pending_uac_tsx(0);
+  uas_data->cancel_pending_uac_tsx(0, false);
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -3094,7 +3094,7 @@ void UACTransaction::exit_context()
   {
     // Deleting the transaction implicitly releases the group lock.
     delete this;
-  } 
+  }
   else
   {
     // Release the group lock.
