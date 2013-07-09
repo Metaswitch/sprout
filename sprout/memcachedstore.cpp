@@ -66,11 +66,12 @@ namespace RegData {
   /// e.g., "localhost:11211".
   RegData::Store* create_memcached_store(const std::list<std::string>& servers,
                                          ///< list of servers to be used
-                                         int connections)
+                                         int connections,
+                                         bool binary)
                                          ///< size of pool (used as init and
                                          /// max)
   {
-    return new MemcachedStore(servers, connections);
+    return new MemcachedStore(servers, connections, binary);
   }
 
   /// Destroy a store object which used the memcached implementation.
@@ -84,10 +85,9 @@ namespace RegData {
   /// For syntax of servers see
   /// http://docs.libmemcached.org/libmemcached_configuration.html#description,
   /// e.g., "localhost:11211".
-  MemcachedStore::MemcachedStore(const std::list<std::string>& servers,
-                                 ///< list of servers to be used
-                                 int pool_size)
-                                 ///< size of pool (used as init and max)
+  MemcachedStore::MemcachedStore(const std::list<std::string>& servers, ///< list of servers to be used
+                                 int pool_size,                         ///< size of pool (used as init and max)
+                                 bool binary)                           ///< set to true to use binary protocol
   {
     // Create the options string to connect to the servers.
     std::string options;
@@ -97,10 +97,19 @@ namespace RegData {
     {
       options += "--SERVER=" + (*i) + " ";
     }
-    options += "--BINARY-PROTOCOL";
+    options += "--SUPPORT-CAS";
+    if (binary)
+    {
+      options += " --BINARY-PROTOCOL";
+    }
     options += " --POOL-MIN=" + to_string<int>(pool_size, std::dec) + " --POOL-MAX=" + to_string<int>(pool_size, std::dec);
 
     _pool = memcached_pool(options.c_str(), options.length());
+
+    if (_pool == NULL)
+    {
+      LOG_ERROR("Failed to connected to memcached store: %s", options.c_str());
+    }
   }
 
   MemcachedStore::~MemcachedStore()
