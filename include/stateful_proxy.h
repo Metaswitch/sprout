@@ -139,7 +139,7 @@ public:
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
   void on_tsx_state(pjsip_event* event);
-  void cancel_pending_uac_tsx(int st_code);
+  void cancel_pending_uac_tsx(int st_code, bool dissociate_uac);
   pj_status_t handle_final_response();
 
   void register_proxy(CallServices::Terminating* proxy);
