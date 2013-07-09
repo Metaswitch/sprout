@@ -564,7 +564,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "");
+  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "", trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -601,7 +601,7 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
 
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*");
+    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*", get_trail(tsx));
     // LCOV_EXCL_STOP
   }
 }

@@ -46,7 +46,7 @@ extern "C" {
 #include "ifchandler.h"
 
 namespace RegistrationUtils {
-void user_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
-void network_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id);
-void register_with_application_servers(IfcHandler*, RegData::Store* store, pjsip_rx_data*, pjsip_tx_data*, const std::string&);
+void user_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail);
+void network_initiated_deregistration(IfcHandler*, RegData::Store* store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail);
+void register_with_application_servers(IfcHandler*, RegData::Store* store, pjsip_rx_data*, pjsip_tx_data*, const std::string&, SAS::TrailId trail);
 }
