@@ -139,7 +139,7 @@ public:
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
   void on_tsx_state(pjsip_event* event);
-  void cancel_pending_uac_tsx(int st_code);
+  void cancel_pending_uac_tsx(int st_code, bool dissociate_uac);
   pj_status_t handle_final_response();
 
   void register_proxy(CallServices::Terminating* proxy);
@@ -152,13 +152,16 @@ public:
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
-  // Enters/exits this transaction's context.  While in the transaction's
-  // context, it will not be destroyed.  enter_context and exit_context should
-  // always be called at the start and end of any entry point (e.g. call from
-  // non-transaction code into transaction or callback from PJSIP) to avoid
-  // the transaction object being destroyed under our feet.  On return from
-  // exit_context, you must not assume that the transaction still exists.  Note
-  // that this does not prevent the _tsx from being destroyed.
+  // Enters/exits this UASTransaction's context.  This takes a group lock,
+  // single-threading any processing on this UASTransaction and associated
+  // UACTransactions.  While in the UASTransaction's context, it will not be
+  // destroyed.  The underlying PJSIP transaction (_tsx) may or may not exist,
+  // but it won't disappear under your feet.
+  //
+  // enter_context and exit_context should always be called at the start and
+  // end of any entry point (e.g. call from non-transaction code into
+  // transaction or callback from PJSIP).  On return from exit_context, you
+  // must not assume that the transaction still exists.
   void enter_context();
   void exit_context();
 
@@ -182,6 +185,7 @@ private:
   AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
+  pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
   int                  _pending_targets;
@@ -225,13 +229,17 @@ public:
 
   static void liveness_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
 
-  // Enters/exits this transaction's context.  While in the transaction's
-  // context, it will not be destroyed.  enter_context and exit_context should
-  // always be called at the start and end of any entry point (e.g. call from
-  // non-transaction code into transaction or callback from PJSIP) to avoid
-  // the transaction object being destroyed under our feet.  On return from
-  // exit_context, you must not assume that the transaction still exists.  Note
-  // that this does not prevent the _tsx from being destroyed.
+  // Enters/exits this UACTransaction's context.  This takes a group lock,
+  // single-threading any processing on this UACTransaction, the associated
+  // UASTransaction and other associated UACTransactions.  While in the
+  // UACTransaction's context, it will not be destroyed.  The underlying PJSIP
+  // transaction (_tsx) may or may not exist, but it won't disappear under
+  // your feet.
+  //
+  // enter_context and exit_context should always be called at the start and
+  // end of any entry point (e.g. call from non-transaction code into
+  // transaction or callback from PJSIP).  On return from exit_context, you
+  // must not assume that the transaction still exists.
   void enter_context();
   void exit_context();
 
@@ -240,6 +248,7 @@ public:
 private:
   UASTransaction*      _uas_data;
   int                  _target;
+  pj_grp_lock_t*       _lock;       //< Lock to protect this UACTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   pjsip_tx_data*       _tdata;
   pj_bool_t            _from_store; /* If true, the aor and binding_id
