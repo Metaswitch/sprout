@@ -80,30 +80,54 @@ namespace RegData {
   const std::string CassandraStore::KEYSPACE = "sprout";
   const std::string CassandraStore::COLUMN_FAMILY = "reg";
 
+  static void cleanup_client(void* client)
+  {
+    // TODO: Implement this properly.
+    //transport->close();
+    delete((CassandraClient*)client);
+  }
+
   /// Constructor: get a handle to the cassandra connection of interest.
-  CassandraStore::CassandraStore(const std::string server)
+  CassandraStore::CassandraStore(const std::string server) : _server(server)
                                  ///< server to use
   {
-    boost::shared_ptr<TTransport> socket = boost::shared_ptr<TSocket>(new TSocket(server, PORT));
-    _transport = boost::shared_ptr<TFramedTransport>(new TFramedTransport(socket));
-    boost::shared_ptr<TProtocol> protocol = boost::shared_ptr<TBinaryProtocol>(new TBinaryProtocol(_transport));
-    _client = new CassandraClient(protocol);
-    _transport->open();
-    _client->set_keyspace(KEYSPACE);
+    pthread_key_create(&_thread_local, cleanup_client);
   }
 
   CassandraStore::~CassandraStore()
   {
-    _transport->close();
-    delete _client;
-    _client = NULL;
+    // Clean up this thread's client now, rather than waiting for
+    // pthread_exit.  This is to support use by single-threaded code
+    // (e.g., UTs), where pthread_exit is never called.
+    CassandraClient* client = (CassandraClient*)pthread_getspecific(_thread_local);
+    if (client != NULL)
+    {
+      pthread_setspecific(_thread_local, NULL);
+      cleanup_client(client);
+    }
+  }
+
+  CassandraClient* CassandraStore::get_client()
+  {
+    CassandraClient* client = (CassandraClient*)pthread_getspecific(_thread_local);
+    if (client == NULL)
+    {
+      boost::shared_ptr<TTransport> socket = boost::shared_ptr<TSocket>(new TSocket(_server, PORT));
+      boost::shared_ptr<TFramedTransport> transport = boost::shared_ptr<TFramedTransport>(new TFramedTransport(socket));
+      boost::shared_ptr<TProtocol> protocol = boost::shared_ptr<TBinaryProtocol>(new TBinaryProtocol(transport));
+      client = new CassandraClient(protocol);
+      transport->open();
+      client->set_keyspace(KEYSPACE);
+      pthread_setspecific(_thread_local, client);
+    }
+    return client;
   }
 
   /// Wipe the contents of all the cassandra servers immediately, if we can
   /// get a connection.  If not, does nothing.
   void CassandraStore::flush_all()
   {
-    _client->truncate(COLUMN_FAMILY);
+    get_client()->truncate(COLUMN_FAMILY);
   }
 
   // LCOV_EXCL_START - need real cassandra to test
@@ -136,7 +160,7 @@ namespace RegData {
     try
     {
       std::vector<KeySlice> results;
-      _client->get_range_slices(results, cparent, sp, range, ConsistencyLevel::ONE);
+      get_client()->get_range_slices(results, cparent, sp, range, ConsistencyLevel::ONE);
       if (results.size() > 0)
       {
         aor_data = deserialize_aor(results[0].columns);
@@ -181,7 +205,7 @@ namespace RegData {
     std::map<std::string, std::map<std::string, std::vector<Mutation> > > keyColumnFamilyMutationMap;
     keyColumnFamilyMutationMap[aor_id] = columnFamilyMutationMap;
 
-    _client->batch_mutate(keyColumnFamilyMutationMap, ConsistencyLevel::ONE);
+    get_client()->batch_mutate(keyColumnFamilyMutationMap, ConsistencyLevel::ONE);
     // TODO: Handle exception
 
     return true;

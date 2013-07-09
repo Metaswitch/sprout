@@ -105,6 +105,7 @@ namespace RegData {
       return oss.str();
     }
 
+    org::apache::cassandra::CassandraClient* get_client();
     static void serialize_aor(CassandraAoR* aor_data, std::vector<org::apache::cassandra::Mutation>& mutations);
     static CassandraAoR* deserialize_aor(const std::vector<org::apache::cassandra::ColumnOrSuperColumn>& columns);
 
@@ -112,9 +113,8 @@ namespace RegData {
     static const std::string KEYSPACE;
     static const std::string COLUMN_FAMILY;
 
-    /// The cassandra transport and client to use.
-    boost::shared_ptr<apache::thrift::transport::TTransport> _transport;
-    org::apache::cassandra::CassandraClient* _client;
+    const std::string _server;
+    pthread_key_t _thread_local;
   };
 
 } // namespace RegData
