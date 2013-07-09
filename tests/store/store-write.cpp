@@ -1,5 +1,6 @@
 #include <getopt.h>
 #include <time.h>
+#include <sys/time.h>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -236,7 +237,13 @@ int main (int argc, char *argv[])
 
   std::vector<pthread_t> threads;
 
-  long start_time = time(NULL);
+  struct timeval td;
+  gettimeofday(&td, NULL);
+  int64_t start_ms = td.tv_sec;
+  start_ms = start_ms * 1000;
+  int64_t usec = td.tv_usec;
+  usec = usec / 1000;
+  start_ms += usec;
 
   // Create the threads.
   for (int ii = 0; ii < num_threads; ++ii)
@@ -252,10 +259,15 @@ int main (int argc, char *argv[])
     pthread_join(threads[ii], NULL);
   }
 
-  long end_time = time(NULL);
+  gettimeofday(&td, NULL);
+  int64_t end_ms = td.tv_sec;
+  end_ms = end_ms * 1000;
+  usec = td.tv_usec;
+  usec = usec / 1000;
+  end_ms += usec;
 
-  printf("Completed writing %d records in %ld seconds\n", num_records * num_threads, end_time - start_time);
-  printf("  = %2g r/w operations per second\n", (double)(num_records * num_threads) / (double)(end_time - start_time));
+  printf("Completed writing %d records in %g seconds\n", num_records * num_threads, (double)(end_ms - start_ms) / 1000.0);
+  printf("  = %2g r/w operations per second\n", (double)(num_records * num_threads * 1000.0) / (double)(end_ms - start_ms));
 
   exit(0);
 }
