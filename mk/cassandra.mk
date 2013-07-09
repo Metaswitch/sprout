@@ -1,11 +1,11 @@
 # included mk file for the cassandra module
 
 CASSANDRA_DIR := ${MODULE_DIR}/cassandra
-THRIFT_DIR := ${MODULE_DIR}/thrift
 
 cassandra:
-	${THRIFT_DIR}/compiler/thrift --gen cpp -o ${CASSANDRA_DIR}/interface/thrift ${CASSANDRA_DIR}/interface/cassandra.thrift
-	g++ -shared -Wl,-soname,libcassandra.so -fPIC -o ${INSTALL_DIR}/usr/lib/libcassandra.so -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${THRIFT_DIR}/lib/cpp/src/ -I ${CASSANDRA_DIR}/interface/thrift/gen-cpp/ ${CASSANDRA_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
+	${INSTALL_DIR}/bin/thrift --gen cpp -o ${CASSANDRA_DIR}/interface/thrift ${CASSANDRA_DIR}/interface/cassandra.thrift
+	g++ -shared -Wl,-soname,libcassandra.so -fPIC -o ${INSTALL_DIR}/lib/libcassandra.so -DHAVE_INTTYPES_H -DHAVE_NETINET_IN_H -I ${INSTALL_DIR}/include/ -I ${CASSANDRA_DIR}/interface/thrift/gen-cpp/ ${CASSANDRA_DIR}/interface/thrift/gen-cpp/Cassandra.cpp ${CASSANDRA_DIR}/interface/thrift/gen-cpp/cassandra_types.cpp
+	cp ${CASSANDRA_DIR}/interface/thrift/gen-cpp/*.h ${INSTALL_DIR}/include/
 
 cassandra_test:
 

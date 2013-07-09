@@ -22,11 +22,13 @@ CPPFLAGS += -I${ROOT}/include \
 
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -ldl \
-					 -lrt \
+           -lrt \
            -lboost_regex \
            -lboost_system \
            -lboost_thread \
-           -lboost_date_time
+           -lboost_date_time \
+           -lcassandra \
+           -lthrift
 
 # Statically link libmemcached
 SLIBS = ${ROOT}/usr/lib/libmemcached.a ${ROOT}/usr/lib/libmemcachedutil.a ${ROOT}/usr/lib/libmemcachedprotocol.a
@@ -35,7 +37,7 @@ SLIBS = ${ROOT}/usr/lib/libmemcached.a ${ROOT}/usr/lib/libmemcachedutil.a ${ROOT
 vpath %.cpp .:${ROOT}/sprout
 
 OBJS_READ  := $(addprefix $(OBJ_DIR)/,store-read.o memcachedstore.o store.o logger.o utils.o log.o)
-OBJS_WRITE := $(addprefix $(OBJ_DIR)/,store-write.o memcachedstore.o store.o logger.o utils.o log.o)
+OBJS_WRITE := $(addprefix $(OBJ_DIR)/,store-write.o memcachedstore.o cassandrastore.o store.o logger.o utils.o log.o)
 
 $(OBJS_READ): | $(OBJ_DIR)
 $(OBJS_WRITE): | $(OBJ_DIR)

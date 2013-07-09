@@ -8,10 +8,11 @@ ${THRIFT_CONFIGURE}:
 	cd ${THRIFT_DIR} && ./buildconf
 
 ${THRIFT_MAKEFILE}: ${THRIFT_CONFIGURE}
-	cd ${THRIFT_DIR} && ./configure --without-csharp --without-java --without-erlang --without-python --without-perl --without-php --without-ruby --without-haskell --without-go --without-d
+	cd ${THRIFT_DIR} && ./configure --prefix=${INSTALL_DIR} --without-csharp --without-java --without-erlang --without-python --without-perl --without-php --without-ruby --without-haskell --without-go --without-d
 
 thrift: ${THRIFT_MAKEFILE}
 	make -C ${THRIFT_DIR}
+	make -C ${THRIFT_DIR} install
 
 thrift_test: ${THRIFT_MAKEFILE}
 	make -C ${THRIFT_DIR} test
