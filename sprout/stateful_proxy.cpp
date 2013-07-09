@@ -1983,6 +1983,14 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       // In routing proxy mode, don't forward 100 response for INVITE as it has
       // already been sent.
       LOG_DEBUG("%s - Discard 100/INVITE response", uac_data->name());
+
+      if (_as_chain_link.is_set())
+      {
+        // Received a 100 Trying response from the application server, so
+        // turn off default handling.
+        _as_chain_link.reset_default_handling();
+      }
+
       exit_context();
       return;
     }
@@ -2266,8 +2274,6 @@ pj_status_t UASTransaction::handle_final_response()
       LOG_DEBUG("Trigger default_handling=CONTINUE processing");
 
       // Reset the best response to a 408 response to use if none of the targets responds.
-      // @TODO - what about other headers?  Also, do we need to do this in other
-      // redirect cases?
       _best_rsp->msg->line.status.code = PJSIP_SC_REQUEST_TIMEOUT;
 
       // Redirect the dialog to the next AS in the chain.
@@ -2795,6 +2801,7 @@ UACTransaction::~UACTransaction()
   if (_liveness_timer.id == LIVENESS_TIMER)
   {
     // The liveness timer is running, so cancel it.
+    _liveness_timer.id = 0;
     pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
   }
 
@@ -2942,7 +2949,7 @@ void UACTransaction::send_request()
   }
   else
   {
-    // Send the request successfully.
+    // Sent the request successfully.
     if (_liveness_timeout != 0)
     {
       _liveness_timer.id = LIVENESS_TIMER;
@@ -3017,6 +3024,13 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG))
   {
     LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
+    if (_liveness_timer.id == LIVENESS_TIMER)
+    {
+      // The liveness timer is running on this transaction, so cancel it.
+      _liveness_timer.id = 0;
+      pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
+    }
+
     pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
     _uas_data->on_new_client_response(this, rdata);
 

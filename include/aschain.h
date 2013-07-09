@@ -238,9 +238,21 @@ public:
     return _as_chain->matches_target(tdata);
   }
 
+  /// Returns default handling for this chain link.  If false, errors or
+  /// timeouts from the AS result in the transaction failing.  If true,
+  /// timeout or 5xx errors from the AS result in the transaction continuing
+  /// with the next AS in the chain.
   bool default_handling() const
   {
     return _default_handling;
+  }
+
+  /// Resets the default handling.  This should be called when the AS
+  /// responds with a 100 Trying response as this indicates the AS has
+  /// received and is processing the transaction.
+  void reset_default_handling()
+  {
+    _default_handling = false;
   }
 
   /// Disposition of a request. Suggests what to do next.
