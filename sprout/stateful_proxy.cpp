@@ -1767,7 +1767,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
     _as_chain_link = handle_incoming_non_cancel(serving_state);
 
     // Do incoming (originating) half.
-    disposition = handle_originating(_as_chain_link, &target);
+    disposition = handle_originating(&target);
 
     if (disposition == AsChainLink::Disposition::Complete)
     {
@@ -1777,12 +1777,12 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
         // terminating chain: switch to terminating and look up iFCs
         // again.  The served user changes here.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        move_to_terminating_chain(_as_chain_link);
+        move_to_terminating_chain();
       }
 
       // Do outgoing (terminating) half.
       LOG_DEBUG("Terminating half");
-      disposition = handle_terminating(_as_chain_link, &target);
+      disposition = handle_terminating(&target);
     }
   }
 
@@ -1838,11 +1838,10 @@ AsChainLink UASTransaction::handle_incoming_non_cancel(const ServingState& servi
 // @returns whether processing should `Stop`, `Skip` to the end, or
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
-AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chain_link,
-                                                            // OUT: target, if disposition is Skip
-                                                            target** target)
+AsChainLink::Disposition UASTransaction::handle_originating(target** target) // OUT: target, if disposition is Skip
+
 {
-  if (!(as_chain_link.is_set() && as_chain_link.session_case().is_originating()))
+  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_originating()))
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
     return AsChainLink::Disposition::Complete;
@@ -1853,12 +1852,12 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
+    disposition = _as_chain_link.on_initial_request(call_services_handler, this, _req, target);
 
     if (disposition == AsChainLink::Disposition::Next)
     {
-      as_chain_link = as_chain_link.next();
-      LOG_DEBUG("Done internal step - advance link to %s and go around again", as_chain_link.to_string().c_str());
+      _as_chain_link = _as_chain_link.next();
+      LOG_DEBUG("Done internal step - advance link to %s and go around again", _as_chain_link.to_string().c_str());
     }
     else
     {
@@ -1872,24 +1871,22 @@ AsChainLink::Disposition UASTransaction::handle_originating(AsChainLink& as_chai
 
 
 /// Move from originating to terminating handling.
-void UASTransaction::move_to_terminating_chain(AsChainLink& as_chain_link)
+void UASTransaction::move_to_terminating_chain()
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
   PJUtils::delete_header(_req->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
-  as_chain_link.release();
-  as_chain_link = create_as_chain(SessionCase::Terminating);
+  _as_chain_link.release();
+  _as_chain_link = create_as_chain(SessionCase::Terminating);
 }
 
 // Perform terminating handling.
 //
 // @returns whether processing should `Stop`, `Skip` to the end, or
 // is now `Complete`. Never returns `Next`.
-AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chain_link,
-                                                        // OUT: target, if disposition is Skip
-                                                        target** target)
+AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
   pj_status_t status;
 
@@ -1926,7 +1923,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
     }
   }
 
-  if (!(as_chain_link.is_set() && as_chain_link.session_case().is_terminating()))
+  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
   {
     return AsChainLink::Disposition::Complete;
   }
@@ -1936,14 +1933,14 @@ AsChainLink::Disposition UASTransaction::handle_terminating(AsChainLink& as_chai
   AsChainLink::Disposition disposition;
   for (;;)
   {
-    disposition = as_chain_link.on_initial_request(call_services_handler, this, _req, target);
+    disposition = _as_chain_link.on_initial_request(call_services_handler, this, _req, target);
     // On return from on_initial_request, our _proxy pointer may be
     // NULL.  Don't use it without checking first.
 
     if (disposition == AsChainLink::Disposition::Next)
     {
-      as_chain_link = as_chain_link.next();
-      LOG_DEBUG("Done internal step - advance link to %s and go around again", as_chain_link.to_string().c_str());
+      _as_chain_link = _as_chain_link.next();
+      LOG_DEBUG("Done internal step - advance link to %s and go around again", _as_chain_link.to_string().c_str());
     }
     else
     {

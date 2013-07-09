@@ -180,9 +180,9 @@ private:
   AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
 
   AsChainLink handle_incoming_non_cancel(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, target** pre_target);
-  void move_to_terminating_chain(AsChainLink& as_chain);
-  AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, target** pre_target);
+  AsChainLink::Disposition handle_originating(target** pre_target);
+  void move_to_terminating_chain();
+  AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
