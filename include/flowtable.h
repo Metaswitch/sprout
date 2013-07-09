@@ -66,9 +66,9 @@ public:
   /// Returns a reference to the flow token.
   inline const std::string& token() const { return _token; };
 
-  std::string asserted_identity(pjsip_uri* preferred_identity) const;
+  std::string asserted_identity(pjsip_uri* preferred_identity);
 
-  std::string default_identity() const;
+  std::string default_identity();
 
   void set_identity(const pjsip_uri* uri, bool is_default, int expires);
 

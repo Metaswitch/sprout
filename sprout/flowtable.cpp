@@ -228,6 +228,9 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _default_id(),
   _refs(1)
 {
+  // Create the lock for protecting the authorized_ids and default_id.
+  pthread_mutex_init(&_flow_lock, NULL);
+
   // Create a random base64 encoded token for the flow.
   PJUtils::create_random_token(Flow::TOKEN_LENGTH, _token);
 
@@ -269,33 +272,47 @@ Flow::~Flow()
     pjsip_endpt_cancel_timer(stack_data.endpt, &_timer);
     _timer.id = 0;
   }
+
+  pthread_mutex_destroy(&_flow_lock);
 }
 
 
 /// Returns the full asserted identity corresponding to the specified
 /// preferred identity, or an empty string if the preferred identity is not
 /// authorized on this flow.
-std::string Flow::asserted_identity(pjsip_uri* preferred_identity) const
+std::string Flow::asserted_identity(pjsip_uri* preferred_identity)
 {
   std::string aor = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(preferred_identity));
+  std::string id;
+
+  pthread_mutex_lock(&_flow_lock);
 
   auth_id_map::const_iterator i = _authorized_ids.find(aor);
 
   if (i != _authorized_ids.end())
   {
     // Found the corresponding identity.
-    return i->second.name_addr;
+    id = i->second.name_addr;
   }
-  return std::string();
+
+  pthread_mutex_unlock(&_flow_lock);
+
+  return id;
 }
 
 
 /// Returns a default identity for this flow.  Note that a single flow
 /// may have multiple default identities.  Return an empty string if no
 /// identities are authorized on this flow.
-std::string Flow::default_identity() const
+std::string Flow::default_identity()
 {
-  return _default_id;
+  pthread_mutex_lock(&_flow_lock);
+
+  std::string id = _default_id;
+
+  pthread_mutex_unlock(&_flow_lock);
+
+  return id;
 }
 
 
@@ -308,6 +325,8 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
   std::string aor = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(uri));
 
   LOG_DEBUG("Setting identity %s on flow %p, expires = %d", aor.c_str(), this, expires);
+
+  pthread_mutex_lock(&_flow_lock);
 
   // Convert the expiry time to an absolute time.
   expires += now;
@@ -370,6 +389,8 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
     // a scan through all the entries looking for the next one to expire,
     // so would be no more efficient.
   }
+
+  pthread_mutex_unlock(&_flow_lock);
 }
 
 
@@ -381,6 +402,8 @@ void Flow::expiry_timer()
   // a single flow to have a large number of identities.  This may not be
   // a valid assumption if a downstream SBC or AGCF muxes a large number of
   // clients over a single flow.
+  pthread_mutex_lock(&_flow_lock);
+
   int now = time(NULL);
   int min_expires = 0;
   for (auth_id_map::const_iterator i = _authorized_ids.begin();
@@ -433,6 +456,8 @@ void Flow::expiry_timer()
     // Restart the timer to pop when the next identity(s) will expire.
     restart_timer(EXPIRY_TIMER, min_expires - now);
   }
+
+  pthread_mutex_unlock(&_flow_lock);
 }
 
 
