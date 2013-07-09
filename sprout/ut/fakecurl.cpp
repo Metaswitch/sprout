@@ -48,6 +48,7 @@ typedef size_t (*datafn_ty)(char* ptr, size_t size, size_t nmemb, void* userdata
 /// Object representing a single fake cURL handle.
 class FakeCurl
 {
+public:
   string _method;
   string _url;
 
