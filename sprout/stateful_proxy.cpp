@@ -1758,31 +1758,43 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
 
-  if ((!edge_proxy) &&
-      ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(_req->msg->line.req.uri))))
+  if (!edge_proxy)
   {
-    // Do services and translation processing for requests targeted at this
-    // node/home domain.
-    _as_chain_link = handle_incoming_non_cancel(serving_state);
-
-    // Do incoming (originating) half.
-    disposition = handle_originating(&target);
-
-    if (disposition == AsChainLink::Disposition::Complete)
+    if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
+        (PJUtils::is_uri_local(_req->msg->line.req.uri)))
     {
-      if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
-      {
-        // We've completed the originating half and we don't yet have a
-        // terminating chain: switch to terminating and look up iFCs
-        // again.  The served user changes here.
-        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-        move_to_terminating_chain();
-      }
+      // Do services and translation processing for requests targeted at this
+      // node/home domain.
+      _as_chain_link = handle_incoming_non_cancel(serving_state);
 
-      // Do outgoing (terminating) half.
-      LOG_DEBUG("Terminating half");
-      disposition = handle_terminating(&target);
+      // Do incoming (originating) half.
+      disposition = handle_originating(&target);
+
+      if (disposition == AsChainLink::Disposition::Complete)
+      {
+        if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
+        {
+          // We've completed the originating half and we don't yet have a
+          // terminating chain: switch to terminating and look up iFCs
+          // again.  The served user changes here.
+          LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+          move_to_terminating_chain();
+        }
+
+        // Do outgoing (terminating) half.
+        LOG_DEBUG("Terminating half");
+        disposition = handle_terminating(&target);
+      }
+    }
+    else
+    {
+      // Request is not target at this domain.  If the serving state is set
+      // we need to release the original dialog as otherwise we may leak an
+      // AsChain.
+      if (serving_state.is_set())
+      {
+        serving_state.original_dialog().release();
+      }
     }
   }
 
