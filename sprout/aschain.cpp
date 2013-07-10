@@ -213,7 +213,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
       // the signalling path.
       LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, next(), tdata->msg, _as_chain->_served_user);
+        new CallServices::Terminating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;

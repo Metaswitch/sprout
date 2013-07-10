@@ -103,7 +103,6 @@ public:
   public:
     Terminating(CallServices* callServices,
                 UASTransaction* uas_data,
-                const AsChainLink& odi,
                 pjsip_msg* msg,
                 std::string served_user);
     ~Terminating();
@@ -113,7 +112,6 @@ public:
     bool on_final_response(pjsip_tx_data* tx_data);
 
   private:
-    const AsChainLink _odi;  //< The ODI; used to handle redirections.
     bool _ringing;
     unsigned int _media_conditions;
     pj_timer_entry _no_reply_timer;
