@@ -146,8 +146,8 @@ public:
 
   pj_status_t send_trying(pjsip_rx_data* rdata);
   pj_status_t send_response(int st_code, const pj_str_t* st_text=NULL);
-  bool redirect(std::string, int, const AsChainLink& odi);
-  bool redirect(pjsip_uri*, int, const AsChainLink& odi);
+  bool redirect(std::string, int);
+  bool redirect(pjsip_uri*, int);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -176,10 +176,10 @@ private:
   void log_on_tsx_complete();
   pj_status_t init_uac_transactions(target_list& targets);
   void dissociate(UACTransaction *uac_data);
-  bool redirect_int(pjsip_uri* target, int code, const AsChainLink& odi);
+  bool redirect_int(pjsip_uri* target, int code);
   AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
 
-  AsChainLink handle_incoming_non_cancel(const ServingState& serving_state);
+  void handle_incoming_non_cancel(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(target** pre_target);
   void move_to_terminating_chain();
   AsChainLink::Disposition handle_terminating(target** pre_target);
