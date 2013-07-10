@@ -2778,7 +2778,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
     // Kick off outgoing processing for the new request.  Continue the
     // existing AsChain. This will trigger orig-cdiv handling.
-    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link.next()));
+    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
   }
   else
   {
