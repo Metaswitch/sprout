@@ -3131,7 +3131,7 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
 
 
 // Test DefaultHandling=CONTINUE for a responsive AS that returns an error.
-TEST_F(IscTest, DISABLED_DefaultHandlingContinueResponsiveError)
+TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
