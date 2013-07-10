@@ -248,6 +248,7 @@ SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char
                                    (pj_sockaddr_t*)&_rem_addr,
                                    sizeof(pj_sockaddr_in),
                                    &_transport);
+    pjsip_transport_add_ref(_transport);
     EXPECT_EQ(PJ_SUCCESS, status);
   }
 }
@@ -256,6 +257,7 @@ SipTest::TransportFlow::~TransportFlow()
 {
   if (!strcmp(_transport->type_name, "TCP"))
   {
+    pjsip_transport_dec_ref(_transport);
     fake_tcp_init_shutdown((fake_tcp_transport*)_transport, PJ_EEOF);
   }
 }
