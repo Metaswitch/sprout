@@ -3028,9 +3028,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
       }
-      LOG_DEBUG("UAC transaction trail = %ld", trail());
       set_trail(cancel, trail());
-      LOG_DEBUG("CANCEL trail = %ld", get_trail(cancel));
 
       if (_tsx->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
       {

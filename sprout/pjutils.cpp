@@ -545,19 +545,19 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
 /// Dummy transaction user module used for send_request method.
 static pjsip_module mod_sprout_util =
 {
-    NULL, NULL,			    // prev, next
-    { "mod-sprout-util", 15 },      // Name
-    -1,				    // Id
-    PJSIP_MOD_PRIORITY_APPLICATION, // Priority
-    NULL,			    // load()
-    NULL,			    // start()
-    NULL,			    // stop()
-    NULL,			    // unload()
-    NULL,			    // on_rx_request()
-    NULL,			    // on_rx_response()
-    NULL,			    // on_tx_request()
-    NULL,			    // on_tx_response()
-    NULL, 	                    // on_tsx_state()
+  NULL, NULL,                     // prev, next
+  { "mod-sprout-util", 15 },      // Name
+  -1,                             // Id
+  PJSIP_MOD_PRIORITY_APPLICATION, // Priority
+  NULL,                           // load()
+  NULL,                           // start()
+  NULL,                           // stop()
+  NULL,                           // unload()
+  NULL,                           // on_rx_request()
+  NULL,                           // on_rx_response()
+  NULL,                           // on_tx_request()
+  NULL,                           // on_tx_response()
+  NULL,                           // on_tsx_state()
 };
 
 /// This provides function similar to the pjsip_endpt_send_request method
