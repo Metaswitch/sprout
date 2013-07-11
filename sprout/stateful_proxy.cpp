@@ -539,7 +539,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
 ///
 void process_cancel_request(pjsip_rx_data* rdata)
 {
-  // This is CANCEL request
   pjsip_transaction *invite_uas;
   pj_str_t key;
 
@@ -571,6 +570,9 @@ void process_cancel_request(pjsip_rx_data* rdata)
     PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_INTERNAL_SERVER_ERROR, NULL, NULL, NULL);
     return;
   }
+
+  // Set the SAS trail on the CANCEL transaction so the response gets correlated
+  set_trail(tsx, get_trail(rdata));
 
   // Feed the CANCEL request to the transaction.
   pjsip_tsx_recv_msg(tsx, rdata);
@@ -2563,6 +2565,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
       }
 
       // Add the trail from the UAS transaction to the UAC transaction.
+      LOG_DEBUG("Adding trail identifier %ld to UAC transaction", trail());
       set_trail(uac_tsx, trail());
 
       // Attach data to the UAC transaction.
@@ -3025,7 +3028,9 @@ void UACTransaction::cancel_pending_tsx(int st_code)
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
       }
+      LOG_DEBUG("UAC transaction trail = %ld", trail());
       set_trail(cancel, trail());
+      LOG_DEBUG("CANCEL trail = %ld", get_trail(cancel));
 
       if (_tsx->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
       {
@@ -3035,7 +3040,7 @@ void UACTransaction::cancel_pending_tsx(int st_code)
       }
 
       LOG_DEBUG("Sending CANCEL request");
-      pj_status_t status = pjsip_endpt_send_request(stack_data.endpt, cancel, -1, NULL, NULL);
+      pj_status_t status = PJUtils::send_request(stack_data.endpt, cancel);
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());

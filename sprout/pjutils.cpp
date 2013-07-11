@@ -482,7 +482,6 @@ int PJUtils::max_expires(pjsip_msg* msg)
 }
 
 
-
 pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
                                      const pjsip_rx_data* rdata,
                                      int st_code,
@@ -526,9 +525,9 @@ pj_status_t PJUtils::create_request_fwd(pjsip_endpoint* endpt,
 
 
 pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
-    pjsip_rx_data* rdata,
-    unsigned options,
-    pjsip_tx_data** p_tdata)
+                                         pjsip_rx_data* rdata,
+                                         unsigned options,
+                                         pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response_fwd(endpt,
                        rdata,
@@ -539,6 +538,55 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
     // Copy the SAS trail across from the request.
     set_trail(*p_tdata, get_trail(rdata));
   }
+  return status;
+}
+
+
+/// Dummy transaction user module used for send_request method.
+static pjsip_module mod_sprout_util =
+{
+    NULL, NULL,			    // prev, next
+    { "mod-sprout-util", 15 },      // Name
+    -1,				    // Id
+    PJSIP_MOD_PRIORITY_APPLICATION, // Priority
+    NULL,			    // load()
+    NULL,			    // start()
+    NULL,			    // stop()
+    NULL,			    // unload()
+    NULL,			    // on_rx_request()
+    NULL,			    // on_rx_response()
+    NULL,			    // on_tx_request()
+    NULL,			    // on_tx_response()
+    NULL, 	                    // on_tsx_state()
+};
+
+/// This provides function similar to the pjsip_endpt_send_request method
+/// but includes setting the SAS trail.  It does not support the timeout, token
+/// or callback options.
+pj_status_t PJUtils::send_request(pjsip_endpoint* endpt,
+                                  pjsip_tx_data* tdata)
+{
+  pjsip_transaction* tsx;
+  pj_status_t status;
+
+  status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
+  if (status != PJ_SUCCESS)
+  {
+    pjsip_tx_data_dec_ref(tdata);
+    return status;
+  }
+
+  pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+
+  // Set the trail ID in the transaction from the message.
+  set_trail(tsx, get_trail(tdata));
+
+  status = pjsip_tsx_send_msg(tsx, NULL);
+  if (status != PJ_SUCCESS)
+  {
+    pjsip_tx_data_dec_ref(tdata);
+  }
+
   return status;
 }
 
