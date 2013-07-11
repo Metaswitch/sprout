@@ -38,11 +38,12 @@ TARGET_SOURCES := logger.cpp \
                   pjutils.cpp \
                   statistic.cpp \
                   zmq_lvc.cpp \
-		  trustboundary.cpp \
-		  sessioncase.cpp \
-	          ifchandler.cpp \
+                  trustboundary.cpp \
+                  sessioncase.cpp \
+                  ifchandler.cpp \
                   aschain.cpp \
-                  sas.cpp
+                  sas.cpp \
+                  custom_headers.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
