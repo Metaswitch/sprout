@@ -144,20 +144,23 @@ pj_status_t create_response_fwd(pjsip_endpoint *endpt,
                                 unsigned options,
                                 pjsip_tx_data **p_tdata);
 
-pj_status_t respond_stateless(pjsip_endpoint *endpt,
-                              pjsip_rx_data *rdata,
+pj_status_t send_request(pjsip_endpoint* endpt,
+                         pjsip_tx_data* tdata);
+
+pj_status_t respond_stateless(pjsip_endpoint* endpt,
+                              pjsip_rx_data* rdata,
                               int st_code,
-                              const pj_str_t *st_text,
-                              const pjsip_hdr *hdr_list,
-                              const pjsip_msg_body *body);
+                              const pj_str_t* st_text,
+                              const pjsip_hdr* hdr_list,
+                              const pjsip_msg_body* body);
 
 pj_status_t respond_stateful(pjsip_endpoint* endpt,
                              pjsip_transaction* uas_tsx,
                              pjsip_rx_data* rdata,
                              int st_code,
-                             const pj_str_t *st_text,
-                             const pjsip_hdr *hdr_list,
-                             const pjsip_msg_body *body);
+                             const pj_str_t* st_text,
+                             const pjsip_hdr* hdr_list,
+                             const pjsip_msg_body* body);
 
 pjsip_tx_data *clone_tdata(pjsip_tx_data *tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
