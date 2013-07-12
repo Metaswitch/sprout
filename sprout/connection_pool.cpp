@@ -45,6 +45,7 @@ extern "C" {
 #include <string>
 
 #include "log.h"
+#include "utils.h"
 #include "pjutils.h"
 #include "connection_pool.h"
 
@@ -358,14 +359,13 @@ void ConnectionPool::recycle_connections()
   // that one connection may be recycled twice in the same schedule, but this
   // should only introduce a small error in the recycling rate.
 
-  std::default_random_engine rand;
-  std::binomial_distribution<int> rbinomial(_num_connections, 1.0/_recycle_period);
+  Utils::BinomialDistribution rbinomial(_num_connections, 1.0/_recycle_period);
 
   while (!_terminated)
   {
     sleep(1);
 
-    int recycle = rbinomial(rand);
+    int recycle = rbinomial();
 
     LOG_INFO("Recycling %d connections to %.*s:%d", recycle, _target.host.slen, _target.host.ptr, _target.port);
 
