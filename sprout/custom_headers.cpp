@@ -271,12 +271,7 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   pjsip_p_c_v_hdr* hdr = pjsip_p_c_v_hdr_create(pool);
 
   do {
-    if (pj_scan_stricmp(scanner, "icid", 4) == 0) {
-      pj_scan_advance_n(scanner, 4, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      pj_scan_get_until_ch(scanner, ';', &hdr->icid);
-    } else if (pj_scan_stricmp(scanner, "orig-ioi", 8) == 0) {
+    if (pj_scan_stricmp(scanner, "orig-ioi", 8) == 0) {
       pj_scan_advance_n(scanner, 8, PJ_TRUE);
       pj_scan_get_char(scanner);
       pj_scan_skip_whitespace(scanner);
@@ -286,11 +281,16 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
       pj_scan_get_char(scanner);
       pj_scan_skip_whitespace(scanner);
       pj_scan_get_until_ch(scanner, ';', &hdr->term_ioi);
-    } else if (pj_scan_stricmp(scanner, "icid_geterated-at", 17) == 0) {
+    } else if (pj_scan_stricmp(scanner, "icid-generated-at", 17) == 0) {
       pj_scan_advance_n(scanner, 17, PJ_TRUE);
       pj_scan_get_char(scanner);
       pj_scan_skip_whitespace(scanner);
       pj_scan_get_until_ch(scanner, ';', &hdr->icid_gen_addr);
+    } else if (pj_scan_stricmp(scanner, "icid", 4) == 0) {
+      pj_scan_advance_n(scanner, 4, PJ_TRUE);
+      pj_scan_get_char(scanner);
+      pj_scan_skip_whitespace(scanner);
+      pj_scan_get_until_ch(scanner, ';', &hdr->icid);
     } else {
       break;
     }
@@ -402,7 +402,7 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   *p++ = ' ';
   if (hdr->orig_ioi.slen) {
     pj_memcpy(p, "orig-ioi=", 9);
-    p += 8;
+    p += 9;
     pj_memcpy(p, hdr->orig_ioi.ptr, hdr->orig_ioi.slen);
     p += hdr->orig_ioi.slen;
     *p++ = ';';
@@ -410,7 +410,7 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   }
   if (hdr->term_ioi.slen) {
     pj_memcpy(p, "term-ioi=", 9);
-    p += 8;
+    p += 9;
     pj_memcpy(p, hdr->term_ioi.ptr, hdr->term_ioi.slen);
     p += hdr->term_ioi.slen;
     *p++ = ';';
@@ -418,7 +418,7 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   }
   if (hdr->icid_gen_addr.slen) {
     pj_memcpy(p, "icid-generated-at=", 18);
-    p += 8;
+    p += 18;
     pj_memcpy(p, hdr->icid_gen_addr.ptr, hdr->icid_gen_addr.slen);
     p += hdr->icid_gen_addr.slen;
     *p++ = ';';
@@ -518,6 +518,8 @@ void *pjsip_p_c_f_a_hdr_clone(pj_pool_t* pool, const void* o)
   pjsip_p_c_f_a_hdr* hdr = pjsip_p_c_f_a_hdr_create(pool);
   pjsip_p_c_f_a_hdr* other = (pjsip_p_c_f_a_hdr*)o;
 
+  hdr->ccf_count = other->ccf_count;
+  hdr->ecf_count = other->ecf_count;
   for (int i = 0; i < PJ_P_C_F_A_MAX_ADDRS; i++) {
     pj_strdup(pool, &hdr->ccf[i], &other->ccf[i]);
     pj_strdup(pool, &hdr->ecf[i], &other->ecf[i]);
@@ -530,6 +532,8 @@ void *pjsip_p_c_f_a_hdr_shallow_clone(pj_pool_t* pool, const void* o)
   pjsip_p_c_f_a_hdr* hdr = pjsip_p_c_f_a_hdr_create(pool);
   pjsip_p_c_f_a_hdr* other = (pjsip_p_c_f_a_hdr*)o;
 
+  hdr->ccf_count = other->ccf_count;
+  hdr->ecf_count = other->ecf_count;
   for (int i = 0; i < PJ_P_C_F_A_MAX_ADDRS; i++) {
     hdr->ccf[i] = other->ccf[i];
     hdr->ecf[i] = other->ecf[i];

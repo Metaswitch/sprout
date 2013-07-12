@@ -56,10 +56,7 @@ extern "C" {
 
 /// Custom header structures.
 typedef struct pjsip_p_c_v_hdr {
-  pjsip_hdr_e type;
-  pj_str_t name;
-  pj_str_t sname;
-  pjsip_hdr_vptr* vptr;
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_p_c_v_hdr);
   pj_str_t icid;
   pj_str_t icid_gen_addr;
   pj_str_t orig_ioi;
@@ -68,10 +65,7 @@ typedef struct pjsip_p_c_v_hdr {
 
 typedef struct pjsip_p_c_f_a_hdr {
 #define PJ_P_C_F_A_MAX_ADDRS 5
-  pjsip_hdr_e type;
-  pj_str_t name;
-  pj_str_t sname;
-  pjsip_hdr_vptr* vptr;
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_p_c_f_a_hdr);
   int ccf_count;
   pj_str_t ccf[PJ_P_C_F_A_MAX_ADDRS];
   int ecf_count;
