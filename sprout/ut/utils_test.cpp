@@ -34,9 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
+#include <math.h>
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -57,6 +55,16 @@ class UtilsTest : public ::testing::Test
 
   virtual ~UtilsTest()
   {
+  }
+
+  double nCm(int n, int m)
+  {
+    double r = 1.0;
+    for (int i = 1; i <= m; i++)
+    {
+      r *= (double)(n - i + 1)/(double)i;
+    }
+    return r;
   }
 };
 
@@ -193,3 +201,27 @@ TEST_F(UtilsTest, Trim)
   EXPECT_EQ("", s);
 }
 
+
+
+TEST_F(UtilsTest, BinomialDistribution)
+{
+  int t = 10;
+  double p = 0.1;
+  Utils::BinomialDistribution b(t, p);
+  std::vector<int> c(t+1);
+
+  for (int i = 0; i < 10000; ++i)
+  {
+    int v = b();
+    EXPECT_THAT(v, testing::AllOf(testing::Ge(0), testing::Le(t)));
+    ++c[v];
+  }
+
+  // Test that the resulting distribution is close to the expected one.
+  for (int i = 0; i <= t; ++i)
+  {
+    double expected = nCm(t,i) * pow(p, i) * pow(1-p, t-i);
+    double observed = (double)c[i] / (double)10000;
+    EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.01), testing::Le(expected + 0.01)));
+  }
+}
