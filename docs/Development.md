@@ -20,7 +20,7 @@ On Ubuntu 12.04,
 
         echo "deb http://repo.cw-ngv.com/latest binary/" | sudo tee /etc/apt/sources.list.d/clearwater.list
 
-    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](http://www.zeromq.org/intro:get-the-software).
+    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](https://github.com/Metaswitch/zeromq3).
 
 2.  update the package list
 
