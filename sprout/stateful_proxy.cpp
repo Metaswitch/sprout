@@ -125,6 +125,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "aschain.h"
 #include "registration_utils.h"
+#include "custom_headers.h"
 
 static RegData::Store* store;
 
@@ -1768,6 +1769,17 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       // Do services and translation processing for requests targeted at this
       // node/home domain.
       handle_incoming_non_cancel(serving_state);
+
+      // Add ourselves as orig-IOI if appropriate.
+      //
+      // Here we rely on the served_user not being populated unless the user
+      // is locally hosted.  This is policed in served_user_from_msg().
+      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+      if (pcv && !_as_chain_link.served_user().empty())
+      {
+        pcv->orig_ioi = stack_data.home_domain;
+      }
 
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
