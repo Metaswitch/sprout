@@ -210,6 +210,11 @@ TEST_F(UtilsTest, BinomialDistribution)
   Utils::BinomialDistribution b(t, p);
   std::vector<int> c(t+1);
 
+  // Randomly seed the random number generator from the nanosecond time
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  srand((unsigned int)ts.tv_nsec);
+
   for (int i = 0; i < 10000; ++i)
   {
     int v = b();
@@ -222,6 +227,6 @@ TEST_F(UtilsTest, BinomialDistribution)
   {
     double expected = nCm(t,i) * pow(p, i) * pow(1-p, t-i);
     double observed = (double)c[i] / (double)10000;
-    EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.01), testing::Le(expected + 0.01)));
+    EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.05), testing::Le(expected + 0.05)));
   }
 }
