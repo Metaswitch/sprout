@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #ifndef UTILS_H_
 #define UTILS_H_
 
@@ -113,6 +111,32 @@ namespace Utils
       tokens.push_back(token);
     }
   }
+
+  /// Generates a random number which is exponentially distributed
+  class ExponentialDistribution
+  {
+  public:
+    ExponentialDistribution(double mean) :
+      _mean(mean)
+    {
+    }
+
+    ~ExponentialDistribution()
+    {
+    }
+
+    int operator() ()
+    {
+      // Generate a uniform random number in the range [0,1] then transform
+      // it to an exponentially distributed number using a formula for the
+      // inverted CDF.
+      double r = (double)rand() / (double)RAND_MAX;
+      return -log(r)/_mean;
+    }
+
+  private:
+    double _mean;
+  };
 
   /// Generates a random number which is binomially distributed
   class BinomialDistribution
