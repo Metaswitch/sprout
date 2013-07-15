@@ -269,9 +269,13 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   pj_pool_t* pool = ctx->pool;
   pj_scanner* scanner = ctx->scanner;
   pjsip_p_c_v_hdr* hdr = pjsip_p_c_v_hdr_create(pool);
+  pj_str_t temp_newline;
 
   do {
-    if (pj_scan_stricmp(scanner, "orig-ioi", 8) == 0) {
+    pj_scan_peek_n(scanner, 1, &temp_newline);
+    if ((*temp_newline.ptr == '\r') || (*temp_newline.ptr == '\n')) {
+      break;
+    } else if (pj_scan_stricmp(scanner, "orig-ioi", 8) == 0) {
       pj_scan_advance_n(scanner, 8, PJ_TRUE);
       pj_scan_get_char(scanner);
       pj_scan_skip_whitespace(scanner);
@@ -281,18 +285,24 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
       pj_scan_get_char(scanner);
       pj_scan_skip_whitespace(scanner);
       pj_scan_get_until_ch(scanner, ';', &hdr->term_ioi);
-    } else if (pj_scan_stricmp(scanner, "icid-generated-at", 17) == 0) {
-      pj_scan_advance_n(scanner, 17, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      pj_scan_get_until_ch(scanner, ';', &hdr->icid_gen_addr);
     } else if (pj_scan_stricmp(scanner, "icid", 4) == 0) {
       pj_scan_advance_n(scanner, 4, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      pj_scan_get_until_ch(scanner, ';', &hdr->icid);
+      
+      // We could have read the icid of icid= or of icid-generated-at=.
+      if (*scanner->curptr == '=') {
+        pj_scan_get_char(scanner);
+        pj_scan_skip_whitespace(scanner);
+        pj_scan_get_until_ch(scanner, ';', &hdr->icid);
+      } else if (pj_scan_stricmp(scanner, "-generated-at", 13) == 0) {
+        pj_scan_advance_n(scanner, 13, PJ_TRUE);
+        pj_scan_get_char(scanner);
+        pj_scan_skip_whitespace(scanner);
+        pj_scan_get_until_ch(scanner, ';', &hdr->icid_gen_addr);
+      } else {
+        PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+      }
     } else {
-      break;
+      PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
     }
 
     // Swallow whitespace and the ';' character.
