@@ -1943,6 +1943,17 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
       return AsChainLink::Disposition::Stop;
     }
+
+    // If the newly translated ReqURI indicates that we're the host of the
+    // target user, include ourselves as the terminating operator for 
+    // billing.
+    pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+      pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+      pcv->term_ioi = stack_data.home_domain;
+    } else if (pcv) {
+      pcv->term_ioi = pj_str("");
+    }
   }
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
