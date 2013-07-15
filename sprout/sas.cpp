@@ -353,7 +353,8 @@ std::string SAS::Event::to_string() const
   write_int16(s, _msg.hdr.static_data_len);
   for (uint32_t ii = 0; ii < _msg.hdr.static_data_len / 4; ++ii)
   {
-    write_int32(s, _msg.static_data[ii]);
+    // Static parameters are written in native byte order, not network order.
+    write_data(s, sizeof(uint32_t), (char *)&_msg.static_data[ii]);
   }
   for (uint32_t ii = 0; ii < _msg.hdr.num_var_data; ++ii)
   {
@@ -385,7 +386,8 @@ std::string SAS::Marker::to_string(Marker::Scope scope) const
   write_int16(s, _msg.hdr.static_data_len);
   for (uint32_t ii = 0; ii < _msg.hdr.static_data_len / 4; ++ii)
   {
-    write_int32(s, _msg.static_data[ii]);
+    // Static parameters are written in native byte order, not network order.
+    write_data(s, sizeof(uint32_t), (char *)&_msg.static_data[ii]);
   }
   for (uint32_t ii = 0; ii < _msg.hdr.num_var_data; ++ii)
   {
