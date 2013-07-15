@@ -83,7 +83,6 @@ public:
   PoolEntry(HttpConnection* parent) :
     _parent(parent),
     _deadline_ms(0L),
-    _engine(reinterpret_cast<unsigned long>(this)),  // Seed generator with a different value each time.
     _rand(1.0 / CONNECTION_AGE_MS)
   {
   }
@@ -104,7 +103,7 @@ public:
   {
     // Get the next desired inter-arrival time. Choose this
     // randomly so as to avoid spikes.
-    unsigned long interval_ms = (unsigned long)_rand(_engine);
+    unsigned long interval_ms = (unsigned long)_rand();
 
     if ((_deadline_ms == 0L) ||
         ((_deadline_ms + interval_ms) < now_ms))
@@ -132,14 +131,11 @@ private:
   // CLOCK_MONOTONIC milliseconds, or 0 for ASAP.
   unsigned long _deadline_ms;
 
-  /// Random number generator to use.
-  std::default_random_engine _engine;
-
   /// Random distribution to use for determining connection lifetimes.
   /// Use an exponential distribution because it is memoryless. This
   /// gives us a Poisson distribution of recyle events, both for
   /// individual threads and for the overall application.
-  std::exponential_distribution<double> _rand;
+  Utils::ExponentialDistribution _rand;
 
   /// Server IP we're connected to, if any.
   std::string _remoteIp;
