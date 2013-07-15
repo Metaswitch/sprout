@@ -116,8 +116,8 @@ namespace Utils
   class ExponentialDistribution
   {
   public:
-    ExponentialDistribution(double mean) :
-      _mean(mean)
+    ExponentialDistribution(double lambda) :
+      _lambda(lambda)
     {
     }
 
@@ -131,11 +131,11 @@ namespace Utils
       // it to an exponentially distributed number using a formula for the
       // inverted CDF.
       double r = (double)rand() / (double)RAND_MAX;
-      return -log(r)/_mean;
+      return -log(r)/_lambda;
     }
 
   private:
-    double _mean;
+    double _lambda;
   };
 
   /// Generates a random number which is binomially distributed
