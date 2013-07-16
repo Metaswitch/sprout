@@ -275,9 +275,9 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
 
   // Calculate the address to forward the response
   pj_bzero(&res_addr, sizeof(res_addr));
-  res_addr.dst_host.type = PJSIP_TRANSPORT_UDP;
+  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
   res_addr.dst_host.flag =
-    pjsip_transport_get_flag_from_type(PJSIP_TRANSPORT_UDP);
+    pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
   // Destination address is Via's received param
   res_addr.dst_host.addr.host = hvia->recvd_param;

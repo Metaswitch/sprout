@@ -714,7 +714,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   // OK goes back C<-X
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
-  //@@@DISABLED - see bug 132. tpA->expect_target(current_txdata(), true);
+  tpA->expect_target(current_txdata(), true);
   msg.set_route(out);
   msg._cseq++;
 
