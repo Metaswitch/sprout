@@ -39,9 +39,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef STATEFUL_PROXY_H__
 #define STATEFUL_PROXY_H__
 
@@ -51,6 +48,7 @@ class UACTransaction;
 
 #include <list>
 
+#include "pjutils.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
@@ -69,7 +67,7 @@ class ServingState
 public:
   ServingState() :
     _session_case(NULL)
-    {
+  {
   }
 
   ServingState(const SessionCase* session_case,
@@ -141,26 +139,29 @@ public:
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
   void on_tsx_state(pjsip_event* event);
-  void cancel_pending_uac_tsx(int st_code, pj_bool_t integrity_protected=PJ_FALSE);
+  void cancel_pending_uac_tsx(int st_code, bool dissociate_uac);
   pj_status_t handle_final_response();
 
   void register_proxy(CallServices::Terminating* proxy);
 
   pj_status_t send_trying(pjsip_rx_data* rdata);
   pj_status_t send_response(int st_code, const pj_str_t* st_text=NULL);
-  bool redirect(std::string, int, const AsChainLink& odi);
-  bool redirect(pjsip_uri*, int, const AsChainLink& odi);
+  bool redirect(std::string, int);
+  bool redirect(pjsip_uri*, int);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
-  // Enters/exits this transaction's context.  While in the transaction's
-  // context, it will not be destroyed.  enter_context and exit_context should
-  // always be called at the start and end of any entry point (e.g. call from
-  // non-transaction code into transaction or callback from PJSIP) to avoid
-  // the transaction object being destroyed under our feet.  On return from
-  // exit_context, you must not assume that the transaction still exists.  Note
-  // that this does not prevent the _tsx from being destroyed.
+  // Enters/exits this UASTransaction's context.  This takes a group lock,
+  // single-threading any processing on this UASTransaction and associated
+  // UACTransactions.  While in the UASTransaction's context, it will not be
+  // destroyed.  The underlying PJSIP transaction (_tsx) may or may not exist,
+  // but it won't disappear under your feet.
+  //
+  // enter_context and exit_context should always be called at the start and
+  // end of any entry point (e.g. call from non-transaction code into
+  // transaction or callback from PJSIP).  On return from exit_context, you
+  // must not assume that the transaction still exists.
   void enter_context();
   void exit_context();
 
@@ -175,15 +176,16 @@ private:
   void log_on_tsx_complete();
   pj_status_t init_uac_transactions(target_list& targets);
   void dissociate(UACTransaction *uac_data);
-  bool redirect_int(pjsip_uri* target, int code, const AsChainLink& odi);
+  bool redirect_int(pjsip_uri* target, int code);
   AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
 
-  AsChainLink handle_incoming_non_cancel(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(AsChainLink& as_chain, target** pre_target);
-  void move_to_terminating_chain(AsChainLink& as_chain);
-  AsChainLink::Disposition handle_terminating(AsChainLink& as_chain, target** pre_target);
+  void handle_incoming_non_cancel(const ServingState& serving_state);
+  AsChainLink::Disposition handle_originating(target** pre_target);
+  void move_to_terminating_chain();
+  AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
+  pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
   int                  _pending_targets;
@@ -202,7 +204,8 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
-  std::list<AsChain*> _victims;  //< Objects to die along with the transaction.
+  AsChainLink          _as_chain_link;
+  std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
 };
 
 // This is the data that is attached to the UAC transaction
@@ -216,35 +219,48 @@ public:
 
   void set_target(const struct target& target);
   void send_request();
-  void cancel_pending_tsx(int st_code, pj_bool_t integrity_protected);
+  void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
-  // Enters/exits this transaction's context.  While in the transaction's
-  // context, it will not be destroyed.  enter_context and exit_context should
-  // always be called at the start and end of any entry point (e.g. call from
-  // non-transaction code into transaction or callback from PJSIP) to avoid
-  // the transaction object being destroyed under our feet.  On return from
-  // exit_context, you must not assume that the transaction still exists.  Note
-  // that this does not prevent the _tsx from being destroyed.
+  void liveness_timer_expired();
+
+  static void liveness_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
+
+  // Enters/exits this UACTransaction's context.  This takes a group lock,
+  // single-threading any processing on this UACTransaction, the associated
+  // UASTransaction and other associated UACTransactions.  While in the
+  // UACTransaction's context, it will not be destroyed.  The underlying PJSIP
+  // transaction (_tsx) may or may not exist, but it won't disappear under
+  // your feet.
+  //
+  // enter_context and exit_context should always be called at the start and
+  // end of any entry point (e.g. call from non-transaction code into
+  // transaction or callback from PJSIP).  On return from exit_context, you
+  // must not assume that the transaction still exists.
   void enter_context();
   void exit_context();
 
   friend class UASTransaction;
 
 private:
-  UASTransaction      *_uas_data;
+  UASTransaction*      _uas_data;
   int                  _target;
-  pjsip_transaction   *_tsx;
-  pjsip_tx_data       *_tdata;
+  pj_grp_lock_t*       _lock;       //< Lock to protect this UACTransaction and the underlying PJSIP transaction
+  pjsip_transaction*   _tsx;
+  pjsip_tx_data*       _tdata;
   pj_bool_t            _from_store; /* If true, the aor and binding_id
                                        identify the binding. */
   pj_str_t             _aor;
   pj_str_t             _binding_id;
   bool                 _pending_destroy;
   int                  _context_count;
+
+  int                  _liveness_timeout;
+  pj_timer_entry       _liveness_timer;
+  static const int LIVENESS_TIMER = 1;
 };
 
 pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
@@ -252,13 +268,15 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy,
+                                int upstream_proxy_port,
                                 int upstream_proxy_connections,
                                 int upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
                                 const std::string& trusted_hosts,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
-                                BgcfService *bgcfService);
+                                BgcfService *bgcfService,
+                                HSSConnection* hss_connection);
 
 void destroy_stateful_proxy();
 
@@ -270,7 +288,8 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
                              const TrustBoundary* trust,
                              target_list& targets,
-                             int max_targets);
+                             int max_targets,
+                             SAS::TrailId trail);
 #endif
 
 #endif

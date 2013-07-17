@@ -89,6 +89,7 @@ struct options
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
+  int                    upstream_proxy_port;
   int                    upstream_proxy_connections;
   int                    upstream_proxy_recycle;
   pj_bool_t              ibcf;
@@ -129,16 +130,15 @@ static void usage(void)
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -e, --edge-proxy <name>[:<connections>[:<recycle time>]]\n"
+       " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an edge proxy using the specified node\n"
-       "                            as the upstream proxy.  Optionally specifies the\n"
-       "                            number of parallel connections to create, and how\n"
-       "                            often to recycle these connections (by default\n"
-       "                            a single connection is used and never recycled).\n"
+       "                            as the upstream proxy.  Optionally specifies the port,\n"
+       "                            the number of parallel connections to create, and how\n"
+       "                            often to recycle these connections (by default a\n"
+       "                            single connection to the trusted port is used and never\n"
+       "                            recycled).\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
-       " -A, --auth <sip-digest|ims-digest>\n"
-       "                            Use authentication\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
        " -M, --memstore <servers>   Use memcached store on comma-separated list of\n"
@@ -243,17 +243,27 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         std::vector<std::string> upstream_proxy_options;
         Utils::split_string(std::string(pj_optarg), ':', upstream_proxy_options, 0, false);
         options->upstream_proxy = upstream_proxy_options[0];
+        options->upstream_proxy_port = 0;
         options->upstream_proxy_connections = 1;
         options->upstream_proxy_recycle = 0;
         if (upstream_proxy_options.size() > 1)
         {
-          options->upstream_proxy_connections = atoi(upstream_proxy_options[1].c_str());
+          options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
           if (upstream_proxy_options.size() > 2)
           {
-            options->upstream_proxy_recycle = atoi(upstream_proxy_options[2].c_str());
+            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
+            if (upstream_proxy_options.size() > 3)
+            {
+              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
+            }
           }
         }
-        fprintf(stdout, "Upstream proxy is set to %s\n", options->upstream_proxy.c_str());
+        fprintf(stdout, "Upstream proxy is set to %s", options->upstream_proxy.c_str());
+        if (options->upstream_proxy_port != 0)
+        {
+          fprintf(stdout, ":%d", options->upstream_proxy_port);
+        }
+        fprintf(stdout, "\n");
         fprintf(stdout, "  connections = %d\n", options->upstream_proxy_connections);
         fprintf(stdout, "  recycle time = %d seconds\n", options->upstream_proxy_recycle);
         options->edge_proxy = PJ_TRUE;
@@ -264,12 +274,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->ibcf = PJ_TRUE;
       options->trusted_hosts = std::string(pj_optarg);
       fprintf(stdout, "IBCF mode enabled, trusted hosts = %s\n", pj_optarg);
-      break;
-
-    case 'A':
-      options->auth_enabled = PJ_TRUE;
-      options->auth_config = pj_optarg;
-      fprintf(stdout, "Enabling authentication %s\n", pj_optarg);
       break;
 
     case 'R':
@@ -355,6 +359,14 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Unknown option. Run with --help for help.\n");
       return -1;
     }
+  }
+
+  // If the upstream proxy port is not set, default it to the trusted port.
+  // We couldn't do this earlier because the trusted port might be set after
+  // the upstream proxy.
+  if (options->upstream_proxy_port == 0)
+  {
+    options->upstream_proxy_port = options->trusted_port;
   }
 
   return PJ_SUCCESS;
@@ -529,7 +541,13 @@ int main(int argc, char *argv[])
 
   if ((opt.log_to_file) && (opt.log_directory != ""))
   {
-    Log::setLogger(new Logger(opt.log_directory, "sprout"));
+    // Work out the program name from argv[0], stripping anything before the final slash.
+    char* prog_name = argv[0];
+    char* slash_ptr = rindex(argv[0], '/');
+    if (slash_ptr != NULL) {
+      prog_name = slash_ptr + 1;
+    }
+    Log::setLogger(new Logger(opt.log_directory, prog_name));
   }
 
   if (opt.analytics_enabled)
@@ -606,18 +624,10 @@ int main(int argc, char *argv[])
   // Initialise the OPTIONS handling module.
   status = init_options();
 
-  if (opt.auth_enabled)
-  {
-    if (opt.auth_realm == "")
-    {
-      opt.auth_realm = opt.local_host;
-    }
-    LOG_STATUS("Enabling %s authentication", opt.auth_config.c_str());
-    status = init_authentication(opt.auth_realm, false, opt.auth_config, hss_connection, analytics_logger);
-  }
-
   if (!opt.edge_proxy)
   {
+    status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_file.empty())
     {
@@ -635,13 +645,15 @@ int main(int argc, char *argv[])
                                ifc_handler,
                                opt.edge_proxy,
                                opt.upstream_proxy,
+                               opt.upstream_proxy_port,
                                opt.upstream_proxy_connections,
                                opt.upstream_proxy_recycle,
                                opt.ibcf,
                                opt.trusted_hosts,
                                analytics_logger,
                                enum_service,
-                               bgcf_service);
+                               bgcf_service,
+                               hss_connection);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",
@@ -653,7 +665,7 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store, analytics_logger, ifc_handler);
+    status = init_registrar(registrar_store, hss_connection, analytics_logger, ifc_handler);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing registrar, %s",

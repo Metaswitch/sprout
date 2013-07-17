@@ -35,6 +35,7 @@
  */
 
 #include <boost/lexical_cast.hpp>
+#include <boost/regex.hpp>
 
 extern "C" {
 #include <pjlib-util.h>
@@ -55,6 +56,7 @@ using namespace rapidxml;
 static long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value);
 static bool parse_bool(xml_node<>* node, std::string description);
 static std::string get_first_node_value(xml_node<>* node, std::string name);
+static std::string get_text_or_cdata(xml_node<>* node);
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name);
 
 
@@ -73,7 +75,9 @@ public:
   }
 
   virtual const char* what() const throw()
-  { // LCOV_EXCL_LINE work around unexplained gcov behaviour
+  // LCOV_EXCL_START work around unexplained gcov behaviour
+  {
+    // LCOV_EXCL_STOP
     return _what.c_str();
   }
 
@@ -100,7 +104,7 @@ IfcHandler::~IfcHandler()
 // @throw ifc_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                       bool is_registered,               //< The registration state
-                      pjsip_msg *msg,                   //< The message being matched
+                      pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt)                  //< The Service Point Trigger node
 {
   // Find the class node.
@@ -140,6 +144,61 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     // check to see if they match the registration type.
     ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
   }
+  else if (strcmp("SIPHeader", name) == 0)
+  {
+    xml_node<>* spt_header = node->first_node("Header");
+    xml_node<>* spt_content = node->first_node("Content");
+    boost::regex header_regex;
+    boost::regex content_regex;
+    pjsip_hdr* header = NULL;
+
+    if (!spt_header)
+    {
+      throw ifc_error("Missing Header element for SIPHeader service point trigger");
+    }
+
+    header_regex = boost::regex(get_text_or_cdata(spt_header), boost::regex_constants::no_except);
+    if (header_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Header element for SIPHeader service point trigger");
+    }
+
+    for (header = msg->hdr.next; header != &msg->hdr; header = header->next)
+    {
+      if (boost::regex_search(PJUtils::pj_str_to_string(&(header->name)), header_regex))
+      {
+        if (!spt_content)
+        {
+          // We've found a matching header, and don't have to match on content
+          ret = true;
+        }
+        else
+        {
+          std::string header_value = PJUtils::get_header_value(header);
+          // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once
+          if (content_regex.status())
+          {
+            content_regex = boost::regex(get_text_or_cdata(spt_content), boost::regex_constants::no_except);
+            if (content_regex.status())
+            {
+              throw ifc_error("Invalid regular expression in Content element for SIPHeader service point trigger");
+            }
+          }
+
+          if (boost::regex_search(header_value, content_regex))
+          {
+            // We've found a matching header, and have matching content in one field
+            ret = true;
+          }
+        }
+      }
+      if (ret)
+      {
+        // Stop processing other headers once we have a match
+        break;
+      }
+    }
+  }
   else if (strcmp("SessionCase", name) == 0)
   {
     // Enum values are per CxData_Type_Rel11.xsd.
@@ -178,7 +237,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       ret = false;
     }
     break;
-      // LCOV_EXCL_STOP
+    // LCOV_EXCL_STOP
     }
   }
   else
@@ -196,7 +255,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg *msg) const
+bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg* msg) const
 {
   try
   {
@@ -245,8 +304,8 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     std::map<int32_t, bool> groups;
 
     for (xml_node<>* spt = trigger->first_node("SPT");
-       spt;
-       spt = spt->next_sibling("SPT"))
+         spt;
+         spt = spt->next_sibling("SPT"))
     {
       xml_node<>* neg_node = spt->first_node("ConditionNegated");
       bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
@@ -294,13 +353,41 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
 /// Gets the first child node of "node" with name "name". Returns an empty string if there
 // is no such node, otherwise returns its value (which is the empty string if
 // it has no value).
-static std::string get_first_node_value(xml_node<>* node, std::string name) {
+static std::string get_first_node_value(xml_node<>* node, std::string name)
+{
   xml_node<>* first_node = node->first_node(name.c_str());
-  return (first_node) ? first_node->value() : "";
+  if (!first_node)
+  {
+    return "";
+  }
+  else
+  {
+    return get_text_or_cdata(first_node);
+  }
+}
+
+// Takes an XML node containing ONLY text or CDATA (not both) and returns the value of that text or
+// CDATA.
+//
+// This is necesary because RapidXML's value() function only returns the text of the first data node,
+// not the first CDATA node.
+static std::string get_text_or_cdata(xml_node<>* node)
+{
+  xml_node<>* first_data_node = node->first_node();
+  if (first_data_node && ((first_data_node->type() != node_cdata) || (first_data_node->type() != node_data)))
+  {
+    return first_data_node->value();
+  }
+  else
+  {
+    return "";
+  }
 }
 
 
-static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name) {
+
+static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
+{
   xml_node<>* child_node = parent_node->first_node(child_node_name.c_str());
   return (child_node != NULL);
 }
@@ -325,7 +412,7 @@ AsInvocation Ifc::as_invocation() const
   // That means each AsInvocation would have to belong to a pool,
   // though, and that's not easy in the current architecture.
 
-  as_invocation.default_handling = boost::lexical_cast<intptr_t>(get_first_node_value(as, "DefaultHandling"));
+  as_invocation.default_handling = boost::lexical_cast<bool>(get_first_node_value(as, "DefaultHandling"));
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
   xml_node<>* as_ext = as->first_node("Extension");
@@ -333,7 +420,9 @@ AsInvocation Ifc::as_invocation() const
   {
     as_invocation.include_register_request = does_child_node_exist(as_ext, "IncludeRegisterRequest");
     as_invocation.include_register_response = does_child_node_exist(as_ext, "IncludeRegisterResponse");
-  } else {
+  }
+  else
+  {
     as_invocation.include_register_request = false;
     as_invocation.include_register_response = false;
   };
@@ -445,7 +534,7 @@ Ifcs::~Ifcs()
 // Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      bool is_registered,               //< Whether the served user is registered
-                     pjsip_msg *msg,                   //< The message starting the dialog
+                     pjsip_msg* msg,                   //< The message starting the dialog
                      std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
 {
   LOG_DEBUG("Interpreting %s IFC information", session_case.to_string().c_str());
@@ -476,19 +565,15 @@ std::string IfcHandler::served_user_from_msg(
 
   // For originating:
   //
-  // Ultimately we should determine the served user as described in
-  // 3GPP TS 24.229 s5.4.3.2, step 1. This first relies on
-  // P-Served-User (RFC5502), if present (step 1a). We do implement
-  // this part. However, until sto125 (support for multiple identities
-  // for the same line) is implemented, bono doesn't set the
-  // P-Asserted-Identity header so it makes no sense to rely on it,
-  // let alone to select one of the identities based on local policy
-  // (step 1.b.ii). We therefore ignore P-Asserted-Identity entirely
-  // for now. Instead, we look at the From header or the request URI
-  // as appropriate for the session case.  Per 24.229, we ignore the
-  // session case and registration state parameters of P-Served-User;
-  // these are intended for the AS, not the S-CSCF (which has other
-  // means of determining these).
+  // We determine the served user as described in 3GPP TS 24.229 s5.4.3.2,
+  // step 1. This first relies on P-Served-User (RFC5502), if present
+  // (step 1a). If not (step 1b), we then look at P-Asserted-Identity.
+  // For compliance with non-IMS devices (and contrary to the IMS spec),
+  // if there is no P-Asserted-Identity we then look at the From header
+  // or the request URI as appropriate for the session case.  Per 24.229,
+  // we ignore the session case and registration state parameters of
+  // P-Served-User; these are intended for the AS, not the S-CSCF (which
+  // has other means of determining these).
 
   // For terminating:
   //
@@ -515,16 +600,43 @@ std::string IfcHandler::served_user_from_msg(
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-      pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
-      uri = PJUtils::uri_from_string_header(served_user_hdr, pool);
+      // Remove parameters before parsing the URI.  If there are URI parameters,
+      // the URI must be enclosed in angle brackets, so we can either remove
+      // everything after the first closing angle bracket, or everything after
+      // the first semo-colon.
+      char* end = pj_strchr(&served_user_hdr->hvalue, '>');
+      if (end == NULL)
+      {
+        end = pj_strchr(&served_user_hdr->hvalue, ';');
+      }
+      if (end != NULL)
+      {
+        served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
+      }
+
+      uri = pjsip_parse_uri(pool, served_user_hdr->hvalue.ptr, served_user_hdr->hvalue.slen, 0);
 
       if (uri == NULL)
       {
         LOG_WARNING("Unable to parse P-Served-User header: %.*s",
                     served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
+      }
+    }
+
+    if (uri == NULL)
+    {
+      // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
+      // header.
+      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
+                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
+
+      if (asserted_id_hdr != NULL)
+      {
+        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
       }
     }
   }
@@ -543,42 +655,18 @@ std::string IfcHandler::served_user_from_msg(
     }
   }
 
-  // PJSIP URIs might have an irritating wrapper around them.
+  // Get the URI if it was encoded within a name-addr.
   uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
-    user = user_from_uri(uri);
+    user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   }
 
   return user;
 }
 
-
-// Determines the user ID string from a URI.
-//
-// @returns the user ID
-std::string IfcHandler::user_from_uri(pjsip_uri *uri)
-{
-  // Get the base URI, ignoring any display name.
-  uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
-
-  // If this is a SIP URI, copy the user and host (only) out into a temporary
-  // structure SIP URI and use this instead.  This strips any parameters.
-  pjsip_sip_uri local_sip_uri;
-  if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-    pjsip_sip_uri_init(&local_sip_uri, PJSIP_URI_SCHEME_IS_SIPS(uri));
-    local_sip_uri.user = sip_uri->user;
-    local_sip_uri.host = sip_uri->host;
-    uri = (pjsip_uri*)&local_sip_uri;
-  }
-
-  // Return the resulting string.
-  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
-}
 
 /// Attempt to parse the content of the node as a bounded integer
 // returning the result or throwing.

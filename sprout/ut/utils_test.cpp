@@ -34,9 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
+#include <math.h>
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -57,6 +55,16 @@ class UtilsTest : public ::testing::Test
 
   virtual ~UtilsTest()
   {
+  }
+
+  double nCm(int n, int m)
+  {
+    double r = 1.0;
+    for (int i = 1; i <= m; i++)
+    {
+      r *= (double)(n - i + 1)/(double)i;
+    }
+    return r;
   }
 };
 
@@ -193,3 +201,70 @@ TEST_F(UtilsTest, Trim)
   EXPECT_EQ("", s);
 }
 
+
+TEST_F(UtilsTest, ExponentialDistribution)
+{
+  double lambda = 1.0 / (double)300;
+  Utils::ExponentialDistribution e(lambda);
+
+  // Use a fixed seed to make the test deterministic.
+  srand(2013);
+
+  // Sample the distribution 10000 times.
+  std::vector<double> x(10000);
+  for (int i = 0; i < 10000; ++i)
+  {
+    x[i] = e();
+    if (x[i] < 0)
+    {
+      printf("Bad value %g\n", x[i]);
+      exit(1);
+    }
+  }
+
+  // Calculate the observed mean and variance.
+  double observed_mean = 0.0;
+  for (int i = 0; i < 10000; ++i)
+  {
+    observed_mean += x[i];
+  }
+  observed_mean /= (double)10000;
+  double observed_variance = 0.0;
+  for (int i = 0; i < 10000; ++i)
+  {
+    observed_variance += (x[i] - observed_mean)*(x[i] - observed_mean);
+  }
+  observed_variance /= (double)10000;
+
+  double expected_mean = 1.0 / lambda;
+  double expected_variance = expected_mean*expected_mean;
+  EXPECT_THAT(observed_mean, testing::AllOf(testing::Ge(expected_mean * 0.95), testing::Le(expected_mean * 1.05)));
+  EXPECT_THAT(observed_variance, testing::AllOf(testing::Ge(expected_variance * 0.95), testing::Le(expected_variance * 1.05)));
+}
+
+
+TEST_F(UtilsTest, BinomialDistribution)
+{
+  int t = 10;
+  double p = 0.1;
+  Utils::BinomialDistribution b(t, p);
+  std::vector<int> c(t+1);
+
+  // Use a fixed seed to make the test deterministic.
+  srand(2013);
+
+  for (int i = 0; i < 10000; ++i)
+  {
+    int v = b();
+    EXPECT_THAT(v, testing::AllOf(testing::Ge(0), testing::Le(t)));
+    ++c[v];
+  }
+
+  // Test that the resulting distribution is close to the expected one.
+  for (int i = 0; i <= t; ++i)
+  {
+    double expected = nCm(t,i) * pow(p, i) * pow(1-p, t-i);
+    double observed = (double)c[i] / (double)10000;
+    EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.05), testing::Le(expected + 0.05)));
+  }
+}

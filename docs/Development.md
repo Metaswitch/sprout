@@ -20,7 +20,7 @@ On Ubuntu 12.04,
 
         echo "deb http://repo.cw-ngv.com/latest binary/" | sudo tee /etc/apt/sources.list.d/clearwater.list
 
-    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](http://www.zeromq.org/intro:get-the-software).
+    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](https://github.com/Metaswitch/zeromq3).
 
 2.  update the package list
 
@@ -38,7 +38,12 @@ are in the `modules` subdirectory.
 To get all the code, clone the sprout repository with the `--recursive` flag to
 indicate that submodules should be cloned too.
 
-    git clone --recursive git@bitbucket.org:metaswitch/sprout.git
+    git clone --recursive git@github.com:Metaswitch/sprout.git
+
+This accesses the repository over SSH on Github, and will not work unless you have a Github account and registered SSH key. If you do not have both of these, you will need to configure Git to read over HTTPS instead:
+
+    git config --global url."https://github.com/".insteadOf git@github.com:
+    git clone --recursive git@github.com:Metaswitch/sprout.git
 
 ## Building Binaries
 

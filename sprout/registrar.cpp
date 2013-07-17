@@ -55,6 +55,7 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "memcachedstore.h"
+#include "hssconnection.h"
 #include "ifchandler.h"
 #include "registrar.h"
 #include "registration_utils.h"
@@ -63,6 +64,9 @@ extern "C" {
 
 
 static RegData::Store* store;
+
+// Connection to the HSS service for retrieving associated public URIs.
+static HSSConnection* hss;
 
 static IfcHandler* ifchandler;
 
@@ -146,14 +150,88 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 }
 
 
+// We don't currently need this function because we don't need to provide the
+// private ID to homestead - once we do, we'll probably need to reinstate it.
+//
+// /// Get private ID from a received message by first checking the Authorization
+// /// header and falling back to pulling the username and host from To URI.
+// bool get_private_id(pjsip_rx_data* rdata, std::string& id)
+// {
+//  bool success = false;
+//
+//   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+//            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+//   if (auth_hdr != NULL)
+//   {
+//     if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)
+//     {
+//       id = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+//       success = true;
+//     }
+//     else
+//     {
+//       LOG_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
+//                   auth_hdr->scheme.slen, auth_hdr->scheme.ptr);
+//     }
+//   }
+//
+//   if (!success)
+//   {
+//     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+//     if (PJSIP_URI_SCHEME_IS_SIP(to_uri) ||
+//         PJSIP_URI_SCHEME_IS_SIPS(to_uri))
+//     {
+//       pjsip_sip_uri* to_sip_uri = (pjsip_sip_uri*)to_uri;
+//       if (to_sip_uri->user.slen > 0)
+//       {
+//         id = PJUtils::pj_str_to_string(&to_sip_uri->user) + "@" + PJUtils::pj_str_to_string(&to_sip_uri->host);
+//       }
+//       else
+//       {
+//         id = PJUtils::pj_str_to_string(&to_sip_uri->host);
+//       }
+//       success = true;
+//     } 
+//     else
+//     {
+//       const pj_str_t* scheme = pjsip_uri_get_scheme(to_uri);
+//       LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
+//                   scheme->slen, scheme->ptr);
+//     }
+//   }
+//
+//   return success;
+// }
+
+
 void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
 
-  // Get the Address of Record from the URI in the To header.
-  std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri));
-  LOG_DEBUG("Process REGISTER for AoR %s", aor.c_str());
+  // Get the URI from the To header and check it is a SIP or SIPS URI.
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+
+  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // whether 404 is the right status code - it says 404 should be used if
+    // the AoR isn't valid for the domain in the RequestURI).
+    // LCOV_EXCL_START
+    LOG_ERROR("Rejecting register request using non SIP URI");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_FOUND,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Canonicalize the public ID from the URI in the To header.
+  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -176,8 +254,32 @@ void process_register_request(pjsip_rx_data* rdata)
   cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
-  // Find the contact and expires headers in the message.
-  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+  // Query the HSS for the associated URIs.
+  // This should really include the private ID, but we don't yet have a
+  // homestead API for it.  Homestead won't be able to query a third-party HSS
+  // without the private ID.
+  Json::Value* uris = hss->get_associated_uris(public_id, trail);
+  if ((uris == NULL) ||
+      (uris->size() == 0))
+  {
+    // We failed to get the list of associated URIs.  This indicates that the
+    // HSS is unavailable, the public identity doesn't exist or the public
+    // identity doesn't belong to the private identity.  Reject with 403.
+    LOG_ERROR("Rejecting register request with invalid public/private identity");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_FORBIDDEN,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+  }
+
+  // Determine the AOR from the first entry in the uris array.
+  std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+  LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
+
+  // Find the expire headers in the message.
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
 
   // Get the system time in seconds for calculating absolute expiry times.
@@ -192,7 +294,8 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     if (aor_data != NULL)
     {
-      delete aor_data;
+      delete aor_data; // LCOV_EXCL_LINE - Single-threaded tests mean we'll
+                       //                  always pass CAS.
     }
 
     // Find the current bindings for the AoR.
@@ -213,6 +316,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
+    pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
     while (contact != NULL)
     {
       if (contact->star)
@@ -294,12 +398,7 @@ void process_register_request(pjsip_rx_data* rdata)
             expiry = 300;
           }
 
-          if (expiry == 0)
-          {
-            RegistrationUtils::user_initiated_deregistration(ifchandler, store, aor, binding_id);
-          } else {
-            binding->_expires = now + expiry;
-          }
+          binding->_expires = now + expiry;
 
           if (analytics != NULL)
           {
@@ -430,7 +529,7 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Construct a Service-Route header pointing at the sprout cluster.  We don't
-  // care which sprout handles the subsequent requests as they all have access 
+  // care which sprout handles the subsequent requests as they all have access
   // to all subscriber information.
   pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
   pj_strdup(tdata->pool,
@@ -440,22 +539,35 @@ void process_register_request(pjsip_rx_data* rdata)
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
-  char buf[500];
-  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR,
-                            service_route_uri,
-                            buf,
-                            sizeof(buf));
-  pj_str_t service_route = {buf, len};
-  pjsip_hdr* service_route_hdr =
-    (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
-                                                &STR_SERVICE_ROUTE,
-                                                &service_route);
-  pjsip_msg_insert_first_hdr(tdata->msg, service_route_hdr);
+  pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
+  service_route->name = STR_SERVICE_ROUTE;
+  service_route->sname = pj_str("");
+  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
 
-  // Send the response.
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
+
+  // Add P-Associated-URI headers for all of the associated URIs.
+  static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
+  for (Json::ValueIterator it = uris->begin(); it != uris->end(); it++)
+  {
+    pj_str_t associated_uri = {(char*)(*it).asCString(), strlen((*it).asCString())};
+    pjsip_hdr* associated_uri_hdr =
+      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
+                                                  &p_associated_uri_hdr_name,
+                                                  &associated_uri);
+    pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
+  }
+  delete uris;
+
+  // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
+  // ASes of the 200 OK response we sent.
+  pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "");
+  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "", trail);
+
+  // Now we can free the tdata.
+  pjsip_tx_data_dec_ref(tdata);
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
   SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
@@ -479,7 +591,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 }
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
-  if (((intptr_t)tsx->mod_data[0] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
       ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
     // Can't create an AS response in UT
@@ -489,16 +601,17 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
 
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*");
+    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*", get_trail(tsx));
     // LCOV_EXCL_STOP
   }
 }
 
-pj_status_t init_registrar(RegData::Store* registrar_store, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
+pj_status_t init_registrar(RegData::Store* registrar_store, HSSConnection* hss_connection, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
 {
   pj_status_t status;
 
   store = registrar_store;
+  hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
 
@@ -513,5 +626,4 @@ void destroy_registrar()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_registrar);
 }
-
 

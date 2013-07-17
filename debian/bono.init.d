@@ -55,9 +55,9 @@
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Bono SIP Edge Proxy"
 NAME=bono
-EXECNAME=sprout
+EXECNAME=bono
 PIDFILE=/var/run/$NAME.pid
-DAEMON=/usr/share/clearwater/bin/sprout
+DAEMON=/usr/share/clearwater/bin/bono
 HOME=/etc/clearwater
 log_directory=/var/log/$NAME
 
@@ -80,7 +80,8 @@ log_directory=/var/log/$NAME
 #
 get_settings()
 {
-        # Pull in the settings for this node.
+        # Set up defaults and then pull in the settings for this node.
+        sas_server=0.0.0.0
         . /etc/clearwater/config
 
         # Set up defaults for user settings then pull in any overrides.
@@ -112,10 +113,10 @@ do_start()
         ulimit -Hn 1000000
         ulimit -Sn 1000000
         ulimit -c unlimited
-        # enable gdb to dump a parent sprout process's stack
+        # enable gdb to dump a parent bono process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --alias $public_ip --trusted-port 5058 --untrusted-port 5060 --edge-proxy $sprout_hostname:$upstream_connections:$upstream_recycle_connections --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --alias $public_ip --trusted-port 5058 --untrusted-port 5060 --edge-proxy $sprout_hostname:5058:$upstream_connections:$upstream_recycle_connections --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
         # Add in IBCF configuration if there are trusted peers configured in user_settings file
         [ "$trusted_peers" ] && DAEMON_ARGS="$DAEMON_ARGS --ibcf $trusted_peers"
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
@@ -173,7 +174,7 @@ else
 fi
 if [ -n "$leaked_pids" ] ; then
   for pid in $leaked_pids ; do
-    logger -p daemon.error -t $NAME Found leaked sprout $pid \(correct is $(cat $PIDFILE)\) - killing $pid
+    logger -p daemon.error -t $NAME Found leaked bono $pid \(correct is $(cat $PIDFILE)\) - killing $pid
     kill -9 $pid
   done
 fi

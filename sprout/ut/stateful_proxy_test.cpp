@@ -37,7 +37,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <valgrind/valgrind.h>
 #include <boost/lexical_cast.hpp>
 
 #include "pjutils.h"
@@ -202,7 +201,7 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
-                            bool hss)
+                            bool ifcs)
   {
     SipTest::SetUpTestCase(false);
 
@@ -211,9 +210,9 @@ public:
     delete _analytics->_logger;
     _analytics->_logger = NULL;
     _call_services = NULL;
-    if (hss)
+    _hss_connection = new FakeHSSConnection();
+    if (ifcs)
     {
-      _hss_connection = new FakeHSSConnection();
       _xdm_connection = new FakeXDMConnection();
       _ifc_handler = new IfcHandler(_hss_connection, _store);
       _call_services = new CallServices(_xdm_connection);
@@ -230,13 +229,15 @@ public:
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
+                                          stack_data.trusted_port,
                                           10,
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
-                                          _bgcf_service);
+                                          _bgcf_service,
+                                          _hss_connection);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -299,6 +300,10 @@ public:
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
     // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
     poll();
 
     // Stop and restart the layer just in case
@@ -328,7 +333,8 @@ protected:
                      bool expect_100,
                      bool pani_AB,
                      bool pani_BA,
-                     bool expect_orig);
+                     bool expect_orig,
+                     bool pcpi);
 };
 
 RegData::Store* StatefulProxyTestBase::_store;
@@ -396,7 +402,16 @@ public:
   }
 
 protected:
-  void doRegisterEdge(TransportFlow* xiTp, string& xoToken, string& xoBareToken, bool firstHop = false, string supported = "outbound, path", bool expectPath = true, string via = "");
+  void doRegisterEdge(TransportFlow* xiTp,
+                      string& xoToken,
+                      string& xoBareToken,
+                      int expiry = 300,
+                      string integrity = "no",
+                      string extraRspHeaders = "",
+                      bool firstHop = false,
+                      string supported = "outbound, path",
+                      bool expectPath = true,
+                      string via = "");
   SP::Message doInviteEdge(string token);
 };
 
@@ -580,7 +595,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool pani_AB,        //< Should P-A-N-I be passed on requests?
                                           bool pani_BA,        //< Should P-A-N-I be passed on responses?
-                                          bool expect_orig)    //< Should we expect the INVITE to be marked originating?
+                                          bool expect_orig,    //< Should we expect the INVITE to be marked originating?
+                                          bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
   SCOPED_TRACE("doTestHeaders");
   pjsip_msg* out;
@@ -631,6 +647,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   {
     EXPECT_THAT(get_headers(out, "Route"), Not(HasSubstr(";orig")));
   }
+
+  // Check P-Called-Party-ID
+  EXPECT_EQ(pcpi ? "P-Called-Party-ID: <" + msg._toscheme + ":" + msg._to + "@" + msg._todomain + ">" : "", get_headers(out, "P-Called-Party-ID"));
 
   invite = pop_txdata();
 
@@ -695,7 +714,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   // OK goes back C<-X
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
-  //@@@DISABLED - see bug 132. tpA->expect_target(current_txdata(), true);
+  tpA->expect_target(current_txdata(), true);
   msg.set_route(out);
   msg._cseq++;
 
@@ -915,7 +934,7 @@ void StatefulProxyTest::doSlowFailureFlow(Message& msg, int st_code)
 TEST_F(StatefulProxyTest, TestSimpleMainline)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
@@ -925,13 +944,13 @@ TEST_F(StatefulProxyTest, TestSimpleMainline)
 TEST_F(StatefulProxyTest, TestMainlineHeadersSprout)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
   // INVITE from anywhere to anywhere.
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false);
+  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false, true);
 }
 
 TEST_F(StatefulProxyTest, TestNotRegisteredTo)
@@ -944,7 +963,7 @@ TEST_F(StatefulProxyTest, TestNotRegisteredTo)
 TEST_F(StatefulProxyTest, TestBadScheme)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._toscheme = "tel";
   msg._to = "+16505551234";
@@ -955,7 +974,7 @@ TEST_F(StatefulProxyTest, TestBadScheme)
 TEST_F(StatefulProxyTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 1;
   doFastFailureFlow(msg, 483); // too many hops
@@ -964,7 +983,7 @@ TEST_F(StatefulProxyTest, TestNoMoreForwards)
 TEST_F(StatefulProxyTest, TestNoMoreForwards2)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._forwards = 0;
   doFastFailureFlow(msg, 483); // too many hops
@@ -974,7 +993,7 @@ TEST_F(StatefulProxyTest, TestNoMoreForwards2)
 TEST_F(StatefulProxyTest, TestProxyRequire)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._extra = "Proxy-Require: privacy";
   doFastFailureFlow(msg, 420);  // bad extension
@@ -1034,9 +1053,9 @@ TEST_F(StatefulProxyTest, TestExternal)
 void StatefulProxyTest::setupForkedFlow(SP::Message& msg)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  register_uri(_store, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob");
   pjsip_msg* out;
 
   // Send INVITE
@@ -1192,10 +1211,12 @@ TEST_F(StatefulProxyTest, TestForkedFlow3)
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
   // Nothing happens yet!
+  poll();
   ASSERT_EQ(0, txdata_count());
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
+  poll();
 
   // Gets acknowledged directly by us
   ASSERT_EQ(1, txdata_count());
@@ -1290,18 +1311,18 @@ TEST_F(StatefulProxyTest, TestForkedFlow4)
 list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
 {
   SCOPED_TRACE("");
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 3600);
-  register_uri(_store, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", 3500);
-  register_uri(_store, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob", 3200);
-  register_uri(_store, "6505551234", "homedomain", "sip:bah@10.114.61.213:5061;transport=tcp;ob", 3300);
-  register_uri(_store, "6505551234", "homedomain", "sip:humbug@10.114.61.213:5061;transport=tcp;ob", 3400);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 3600);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", 3500);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:awwnawmaw@10.114.61.213:5061;transport=tcp;ob", 3200);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:bah@10.114.61.213:5061;transport=tcp;ob", 3300);
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:humbug@10.114.61.213:5061;transport=tcp;ob", 3400);
 
   Message msg;
   pjsip_rx_data* rdata = build_rxdata(msg.get_request());
   parse_rxdata(rdata);
 
   target_list targets;
-  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets);
+  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;
   for (target_list::const_iterator i = targets.begin();
@@ -1342,6 +1363,9 @@ TEST_F(StatefulProxyTest, TestProxyCalcTargets2)
 void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport to register on
                                            string& xoToken, //^ out: token (parsed from Path)
                                            string& xoBareToken, //^ out: bare token (parsed from Path)
+                                           int expires, //^ expiry period
+                                           string integrity, //^ expected integrity marking in authorization header
+                                           string extraRspHeaders, //^ extra headers to be included in response
                                            bool firstHop,  //^ is this the first hop? If not, there was a previous hop to get here.
                                            string supported, //^ Supported: header value, or empty if none
                                            bool expectPath, //^ do we expect a Path: response? If false, don't parse token
@@ -1352,10 +1376,11 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   // Register a client with the edge proxy.
   Message msg;
   msg._method = "REGISTER";
+  msg._to = msg._from;        // To header contains AoR in REGISTER requests.
   msg._first_hop = firstHop;
   msg._via = via.empty() ? xiTp->to_string(false) : via;
   msg._extra = "Contact: sip:wuntootreefower@";
-  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
   if (!supported.empty())
   {
     msg._extra.append("\r\n").append("Supported: ").append(supported);
@@ -1395,12 +1420,13 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
     EXPECT_THAT(xoToken, MatchesRegex(expect));
 
     // Get the bare token as just the user@host part of the URI.
-    xoBareToken = xoToken.substr(0, xoToken.find(':', xoToken.find(':')));
+    xoBareToken = xoToken.substr(xoToken.find(':')+1);
+    xoBareToken = xoBareToken.substr(0, xoBareToken.find(':'));
   }
 
-  // No integrity marking.
+  // Check integrity=? marking.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("", actual);
+  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
 
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
@@ -1410,8 +1436,15 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!xoToken.empty())
   {
     r = "Path: ";
-    r.append(xoToken);
+    r.append(xoToken).append("\n");
   }
+  // Must include a contact header otherwise the flow won't be marked as authenticated.
+  r.append("Contact: sip:wuntootreefower@").append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+
+  // Add any extra response headers.
+  r.append(extraRspHeaders);
+
+  // Pass the response back.
   inject_msg(respond_to_current_txdata(200, "", r));
   ASSERT_EQ(1, txdata_count());
 
@@ -1440,7 +1473,7 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   return msg;
 }
 
-TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFW)
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 {
   SCOPED_TRACE("");
 
@@ -1593,6 +1626,267 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWUDP)
   delete tp;
 }
 
+TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  pjsip_tx_data* tdata;
+  pjsip_msg* out;
+  string actual;
+
+  // Register client.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        49150);
+
+  // Register a client, with four associated URIs.
+  SCOPED_TRACE("");
+  string token;
+  string baretoken;
+  doRegisterEdge(tp, token, baretoken, 300, "no",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Send an INVITE from the client specifying one of the valid identities in
+  // a P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // P-Preferred-Identity header has been converted to P-Asserted-Identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:+16505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // A P-Asserted-Identity header has been added with the default identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:6505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with two P-Preferred-Identitys.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>, <tel:+16505551000>");
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // P-Asserted-Identity headers have been added with both identities.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:+16505551000@homedomain>\r\nP-Asserted-Identity: <tel:+16505551000>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Send an INVITE from the client with an unauthorized P-Preferred-Identity.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551001@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an INVITE from the client with two sip: P-Preferred-Identitys.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  msg._extra.append("\r\nP-Preferred-Identity: <sip:+16505551000@homedomain>, <sip:6505551000@homedomain>");
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Refresh the registration.
+  SCOPED_TRACE("");
+  doRegisterEdge(tp, token, baretoken, 300, "yes",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Check that authorization is still in place by sending an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Is the right kind and method.
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (upstream).
+  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+
+  // Route header refers to upstream and indicates it is an originating request.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+
+  // Edge proxy must double record route for transition to trust zone.
+  actual = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("Record-Route: <sip:testnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + ":" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+
+  // A P-Asserted-Identity header has been added with the default identity.
+  actual = get_headers(tdata->msg, "P-Asserted-Identity");
+  EXPECT_EQ("P-Asserted-Identity: <sip:6505551000@homedomain>", actual);
+
+  // Send 200 OK to close our transaction.
+  inject_msg(respond_to_current_txdata(200));
+  poll();
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  free_txdata();
+
+  // Expire the registration.
+  SCOPED_TRACE("");
+  doRegisterEdge(tp, token, baretoken, 0, "yes",
+                 "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
+
+  // Check that authorization is gone by sending an INVITE from the client with no P-Preferred-Identity header.
+  SCOPED_TRACE("");
+  msg._method = "INVITE";
+  msg._requri = "sip:6505551234@homedomain:5061;transport=tcp;ob";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._extra = "Route: ";
+  msg._extra.append(token);
+  inject_msg(msg.get_request(), tp);
+
+  // Is the right kind and method.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+
+  // Goes to the right place (back to the injector)
+  tp->expect_target(tdata);
+  free_txdata();
+
+  delete tp;
+}
+
 TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 {
   SCOPED_TRACE("");
@@ -1689,7 +1983,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.38",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
@@ -1697,13 +1991,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.39",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "outbound, path", true, "10.22.3.4:9999");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
   // Client 3: Doesn't declare outbound support (no attr), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "path", false, "");
+  //doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", false, "");
   //delete tp;
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
@@ -1711,13 +2005,13 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "path", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", true, "10.22.3.5:8888");
   delete tp;
 
   // Client 5: Doesn't declare outbound support (no header), not behind NAT. Shouldn't get path.
   // RETIRED - since sto131 we add Path to all REGISTERs from clients outside trusted zone.
   //tp = new TransportFlow("TCP", "10.83.18.40", 36530);
-  //doRegisterEdge(tp, token, baretoken, true, "", false, "");
+  //doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", false, "");
   //delete tp;
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
@@ -1725,7 +2019,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          TransportFlow::Trust::UNTRUSTED,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, true, "", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
@@ -1737,7 +2031,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, true);
+  doRegisterEdge(tp, token, baretoken, 300, "no", "", true);
 
   // This is first hop, so should be marked
   EXPECT_THAT(token, HasSubstr(";ob"));
@@ -1773,8 +2067,11 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   free_txdata();
 
   // Now try a message from the client to the R.O.W.
+  // Include a parameter in the From URI to check that this is correctly stripped
+  // out for authentication checks.
   Message msg2;
   msg2._method = "INVITE";
+  msg2._fromdomain += ";user=phone";
   msg2._first_hop = true;
   inject_msg(msg2.get_request(), tp);
 
@@ -1809,6 +2106,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   // home domain). Edge proxy should silently correct this.
   msg2._unique++;
   msg2._todomain = "testnode";
+  msg2._fromdomain += ";user=phone";
   inject_msg(msg2.get_request(), tp);
 
   ASSERT_EQ(1, txdata_count());
@@ -1852,7 +2150,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1860,7 +2158,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), first hop, in particular for header stripping.
@@ -1872,7 +2170,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, true);
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
 
   // INVITE from client via bono to Sprout, first hop
   Message msg;
@@ -1880,7 +2178,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   msg._via = "10.83.18.37:36531;transport=tcp";
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true, false);
 }
 
 // Test flows out of Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -1892,7 +2190,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -1902,7 +2200,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false);
+  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -1914,7 +2212,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, false);
+  doRegisterEdge(&tp, token, baretoken);
 
   // INVITE from client via bono to Sprout, not first hop
   Message msg;
@@ -1923,7 +2221,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   // the right address.
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true);
+  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true, false);
 }
 
 
@@ -1945,7 +2243,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
   // This cannot be originating, because it's IBCF! It's a foreign domain.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false);
+  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false, false);
 }
 
 // Test flows out of IBCF, in particular for header stripping.
@@ -1966,7 +2264,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false, false);
 }
 
 // Check configured trusted host is respected
@@ -1999,11 +2297,9 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   r1.matches(tdata->msg);
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
 
-  // Check it is marked authorized and integrity-protected. This
-  // particular header is a bit weird; feel free to relax the test if
-  // you understand what's going on.
+  // Check there is no Authorization header added.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", nonce=\"\", response=\"\",integrity-protected=\"yes\"", actual);
+  EXPECT_EQ("", actual);
 
   // Send a reply.
   inject_msg(respond_to_current_txdata(200));
@@ -2065,7 +2361,6 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
 
   TransportFlow* tp;
   pjsip_tx_data* tdata;
-  RespMatcher r1(403);
   string actual;
 
   // Get a connection from the other trusted host.
@@ -2078,6 +2373,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   // Check it's the right kind and method, and goes to the right place.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
+  RespMatcher r1(403);
   r1.matches(tdata->msg);
   tp->expect_target(tdata, true);  // to source
 
@@ -2098,7 +2394,6 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 
   TransportFlow* tp;
   pjsip_tx_data* tdata;
-  ReqMatcher r1("INVITE");
   string actual;
 
   // Get a connection from some other random (untrusted) host.
@@ -2108,15 +2403,12 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
   msg._unique++;
   inject_msg(msg.get_request(), tp);
 
-  // Check it's the right kind and method, and goes to the right place.
+  // Check it is rejected with a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
+  RespMatcher r1(403);
   r1.matches(tdata->msg);
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
-
-  // Check it is *not* authorized.
-  actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("", actual);
+  tp->expect_target(tdata, true);  // to source
 
   free_txdata();
   delete tp;
@@ -2125,7 +2417,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 // Test basic ISC (AS) flow.
 TEST_F(IscTest, SimpleMainline)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2217,7 +2509,7 @@ TEST_F(IscTest, SimpleMainline)
 // Test basic ISC (AS) flow with a single "Next" on the originating side.
 TEST_F(IscTest, SimpleNextOrigFlow)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2323,7 +2615,7 @@ TEST_F(IscTest, SimpleNextOrigFlow)
 // Test basic ISC (AS) rejection flow.
 TEST_F(IscTest, SimpleReject)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2409,7 +2701,7 @@ TEST_F(IscTest, SimpleReject)
 // Test basic ISC (AS) terminating-only flow: call comes from non-local user.
 TEST_F(IscTest, SimpleNonLocalReject)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2496,7 +2788,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
 // Test basic ISC (AS) final acceptance flow (AS sinks request).
 TEST_F(IscTest, SimpleAccept)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2582,7 +2874,7 @@ TEST_F(IscTest, SimpleAccept)
 // Test basic ISC (AS) redirection flow.
 TEST_F(IscTest, SimpleRedirect)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -2666,10 +2958,273 @@ TEST_F(IscTest, SimpleRedirect)
 }
 
 
+// Test DefaultHandling=TERMINATE for non-responsive AS.
+TEST_F(IscTest, DefaultHandlingTerminate)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain;orig";
+  msg._todomain = "";
+  msg._fromdomain = "remote-base.mars.int";
+  msg._route = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 rejects it with a 408 error.
+  string fresp = respond_to_txdata(current_txdata(), 408);
+  free_txdata();
+  inject_msg(fresp, &tpAS1);
+
+  // ACK goes back to AS1
+  SCOPED_TRACE("ACK");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
+  free_txdata();
+
+  // 408 response goes back to bono
+  SCOPED_TRACE("408");
+  out = current_txdata()->msg;
+  RespMatcher(408).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  msg._cseq++;
+  free_txdata();
+
+  // ---------- Send ACK from bono
+  SCOPED_TRACE("ACK");
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpBono);
+}
+
+
+// Test DefaultHandling=CONTINUE for non-responsive AS.
+TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain;orig";
+  msg._todomain = "";
+  msg._route = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 rejects it with a 408 error.
+  string fresp = respond_to_txdata(current_txdata(), 408);
+  free_txdata();
+  inject_msg(fresp, &tpAS1);
+
+  // ACK goes back to AS1
+  SCOPED_TRACE("ACK");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ReqMatcher r2("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r2.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r2.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  free_txdata();
+}
+
+
+// Test DefaultHandling=CONTINUE for a responsive AS that returns an error.
+TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<ServiceProfile>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain;orig";
+  msg._todomain = "";
+  msg._route = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 sends a 100 Trying to indicate it has received the request.
+  // This will disable the default handling.
+  string fresp = respond_to_txdata(current_txdata(), 100);
+  inject_msg(fresp, &tpAS1);
+
+  // ---------- AS1 now rejects the request with a 500 response.  This gets
+  // returned to the caller because the 100 Trying indicated the AS is live.
+  fresp = respond_to_txdata(current_txdata(), 500);
+  free_txdata();
+  inject_msg(fresp, &tpAS1);
+
+  // ACK goes back to AS1
+  SCOPED_TRACE("ACK");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
+  free_txdata();
+
+  // 500 response goes back to bono
+  SCOPED_TRACE("500");
+  out = current_txdata()->msg;
+  RespMatcher(500).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  msg._cseq++;
+  free_txdata();
+
+  // ---------- Send ACK from bono
+  SCOPED_TRACE("ACK");
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpBono);
+}
+
+
 // Test more interesting ISC (AS) flow.
 TEST_F(IscTest, InterestingAs)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -2913,7 +3468,7 @@ TEST_F(IscTest, InterestingAs)
 // Test AS-originated flow - orig.
 void IscTest::doAsOriginated(Message& msg, bool expect_orig)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3083,8 +3638,8 @@ TEST_F(IscTest, AsOriginatedTerm)
 // Test call-diversion AS flow.
 TEST_F(IscTest, Cdiv)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3233,8 +3788,8 @@ TEST_F(IscTest, Cdiv)
 // Test call-diversion AS flow, where MMTEL does the diversion.
 TEST_F(IscTest, MmtelCdiv)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3382,7 +3937,7 @@ TEST_F(IscTest, MmtelCdiv)
 // Test call-diversion AS flow, where MMTEL does the diversion - twice.
 TEST_F(IscTest, MmtelDoubleCdiv)
 {
-  register_uri(_store, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3584,15 +4139,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
 // Test attempted AS chain link after chain has expired.
 TEST_F(IscTest, ExpiredChain)
 {
-//  if (RUNNING_ON_VALGRIND)
-//  {
-//    // This test doesn't work with Valgrind, presumably due to some
-//    // interaction with the clock_gettime call interposing we do at
-//    // cwtest_advance_time_ms below.
-//    return;
-//  }
-
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<ServiceProfile>\n"
@@ -3699,7 +4246,7 @@ TEST_F(IscTest, ExpiredChain)
 // Test a simple MMTEL flow.
 TEST_F(IscTest, MmtelFlow)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -3836,7 +4383,7 @@ TEST_F(IscTest, MmtelFlow)
 //
 TEST_F(IscTest, MmtelThenExternal)
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
@@ -4056,7 +4603,7 @@ TEST_F(IscTest, MmtelThenExternal)
 //
 TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
 {
-  register_uri(_store, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551000@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>

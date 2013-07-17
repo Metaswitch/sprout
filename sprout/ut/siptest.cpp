@@ -123,7 +123,26 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
 
+  // Sort out logging.
+  init_pjsip_logging(99, false, "");
+
+  // Initialise PJSIP and associated resources.
   init_pjsip();
+
+  // Initialise the trusted port.
+  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
+
+  // Initialise the untrusted port.
+  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
+
+  // Set the TCP factory used by Bono to create connections to Sprout.
+  stack_data.tcp_factory = _tcp_tpfactory_trusted;
+
+  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
+  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
+                                  TransportFlow::Trust::TRUSTED,
+                                  "0.0.0.0",
+                                  5060);
 
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats(),
@@ -138,6 +157,11 @@ void SipTest::TearDownTestCase()
   FakeLogger _log(false);  // swallow logs during this method
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
+
+  // Delete the default transport
+  delete _tp_default;
+
+  // Terminate PJSIP
   term_pjsip();
 }
 
@@ -172,11 +196,9 @@ void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tc
   ASSERT_EQ(PJ_SUCCESS, status);
 }
 
+#if 0
 void SipTest::init_pjsip()
 {
-  // Sort out logging:
-  init_pjsip_logging(99, false, "");
-
   // Must init PJLIB first:
   pj_status_t status = pj_init();
   ASSERT_EQ(PJ_SUCCESS, status);
@@ -197,20 +219,6 @@ void SipTest::init_pjsip()
   status = pjsip_tsx_layer_init_module(stack_data.endpt);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  // Initialise the trusted port.
-  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
-
-  // Initialise the untrusted port.
-  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
-
-  // Set the TCP factory used by Bono to create connections to Sprout.
-  stack_data.tcp_factory = _tcp_tpfactory_trusted;
-
-  // Get a default TCP transport flow to use for injection.  Give it a dummy address.
-  _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
-                                  TransportFlow::Trust::TRUSTED,
-                                  "0.0.0.0",
-                                  5060);
 }
 
 void SipTest::term_pjsip()
@@ -221,6 +229,7 @@ void SipTest::term_pjsip()
   pj_caching_pool_destroy(&stack_data.cp);
   pj_shutdown();
 }
+#endif
 
 SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char* addr, int port)
 {
@@ -239,6 +248,7 @@ SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char
                                    (pj_sockaddr_t*)&_rem_addr,
                                    sizeof(pj_sockaddr_in),
                                    &_transport);
+    pjsip_transport_add_ref(_transport);
     EXPECT_EQ(PJ_SUCCESS, status);
   }
 }
@@ -247,6 +257,7 @@ SipTest::TransportFlow::~TransportFlow()
 {
   if (!strcmp(_transport->type_name, "TCP"))
   {
+    pjsip_transport_dec_ref(_transport);
     fake_tcp_init_shutdown((fake_tcp_transport*)_transport, PJ_EEOF);
   }
 }
@@ -468,10 +479,15 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri(RegData::Store* store, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
+void SipTest::register_uri(RegData::Store* store, FakeHSSConnection* hss, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
 {
   string uri("sip:");
   uri.append(user).append("@").append(domain);
+  if (hss)
+  {
+    hss->set_json(std::string("/associatedpublicbypublic/" + Utils::url_escape(uri)),
+                  std::string("{\"public_ids\":[\"" + uri + "\"]}"));
+  }
   RegData::AoR* aor = store->get_aor_data(uri);
   RegData::AoR::Binding* binding = aor->get_binding(contact);
   binding->_uri = contact;

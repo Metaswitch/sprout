@@ -213,7 +213,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
       // the signalling path.
       LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
       CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, next(), tdata->msg, _as_chain->_served_user);
+        new CallServices::Terminating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
@@ -224,6 +224,9 @@ AsChainLink::on_initial_request(CallServices* call_services,
   {
     std::string as_uri_str = application_server.server_name;
 
+    // Store the default handling as we may need it later.
+    _default_handling = application_server.default_handling;
+
     // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
     // except that ifchandler doesn't have a handy pool to use.
     pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
@@ -231,14 +234,6 @@ AsChainLink::on_initial_request(CallServices* call_services,
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),
              odi_value.c_str(),
              to_string().c_str());
-
-    // Basic support for P-Asserted-Identity: strip any header(s) we've
-    // received, and set up to be the same as the From header. Full support will
-    // be added under sto125.
-    pj_str_t pai_str = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR,
-                                              PJSIP_MSG_FROM_HDR(tdata->msg)->uri,
-                                              tdata->pool);
-    PJUtils::set_generic_header(tdata, &STR_P_ASSERTED_IDENTITY, &pai_str);
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
@@ -256,8 +251,18 @@ AsChainLink::on_initial_request(CallServices* call_services,
 
     // Start defining the new target.
     target* as_target = new target;
-    as_target->from_store = false;
-    as_target->transport = NULL;
+
+    // Set the liveness timeout value based on the default handling defined
+    // on the application server.  (Don't use ?: as it hits a GCC bug in
+    // UT builds.)
+    if (_default_handling)
+    {
+      as_target->liveness_timeout = AS_TIMEOUT_CONTINUE;
+    }
+    else
+    {
+      as_target->liveness_timeout = AS_TIMEOUT_TERMINATE;
+    }
 
     // Request-URI should remain unchanged
     as_target->uri = tdata->msg->line.req.uri;

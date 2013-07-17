@@ -100,17 +100,228 @@ static pjsip_module mod_stack =
 
 
 /// Custom parser for Privacy header.  This is registered with PJSIP when
-// we initialize the stack.
+/// we initialize the stack.
 static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
 {
-    pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
-    pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
-    return (pjsip_hdr*)privacy;
+  pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
+  pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
+  return (pjsip_hdr*)privacy;
+}
+
+
+#define copy_advance(buf,str)   \
+	do { \
+	    if ((str).slen >= (endbuf-buf)) return -1;	\
+	    pj_memcpy(buf, (str).ptr, (str).slen); \
+	    buf += (str).slen; \
+	} while (0)
+
+
+typedef void* (*clone_fptr)(pj_pool_t *, const void*);
+typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
+
+static int identity_hdr_print(pjsip_routing_hdr *hdr, char *buf, pj_size_t size);
+static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
+static pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
+
+pjsip_hdr_vptr identity_hdr_vptr =
+{
+  (clone_fptr) &identity_hdr_clone,
+  (clone_fptr) &identity_hdr_shallow_clone,
+  (print_fptr) &identity_hdr_print,
+};
+
+
+/// Custom create, clone and print functions used for the P-Associated-URI,
+/// P-Asserted-Identity and P-Preferred-Identity headers
+static int identity_hdr_print(pjsip_routing_hdr *hdr,
+                              char *buf,
+                              pj_size_t size)
+{
+  int printed;
+  char *startbuf = buf;
+  char *endbuf = buf + size;
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+
+  /* Route and Record-Route don't compact forms */
+  copy_advance(buf, hdr->name);
+  *buf++ = ':';
+  *buf++ = ' ';
+
+  printed = pjsip_uri_print(PJSIP_URI_IN_FROMTO_HDR,
+                            &hdr->name_addr,
+                            buf,
+                            endbuf-buf);
+  if (printed < 1)
+  {
+    return -1;
+  }
+  buf += printed;
+
+  printed = pjsip_param_print_on(&hdr->other_param, buf, endbuf-buf,
+                                 &pc->pjsip_TOKEN_SPEC,
+                                 &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0)
+  {
+    return -1;
+  }
+  buf += printed;
+
+  return buf-startbuf;
+}
+
+
+static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool,
+                                             const pjsip_routing_hdr *rhs)
+{
+  pjsip_routing_hdr *hdr = PJUtils::identity_hdr_create(pool, rhs->name);
+  pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
+  pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
+  return hdr;
+}
+
+
+static pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool,
+                                                     const pjsip_routing_hdr *rhs)
+{
+  pjsip_routing_hdr *hdr = PJ_POOL_ALLOC_T(pool, pjsip_routing_hdr);
+  pj_memcpy(hdr, rhs, sizeof(*hdr));
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &rhs->other_param);
+  return hdr;
+}
+
+
+/// Custom parser for P-Associated-URI header.  This is registered with PJSIP when
+/// we initialize the stack.
+static pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
+{
+  // The P-Associated-URI header is a comma separated list of name-addrs
+  // with optional parameters, so we parse it to multiple header structures,
+  // using the pjsip_route_hdr structure for each.
+  pjsip_route_hdr *first = NULL;
+  pj_scanner *scanner = ctx->scanner;
+
+  do
+  {
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
+    if (!first)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+
+    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+    while (*scanner->curptr == ';')
+    {
+      pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
+      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
+      pj_list_insert_before(&hdr->other_param, p);
+    }
+
+    if (*scanner->curptr == ',')
+    {
+      pj_scan_get_char(scanner);
+    }
+    else
+    {
+      break;
+    }
+  } while (1);
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)first;
+}
+
+
+/// Custom parser for P-Asserted-Identity header.  This is registered with PJSIP when
+/// we initialize the stack.
+static pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx *ctx)
+{
+  // The P-Asserted-Identity header is a comma separated list of name-addrs
+  // so we parse it to multiple header structures, using the pjsip_route_hdr
+  // structure for each.  Note that P-Asserted-Identity cannot have parameters
+  // after the name-addr.
+  pjsip_route_hdr *first = NULL;
+  pj_scanner *scanner = ctx->scanner;
+
+  do
+  {
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
+    if (!first)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+
+    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+    if (*scanner->curptr == ',')
+    {
+      pj_scan_get_char(scanner);
+    }
+    else
+    {
+      break;
+    }
+  } while (1);
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)first;
+}
+
+
+/// Custom parser for P-Preferred-Identity header.  This is registered with PJSIP when
+/// we initialize the stack.
+static pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx *ctx)
+{
+  // The P-Preferred-Identity header is a comma separated list of name-addrs
+  // so we parse it to multiple header structures, using the pjsip_route_hdr
+  // structure for each.  Note that P-Preferred-Identity cannot have parameters
+  // after the name-addr.
+  pjsip_route_hdr *first = NULL;
+  pj_scanner *scanner = ctx->scanner;
+
+  do
+  {
+    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
+    if (!first)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+
+    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+    if (*scanner->curptr == ',')
+    {
+      pj_scan_get_char(scanner);
+    }
+    else
+    {
+      break;
+    }
+  } while (1);
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)first;
 }
 
 
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
-// and timers.
+/// and timers.
 static int pjsip_thread(void *p)
 {
   pj_time_val delay = {0, 10};
@@ -131,7 +342,6 @@ static int pjsip_thread(void *p)
 
 
 /// Worker threads handle most SIP message processing.
-//
 static int worker_thread(void* p)
 {
   // Set up data to always process incoming messages at the first PJSIP
@@ -354,7 +564,7 @@ static void pjsip_log_handler(int level,
   default: level = 5; break;
   }
 
-  Log::write(level, "pjsip", data);
+  Log::write(level, "pjsip", 0, data);
 }
 
 
@@ -409,6 +619,55 @@ pj_status_t create_listener_transports(int port, pjsip_tpfactory** tcp_factory)
 }
 
 
+pj_status_t init_pjsip()
+{
+  pj_status_t status;
+
+  // Must init PJLIB first:
+  status = pj_init();
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Dump PJLIB config to log file.
+  pj_dump_config();
+
+  // Then init PJLIB-UTIL:
+  status = pjlib_util_init();
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Must create a pool factory before we can allocate any memory.
+  pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
+
+  // Create the endpoint.
+  status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Init transaction layer.
+  status = pjsip_tsx_layer_init_module(stack_data.endpt);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Create pool for the application
+  stack_data.pool = pj_pool_create(&stack_data.cp.factory,
+                                   "sprout-bono",
+                                   4000,
+                                   4000,
+                                   NULL);
+
+  // Register custom header parsers for Privacy, P-Associated-URI, P-Asserted-Identity
+  // and P-Preferred-Identity.
+  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Asserted-Identity", NULL, &parse_hdr_p_asserted_identity);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Preferred-Identity", NULL, &parse_hdr_p_preferred_identity);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+
+  return PJ_SUCCESS;
+}
+
+
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int trusted_port,
@@ -453,43 +712,12 @@ pj_status_t init_stack(const std::string& system_name,
     SAS::init(stack_data.local_host.slen, stack_data.local_host.ptr, sas_address);
   }
 
-  // Must init PJLIB first:
-  status = pj_init();
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-  // Dump PJLIB config to log file.
-  pj_dump_config();
-
-  // Then init PJLIB-UTIL:
-  status = pjlib_util_init();
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-  // Must create a pool factory before we can allocate any memory.
-  pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
-
-  // Create the endpoint.
-  status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-  // Init transaction layer.
-  status = pjsip_tsx_layer_init_module(stack_data.endpt);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
-  // Create pool for the application
-  stack_data.pool = pj_pool_create(&stack_data.cp.factory,
-                                   "sprout-bono",
-                                   4000,
-                                   4000,
-                                   NULL);
+  // Initialise PJSIP and all the associated resources.
+  status = init_pjsip();
 
   // Register the stack module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
-
-  // Register custom header parsers (currently only Privacy, but add any others
-  // here).
-  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   // Create listening transports for trusted and untrusted ports.
   if (stack_data.trusted_port != 0)
@@ -524,7 +752,7 @@ pj_status_t init_stack(const std::string& system_name,
   // Get the rest of IP interfaces.
   if (pj_enum_ip_interface(pj_AF_INET(), &addr_cnt, addr_list) == PJ_SUCCESS)
   {
-    for (i=0; i<addr_cnt; ++i)
+    for (i = 0; i < addr_cnt; ++i)
     {
       if (addr_list[i].ipv4.sin_addr.s_addr == pri_addr.ipv4.sin_addr.s_addr)
       {
@@ -545,7 +773,6 @@ pj_status_t init_stack(const std::string& system_name,
 
   stack_data.name[stack_data.name_cnt] = pj_str("localhost");
   stack_data.name_cnt++;
-
   // Parse the list of alias host names.
   if (alias_hosts != "")
   {
@@ -571,7 +798,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats());
 
-  return PJ_SUCCESS;
+  return status;
 }
 
 
@@ -655,19 +882,26 @@ void unregister_stack_modules(void)
 }
 
 
+void term_pjsip()
+{
+  pjsip_endpt_destroy(stack_data.endpt);
+  pj_pool_release(stack_data.pool);
+  pj_caching_pool_destroy(&stack_data.cp);
+  pj_shutdown();
+}
+
+
 // Destroy stack
 void destroy_stack(void)
 {
   // Tear down the stack.
   delete stack_data.stats_aggregator;
-  pjsip_endpt_destroy(stack_data.endpt);
-  pj_pool_release(stack_data.pool);
-  pj_caching_pool_destroy(&stack_data.cp);
   pjsip_threads.clear();
   worker_threads.clear();
 
   SAS::term();
 
-  pj_shutdown();
+  // Terminate PJSIP.
+  term_pjsip();
 }
 

@@ -81,18 +81,23 @@ std::string uri_to_string(pjsip_uri_context_e context,
                           const pjsip_uri* uri);
 
 pjsip_uri* uri_from_string(const std::string& uri_s,
-                           pj_pool_t* pool);
-
-pjsip_uri* uri_from_string_header(pjsip_generic_string_hdr* hdr,
-                                  pj_pool_t *pool);
+                           pj_pool_t* pool,
+                           pj_bool_t force_name_addr=false);
 
 std::string pj_str_to_string(const pj_str_t* pjstr);
 
 std::string pj_status_to_string(const pj_status_t status);
 
-void add_integrity_protected_indication(pjsip_tx_data* tdata);
+std::string aor_from_uri(const pjsip_sip_uri* uri);
 
-void add_integrity_protected_indication(pjsip_tx_data* tdata);
+std::string public_id_from_uri(const pjsip_uri* uri);
+
+typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
+void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
+
+void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
+
+pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t& name);
 
 pjsip_uri* next_hop(pjsip_msg* msg);
 
@@ -119,6 +124,8 @@ pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
 pj_bool_t is_first_hop(pjsip_msg* msg);
 
+int max_expires(pjsip_msg* msg);
+
 pj_status_t create_response(pjsip_endpoint *endpt,
       		      const pjsip_rx_data *rdata,
       		      int st_code,
@@ -137,20 +144,23 @@ pj_status_t create_response_fwd(pjsip_endpoint *endpt,
                                 unsigned options,
                                 pjsip_tx_data **p_tdata);
 
-pj_status_t respond_stateless(pjsip_endpoint *endpt,
-                              pjsip_rx_data *rdata,
+pj_status_t send_request(pjsip_endpoint* endpt,
+                         pjsip_tx_data* tdata);
+
+pj_status_t respond_stateless(pjsip_endpoint* endpt,
+                              pjsip_rx_data* rdata,
                               int st_code,
-                              const pj_str_t *st_text,
-                              const pjsip_hdr *hdr_list,
-                              const pjsip_msg_body *body);
+                              const pj_str_t* st_text,
+                              const pjsip_hdr* hdr_list,
+                              const pjsip_msg_body* body);
 
 pj_status_t respond_stateful(pjsip_endpoint* endpt,
                              pjsip_transaction* uas_tsx,
                              pjsip_rx_data* rdata,
                              int st_code,
-                             const pj_str_t *st_text,
-                             const pjsip_hdr *hdr_list,
-                             const pjsip_msg_body *body);
+                             const pj_str_t* st_text,
+                             const pjsip_hdr* hdr_list,
+                             const pjsip_msg_body* body);
 
 pjsip_tx_data *clone_tdata(pjsip_tx_data *tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
@@ -160,6 +170,8 @@ bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);
 typedef std::map<pj_sockaddr, bool, bool(*)(const pj_sockaddr&, const pj_sockaddr&)> host_list_t;
 
 void create_random_token(size_t length, std::string& token);
+
+std::string get_header_value(pjsip_hdr*);
 
 } // namespace PJUtils
 

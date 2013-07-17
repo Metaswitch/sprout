@@ -81,7 +81,7 @@ void SAS::term()
 SAS::Connection::Connection(const std::string& system_name, const std::string& sas_address) :
   _system_name(system_name),
   _sas_address(sas_address),
-  _msg_q(),
+  _msg_q(0, false),
   _writer(0),
   _sock(0)
 {
@@ -177,6 +177,7 @@ void SAS::Connection::writer()
     // reconnect.  We wait on the queue so we get a kick if the term function
     // is called.
     std::string msg;
+    LOG_DEBUG("Waiting to reconnect to SAS - timeout = %d", reconnect_timeout);
     if (!_msg_q.pop(msg, reconnect_timeout))
     {
       // Received a termination signal on the queue, so exit.
@@ -352,7 +353,8 @@ std::string SAS::Event::to_string() const
   write_int16(s, _msg.hdr.static_data_len);
   for (uint32_t ii = 0; ii < _msg.hdr.static_data_len / 4; ++ii)
   {
-    write_int32(s, _msg.static_data[ii]);
+    // Static parameters are written in native byte order, not network order.
+    write_data(s, sizeof(uint32_t), (char *)&_msg.static_data[ii]);
   }
   for (uint32_t ii = 0; ii < _msg.hdr.num_var_data; ++ii)
   {
@@ -384,7 +386,8 @@ std::string SAS::Marker::to_string(Marker::Scope scope) const
   write_int16(s, _msg.hdr.static_data_len);
   for (uint32_t ii = 0; ii < _msg.hdr.static_data_len / 4; ++ii)
   {
-    write_int32(s, _msg.static_data[ii]);
+    // Static parameters are written in native byte order, not network order.
+    write_data(s, sizeof(uint32_t), (char *)&_msg.static_data[ii]);
   }
   for (uint32_t ii = 0; ii < _msg.hdr.num_var_data; ++ii)
   {

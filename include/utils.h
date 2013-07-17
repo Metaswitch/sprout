@@ -34,11 +34,10 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #ifndef UTILS_H_
 #define UTILS_H_
 
+#include <math.h>
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -50,7 +49,7 @@ namespace Utils
 {
   std::string url_escape(const std::string& s);
 
-// trim from start
+  // trim from start
   inline std::string& ltrim(std::string &s)
   {
     s.erase(s.begin(), std::find_if(s.begin(), s.end(),
@@ -58,7 +57,7 @@ namespace Utils
     return s;
   }
 
-// trim from end
+  // trim from end
   inline std::string& rtrim(std::string &s)
   {
     s.erase(std::find_if(s.rbegin(), s.rend(),
@@ -66,7 +65,7 @@ namespace Utils
     return s;
   }
 
-// trim from both ends
+  // trim from both ends
   inline std::string& trim(std::string &s)
   {
     return ltrim(rtrim(s));
@@ -113,6 +112,69 @@ namespace Utils
       tokens.push_back(token);
     }
   }
+
+  /// Generates a random number which is exponentially distributed
+  class ExponentialDistribution
+  {
+  public:
+    ExponentialDistribution(double lambda) :
+      _lambda(lambda)
+    {
+    }
+
+    ~ExponentialDistribution()
+    {
+    }
+
+    int operator() ()
+    {
+      // Generate a uniform random number in the range [0,1] then transform
+      // it to an exponentially distributed number using a formula for the
+      // inverted CDF.
+      double r = (double)rand() / (double)RAND_MAX;
+      return -log(r)/_lambda;
+    }
+
+  private:
+    double _lambda;
+  };
+
+  /// Generates a random number which is binomially distributed
+  class BinomialDistribution
+  {
+  public:
+    BinomialDistribution(int t, double p) :
+      _cdf(t + 1)
+    {
+      // Compute the discrete CDF for the distribution using the recurrence
+      // relation for the PDF
+      //    PDF(i) = PDF(i-1) * ((t-i+1)/i) * (p/(1-p))
+      double pr = p / (1 - p);
+      double pdf = pow(1 - p, t);
+      _cdf[0] = pdf;
+      for (int i = 1; i <= t; ++i)
+      {
+        pdf *= pr * (double)(t - i + 1)/(double)i;
+        _cdf[i] = _cdf[i-1] + pdf;
+      }
+    }
+
+    ~BinomialDistribution()
+    {
+    }
+
+    int operator() ()
+    {
+      // Find the lower bound in the CDF
+      double r = (double)rand() / (double)RAND_MAX;
+      std::vector<double>::iterator i = lower_bound(_cdf.begin(), _cdf.end(), r);
+      return i - _cdf.begin();
+    }
+
+  private:
+    std::vector<double> _cdf;
+  };
+
 } // namespace Utils
 
 #endif /* UTILS_H_ */

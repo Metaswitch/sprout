@@ -56,21 +56,29 @@ extern "C" {
 
 #define MAX_SIP_MSG_SIZE 65535
 
-void send_register_to_as(pjsip_rx_data* received_register, pjsip_tx_data* ok_response, AsInvocation& as, int expires, const std::string&);
-void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string&, int);
+void send_register_to_as(pjsip_rx_data* received_register,
+    pjsip_tx_data* ok_response,
+    AsInvocation& as,
+    int expires,
+    const std::string&,
+    SAS::TrailId);
+
+void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string&, SAS::TrailId trail);
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
                                          RegData::Store* store,
-                                         const std::string& aor)
+                                         const std::string& aor,
+                                         SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, aor);
+  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, aor, trail);
 }
 
 void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
                                        RegData::Store* store,
                                        pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
-                                       const std::string& aor) // Should be empty if we have a received_register
+                                       const std::string& aor,
+                                       SAS::TrailId trail) // Should be empty if we have a received_register
 {
   // Function preconditions
   if (received_register == NULL) {
@@ -112,11 +120,12 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     assert(status == PJ_SUCCESS);
 
+    // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
+
     // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
     // constraints for REGISTER messages, but we only get the served user from the From address in an
     // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
     // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
-    SAS::TrailId trail = SAS::new_trail(1);
     std::vector<Ifc> ifc_list;
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
@@ -124,7 +133,6 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    SAS::TrailId trail = get_trail(ok_response);
     served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
     Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
@@ -143,12 +151,17 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     // Loop through the as_list
     for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-      send_register_to_as(received_register, ok_response, *as_iter, expires, aor);
+      send_register_to_as(received_register, ok_response, *as_iter, expires, aor, trail);
     }
   }
 }
 
-void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_response, AsInvocation& as, int expires, const std::string& aor)
+void send_register_to_as(pjsip_rx_data *received_register,
+    pjsip_tx_data *ok_response,
+    AsInvocation& as,
+    int expires,
+    const std::string& aor,
+    SAS::TrailId trail)
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
@@ -256,13 +269,15 @@ void send_register_to_as(pjsip_rx_data *received_register, pjsip_tx_data *ok_res
     tdata->msg->body = final_body;
 
   }
-
+  
   // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
   // if it fails
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
   // DefaultHandling has a value of 0 or 1, so we can store it directly in the pointer. Not perfect, but
   // harmless if done right.
-  tsx->mod_data[0] = (void*)as.default_handling;
+  tsx->mod_data[mod_registrar.id] = (void*)as.default_handling;
+  set_trail(tdata, trail);
+  set_trail(tsx, trail);
   status = pjsip_tsx_send_msg(tsx, tdata);
 }
 
@@ -288,7 +303,9 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
       LOG_INFO("Clearing all bindings!");
       aor_data->clear();
     } else {
-      aor_data->remove_binding(binding_id);
+      aor_data->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
+                                            // initiated deregistration of a 
+                                            // single binding (flow failed).
     }
 
     bool ok = store->set_aor_data(aor, aor_data);
@@ -300,19 +317,12 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
   }
 };
 
-void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
+void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
 {
   expire_bindings(store, aor, binding_id);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifchandler, store, aor);
+  deregister_with_application_servers(ifchandler, store, aor, trail);
   notify_application_servers();
-};
-
-void RegistrationUtils::user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id)
-{
-  expire_bindings(store, aor, binding_id);
-  // No need to send a REGISTER message to the ASes - we hit this because we've received a REGISTER
-  // from the user with an expiry time of 0, and we'll have forwarded that on.
 };
