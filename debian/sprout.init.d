@@ -86,7 +86,7 @@ get_settings()
         . /etc/clearwater/config
 
         # Pull in the current cluster configuration (creating a default if it does not exist).
-        [ -f /etc/clearwater/cluster_settings ] || echo "memcached_servers=$local_ip:11211" > /etc/clearwater/cluster_settings
+        [ -f /etc/clearwater/cluster_settings ] || echo "memcached_servers=$public_hostname:11211" > /etc/clearwater/cluster_settings
         . /etc/clearwater/cluster_settings
 
         # Set up defaults for user settings then pull in any overrides.
