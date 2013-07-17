@@ -85,7 +85,7 @@ void destroy_memcached_store(RegData::Store* store)
 /// e.g., "localhost:11211".
 MemcachedStore::MemcachedStore(const std::list<std::string>& servers,
                                ///< list of servers to be used
-                               int pool_size
+                               int pool_size,
                                ///< size of pool (used as init and max)
                                bool binary)
                                ///< use binary protocol?
@@ -110,7 +110,9 @@ MemcachedStore::MemcachedStore(const std::list<std::string>& servers,
 
   if (_pool == NULL)
   {
+    // LCOV_EXCL_START - need real memcached to test
     LOG_ERROR("Failed to connected to memcached store: %s", options.c_str());
+    // LCOV_EXCL_STOP
   }
 }
 
