@@ -103,7 +103,7 @@ namespace RegData {
   class MemcachedStore : public Store
   {
   public:
-    MemcachedStore(const std::list<std::string>& servers, int pool_size);
+    MemcachedStore(const std::list<std::string>& servers, int pool_size, bool binary=true);
     ~MemcachedStore();
 
     void flush_all();
