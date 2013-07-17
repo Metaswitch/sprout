@@ -277,6 +277,17 @@ Flow::~Flow()
 }
 
 
+/// Called whenever a REGISTER is handled for this flow, to ensure the
+/// flow doesn't time out in the middle of processing the REGISTER.
+void Flow::touch()
+{
+  if (_timer.id == IDLE_TIMER)
+  {
+    // Idle timer is running, so restart it.
+    restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
+  }
+}
+
 /// Returns the full asserted identity corresponding to the specified
 /// preferred identity, or an empty string if the preferred identity is not
 /// authorized on this flow.

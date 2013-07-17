@@ -238,7 +238,6 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
-  LOG_INFO("Adding integrity-protected indicator to message");
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
                                       pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
 
@@ -285,6 +284,8 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   default:
     break;
   }
+  LOG_INFO("Adding integrity-protected=%.*s indicator to message",
+           new_param->value.slen, new_param->value.ptr);
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
