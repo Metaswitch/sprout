@@ -137,7 +137,7 @@ private:
   static const int EXPIRY_TIMER = 1;
   static const int IDLE_TIMER = 2;
 
-  /// Timeout used to delete idle non-reliable flows.
+  /// Timeout (in seconds) used to delete idle non-reliable flows.
   static const int IDLE_TIMEOUT = 600;
 };
 
