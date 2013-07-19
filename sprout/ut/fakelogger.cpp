@@ -67,6 +67,7 @@ FakeLogger::FakeLogger(bool noisy) :
 
 FakeLogger::~FakeLogger()
 {
+  pthread_mutex_destroy(&_logger_lock);
   Log::setLogger(NULL);
 }
 
