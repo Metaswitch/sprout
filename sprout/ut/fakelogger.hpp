@@ -64,6 +64,7 @@ public:
   static int howNoisy();
 
 private:
+  pthread_mutex_t _logger_lock;
   std::string _lastlog;
   bool _noisy;
 };

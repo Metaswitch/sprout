@@ -50,6 +50,8 @@ using namespace std;
 FakeLogger::FakeLogger() :
   _noisy(isNoisy())
 {
+  pthread_mutex_init(&_logger_lock, NULL);
+
   Log::setLogger(this);
   Log::setLoggingLevel(howNoisy());
 }
@@ -57,12 +59,15 @@ FakeLogger::FakeLogger() :
 FakeLogger::FakeLogger(bool noisy) :
   _noisy(noisy)
 {
+  pthread_mutex_init(&_logger_lock, NULL);
+
   Log::setLogger(this);
   Log::setLoggingLevel(DEFAULT_LOGGING_LEVEL);
 }
 
 FakeLogger::~FakeLogger()
 {
+  pthread_mutex_destroy(&_logger_lock);
   Log::setLogger(NULL);
 }
 
@@ -74,12 +79,17 @@ void FakeLogger::write(const char* data)
     line.push_back('\n');
   }
 
+  pthread_mutex_lock(&_logger_lock);
+
   _lastlog.append(line);
+
+  pthread_mutex_unlock(&_logger_lock);
 
   if (_noisy)
   {
     cout << line;
   }
+
 }
 
 void FakeLogger::flush()
@@ -88,7 +98,13 @@ void FakeLogger::flush()
 
 bool FakeLogger::contains(const char* needle)
 {
-  return _lastlog.find(needle) != string::npos;
+  pthread_mutex_lock(&_logger_lock);
+
+  bool result = _lastlog.find(needle) != string::npos;
+
+  pthread_mutex_unlock(&_logger_lock);
+
+  return result;
 }
 
 bool FakeLogger::isNoisy()
