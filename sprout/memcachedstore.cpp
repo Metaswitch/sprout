@@ -69,7 +69,7 @@ RegData::Store* create_memcached_store(const std::list<std::string>& servers,
                                        bool binary)
                                        ///< use binary protocol?
 {
-  return new MemcachedStore(servers, connections);
+  return new MemcachedStore(servers, connections, binary);
 }
 
 /// Destroy a store object which used the memcached implementation.
