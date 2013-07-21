@@ -376,16 +376,19 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
     LOG_DEBUG("Deleting identity %s", aor.c_str());
     auth_id_map::iterator i = _authorized_ids.find(aor);
 
-    // Check to see whether this was the current default identity we are
-    // using for this flow.  We could do the string comparision in all cases
-    // but it is only necessary if the identity is marked as a default
-    // candidate.
-    if ((i->second.default_id) && (i->first == _default_id))
+    if (i != _authorized_ids.end())
     {
-      // This was our default ID, so remove it.
-      _default_id = "";
+      // Check to see whether this was the current default identity we are
+      // using for this flow.  We could do the string comparision in all cases
+      // but it is only necessary if the identity is marked as a default
+      // candidate.
+      if ((i->second.default_id) && (i->first == _default_id))
+      {
+        // This was our default ID, so remove it.
+        _default_id = "";
+      }
+      _authorized_ids.erase(i);
     }
-    _authorized_ids.erase(i);
 
     if (_default_id == "")
     {
