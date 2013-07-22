@@ -1,2 +1,3 @@
 build/bin/bono usr/share/clearwater/bin
 bono.root/* /
+scripts/log_cleaner.py etc/cron.hourly/bono_log_cleaner.py

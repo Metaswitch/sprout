@@ -1,2 +1,3 @@
 build/bin/sprout usr/share/clearwater/bin
 sprout.root/* /
+scripts/log_cleaner.py etc/cron.hourly/sprout_log_cleaner.py
