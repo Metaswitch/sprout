@@ -71,7 +71,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
              "Max-Forwards: 63\n"
              "From: <sip:6505551234@homedomain>;tag=1234\n"
              "To: <sip:6505554321@homedomain>\n"
-             "P-Charging-Vector: icid=4815162542; orig-ioi=homedomain; term-ioi=remotedomain; icid-generated-at=edge.proxy.net;\n"
+             "P-Charging-Vector: icid-value=4815162542; orig-ioi=homedomain; term-ioi=remotedomain; icid-generated-at=edge.proxy.net; other-param=test-value\n"
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
@@ -93,6 +93,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv->icid_gen_addr, "edge.proxy.net");
+  EXPECT_EQ(1, pj_list_size(&pcv->other_param));
 
   // Test the VPTR functions (clone, shallow clone and print on).
   pjsip_p_c_v_hdr* pcv_clone = (pjsip_p_c_v_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
@@ -101,6 +102,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv_clone->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv_clone->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv_clone->icid_gen_addr, "edge.proxy.net");
+  EXPECT_EQ(1, pj_list_size(&pcv_clone->other_param));
 
   pjsip_p_c_v_hdr* pcv_sclone = (pjsip_p_c_v_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
 
@@ -108,13 +110,15 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv_sclone->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv_sclone->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv_sclone->icid_gen_addr, "edge.proxy.net");
+  EXPECT_EQ(1, pj_list_size(&pcv_sclone->other_param));
 
   char buf[1024];
+  hdr = (pjsip_hdr*)pcv_clone;
   int written = hdr->vptr->print_on(hdr, buf, 0);
   EXPECT_EQ(written, -1);
   written = hdr->vptr->print_on(hdr, buf, 1024);
 
-  EXPECT_STREQ(buf, "P-Charging-Vector: icid=4815162542; orig-ioi=homedomain; term-ioi=remotedomain; icid-generated-at=edge.proxy.net; ");
+  EXPECT_STREQ("P-Charging-Vector: icid-value=4815162542;orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
 TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
@@ -124,7 +128,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
              "Max-Forwards: 63\n"
              "From: <sip:6505551234@homedomain>;tag=1234\n"
              "To: <sip:6505554321@homedomain>\n"
-             "P-Charging-Function-Addresses: ecf=10.0.0.1; ccf=10.0.0.2; ecf=10.0.0.3; ccf=10.0.0.4;\n"
+             "P-Charging-Function-Addresses: ecf=10.0.0.1; ccf=10.0.0.2; ecf=10.0.0.3; ccf=10.0.0.4; other-param=test-value\n"
              "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
              "Call-ID: 1-13919@10.151.20.48\n"
              "CSeq: 1 INVITE\n"
@@ -142,36 +146,28 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   // We have a P-CFA header, check it was filled out correctly.
   pjsip_p_c_f_a_hdr* pcfa = (pjsip_p_c_f_a_hdr*)hdr;
 
-  EXPECT_EQ(pcfa->ccf_count, 2);
-  EXPECT_EQ(pcfa->ecf_count, 2);
-  EXPECT_PJEQ(pcfa->ccf[0], "10.0.0.2");
-  EXPECT_PJEQ(pcfa->ccf[1], "10.0.0.4");
-  EXPECT_PJEQ(pcfa->ecf[0], "10.0.0.1");
-  EXPECT_PJEQ(pcfa->ecf[1], "10.0.0.3");
+  EXPECT_EQ(2, pj_list_size(&pcfa->ccf));
+  EXPECT_EQ(2, pj_list_size(&pcfa->ecf));
+  EXPECT_EQ(1, pj_list_size(&pcfa->other_param));
 
   // Test the VPTR functions (clone, shallow clone and print on).
   pjsip_p_c_f_a_hdr* pcfa_clone = (pjsip_p_c_f_a_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
 
-  EXPECT_EQ(pcfa_clone->ccf_count, 2);
-  EXPECT_EQ(pcfa_clone->ecf_count, 2);
-  EXPECT_PJEQ(pcfa_clone->ccf[0], "10.0.0.2");
-  EXPECT_PJEQ(pcfa_clone->ccf[1], "10.0.0.4");
-  EXPECT_PJEQ(pcfa_clone->ecf[0], "10.0.0.1");
-  EXPECT_PJEQ(pcfa_clone->ecf[1], "10.0.0.3");
+  EXPECT_EQ(2, pj_list_size(&pcfa_clone->ccf));
+  EXPECT_EQ(2, pj_list_size(&pcfa_clone->ecf));
+  EXPECT_EQ(1, pj_list_size(&pcfa_clone->other_param));
 
   pjsip_p_c_f_a_hdr* pcfa_sclone = (pjsip_p_c_f_a_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
 
-  EXPECT_EQ(pcfa_sclone->ccf_count, 2);
-  EXPECT_EQ(pcfa_sclone->ecf_count, 2);
-  EXPECT_PJEQ(pcfa_sclone->ccf[0], "10.0.0.2");
-  EXPECT_PJEQ(pcfa_sclone->ccf[1], "10.0.0.4");
-  EXPECT_PJEQ(pcfa_sclone->ecf[0], "10.0.0.1");
-  EXPECT_PJEQ(pcfa_sclone->ecf[1], "10.0.0.3");
+  EXPECT_EQ(2, pj_list_size(&pcfa_sclone->ccf));
+  EXPECT_EQ(2, pj_list_size(&pcfa_sclone->ecf));
+  EXPECT_EQ(1, pj_list_size(&pcfa_sclone->other_param));
 
   char buf[1024];
+  hdr = (pjsip_hdr*)pcfa_clone;
   int written = hdr->vptr->print_on(hdr, buf, 0);
   EXPECT_EQ(written, -1);
   written = hdr->vptr->print_on(hdr, buf, 1024);
 
-  EXPECT_STREQ(buf, "P-Charging-Function-Addresses: ccf=10.0.0.2; ccf=10.0.0.4; ecf=10.0.0.1; ecf=10.0.0.3; ");
+  EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
 }

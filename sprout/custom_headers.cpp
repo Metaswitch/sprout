@@ -263,54 +263,61 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   // icid-gen-addr         = "icid-generated-at" EQUAL host
   // orig-ioi              = "orig-ioi" EQUAL gen-value
   // term-ioi              = "term-ioi" EQUAL gen-value
-  //
-  // With the proviso that the ICID parameter must be set.
 
   pj_pool_t* pool = ctx->pool;
   pj_scanner* scanner = ctx->scanner;
   pjsip_p_c_v_hdr* hdr = pjsip_p_c_v_hdr_create(pool);
-  pj_str_t temp_newline;
+  pj_str_t name;
+  pj_str_t value;
 
-  do {
-    pj_scan_peek_n(scanner, 1, &temp_newline);
-    if ((*temp_newline.ptr == '\r') || (*temp_newline.ptr == '\n')) {
-      break;
-    } else if (pj_scan_stricmp(scanner, "orig-ioi", 8) == 0) {
-      pj_scan_advance_n(scanner, 8, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      pj_scan_get_until_ch(scanner, ';', &hdr->orig_ioi);
-    } else if (pj_scan_stricmp(scanner, "term-ioi", 8) == 0) {
-      pj_scan_advance_n(scanner, 8, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      pj_scan_get_until_ch(scanner, ';', &hdr->term_ioi);
-    } else if (pj_scan_stricmp(scanner, "icid", 4) == 0) {
-      pj_scan_advance_n(scanner, 4, PJ_TRUE);
-      
-      // We could have read the icid of icid= or of icid-generated-at=.
-      if (*scanner->curptr == '=') {
-        pj_scan_get_char(scanner);
-        pj_scan_skip_whitespace(scanner);
-        pj_scan_get_until_ch(scanner, ';', &hdr->icid);
-      } else if (pj_scan_stricmp(scanner, "-generated-at", 13) == 0) {
-        pj_scan_advance_n(scanner, 13, PJ_TRUE);
-        pj_scan_get_char(scanner);
-        pj_scan_skip_whitespace(scanner);
-        pj_scan_get_until_ch(scanner, ';', &hdr->icid_gen_addr);
-      } else {
-        PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
-      }
+  // Parse the required icid-value parameter first.
+  pjsip_parse_param_imp(scanner, pool, &name, &value,
+                        PJSIP_PARSE_REMOVE_QUOTE);
+  if (!pj_stricmp2(&name, "icid-value")) {
+    hdr->icid = value;
+  } else {
+    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+  }
+
+  // Should always need to swallow the ';' for the icid-value param.
+  if (*scanner->curptr == ';') {
+    pj_scan_get_char(scanner);
+  } else {
+    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+  }
+
+  // Now parse the rest of the params.
+  for (;;) {
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+
+    if (!pj_stricmp2(&name, "orig-ioi")) {
+      hdr->orig_ioi = value;
+    } else if (!pj_stricmp2(&name, "term-ioi")) {
+      hdr->term_ioi = value;
+    } else if (!pj_stricmp2(&name, "icid-generated-at")) {
+      hdr->icid_gen_addr = value;
     } else {
-      PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+      pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = name;
+      param->value = value;
+      pj_list_insert_before(&hdr->other_param, param);
     }
 
-    // Swallow whitespace and the ';' character.
-    pj_scan_skip_whitespace(scanner);
-    pj_scan_get_char(scanner);
-    pj_scan_skip_whitespace(scanner);
+    // May need to swallow the ';' for the previous param.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';') {
+      pj_scan_get_char(scanner);
+    }
 
-  } while (1);
+    // If the next character is a newline (after skipping whitespace)
+    // we're done.
+    pj_scan_skip_whitespace(scanner);
+    if (pj_scan_is_eof(scanner) ||
+        (*scanner->curptr == '\r') ||
+        (*scanner->curptr == '\n')) {
+      break;
+    }
+  }
 
   // We're done parsing this header.
   pjsip_parse_end_hdr_imp(scanner);
@@ -340,7 +347,8 @@ pjsip_p_c_v_hdr* pjsip_p_c_v_hdr_init(pj_pool_t* pool, void* mem)
   hdr->name = STR_P_C_V;
   hdr->sname = STR_P_C_V;
   hdr->vptr = &pjsip_p_c_v_vptr;
-  pj_list_init((pjsip_hdr*)hdr);
+  pj_list_init(hdr);
+  pj_list_init(&hdr->other_param);
 
   return hdr;
 }
@@ -353,6 +361,7 @@ void *pjsip_p_c_v_hdr_clone(pj_pool_t* pool, const void* o)
   pj_strdup(pool, &hdr->orig_ioi, &other->orig_ioi);
   pj_strdup(pool, &hdr->term_ioi, &other->term_ioi);
   pj_strdup(pool, &hdr->icid_gen_addr, &other->icid_gen_addr);
+  pjsip_param_clone(pool, &hdr->other_param, &other->other_param);
   return hdr;
 }
 
@@ -364,76 +373,81 @@ void *pjsip_p_c_v_hdr_shallow_clone(pj_pool_t* pool, const void* o)
   hdr->orig_ioi = other->orig_ioi;
   hdr->term_ioi = other->term_ioi;
   hdr->icid_gen_addr = other->icid_gen_addr;
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &other->other_param);
   return hdr;
 }
 
 int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
 {
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
   pjsip_p_c_v_hdr* hdr = (pjsip_p_c_v_hdr*)h;
   char* p = buf;
 
-  // Check the header will fit.
+  // Check the fixed parts of the header will fit.
   int needed = 0;
   needed += hdr->name.slen; // Header name
   needed += 2;              // : and space
-  needed += 5;              // icid=
+  needed += 11;              // icid-value=
   needed += hdr->icid.slen; // <icid>
-  needed += 2;              // ; and space
+  needed += 1;              // ;
   if (hdr->orig_ioi.slen) {
     needed += 9;              // orig-ioi=
     needed += hdr->orig_ioi.slen; // <orig-ioi>
-    needed += 2;              // ; and space
+    needed += 1;              // ;
   }
   if (hdr->term_ioi.slen) {
     needed += 9;              // term-ioi=
     needed += hdr->term_ioi.slen; // <term-ioi>
-    needed += 2;              // ; and space
+    needed += 1;              // ;
   }
   if (hdr->icid_gen_addr.slen) {
     needed += 18;              // icid-generated-at=
     needed += hdr->icid_gen_addr.slen; // <icid-generated-at>
-    needed += 2;              // ; and space
   }
 
   if (needed > (pj_ssize_t)len) {
     return -1;
   }
   
-  // Now write the header out.
+  // Now write the fixed header out.
   pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
   p += hdr->name.slen;
   *p++ = ':';
   *p++ = ' ';
-  pj_memcpy(p, "icid=", 5);
-  p += 5;
+  pj_memcpy(p, "icid-value=", 11);
+  p += 11;
   pj_memcpy(p, hdr->icid.ptr, hdr->icid.slen);
   p += hdr->icid.slen;
-  *p++ = ';';
-  *p++ = ' ';
   if (hdr->orig_ioi.slen) {
+    *p++ = ';';
     pj_memcpy(p, "orig-ioi=", 9);
     p += 9;
     pj_memcpy(p, hdr->orig_ioi.ptr, hdr->orig_ioi.slen);
     p += hdr->orig_ioi.slen;
-    *p++ = ';';
-    *p++ = ' ';
   }
   if (hdr->term_ioi.slen) {
+    *p++ = ';';
     pj_memcpy(p, "term-ioi=", 9);
     p += 9;
     pj_memcpy(p, hdr->term_ioi.ptr, hdr->term_ioi.slen);
     p += hdr->term_ioi.slen;
-    *p++ = ';';
-    *p++ = ' ';
   }
   if (hdr->icid_gen_addr.slen) {
+    *p++ = ';';
     pj_memcpy(p, "icid-generated-at=", 18);
     p += 18;
     pj_memcpy(p, hdr->icid_gen_addr.ptr, hdr->icid_gen_addr.slen);
     p += hdr->icid_gen_addr.slen;
-    *p++ = ';';
-    *p++ = ' ';
   }
+  
+  // Attempt to write out the other params.
+  pj_ssize_t printed = pjsip_param_print_on(&hdr->other_param, p, buf+len-p,
+                                            &pc->pjsip_TOKEN_SPEC,
+                                            &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0) {
+    return -1;
+  }
+  p += printed;
   *p = '\0';
 
   return p - buf;
@@ -456,39 +470,37 @@ pjsip_hdr* parse_hdr_p_charging_function_addresses(pjsip_parse_ctx* ctx)
   pj_pool_t* pool = ctx->pool;
   pj_scanner* scanner = ctx->scanner;
   pjsip_p_c_f_a_hdr* hdr = pjsip_p_c_f_a_hdr_create(pool);
+  pj_str_t name;
+  pj_str_t value;
+  pjsip_param *param;
 
-  do {
-    if (pj_scan_stricmp(scanner, "ccf", 3) == 0) {
-      pj_scan_advance_n(scanner, 3, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      if (hdr->ccf_count < PJ_P_C_F_A_MAX_ADDRS) {
-        pj_scan_get_until_ch(scanner, ';', &hdr->ccf[hdr->ccf_count]);
-        hdr->ccf_count++;
-      }
-      else {
-        pj_scan_get_until_ch(scanner, ';', NULL);
-      }
-    } else if (pj_scan_stricmp(scanner, "ecf", 3) == 0) {
-      pj_scan_advance_n(scanner, 3, PJ_TRUE);
-      pj_scan_get_char(scanner);
-      pj_scan_skip_whitespace(scanner);
-      if (hdr->ecf_count < PJ_P_C_F_A_MAX_ADDRS) {
-        pj_scan_get_until_ch(scanner, ';', &hdr->ecf[hdr->ecf_count]);
-        hdr->ecf_count++;
-      } else {
-        pj_scan_get_until_ch(scanner, ';', NULL);
-      }
+  for (;;) {
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+    param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    param->name = name;
+    param->value = value;
+    if (!pj_stricmp2(&name, "ccf")) {
+      pj_list_insert_before(&hdr->ccf, param);
+    } else if (!pj_stricmp2(&name, "ecf")) {
+      pj_list_insert_before(&hdr->ecf, param);
     } else {
-      break;
+      pj_list_insert_before(&hdr->other_param, param);
     }
 
-    // Swallow whitespace and the ';' character.
-    pj_scan_skip_whitespace(scanner);
-    pj_scan_get_char(scanner);
-    pj_scan_skip_whitespace(scanner);
+    // We might need to swallow the ';'.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';') {
+      pj_scan_get_char(scanner);
+    }
 
-  } while (1);
+    // If we're EOF or looking at a newline, we're done.
+    pj_scan_skip_whitespace(scanner);
+    if (pj_scan_is_eof(scanner) ||
+        (*scanner->curptr == '\r') ||
+        (*scanner->curptr == '\n')) {
+      break;
+    }
+  }
 
   // We're done parsing this header.
   pjsip_parse_end_hdr_imp(scanner);
@@ -518,7 +530,10 @@ pjsip_p_c_f_a_hdr* pjsip_p_c_f_a_hdr_init(pj_pool_t* pool, void* mem)
   hdr->name = STR_P_C_F_A;
   hdr->sname = STR_P_C_F_A;
   hdr->vptr = &pjsip_p_c_f_a_vptr;
-  pj_list_init((pjsip_hdr*)hdr);
+  pj_list_init(hdr);
+  pj_list_init(&hdr->ccf);
+  pj_list_init(&hdr->ecf);
+  pj_list_init(&hdr->other_param);
 
   return hdr;
 }
@@ -528,12 +543,10 @@ void *pjsip_p_c_f_a_hdr_clone(pj_pool_t* pool, const void* o)
   pjsip_p_c_f_a_hdr* hdr = pjsip_p_c_f_a_hdr_create(pool);
   pjsip_p_c_f_a_hdr* other = (pjsip_p_c_f_a_hdr*)o;
 
-  hdr->ccf_count = other->ccf_count;
-  hdr->ecf_count = other->ecf_count;
-  for (int i = 0; i < PJ_P_C_F_A_MAX_ADDRS; i++) {
-    pj_strdup(pool, &hdr->ccf[i], &other->ccf[i]);
-    pj_strdup(pool, &hdr->ecf[i], &other->ecf[i]);
-  }
+  pjsip_param_clone(pool, &hdr->ccf, &other->ccf);
+  pjsip_param_clone(pool, &hdr->ecf, &other->ecf);
+  pjsip_param_clone(pool, &hdr->other_param, &other->other_param);
+
   return hdr;
 }
 
@@ -542,62 +555,112 @@ void *pjsip_p_c_f_a_hdr_shallow_clone(pj_pool_t* pool, const void* o)
   pjsip_p_c_f_a_hdr* hdr = pjsip_p_c_f_a_hdr_create(pool);
   pjsip_p_c_f_a_hdr* other = (pjsip_p_c_f_a_hdr*)o;
 
-  hdr->ccf_count = other->ccf_count;
-  hdr->ecf_count = other->ecf_count;
-  for (int i = 0; i < PJ_P_C_F_A_MAX_ADDRS; i++) {
-    hdr->ccf[i] = other->ccf[i];
-    hdr->ecf[i] = other->ecf[i];
-  }
+  pjsip_param_shallow_clone(pool, &hdr->ccf, &other->ccf);
+  pjsip_param_shallow_clone(pool, &hdr->ecf, &other->ecf);
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &other->other_param);
+
   return hdr;
 }
 
 int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
 {
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
   pjsip_p_c_f_a_hdr* hdr = (pjsip_p_c_f_a_hdr*)h;
   char* p = buf;
 
-  // Check the header will fit.
+  // Check that at least the header name will fit.
   int needed = 0;
   needed += hdr->name.slen; // Header name
-  needed += 2;                // : and space
-  for (int i = 0; i < PJ_P_C_F_A_MAX_ADDRS; i++) {
-    if (i < hdr->ccf_count) {
-      needed += 4;            // ccf=
-      needed += hdr->ccf[i].slen; // data
-      needed += 2;            // ; and space
-    }
-    if (i < hdr->ecf_count) {
-      needed += 4;            // ecf=
-      needed += hdr->ecf[i].slen; // data
-      needed += 2;            // ; and space
-    }
-  }
+  needed += 2;              // : and space
 
   if (needed > (pj_ssize_t)len) {
     return -1;
   }
   
-  // Now write the header out.
+  // Now write the header name out.
   pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
   p += hdr->name.slen;
   *p++ = ':';
   *p++ = ' ';
-  for (int i = 0; i < hdr->ccf_count; i++) {
-    pj_memcpy(p, "ccf=", 4);
-    p += 4;
-    pj_memcpy(p, hdr->ccf[i].ptr, hdr->ccf[i].slen);
-    p += hdr->ccf[i].slen;
-    *p++ = ';';
-    *p++ = ' ';
+
+  // Now try to write out the three parameter lists.  Annoyingly,
+  // pjsip_param_print_on() will always print the separator before each
+  // parameter, including the first parameter in this case.
+  //
+  // The P-Charging-Function-Addresses header has no body (technically 
+  // invalid SIP) and thus we need to print the first parameter without the 
+  // separator.  Since this first parameter could be in any of the parameter
+  // lists, we have to track (with the found_first_param flag) when we've
+  // handled it.
+  bool found_first_param = false;
+  int printed;
+
+  pjsip_param* param_list = NULL;
+  for (int i = 0; i < 3; i++) {
+    switch (i) {
+      case 0:
+        param_list = &hdr->ccf;
+        break;
+      case 1:
+        param_list = &hdr->ecf;
+        break;
+      case 2:
+        param_list = &hdr->other_param;
+        break;
+    }
+
+    if (pj_list_empty(param_list)) {
+      continue;
+    }
+
+    if (found_first_param) {
+      // Simply write out the parameters
+      printed = pjsip_param_print_on(param_list, p, buf+len-p,
+                                     &pc->pjsip_TOKEN_SPEC,
+                                     &pc->pjsip_TOKEN_SPEC, ';');
+      if (printed < 0) {
+        return -1;
+      }
+      p += printed;
+    } else {
+      // We print the first parameter manually then print the rest.
+      pjsip_param* first_param = param_list->next;
+      pj_list_erase(first_param);
+
+      // Check we have space for the first param before printing it out.
+      needed = pj_strlen(&first_param->name);
+      if (first_param->value.slen) {
+        needed += 1 + pj_strlen(&first_param->value);
+      }
+      if (needed > buf+len-p) {
+        return -1;
+      }
+
+      pj_memcpy(p, first_param->name.ptr, first_param->name.slen);
+      p += first_param->name.slen;
+      if (first_param->value.slen) {
+        *p++ = '=';
+        pj_memcpy(p, first_param->value.ptr, first_param->value.slen);
+        p += first_param->value.slen;
+      }
+
+      // Now print the rest of this parameter list (may be empty).
+      printed = pjsip_param_print_on(param_list, p, buf+len-p,
+                                     &pc->pjsip_TOKEN_SPEC,
+                                     &pc->pjsip_TOKEN_SPEC, ';');
+      if (printed < 0) {
+        return -1;
+      }
+      p += printed;
+
+      // Finally, restore the first param to the head of the parameter list.
+      pj_list_insert_after(param_list, first_param);
+
+      // We've found the first parameter, everything else is simple.
+      found_first_param = true;
+    }
   }
-  for (int i = 0; i < hdr->ecf_count; i++) {
-    pj_memcpy(p, "ecf=", 4);
-    p += 4;
-    pj_memcpy(p, hdr->ecf[i].ptr, hdr->ecf[i].slen);
-    p += hdr->ecf[i].slen;
-    *p++ = ';';
-    *p++ = ' ';
-  }
+ 
   *p = '\0';
 
   return p - buf;

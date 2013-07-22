@@ -61,15 +61,14 @@ typedef struct pjsip_p_c_v_hdr {
   pj_str_t icid_gen_addr;
   pj_str_t orig_ioi;
   pj_str_t term_ioi;
+  pjsip_param other_param;
 } pjsip_p_c_v_hdr;
 
 typedef struct pjsip_p_c_f_a_hdr {
-#define PJ_P_C_F_A_MAX_ADDRS 5
   PJSIP_DECL_HDR_MEMBER(struct pjsip_p_c_f_a_hdr);
-  int ccf_count;
-  pj_str_t ccf[PJ_P_C_F_A_MAX_ADDRS];
-  int ecf_count;
-  pj_str_t ecf[PJ_P_C_F_A_MAX_ADDRS];
+  pjsip_param ccf;
+  pjsip_param ecf;
+  pjsip_param other_param;
 } pjsip_p_c_f_a_hdr;
 
 /// Utility functions (parse, create, init, clone, print_on)
