@@ -1887,6 +1887,22 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   delete tp;
 }
 
+TEST_F(StatefulEdgeProxyTest, TestEdgeDeregister)
+{
+  SCOPED_TRACE("");
+
+  //Deregister client which hasn't registered yet
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                        49152);
+  string token;
+  string baretoken;
+  doRegisterEdge(tp, token, baretoken, 0);
+
+  delete tp;
+}
+
 TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 {
   SCOPED_TRACE("");
