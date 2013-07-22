@@ -125,6 +125,7 @@ extern "C" {
 #include "ifchandler.h"
 #include "aschain.h"
 #include "registration_utils.h"
+#include "custom_headers.h"
 
 static RegData::Store* store;
 
@@ -1782,6 +1783,17 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       // node/home domain.
       handle_incoming_non_cancel(serving_state);
 
+      // Add ourselves as orig-IOI if appropriate.
+      //
+      // Here we rely on the served_user not being populated unless the user
+      // is locally hosted.  This is policed in served_user_from_msg().
+      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+      if (pcv && !_as_chain_link.served_user().empty())
+      {
+        pcv->orig_ioi = stack_data.home_domain;
+      }
+
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
 
@@ -1943,6 +1955,17 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
       LOG_INFO("Rejecting off-net call from user without E.164 address");
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
       return AsChainLink::Disposition::Stop;
+    }
+
+    // If the newly translated ReqURI indicates that we're the host of the
+    // target user, include ourselves as the terminating operator for 
+    // billing.
+    pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+      pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+      pcv->term_ioi = stack_data.home_domain;
+    } else if (pcv) {
+      pcv->term_ioi = pj_str("");
     }
   }
 
