@@ -11,7 +11,8 @@ include ${MK_DIR}/linux.mk
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/usr/include
+            -I${ROOT}/usr/include \
+						-I${ROOT}/modules/mongo-c-driver/src
 
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -ldl \
@@ -21,14 +22,14 @@ LDFLAGS += -ldl \
            -lboost_thread \
            -lboost_date_time
 
-# Statically link libmemcached
-SLIBS = ${ROOT}/usr/lib/libmemcached.a ${ROOT}/usr/lib/libmemcachedutil.a ${ROOT}/usr/lib/libmemcachedprotocol.a
+# Statically link libmemcached and libmongoc
+SLIBS = ${ROOT}/usr/lib/libmemcached.a ${ROOT}/usr/lib/libmemcachedutil.a ${ROOT}/usr/lib/libmemcachedprotocol.a ${ROOT}/modules/mongo-c-driver/libmongoc.a
 
 # .cpp files will either be local or in the sprout directory							
 vpath %.cpp .:${ROOT}/sprout
 
-OBJS_READ  := $(addprefix $(OBJ_DIR)/,store-read.o memcachedstore.o store.o logger.o utils.o log.o)
-OBJS_WRITE := $(addprefix $(OBJ_DIR)/,store-write.o memcachedstore.o store.o logger.o utils.o log.o)
+OBJS_READ  := $(addprefix $(OBJ_DIR)/,store-read.o memcachedstore.o mongodbstore.o store.o logger.o utils.o log.o)
+OBJS_WRITE := $(addprefix $(OBJ_DIR)/,store-write.o memcachedstore.o mongodbstore.o store.o logger.o utils.o log.o)
 
 .PHONY: all
 all: $(BIN_DIR)/store-read $(BIN_DIR)/store-write

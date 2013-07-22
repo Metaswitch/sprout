@@ -7,8 +7,8 @@
 #include "log.h"
 #include "logger.h"
 #include "memcachedstorefactory.h"
+#include "mongodbstorefactory.h"
 #include "utils.h"
-#include "stack.h"
 
 // Options variables - all are read-only once the threads are started.
 bool verbose = false;
@@ -120,7 +120,7 @@ static void usage(char* command)
          "                                is 1)\n"
          " -e, --expires <expires>        Specifies the expires value for each record (default is 300)\n"
          " -p, --protocol <protocol>      Specifies protocol to use (memcached-ascii, memcached-binary,\n"
-         "                                default is memcached-ascii)\n"
+         "                                mongodb - default is memcached-ascii)\n"
          " -L, --log-level <log-level>    Specifies the log level (default is 2)\n");
 }
 
@@ -183,7 +183,8 @@ int main (int argc, char *argv[])
       case 'p':
         protocol = std::string(optarg);
         if ((protocol != "memcached-ascii") &&
-            (protocol != "memcached-binary"))
+            (protocol != "memcached-binary") &&
+            (protocol != "mongodb"))
         {
           printf("Unknown protocol %s\n", protocol.c_str());
           usage(argv[0]);
@@ -220,10 +221,19 @@ int main (int argc, char *argv[])
   Log::setLoggingLevel(log_level);
   Log::setLogger(new Logger());
 
-  // Open the store.
   std::list<std::string> server_list;
   Utils::split_string(servers, ',', server_list, 0, true);
-  store = RegData::create_memcached_store(server_list, num_threads, (protocol == "memcached-binary"));
+
+  // Open the store.
+  if ((protocol == "memcached-ascii") ||
+      (protocol == "memcached-binary"))
+  {
+    store = RegData::create_memcached_store(server_list, num_threads, (protocol == "memcached-binary"));
+  }
+  else if (protocol == "mongodb")
+  {
+    store = RegData::create_mongodb_store(server_list);
+  }
 
   std::vector<pthread_t> threads;
 

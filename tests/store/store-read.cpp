@@ -8,7 +8,6 @@
 #include "logger.h"
 #include "memcachedstorefactory.h"
 #include "utils.h"
-#include "stack.h"
 
 // Options variables - all are read-only once the threads are started.
 bool verbose = false;
