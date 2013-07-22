@@ -276,9 +276,9 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
 
   // Calculate the address to forward the response
   pj_bzero(&res_addr, sizeof(res_addr));
-  res_addr.dst_host.type = PJSIP_TRANSPORT_UDP;
+  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
   res_addr.dst_host.flag =
-    pjsip_transport_get_flag_from_type(PJSIP_TRANSPORT_UDP);
+    pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
   // Destination address is Via's received param
   res_addr.dst_host.addr.host = hvia->recvd_param;
@@ -814,6 +814,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     }
 
     LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+
+    // Touch the flow to make sure it doesn't time out while we are waiting
+    // for the REGISTER response from upstream.
+    src_flow->touch();
 
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
@@ -1524,7 +1528,8 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
     {
       // The Path header has a flow token, so see if this maps to a known
       // active flow.
-      Flow* flow_data = flow_table->find_flow(PJUtils::pj_str_to_string(&path_uri->user));
+      std::string flow_token = PJUtils::pj_str_to_string(&path_uri->user);
+      Flow* flow_data = flow_table->find_flow(flow_token);
 
       if (flow_data != NULL)
       {
@@ -1565,6 +1570,14 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
 
         // Decrement the reference to the flow data
         flow_data->dec_ref();
+      }
+      else
+      {
+        // Failed to correlate the token in the Path header to an active flow.
+        // This can happen if, for example, the connection to the client
+        // failed, but it is unusual, so log at info level rather than as an
+        // error or warning.
+        LOG_INFO("Failed to correlate REGISTER response Path token %s to a flow", flow_token.c_str());
       }
     }
   }
