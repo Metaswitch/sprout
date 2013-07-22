@@ -348,6 +348,10 @@ pjsip_p_c_v_hdr* pjsip_p_c_v_hdr_init(pj_pool_t* pool, void* mem)
   hdr->sname = STR_P_C_V;
   hdr->vptr = &pjsip_p_c_v_vptr;
   pj_list_init(hdr);
+  hdr->icid = pj_str("");
+  hdr->orig_ioi = pj_str("");
+  hdr->term_ioi = pj_str("");
+  hdr->icid_gen_addr = pj_str("");
   pj_list_init(&hdr->other_param);
 
   return hdr;
