@@ -116,8 +116,12 @@ TEST_F(CustomHeadersTest, PChargingVector)
   hdr = (pjsip_hdr*)pcv_clone;
   int written = hdr->vptr->print_on(hdr, buf, 0);
   EXPECT_EQ(written, -1);
-  written = hdr->vptr->print_on(hdr, buf, 1024);
-
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = hdr->vptr->print_on(hdr, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 138);
   EXPECT_STREQ("P-Charging-Vector: icid-value=4815162542;orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
@@ -167,7 +171,11 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   hdr = (pjsip_hdr*)pcfa_clone;
   int written = hdr->vptr->print_on(hdr, buf, 0);
   EXPECT_EQ(written, -1);
-  written = hdr->vptr->print_on(hdr, buf, 1024);
-
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = hdr->vptr->print_on(hdr, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 105);
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
 }
