@@ -276,14 +276,14 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   if (!pj_stricmp2(&name, "icid-value")) {
     hdr->icid = value;
   } else {
-    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
   }
 
   // Should always need to swallow the ';' for the icid-value param.
   if (*scanner->curptr == ';') {
     pj_scan_get_char(scanner);
   } else {
-    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION);
+    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
   }
 
   // Now parse the rest of the params.
@@ -614,7 +614,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
     }
 
     if (pj_list_empty(param_list)) {
-      continue;
+      continue; // LCOV_EXCL_LINE
     }
 
     if (found_first_param) {
@@ -637,6 +637,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
         needed += 1 + pj_strlen(&first_param->value);
       }
       if (needed > buf+len-p) {
+        pj_list_insert_after(param_list, first_param);
         return -1;
       }
 
@@ -653,6 +654,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
                                      &pc->pjsip_TOKEN_SPEC,
                                      &pc->pjsip_TOKEN_SPEC, ';');
       if (printed < 0) {
+        pj_list_insert_after(param_list, first_param);
         return -1;
       }
       p += printed;
@@ -668,4 +670,25 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
   *p = '\0';
 
   return p - buf;
+}
+
+/// Register all of our custom header parsers with pjSIP.  This should be
+// called once during startup.
+pj_status_t register_custom_headers() {
+  pj_status_t status;
+  
+  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Asserted-Identity", NULL, &parse_hdr_p_asserted_identity);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Preferred-Identity", NULL, &parse_hdr_p_preferred_identity);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Charging-Vector", NULL, &parse_hdr_p_charging_vector);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Charging-Function-Addresses", NULL, &parse_hdr_p_charging_function_addresses);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  return PJ_SUCCESS;
 }

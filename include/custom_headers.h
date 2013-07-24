@@ -46,6 +46,9 @@ extern "C" {
 #include <pjsip.h>
 }
 
+// Main entry point
+pj_status_t register_custom_headers();
+
 // Utility macro from sip_parser.c
 #define copy_advance(buf,str)                   \
   do {                                          \

@@ -15,6 +15,7 @@ websockets.cpp
 dnsresolver.cpp
 flowtable.cpp
 zmq_lvc.cpp
+custom_headers.cpp
 
 # Not intended to be covered, as just stub code.
 sas.cpp
