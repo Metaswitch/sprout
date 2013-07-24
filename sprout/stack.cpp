@@ -431,19 +431,7 @@ pj_status_t init_pjsip()
                                    4000,
                                    NULL);
 
-  // Register custom header parsers for Privacy, P-Associated-URI, P-Asserted-Identity
-  // and P-Preferred-Identity.
-  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Asserted-Identity", NULL, &parse_hdr_p_asserted_identity);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Preferred-Identity", NULL, &parse_hdr_p_preferred_identity);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Charging-Vector", NULL, &parse_hdr_p_charging_vector);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Charging-Function-Addresses", NULL, &parse_hdr_p_charging_function_addresses);
+  status = register_custom_headers();
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   return PJ_SUCCESS;
