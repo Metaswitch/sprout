@@ -1288,13 +1288,13 @@ void proxy_calculate_targets(pjsip_msg* msg,
       if (!bgcf_route.empty())
       {
         // Split the route into a host and (optional) port.
-        int port = 0
+        int port = 0;
         std::vector<std::string> bgcf_route_elems;
         Utils::split_string(bgcf_route, ':', bgcf_route_elems, 2, true);
 
-        if (bgcf_route_elems.length() > 1)
+        if (bgcf_route_elems.size() > 1)
         {
-          port = atoi(bgcf_route_elems[1].c_str())
+          port = atoi(bgcf_route_elems[1].c_str());
         }
 
         // BGCF configuration has a route to this destination, so translate to
