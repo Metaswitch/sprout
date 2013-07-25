@@ -1287,11 +1287,21 @@ void proxy_calculate_targets(pjsip_msg* msg,
 
       if (!bgcf_route.empty())
       {
+        // Split the route into a host and (optional) port.
+        int port = 0
+        std::vector<std::string> bgcf_route_elems;
+        Utils::split_string(bgcf_route, ':', bgcf_route_elems, 2, true);
+
+        if (bgcf_route_elems.length() > 1)
+        {
+          port = atoi(bgcf_route_elems[1].c_str())
+        }
+
         // BGCF configuration has a route to this destination, so translate to
         // a URI.
         pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
-        pj_strdup2(pool, &route_uri->host, bgcf_route.c_str());
-        route_uri->port = stack_data.trusted_port;
+        pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
+        route_uri->port = port;
         route_uri->transport_param = pj_str("TCP");
         route_uri->lr_param = 1;
         target.paths.push_back((pjsip_uri*)route_uri);
@@ -1958,7 +1968,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
     }
 
     // If the newly translated ReqURI indicates that we're the host of the
-    // target user, include ourselves as the terminating operator for 
+    // target user, include ourselves as the terminating operator for
     // billing.
     pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
       pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
