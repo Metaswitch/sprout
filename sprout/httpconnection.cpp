@@ -336,7 +336,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
     // Send the request.
     doc.clear();
-    LOG_DEBUG("Sending HTTP request : %s (try %d)", url.c_str(), i);
+    LOG_DEBUG("Sending HTTP request : GET %s (try %d) %s", url.c_str(), i, (recycle_conn) ? "on new connection" : "");
     rc = curl_easy_perform(curl);
 
     if (rc == CURLE_OK)
@@ -359,7 +359,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     else
     {
       // Report the error to SAS
-      LOG_ERROR("HTTP error response : %s : %s", url.c_str(), curl_easy_strerror(rc));
+      LOG_ERROR("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
       SAS::Event http_err_event(trail, _sasEventBase + SASEvent::HTTP_ERR, 1u);
       http_err_event.add_static_param(rc);
       http_err_event.add_var_param(url);
