@@ -61,6 +61,11 @@ static void* writer_thread(void* p)
 
   std::string aor_base = "aor" + to_string<int>(tid, std::dec);
 
+  // First time round initialise the countdown counter based on the thread
+  // identifier, so the threads don't synchronize writing the comfort dot.
+  long countdown = 1000;
+  countdown = (countdown * tid) / num_threads;
+
   do
   {
     for (int ii = 0; ii < num_records; ++ii)
@@ -102,13 +107,20 @@ static void* writer_thread(void* p)
         // Print the data.
         log_bindings(tid, aor_name, aor_data);
       }
+      else
+      {
+        //printf("Thread %ld, countdown = %ld\n", tid, countdown - 1);
+        if (--countdown <= 0)
+        {
+          printf(".");
+          fflush(0);
+
+          // Restart the countdown for the comfort dot.
+          countdown = 1000;
+        }
+      }
 
       delete aor_data;
-    }
-    if ((continuous) && (!verbose))
-    {
-      // User comfort!
-      printf(".");
     }
   }
   while (continuous);
