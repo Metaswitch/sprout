@@ -20,6 +20,7 @@ int expires = 300;
 std::string protocol = "memcached-ascii";
 int log_level = 2;
 std::string aor_domain;
+bool continuous = false;
 
 // Pointer to the store object - read-only once the threads are started.
 RegData::Store* store;
@@ -60,48 +61,57 @@ static void* writer_thread(void* p)
 
   std::string aor_base = "aor" + to_string<int>(tid, std::dec);
 
-  for (int ii = 0; ii < num_records; ++ii)
+  do
   {
-    std::string aor_name = aor_base + "-" + to_string<long>(ii, std::dec) + "@" + aor_domain;
-
-    RegData::AoR* aor_data = NULL;
-
-    do
+    for (int ii = 0; ii < num_records; ++ii)
     {
-      // Delete AoR data if we've already been round once.
+      std::string aor_name = aor_base + "-" + to_string<long>(ii, std::dec) + "@" + aor_domain;
+
+      RegData::AoR* aor_data = NULL;
+
+      do
+      {
+        // Delete AoR data if we've already been round once.
+        delete aor_data;
+
+        // Get the data for the AoR.
+        aor_data = store->get_aor_data(aor_name);
+
+        if (aor_data == NULL)
+        {
+          printf("%ld: Failed to get aor_data for %s\n", tid, aor_name.c_str());
+          exit(1);
+        }
+
+        for (int jj = 0; jj < num_bindings; ++jj)
+        {
+          // Find or add the specified binding.
+          std::string binding_id = "binding" + to_string<int>(jj, std::dec);
+          RegData::AoR::Binding* binding = aor_data->get_binding(binding_id);
+
+          // Update the binding
+          binding->_uri = binding_id + "@127.0.0.1;transport=TCP";
+          binding->_priority = 1;
+          binding->_expires = time(NULL) + expires;
+        }
+
+      } while (!store->set_aor_data(aor_name, aor_data));
+
+      if (verbose)
+      {
+        // Print the data.
+        log_bindings(tid, aor_name, aor_data);
+      }
+
       delete aor_data;
-
-      // Get the data for the AoR.
-      aor_data = store->get_aor_data(aor_name);
-
-      if (aor_data == NULL)
-      {
-        printf("%ld: Failed to get aor_data for %s\n", tid, aor_name.c_str());
-        exit(1);
-      }
-
-      for (int jj = 0; jj < num_bindings; ++jj)
-      {
-        // Find or add the specified binding.
-        std::string binding_id = "binding" + to_string<int>(jj, std::dec);
-        RegData::AoR::Binding* binding = aor_data->get_binding(binding_id);
-
-        // Update the binding
-        binding->_uri = binding_id + "@127.0.0.1;transport=TCP";
-        binding->_priority = 1;
-        binding->_expires = time(NULL) + expires;
-      }
-
-    } while (!store->set_aor_data(aor_name, aor_data));
-
-    if (verbose)
-    {
-      // Print the data.
-      log_bindings(tid, aor_name, aor_data);
     }
-
-    delete aor_data;
+    if ((continuous) && (!verbose))
+    {
+      // User comfort!
+      printf(".");
+    }
   }
+  while (continuous);
 
   return NULL;
 }
@@ -121,7 +131,9 @@ static void usage(char* command)
          " -e, --expires <expires>        Specifies the expires value for each record (default is 300)\n"
          " -p, --protocol <protocol>      Specifies protocol to use (memcached-ascii, memcached-binary,\n"
          "                                default is memcached-ascii)\n"
-         " -L, --log-level <log-level>    Specifies the log level (default is 2)\n");
+         " -L, --log-level <log-level>    Specifies the log level (default is 2)\n"
+         " -c, --continuous               Run continuously\n"
+        );
 }
 
 int main (int argc, char *argv[])
@@ -139,6 +151,7 @@ int main (int argc, char *argv[])
       {"expires",             required_argument,         0, 'e'},
       {"protocol",            required_argument,         0, 'p'},
       {"log-level",           required_argument,         0, 'L'},
+      {"continuous",          no_argument,               0, 'c'},
       {0, 0, 0, 0}
     };
 
@@ -146,7 +159,7 @@ int main (int argc, char *argv[])
     // getopt_long stores the option index here.
     int option_index = 0;
 
-    char c = getopt_long(argc, argv, "vs:t:r:b:e:p:L:", long_options, &option_index);
+    char c = getopt_long(argc, argv, "vs:t:r:b:e:p:L:c", long_options, &option_index);
 
     // Detect the end of the options.
     if (c == -1)
@@ -195,6 +208,10 @@ int main (int argc, char *argv[])
         log_level = atoi(optarg);
         break;
 
+      case 'c':
+        continuous = true;
+        break;
+
       default:
         usage(argv[0]);
         exit(1);
@@ -216,6 +233,7 @@ int main (int argc, char *argv[])
   printf("AOR domain = %s\n", aor_domain.c_str());
   printf("Expires = %d\n", expires);
   printf("Protocol = %s\n", protocol.c_str());
+  printf("Continuous = %s\n", continuous ? "yes" : "no");
 
   Log::setLoggingLevel(log_level);
   Log::setLogger(new Logger());
