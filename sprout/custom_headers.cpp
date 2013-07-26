@@ -279,44 +279,49 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
     PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
   }
 
-  // Should always need to swallow the ';' for the icid-value param.
-  if (*scanner->curptr == ';') {
+  // Move onto the next parameter in the header (if present).
+  if (pj_scan_is_eof(scanner) ||
+      (*scanner->curptr == '\r') ||
+      (*scanner->curptr == '\n')) {
+    // End of header - nothing to do.
+  }
+  else if (*scanner->curptr == ';') {
+    // Swallow the ';' separator then parse the rest of the parameters.
     pj_scan_get_char(scanner);
+
+    for (;;) {
+      pjsip_parse_param_imp(scanner, pool, &name, &value,
+                            PJSIP_PARSE_REMOVE_QUOTE);
+
+      if (!pj_stricmp2(&name, "orig-ioi")) {
+        hdr->orig_ioi = value;
+      } else if (!pj_stricmp2(&name, "term-ioi")) {
+        hdr->term_ioi = value;
+      } else if (!pj_stricmp2(&name, "icid-generated-at")) {
+        hdr->icid_gen_addr = value;
+      } else {
+        pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+        param->name = name;
+        param->value = value;
+        pj_list_insert_before(&hdr->other_param, param);
+      }
+
+      // May need to swallow the ';' for the previous param.
+      if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';') {
+        pj_scan_get_char(scanner);
+      }
+
+      // If the next character is a newline (after skipping whitespace)
+      // we're done.
+      pj_scan_skip_whitespace(scanner);
+      if (pj_scan_is_eof(scanner) ||
+          (*scanner->curptr == '\r') ||
+          (*scanner->curptr == '\n')) {
+        break;
+      }
+    }
   } else {
     PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
-  }
-
-  // Now parse the rest of the params.
-  for (;;) {
-    pjsip_parse_param_imp(scanner, pool, &name, &value,
-                          PJSIP_PARSE_REMOVE_QUOTE);
-
-    if (!pj_stricmp2(&name, "orig-ioi")) {
-      hdr->orig_ioi = value;
-    } else if (!pj_stricmp2(&name, "term-ioi")) {
-      hdr->term_ioi = value;
-    } else if (!pj_stricmp2(&name, "icid-generated-at")) {
-      hdr->icid_gen_addr = value;
-    } else {
-      pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      param->name = name;
-      param->value = value;
-      pj_list_insert_before(&hdr->other_param, param);
-    }
-
-    // May need to swallow the ';' for the previous param.
-    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';') {
-      pj_scan_get_char(scanner);
-    }
-
-    // If the next character is a newline (after skipping whitespace)
-    // we're done.
-    pj_scan_skip_whitespace(scanner);
-    if (pj_scan_is_eof(scanner) ||
-        (*scanner->curptr == '\r') ||
-        (*scanner->curptr == '\n')) {
-      break;
-    }
   }
 
   // We're done parsing this header.
@@ -341,7 +346,7 @@ pjsip_p_c_v_hdr* pjsip_p_c_v_hdr_init(pj_pool_t* pool, void* mem)
 {
   pjsip_p_c_v_hdr* hdr = (pjsip_p_c_v_hdr*)mem;
   PJ_UNUSED_ARG(pool);
-  
+
   // Based on init_hdr from sip_msg.c
   hdr->type = PJSIP_H_OTHER;
   hdr->name = STR_P_C_V;
@@ -412,7 +417,7 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   if (needed > (pj_ssize_t)len) {
     return -1;
   }
-  
+
   // Now write the fixed header out.
   pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
   p += hdr->name.slen;
@@ -443,7 +448,7 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
     pj_memcpy(p, hdr->icid_gen_addr.ptr, hdr->icid_gen_addr.slen);
     p += hdr->icid_gen_addr.slen;
   }
-  
+
   // Attempt to write out the other params.
   pj_ssize_t printed = pjsip_param_print_on(&hdr->other_param, p, buf+len-p,
                                             &pc->pjsip_TOKEN_SPEC,
@@ -580,7 +585,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
   if (needed > (pj_ssize_t)len) {
     return -1;
   }
-  
+
   // Now write the header name out.
   pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
   p += hdr->name.slen;
@@ -591,8 +596,8 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
   // pjsip_param_print_on() will always print the separator before each
   // parameter, including the first parameter in this case.
   //
-  // The P-Charging-Function-Addresses header has no body (technically 
-  // invalid SIP) and thus we need to print the first parameter without the 
+  // The P-Charging-Function-Addresses header has no body (technically
+  // invalid SIP) and thus we need to print the first parameter without the
   // separator.  Since this first parameter could be in any of the parameter
   // lists, we have to track (with the found_first_param flag) when we've
   // handled it.
@@ -666,7 +671,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
       found_first_param = true;
     }
   }
- 
+
   *p = '\0';
 
   return p - buf;
@@ -676,7 +681,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
 // called once during startup.
 pj_status_t register_custom_headers() {
   pj_status_t status;
-  
+
   status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
