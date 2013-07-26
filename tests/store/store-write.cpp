@@ -79,14 +79,17 @@ static void* writer_thread(void* p)
         // Delete AoR data if we've already been round once.
         delete aor_data;
 
-        // Get the data for the AoR.
-        aor_data = store->get_aor_data(aor_name);
-
-        if (aor_data == NULL)
+        do
         {
-          printf("%ld: Failed to get aor_data for %s\n", tid, aor_name.c_str());
-          exit(1);
+          // Get the data for the AoR.
+          aor_data = store->get_aor_data(aor_name);
+
+          if (aor_data == NULL)
+          {
+            printf("%ld: Failed to get aor_data for %s\n", tid, aor_name.c_str());
+          }
         }
+        while (aor_data == NULL);
 
         for (int jj = 0; jj < num_bindings; ++jj)
         {
