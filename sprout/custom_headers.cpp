@@ -279,49 +279,40 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
     PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
   }
 
-  // Move onto the next parameter in the header (if present).
-  if (pj_scan_is_eof(scanner) ||
-      (*scanner->curptr == '\r') ||
-      (*scanner->curptr == '\n')) {
-    // End of header - nothing to do.
-  }
-  else if (*scanner->curptr == ';') {
-    // Swallow the ';' separator then parse the rest of the parameters.
-    pj_scan_get_char(scanner);
+  for (;;) {
+    pj_scan_skip_whitespace(scanner);
 
-    for (;;) {
-      pjsip_parse_param_imp(scanner, pool, &name, &value,
-                            PJSIP_PARSE_REMOVE_QUOTE);
-
-      if (!pj_stricmp2(&name, "orig-ioi")) {
-        hdr->orig_ioi = value;
-      } else if (!pj_stricmp2(&name, "term-ioi")) {
-        hdr->term_ioi = value;
-      } else if (!pj_stricmp2(&name, "icid-generated-at")) {
-        hdr->icid_gen_addr = value;
-      } else {
-        pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-        param->name = name;
-        param->value = value;
-        pj_list_insert_before(&hdr->other_param, param);
-      }
-
-      // May need to swallow the ';' for the previous param.
-      if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';') {
-        pj_scan_get_char(scanner);
-      }
-
-      // If the next character is a newline (after skipping whitespace)
-      // we're done.
-      pj_scan_skip_whitespace(scanner);
-      if (pj_scan_is_eof(scanner) ||
-          (*scanner->curptr == '\r') ||
-          (*scanner->curptr == '\n')) {
-        break;
-      }
+    // If icid-value is the only parameter we will have reached the end of the
+    // header and have nothing more to do.
+    if (pj_scan_is_eof(scanner) ||
+        (*scanner->curptr == '\r') ||
+        (*scanner->curptr == '\n')) {
+      break;
     }
-  } else {
-    PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
+
+    // There's more content in the header so the next character must be the ";"
+    // separator.
+    if (*scanner->curptr == ';') {
+      pj_scan_get_char(scanner);
+    } else {
+      PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
+    }
+
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+
+    if (!pj_stricmp2(&name, "orig-ioi")) {
+      hdr->orig_ioi = value;
+    } else if (!pj_stricmp2(&name, "term-ioi")) {
+      hdr->term_ioi = value;
+    } else if (!pj_stricmp2(&name, "icid-generated-at")) {
+      hdr->icid_gen_addr = value;
+    } else {
+      pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = name;
+      param->value = value;
+      pj_list_insert_before(&hdr->other_param, param);
+    }
   }
 
   // We're done parsing this header.
