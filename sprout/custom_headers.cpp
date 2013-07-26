@@ -282,7 +282,7 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   for (;;) {
     pj_scan_skip_whitespace(scanner);
 
-    // If we just parased the last parameter we will have reached the end of the
+    // If we just parsed the last parameter we will have reached the end of the
     // header and have nothing more to do.
     if (pj_scan_is_eof(scanner) ||
         (*scanner->curptr == '\r') ||
