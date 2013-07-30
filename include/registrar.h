@@ -49,9 +49,8 @@ extern "C" {
 #include "analyticslogger.h"
 #include "ifchandler.h"
 
-// Maximum registration time 5 minutes (300 seconds).
-// @@@TODO Temporarily raise this for IMS bench interop
-#define REG_MAX_EXPIRES 30000
+// Maximum registration time 1 hour (3600 seconds).
+const int REG_MAX_EXPIRES = 3600;
 
 extern pjsip_module mod_registrar;
 
