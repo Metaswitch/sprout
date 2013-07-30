@@ -391,11 +391,11 @@ void process_register_request(pjsip_rx_data* rdata)
 
           // Calculate the expiry period for the updated binding.
           expiry = (contact->expires != -1) ? contact->expires :
-                       (expires != NULL) ? expires->ivalue : 300;
-          if (expiry > 300)
+                       (expires != NULL) ? expires->ivalue : REG_MAX_EXPIRES;
+          if (expiry > REG_MAX_EXPIRES)
           {
-            // Expiry is too long, set it to the maximum of 300 seconds (5 minutes).
-            expiry = 300;
+            // Expiry is too long, set it to the maximum.
+            expiry = REG_MAX_EXPIRES;
           }
 
           binding->_expires = now + expiry;
