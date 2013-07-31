@@ -458,20 +458,21 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
 
 /// Gets the maximum expires value from all contacts in a REGISTER message
 /// (request or response).
-int PJUtils::max_expires(pjsip_msg* msg)
+int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
 {
   int max_expires = 0;
 
   // Check for an expires header (this will specify the default expiry for
   // any contacts that don't specify their own expiry).
   pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 300;
 
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 
   while (contact != NULL)
   {
-    int expires = (contact->expires != -1) ? contact->expires : default_expires;
+    int expires = (contact->expires != -1) ? contact->expires :
+                  (expires_hdr != NULL) ? expires_hdr->ivalue :
+                  default_expires;
     if (expires > max_expires)
     {
       max_expires = expires;
