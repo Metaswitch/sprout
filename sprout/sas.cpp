@@ -83,7 +83,7 @@ SAS::Connection::Connection(const std::string& system_name, const std::string& s
   _sas_address(sas_address),
   _msg_q(0, false),
   _writer(0),
-  _sock(0)
+  _sock(-1)
 {
   // Spawn a thread to open and write to the SAS connection.
   int rc = pthread_create(&_writer, NULL, &writer_thread, this);
@@ -135,7 +135,7 @@ void SAS::Connection::writer()
 
       // Now can start dequeuing and sending data.
       std::string msg;
-      while (_msg_q.pop(msg))
+      while ((_sock != -1) && (_msg_q.pop(msg)))
       {
         int len = msg.length();
         char* buf = (char*)msg.data();
@@ -151,6 +151,7 @@ void SAS::Connection::writer()
           {
             LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
             ::close(_sock);
+            _sock = -1;
             break;
           }
         }
@@ -211,6 +212,7 @@ bool SAS::Connection::connect_init()
   {
     LOG_ERROR("Failed to connect to SAS %s:%d : %d %s\n", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
     ::close(_sock);
+    _sock = -1;
     return false;
   }
 
@@ -235,6 +237,8 @@ bool SAS::Connection::connect_init()
   if (rc < 0)
   {
     LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+    ::close(_sock);
+    _sock = -1;
     return false;
   }
 
