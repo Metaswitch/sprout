@@ -98,6 +98,7 @@ private:
 
   FlowTable* _flow_table;
   pjsip_transport* _transport;
+  pjsip_tp_state_listener_key* _tp_state_listener_key;
   pj_sockaddr _remote_addr;
   std::string _token;
 
@@ -139,6 +140,9 @@ private:
 
   /// Timeout (in seconds) used to delete idle non-reliable flows.
   static const int IDLE_TIMEOUT = 600;
+
+  /// Grace period for contact expiry.
+  static const int EXPIRY_GRACE_INTERVAL = 30;
 };
 
 
