@@ -54,7 +54,7 @@
 using namespace std;
 using testing::MatchesRegex;
 
-#define REGEX_NUM_LT_3600 "(3600|3[0-5][0-9]{2}|[1-2][0-9]{3}|[1-9][0-9]{0,2})"
+#define REGEX_INT_LT_3600 "(3600|3[0-5][0-9]{2}|[1-2][0-9]{3}|[1-9][0-9]{0,2})"
 
 /// Fixture for RegistrarTest.
 class RegistrarTest : public SipTest
@@ -74,14 +74,10 @@ public:
     _ifc_handler = new IfcHandler(_hss_connection, _store);
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _hss_connection, _analytics, _ifc_handler, 0);
-    ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
   }
 
   static void TearDownTestCase()
   {
-    destroy_registrar();
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
@@ -90,14 +86,26 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  RegistrarTest() : SipTest(&mod_registrar)
+  RegistrarTest(int max_expires = 0) :
+    SipTest(&mod_registrar)
   {
+    // The registrar must be created on each test as the maximum expiry period
+    // can change from test to test.
+    pj_status_t ret = init_registrar(_store,
+                                     _hss_connection,
+                                     _analytics,
+                                     _ifc_handler,
+                                     max_expires);
+    EXPECT_EQ(PJ_SUCCESS, ret);
+    stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
+
     _analytics->_logger = &_log;
     _store->flush_all();  // start from a clean slate on each test
   }
 
   ~RegistrarTest()
   {
+    destroy_registrar();
     _analytics->_logger = NULL;
   }
 
@@ -302,8 +310,8 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   // Expires timer for first contact may have ticked down, so give it some leeway.
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
   //          get_headers(out, "Contact"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -319,8 +327,8 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
@@ -336,9 +344,9 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1"));
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
@@ -352,9 +360,9 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires="REGEX_NUM_LT_3600";\\+sip.ice;reg-id=1"));
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" REGEX_INT_LT_3600 ";\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
