@@ -167,6 +167,23 @@ void render_call_stats(std::vector<std::string>& msgs)
   }
 }
 
+// Render a set of latency statistics.  The names here match those in Ruby
+// cw_stat.
+void render_latency_us(std::vector<std::string>& msgs)
+{
+  if (msgs.size() >= 6 )
+  {
+    printf("mean:%s\n", msgs[2].c_str());
+    printf("variance:%s\n", msgs[3].c_str());
+    printf("lwm:%s\n", msgs[4].c_str());
+    printf("hwm:%s\n", msgs[5].c_str());
+  }
+  else
+  {
+    fprintf(stderr, "Too short call statistics - %d < 6", (int)msgs.size());
+  }
+}
+
 int main(int argc, char** argv)
 {
   // Check arguments.
@@ -201,6 +218,10 @@ int main(int argc, char** argv)
     else if (msgs[0] == "call_stats")
     {
       render_call_stats(msgs);
+    }
+    else if (msgs[0] == "latency_us")
+    {
+      render_latency_us(msgs);
     }
     else
     {

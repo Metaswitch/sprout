@@ -65,6 +65,7 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "statistic.h"
 #include "custom_headers.h"
+#include "accumulator.h"
 
 struct stack_data_struct stack_data;
 
@@ -74,7 +75,15 @@ static volatile pj_bool_t quit_flag;
 
 
 // Queue for incoming messages.
-eventq<pjsip_rx_data*> rx_msg_q;
+struct rx_msg_qe
+{
+  pjsip_rx_data* rdata;    // received message
+  struct timespec rx_time; // time at which it was received
+};
+eventq<struct rx_msg_qe> rx_msg_q;
+
+
+static Accumulator* latency_accumulator;
 
 
 // We register a single module to handle scheduling plus local and
@@ -132,16 +141,31 @@ static int worker_thread(void* p)
 
   LOG_DEBUG("Worker thread started");
 
-  pjsip_rx_data* rdata = NULL;
+  struct rx_msg_qe qe = {0};
 
-  while (rx_msg_q.pop(rdata))
+  while (rx_msg_q.pop(qe))
   {
+    pjsip_rx_data* rdata = qe.rdata;
     if (rdata)
     {
       LOG_DEBUG("Worker thread dequeue message %p", rdata);
       pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
+
+      struct timespec done_time;
+      if (clock_gettime(CLOCK_MONOTONIC, &done_time) == 0)
+      {
+        long latency_us = (done_time.tv_nsec - qe.rx_time.tv_nsec) / 1000L +
+                          (done_time.tv_sec - qe.rx_time.tv_sec) * 1000000L;
+        LOG_DEBUG("Request latency = %ldus", latency_us);
+        latency_accumulator->accumulate(latency_us);
+        latency_accumulator->refresh();
+      }
+      else
+      {
+        LOG_ERROR("Failed to get done timestamp: %s", strerror(errno));
+      }
     }
   }
 
@@ -285,6 +309,15 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
+  // Before we start, get a timestamp.  This will track the time from
+  // receiving a message to forwarding it on (or rejecting it).
+  struct rx_msg_qe qe;
+  if (clock_gettime(CLOCK_MONOTONIC, &qe.rx_time) != 0)
+  {
+    LOG_ERROR("Failed to get receive timestamp: %s", strerror(errno));
+    return PJ_TRUE;
+  }
+
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
@@ -310,7 +343,8 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   // have a queue per transport and round-robin them?
 
   LOG_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
-  rx_msg_q.push(clone_rdata);
+  qe.rdata = clone_rdata;
+  rx_msg_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
   return PJ_TRUE;
@@ -568,6 +602,8 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats());
 
+  latency_accumulator = new StatisticAccumulator("latency_us");
+
   return status;
 }
 
@@ -665,6 +701,8 @@ void term_pjsip()
 void destroy_stack(void)
 {
   // Tear down the stack.
+  delete latency_accumulator;
+  latency_accumulator = NULL;
   delete stack_data.stats_aggregator;
   pjsip_threads.clear();
   worker_threads.clear();
