@@ -70,13 +70,14 @@ void deregister_with_application_servers(IfcHandler *ifchandler,
                                          const std::string& aor,
                                          SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, aor, trail);
+  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, 0, aor, trail);
 }
 
 void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
                                        RegData::Store* store,
                                        pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
+                                       int expires,
                                        const std::string& aor,
                                        SAS::TrailId trail) // Should be empty if we have a received_register
 {
@@ -140,19 +141,9 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 
-  // Expire all outstanding bindings for this AoR, and get the time this AoR still has remaining - this
-  // is the most sensible value to pass to an AS, as they don't have any per-binding information.
-  RegData::AoR *aor_data = store->get_aor_data(served_user);
-  if (aor_data)
-  {
-    int now = time(NULL);
-    int expires = store->expire_bindings(aor_data, now) - now;
-    delete aor_data;
-
-    // Loop through the as_list
-    for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-      send_register_to_as(received_register, ok_response, *as_iter, expires, aor, trail);
-    }
+  // Loop through the as_list
+  for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
+    send_register_to_as(received_register, ok_response, *as_iter, expires, aor, trail);
   }
 }
 
