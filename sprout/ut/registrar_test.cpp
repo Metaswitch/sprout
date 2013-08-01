@@ -121,6 +121,17 @@ AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 FakeHSSConnection* RegistrarTest::_hss_connection;
 
+// The value to use when configuring the registrar with a custom expiry period.
+#define CUSTOM_EXPIRES       4321
+#define CUSTOM_EXPIRES_STR  "4321"
+
+class RegistrarTestCustomExpires : public RegistrarTest
+{
+  RegistrarTestCustomExpires() :
+    RegistrarTest(CUSTOM_EXPIRES)
+  {}
+};
+
 class Message
 {
 public:
@@ -698,4 +709,59 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
+}
+
+// Registrar is configured with a custom registration expiry period.  If the
+// REGISTER supplies a shorter expiry, use the value from the REGISTER.
+TEST_F(RegistrarTestCustomExpires, ShortExpiresHeader)
+{
+  Message msg;
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._expires = "Expires: 800";
+  ASSERT_LT(800, CUSTOM_EXPIRES);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=800;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  free_txdata();
+}
+
+// Registrar is configured with a custom registration expiry period.  If the
+// REGISTER supplies a longer expiry, use the configured value.
+TEST_F(RegistrarTestCustomExpires, LongExpiresHeader)
+{
+  Message msg;
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._expires = "Expires: 8000";
+  ASSERT_GT(8000, CUSTOM_EXPIRES);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" CUSTOM_EXPIRES_STR ";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  free_txdata();
+}
+
+// Registrar is configured with a custom registration expiry period.  If the
+// REGISTER does not supply an expiry period, use the configured value.
+TEST_F(RegistrarTestCustomExpires, NoExpiryOnRegister)
+{
+  Message msg;
+  msg._contact_params = ";+sip.ice;reg-id=1";
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=" CUSTOM_EXPIRES_STR ";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  free_txdata();
 }
