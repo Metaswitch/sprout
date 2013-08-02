@@ -81,7 +81,7 @@ void SAS::term()
 SAS::Connection::Connection(const std::string& system_name, const std::string& sas_address) :
   _system_name(system_name),
   _sas_address(sas_address),
-  _msg_q(0, false),
+  _msg_q(MAX_MSG_QUEUE, false),
   _writer(0),
   _sock(-1)
 {
@@ -141,7 +141,11 @@ void SAS::Connection::writer()
         char* buf = (char*)msg.data();
         while (len > 0)
         {
-          int nsent = ::send(_sock, buf, len, 0);
+          int flags = 0;
+#ifdef MSG_NOSIGNAL
+          flags |= MSG_NOSIGNAL;
+#endif
+          int nsent = ::send(_sock, buf, len, flags);
           if (nsent > 0)
           {
             len -= nsent;
@@ -149,7 +153,18 @@ void SAS::Connection::writer()
           }
           else if ((nsent < 0) && (errno != EINTR))
           {
-            LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+            if ((errno == EWOULDBLOCK) || (errno == EAGAIN))
+            {
+              // The send timeout has expired, so close the socket so we
+              // try to connect again (and avoid buffering data while waiting
+              // for long TCP timeouts).
+              LOG_ERROR("SAS connection to %s:%d locked up: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+            }
+            else
+            {
+              // The socket has failed.
+              LOG_ERROR("SAS connection to %s:%d failed: %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+            }
             ::close(_sock);
             _sock = -1;
             break;
@@ -201,6 +216,21 @@ bool SAS::Connection::connect_init()
     return false;
   }
 
+  // Set a maximum send timeout on the socket so we don't wait forever if the
+  // connection fails.
+  struct timeval timeout;      
+  timeout.tv_sec = SEND_TIMEOUT;
+  timeout.tv_usec = 0;
+
+  rc = ::setsockopt(_sock, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout));
+  if (rc < 0) 
+  {
+    LOG_ERROR("Failed to set send timeout on SAS connection : %d %d %s", rc, errno, ::strerror(errno));
+    ::close(_sock);
+    _sock = -1;
+    return false;
+  }
+
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons(SAS_PORT);
@@ -210,7 +240,7 @@ bool SAS::Connection::connect_init()
 
   if (rc != 0)
   {
-    LOG_ERROR("Failed to connect to SAS %s:%d : %d %s\n", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
+    LOG_ERROR("Failed to connect to SAS %s:%d : %d %s", _sas_address.c_str(), SAS_PORT, errno, ::strerror(errno));
     ::close(_sock);
     _sock = -1;
     return false;
