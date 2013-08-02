@@ -564,7 +564,8 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, "", trail);
+  std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool);
+  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, expiry, served_user, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
