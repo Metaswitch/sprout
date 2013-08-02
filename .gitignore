@@ -8,3 +8,6 @@
 on-eclipse-build.local.sh
 
 .openssl_config_run
+
+# Ignore ctags tag-file
+tags

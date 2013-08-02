@@ -72,6 +72,8 @@ static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
 
+static int max_expires;
+
 //
 // mod_registrar is the module to receive SIP REGISTER requests.  This
 // must get invoked before the proxy UA module.
@@ -191,7 +193,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 //         id = PJUtils::pj_str_to_string(&to_sip_uri->host);
 //       }
 //       success = true;
-//     } 
+//     }
 //     else
 //     {
 //       const pj_str_t* scheme = pjsip_uri_get_scheme(to_uri);
@@ -391,11 +393,12 @@ void process_register_request(pjsip_rx_data* rdata)
 
           // Calculate the expiry period for the updated binding.
           expiry = (contact->expires != -1) ? contact->expires :
-                       (expires != NULL) ? expires->ivalue : 300;
-          if (expiry > 300)
+                   (expires != NULL) ? expires->ivalue :
+                   max_expires;
+          if (expiry > max_expires)
           {
-            // Expiry is too long, set it to the maximum of 300 seconds (5 minutes).
-            expiry = 300;
+            // Expiry is too long, set it to the maximum.
+            expiry = max_expires;
           }
 
           binding->_expires = now + expiry;
@@ -607,7 +610,11 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
   }
 }
 
-pj_status_t init_registrar(RegData::Store* registrar_store, HSSConnection* hss_connection, AnalyticsLogger* analytics_logger, IfcHandler* ifchandler_ref)
+pj_status_t init_registrar(RegData::Store* registrar_store,
+                           HSSConnection* hss_connection,
+                           AnalyticsLogger* analytics_logger,
+                           IfcHandler* ifchandler_ref,
+                           int cfg_max_expires)
 {
   pj_status_t status;
 
@@ -615,6 +622,7 @@ pj_status_t init_registrar(RegData::Store* registrar_store, HSSConnection* hss_c
   hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
+  max_expires = cfg_max_expires;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
