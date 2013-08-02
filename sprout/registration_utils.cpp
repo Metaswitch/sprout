@@ -67,10 +67,10 @@ void deregister_with_application_servers(IfcHandler*, RegData::Store* store, con
 
 void deregister_with_application_servers(IfcHandler *ifchandler,
                                          RegData::Store* store,
-                                         const std::string& aor,
+                                         const std::string& served_user,
                                          SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, 0, aor, trail);
+  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, 0, served_user, trail);
 }
 
 void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
@@ -78,42 +78,44 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
                                        pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
                                        int expires,
-                                       const std::string& aor,
-                                       SAS::TrailId trail) // Should be empty if we have a received_register
+                                       const std::string& served_user,
+                                       SAS::TrailId trail)
 {
   // Function preconditions
   if (received_register == NULL) {
     // We should have both messages or neither
     assert(ok_response == NULL);
-    // This shouldn't be defined if we have a message to build it from
-    assert(aor.compare("") != 0);
   } else {
-    // This should be defined if we don't have a message to build it from
-    assert(aor.compare("") == 0);
     // We should have both messages or neither
     assert(ok_response != NULL);
   }
 
-  std::string served_user = aor;
-
   std::vector<AsInvocation> as_list;
-  LOG_INFO("Looking up list of Application Servers");
+  // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
+  // constraints for REGISTER messages, but we only get the served user from the From address in an
+  // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
+  // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
+  Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
+
   if (received_register == NULL) {
-    LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", aor.c_str());
     pj_status_t status;
     pjsip_method method;
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
     pjsip_tx_data *tdata;
+
     std::string bono_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.home_domain), pj_strlen(&stack_data.home_domain))+">";
     const pj_str_t bono_uri = pj_str(const_cast<char *>(bono_uri_string.c_str()));
-    std::string aor_uri_string = "<"+aor+">";
-    const pj_str_t aor_uri = pj_str(const_cast<char *>(aor_uri_string.c_str()));
+
+    std::string served_user_uri_string = "<"+served_user+">";
+    const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
+    
+    LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
     status = pjsip_endpt_create_request(stack_data.endpt,
                                &method,       // Method
                                &bono_uri,     // Target
-                               &aor_uri,      // From
-                               &aor_uri,      // To
-                               &aor_uri,      // Contact
+                               &served_user_uri,      // From
+                               &served_user_uri,      // To
+                               &served_user_uri,      // Contact
                                NULL,          // Auto-generate Call-ID
                                1,             // CSeq
                                NULL,          // No body
@@ -123,27 +125,19 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
 
-    // Choice of SessionCase::Originating is not arbitrary - we don't expect iFCs to specify SessionCase
-    // constraints for REGISTER messages, but we only get the served user from the From address in an
-    // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
-    // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
-    std::vector<Ifc> ifc_list;
-    Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
-    delete ifcs;
+
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    served_user = ifchandler->served_user_from_msg(SessionCase::Originating, received_register->msg_info.msg, received_register->tp_info.pool);
-    Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
-    delete ifcs;
   }
+  delete ifcs;
   LOG_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-    send_register_to_as(received_register, ok_response, *as_iter, expires, aor, trail);
+    send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
   }
 }
 
@@ -151,7 +145,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
     pjsip_tx_data *ok_response,
     AsInvocation& as,
     int expires,
-    const std::string& aor,
+    const std::string& served_user,
     SAS::TrailId trail)
 {
   pj_status_t status;
@@ -159,14 +153,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pjsip_transaction *tsx;
   pjsip_method method;
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
-  std::string user_uri_string = aor;
 
-  if (received_register) {
-    user_uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR,
-                                             (pjsip_uri *)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(received_register->msg_info.msg)->uri));
-  }
-
-  pj_str_t user_uri = pj_str(const_cast<char *>(user_uri_string.c_str()));
+  pj_str_t user_uri = pj_str(const_cast<char *>(served_user.c_str()));
   std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.trusted_port) + ">";
   pj_str_t scscf_uri = pj_str(const_cast<char *>(scscf_uri_string.c_str()));
   pj_str_t as_uri = pj_str(const_cast<char *>(as.server_name.c_str()));
@@ -308,12 +296,12 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
   }
 };
 
-void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
+void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
 {
-  expire_bindings(store, aor, binding_id);
+  expire_bindings(store, served_user, binding_id);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifchandler, store, aor, trail);
+  deregister_with_application_servers(ifchandler, store, served_user, trail);
   notify_application_servers();
 };
