@@ -119,7 +119,6 @@ struct options
 
 static pj_bool_t quit_flag = PJ_FALSE;
 
-
 static void usage(void)
 {
   puts("Options:\n"
@@ -152,7 +151,7 @@ static void usage(void)
        " -E, --enum <server>        Name/IP address of ENUM server (default: 127.0.0.1)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
        " -f, --enum-file <file>     JSON ENUM config file (disables DNS-based ENUM lookup)\n"
-       " -r  --reg-max-expires <expiry>\n"
+       " -r, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
        " -p, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
        " -w, --worker_threads N     Number of worker threads (default: 1)\n"
@@ -180,7 +179,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
-    { "rr",                no_argument,       0, 'r'},
     { "auth",              required_argument, 0, 'A'},
     { "realm",             required_argument, 0, 'R'},
     { "memstore",          required_argument, 0, 'M'},
@@ -205,7 +203,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int opt_ind;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:rA:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
@@ -477,7 +475,7 @@ int main(int argc, char *argv[])
   opt.enum_server = "127.0.0.1";
   opt.enum_suffix = ".e164.arpa";
   // opt.enum_file = "";
-  opt.reg_max_expires = 0;
+  opt.reg_max_expires = 300;
   opt.pjsip_threads = 1;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;

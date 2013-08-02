@@ -73,7 +73,6 @@ static IfcHandler* ifchandler;
 static AnalyticsLogger* analytics;
 
 static int max_expires;
-const static int DEFAULT_MAX_EXPIRES = 3600;
 
 //
 // mod_registrar is the module to receive SIP REGISTER requests.  This
@@ -622,12 +621,7 @@ pj_status_t init_registrar(RegData::Store* registrar_store,
   hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
-
-  if (cfg_max_expires > 0) {
-    max_expires = cfg_max_expires;
-  } else {
-    max_expires = DEFAULT_MAX_EXPIRES;
-  }
+  max_expires = cfg_max_expires;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
