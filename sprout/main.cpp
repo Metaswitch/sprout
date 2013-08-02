@@ -201,6 +201,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   };
   int c;
   int opt_ind;
+  int reg_max_expires;
 
   pj_optind = 0;
   while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
@@ -319,7 +320,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'r':
-      int reg_max_expires = atoi(pj_optarg);
+      reg_max_expires = atoi(pj_optarg);
 
       if (reg_max_expires > 0)
       {
