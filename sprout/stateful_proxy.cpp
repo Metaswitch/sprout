@@ -1546,7 +1546,12 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         // The response correlates to an active flow.  Check the contact
         // headers and expiry header to find when the last contacts will
         // expire.
-        int max_expires = PJUtils::max_expires(rdata->msg_info.msg);
+        //
+        // If a binding does not specify an expiry time then assume it expires
+        // in 5 minutes (300s).  This should never happens as it means the
+        // registrar is misbehaving, but we defensively assume a short expiry
+        // time as this is more secure.
+        int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
         LOG_DEBUG("Maximum contact expiry is %d", max_expires);
 
         // Go through the list of URIs covered by this registration setting

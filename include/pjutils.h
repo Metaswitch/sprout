@@ -124,7 +124,7 @@ pj_bool_t msg_supports_extension(pjsip_msg* msg, const char* extension);
 
 pj_bool_t is_first_hop(pjsip_msg* msg);
 
-int max_expires(pjsip_msg* msg);
+int max_expires(pjsip_msg* msg, int default_expires);
 
 pj_status_t create_response(pjsip_endpoint *endpt,
       		      const pjsip_rx_data *rdata,
