@@ -121,7 +121,7 @@ do_start()
         get_settings
         DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore $memcached_servers --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
 
-        if [[ -n $reg_max_expires ]]
+        if [ ! -z $reg_max_expires ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
         fi
