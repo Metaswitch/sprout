@@ -539,6 +539,13 @@ void process_register_request(pjsip_rx_data* rdata)
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
+  // Add the orig parameter.  The UE must provide this back on future messages
+  // to ensure we perform originating processing.
+  pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+  pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+  pj_strdup2(tdata->pool, &orig_param->value, "");
+  pj_list_insert_after(&service_route_uri->other_param, orig_param);
+
   pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
   service_route->name = STR_SERVICE_ROUTE;
   service_route->sname = pj_str("");
