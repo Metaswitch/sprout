@@ -319,9 +319,22 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'r':
-      options->reg_max_expires = atoi(pj_optarg);
-      fprintf(stdout, "Maximum registration period set to %d seconds\n",
-              options->reg_max_expires);
+      int reg_max_expires = atoi(pj_optarg);
+
+      if (reg_max_expires > 0)
+      {
+        options->reg_max_expires = reg_max_expires;
+        fprintf(stdout, "Maximum registration period set to %d seconds\n",
+                options->reg_max_expires);
+      }
+      else
+      {
+        // The parameter could be invalid either because it's -ve, or it's not
+        // an integer (in which case atoi returns 0). Log, but don't store it.
+        LOG_WARNING("Invalid value for reg_max_expires: '%s'. "
+                    "The default value of %d will be used.",
+                    pj_optarg, options->reg_max_expires);
+      }
       break;
 
     case 'p':
