@@ -122,7 +122,8 @@ static std::string known_statnames[] = {
   "client_count",
   "connected_homers",
   "connected_homesteads",
-  "connected_sprouts"
+  "connected_sprouts",
+  "latency_us"
 };
 
 

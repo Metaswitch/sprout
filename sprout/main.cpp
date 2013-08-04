@@ -591,10 +591,10 @@ int main(int argc, char *argv[])
   if (opt.store_servers != "")
   {
     // Use memcached store.
-    LOG_STATUS("Using memcached store");
+    LOG_STATUS("Using memcached compatible store with ASCII protocol");
     std::list<std::string> servers;
     Utils::split_string(opt.store_servers, ',', servers, 0, true);
-    registrar_store = RegData::create_memcached_store(servers, 100);
+    registrar_store = RegData::create_memcached_store(servers, 100, false);
   }
   else
   {
