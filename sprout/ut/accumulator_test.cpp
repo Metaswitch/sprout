@@ -98,7 +98,7 @@ TEST_F(AccumulatorTest, OneSample)
 
 TEST_F(AccumulatorTest, MultipleSamples)
 {
-  uint_fast64_t variance;
+  uint_fast64_t variance = 0;
   for (int ii = 1000; ii <= 2000; ii++)
   {
     _accumulator.accumulate(ii);
