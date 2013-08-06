@@ -149,5 +149,5 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::string actual;
   bool res = _hss.get_user_ifc("pubid44", actual, 0);
   EXPECT_FALSE(res);
-  EXPECT_TRUE(_log.contains("HTTP error response"));
+  EXPECT_TRUE(_log.contains("GET http://narcissus/filtercriteria/pubid44 failed"));
 }
