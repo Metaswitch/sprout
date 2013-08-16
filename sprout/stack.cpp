@@ -322,6 +322,14 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
 
+  if ((rx_msg_q.size() > 200) &&
+      (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+      (rdata->msg_info.msg->line.req.method.id != PJSIP_OPTIONS_METHOD))
+  {
+    // Discard non-OPTIONS requests if queue is too big.
+    return PJ_TRUE;
+  }
+
   // Clone the message and queue it to a scheduler thread.
   pjsip_rx_data* clone_rdata;
   pj_status_t status = pjsip_rx_data_clone(rdata, 0, &clone_rdata);
