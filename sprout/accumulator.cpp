@@ -48,7 +48,9 @@ void Accumulator::accumulate(unsigned long sample)
 
   // Update the low- and high-water marks.  In each case, we get the current
   // value, decide whether a change is required and then atomically swap it
-  // if so, repeating if it was changed in the meantime.
+  // if so, repeating if it was changed in the meantime.  Note that
+  // compare_exchange_weak loads the current value into the expected value
+  // parameter (lwm or hwm below) if the compare fails.
   uint_fast64_t lwm = _current._lwm.load();
   while ((sample < lwm) &&
 	 (!_current._lwm.compare_exchange_weak(lwm, sample)))
@@ -121,9 +123,9 @@ void Accumulator::read(uint_fast64_t period_us)
   _last._variance = (n > 0) ? ((sigma_squared / n) - (mean * mean)) : 0;
   // Read low- and high-water marks, fixing low-water mark to 0 if there were
   // no samples in the period.
-  uint_fast64_t lwm = _current._lwm.exchange(0);
+  uint_fast64_t lwm = _current._lwm.exchange(MAX_UINT_FAST64);
   _last._lwm = (n > 0) ? lwm : 0;
-  _last._hwm = _current._hwm.exchange(MAX_UINT_FAST64);
+  _last._hwm = _current._hwm.exchange(0);
 }
 
 /// Callback whenever the accumulated statistics are refreshed.  Passes
