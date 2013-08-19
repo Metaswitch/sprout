@@ -45,6 +45,7 @@
 
 #include "httpconnection.h"
 #include "sas.h"
+#include "accumulator.h"
 
 /// @class HSSConnection
 ///
@@ -70,6 +71,10 @@ private:
   virtual Json::Value* get_object(const std::string& path, SAS::TrailId trail);
 
   HttpConnection* _http;
+  StatisticAccumulator _latencyStatistic;
+  StatisticAccumulator _digestLatencyStatistic;
+  StatisticAccumulator _associatedUriLatencyStatistic;
+  StatisticAccumulator _ifcLatencyStatistic;
 };
 
 #endif

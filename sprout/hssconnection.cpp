@@ -46,13 +46,18 @@
 #include "sasevent.h"
 #include "httpconnection.h"
 #include "hssconnection.h"
+#include "accumulator.h"
 
 
 HSSConnection::HSSConnection(const std::string& server) :
   _http(new HttpConnection(server,
                            false,
                            SASEvent::TX_HSS_BASE,
-                           "connected_homesteads"))
+                           "connected_homesteads")),
+  _latencyStatistic("hss_latency_us"),
+  _digestLatencyStatistic("hss_digest_latency_us"),
+  _associatedUriLatencyStatistic("hss_assoc_uri_latency_us"),
+  _ifcLatencyStatistic("hss_ifc_latency_us")
 {
 }
 
@@ -69,11 +74,23 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
                                             const std::string& public_user_identity,
                                             SAS::TrailId trail)
 {
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
   std::string path = "/credentials/" +
                      Utils::url_escape(private_user_identity) + "/" +
                      Utils::url_escape(public_user_identity) +
                      "/digest";
-  return get_object(path, trail);
+  Json::Value* rc = get_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latencyStatistic.accumulate(latency_us);
+    _digestLatencyStatistic.accumulate(latency_us);
+  }
+
+  return rc;
 }
 
 
@@ -81,9 +98,20 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 Json::Value* HSSConnection::get_associated_uris(const std::string& public_user_identity,
                                                 SAS::TrailId trail)
 {
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
   std::string path = "/associatedpublicbypublic/" +
                      Utils::url_escape(public_user_identity);
   Json::Value* root = get_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latencyStatistic.accumulate(latency_us);
+    _associatedUriLatencyStatistic.accumulate(latency_us);
+  }
+
   Json::Value* uris = NULL;
   if (root != NULL)
   {
@@ -115,9 +143,21 @@ bool HSSConnection::get_user_ifc(const std::string& public_user_identity,
                                  std::string& xml_data,
                                  SAS::TrailId trail)
 {
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
   std::string path = "/filtercriteria/" +
                      Utils::url_escape(public_user_identity);
-  return _http->get(path, xml_data, "", trail);
+  bool rc = _http->get(path, xml_data, "", trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latencyStatistic.accumulate(latency_us);
+    _ifcLatencyStatistic.accumulate(latency_us);
+  }
+
+  return rc;
 }
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.

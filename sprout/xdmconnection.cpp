@@ -46,20 +46,23 @@
 #include "sasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
+#include "accumulator.h"
 
 /// Main constructor.
 XDMConnection::XDMConnection(const std::string& server) :
   _http(new HttpConnection(server,
                            true,
                            SASEvent::TX_XDM_GET_BASE,
-                           "connected_homers"))
+                           "connected_homers")),
+  _latencyStatistic("xdm_latency_us")
 {
 }
 
 /// Constructor supplying own connection. For UT use. Ownership passes
 /// to this object.
 XDMConnection::XDMConnection(HttpConnection* http) :
-  _http(http)
+  _http(http),
+  _latencyStatistic("xdm_latency_us")
 {
 }
 
@@ -74,6 +77,17 @@ bool XDMConnection::get_simservs(const std::string& user,
                                  const std::string& password,
                                  SAS::TrailId trail)
 {
-  return _http->get("/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml", xml_data, user, trail);
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  bool rc = _http->get("/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml", xml_data, user, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latencyStatistic.accumulate(latency_us);
+  }
+
+  return rc;
 }
 
