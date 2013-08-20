@@ -185,6 +185,17 @@ private:
   AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
+  Ifcs lookup_ifcs(std::string public_id, SAS::TrailId trail);
+  std::vector<std::string> get_associated_uris(std::string public_id, SAS::TrailId trail);
+
+  void proxy_calculate_targets(pjsip_msg* msg,
+			       pj_pool_t* pool,
+			       const TrustBoundary* trust,
+			       target_list& targets,
+			       int max_targets,
+			       SAS::TrailId trail);
+
+
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
@@ -284,12 +295,6 @@ void destroy_stateful_proxy();
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata);
 
-void proxy_calculate_targets(pjsip_msg* msg,
-                             pj_pool_t* pool,
-                             const TrustBoundary* trust,
-                             target_list& targets,
-                             int max_targets,
-                             SAS::TrailId trail);
 #endif
 
 #endif

@@ -1241,15 +1241,12 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 // IN-TRANSACTION PROCESSING
 
 /// Calculate a list of targets for the message.
-#ifndef UNIT_TEST
-static
-#endif
-void proxy_calculate_targets(pjsip_msg* msg,
-                             pj_pool_t* pool,
-                             const TrustBoundary* trust,
-                             target_list& targets,
-                             int max_targets,
-                             SAS::TrailId trail)
+void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
+					     pj_pool_t* pool,
+					     const TrustBoundary* trust,
+					     target_list& targets,
+					     int max_targets,
+					     SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
