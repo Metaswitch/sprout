@@ -261,6 +261,8 @@ void process_register_request(pjsip_rx_data* rdata)
   // homestead API for it.  Homestead won't be able to query a third-party HSS
   // without the private ID.
   std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifc_map;
+  hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
   if (uris.size() == 0)
   {
     // We failed to get the list of associated URIs.  This indicates that the
