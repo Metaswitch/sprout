@@ -60,8 +60,6 @@ public:
   Json::Value* get_digest_data(const std::string& private_user_id,
                                const std::string& public_user_id,
                                SAS::TrailId trail);
-  Json::Value* get_associated_uris(const std::string& private_user_id,
-                                   SAS::TrailId);
   virtual bool get_user_ifc(const std::string& public_user_id,
                             std::string& xml_data,
                             SAS::TrailId trail);

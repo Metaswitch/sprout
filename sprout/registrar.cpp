@@ -260,9 +260,8 @@ void process_register_request(pjsip_rx_data* rdata)
   // This should really include the private ID, but we don't yet have a
   // homestead API for it.  Homestead won't be able to query a third-party HSS
   // without the private ID.
-  Json::Value* uris = hss->get_associated_uris(public_id, trail);
-  if ((uris == NULL) ||
-      (uris->size() == 0))
+  std::vector<std::string> uris;
+  if (uris.size() == 0)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
@@ -278,7 +277,7 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+  std::string aor = uris.front();
   LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Find the expire headers in the message.
@@ -558,16 +557,17 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Add P-Associated-URI headers for all of the associated URIs.
   static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
-  for (Json::ValueIterator it = uris->begin(); it != uris->end(); it++)
+  for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
   {
-    pj_str_t associated_uri = {(char*)(*it).asCString(), strlen((*it).asCString())};
+    char* c_it = strdup(it->c_str());
+    pj_str_t associated_uri = {c_it, strlen(c_it)};
     pjsip_hdr* associated_uri_hdr =
       (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                   &p_associated_uri_hdr_name,
                                                   &associated_uri);
     pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
+    free(c_it);
   }
-  delete uris;
 
   // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
   // ASes of the 200 OK response we sent.

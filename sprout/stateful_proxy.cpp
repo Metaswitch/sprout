@@ -1379,12 +1379,11 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
     std::string public_id = PJUtils::aor_from_uri(req_uri);
-    Json::Value* uris = hss->get_associated_uris(public_id, trail);
-    if ((uris != NULL) &&
-        (uris->size() > 0))
+    std::vector<std::string> uris = get_associated_uris(public_id, trail);
+    if (uris.size() > 0)
     {
       // Take the first associated URI as the AOR.
-      std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+      std::string aor = uris.front();
 
       // Look up the target in the registration data store.
       LOG_INFO("Look up targets in registration store: %s", aor.c_str());
@@ -1476,7 +1475,6 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
       delete aor_data;
     }
-    delete uris;
   }
 }
 

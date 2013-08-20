@@ -77,39 +77,6 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 }
 
 
-/// Retrieve user's associated URIs as JSON object. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_associated_uris(const std::string& public_user_identity,
-                                                SAS::TrailId trail)
-{
-  std::string path = "/associatedpublicbypublic/" +
-                     Utils::url_escape(public_user_identity);
-  Json::Value* root = get_object(path, trail);
-  Json::Value* uris = NULL;
-  if (root != NULL)
-  {
-    if (root->isObject())
-    {
-      uris = new Json::Value;
-      *uris = root->get("public_ids", Json::Value::null);
-      if (!uris->isArray())
-      {
-        Json::FastWriter writer;
-        LOG_ERROR("Failed to find \"public_ids\" array in Homestead response:\n %s\n %s\n", path.c_str(), writer.write(*root).c_str());
-        delete uris;
-        uris = NULL;
-      }
-    }
-    else
-    {
-      Json::FastWriter writer;
-      LOG_ERROR("Homestead response is not JSON object:\n %s\n %s\n", path.c_str(), writer.write(*root).c_str());
-    }
-    delete root;
-  }
-  return uris;
-}
-
-
 /// Retrieve user's initial filter criteria as JSON object. Caller is responsible for deleting.
 bool HSSConnection::get_user_ifc(const std::string& public_user_identity,
                                  std::string& xml_data,
