@@ -37,6 +37,8 @@
 ///
 
 #include <string>
+#include <memory>
+#include <map>
 #include <json/reader.h>
 #include <json/writer.h>
 
@@ -73,22 +75,12 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
                      Utils::url_escape(private_user_identity) + "/" +
                      Utils::url_escape(public_user_identity) +
                      "/digest";
-  return get_object(path, trail);
+  return get_json_object(path, trail);
 }
 
-
-/// Retrieve user's initial filter criteria as JSON object. Caller is responsible for deleting.
-bool HSSConnection::get_user_ifc(const std::string& public_user_identity,
-                                 std::string& xml_data,
-                                 SAS::TrailId trail)
-{
-  std::string path = "/filtercriteria/" +
-                     Utils::url_escape(public_user_identity);
-  return _http->get(path, xml_data, "", trail);
-}
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_object(const std::string& path, SAS::TrailId trail)
+Json::Value* HSSConnection::get_json_object(const std::string& path, SAS::TrailId trail)
 {
   std::string json_data;
   Json::Value* root = NULL;
@@ -109,3 +101,54 @@ Json::Value* HSSConnection::get_object(const std::string& path, SAS::TrailId tra
 
   return root;
 }
+
+
+/// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
+rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path, SAS::TrailId trail)
+{
+  std::string raw_data;
+  rapidxml::xml_document<>* root = NULL;
+
+  if (_http->get(path, raw_data, "", trail))
+  {
+    root = new rapidxml::xml_document<>;
+    try {
+      root->parse<0>(root->allocate_string(raw_data.c_str()));
+    } catch (rapidxml::parse_error& err)
+    {
+      // report to the user the failure and their locations in the document.
+      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
+      delete root;
+      root = NULL;
+    }
+  }
+
+  return root;
+}
+
+
+/// Retrieve user's associated URIs as JSON object. Caller is responsible for deleting.
+void HSSConnection::get_subscription_data(const std::string& public_user_identity,
+					  const std::string& private_user_identity,
+					  std::map<std::string, Ifcs >* service_profiles,
+					  std::vector<std::string>* associated_uris,
+					  SAS::TrailId trail)
+{
+  std::string path = "/impu/" +
+                     Utils::url_escape(public_user_identity);
+  std::shared_ptr<rapidxml::xml_document<> > root (get_xml_object(path, trail));
+  rapidxml::xml_node<>* sp = NULL;
+  for (sp = root->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile")) {
+    Ifcs ifc (root, sp);
+    rapidxml::xml_node<>* id = NULL;
+    for (id = sp->first_node("PublicIdentity"); id != NULL; id = id->next_sibling("PublicIdentity")) {
+      if (id->first_node("Identity")) {
+	std::string uri = std::string(id->first_node("Identity")->value());
+	associated_uris->push_back(uri);
+	(*service_profiles)[uri] = ifc;
+      }
+    }
+  }
+ }
+
+

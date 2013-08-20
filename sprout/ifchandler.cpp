@@ -44,7 +44,6 @@ extern "C" {
 
 #include "log.h"
 #include "constants.h"
-#include "hssconnection.h"
 #include "stack.h"
 #include "pjutils.h"
 
@@ -86,9 +85,7 @@ private:
 };
 
 
-IfcHandler::IfcHandler(HSSConnection* hss, RegData::Store* store) :
-  _hss(hss),
-  _store(store)
+IfcHandler::IfcHandler()
 {
 }
 
@@ -442,17 +439,9 @@ Ifcs::Ifcs() :
 /// Construct a set of iFCs. Takes ownership of the ifc_doc.
 //
 // If there are any errors, yields an empty iFC doc (but does not fail).
-Ifcs::Ifcs(xml_document<>* ifc_doc) :
+Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
   _ifc_doc(ifc_doc)
 {
-  xml_node<>* sp = ifc_doc->first_node("ServiceProfile");
-  if (!sp)
-  {
-    // Failed to find the ServiceProfile node so this document is invalid.
-    LOG_ERROR("iFCs missing ServiceProfile node");
-    return;
-  }
-
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
   std::multimap<int32_t, Ifc> ifc_map;
@@ -489,7 +478,6 @@ Ifcs::Ifcs(xml_document<>* ifc_doc) :
 
 Ifcs::~Ifcs()
 {
-  delete _ifc_doc;
 }
 
 

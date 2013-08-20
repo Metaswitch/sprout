@@ -58,6 +58,7 @@ class UACTransaction;
 #include "trustboundary.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "hssconnection.h"
 #include "aschain.h"
 
 /// Short-lived data structure holding details of how we are to serve

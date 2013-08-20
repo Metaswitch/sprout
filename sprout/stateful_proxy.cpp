@@ -123,6 +123,7 @@ extern "C" {
 #include "trustboundary.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "hssconnection.h"
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"

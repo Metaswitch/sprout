@@ -47,10 +47,10 @@ extern "C" {
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "rapidxml/rapidxml.hpp"
 
-#include "hssconnection.h"
 #include "regdata.h"
 #include "sessioncase.h"
 
@@ -99,7 +99,7 @@ class Ifcs
 {
 public:
   Ifcs();
-  Ifcs(rapidxml::xml_document<>* ifc_doc);
+  Ifcs(std::shared_ptr<rapidxml::xml_document<> > ifc_doc, rapidxml::xml_node<>* sp);
   ~Ifcs();
 
   size_t size() const
@@ -118,7 +118,7 @@ public:
                  std::vector<AsInvocation>& application_servers) const;
 
 private:
-  const rapidxml::xml_document<>* _ifc_doc;
+  std::shared_ptr<rapidxml::xml_document<> > _ifc_doc;
   std::vector<Ifc> _ifcs;
 };
 
@@ -127,7 +127,7 @@ private:
 class IfcHandler
 {
 public:
-  IfcHandler(HSSConnection* hss, RegData::Store* store);
+  IfcHandler();
   ~IfcHandler();
 
   static std::string served_user_from_msg(const SessionCase& session_case,
@@ -136,7 +136,4 @@ public:
 
 private:
   static std::string user_from_uri(pjsip_uri *uri);
-
-  HSSConnection* _hss;
-  RegData::Store* _store;
 };
