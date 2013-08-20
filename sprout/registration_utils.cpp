@@ -95,7 +95,7 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
   // constraints for REGISTER messages, but we only get the served user from the From address in an
   // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
   // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
-  Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
+  Ifcs* ifcs = new Ifcs;
 
   if (received_register == NULL) {
     pj_status_t status;

@@ -1237,6 +1237,17 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+{
+  std::vector<std::string> uris;
+  return uris;
+}
+
+Ifcs* UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+{
+  return new Ifcs;
+}
+
 ///@{
 // IN-TRANSACTION PROCESSING
 
@@ -3523,9 +3534,8 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   else
   {
     is_registered = is_user_registered(served_user);
-    ifcs = ifc_handler->lookup_ifcs(session_case,
-                                    served_user,
-                                    trail());
+    ifcs = lookup_ifcs(served_user,
+		       trail());
   }
 
   // Create the AsChain, and schedule its destruction.  AsChain

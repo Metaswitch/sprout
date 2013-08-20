@@ -432,38 +432,6 @@ AsInvocation Ifc::as_invocation() const
 }
 
 
-/// Get the list of iFCs from the specified subscriber, ready to apply
-/// to messages in this original dialog. If there are no iFCs, the
-/// list will be empty.
-Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
-                              const std::string& served_user,   //< The served user
-                              SAS::TrailId trail)               //< The SAS trail ID
-{
-  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
-
-  xml_document<>* ifc_doc = new xml_document<>();
-  std::string ifc_xml;
-  if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
-  {
-    LOG_INFO("No iFC found - no processing will be applied");
-  }
-  else
-  {
-    try
-    {
-      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
-    }
-    catch (parse_error err)
-    {
-      LOG_ERROR("iFCs parse error: %s", err.what());
-      ifc_doc->clear();
-    }
-  }
-
-  return new Ifcs(ifc_doc);
-}
-
-
 /// Construct an empty set of iFCs.
 Ifcs::Ifcs() :
   _ifc_doc(NULL)

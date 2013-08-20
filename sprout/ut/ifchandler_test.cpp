@@ -215,9 +215,10 @@ void IfcHandlerTest::doBaseTest(string description,
   }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  Ifcs* ifcs = _ifc_handler->lookup_ifcs(sescase,
-                                         served_user,
-                                         0);
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  char* cstr_ifc = strdup(ifc.c_str());
+  root->parse<0>(cstr_ifc);
+  Ifcs* ifcs = new Ifcs(root);
   ifcs->interpret(sescase,
                   reg,
                   msg,

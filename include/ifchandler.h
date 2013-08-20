@@ -134,10 +134,6 @@ public:
                                           pjsip_msg* msg,
                                           pj_pool_t* pool);
 
-  Ifcs* lookup_ifcs(const SessionCase& session_case,
-                    const std::string& served_user,
-                    SAS::TrailId trail);
-
 private:
   static std::string user_from_uri(pjsip_uri *uri);
 
