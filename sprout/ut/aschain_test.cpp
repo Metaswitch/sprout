@@ -109,7 +109,6 @@ Ifcs* simple_ifcs(int count, ...)
 
   std::shared_ptr<rapidxml::xml_document<> > ifc_doc (new rapidxml::xml_document<>);
   ifc_doc->parse<0>(ifc_doc->allocate_string(xml.c_str()));
-  printf("%s", xml.c_str());
   return new Ifcs(ifc_doc, ifc_doc->first_node("IMSSubscription")->first_node("ServiceProfile"));
 }
 

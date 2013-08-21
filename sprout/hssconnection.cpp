@@ -123,7 +123,6 @@ rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path,
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
-      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
       delete root;
       root = NULL;
     }
@@ -156,19 +155,17 @@ void HSSConnection::get_subscription_data(const std::string& public_user_identit
     return;
 }
   for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile")) {
-    assert(sp);
     Ifcs ifc (root, sp);
     rapidxml::xml_node<>* id = NULL;
     for (id = sp->first_node("PublicIdentity"); id != NULL; id = id->next_sibling("PublicIdentity")) {
       if (id->first_node("Identity")) {
 	std::string uri = std::string(id->first_node("Identity")->value());
-        printf("Processing Identity - %s\n", uri.c_str());
+        LOG_DEBUG("Processing Identity node from HSS XML - %s\n", uri.c_str());
 	associated_uris->push_back(uri);
 	(*service_profiles)[uri] = ifc;
       }
     }
   }
- printf("HSSConnection::get_subscription_data done\n");
  }
 
 

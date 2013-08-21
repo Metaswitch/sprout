@@ -445,7 +445,6 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
 {
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
-  printf("%ld\n", _ifcs.size());
   std::multimap<int32_t, Ifc> ifc_map;
 
   if (!sp) {
@@ -479,7 +478,6 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
        ++it)
   {
     _ifcs.push_back(it->second);
-    printf("%ld\n", _ifcs.size());
   }
 }
 

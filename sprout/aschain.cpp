@@ -68,7 +68,6 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _ifcs(ifcs)
 {
   LOG_DEBUG("Creating AsChain %p and adding to map", this);
-  fprintf(stderr, "Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
 }
 
@@ -306,7 +305,6 @@ AsChainTable::~AsChainTable()
 void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens)
 {
   size_t len = as_chain->size();
-  fprintf(stderr, "%ld\n", len);
   pthread_mutex_lock(&_lock);
 
   for (size_t i = 0; i < len; i++)

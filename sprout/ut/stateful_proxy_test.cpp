@@ -4647,9 +4647,10 @@ TEST_F(IscTest, MmtelThenExternal)
 TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4682,7 +4683,7 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4694,9 +4695,10 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4745,7 +4747,7 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">

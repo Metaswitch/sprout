@@ -208,11 +208,6 @@ void IfcHandlerTest::doBaseTest(string description,
                                 bool third_party_reg)
 {
   SCOPED_TRACE(description);
-  if (ifc != "")
-  {
-    _hss_connection->set_user_ifc("sip:5755550033@homedomain",
-                                  ifc);
-  }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
   std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);

@@ -130,11 +130,8 @@ void RegistrationUtils::register_with_application_servers(Ifcs* ifcs,
   } else {
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
   }
-  fprintf(stderr, "RKD\n");
   LOG_INFO("Found %d Application Servers", as_list.size());
-  printf("Found %d Application Servers", as_list.size());
-
-  fprintf(stderr, "RKD1\n");
+  
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
     send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
@@ -201,7 +198,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
     int multipart_parts = 0;
 
     if (!as.service_info.empty()) {
-      printf("Service Info not empty\n");
       pjsip_multipart_part *xml_part = pjsip_multipart_create_part(tdata->pool);
       std::string xml_str = "<ims-3gpp><service-info>"+as.service_info+"</service-info></ims-3gpp>";
       pj_str_t xml_pj_str;
@@ -215,7 +211,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
     }
 
     if (as.include_register_request) {
-      printf("Including REGISTER\n");
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(received_register->msg_info.msg, buf, sizeof(buf));
       pj_str_t request_str = pj_str(buf);
@@ -228,7 +223,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
     };
 
     if (as.include_register_response) {
-      printf("Including 200 OK\n");
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
       pj_str_t response_str = pj_str(buf);
@@ -240,7 +234,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                response_part);
     };
 
-    printf("%d multipart parts\n", multipart_parts);
     if (multipart_parts == 0) {
       final_body = NULL;
     } else if (multipart_parts == 1) {
