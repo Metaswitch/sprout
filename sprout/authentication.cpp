@@ -123,7 +123,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
 
   if (data != NULL)
   {
-    std::string digest = data->get("digest", "" ).asString();
+    std::string digest = data->get("digest_ha1", "" ).asString();
     if (digest != "")
     {
       LOG_DEBUG("Digest for user %.*s in realm %.*s = %s",
