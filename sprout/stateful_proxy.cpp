@@ -1240,13 +1240,42 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
 {
-  std::vector<std::string> uris;
-  return uris;
+  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
+  if (data == cached_hss_data.end())
+  { 
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
+    cached_hss_data[public_id] = {ifc_map[public_id], uris};
+    data = cached_hss_data.find(public_id);
+    printf("Populating cache for %s\n", public_id.c_str());
+  } else {
+    printf("Using cache for %s\n", public_id.c_str());
+  }
+  printf("Returning from get_associated_uris\n");
+  return data->second.uris;
 }
 
 Ifcs* UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
 {
-  return new Ifcs;
+  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
+  if (data == cached_hss_data.end())
+  { 
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
+    printf("Size of iFCs is %ld\n", ifc_map[public_id].size());
+    cached_hss_data[public_id] = {ifc_map[public_id], uris};
+    data = cached_hss_data.find(public_id);
+    printf("Populating cache for %s\n", public_id.c_str());
+  } else {
+    printf("Using cache for %s\n", public_id.c_str());
+  }
+  printf("Returning from lookup_ifcs\n");
+  //char* rkd = 0;
+  //(*rkd)++;
+  printf("Size of iFCs is %ld\n", data->second.ifcs.size());
+  return &(data->second.ifcs);
 }
 
 ///@{
@@ -1384,6 +1413,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     if (uris.size() > 0)
     {
       // Take the first associated URI as the AOR.
+      fprintf(stderr, uris.front().c_str());
       std::string aor = uris.front();
 
       // Look up the target in the registration data store.
@@ -1726,6 +1756,7 @@ UASTransaction::~UASTransaction()
   pj_grp_lock_dec_ref(_lock);
 
   LOG_DEBUG("UASTransaction destructor completed");
+  fprintf(stderr, "UASTransaction destructor completed\n");
 }
 
 // Creates a PJSIP transaction and a corresponding UASTransaction.  On
@@ -1853,7 +1884,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
     handle_outgoing_non_cancel(target);
   }
 
+  fprintf(stderr, "RKD before\n");
   delete target;
+  fprintf(stderr, "RKD after\n");
 }
 
 
@@ -3536,7 +3569,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
     ifcs = lookup_ifcs(served_user,
 		       trail());
   }
-
+  printf("Looked up iFCs\n");
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.
   //
@@ -3576,6 +3609,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                  ifcs);
   _victims.push_back(ret.as_chain());
   LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
+  printf("Retrieved AsChain %s", ret.to_string().c_str());
   return ret;
 }
 

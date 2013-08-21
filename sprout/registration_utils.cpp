@@ -123,7 +123,6 @@ void RegistrationUtils::register_with_application_servers(Ifcs* ifcs,
     assert(status == PJ_SUCCESS);
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-
     ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
 
     status = pjsip_tx_data_dec_ref(tdata);
@@ -131,8 +130,11 @@ void RegistrationUtils::register_with_application_servers(Ifcs* ifcs,
   } else {
     ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
   }
+  fprintf(stderr, "RKD\n");
   LOG_INFO("Found %d Application Servers", as_list.size());
+  printf("Found %d Application Servers", as_list.size());
 
+  fprintf(stderr, "RKD1\n");
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
     send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);

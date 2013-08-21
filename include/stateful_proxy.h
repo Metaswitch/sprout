@@ -123,6 +123,12 @@ private:
   AsChainLink _original_dialog;
 };
 
+struct HSSCallInformation
+{
+  Ifcs ifcs;
+  std::vector<std::string> uris;
+};
+
 // This is the data that is attached to the UAS transaction
 class UASTransaction
 {
@@ -218,6 +224,7 @@ private:
   int                  _context_count;
   AsChainLink          _as_chain_link;
   std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
+  std::map<std::string, HSSCallInformation> cached_hss_data;
 };
 
 // This is the data that is attached to the UAC transaction

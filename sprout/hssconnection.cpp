@@ -168,6 +168,7 @@ void HSSConnection::get_subscription_data(const std::string& public_user_identit
       }
     }
   }
+ printf("HSSConnection::get_subscription_data done\n");
  }
 
 
