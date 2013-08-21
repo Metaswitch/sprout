@@ -69,7 +69,7 @@ public:
 
     _hss_connection = new FakeHSSConnection();
     _store = RegData::create_local_store();
-    _ifc_handler = new IfcHandler(_hss_connection, _store);
+    _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
@@ -215,10 +215,10 @@ void IfcHandlerTest::doBaseTest(string description,
   }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);
-  Ifcs* ifcs = new Ifcs(root);
+  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"));
   ifcs->interpret(sescase,
                   reg,
                   msg,
@@ -477,16 +477,6 @@ TEST_F(IfcHandlerTest, NoTrigger)
          SessionCase::Originating,
          true);
   EXPECT_TRUE(_log.contains("has no trigger point"));
-}
-
-TEST_F(IfcHandlerTest, ParseError)
-{
-  doTest("",
-         "<shrdlu ",
-         true,
-         SessionCase::Originating,
-         false);
-  EXPECT_TRUE(_log.contains("iFCs parse error"));
 }
 
 TEST_F(IfcHandlerTest, NoClass1)

@@ -61,7 +61,11 @@ public:
                     const std::string& xml_data);
 
   void set_json(const std::string& url, const std::string& json);
-
+  void get_subscription_data(const std::string& public_user_identity,
+			     const std::string& private_user_identity,
+			     std::vector<std::string>* uris,
+			     std::map<std::string, Ifcs>* ifcs_map,
+			     SAS::TrailId trail);
 private:
   Json::Value* get_object(const std::string& url, SAS::TrailId trail);
   void set_object(const std::string& url, Json::Value& object, SAS::TrailId trail);

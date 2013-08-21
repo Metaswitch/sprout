@@ -568,7 +568,6 @@ void process_register_request(pjsip_rx_data* rdata)
                                                   &p_associated_uri_hdr_name,
                                                   &associated_uri);
     pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
-    free(c_it);
   }
 
   // Send the response, but prevent the transmitted data from being freed, as we may need to inform the

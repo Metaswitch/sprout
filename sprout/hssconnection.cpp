@@ -36,6 +36,7 @@
 
 ///
 
+#include <cassert>
 #include <string>
 #include <memory>
 #include <map>
@@ -71,10 +72,14 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
                                             const std::string& public_user_identity,
                                             SAS::TrailId trail)
 {
-  std::string path = "/credentials/" +
-                     Utils::url_escape(private_user_identity) + "/" +
-                     Utils::url_escape(public_user_identity) +
+  std::string path = "/impi/" +
+                     Utils::url_escape(private_user_identity) + 
                      "/digest";
+
+  if (!public_user_identity.empty())
+    {
+      path += "?public_id=" + Utils::url_escape(public_user_identity);
+    }
   return get_json_object(path, trail);
 }
 
@@ -118,6 +123,7 @@ rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path,
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
+      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
       delete root;
       root = NULL;
     }
@@ -138,12 +144,25 @@ void HSSConnection::get_subscription_data(const std::string& public_user_identit
                      Utils::url_escape(public_user_identity);
   std::shared_ptr<rapidxml::xml_document<> > root (get_xml_object(path, trail));
   rapidxml::xml_node<>* sp = NULL;
-  for (sp = root->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile")) {
+  if (!root.get())
+{
+    LOG_ERROR("Malformed HSS XML - document could not be parsed"); 
+    return;
+}
+  rapidxml::xml_node<>* imss = root->first_node("IMSSubscription");
+  if (!imss)
+{
+    LOG_ERROR("Malformed HSS XML - no IMSSubscription element"); 
+    return;
+}
+  for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile")) {
+    assert(sp);
     Ifcs ifc (root, sp);
     rapidxml::xml_node<>* id = NULL;
     for (id = sp->first_node("PublicIdentity"); id != NULL; id = id->next_sibling("PublicIdentity")) {
       if (id->first_node("Identity")) {
 	std::string uri = std::string(id->first_node("Identity")->value());
+        printf("Processing Identity - %s\n", uri.c_str());
 	associated_uris->push_back(uri);
 	(*service_profiles)[uri] = ifc;
       }

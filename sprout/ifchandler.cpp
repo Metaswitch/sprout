@@ -36,6 +36,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
+#include <cassert>
 
 extern "C" {
 #include <pjlib-util.h>
@@ -445,6 +446,11 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
   std::multimap<int32_t, Ifc> ifc_map;
+
+  if (!sp) {
+    LOG_ERROR("No iFC found!");
+    return;
+  }
 
   // Spin through the list of filter criteria, adding each to the list.
   for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");

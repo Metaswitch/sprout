@@ -39,6 +39,7 @@
 
 #include <cstdio>
 #include "fakehssconnection.hpp"
+#include "ifchandler.h"
 #include <json/reader.h>
 #include "gtest/gtest.h"
 
@@ -100,4 +101,19 @@ void FakeHSSConnection::set_user_ifc(const std::string& public_user_identity,
                                      const std::string& xml_data)
 {
   _ifc_db[public_user_identity] = xml_data;
+}
+
+void FakeHSSConnection::get_subscription_data(const std::string& public_user_identity,
+const std::string& private_user_identity,
+					      std::vector<std::string>* uris,
+					      std::map<std::string, Ifcs>* ifcs_map,
+					      SAS::TrailId trail) {
+  std::map<std::string, std::string>::iterator i = _ifc_db.find(public_user_identity);
+  if (i != _ifc_db.end())
+  {
+    //xml_data = i->second;
+    uris->push_back(public_user_identity);
+    Ifcs ifcs;
+    (*ifcs_map)[public_user_identity] = ifcs;
+  }
 }

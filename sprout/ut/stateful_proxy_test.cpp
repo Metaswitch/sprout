@@ -214,7 +214,7 @@ public:
     if (ifcs)
     {
       _xdm_connection = new FakeXDMConnection();
-      _ifc_handler = new IfcHandler(_hss_connection, _store);
+      _ifc_handler = new IfcHandler();
       _call_services = new CallServices(_xdm_connection);
     }
     // We only test with a JSONEnumService, not with a DNSEnumService - since

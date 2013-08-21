@@ -84,8 +84,7 @@ public:
 
 Ifcs* simple_ifcs(int count, ...)
 {
-  std::string xml = R"(<?xml version="1.0" encoding="UTF-8"?>
-                       <ServiceProfile>)";
+  std::string xml = R"(<?xml version="1.0" encoding="UTF-8"?><IMSSubscription><ServiceProfile><PublicIdentity><Identity>sip:5755550011@homedomain</Identity></PublicIdentity>)";
 
 
 
@@ -106,11 +105,12 @@ Ifcs* simple_ifcs(int count, ...)
   }
   va_end(args);
 
-  xml += "</ServiceProfile>";
+  xml += "</ServiceProfile></IMSSubscription>";
 
-  rapidxml::xml_document<>* ifc_doc = new rapidxml::xml_document<>();
+  std::shared_ptr<rapidxml::xml_document<> > ifc_doc (new rapidxml::xml_document<>);
   ifc_doc->parse<0>(ifc_doc->allocate_string(xml.c_str()));
-  return new Ifcs(ifc_doc);
+  printf("%s", xml.c_str());
+  return new Ifcs(ifc_doc, ifc_doc->first_node("IMSSubscription")->first_node("ServiceProfile"));
 }
 
 
