@@ -3800,7 +3800,7 @@ TEST_F(IscTest, Cdiv)
   free_txdata();
 }
 
-// Test call-diversion AS flow.
+// Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
 TEST_F(IscTest, TerminatingWithEnumRewrite)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
