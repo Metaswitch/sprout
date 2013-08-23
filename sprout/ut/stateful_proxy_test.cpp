@@ -3800,6 +3800,105 @@ TEST_F(IscTest, Cdiv)
   free_txdata();
 }
 
+// Test call-diversion AS flow.
+TEST_F(IscTest, CdivWithEnumRewrite)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
+  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <ServiceProfile>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile>)");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "1115551234@homedomain;orig";
+  msg._todomain = "";
+  msg._route = "sip:1115551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // These fields of the message will only be filled in correctly if we have
+  // done an ENUM lookup before applying terminating services, and correctly
+  // recognised that "1115551234" is "6505551234".
+
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  free_txdata();
+}
+
 
 // Test call-diversion AS flow, where MMTEL does the diversion.
 TEST_F(IscTest, MmtelCdiv)
