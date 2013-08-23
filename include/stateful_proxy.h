@@ -182,7 +182,6 @@ private:
   void handle_incoming_non_cancel(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(target** pre_target);
   void move_to_terminating_chain();
-  pj_status_t do_enum_lookup();
   AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 

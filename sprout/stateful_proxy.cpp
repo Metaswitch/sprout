@@ -1785,7 +1785,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   target* target = NULL;
-  pj_status_t enum_lookup_successful;
+  pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
@@ -1812,7 +1812,25 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
-      enum_lookup_successful = do_enum_lookup();
+
+      if ((disposition == AsChainLink::Disposition::Complete) &&
+          (enum_service))
+      {
+        // Request is targeted at this domain but URI is not currently
+        // routeable, so translate it to a routeable URI.
+        LOG_DEBUG("Translating URI");
+        status = translate_request_uri(_req, trail());
+
+        if (status != PJ_SUCCESS)
+        {
+          // An error occurred during URI translation.  This doesn't happen if
+          // there is no match, only if there is a match but there is an error
+          // performing the defined mapping.  We therefore reject the request
+          // with the not found status code and a specific reason phrase.
+          send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+          disposition = AsChainLink::Disposition::Stop;
+        }
+      }
 
       if (disposition == AsChainLink::Disposition::Complete)
       {
@@ -1825,13 +1843,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
           move_to_terminating_chain();
         }
 
-        if (enum_lookup_successful == PJ_SUCCESS) {
           // Do outgoing (terminating) half.
           LOG_DEBUG("Terminating half");
           disposition = handle_terminating(&target);
-        } else {
-          disposition = AsChainLink::Disposition::Stop;
-        }
       }
     }
     else
@@ -1936,31 +1950,6 @@ void UASTransaction::move_to_terminating_chain()
   // Create new terminating chain.
   _as_chain_link.release();
   _as_chain_link = create_as_chain(SessionCase::Terminating);
-}
-
-pj_status_t UASTransaction::do_enum_lookup() {
-  pj_status_t status = PJ_SUCCESS;
-
-  if (!edge_proxy &&
-      (enum_service) &&
-      (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-      (!is_uri_routeable(_req->msg->line.req.uri)))
-  {
-    // Request is targeted at this domain but URI is not currently
-    // routeable, so translate it to a routeable URI.
-    LOG_DEBUG("Translating URI");
-    status = translate_request_uri(_req, trail());
-
-    if (status != PJ_SUCCESS)
-    {
-      // An error occurred during URI translation.  This doesn't happen if
-      // there is no match, only if there is a match but there is an error
-      // performing the defined mapping.  We therefore reject the request
-      // with the not found status code and a specific reason phrase.
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-    }
-  }
-  return status;
 }
 
 // Perform terminating handling.
