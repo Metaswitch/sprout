@@ -1826,12 +1826,12 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
         }
 
         if (enum_lookup_successful == PJ_SUCCESS) {
-	  // Do outgoing (terminating) half.
-	  LOG_DEBUG("Terminating half");
-	  disposition = handle_terminating(&target);
-	} else {
-	  disposition = AsChainLink::Disposition::Stop;
-	}
+          // Do outgoing (terminating) half.
+          LOG_DEBUG("Terminating half");
+          disposition = handle_terminating(&target);
+        } else {
+          disposition = AsChainLink::Disposition::Stop;
+        }
       }
     }
     else
