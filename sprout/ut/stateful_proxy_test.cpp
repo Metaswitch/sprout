@@ -3801,35 +3801,12 @@ TEST_F(IscTest, Cdiv)
 }
 
 // Test call-diversion AS flow.
-TEST_F(IscTest, CdivWithEnumRewrite)
+TEST_F(IscTest, TerminatingWithEnumRewrite)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_user_ifc("sip:6505551234@homedomain",
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <ServiceProfile>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -3856,7 +3833,6 @@ TEST_F(IscTest, CdivWithEnumRewrite)
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
