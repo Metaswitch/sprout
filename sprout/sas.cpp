@@ -38,6 +38,7 @@
 #include <time.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 #include "log.h"
 #include "sas.h"

@@ -39,6 +39,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 }
+#include <unistd.h>
 
 // Common STL includes.
 #include <cassert>
