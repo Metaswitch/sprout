@@ -1829,8 +1829,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 	  // Do outgoing (terminating) half.
 	  LOG_DEBUG("Terminating half");
 	  disposition = handle_terminating(&target);
-        } else {
-          disposition = AsChainLink::Disposition::Stop;
+	} else {
+	  disposition = AsChainLink::Disposition::Stop;
 	}
       }
     }
@@ -1969,28 +1969,28 @@ pj_status_t UASTransaction::do_enum_lookup() {
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
-    if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
-    {
-      // The URI has been translated to an off-net domain, but the user does
-      // not have a valid E.164 number that can be used to make off-net calls.
-      // Reject the call with a not found response code, which is about the
-      // most suitable for this case.
-      LOG_INFO("Rejecting off-net call from user without E.164 address");
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-      return AsChainLink::Disposition::Stop;
-    }
+  if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+      (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
+  {
+    // The URI has been translated to an off-net domain, but the user does
+    // not have a valid E.164 number that can be used to make off-net calls.
+    // Reject the call with a not found response code, which is about the
+    // most suitable for this case.
+    LOG_INFO("Rejecting off-net call from user without E.164 address");
+    send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
+    return AsChainLink::Disposition::Stop;
+  }
 
-    // If the newly translated ReqURI indicates that we're the host of the
-    // target user, include ourselves as the terminating operator for
-    // billing.
-    pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-      pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
-      pcv->term_ioi = stack_data.home_domain;
-    } else if (pcv) {
-      pcv->term_ioi = pj_str("");
-    }
+  // If the newly translated ReqURI indicates that we're the host of the
+  // target user, include ourselves as the terminating operator for
+  // billing.
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+    pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+    pcv->term_ioi = stack_data.home_domain;
+  } else if (pcv) {
+    pcv->term_ioi = pj_str("");
+  }
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
   {
