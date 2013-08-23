@@ -90,6 +90,37 @@ class HssConnectionTest : public BaseTest
         "</InitialFilterCriteria>"
       "</ServiceProfile>"
       "</IMSSubscription>";
+    fakecurl_responses["http://narcissus/impu/pubid42_malformed"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+              "<Grou";
+    fakecurl_responses["http://narcissus/impu/pubid43_malformed"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<NonsenseWord>"
+      "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:123@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>sip:456@example.com</Identity>"
+      "</PublicIdentity>"
+        "<InitialFilterCriteria>"
+          "<TriggerPoint>"
+            "<ConditionTypeCNF>0</ConditionTypeCNF>"
+            "<SPT>"
+              "<ConditionNegated>0</ConditionNegated>"
+              "<Group>0</Group>"
+              "<Method>INVITE</Method>"
+              "<Extension></Extension>"
+            "</SPT>"
+          "</TriggerPoint>"
+          "<ApplicationServer>"
+            "<ServerName>mmtel.narcissi.example.com</ServerName>"
+            "<DefaultHandling>0</DefaultHandling>"
+          "</ApplicationServer>"
+        "</InitialFilterCriteria>"
+      "</ServiceProfile>"
+      "</NonsenseWord>";
+ 
     fakecurl_responses["http://narcissus/impu/pubid44"] = CURLE_REMOTE_FILE_NOT_FOUND;
   }
 
@@ -130,6 +161,25 @@ TEST_F(HssConnectionTest, SimpleIfc)
   std::map<std::string, Ifcs> ifcs_map;
   _hss.get_subscription_data("pubid42", "", &ifcs_map, &uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
+}
+
+TEST_F(HssConnectionTest, BadXML)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid42_malformed", "", &ifcs_map, &uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+}
+
+
+TEST_F(HssConnectionTest, BadXML2)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid43_malformed", "", &ifcs_map, &uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, ServerFailure)
