@@ -1785,6 +1785,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   target* target = NULL;
+  pj_status_t enum_lookup_successful;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
@@ -1811,6 +1812,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
+      enum_lookup_successful = do_enum_lookup();
 
       if (disposition == AsChainLink::Disposition::Complete)
       {
@@ -1823,9 +1825,13 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
           move_to_terminating_chain();
         }
 
-        // Do outgoing (terminating) half.
-        LOG_DEBUG("Terminating half");
-        disposition = handle_terminating(&target);
+        if (enum_lookup_successful == PJ_SUCCESS) {
+	  // Do outgoing (terminating) half.
+	  LOG_DEBUG("Terminating half");
+	  disposition = handle_terminating(&target);
+        } else {
+          disposition = AsChainLink::Disposition::Stop;
+	}
       }
     }
     else
@@ -1932,13 +1938,8 @@ void UASTransaction::move_to_terminating_chain()
   _as_chain_link = create_as_chain(SessionCase::Terminating);
 }
 
-// Perform terminating handling.
-//
-// @returns whether processing should `Stop`, `Skip` to the end, or
-// is now `Complete`. Never returns `Next`.
-AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
-{
-  pj_status_t status;
+pj_status_t UASTransaction::do_enum_lookup() {
+  pj_status_t status = PJ_SUCCESS;
 
   if (!edge_proxy &&
       (enum_service) &&
@@ -1957,9 +1958,17 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
       // performing the defined mapping.  We therefore reject the request
       // with the not found status code and a specific reason phrase.
       send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-      return AsChainLink::Disposition::Stop;
     }
+  }
+  return status;
+}
 
+// Perform terminating handling.
+//
+// @returns whether processing should `Stop`, `Skip` to the end, or
+// is now `Complete`. Never returns `Next`.
+AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
+{
     if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
         (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
     {
@@ -1982,7 +1991,6 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
     } else if (pcv) {
       pcv->term_ioi = pj_str("");
     }
-  }
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
   {
