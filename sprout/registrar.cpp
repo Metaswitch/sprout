@@ -257,9 +257,11 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
   // Query the HSS for the associated URIs.
-  // This should really include the private ID, but we don't yet have a
-  // homestead API for it.  Homestead won't be able to query a third-party HSS
-  // without the private ID.
+
+  // The second parameter should be the private ID, but this isn't necessary
+  // until we implement support for receiving updates from the HSS. TODO:
+  // reinstate the get_private_id function and pass the private ID in.
+
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
   hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
@@ -561,8 +563,7 @@ void process_register_request(pjsip_rx_data* rdata)
   static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
   for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
   {
-    char* c_it = strdup(it->c_str());
-    pj_str_t associated_uri = {c_it, strlen(c_it)};
+    const pj_str_t associated_uri = pj_str(const_cast<char*>(it->c_str()));
     pjsip_hdr* associated_uri_hdr =
       (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                   &p_associated_uri_hdr_name,

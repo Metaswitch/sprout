@@ -192,7 +192,7 @@ private:
   AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
-  Ifcs* lookup_ifcs(std::string public_id, SAS::TrailId trail);
+  Ifcs lookup_ifcs(std::string public_id, SAS::TrailId trail);
   std::vector<std::string> get_associated_uris(std::string public_id, SAS::TrailId trail);
 
   void proxy_calculate_targets(pjsip_msg* msg,

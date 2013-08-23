@@ -1238,6 +1238,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
 std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
@@ -1252,7 +1253,8 @@ std::vector<std::string> UASTransaction::get_associated_uris(std::string public_
   return data->second.uris;
 }
 
-Ifcs* UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
+Ifcs UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
   if (data == cached_hss_data.end())
@@ -1263,7 +1265,7 @@ Ifcs* UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail)
     cached_hss_data[public_id] = {ifc_map[public_id], uris};
     data = cached_hss_data.find(public_id);
   }
-  return &(data->second.ifcs);
+  return data->second.ifcs;
 }
 
 ///@{
@@ -3525,6 +3527,7 @@ bool is_user_registered(std::string served_user)
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                             std::string served_user)  //< Served user, if already known, else ""
 {
+  Ifcs ifcs;
   if (ifc_handler == NULL)
   {
     // LCOV_EXCL_START No easy way to hit.
@@ -3540,14 +3543,9 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                     _req->pool);
   }
 
-  Ifcs* ifcs;
   bool is_registered = false;
 
-  if (served_user.empty())
-  {
-    ifcs = new Ifcs();
-  }
-  else
+  if (!served_user.empty())
   {
     is_registered = is_user_registered(served_user);
     ifcs = lookup_ifcs(served_user,

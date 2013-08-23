@@ -56,7 +56,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  const std::string& served_user,
                  bool is_registered,
                  SAS::TrailId trail,
-                 Ifcs* ifcs) :
+                 Ifcs ifcs) :
   _as_chain_table(as_chain_table),
   _refs(2),  // one for the chain being returned,
              // and one for the reference in the table.
@@ -105,7 +105,7 @@ const SessionCase& AsChain::session_case() const
 /// @returns the number of elements in this chain
 size_t AsChain::size() const
 {
-  return _ifcs->size();
+  return _ifcs.size();
 }
 
 
@@ -151,7 +151,7 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          const std::string& served_user,
                                          bool is_registered,
                                          SAS::TrailId trail,
-                                         Ifcs* ifcs)
+                                         Ifcs ifcs)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
@@ -184,7 +184,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
     return AsChainLink::Disposition::Complete;
   }
 
-  const Ifc& ifc = (*(_as_chain->_ifcs))[_index];
+  const Ifc& ifc = (_as_chain->_ifcs)[_index];
   if (!ifc.filter_matches(_as_chain->session_case(),
                           _as_chain->_is_registered,
                           tdata->msg))

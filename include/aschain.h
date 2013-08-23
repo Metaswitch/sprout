@@ -113,7 +113,7 @@ private:
           const std::string& served_user,
           bool is_registered,
           SAS::TrailId trail,
-          Ifcs* ifcs);
+          Ifcs ifcs);
   ~AsChain();
 
   void inc_ref()
@@ -149,7 +149,7 @@ private:
   const std::string _served_user;
   const bool _is_registered;
   const SAS::TrailId _trail;
-  const Ifcs* _ifcs;  //< List of iFCs. Owned by this object.
+  const Ifcs _ifcs;  //< List of iFCs. Owned by this object.
 };
 
 
@@ -281,7 +281,7 @@ public:
                                      const std::string& served_user,
                                      bool is_registered,
                                      SAS::TrailId trail,
-                                     Ifcs* ifcs);
+                                     Ifcs ifcs);
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,
