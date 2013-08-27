@@ -93,6 +93,7 @@ get_settings()
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+        [ -z "$remote_memstore" ] || remote_memstore_arg="--remote-memstore $remote_memstore"
 }
 
 #
@@ -115,7 +116,7 @@ do_start()
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore 127.0.0.1 --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore 127.0.0.1 $remote_memstore --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
 
         if [ ! -z $reg_max_expires ]
         then

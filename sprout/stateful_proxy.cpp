@@ -129,6 +129,7 @@ extern "C" {
 #include "custom_headers.h"
 
 static RegData::Store* store;
+static RegData::Store* remote_store;
 
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
@@ -1239,11 +1240,11 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 ///@}
 
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
-std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail)
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
   if (data == cached_hss_data.end())
-  { 
+  {
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
@@ -1254,11 +1255,11 @@ std::vector<std::string> UASTransaction::get_associated_uris(std::string public_
 }
 
 // Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
-Ifcs UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+Ifcs UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail)
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
   if (data == cached_hss_data.end())
-  { 
+  {
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
@@ -1408,6 +1409,16 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       // Look up the target in the registration data store.
       LOG_INFO("Look up targets in registration store: %s", aor.c_str());
       RegData::AoR* aor_data = store->get_aor_data(aor);
+
+      // If we didn't get bindings from the local store and we have a remote
+      // store, try the remote.
+      if ((remote_store != NULL) &&
+          ((aor_data == NULL) ||
+           (aor_data->bindings().empty())))
+      {
+        delete aor_data;
+        aor_data = remote_store->get_aor_data(aor);
+      }
 
       // Pick up to max_targets bindings to attempt to contact.  Since
       // some of these may be stale, and we don't want stale bindings to
@@ -3268,6 +3279,7 @@ void UACTransaction::exit_context()
 // MODULE LIFECYCLE
 
 pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
+                                RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
@@ -3286,6 +3298,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
   analytics_logger = analytics;
   store = registrar_store;
+  remote_store = remote_reg_store;
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
@@ -3513,8 +3526,19 @@ bool is_user_registered(std::string served_user)
   {
     std::string aor = served_user;
     RegData::AoR* aor_data = store->get_aor_data(aor);
+
+    // If we have a remote store and the local store suggests the subscriber is
+    // unregistered, double-check in the remote store.
+    if ((remote_store != NULL) &&
+        ((aor_data == NULL) ||
+         (aor_data->bindings().empty())))
+    {
+      delete aor_data;
+      aor_data = remote_store->get_aor_data(aor);
+    }
+
     is_registered = (aor_data != NULL) &&
-      (aor_data->bindings().size() != 0u);
+                    (aor_data->bindings().size() != 0u);
     delete aor_data; aor_data = NULL;
     LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
   }
