@@ -145,7 +145,7 @@ static void usage(void)
        " -M, --memstore <servers>   Use memcached store on comma-separated list of\n"
        "                            servers for registration state\n"
        "                            (otherwise uses local store)\n"
-       " -m, --remote-memstore <servers>\n
+       " -m, --remote-memstore <servers>\n"
        "                            Use remote memcached store on comma-separated list of\n"
        "                            servers for registration state\n"
        "                            (otherwise uses no remote memcached store)\n"

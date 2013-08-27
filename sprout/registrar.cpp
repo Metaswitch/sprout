@@ -209,16 +209,24 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 /// Write to the registration store.
 RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write to
                              std::string aor,               ///<address of record to write to
-                             pjsip_msg* msg,                ///<message to read Contact headers from
+                             pjsip_rx_data* rdata,          ///<received message to read headers from
+                             int now,                       ///<time now
+                             int& expiry,                   ///<[out] longest expiry time
                              RegData::AoR* backup_aor,      ///<backup data if no entry in store
                              RegData::Store* backup_store)  ///<backup store to read from if no entry in store and no backup data
 {
-  int st_code = PJSIP_SC_OK;
+  // Get the call identifier and the cseq number from the respective headers.
+  std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
+  int cseq = rdata->msg_info.cseq->cseq;
 
-  // The registration service uses optimistic locking to avoid concurrent
+  // Find the expire headers in the message.
+  pjsip_msg *msg = rdata->msg_info.msg;
+  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   RegData::AoR* aor_data = NULL;
+  bool backup_aor_alloced = false;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -238,24 +246,22 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
       // LCOV_EXCL_STOP
     }
 
-    if ((backup_aor == NULL) &&
-        (backup_store != NULL) &&
+    // If we don't have any bindings, try the backup AoR and/or store.
+    if ((aor_data == NULL) ||
         (aor_data->bindings().empty()))
     {
-      RegData::AoR* backup_aor = backup_store->get_aor_data(aor);
+      if ((backup_aor == NULL) &&
+          (backup_store != NULL))
+      {
+        backup_aor = backup_store->get_aor_data(aor);
+        backup_aor_alloced = (backup_aor != NULL);
+      }
+
       if (backup_aor != NULL)
       {
-        aor_data->bindings().insert(backup_aor->bindings().begin(),
-                                    backup_aor->bindings().end());
-        delete backup_aor;
-        backup_aor = NULL;
+        delete aor_data;
+        aor_data = new RegData::AoR(*backup_aor);
       }
-    }
-
-    if (backup_aor != NULL)
-    {
-      aor_data->bindings().insert(backup_aor->bindings().begin(),
-                                  backup_aor->bindings().end());
     }
 
     // Now loop through all the contacts.  If there are multiple contacts in
@@ -358,6 +364,12 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
   }
   while (!primary_store->set_aor_data(aor, aor_data));
 
+  // If we allocated the backup AoR, tidy up.
+  if (backup_aor_alloced)
+  {
+    delete backup_aor;
+  }
+
   return aor_data;
 }
 
@@ -389,11 +401,6 @@ void process_register_request(pjsip_rx_data* rdata)
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
-
-  // Get the call identifier and the cseq number from the respective headers.
-  std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
-  int cseq = rdata->msg_info.cseq->cseq;
-  pjsip_msg *msg = rdata->msg_info.msg;
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
@@ -439,14 +446,12 @@ void process_register_request(pjsip_rx_data* rdata)
   std::string aor = uris.front();
   LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
-  // Find the expire headers in the message.
-  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
   int expiry = 0;
 
-  RegData::AoR* aor_data = write_to_store(store, aor, msg, NULL, remote_store);
+  // Write to the local store, checking the remote store if there is no entry locally.
+  RegData::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -456,7 +461,8 @@ void process_register_request(pjsip_rx_data* rdata)
     // about failures in this case.
     if (remote_store != NULL)
     {
-      (void)write_to_store(remote_store, aor, msg, aor_data, NULL);
+      int tmp_expiry = 0;
+      (void)write_to_store(remote_store, aor, rdata, now, tmp_expiry, aor_data, NULL);
     }
   }
   else
@@ -555,6 +561,7 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Deal with path header related fields in the response.
+  pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_generic_string_hdr* path_hdr =
     (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
   if ((path_hdr != NULL) &&
