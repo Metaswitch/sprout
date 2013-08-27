@@ -1814,7 +1814,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       disposition = handle_originating(&target);
 
       if ((disposition == AsChainLink::Disposition::Complete) &&
-          (enum_service))
+          (enum_service) &&
+          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+          (!is_uri_routeable(_req->msg->line.req.uri)))
       {
         // Request is targeted at this domain but URI is not currently
         // routeable, so translate it to a routeable URI.
