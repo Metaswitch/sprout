@@ -3996,7 +3996,7 @@ TEST_F(IscTest, MmtelCdiv)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -4023,7 +4023,7 @@ TEST_F(IscTest, MmtelCdiv)
   EXPECT_EQ("sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1"));
 
   free_txdata();
 }
@@ -4202,7 +4202,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505555678@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
-              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain>;index=1\r\nHistory-Info: <sip:6505555678@homedomain>;index=1.1\r\nHistory-Info: <sip:6505559012@homedomain>;index=1.2"));
+              testing::MatchesRegex("History-Info: <sip:6505551234@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1\r\nHistory-Info: <sip:6505555678@homedomain;text=Temporarily%20Unavailable;cause=480;Reason=SIP>;index=1.1\r\nHistory-Info: <sip:6505559012@homedomain>;index=1.1.1"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
