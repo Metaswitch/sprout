@@ -256,10 +256,17 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
         backup_aor_alloced = (backup_aor != NULL);
       }
 
-      if (backup_aor != NULL)
+      if ((backup_aor != NULL) &&
+          (!backup_aor->bindings().empty()))
       {
-        delete aor_data;
-        aor_data = new RegData::AoR(*backup_aor);
+        for (RegData::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
+             i != backup_aor->bindings().end();
+             ++i)
+        {
+          RegData::AoR::Binding* src = i->second;
+          RegData::AoR::Binding* dst = aor_data->get_binding(i->first);
+          *dst = *src;
+        }
       }
     }
 
