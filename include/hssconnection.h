@@ -64,8 +64,8 @@ public:
                                SAS::TrailId trail);
   void get_subscription_data(const std::string& public_user_identity,
 			     const std::string& private_user_identity,
-			     std::map<std::string, Ifcs >* service_profiles,
-			     std::vector<std::string>* associated_uris,
+			     std::map<std::string, Ifcs >& service_profiles,
+			     std::vector<std::string>& associated_uris,
 			     SAS::TrailId trail);
 private:
   virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);

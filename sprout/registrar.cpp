@@ -264,7 +264,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
-  hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
+  hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
   if (uris.size() == 0)
   {
     // We failed to get the list of associated URIs.  This indicates that the
@@ -563,11 +563,12 @@ void process_register_request(pjsip_rx_data* rdata)
   static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
   for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
   {
-    const pj_str_t associated_uri = pj_str(const_cast<char*>(it->c_str()));
+    pj_str_t tmp_associated_uri;
+    const pj_str_t* associated_uri = pj_cstr(&tmp_associated_uri, it->c_str());
     pjsip_hdr* associated_uri_hdr =
       (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                   &p_associated_uri_hdr_name,
-                                                  &associated_uri);
+                                                  associated_uri);
     pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
   }
 
@@ -576,7 +577,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  RegistrationUtils::register_with_application_servers(&ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);

@@ -1238,34 +1238,32 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
-// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
-std::vector<std::string> UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+HSSCallInformation& UASTransaction::get_data_from_hss(std::string public_id, SAS::TrailId trail)
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
   if (data == cached_hss_data.end())
   { 
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
+    hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
     cached_hss_data[public_id] = {ifc_map[public_id], uris};
     data = cached_hss_data.find(public_id);
   }
-  return data->second.uris;
+  return data->second;
+}
+
+// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
+std::vector<std::string>& UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+{
+  HSSCallInformation& data = get_data_from_hss(public_id, trail);
+  return data.uris;
 }
 
 // Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
-Ifcs UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+Ifcs& UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
 {
-  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
-  if (data == cached_hss_data.end())
-  { 
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    hss->get_subscription_data(public_id, "", &ifc_map, &uris, trail);
-    cached_hss_data[public_id] = {ifc_map[public_id], uris};
-    data = cached_hss_data.find(public_id);
-  }
-  return data->second.ifcs;
+  HSSCallInformation& data = get_data_from_hss(public_id, trail);
+  return data.ifcs;
 }
 
 ///@{
@@ -1273,11 +1271,11 @@ Ifcs UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail)
 
 /// Calculate a list of targets for the message.
 void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
-					     pj_pool_t* pool,
-					     const TrustBoundary* trust,
-					     target_list& targets,
-					     int max_targets,
-					     SAS::TrailId trail)
+                                             pj_pool_t* pool,
+                                             const TrustBoundary* trust,
+                                             target_list& targets,
+                                             int max_targets,
+                                             SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
@@ -3549,7 +3547,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   {
     is_registered = is_user_registered(served_user);
     ifcs = lookup_ifcs(served_user,
-		       trail());
+                       trail());
   }
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.

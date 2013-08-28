@@ -85,7 +85,8 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_json_object(const std::string& path, SAS::TrailId trail)
+Json::Value* HSSConnection::get_json_object(const std::string& path,
+                                            SAS::TrailId trail)
 {
   std::string json_data;
   Json::Value* root = NULL;
@@ -109,7 +110,8 @@ Json::Value* HSSConnection::get_json_object(const std::string& path, SAS::TrailI
 
 
 /// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
-rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path, SAS::TrailId trail)
+rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path,
+                                                        SAS::TrailId trail)
 {
   std::string raw_data;
   rapidxml::xml_document<>* root = NULL;
@@ -117,9 +119,11 @@ rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path,
   if (_http->get(path, raw_data, "", trail))
   {
     root = new rapidxml::xml_document<>;
-    try {
+    try
+    {
       root->parse<0>(root->allocate_string(raw_data.c_str()));
-    } catch (rapidxml::parse_error& err)
+    }
+    catch (rapidxml::parse_error& err)
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
@@ -137,24 +141,24 @@ rapidxml::xml_document<>* HSSConnection::get_xml_object(const std::string& path,
 //  corresponding to each in the ifcs_map parameter.
 
 void HSSConnection::get_subscription_data(const std::string& public_user_identity,
-					  const std::string& private_user_identity,
-					  std::map<std::string, Ifcs >* ifcs_map,
-					  std::vector<std::string>* associated_uris,
-					  SAS::TrailId trail)
+                                          const std::string& private_user_identity,
+                                          std::map<std::string, Ifcs >& ifcs_map,
+                                          std::vector<std::string>& associated_uris,
+                                          SAS::TrailId trail)
 {
   std::string path = "/impu/" +
                      Utils::url_escape(public_user_identity);
 
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
-  // of scope,
+  // of scope.
 
   std::shared_ptr<rapidxml::xml_document<> > root (get_xml_object(path, trail));
   rapidxml::xml_node<>* sp = NULL;
 
   if (!root.get())
   {
-    LOG_ERROR("Malformed HSS XML - document could not be parsed"); 
+    LOG_ERROR("Malformed or nonexistent HSS XML - document could not be parsed"); 
     return;
   }
 
@@ -166,22 +170,25 @@ void HSSConnection::get_subscription_data(const std::string& public_user_identit
     return;
   }
 
-  for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile")) {
-    Ifcs ifc (root, sp);
-    rapidxml::xml_node<>* id = NULL;
+  for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile"))
+  {
+    Ifcs ifc(root, sp);
+    rapidxml::xml_node<>* public_id = NULL;
 
-    for (id = sp->first_node("PublicIdentity"); id != NULL; id = id->next_sibling("PublicIdentity")) {
+    for (public_id = sp->first_node("PublicIdentity"); public_id != NULL; public_id = public_id->next_sibling("PublicIdentity"))
+    {
 
-      if (id->first_node("Identity")) {
-	std::string uri = std::string(id->first_node("Identity")->value());
+      rapidxml::xml_node<>* identity = public_id->first_node("Identity");
+      if (identity)
+      {
+        std::string uri = std::string(identity->value());
         LOG_DEBUG("Processing Identity node from HSS XML - %s\n", uri.c_str());
-
-	associated_uris->push_back(uri);
-	(*ifcs_map)[uri] = ifc;
+        
+        associated_uris.push_back(uri);
+        ifcs_map[uri] = ifc;
       }
     }
   }
-
- }
+}
 
 
