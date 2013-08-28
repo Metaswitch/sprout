@@ -2791,7 +2791,8 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)diversion);
 
     // Create or update a History-Info header for the old target.
-    if (prev_history_info_hdr == NULL) {
+    if (prev_history_info_hdr == NULL)
+    {
       prev_history_info_hdr = create_history_info_hdr(_req->msg->line.req.uri);
       prev_history_info_hdr->index = pj_str("1");
       pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)prev_history_info_hdr);
@@ -2852,7 +2853,8 @@ void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int
   {
     // Set up the Reason parameter - this is always "SIP".
     pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
-    if (pj_list_empty(&history_info_sip_uri->other_param)) {
+    if (pj_list_empty(&history_info_sip_uri->other_param))
+    {
       pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
       param->name = STR_REASON;
       param->value = STR_SIP;
