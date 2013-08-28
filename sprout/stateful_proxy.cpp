@@ -2741,10 +2741,6 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
 bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
-  static const pj_str_t STR_REASON = pj_str("Reason");
-  static const pj_str_t STR_SIP = pj_str("SIP");
-  static const pj_str_t STR_CAUSE = pj_str("cause");
-  static const pj_str_t STR_TEXT = pj_str("text");
   static const int MAX_HISTORY_INFOS = 5;
 
   // Default the code to 480 Temporarily Unavailable.
@@ -2793,56 +2789,28 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
                                                     &STR_DIVERSION,
                                                     pj_cstr(&sdiv, div.c_str()));
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)diversion);
+    pjsip_history_info_hdr* first_history_info_hdr = NULL;
+
+    if (prev_history_info_hdr == NULL) {
+      first_history_info_hdr = create_history_info_hdr(_req->msg->line.req.uri);
+      first_history_info_hdr->index = pj_str("1");
+      pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)first_history_info_hdr);
+      prev_history_info_hdr = first_history_info_hdr; // (pjsip_history_info_hdr*)pjsip_msg_find_hdr_by_name(_req->msg, &STR_HISTORY_INFO, NULL);
+    }
+
+    update_history_info_reason(&(((pjsip_name_addr*)(prev_history_info_hdr->uri))->uri), code);
 
     // Set up the new target URI.
     _req->msg->line.req.uri = target;
-
-    // Create a History-Info header.
-    pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
-
-    // Clone the URI and set up its parameters.
-    pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
-    if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
-    {
-      // Set up the Reason parameter - this is always "SIP".
-      pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
-      pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_REASON;
-      param->value = STR_SIP;
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-
-      // Now add the cause parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_CAUSE;
-      char cause_text[4];
-      sprintf(cause_text, "%u", code);
-      pj_strdup2(_req->pool, &param->value, cause_text);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-
-      // Finally add the text parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_TEXT;
-      param->value = *pjsip_get_status_text(code);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-    }
-    pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
-    history_info_name_addr_uri->uri = history_info_uri;
-    history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
-
-    // Set up the index parameter.  This is "1" if it is the first request and
-    // the previous value suffixed with ".1" if not.
-    if (prev_history_info_hdr == NULL)
-    {
-      history_info_hdr->index = pj_str("1");
-    }
-    else
-    {
-      history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
-      history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
-    }
     // Add the History-Info header to the request.
+    pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target);
+
+    // Set up the index parameter.  This is the previous value suffixed with ".1".   
+    history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
+    history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
+
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
     // Kick off outgoing processing for the new request.  Continue the
@@ -2855,6 +2823,56 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   }
 
   return false;
+}
+
+
+void UASTransaction::update_history_info_reason(pjsip_uri** history_info_uri, int code)
+{
+  static const pj_str_t STR_REASON = pj_str("Reason");
+  static const pj_str_t STR_SIP = pj_str("SIP");
+  static const pj_str_t STR_CAUSE = pj_str("cause");
+  static const pj_str_t STR_TEXT = pj_str("text");
+
+  if (PJSIP_URI_SCHEME_IS_SIP(*history_info_uri))
+  {
+    // Set up the Reason parameter - this is always "SIP".
+    pjsip_sip_uri** history_info_sip_uri = (pjsip_sip_uri**)history_info_uri;
+    if (pj_list_empty(&(*history_info_sip_uri)->other_param)) {
+    pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+    param->name = STR_REASON;
+    param->value = STR_SIP;
+
+    pj_list_insert_after(&(*history_info_sip_uri)->other_param, (pj_list_type*)param);
+    
+    // Now add the cause parameter.
+    param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+    param->name = STR_CAUSE;
+    char cause_text[4];
+    sprintf(cause_text, "%u", code);
+    pj_strdup2(_req->pool, &param->value, cause_text);
+    pj_list_insert_after(&(*history_info_sip_uri)->other_param, param);
+
+    // Finally add the text parameter.
+    param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+    param->name = STR_TEXT;
+    param->value = *pjsip_get_status_text(code);
+    pj_list_insert_after(&(*history_info_sip_uri)->other_param, param);
+  }
+      }
+}
+
+pjsip_history_info_hdr* UASTransaction::create_history_info_hdr(pjsip_uri* target)
+{
+    // Create a History-Info header.
+    pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
+
+    // Clone the URI and set up its parameters.
+    pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
+    pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
+    history_info_name_addr_uri->uri = history_info_uri;
+    history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
+
+    return history_info_hdr;
 }
 
 
