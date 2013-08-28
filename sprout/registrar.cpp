@@ -247,8 +247,7 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
     }
 
     // If we don't have any bindings, try the backup AoR and/or store.
-    if ((aor_data == NULL) ||
-        (aor_data->bindings().empty()))
+    if (aor_data->bindings().empty())
     {
       if ((backup_aor == NULL) &&
           (backup_store != NULL))
