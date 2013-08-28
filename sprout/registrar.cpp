@@ -259,8 +259,9 @@ void process_register_request(pjsip_rx_data* rdata)
   // Query the HSS for the associated URIs.
 
   // The second parameter should be the private ID, but this isn't necessary
-  // until we implement support for receiving updates from the HSS. TODO:
-  // reinstate the get_private_id function and pass the private ID in.
+  // until we implement support for receiving updates from the HSS.
+  // TODO in sto281:
+  //   reinstate the get_private_id function and pass the private ID in.
 
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
@@ -577,6 +578,12 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
+  // TODO in sto397: we should do third-party registration once per
+  // service profile (i.e. once per iFC, using an arbitrary public
+  // ID). hss->get_subscription_data should be enhanced to provide an
+  // appropriate data structure (representing the ServiceProfile
+  // nodes) and we should loop through that.
+
   RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
 
   // Now we can free the tdata.
@@ -614,7 +621,11 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
 
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::network_initiated_deregistration(hss, store, aor, "*", get_trail(tsx));
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+
+    RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
     // LCOV_EXCL_STOP
   }
 }

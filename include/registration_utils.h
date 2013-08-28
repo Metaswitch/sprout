@@ -47,8 +47,8 @@ extern "C" {
 #include "hssconnection.h"
 
 namespace RegistrationUtils {
-void network_initiated_deregistration(HSSConnection *hss,
-                                      RegData::Store* store,
+void network_initiated_deregistration(RegData::Store* store,
+                                      Ifcs& ifcs,
                                       const std::string& served_user,
                                       const std::string& binding_id,
                                       SAS::TrailId trail);

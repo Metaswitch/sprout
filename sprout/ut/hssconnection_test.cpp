@@ -149,7 +149,7 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42", "", &ifcs_map, &uris, 0);
+  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
   EXPECT_EQ(2u, uris.size());
   EXPECT_EQ("sip:123@example.com", uris[0]);
   EXPECT_EQ("sip:456@example.com", uris[1]);
@@ -159,7 +159,7 @@ TEST_F(HssConnectionTest, SimpleIfc)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42", "", &ifcs_map, &uris, 0);
+  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
 }
 
@@ -167,7 +167,7 @@ TEST_F(HssConnectionTest, BadXML)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42_malformed", "", &ifcs_map, &uris, 0);
+  _hss.get_subscription_data("pubid42_malformed", "", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
 }
@@ -177,7 +177,7 @@ TEST_F(HssConnectionTest, BadXML2)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid43_malformed", "", &ifcs_map, &uris, 0);
+  _hss.get_subscription_data("pubid43_malformed", "", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("Malformed HSS XML"));
 }
@@ -186,7 +186,7 @@ TEST_F(HssConnectionTest, ServerFailure)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid44", "", &ifcs_map, &uris, 0);
+  _hss.get_subscription_data("pubid44", "", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("HTTP error response"));
 }

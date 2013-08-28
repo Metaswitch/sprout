@@ -603,6 +603,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 {
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
+  std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
   fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<IMSSubscription><ServiceProfile>\n"
@@ -626,12 +627,15 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                                 "</ServiceProfile></IMSSubscription>";
 
   RegData::AoR* aor_data;
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain");
+  aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
+  std::map<std::string, Ifcs> ifc_map;
+  std::vector<std::string> uris;
+  _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_hss_connection, _store, "sip:6505550231@homedomain", "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
@@ -644,7 +648,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   free_txdata();
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data("sip:6505551234@homedomain");
+  aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;

@@ -282,7 +282,7 @@ TEST_F(IfcHandlerTest, NoIfc)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("No iFC found"));
+  EXPECT_TRUE(_log.contains("No ServiceProfile node in iFC!"));
 }
 
 TEST_F(IfcHandlerTest, NoPriority)

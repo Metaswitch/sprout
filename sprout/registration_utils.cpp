@@ -293,15 +293,12 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
   }
 };
 
-void RegistrationUtils::network_initiated_deregistration(HSSConnection* hss, RegData::Store *store, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
+void RegistrationUtils::network_initiated_deregistration(RegData::Store *store, Ifcs& ifcs, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
 {
   expire_bindings(store, served_user, binding_id);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  hss->get_subscription_data(served_user, "", ifc_map, uris, trail);
-  deregister_with_application_servers(ifc_map[served_user], store, served_user, trail);
+  deregister_with_application_servers(ifcs, store, served_user, trail);
   notify_application_servers();
 };

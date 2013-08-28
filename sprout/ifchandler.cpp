@@ -452,28 +452,28 @@ Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
 
     // Spin through the list of filter criteria, adding each to the list.
     for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");
-	 ifc;
-	 ifc = ifc->next_sibling("InitialFilterCriteria"))
+         ifc;
+         ifc = ifc->next_sibling("InitialFilterCriteria"))
     {
       try
       {
-	xml_node<>* priority_node = ifc->first_node("Priority");
-	int32_t priority = (int32_t)((priority_node) ?
-				     parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
-				     0);
-	ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
+        xml_node<>* priority_node = ifc->first_node("Priority");
+        int32_t priority = (int32_t)((priority_node) ?
+                                     parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                     0);
+        ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
       }
       catch (ifc_error err)
       {
-	// Ignore individual criteria which can't be parsed, and keep
-	// going with the rest.
-	LOG_ERROR("iFC evaluation error %s", err.what());
+        // Ignore individual criteria which can't be parsed, and keep
+        // going with the rest.
+        LOG_ERROR("iFC evaluation error %s", err.what());
       }
     }
 
     for (std::multimap<int32_t, Ifc>::iterator it = ifc_map.begin();
-	 it != ifc_map.end();
-	 ++it)
+         it != ifc_map.end();
+         ++it)
     {
       _ifcs.push_back(it->second);
     }

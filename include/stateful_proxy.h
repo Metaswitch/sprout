@@ -197,12 +197,11 @@ private:
   std::vector<std::string>& get_associated_uris(std::string public_id, SAS::TrailId trail);
 
   void proxy_calculate_targets(pjsip_msg* msg,
-			       pj_pool_t* pool,
-			       const TrustBoundary* trust,
-			       target_list& targets,
-			       int max_targets,
-			       SAS::TrailId trail);
-
+                               pj_pool_t* pool,
+                               const TrustBoundary* trust,
+                               target_list& targets,
+                               int max_targets,
+                               SAS::TrailId trail);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;

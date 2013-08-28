@@ -3156,7 +3156,11 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      RegistrationUtils::network_initiated_deregistration(hss, store, aor, binding_id, trail());
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      hss->get_subscription_data(aor, "", ifc_map, uris, trail());
+
+      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
     }
   }
 
