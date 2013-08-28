@@ -177,6 +177,8 @@ private:
   pj_status_t init_uac_transactions(target_list& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
+  pjsip_history_info_hdr* create_history_info_hdr(pjsip_uri* target);
+  void update_history_info_reason(pjsip_uri* history_info_uri, int code);
   AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
 
   void handle_incoming_non_cancel(const ServingState& serving_state);
