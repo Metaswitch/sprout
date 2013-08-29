@@ -165,7 +165,7 @@ void PoolEntry::setRemoteIp(std::string value)  //< Remote IP, or "" if no conne
 
   if (!value.empty())
   {
-    // Increment the count of connections to this address.  (Note this is 
+    // Increment the count of connections to this address.  (Note this is
     // safe even if this is the first connection as the [] operator will
     // insert an entry initialised to 0.)
     ++_parent->_serverCount[value];
@@ -359,11 +359,19 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     {
       // Report the error to SAS
       LOG_DEBUG("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
+
       SAS::Event http_err_event(trail, _sasEventBase + SASEvent::HTTP_ERR, 1u);
       http_err_event.add_static_param(rc);
       http_err_event.add_var_param(url);
       http_err_event.add_var_param(curl_easy_strerror(rc));
       SAS::report_event(http_err_event);
+
+      long http_rc = 0;
+      if (rc == CURLE_HTTP_RETURNED_ERROR)
+      {
+        // Get the HTTP error code returned from the server.
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_rc);
+      }
 
       // Is this an error we should retry? If cURL itself has already
       // retried (e.g., CURLE_COULDNT_CONNECT) then there is no point
@@ -373,21 +381,24 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
       // ourselves.
       bool non_fatal = ((rc == CURLE_OPERATION_TIMEDOUT) ||
                         (rc == CURLE_SEND_ERROR) ||
-                        (rc == CURLE_RECV_ERROR));
+                        (rc == CURLE_RECV_ERROR) ||
+                        ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 503)));
 
-      if (!recycle_conn && non_fatal)
+      char* remote_ip;
+      curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &remote_ip);
+
+      if ((non_fatal) && (i == 0))
       {
-        // Loop around and try again.  Always request a fresh
-        // connection.
-        LOG_ERROR("GET %s failed at server %s : %s : retrying",
-                  url.c_str(), entry->getRemoteIp().c_str(), curl_easy_strerror(rc));
+        // Loop around and try again.  Always request a fresh connection.
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
       }
       else
       {
-        LOG_ERROR("GET %s failed at server %s : %s : fatal",
-                  url.c_str(), entry->getRemoteIp().c_str(), curl_easy_strerror(rc));
-        // Fatal error - we're done!
+        // Fatal error or we've already retried once - we're done!
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         break;
       }
     }
