@@ -64,6 +64,8 @@ extern "C" {
 #include "utils.h"
 #include "zmq_lvc.h"
 #include "statistic.h"
+#include "custom_headers.h"
+#include "accumulator.h"
 
 struct stack_data_struct stack_data;
 
@@ -73,7 +75,15 @@ static volatile pj_bool_t quit_flag;
 
 
 // Queue for incoming messages.
-eventq<pjsip_rx_data*> rx_msg_q;
+struct rx_msg_qe
+{
+  pjsip_rx_data* rdata;    // received message
+  struct timespec rx_time; // time at which it was received
+};
+eventq<struct rx_msg_qe> rx_msg_q;
+
+
+static Accumulator* latency_accumulator;
 
 
 // We register a single module to handle scheduling plus local and
@@ -97,228 +107,6 @@ static pjsip_module mod_stack =
   &on_tx_msg,                         /* on_tx_response()     */
   NULL,                               /* on_tsx_state()       */
 };
-
-
-/// Custom parser for Privacy header.  This is registered with PJSIP when
-/// we initialize the stack.
-static pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
-{
-  pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
-  pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
-  return (pjsip_hdr*)privacy;
-}
-
-
-#define copy_advance(buf,str)   \
-	do { \
-	    if ((str).slen >= (endbuf-buf)) return -1;	\
-	    pj_memcpy(buf, (str).ptr, (str).slen); \
-	    buf += (str).slen; \
-	} while (0)
-
-
-typedef void* (*clone_fptr)(pj_pool_t *, const void*);
-typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
-
-static int identity_hdr_print(pjsip_routing_hdr *hdr, char *buf, pj_size_t size);
-static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
-static pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
-
-pjsip_hdr_vptr identity_hdr_vptr =
-{
-  (clone_fptr) &identity_hdr_clone,
-  (clone_fptr) &identity_hdr_shallow_clone,
-  (print_fptr) &identity_hdr_print,
-};
-
-
-/// Custom create, clone and print functions used for the P-Associated-URI,
-/// P-Asserted-Identity and P-Preferred-Identity headers
-static int identity_hdr_print(pjsip_routing_hdr *hdr,
-                              char *buf,
-                              pj_size_t size)
-{
-  int printed;
-  char *startbuf = buf;
-  char *endbuf = buf + size;
-  const pjsip_parser_const_t *pc = pjsip_parser_const();
-
-  /* Route and Record-Route don't compact forms */
-  copy_advance(buf, hdr->name);
-  *buf++ = ':';
-  *buf++ = ' ';
-
-  printed = pjsip_uri_print(PJSIP_URI_IN_FROMTO_HDR,
-                            &hdr->name_addr,
-                            buf,
-                            endbuf-buf);
-  if (printed < 1)
-  {
-    return -1;
-  }
-  buf += printed;
-
-  printed = pjsip_param_print_on(&hdr->other_param, buf, endbuf-buf,
-                                 &pc->pjsip_TOKEN_SPEC,
-                                 &pc->pjsip_TOKEN_SPEC, ';');
-  if (printed < 0)
-  {
-    return -1;
-  }
-  buf += printed;
-
-  return buf-startbuf;
-}
-
-
-static pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool,
-                                             const pjsip_routing_hdr *rhs)
-{
-  pjsip_routing_hdr *hdr = PJUtils::identity_hdr_create(pool, rhs->name);
-  pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
-  pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
-  return hdr;
-}
-
-
-static pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool,
-                                                     const pjsip_routing_hdr *rhs)
-{
-  pjsip_routing_hdr *hdr = PJ_POOL_ALLOC_T(pool, pjsip_routing_hdr);
-  pj_memcpy(hdr, rhs, sizeof(*hdr));
-  pjsip_param_shallow_clone(pool, &hdr->other_param, &rhs->other_param);
-  return hdr;
-}
-
-
-/// Custom parser for P-Associated-URI header.  This is registered with PJSIP when
-/// we initialize the stack.
-static pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
-{
-  // The P-Associated-URI header is a comma separated list of name-addrs
-  // with optional parameters, so we parse it to multiple header structures,
-  // using the pjsip_route_hdr structure for each.
-  pjsip_route_hdr *first = NULL;
-  pj_scanner *scanner = ctx->scanner;
-
-  do
-  {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
-    if (!first)
-    {
-      first = hdr;
-    }
-    else
-    {
-      pj_list_insert_before(first, hdr);
-    }
-    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
-
-    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
-
-    while (*scanner->curptr == ';')
-    {
-      pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
-      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
-      pj_list_insert_before(&hdr->other_param, p);
-    }
-
-    if (*scanner->curptr == ',')
-    {
-      pj_scan_get_char(scanner);
-    }
-    else
-    {
-      break;
-    }
-  } while (1);
-  pjsip_parse_end_hdr_imp(scanner);
-
-  return (pjsip_hdr*)first;
-}
-
-
-/// Custom parser for P-Asserted-Identity header.  This is registered with PJSIP when
-/// we initialize the stack.
-static pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx *ctx)
-{
-  // The P-Asserted-Identity header is a comma separated list of name-addrs
-  // so we parse it to multiple header structures, using the pjsip_route_hdr
-  // structure for each.  Note that P-Asserted-Identity cannot have parameters
-  // after the name-addr.
-  pjsip_route_hdr *first = NULL;
-  pj_scanner *scanner = ctx->scanner;
-
-  do
-  {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
-    if (!first)
-    {
-      first = hdr;
-    }
-    else
-    {
-      pj_list_insert_before(first, hdr);
-    }
-    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
-
-    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
-
-    if (*scanner->curptr == ',')
-    {
-      pj_scan_get_char(scanner);
-    }
-    else
-    {
-      break;
-    }
-  } while (1);
-  pjsip_parse_end_hdr_imp(scanner);
-
-  return (pjsip_hdr*)first;
-}
-
-
-/// Custom parser for P-Preferred-Identity header.  This is registered with PJSIP when
-/// we initialize the stack.
-static pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx *ctx)
-{
-  // The P-Preferred-Identity header is a comma separated list of name-addrs
-  // so we parse it to multiple header structures, using the pjsip_route_hdr
-  // structure for each.  Note that P-Preferred-Identity cannot have parameters
-  // after the name-addr.
-  pjsip_route_hdr *first = NULL;
-  pj_scanner *scanner = ctx->scanner;
-
-  do
-  {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
-    if (!first)
-    {
-      first = hdr;
-    }
-    else
-    {
-      pj_list_insert_before(first, hdr);
-    }
-    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
-
-    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
-
-    if (*scanner->curptr == ',')
-    {
-      pj_scan_get_char(scanner);
-    }
-    else
-    {
-      break;
-    }
-  } while (1);
-  pjsip_parse_end_hdr_imp(scanner);
-
-  return (pjsip_hdr*)first;
-}
-
 
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
@@ -353,16 +141,31 @@ static int worker_thread(void* p)
 
   LOG_DEBUG("Worker thread started");
 
-  pjsip_rx_data* rdata = NULL;
+  struct rx_msg_qe qe = {0};
 
-  while (rx_msg_q.pop(rdata))
+  while (rx_msg_q.pop(qe))
   {
+    pjsip_rx_data* rdata = qe.rdata;
     if (rdata)
     {
       LOG_DEBUG("Worker thread dequeue message %p", rdata);
       pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
+
+      struct timespec done_time;
+      if (clock_gettime(CLOCK_MONOTONIC, &done_time) == 0)
+      {
+        long latency_us = (done_time.tv_nsec - qe.rx_time.tv_nsec) / 1000L +
+                          (done_time.tv_sec - qe.rx_time.tv_sec) * 1000000L;
+        LOG_DEBUG("Request latency = %ldus", latency_us);
+        latency_accumulator->accumulate(latency_us);
+        latency_accumulator->refresh();
+      }
+      else
+      {
+        LOG_ERROR("Failed to get done timestamp: %s", strerror(errno));
+      }
     }
   }
 
@@ -506,6 +309,15 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
+  // Before we start, get a timestamp.  This will track the time from
+  // receiving a message to forwarding it on (or rejecting it).
+  struct rx_msg_qe qe;
+  if (clock_gettime(CLOCK_MONOTONIC, &qe.rx_time) != 0)
+  {
+    LOG_ERROR("Failed to get receive timestamp: %s", strerror(errno));
+    return PJ_TRUE;
+  }
+
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
@@ -531,7 +343,8 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   // have a queue per transport and round-robin them?
 
   LOG_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
-  rx_msg_q.push(clone_rdata);
+  qe.rdata = clone_rdata;
+  rx_msg_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
   return PJ_TRUE;
@@ -652,17 +465,8 @@ pj_status_t init_pjsip()
                                    4000,
                                    NULL);
 
-  // Register custom header parsers for Privacy, P-Associated-URI, P-Asserted-Identity
-  // and P-Preferred-Identity.
-  status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
+  status = register_custom_headers();
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Associated-URI", NULL, &parse_hdr_p_associated_uri);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Asserted-Identity", NULL, &parse_hdr_p_asserted_identity);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  status = pjsip_register_hdr_parser("P-Preferred-Identity", NULL, &parse_hdr_p_preferred_identity);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-
 
   return PJ_SUCCESS;
 }
@@ -798,6 +602,8 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
                                                    Statistic::known_stats());
 
+  latency_accumulator = new StatisticAccumulator("latency_us");
+
   return status;
 }
 
@@ -895,6 +701,8 @@ void term_pjsip()
 void destroy_stack(void)
 {
   // Tear down the stack.
+  delete latency_accumulator;
+  latency_accumulator = NULL;
   delete stack_data.stats_aggregator;
   pjsip_threads.clear();
   worker_threads.clear();

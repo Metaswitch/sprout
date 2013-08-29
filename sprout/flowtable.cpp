@@ -222,6 +222,7 @@ void FlowTable::report_flow_count()
 Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr* remote_addr) :
   _flow_table(flow_table),
   _transport(transport),
+  _tp_state_listener_key(NULL),
   _remote_addr(*remote_addr),
   _token(),
   _authorized_ids(),
@@ -238,14 +239,13 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   {
     // We're adding a new reliable transport, so make sure it stays around
     // until we remove it from the map.
-    pjsip_transport_add_ref(transport);
+    pjsip_transport_add_ref(_transport);
 
     // Add a state listener so we find out when the flow is destroyed.
-    pjsip_tp_state_listener_key* listener_key;
-    pjsip_transport_add_state_listener(transport,
+    pjsip_transport_add_state_listener(_transport,
                                        &on_transport_state_changed,
                                        this,
-                                       &listener_key);
+                                       &_tp_state_listener_key);
     LOG_DEBUG("Added transport listener for flow %p", this);
   }
 
@@ -262,6 +262,12 @@ Flow::~Flow()
 {
   if (PJSIP_TRANSPORT_IS_RELIABLE(_transport))
   {
+    // Remove the state listener to ensure it doesn't get called after the
+    // flow is destroyed.
+    pjsip_transport_remove_state_listener(_transport,
+                                          _tp_state_listener_key,
+                                          this);
+
     // We incremented the ref count when we put it in the map.
     pjsip_transport_dec_ref(_transport);
   }
@@ -274,6 +280,18 @@ Flow::~Flow()
   }
 
   pthread_mutex_destroy(&_flow_lock);
+}
+
+
+/// Called whenever a REGISTER is handled for this flow, to ensure the
+/// flow doesn't time out in the middle of processing the REGISTER.
+void Flow::touch()
+{
+  if (_timer.id == IDLE_TIMER)
+  {
+    // Idle timer is running, so restart it.
+    restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
+  }
 }
 
 
@@ -333,6 +351,11 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
 
   if (expires > now)
   {
+    // Add a constant "grace" period to the expiry time to give clients so
+    // leeway if they are late refreshing bindings, to avoid extra authentication
+    // challenges.
+    expires += EXPIRY_GRACE_INTERVAL;
+
     // Find or create the entry for this aor.
     AuthId& aid = _authorized_ids[aor];
 
@@ -365,16 +388,19 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
     LOG_DEBUG("Deleting identity %s", aor.c_str());
     auth_id_map::iterator i = _authorized_ids.find(aor);
 
-    // Check to see whether this was the current default identity we are
-    // using for this flow.  We could do the string comparision in all cases
-    // but it is only necessary if the identity is marked as a default
-    // candidate.
-    if ((i->second.default_id) && (i->first == _default_id))
+    if (i != _authorized_ids.end())
     {
-      // This was our default ID, so remove it.
-      _default_id = "";
+      // Check to see whether this was the current default identity we are
+      // using for this flow.  We could do the string comparision in all cases
+      // but it is only necessary if the identity is marked as a default
+      // candidate.
+      if ((i->second.default_id) && (i->first == _default_id))
+      {
+        // This was our default ID, so remove it.
+        _default_id = "";
+      }
+      _authorized_ids.erase(i);
     }
-    _authorized_ids.erase(i);
 
     if (_default_id == "")
     {

@@ -37,6 +37,7 @@
 #ifndef CONSTANTS_H_
 #define CONSTANTS_H_
 
+const pj_str_t STR_DIVERSION = pj_str("Diversion");
 const pj_str_t STR_SUPPORTED = pj_str("Supported");
 const pj_str_t STR_REQUIRE = pj_str("Require");
 const pj_str_t STR_PATH = pj_str("Path");
@@ -64,6 +65,8 @@ const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
 const pj_str_t STR_SERVICE_ROUTE = pj_str("Service-Route");
 const pj_str_t STR_ORIG = pj_str("orig");
 const pj_str_t STR_NO_FORK = pj_str("no-fork");
+const pj_str_t STR_P_C_V = pj_str("P-Charging-Vector");
+const pj_str_t STR_P_C_F_A = pj_str("P-Charging-Function-Addresses");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");

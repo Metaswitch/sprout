@@ -106,6 +106,7 @@ struct options
   std::string            enum_file;
   pj_bool_t              analytics_enabled;
   std::string            analytics_directory;
+  int                    reg_max_expires;
   int                    pjsip_threads;
   int                    worker_threads;
   pj_bool_t              log_to_file;
@@ -117,7 +118,6 @@ struct options
 
 
 static pj_bool_t quit_flag = PJ_FALSE;
-
 
 static void usage(void)
 {
@@ -151,6 +151,8 @@ static void usage(void)
        " -E, --enum <server>        Name/IP address of ENUM server (default: 127.0.0.1)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
        " -f, --enum-file <file>     JSON ENUM config file (disables DNS-based ENUM lookup)\n"
+       " -r, --reg-max-expires <expiry>\n"
+       "                            The maximum allowed registration period (in seconds)\n"
        " -p, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
        " -w, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
@@ -177,7 +179,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
-    { "rr",                no_argument,       0, 'r'},
     { "auth",              required_argument, 0, 'A'},
     { "realm",             required_argument, 0, 'R'},
     { "memstore",          required_argument, 0, 'M'},
@@ -187,6 +188,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
+    { "reg-max-expires",   required_argument, 0, 'r'},
     { "pjsip-threads",     required_argument, 0, 'p'},
     { "worker-threads",    required_argument, 0, 'w'},
     { "analytics",         required_argument, 0, 'a'},
@@ -199,9 +201,10 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   };
   int c;
   int opt_ind;
+  int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:rA:R:M:S:H:X:E:x:f:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
@@ -314,6 +317,25 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'f':
       options->enum_file = std::string(pj_optarg);
       fprintf(stdout, "ENUM file set to %s\n", pj_optarg);
+      break;
+
+    case 'r':
+      reg_max_expires = atoi(pj_optarg);
+
+      if (reg_max_expires > 0)
+      {
+        options->reg_max_expires = reg_max_expires;
+        fprintf(stdout, "Maximum registration period set to %d seconds\n",
+                options->reg_max_expires);
+      }
+      else
+      {
+        // The parameter could be invalid either because it's -ve, or it's not
+        // an integer (in which case atoi returns 0). Log, but don't store it.
+        LOG_WARNING("Invalid value for reg_max_expires: '%s'. "
+                    "The default value of %d will be used.",
+                    pj_optarg, options->reg_max_expires);
+      }
       break;
 
     case 'p':
@@ -467,6 +489,7 @@ int main(int argc, char *argv[])
   opt.enum_server = "127.0.0.1";
   opt.enum_suffix = ".e164.arpa";
   // opt.enum_file = "";
+  opt.reg_max_expires = 300;
   opt.pjsip_threads = 1;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
@@ -530,6 +553,11 @@ int main(int argc, char *argv[])
     }
   }
 
+  if (opt.edge_proxy && (opt.reg_max_expires != 0))
+  {
+    LOG_WARNING("A registration expiry period should not be specified for an edge proxy");
+  }
+
   // Ensure our random numbers are unpredictable.
   unsigned int seed;
   pj_time_val now;
@@ -577,10 +605,10 @@ int main(int argc, char *argv[])
   if (opt.store_servers != "")
   {
     // Use memcached store.
-    LOG_STATUS("Using memcached store");
+    LOG_STATUS("Using memcached compatible store with ASCII protocol");
     std::list<std::string> servers;
     Utils::split_string(opt.store_servers, ',', servers, 0, true);
-    registrar_store = RegData::create_memcached_store(servers, 100);
+    registrar_store = RegData::create_memcached_store(servers, 100, false);
   }
   else
   {
@@ -665,7 +693,11 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store, hss_connection, analytics_logger, ifc_handler);
+    status = init_registrar(registrar_store,
+                            hss_connection,
+                            analytics_logger,
+                            ifc_handler,
+                            opt.reg_max_expires);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing registrar, %s",

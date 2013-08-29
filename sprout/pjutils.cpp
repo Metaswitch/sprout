@@ -238,7 +238,6 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
-  LOG_INFO("Adding integrity-protected indicator to message");
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
                                       pjsip_msg_find_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
 
@@ -285,6 +284,8 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   default:
     break;
   }
+  LOG_INFO("Adding integrity-protected=%.*s indicator to message",
+           new_param->value.slen, new_param->value.ptr);
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
@@ -457,14 +458,17 @@ pj_bool_t PJUtils::is_first_hop(pjsip_msg* msg)
 
 /// Gets the maximum expires value from all contacts in a REGISTER message
 /// (request or response).
-int PJUtils::max_expires(pjsip_msg* msg)
+int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
 {
   int max_expires = 0;
 
   // Check for an expires header (this will specify the default expiry for
   // any contacts that don't specify their own expiry).
   pjsip_expires_hdr* expires_hdr = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int default_expires = (expires_hdr != NULL) ? expires_hdr->ivalue : 300;
+  if (expires_hdr != NULL)
+  {
+    default_expires = expires_hdr->ivalue;
+  }
 
   pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
 

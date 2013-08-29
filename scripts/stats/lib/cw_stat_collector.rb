@@ -217,9 +217,26 @@ class ConnectedIpsRenderer < AbstractRenderer
   end
 end
 
-# Register the two statistics we currently expose
+# This renderer reports latency statistics.
+#
+# The output format is picked to be human readable, while still easy to
+# parse so it can be given to another tool (cacti for example).
+class LatencyStatsRenderer < AbstractRenderer
+  # @see AbstractRenderer#render
+  def render(msg)
+    <<-EOF
+mean:#{msg[0]}
+variance:#{msg[1]}
+lwm:#{msg[2]}
+hwm:#{msg[3]}
+    EOF
+  end
+end
+
+# Register the statistics we currently expose
 CWStatCollector.register_renderer("client_count", SimpleStatRenderer)
 CWStatCollector.register_renderer("connected_homesteads", ConnectedIpsRenderer)
 CWStatCollector.register_renderer("connected_homers", ConnectedIpsRenderer)
 CWStatCollector.register_renderer("connected_sprouts", ConnectedIpsRenderer)
 CWStatCollector.register_renderer("call_stats", CallStatsRenderer)
+CWStatCollector.register_renderer("latency_us", LatencyStatsRenderer)

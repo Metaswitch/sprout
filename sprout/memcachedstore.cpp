@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #include "memcachedstore.h"
 
 // Common STL includes.
@@ -66,11 +63,13 @@ namespace RegData {
 /// e.g., "localhost:11211".
 RegData::Store* create_memcached_store(const std::list<std::string>& servers,
                                        ///< list of servers to be used
-                                       int connections)
+                                       int connections,
                                        ///< size of pool (used as init and
                                        /// max)
+                                       bool binary)
+                                       ///< use binary protocol?
 {
-  return new MemcachedStore(servers, connections);
+  return new MemcachedStore(servers, connections, binary);
 }
 
 /// Destroy a store object which used the memcached implementation.
@@ -86,8 +85,10 @@ void destroy_memcached_store(RegData::Store* store)
 /// e.g., "localhost:11211".
 MemcachedStore::MemcachedStore(const std::list<std::string>& servers,
                                ///< list of servers to be used
-                               int pool_size)
+                               int pool_size,
                                ///< size of pool (used as init and max)
+                               bool binary)
+                               ///< use binary protocol?
 {
   // Create the options string to connect to the servers.
   std::string options;
@@ -97,11 +98,22 @@ MemcachedStore::MemcachedStore(const std::list<std::string>& servers,
   {
     options += "--SERVER=" + (*i) + " ";
   }
-  options += "--BINARY-PROTOCOL";
-  //options += " --CONNECT-TIMEOUT=200";
+  options += "--SUPPORT-CAS";
+  if (binary)
+  {
+    options += " --BINARY-PROTOCOL";
+  }
+  options += " --CONNECT-TIMEOUT=200";
   options += " --POOL-MIN=" + to_string<int>(pool_size, std::dec) + " --POOL-MAX=" + to_string<int>(pool_size, std::dec);
 
   _pool = memcached_pool(options.c_str(), options.length());
+
+  if (_pool == NULL)
+  {
+    // LCOV_EXCL_START - need real memcached to test
+    LOG_ERROR("Failed to connected to memcached store: %s", options.c_str());
+    // LCOV_EXCL_STOP
+  }
 }
 
 MemcachedStore::~MemcachedStore()

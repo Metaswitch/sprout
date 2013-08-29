@@ -66,6 +66,8 @@ public:
   /// Returns a reference to the flow token.
   inline const std::string& token() const { return _token; };
 
+  void touch();
+
   std::string asserted_identity(pjsip_uri* preferred_identity);
 
   std::string default_identity();
@@ -96,6 +98,7 @@ private:
 
   FlowTable* _flow_table;
   pjsip_transport* _transport;
+  pjsip_tp_state_listener_key* _tp_state_listener_key;
   pj_sockaddr _remote_addr;
   std::string _token;
 
@@ -135,8 +138,11 @@ private:
   static const int EXPIRY_TIMER = 1;
   static const int IDLE_TIMER = 2;
 
-  /// Timeout used to delete idle non-reliable flows.
+  /// Timeout (in seconds) used to delete idle non-reliable flows.
   static const int IDLE_TIMEOUT = 600;
+
+  /// Grace period for contact expiry.
+  static const int EXPIRY_GRACE_INTERVAL = 30;
 };
 
 
