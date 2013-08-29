@@ -1516,18 +1516,21 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
   pj_status_t status = PJ_SUCCESS;
   std::string uri;
 
-  if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
+  if (enum_service != NULL)
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    if (is_user_numeric(user))
+    if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
     {
+      std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+      if (is_user_numeric(user))
+      {
+        uri = enum_service->lookup_uri_from_user(user, trail);
+      }
+    }
+    else
+    {
+      std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
-  }
-  else
-  {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
-    uri = enum_service->lookup_uri_from_user(user, trail);
   }
 
   if (!uri.empty())
@@ -1822,6 +1825,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   target* target = NULL;
+  pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
@@ -1849,6 +1853,27 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
 
+      if ((disposition == AsChainLink::Disposition::Complete) &&
+          (enum_service) &&
+          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+          (!is_uri_routeable(_req->msg->line.req.uri)))
+      {
+        // Request is targeted at this domain but URI is not currently
+        // routeable, so translate it to a routeable URI.
+        LOG_DEBUG("Translating URI");
+        status = translate_request_uri(_req, trail());
+
+        if (status != PJ_SUCCESS)
+        {
+          // An error occurred during URI translation.  This doesn't happen if
+          // there is no match, only if there is a match but there is an error
+          // performing the defined mapping.  We therefore reject the request
+          // with the not found status code and a specific reason phrase.
+          send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+          disposition = AsChainLink::Disposition::Stop;
+        }
+      }
+
       if (disposition == AsChainLink::Disposition::Complete)
       {
         if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
@@ -1860,9 +1885,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
           move_to_terminating_chain();
         }
 
-        // Do outgoing (terminating) half.
-        LOG_DEBUG("Terminating half");
-        disposition = handle_terminating(&target);
+          // Do outgoing (terminating) half.
+          LOG_DEBUG("Terminating half");
+          disposition = handle_terminating(&target);
       }
     }
     else
@@ -1975,50 +2000,27 @@ void UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
-  pj_status_t status;
-
-  if (!edge_proxy &&
-      (enum_service) &&
-      (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-      (!is_uri_routeable(_req->msg->line.req.uri)))
+  if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+      (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
   {
-    // Request is targeted at this domain but URI is not currently
-    // routeable, so translate it to a routeable URI.
-    LOG_DEBUG("Translating URI");
-    status = translate_request_uri(_req, trail());
+    // The URI has been translated to an off-net domain, but the user does
+    // not have a valid E.164 number that can be used to make off-net calls.
+    // Reject the call with a not found response code, which is about the
+    // most suitable for this case.
+    LOG_INFO("Rejecting off-net call from user without E.164 address");
+    send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
+    return AsChainLink::Disposition::Stop;
+  }
 
-    if (status != PJ_SUCCESS)
-    {
-      // An error occurred during URI translation.  This doesn't happen if
-      // there is no match, only if there is a match but there is an error
-      // performing the defined mapping.  We therefore reject the request
-      // with the not found status code and a specific reason phrase.
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-      return AsChainLink::Disposition::Stop;
-    }
-
-    if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
-    {
-      // The URI has been translated to an off-net domain, but the user does
-      // not have a valid E.164 number that can be used to make off-net calls.
-      // Reject the call with a not found response code, which is about the
-      // most suitable for this case.
-      LOG_INFO("Rejecting off-net call from user without E.164 address");
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-      return AsChainLink::Disposition::Stop;
-    }
-
-    // If the newly translated ReqURI indicates that we're the host of the
-    // target user, include ourselves as the terminating operator for
-    // billing.
-    pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-      pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
-      pcv->term_ioi = stack_data.home_domain;
-    } else if (pcv) {
-      pcv->term_ioi = pj_str("");
-    }
+  // If the newly translated ReqURI indicates that we're the host of the
+  // target user, include ourselves as the terminating operator for
+  // billing.
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+    pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+    pcv->term_ioi = stack_data.home_domain;
+  } else if (pcv) {
+    pcv->term_ioi = pj_str("");
   }
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
@@ -2779,10 +2781,6 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
 bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
-  static const pj_str_t STR_REASON = pj_str("Reason");
-  static const pj_str_t STR_SIP = pj_str("SIP");
-  static const pj_str_t STR_CAUSE = pj_str("cause");
-  static const pj_str_t STR_TEXT = pj_str("text");
   static const int MAX_HISTORY_INFOS = 5;
 
   // Default the code to 480 Temporarily Unavailable.
@@ -2816,55 +2814,44 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     cancel_pending_uac_tsx(code, true);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
+    // Add a Diversion header with the original request URI and the reason
+    // for the diversion.
+    std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _req->msg->line.req.uri);
+    div += ";reason=";
+    div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
+           (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+           (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
+           (code == 0) ? "unconditional" :
+           "unknown";
+    pj_str_t sdiv;
+    pjsip_generic_string_hdr* diversion =
+                    pjsip_generic_string_hdr_create(_req->pool,
+                                                    &STR_DIVERSION,
+                                                    pj_cstr(&sdiv, div.c_str()));
+    pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)diversion);
+
+    // Create or update a History-Info header for the old target.
+    if (prev_history_info_hdr == NULL)
+    {
+      prev_history_info_hdr = create_history_info_hdr(_req->msg->line.req.uri);
+      prev_history_info_hdr->index = pj_str("1");
+      pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)prev_history_info_hdr);
+    }
+
+    update_history_info_reason(((pjsip_name_addr*)(prev_history_info_hdr->uri))->uri, code);
+
     // Set up the new target URI.
     _req->msg->line.req.uri = target;
 
-    // Create a History-Info header.
-    pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
+    // Create a History-Info header for the new target.
+    pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target);
 
-    // Clone the URI and set up its parameters.
-    pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
-    if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
-    {
-      // Set up the Reason parameter - this is always "SIP".
-      pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
-      pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_REASON;
-      param->value = STR_SIP;
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
+    // Set up the index parameter.  This is the previous value suffixed with ".1".   
+    history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
+    history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
 
-      // Now add the cause parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_CAUSE;
-      char cause_text[4];
-      sprintf(cause_text, "%u", code);
-      pj_strdup2(_req->pool, &param->value, cause_text);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-
-      // Finally add the text parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_TEXT;
-      param->value = *pjsip_get_status_text(code);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-    }
-    pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
-    history_info_name_addr_uri->uri = history_info_uri;
-    history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
-
-    // Set up the index parameter.  This is "1" if it is the first request and
-    // the previous value suffixed with ".1" if not.
-    if (prev_history_info_hdr == NULL)
-    {
-      history_info_hdr->index = pj_str("1");
-    }
-    else
-    {
-      history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
-      history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
-    }
-    // Add the History-Info header to the request.
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
     // Kick off outgoing processing for the new request.  Continue the
@@ -2877,6 +2864,58 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   }
 
   return false;
+}
+
+
+pjsip_history_info_hdr* UASTransaction::create_history_info_hdr(pjsip_uri* target)
+{
+  // Create a History-Info header.
+  pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
+
+  // Clone the URI and set up its parameters.
+  pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
+  pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
+  history_info_name_addr_uri->uri = history_info_uri;
+  history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
+  
+  return history_info_hdr;
+}
+
+
+void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int code)
+{
+  static const pj_str_t STR_REASON = pj_str("Reason");
+  static const pj_str_t STR_SIP = pj_str("SIP");
+  static const pj_str_t STR_CAUSE = pj_str("cause");
+  static const pj_str_t STR_TEXT = pj_str("text");
+
+  if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
+  {
+    // Set up the Reason parameter - this is always "SIP".
+    pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
+    if (pj_list_empty(&history_info_sip_uri->other_param))
+    {
+      pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_REASON;
+      param->value = STR_SIP;
+
+      pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
+    
+      // Now add the cause parameter.
+      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_CAUSE;
+      char cause_text[4];
+      sprintf(cause_text, "%u", code);
+      pj_strdup2(_req->pool, &param->value, cause_text);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+
+      // Finally add the text parameter.
+      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_TEXT;
+      param->value = *pjsip_get_status_text(code);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+    }
+  }
 }
 
 
