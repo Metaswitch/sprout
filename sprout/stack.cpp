@@ -322,11 +322,20 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
 
-  if ((rx_msg_q.size() > 200) &&
+  if ((rx_msg_q.size() > 100) &&
       (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+      (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD) &&
       (rdata->msg_info.msg->line.req.method.id != PJSIP_OPTIONS_METHOD))
   {
-    // Discard non-OPTIONS requests if queue is too big.
+    // Respond statelessly with a 503 Service Unavailable, including a
+    // Retry-After header with a zero length timeout.
+    pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_SERVICE_UNAVAILABLE,
+                               NULL,
+                               (pjsip_hdr*)retry_after,
+                               NULL);
     return PJ_TRUE;
   }
 

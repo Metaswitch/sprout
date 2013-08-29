@@ -194,7 +194,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // the message through.
     LOG_DEBUG("Request authenticated successfully");
     return PJ_FALSE;
-
   }
   else
   {
@@ -286,6 +285,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       // @TODO - need more diagnostics here so we can identify and flag
       // attacks.
+
+      if (status == PJSIP_EAUTHACCNOTFOUND)
+      {
+        // Failed to find the account.  At the moment we don't distinguish between
+        // a genuine not found error from Homestead and some other error
+        // (ie. overload or connection failure).  For now return overload (503)
+        // for the purposes of stress testing.
+        LOG_ERROR("Reject request with %d status code", PJSIP_SC_SERVICE_UNAVAILABLE);
+        sc = PJSIP_SC_SERVICE_UNAVAILABLE;
+      }
 
       // Reject the request.
       PJUtils::respond_stateless(stack_data.endpt,
