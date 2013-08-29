@@ -103,9 +103,11 @@ void test_main_handle_signal(int xiSigNum)
 {
   int pid = getpid();
 
+#ifdef PR_SET_PTRACER
   // Allow children to debug this process
   // (because debugging is restricted under Ubuntu: search ptrace_scope).
   prctl(PR_SET_PTRACER, pid, 0, 0, 0);
+#endif
 
   // Explain we're recovering from a signal.
   printf("*** handling signal %d ***\n", xiSigNum);
