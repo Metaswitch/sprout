@@ -1479,18 +1479,21 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
   pj_status_t status = PJ_SUCCESS;
   std::string uri;
 
-  if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
+  if (enum_service != NULL)
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    if (is_user_numeric(user))
+    if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
     {
+      std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+      if (is_user_numeric(user))
+      {
+        uri = enum_service->lookup_uri_from_user(user, trail);
+      }
+    }
+    else
+    {
+      std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
-  }
-  else
-  {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
-    uri = enum_service->lookup_uri_from_user(user, trail);
   }
 
   if (!uri.empty())
