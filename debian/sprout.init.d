@@ -82,8 +82,8 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
-        memstore=127.0.0.1
         . /etc/clearwater/config
+        memstore=$local_ip
         [ -r /etc/clearwater/cluster_settings ] && . /etc/clearwater/cluster_settings
 
         # Set up defaults for user settings then pull in any overrides.
