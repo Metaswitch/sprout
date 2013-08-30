@@ -142,11 +142,8 @@ long HSSConnection::get_xml_object(const std::string& path,
 //  URIs in the associated_uris output parameter and the Ifcs object
 //  corresponding to each in the ifcs_map parameter.
 
-//  If we retrieve a valid document, we should always be able to
-//  populate associated_uris with at least one item. Callers should
-//  check whether associated_uris has been populated - if not, then we
-//  have either not found the subscriber, failed to communicate with
-//  the HSS, or received a document we cannot parse.
+// Returns the HTTP code from Homestead - callers should check that
+// this is 200 OK before relying on the output parameters.
 
 long HSSConnection::get_subscription_data(const std::string& public_user_identity,
                                           const std::string& private_user_identity,
