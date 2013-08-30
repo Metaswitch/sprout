@@ -178,6 +178,8 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
     _options += " --BINARY-PROTOCOL";
   }
   _options += " --CONNECT-TIMEOUT=200";
+
+  LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
 }
 
 
