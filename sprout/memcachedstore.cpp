@@ -89,8 +89,11 @@ MemcachedStore::MemcachedStore(const std::list<std::string>& servers, ///< list 
                                bool binary) :                         ///< use binary protocol?
   _binary(binary),
   _view(0),
-  _options()
+  _options(),
+  _vbucket_map(),
+  _vbuckets()
 {
+
   // Create the thread local key for the per thread data.
   pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
 
@@ -138,6 +141,11 @@ MemcachedStore::connection* MemcachedStore::get_connection()
       conn->st = NULL;
     }
     conn->st = memcached(_options.data(), _options.length());
+
+    // Set up the virtual buckets.
+    memcached_bucket_set(conn->st, _vbucket_map, NULL, _vbuckets, 1);
+
+    // Flag that we are in sync with the latest view.
     conn->view = _view;
   }
 
@@ -165,6 +173,7 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
 {
   ++_view;
   _options = "";
+  delete _vbucket_map;
 
   for (std::list<std::string>::const_iterator i = servers.begin();
        i != servers.end();
@@ -178,6 +187,13 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
     _options += " --BINARY-PROTOCOL";
   }
   _options += " --CONNECT-TIMEOUT=200";
+
+  _vbuckets = servers.size();
+  _vbucket_map = new uint32_t[_vbuckets];
+  for (uint32_t ii = 0; ii < _vbuckets; ++ii)
+  {
+    _vbucket_map[ii] = ii;
+  }
 
   LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
 }

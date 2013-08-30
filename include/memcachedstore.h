@@ -143,7 +143,8 @@ private:
   bool _binary;
   uint64_t _view;
   std::string _options;
-
+  uint32_t* _vbucket_map;
+  uint32_t _vbuckets;
 };
 
 } // namespace RegData
