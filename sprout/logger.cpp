@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <execinfo.h>
+#include <string.h>
 
 // Common STL includes.
 #include <cassert>
@@ -53,7 +54,6 @@
 #include <list>
 #include <queue>
 #include <string>
-
 
 #include "logger.h"
 
@@ -66,11 +66,14 @@ Logger::Logger() :
   pthread_mutex_init(&_lock, NULL);
 };
 
+
 Logger::Logger(const std::string& directory, const std::string& filename) :
   _flags(ADD_TIMESTAMPS),
   _last_hour(0),
   _rotate(true),
-  _fd(NULL)
+  _fd(NULL),
+  _discards(0),       
+  _saved_errno(0)             
 {
   pthread_mutex_init(&_lock, NULL);
   _prefix = directory + "/" + filename;
@@ -99,44 +102,94 @@ void Logger::gettime(struct timespec* ts)
   clock_gettime(CLOCK_REALTIME, ts);
 }
 
+
+/// Writes a log to the logfile, cycling or opening the log file when
+/// necessary.
 void Logger::write(const char* data)
 {
   // Writes logger output to a series of hourly files.
-  struct timespec ts;
-  gettime(&ts);
-  struct tm* dt = gmtime(&ts.tv_sec);
+  timestamp_t ts;
+  get_timestamp(ts);
 
-  // Take the lock before we operate on member variables.
   pthread_mutex_lock(&_lock);
 
-  // Convert the date/time into a rough number of hours since some base date.
-  // This doesn't have to be exact, but it does have to be monotonically
-  // increasing, so assume every year is a leap year.
-  int hour = dt->tm_year * 366 * 24 + dt->tm_yday * 24 + dt->tm_hour;
-  if (_rotate && ((hour > _last_hour) || (_fd == NULL)))
+  if ((_fd != NULL) ||
+      ((_discards % LOGFILE_CHECK_FREQUENCY) == 0))
   {
-    // Time to switch to a new log file.
-    if (_fd != NULL)
+    // We have a valid file handle, or it is time to try opening the file
+    // again.
+
+    // Convert the date/time into a rough number of hours since some base date.
+    // This doesn't have to be exact, but it does have to be monotonically
+    // increasing, so assume every year is a leap year.
+    int hour = ts.year * 366 * 24 + ts.yday * 24 + ts.hour;
+
+    if ((_rotate && (hour > _last_hour)) ||
+        (_fd == NULL))
     {
-      fclose(_fd);
+      // Open a new log file.
+      cycle_log_file(ts);
+      _last_hour = hour;
+
+      if ((_fd != NULL) &&
+          (_discards != 0))
+      {
+        // LCOV_EXCL_START Currently don't force fopen failures in UT
+        char discard_msg[100];
+        sprintf(discard_msg,
+                "Failed to open logfile (%d - %s), %d logs discarded", 
+                _saved_errno, ::strerror(_saved_errno), _discards);
+        write_log_file(discard_msg, ts);
+        _discards = 0;
+        _saved_errno = 0;
+        // LCOV_EXCL_STOP
+      }
     }
-    char fname[100];
-    sprintf(fname, "%s_%4.4d%2.2d%2.2d_%2.2d00.txt",
-            _prefix.c_str(),
-            (dt->tm_year + 1900),
-            (dt->tm_mon + 1),
-            dt->tm_mday,
-            dt->tm_hour);
-    _fd = fopen(fname, "a");
-    _last_hour = hour;
   }
 
+  if (_fd != NULL) 
+  {
+    // We have a valid log file open, so write the log.
+    write_log_file(data, ts);
+  }
+  else
+  {
+    // No valid log file, so count this as a discard.
+    // LCOV_EXCL_START Currently don't force fopen failures in UT
+    ++_discards;
+    // LCOV_EXCL_STOP
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+
+/// Gets a timestamp in the form required by the logger.
+void Logger::get_timestamp(timestamp_t& ts)
+{
+  struct timespec timespec;
+  gettime(&timespec);
+  struct tm* dt = gmtime(&timespec.tv_sec);
+  ts.year = dt->tm_year;
+  ts.mon = dt->tm_mon;
+  ts.mday = dt->tm_mday;
+  ts.hour = dt->tm_hour;
+  ts.min = dt->tm_min;
+  ts.sec = dt->tm_sec;
+  ts.msec = (int)(timespec.tv_nsec / 1000000);
+  ts.yday = dt->tm_yday;
+}
+
+
+/// Writes a log to the file with timestamp if configured.
+void Logger::write_log_file(const char *data, const timestamp_t& ts)
+{
   if (_flags & ADD_TIMESTAMPS)
   {
     char timestamp[100];
-    sprintf(timestamp, "%2.2d-%2.2d-%4.4d %2.2d:%2.2d:%2.2d.%3.3ld ",
-            dt->tm_mday, (dt->tm_mon+1), (dt->tm_year + 1900),
-            dt->tm_hour, dt->tm_min, dt->tm_sec, (ts.tv_nsec / 1000000));
+    sprintf(timestamp, "%2.2d-%2.2d-%4.4d %2.2d:%2.2d:%2.2d.%3.3d ",
+            ts.mday, (ts.mon+1), (ts.year + 1900),
+            ts.hour, ts.min, ts.sec, ts.msec);
     fputs(timestamp, _fd);
   }
 
@@ -147,9 +200,33 @@ void Logger::write(const char* data)
   {
     fflush(_fd);
   }
-
-  pthread_mutex_unlock(&_lock);
 }
+
+
+void Logger::cycle_log_file(const timestamp_t& ts)
+{
+  if (_fd != NULL)
+  {
+    fclose(_fd);
+  }
+  char fname[100];
+  sprintf(fname, "%s_%4.4d%2.2d%2.2d_%2.2d00.txt",
+          _prefix.c_str(),
+          (ts.year + 1900),
+          (ts.mon + 1),
+          ts.mday,
+          ts.hour);
+  _fd = fopen(fname, "a");
+
+  if (_fd == NULL) 
+  {
+    // Failed to open logfile, so save errno until we can log it.
+    // LCOV_EXCL_START Currently don't force fopen failures in UT
+    _saved_errno = errno;
+    // LCOV_EXCL_STOP
+  }
+}
+
 
 // LCOV_EXCL_START Only used in exceptional signal handlers - not hit in UT
 

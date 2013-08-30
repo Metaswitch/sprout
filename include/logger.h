@@ -66,12 +66,35 @@ public:
   virtual void backtrace(const char* data);
 
 private:
+  /// Encodes the time as needed by the logger.
+  typedef struct
+  {
+    int year;
+    int mon;
+    int mday;
+    int hour;
+    int min;
+    int sec;
+    int msec;      
+    int yday;
+  } timestamp_t;
+
+  void get_timestamp(timestamp_t& ts);
+  void write_log_file(const char* data, const timestamp_t& ts);
+  void cycle_log_file(const timestamp_t& ts);
+
   int _flags;
   std::string _prefix;
   int _last_hour;
   bool _rotate;
   FILE* _fd;
+  int _discards;
+  int _saved_errno;
   pthread_mutex_t _lock;
+
+  /// Defines how frequently (in terms of log attempts) we will try to 
+  /// open the log file if we failed to open it previously.
+  static const int LOGFILE_CHECK_FREQUENCY = 1000;
 };
 
 
