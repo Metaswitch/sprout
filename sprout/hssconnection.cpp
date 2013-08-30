@@ -166,7 +166,8 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   rapidxml::xml_node<>* sp = NULL;
 
-  if (http_code != 200) {
+  if (http_code != 200)
+  {
     // If get_xml_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.

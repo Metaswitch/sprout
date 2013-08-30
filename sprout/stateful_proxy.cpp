@@ -1255,7 +1255,8 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::map<std::string, Ifcs> ifc_map;
     long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
     info = {ifc_map[public_id], uris};
-    if (http_code == 200) {
+    if (http_code == 200)
+    {
       cached_hss_data[public_id] = info;
       return true;
     }
@@ -1269,7 +1270,8 @@ bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std:
 {
   HSSCallInformation data;
   bool success = get_data_from_hss(public_id, data, trail);
-  if (success) {
+  if (success)
+  {
     uris = data.uris;
   }
   return success;
@@ -1280,7 +1282,8 @@ bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId
 {
   HSSCallInformation data; 
   bool success = get_data_from_hss(public_id, data, trail);
-  if (success) {
+  if (success)
+  {
     ifcs = data.ifcs;
   }
   return success;
@@ -1876,7 +1879,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
           // again.  The served user changes here.
           LOG_DEBUG("Originating AS chain complete, move to terminating chain");
           bool success = move_to_terminating_chain();
-          if (!success) {
+          if (!success)
+          {
             LOG_INFO("Reject request with 404 due to failed move to terminating chain");
             send_response(PJSIP_SC_NOT_FOUND);
             delete target;
@@ -2010,7 +2014,8 @@ bool UASTransaction::move_to_terminating_chain()
   Ifcs ifcs;
   bool success = lookup_ifcs(served_user, ifcs, trail());
 
-  if (success) {
+  if (success)
+  {
     _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
   }
   return success;
@@ -2061,9 +2066,12 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
     // billing.
     pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
       pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri))
+    {
       pcv->term_ioi = stack_data.home_domain;
-    } else if (pcv) {
+    }
+    else if (pcv)
+    {
       pcv->term_ioi = pj_str("");
     }
   }
