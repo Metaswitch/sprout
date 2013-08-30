@@ -55,10 +55,11 @@ public:
   HttpConnection(const std::string& server, bool assertUser, int sasEventBase, const std::string& statName);
   virtual ~HttpConnection();
 
-  virtual bool get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
+  virtual long get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
 
 private:
   CURL* get_curl_handle();
+  virtual long CURLcode_to_long(CURLcode code);
 
   const std::string _server;
   const bool _assertUser;

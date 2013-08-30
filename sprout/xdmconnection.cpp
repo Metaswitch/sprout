@@ -74,6 +74,8 @@ bool XDMConnection::get_simservs(const std::string& user,
                                  const std::string& password,
                                  SAS::TrailId trail)
 {
-  return _http->get("/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml", xml_data, user, trail);
+  std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
+  long http_code = _http->get(url, xml_data, user, trail);
+  return (http_code == 200);
 }
 
