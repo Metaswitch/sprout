@@ -154,12 +154,6 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
                                           std::vector<std::string>& associated_uris,
                                           SAS::TrailId trail)
 {
-  if (public_user_identity.empty())
-  {
-    LOG_ERROR("Attempted to get data from the HSS without providing a public ID!");
-    return 400;
-  }
-
   std::string path = "/impu/" +
                      Utils::url_escape(public_user_identity);
 

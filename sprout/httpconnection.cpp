@@ -298,11 +298,14 @@ long HttpConnection::CURLcode_to_long(CURLcode code)
   {
   case CURLE_OK:
     return 200;
+  // LCOV_EXCL_START
   case CURLE_URL_MALFORMAT:
   case CURLE_NOT_BUILT_IN:
     return 400;  // Bad Request
+  // LCOV_EXCL_STOP
   case CURLE_REMOTE_FILE_NOT_FOUND:
     return 404;
+  // LCOV_EXCL_START
   case CURLE_COULDNT_RESOLVE_PROXY:
   case CURLE_COULDNT_RESOLVE_HOST:
   case CURLE_COULDNT_CONNECT:
@@ -317,6 +320,7 @@ long HttpConnection::CURLcode_to_long(CURLcode code)
       return http_code; }
   default:
     return 500;  // Internal Server Error
+  // LCOV_EXCL_STOP
   }
 }
     
@@ -445,7 +449,7 @@ long HttpConnection::get(const std::string& path,       //< Absolute path to req
   long http_code = CURLcode_to_long(rc);
   if ((rc != CURLE_OK) && (rc != CURLE_REMOTE_FILE_NOT_FOUND))
   {
-    LOG_ERROR("cURL failure with cURL error code %d (see man 3 libcurl-errors) and HTTP error code %ld", (int)rc, http_code);
+    LOG_ERROR("cURL failure with cURL error code %d (see man 3 libcurl-errors) and HTTP error code %ld", (int)rc, http_code);  // LCOV_EXCL_LINE
   }
   return http_code;
 }

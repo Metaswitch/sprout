@@ -1254,7 +1254,7 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-    HSSCallInformation info = {ifc_map[public_id], uris};
+    info = {ifc_map[public_id], uris};
     if (http_code == 200) {
       cached_hss_data[public_id] = info;
       return true;
@@ -1847,10 +1847,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 
       if (!rc)
       {
-	LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
-	send_response(PJSIP_SC_NOT_FOUND);
-	delete target;
-	return;
+        LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
+        send_response(PJSIP_SC_NOT_FOUND);
+        delete target;
+        return;
       };
 
       // Add ourselves as orig-IOI if appropriate.
@@ -1858,10 +1858,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       // Here we rely on the served_user not being populated unless the user
       // is locally hosted.  This is policed in served_user_from_msg().
       pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-	pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
       if (pcv && !_as_chain_link.served_user().empty())
       {
-	pcv->orig_ioi = stack_data.home_domain;
+        pcv->orig_ioi = stack_data.home_domain;
       }
 
       // Do incoming (originating) half.
@@ -1869,28 +1869,28 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 
       if (disposition == AsChainLink::Disposition::Complete)
       {
-	if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
+        if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
         {
-	  // We've completed the originating half and we don't yet have a
-	  // terminating chain: switch to terminating and look up iFCs
-	  // again.  The served user changes here.
-	  LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-	  bool success = move_to_terminating_chain();
-	  if (!success) {
-	    LOG_INFO("Reject request with 404 due to failed move to terminating chain");
-	    send_response(PJSIP_SC_NOT_FOUND);
-	    delete target;
-	    return;
-	  }
-	}
-	// Do outgoing (terminating) half.
-	LOG_DEBUG("Terminating half");
-	disposition = handle_terminating(&target);
-	}
+          // We've completed the originating half and we don't yet have a
+          // terminating chain: switch to terminating and look up iFCs
+          // again.  The served user changes here.
+          LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+          bool success = move_to_terminating_chain();
+          if (!success) {
+            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+            send_response(PJSIP_SC_NOT_FOUND);
+            delete target;
+            return;
+          }
+        }
+        // Do outgoing (terminating) half.
+        LOG_DEBUG("Terminating half");
+        disposition = handle_terminating(&target);
       }
+    }
     else
     {
-      // Request is not target at this domain.  If the serving state is set
+      // Request is not targeted at this domain.  If the serving state is set
       // we need to release the original dialog as otherwise we may leak an
       // AsChain.
       if (serving_state.is_set())
@@ -1938,10 +1938,10 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 
         _as_chain_link.release();
         success = lookup_ifcs(served_user, ifcs, trail());
-	if (success)
-	{
-	  _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
-	}
+        if (success)
+        {
+          _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+        }
       }
     }
     else
@@ -3222,7 +3222,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
       if (!uris.empty())
       {
-	RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
       }
     }
   }
