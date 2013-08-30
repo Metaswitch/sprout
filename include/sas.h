@@ -176,6 +176,12 @@ private:
 
     // Socket for the connection.
     int _sock;
+
+    /// Send timeout for the socket in seconds.
+    static const int SEND_TIMEOUT = 30;
+
+    /// Maximum depth of SAS message queue.
+    static const int MAX_MSG_QUEUE = 1000;
   };
 
   static void write_hdr(std::string& s, uint16_t msg_length, uint8_t msg_type);
