@@ -88,9 +88,9 @@ MemcachedStore::MemcachedStore(const std::list<std::string>& servers, ///< list 
                                int pool_size,                         ///< size of pool (used as init and max)
                                bool binary) :                         ///< use binary protocol?
   _binary(binary),
+  _replicas(2),
   _view(0),
   _options(),
-  _vbucket_map(),
   _vbuckets()
 {
 
@@ -115,56 +115,8 @@ MemcachedStore::~MemcachedStore()
   }
 }
 
+
 // LCOV_EXCL_START - need real memcached to test
-
-
-/// Gets a connection to the memcached cluster(s).
-MemcachedStore::connection* MemcachedStore::get_connection()
-{
-  MemcachedStore::connection* conn = (connection*)pthread_getspecific(_thread_local);
-  if (conn == NULL)
-  {
-    // Create a new connection structure for this thread.
-    conn = new MemcachedStore::connection;
-    pthread_setspecific(_thread_local, conn);
-    conn->st = NULL;
-    conn->view = 0;
-  }
-
-  if (conn->view != _view)
-  {
-    // Either the view has changed or has not yet been set up, so create a
-    // new memcached_st.
-    if (conn->st != NULL)
-    {
-      memcached_free(conn->st);
-      conn->st = NULL;
-    }
-    conn->st = memcached(_options.data(), _options.length());
-
-    // Set up the virtual buckets.
-    memcached_bucket_set(conn->st, _vbucket_map, NULL, _vbuckets, 1);
-
-    // Flag that we are in sync with the latest view.
-    conn->view = _view;
-  }
-
-  return conn;
-}
-
-
-/// Called to clean up the thread local data for a thread using the MemcachedStore class.
-void MemcachedStore::cleanup_connection(void* p)
-{
-  MemcachedStore::connection* conn = (MemcachedStore::connection*)p;
-
-  if (conn->st != NULL)
-  {
-    memcached_free(conn->st);
-  }
-
-  delete conn;
-}
 
 
 /// Set up a new view of the memcached cluster(s).  The view determines
@@ -173,7 +125,12 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
 {
   ++_view;
   _options = "";
-  delete _vbucket_map;
+  for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
+  {
+    delete _vbucket_map[ii];
+  }
+
+  _servers = servers.size();
 
   for (std::list<std::string>::const_iterator i = servers.begin();
        i != servers.end();
@@ -188,14 +145,95 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
   }
   _options += " --CONNECT-TIMEOUT=200";
 
-  _vbuckets = servers.size();
-  _vbucket_map = new uint32_t[_vbuckets];
-  for (uint32_t ii = 0; ii < _vbuckets; ++ii)
+  LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
+
+  // Work out how many active replicas we have for each bucket.
+  int active_replicas = _replicas;
+  if (active_replicas > _servers)
   {
-    _vbucket_map[ii] = ii;
+    active_replicas = _servers;
+  }
+  LOG_DEBUG("%d active replicas", active_replicas);
+
+  _vbucket_map.resize(active_replicas);
+
+  // Set up the primary vbucket map.  Allow (active_replicas - 1) extra entries
+  // so we can use the same array for all replicas.
+  _vbuckets = NUM_VBUCKETS;
+  _vbucket_map[0] = new uint32_t[_vbuckets + active_replicas - 1];
+  LOG_DEBUG("Setting up primary vbucket_map");
+  for (size_t ii = 0; ii < _vbuckets + active_replicas - 1; ++ii)
+  {
+    _vbucket_map[0][ii] = ii % _servers;
   }
 
-  LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
+  // Set up the replica vbucket maps if there are enough servers.
+  for (int jj = 1; jj < active_replicas; ++jj)
+  {
+    LOG_DEBUG("Setting up vbucket_map for replica %d", jj);
+    _vbucket_map[jj] = &_vbucket_map[0][jj];
+  }
+
+}
+
+
+/// Gets a connection to the memcached cluster(s).
+MemcachedStore::connection* MemcachedStore::get_connection()
+{
+  MemcachedStore::connection* conn = (connection*)pthread_getspecific(_thread_local);
+  if (conn == NULL)
+  {
+    // Create a new connection structure for this thread.
+    conn = new MemcachedStore::connection;
+    pthread_setspecific(_thread_local, conn);
+    conn->view = 0;
+  }
+
+  if (conn->view != _view)
+  {
+    // Either the view has changed or has not yet been set up, so create a
+    // new memcached_st.
+    LOG_DEBUG("Set up new view %d for thread", _view);
+    for (size_t ii = 0; ii < conn->st.size(); ++ii)
+    {
+      memcached_free(conn->st[ii]);
+      conn->st[ii] = NULL;
+    }
+    conn->st.resize(_vbucket_map.size());
+
+    for (size_t ii = 0; ii < conn->st.size(); ++ii)
+    {
+      // Create a new memcached_st.
+      LOG_DEBUG("Calling memcached - options = %s (%d)", _options.c_str(), _options.length());
+      conn->st[ii] = memcached(_options.c_str(), _options.length());
+      LOG_DEBUG("memcached returned");
+
+      // Set up the virtual buckets.
+      LOG_DEBUG("Calling memcached_bucket_set");
+      memcached_bucket_set(conn->st[ii], _vbucket_map[ii], NULL, _vbuckets, 1);
+
+      LOG_DEBUG("Set up memcached_st and vbucket for replica %d", ii);
+    }
+
+    // Flag that we are in sync with the latest view.
+    conn->view = _view;
+  }
+
+  return conn;
+}
+
+
+/// Called to clean up the thread local data for a thread using the MemcachedStore class.
+void MemcachedStore::cleanup_connection(void* p)
+{
+  MemcachedStore::connection* conn = (MemcachedStore::connection*)p;
+
+  for (size_t ii = 0; ii < conn->st.size(); ++ii)
+  {
+    memcached_free(conn->st[ii]);
+  }
+
+  delete conn;
 }
 
 
@@ -206,50 +244,140 @@ void MemcachedStore::flush_all()
   connection* conn = get_connection();
 
   // Wipe out the contents of the servers immediately.
-  memcached_flush(conn->st, 0);
+  memcached_flush(conn->st[0], 0);
 }
 
 
 /// Retrieve the AoR data for a given SIP URI, creating it if there isn't
-/// any already, and returning NULL if we can't get a connection.
+/// any already.
 AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
                                   ///< the SIP URI
 {
-  memcached_return_t rc;
+  memcached_return_t rc = MEMCACHED_SUCCESS;
   MemcachedAoR* aor_data = NULL;
+  memcached_result_st result;
+  std::vector<bool> read_repair(_replicas);
+  size_t failed_replicas = 0;
 
   connection* conn = get_connection();
 
   const char* key_ptr = aor_id.data();
   const size_t key_len = aor_id.length();
-  rc = memcached_mget(conn->st, &key_ptr, &key_len, 1);
 
-  if (memcached_success(rc))
+  // Read from all replicas until we get a positive result.
+  size_t ii;
+  for (ii = 0; ii < conn->st.size(); ++ii)
   {
-    memcached_result_st result;
-    memcached_result_create(conn->st, &result);
-    memcached_fetch_result(conn->st, &result, &rc);
+    LOG_DEBUG("Attempt to read from replica %d", ii);
+    rc = memcached_mget(conn->st[ii], &key_ptr, &key_len, 1);
 
     if (memcached_success(rc))
     {
-      aor_data = deserialize_aor(std::string(memcached_result_value(&result), memcached_result_length(&result)));
-      aor_data->set_cas(memcached_result_cas(&result));
+      memcached_result_create(conn->st[ii], &result);
+      memcached_fetch_result(conn->st[ii], &result, &rc);
+    }
+
+    if (memcached_success(rc))
+    {
+      // Found a record, so exit
+      LOG_DEBUG("Found record on replica %d", ii);
+      break;
+    }
+    else if (rc == MEMCACHED_NOTFOUND)
+    {
+      // Failed to find a record on an active replica, so flag that we may
+      // need to do a read repair to this node.
+      LOG_DEBUG("Replica %d returned not_found", ii);
+      read_repair[ii] = true;
       memcached_result_free(&result);
-      int now = time(NULL);
-      expire_bindings(aor_data, now);
     }
     else
     {
-      // AoR does not exist, so create it.
-      aor_data = new MemcachedAoR();
+      // Error from this node, so consider it inactive.
+      LOG_DEBUG("Replica %d returned error %d (%s)", ii, rc, memcached_strerror(conn->st[ii], rc));
+      ++failed_replicas;
     }
+  }
+
+  if (memcached_success(rc))
+  {
+    // Deserialize the result and expire any bindings that are out of date.
+    LOG_DEBUG("Deserialize record");
+    aor_data = deserialize_aor(std::string(memcached_result_value(&result), memcached_result_length(&result)));
+    aor_data->set_cas(memcached_result_cas(&result));
+    int now = time(NULL);
+    int max_expires = expire_bindings(aor_data, now);
+
+    // Do read of any nodes that didn't find the record.
+    bool first_repair = true;
+    for (size_t jj = 0; jj < ii; ++jj)
+    {
+      if (read_repair[jj])
+      {
+        LOG_DEBUG("Do read repair on replica %d", jj);
+        if (first_repair)
+        {
+          LOG_DEBUG("First repair replica, so must do synchronous add");
+          memcached_return_t repair_rc;
+          repair_rc = memcached_add(conn->st[jj], key_ptr, key_len, memcached_result_value(&result), memcached_result_length(&result), max_expires, 0);
+          if (memcached_success(repair_rc))
+          {
+            // Read repair worked, but we have to do another read to get the
+            // CAS value on the primary server.
+            LOG_DEBUG("Read repair on replica %d successful", jj);
+            repair_rc = memcached_mget(conn->st[jj], &key_ptr, &key_len, 1);
+            if (memcached_success(repair_rc))
+            {
+              memcached_result_st repaired_result;
+              memcached_result_create(conn->st[jj], &repaired_result);
+              memcached_fetch_result(conn->st[jj], &repaired_result, &repair_rc);
+              if (memcached_success(repair_rc))
+              {
+                aor_data->set_cas(memcached_result_cas(&result));
+              }
+              memcached_result_free(&repaired_result);
+            }
+
+            if (!memcached_success(repair_rc))
+            {
+              // Failed to read data after a successful read repair.  There's
+              // not much we can do about this error - it will likely mean a
+              // subsequent write will fail because the CAS value will be
+              // wrong, but the app should then retry.
+              LOG_WARNING("Failed to read data after successful read repair");
+            }
+
+            first_repair = true;
+          }
+        }
+        else
+        {
+          // Not the first read repair, so can just do the add asynchronously
+          // on a best efforts basis.
+          LOG_DEBUG("Not first repair replica, so do asynchronous add");
+          memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 1);
+          memcached_add(conn->st[jj], key_ptr, key_len, memcached_result_value(&result), memcached_result_length(&result), max_expires, 0);
+          memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 0);
+        }
+      }
+    }
+
+    // Free the result.
+    memcached_result_free(&result);
+  }
+  else if (failed_replicas < conn->st.size())
+  {
+    // At least one replica returned NOT_FOUND, so return an empty aor_data
+    // record
+    LOG_DEBUG("At least one replica returned not found, so return empty record");
+    aor_data = new MemcachedAoR();
   }
   else
   {
-    // memcached_mget failed, so log error.
-    LOG_ERROR("memcached_mget command failed, rc = %d (%s)",
-              rc,
-              memcached_strerror(conn->st, rc));
+    // All replicas returned an error, so return no data record and log the
+    // error.
+    LOG_ERROR("Failed to read AoR data for %s from %d replicas",
+              aor_id.c_str(), conn->st.size());
   }
 
   return (AoR*)aor_data;
@@ -265,7 +393,7 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
                                   AoR* data)
                                   ///< the data to store
 {
-  memcached_return_t rc;
+  memcached_return_t rc = MEMCACHED_SUCCESS;
   MemcachedAoR* aor_data = (MemcachedAoR*)data;
 
   connection* conn = get_connection();
@@ -278,26 +406,58 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
   int now = time(NULL);
   int max_expires = expire_bindings(aor_data, now);
   std::string value = serialize_aor(aor_data);
-  if (aor_data->get_cas() == 0)
+
+  // First try to write the primary data record to the first responding
+  // server.
+  size_t ii;
+  for (ii = 0; ii < conn->st.size(); ++ii)
   {
-    // New record, so attempt to add.  This will fail if someone else
-    // gets there first.
-    rc = memcached_add(conn->st, aor_id.data(), aor_id.length(), value.data(), value.length(), max_expires, 0);
+    LOG_DEBUG("Attempt conditional write to replica %d", ii);
+    if (aor_data->get_cas() == 0)
+    {
+      // New record, so attempt to add.  This will fail if someone else
+      // gets there first.
+      rc = memcached_add(conn->st[ii], aor_id.data(), aor_id.length(), value.data(), value.length(), max_expires, 0);
+    }
+    else
+    {
+      // This is an update to an existing record, so use memcached_cas
+      // to make sure it is atomic.
+      rc = memcached_cas(conn->st[ii], aor_id.data(), aor_id.length(), value.data(), value.length(), max_expires, 0, aor_data->get_cas());
+    }
+
+    if (memcached_success(rc))
+    {
+      LOG_DEBUG("Conditional write succeeded to replica %d", ii);
+      break;
+    }
+    else
+    {
+      LOG_DEBUG("memcached_%s command failed, rc = %d (%s), expiry = %d",
+                (aor_data->get_cas() == 0) ? "add" : "cas",
+                rc,
+                memcached_strerror(conn->st[ii], rc),
+                max_expires - now);
+    }
   }
-  else
+
+  if (ii < conn->st.size())
   {
-    // This is an update to an existing record, so use memcached_cas
-    // to make sure it is atomic.
-    rc = memcached_cas(conn->st, aor_id.data(), aor_id.length(), value.data(), value.length(), max_expires, 0, aor_data->get_cas());
+    // Write must have succeeded, so write unconditionally (and asynchronously)
+    // to the replicas.
+    for (size_t jj = ii + 1; jj < conn->st.size(); ++jj)
+    {
+      LOG_DEBUG("Attempt unconditional write to replica %d", jj);
+      memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 1);
+      memcached_set(conn->st[jj], aor_id.data(), aor_id.length(), value.data(), value.length(), max_expires, 0);
+      memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 0);
+    }
   }
 
   if (!memcached_success(rc))
   {
-    LOG_ERROR("memcached_%s command failed, rc = %d (%s), expiry = %d",
-              (aor_data->get_cas() == 0) ? "add" : "cas",
-              rc,
-              memcached_strerror(conn->st, rc),
-              max_expires - now);
+    LOG_ERROR("Failed to write AoR data for %s to %d replicas",
+              aor_id.c_str(), conn->st.size());
   }
 
   return memcached_success(rc);

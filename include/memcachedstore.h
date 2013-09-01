@@ -44,6 +44,7 @@
 #define MEMCACHEDSTORE_H__
 
 #include <sstream>
+#include <vector>
 
 extern "C" {
 #include <libmemcached/memcached.h>
@@ -119,7 +120,7 @@ private:
   typedef struct connection
   {
     uint64_t view;
-    memcached_st* st;
+    std::vector<memcached_st*> st;
   } connection;
 
   connection* get_connection();
@@ -140,11 +141,19 @@ private:
   static MemcachedAoR* deserialize_aor(const std::string& s);
 
   pthread_key_t _thread_local;
+
   bool _binary;
+  int _replicas;
+
   uint64_t _view;
+
+  int _servers;
   std::string _options;
-  uint32_t* _vbucket_map;
+
+  static const int NUM_VBUCKETS = 256;
+
   uint32_t _vbuckets;
+  std::vector<uint32_t*> _vbucket_map;
 };
 
 } // namespace RegData
