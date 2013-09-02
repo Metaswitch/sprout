@@ -126,6 +126,7 @@ extern "C" {
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"
+#include "dialog_tracker.hpp"
 
 static RegData::Store* store;
 
@@ -141,6 +142,7 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
+static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
 static HSSConnection* hss;
 
@@ -2319,6 +2321,9 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
 {
   enter_context();
 
+  bool is_client = determine_source(_tsx->transport, _tsx->addr);
+  dialog_tracker->on_tsx_state(_req, _tsx, event, is_client);
+
   if (_tsx->state == PJSIP_TSX_STATE_COMPLETED)
   {
     // UAS transaction has completed, so do any transaction completion
@@ -3332,6 +3337,9 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     // Create a flow table object to manage the client flow records.
     flow_table = new FlowTable;
 
+    // Create a dialog tracker to count dialogs on each flow
+    dialog_tracker = new DialogTracker(flow_table);
+
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
     pool_target.host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
@@ -3399,7 +3407,11 @@ void destroy_stateful_proxy()
     delete upstream_conn_pool; upstream_conn_pool = NULL;
 
     // Destroy the flow table.
-    delete flow_table; flow_table = NULL;
+    delete flow_table;
+    flow_table = NULL;
+
+    delete dialog_tracker;
+    dialog_tracker = NULL;
   }
   else
   {
