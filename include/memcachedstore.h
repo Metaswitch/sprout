@@ -146,6 +146,7 @@ private:
   int _replicas;
 
   uint64_t _view;
+  pthread_mutex_t _view_lock;
 
   int _servers;
   std::string _options;

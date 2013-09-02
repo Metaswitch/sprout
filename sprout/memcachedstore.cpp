@@ -72,6 +72,7 @@ RegData::Store* create_memcached_store(const std::list<std::string>& servers,
   return new MemcachedStore(servers, connections, binary);
 }
 
+
 /// Destroy a store object which used the memcached implementation.
 void destroy_memcached_store(RegData::Store* store)
 {
@@ -93,9 +94,11 @@ MemcachedStore::MemcachedStore(const std::list<std::string>& servers, ///< list 
   _options(),
   _vbuckets()
 {
-
   // Create the thread local key for the per thread data.
   pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
+
+  // Create the lock for protecting the current view.
+  pthread_mutex_init(&_view_lock, NULL);
 
   // Set up the initial view of the servers.
   new_view(servers);
@@ -113,6 +116,8 @@ MemcachedStore::~MemcachedStore()
     pthread_setspecific(_thread_local, NULL);
     cleanup_connection(conn);
   }
+
+  pthread_mutex_destroy(&_view_lock);
 }
 
 
@@ -123,6 +128,8 @@ MemcachedStore::~MemcachedStore()
 /// how data is distributed around the cluster.
 void MemcachedStore::new_view(const std::list<std::string>& servers)
 {
+  pthread_mutex_lock(&_view_lock);
+
   ++_view;
   _options = "";
   for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
@@ -174,6 +181,7 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
     _vbucket_map[jj] = &_vbucket_map[0][jj];
   }
 
+  pthread_mutex_unlock(&_view_lock);
 }
 
 
@@ -193,6 +201,8 @@ MemcachedStore::connection* MemcachedStore::get_connection()
   {
     // Either the view has changed or has not yet been set up, so create a
     // new memcached_st.
+    pthread_mutex_lock(&_view_lock);
+
     LOG_DEBUG("Set up new view %d for thread", _view);
     for (size_t ii = 0; ii < conn->st.size(); ++ii)
     {
@@ -216,6 +226,8 @@ MemcachedStore::connection* MemcachedStore::get_connection()
 
     // Flag that we are in sync with the latest view.
     conn->view = _view;
+
+    pthread_mutex_unlock(&_view_lock);
   }
 
   return conn;
