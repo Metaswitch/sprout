@@ -1064,6 +1064,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       {
         LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
       }
+      if (src_flow != NULL)
+      {
+        src_flow->dec_ref();
+      }
       return PJ_ENOTFOUND;
     }
 
