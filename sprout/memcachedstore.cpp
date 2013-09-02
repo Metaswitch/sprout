@@ -203,13 +203,12 @@ MemcachedStore::connection* MemcachedStore::get_connection()
 
     for (size_t ii = 0; ii < conn->st.size(); ++ii)
     {
+      LOG_DEBUG("Setting up replica %d", ii);
+
       // Create a new memcached_st.
-      LOG_DEBUG("Calling memcached - options = %s (%d)", _options.c_str(), _options.length());
       conn->st[ii] = memcached(_options.c_str(), _options.length());
-      LOG_DEBUG("memcached returned");
 
       // Set up the virtual buckets.
-      LOG_DEBUG("Calling memcached_bucket_set");
       memcached_bucket_set(conn->st[ii], _vbucket_map[ii], NULL, _vbuckets, 1);
 
       LOG_DEBUG("Set up memcached_st and vbucket for replica %d", ii);
@@ -333,7 +332,8 @@ AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
               memcached_fetch_result(conn->st[jj], &repaired_result, &repair_rc);
               if (memcached_success(repair_rc))
               {
-                aor_data->set_cas(memcached_result_cas(&result));
+                LOG_DEBUG("Updating CAS value on AoR record from %ld to %ld", aor_data->get_cas(), memcached_result_cas(&repaired_result));
+                aor_data->set_cas(memcached_result_cas(&repaired_result));
               }
               memcached_result_free(&repaired_result);
             }
@@ -412,7 +412,7 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
   size_t ii;
   for (ii = 0; ii < conn->st.size(); ++ii)
   {
-    LOG_DEBUG("Attempt conditional write to replica %d", ii);
+    LOG_DEBUG("Attempt conditional write to replica %d, CAS = %ld", ii, aor_data->get_cas());
     if (aor_data->get_cas() == 0)
     {
       // New record, so attempt to add.  This will fail if someone else
