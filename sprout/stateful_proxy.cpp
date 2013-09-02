@@ -653,15 +653,13 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   return PJ_SUCCESS;
 }
 
-
-/// Checks whether the request was received from a trusted source.
-static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
+static SourceType determine_source(pjsip_rx_data* rdata)
 {
   if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
   {
     // Request received on trusted port.
     LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
-    return PJ_TRUE;
+    return trustedPort;
   }
 
   LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
@@ -671,24 +669,37 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
       (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
   {
     LOG_DEBUG("Request received on configured SIP trunk");
+    return configuredTrunk;
+  }
+
+  return client;
+}
+
+/// Checks whether the request was received from a trusted source.
+static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
+{
+  SourceType source = determine_source(rdata);
+  if ((source == trustedPort) || (source == configuredTrunk))
+  {
     return PJ_TRUE;
   }
-
-  Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
-                                         &rdata->pkt_info.src_addr);
-  if (src_flow != NULL)
+  else if (source == client)
   {
-    // Request received on a known flow, so check it is authenticated.
-    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+    Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
+                                         &rdata->pkt_info.src_addr);
+    if (src_flow != NULL)
     {
-      LOG_DEBUG("Request received on authenticated client flow.");
+      // Request received on a known flow, so check it is authenticated.
+      pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+      {
+        LOG_DEBUG("Request received on authenticated client flow.");
+        src_flow->dec_ref();
+        return PJ_TRUE;
+      }
       src_flow->dec_ref();
-      return PJ_TRUE;
     }
-    src_flow->dec_ref();
   }
-
   return PJ_FALSE;
 }
 
