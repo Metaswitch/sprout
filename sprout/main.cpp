@@ -46,6 +46,7 @@ extern "C" {
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <semaphore.h>
 
 // Common STL includes.
 #include <cassert>
@@ -477,7 +478,7 @@ void on_stack_quiesced()
   quit_flag = PJ_TRUE;
 }
 
-void quiesce_unquiesce_thread_func(void *_);
+void *quiesce_unquiesce_thread_func(void *_)
 {
   pj_bool_t curr_quiescing = quiescing;
   pj_bool_t new_quiescing;
@@ -493,7 +494,7 @@ void quiesce_unquiesce_thread_func(void *_);
     // Only act if the quiescing state has changed.
     if (curr_quiescing != new_quiescing)
     {
-      curr_quiescing = new_quiescing
+      curr_quiescing = new_quiescing;
 
       if (new_quiescing) {
         quiesce_stack(on_stack_quiesced);
@@ -502,6 +503,8 @@ void quiesce_unquiesce_thread_func(void *_);
       }
     }
   }
+
+  return NULL;
 }
 
 
