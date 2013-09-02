@@ -653,20 +653,20 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   return PJ_SUCCESS;
 }
 
-static SourceType determine_source(pjsip_rx_data* rdata)
+static SourceType determine_source(pjsip_transport* transport, pj_sockaddr addr)
 {
-  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  if (transport->local_name.port == stack_data.trusted_port)
   {
     // Request received on trusted port.
-    LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
+    LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
     return trustedPort;
   }
 
-  LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
+  LOG_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
 
   // Request received on untrusted port, so see if it came over a trunk.
   if ((ibcf) &&
-      (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+      (ibcf_trusted_peer(addr)))
   {
     LOG_DEBUG("Request received on configured SIP trunk");
     return configuredTrunk;
@@ -678,7 +678,7 @@ static SourceType determine_source(pjsip_rx_data* rdata)
 /// Checks whether the request was received from a trusted source.
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 {
-  SourceType source = determine_source(rdata);
+  SourceType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
   if ((source == trustedPort) || (source == configuredTrunk))
   {
     return PJ_TRUE;
