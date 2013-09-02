@@ -822,6 +822,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
+      src_flow->dec_ref();
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
@@ -917,6 +918,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // Cannot have more than two preferred identities.
             LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
             PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            src_flow->dec_ref();
             return PJ_ENOTFOUND;
           }
           else if (identities.size() == 0)
@@ -943,6 +945,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // Preferred identity must be sip, sips or tel URI.
               LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
@@ -970,6 +973,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // tel URI
               LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
