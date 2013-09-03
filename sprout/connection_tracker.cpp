@@ -34,13 +34,18 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include <cassert>
+
+#include "log.h"
+#include "utils.h"
+#include "pjutils.h"
 #include "connection_tracker.h"
 
 ConnectionTracker::ConnectionTracker() :
   _connections(),
   _quiescing(PJ_FALSE)
 {
-  pthread_mutex_init(&_lock);
+  pthread_mutex_init(&_lock, NULL);
 }
 
 
@@ -96,7 +101,7 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
   {
     pthread_mutex_lock(&_lock);
 
-    if (_connections.find(tp) != set::end)
+    if (_connections.find(tp) != _connections.end())
     {
       // New connection. Add it to the connections set, and register a state
       // listener so we know when it gets destroyed.

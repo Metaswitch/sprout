@@ -46,10 +46,7 @@ extern "C" {
 }
 
 // Common STL includes.
-#include <cassert>
-#include <map>
-#include <unordered_map>
-#include <string>
+#include <set>
 
 class ConnectionTracker
 {
