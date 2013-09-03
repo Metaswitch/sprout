@@ -55,7 +55,8 @@ extern "C" {
 FlowTable::FlowTable() :
   _tp2flow_map(),
   _tk2flow_map(),
-  _statistic("client_count")
+  _statistic("client_count"),
+  _quiescing(false)
 {
   pthread_mutex_init(&_flow_map_lock, NULL);
   report_flow_count();
@@ -218,6 +219,20 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
+void FlowTable::quiesce()
+{
+  _quiescing = true;
+}
+
+void FlowTable::unquiesce()
+{
+  _quiescing = false;
+}
+
+bool FlowTable::is_quiescing()
+{
+  return _quiescing;
+}
 
 Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr* remote_addr) :
   _flow_table(flow_table),
@@ -227,7 +242,8 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _token(),
   _authorized_ids(),
   _default_id(),
-  _refs(1)
+  _refs(1),
+  _dialogs(0)
 {
   // Create the lock for protecting the authorized_ids and default_id.
   pthread_mutex_init(&_flow_lock, NULL);
@@ -544,6 +560,29 @@ void Flow::dec_ref()
   }
 }
 
+void Flow::increment_dialogs()
+{
+  _dialogs++;
+}
+
+void Flow::decrement_dialogs()
+{
+  unsigned int old_value = _dialogs;
+  unsigned int new_value;
+  do
+  {
+    if (old_value == 0) {
+      LOG_WARNING("Attempt to bring dialog count below 0 on a flow");
+      break;
+    }
+    new_value = old_value - 1;
+  } while (!_dialogs.compare_exchange_weak(old_value, new_value));
+}
+
+bool Flow::should_quiesce()
+{
+  return ((_dialogs == 0) && _flow_table->is_quiescing());
+}
 
 /// Called by PJSIP when a reliable transport connection changes state.
 void Flow::on_transport_state_changed(pjsip_transport *tp,

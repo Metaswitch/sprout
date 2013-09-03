@@ -49,6 +49,7 @@ extern "C" {
 #include <map>
 #include <unordered_map>
 #include <string>
+#include <atomic>
 
 #include "statistic.h"
 
@@ -75,6 +76,12 @@ public:
   void set_identity(const pjsip_uri* uri, bool is_default, int expires);
 
   void dec_ref();
+
+  void increment_dialogs();
+
+  void decrement_dialogs();
+
+  bool should_quiesce();
 
   static void on_transport_state_changed(pjsip_transport *tp,
                                          pjsip_transport_state state,
@@ -132,6 +139,8 @@ private:
   /// by a thread which currently holds the FlowTable::_flow_map_lock.
   int _refs;
 
+  std::atomic_uint _dialogs;
+
   /// Timer identifiers - the timer either runs as an expiry timer (when there
   /// are active identities) or an idle timer (when there are no active
   /// identities on a non-reliable flow).
@@ -167,6 +176,11 @@ public:
 
   /// Removes a flow from the flow table.
   void remove_flow(Flow* flow);
+
+  // Functions for quiescing a Bono.
+  void quiesce();
+  void unquiesce();
+  bool is_quiescing();
 
   friend class Flow;
 
@@ -217,6 +231,7 @@ private:
   // Statistics
   void report_flow_count();
   Statistic _statistic;
+  bool _quiescing;
 };
 
 #endif
