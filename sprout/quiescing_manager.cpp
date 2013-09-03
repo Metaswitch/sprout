@@ -40,17 +40,19 @@
 #include "log.h"
 #include "utils.h"
 #include "pjutils.h"
+
+#define QUIESCING_MANAGER_DEFINE_VARS
 #include "quiescing_manager.h"
 
 
 SynchronizedFSM::SynchronizedFSM() :
-  _input_q(),
-  _running(false)
+  _running(false),
+  _input_q()
 {
   pthread_mutex_init(&_lock, NULL);
 }
 
-SynchronizedFSM::~SynchronizedFSM() :
+SynchronizedFSM::~SynchronizedFSM()
 {
   pthread_mutex_destroy(&_lock);
 }
@@ -92,7 +94,7 @@ void SynchronizedFSM::send_input(int input)
 QuiescingManager::QuiescingManager(bool edge_proxy,
                                    ConnectionTracker *connection_tracker) :
   SynchronizedFSM(),
-  _conn_tracker(connection_tracker)
+  _conn_tracker(connection_tracker),
   _edge_proxy(edge_proxy)
 {}
 
@@ -118,7 +120,7 @@ void QuiescingManager::process_input(int input)
       switch (input)
       {
         case INPUT_QUIESCE:
-          _state = QUIESCING_FLOWS;
+          _state = STATE_QUIESCING_FLOWS;
           quiesce_untrusted_interface();
           break;
 
@@ -141,7 +143,7 @@ void QuiescingManager::process_input(int input)
           break;
 
         case INPUT_FLOWS_GONE:
-          _state = QUIESCING_CONNS;
+          _state = STATE_QUIESCING_CONNS;
           quiesce_connections();
           break;
 
@@ -150,7 +152,7 @@ void QuiescingManager::process_input(int input)
           break;
 
         case INPUT_UNQUIESCE:
-          _state = ACTIVE;
+          _state = STATE_ACTIVE;
           unquiesce_untrusted_interface();
           break;
       }
@@ -169,12 +171,12 @@ void QuiescingManager::process_input(int input)
           break;
 
         case INPUT_CONNS_GONE:
-          _state = QUIESCED;
+          _state = STATE_QUIESCED;
           quiesce_complete();
           break;
 
         case INPUT_UNQUIESCE:
-          _state = ACTIVE;
+          _state = STATE_ACTIVE;
           unquiesce_connections();
           unquiesce_untrusted_interface();
           break;

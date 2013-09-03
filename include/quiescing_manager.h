@@ -45,6 +45,8 @@ extern "C" {
 #include <pjlib.h>
 }
 
+#include "connection_tracker.h"
+
 // Abstract base class for a synchnronized finite state machine. This ensures
 // that only one thread is running the state machine at once.
 class SynchronizedFSM
@@ -76,7 +78,7 @@ private:
 
   // Queue of inputs waiting to be consumed by the state machine.
   std::queue<int> _input_q;
-}
+};
 
 
 // The quiescing manager is a finite state machine that controls the processing
@@ -111,19 +113,21 @@ private:
 class QuiescingManager : public SynchronizedFSM
 {
 public:
-  void QuiescingManager(bool edge_proxy,
-                        ConnectionTracker *connection_tracker);
+  QuiescingManager(bool edge_proxy,
+                   ConnectionTracker *connection_tracker);
 
   // Inputs methods for the state machine.
   //
   // These just send a new input to the state machine, so we define the
   // implmentation of them here.
-  void quiesce() { send_input(INPUT_QUIESCE) };
-  void flows_gone() { send_input(INPUT_FLOWS_GONE) };
-  void connections_gone() { send_input(INPUT_CONNS_GONE) };
-  void unquiesce() { send_input(INPUT_UNQUIESCE) };
+  void quiesce() { send_input(INPUT_QUIESCE); }
+  void flows_gone() { send_input(INPUT_FLOWS_GONE); }
+  void connections_gone() { send_input(INPUT_CONNS_GONE); }
+  void unquiesce() { send_input(INPUT_UNQUIESCE); }
 
 private:
+  void process_input(int input);
+
   // The quiescing manager's states, and string representations (for logging).
   enum {
     STATE_ACTIVE,
@@ -132,12 +136,7 @@ private:
     STATE_QUIESCED,
   };
 
-  const static char *[] STATE_NAMES = {
-    "ACTIVE",
-    "QUIESCING_FLOWS",
-    "QUIESCING_CONNS",
-    "QUIESCED",
-  }
+  static const char *STATE_NAMES[4];
 
   // The quiescing manager's inputs, and string representations (for logging).
   enum {
@@ -145,14 +144,9 @@ private:
     INPUT_FLOWS_GONE,
     INPUT_CONNS_GONE,
     INPUT_UNQUIESCE
-  }
+  };
 
-  const static char *[] INPUT_NAMES = {
-    "QUIESCE",
-    "FLOWS_GONE",
-    "CONNS_GONE",
-    "UNQUIESCE",
-  }
+  static const char *INPUT_NAMES[4];
 
   // Pointer to the object tracking TCP connections.
   ConnectionTracker *_conn_tracker;
@@ -163,7 +157,7 @@ private:
   // Utility method that should be called when the FSM encounters receives an
   // input that is invalid for the current state.
 
-  void invalid_cell(int input, int state);
+  void invalid_input(int input, int state);
 
   // Private methods called as part of the state machine implementation.
   void quiesce_untrusted_interface();
@@ -172,7 +166,22 @@ private:
 
   void unquiesce_connections();
   void unquiesce_untrusted_interface();
-}
+};
 
+#ifdef QUIESCING_MANAGER_DEFINE_VARS
+const char *QuiescingManager::STATE_NAMES[4] = {
+  "ACTIVE",
+  "QUIESCING_FLOWS",
+  "QUIESCING_CONNS",
+  "QUIESCED",
+};
+
+const char *QuiescingManager::INPUT_NAMES[4] = {
+  "QUIESCE",
+  "FLOWS_GONE",
+  "CONNS_GONE",
+  "UNQUIESCE",
+};
+#endif
 
 #endif
