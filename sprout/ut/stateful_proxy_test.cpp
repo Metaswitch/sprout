@@ -1473,6 +1473,39 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   return msg;
 }
 
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
+{
+  SCOPED_TRACE("");
+
+  edge_proxy_quiesce(NULL);
+
+  // Register client.
+  TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                          49152);
+  // Register a client with the edge proxy.
+  Message msg;
+  int expires = 300;
+  msg._method = "REGISTER";
+  msg._to = msg._from;        // To header contains AoR in REGISTER requests.
+  msg._first_hop = true;
+  msg._via = xiTp->to_string(false);
+  msg._extra = "Contact: sip:wuntootreefower@";
+  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  inject_msg(msg.get_request(), xiTp);
+  ASSERT_EQ(1, txdata_count());
+
+  // Check that we get a 305 Use Proxy response when sending a
+  // REGISTER on a flow with no dialogs when we are quiesced.
+  RespMatcher r1(305);
+  pjsip_tx_data* tdata = current_txdata();
+  r1.matches(tdata->msg);
+
+  edge_proxy_unquiesce();
+  delete xiTp;
+}
+
 TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 {
   SCOPED_TRACE("");
