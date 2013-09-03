@@ -33,6 +33,8 @@
  */
 
 #include "dialog_tracker.hpp"
+#include "pjutils.h"
+#include "log.h"
 
 // Called when a UASTransaction completes in edge proxy mode.
 // Checks whether this transaction starts or ends a dialog, and takes
@@ -46,5 +48,75 @@ void DialogTracker::on_uas_tsx_complete(const pjsip_tx_data* original_request,
                                         const pjsip_event* event,
                                         bool is_client)
 {
-  return;
+  if ((tsx->method.id == PJSIP_INVITE_METHOD)
+      && (tsx->status_code == 200)
+      && (PJSIP_MSG_TO_HDR(original_request->msg)->tag.slen == 0))
+  {
+    on_dialog_start(original_request, tsx, event, is_client);
+  }
+  else if (tsx->method.id == PJSIP_BYE_METHOD)
+  {
+    on_dialog_end(original_request, tsx, event, is_client);
+  }
+}
+
+void DialogTracker::on_dialog_start(const pjsip_tx_data* original_request,
+                                    const pjsip_transaction* tsx,
+                                    const pjsip_event* event,
+                                    bool is_client)
+{
+  Flow* client_flow = get_client_flow(original_request, tsx, event, is_client);
+  if (client_flow != NULL) {
+    client_flow->increment_dialogs();
+    client_flow->dec_ref();
+
+  }
+}
+
+void DialogTracker::on_dialog_end(const pjsip_tx_data* original_request,
+                                  const pjsip_transaction* tsx,
+                                  const pjsip_event* event,
+                                  bool is_client)
+{
+  Flow* client_flow = get_client_flow(original_request, tsx, event, is_client);
+  if (client_flow != NULL) {
+    client_flow->decrement_dialogs();
+    client_flow->dec_ref();
+  }
+}
+
+Flow* DialogTracker::get_client_flow(const pjsip_tx_data* original_request,
+                                     const pjsip_transaction* tsx,
+                                     const pjsip_event* event,
+                                     bool is_client)
+{
+  if (!is_client)
+  {
+    pjsip_routing_hdr* route_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr(original_request->msg,
+                                                                      PJSIP_H_ROUTE,
+                                                                      NULL);
+    if (route_hdr == NULL)
+    {
+      route_hdr = (pjsip_routing_hdr*)pjsip_msg_find_hdr(original_request->msg,
+                                                         PJSIP_H_RECORD_ROUTE,
+                                                         NULL);
+    }
+
+    if (route_hdr == NULL) {
+      // LCOV_EXCL_START - never happens, checked out of an abundance
+      // of caution
+      LOG_ERROR("No Route or Record-Route header found - cannot deduce the flow");
+      return NULL;
+      // LCOV_EXCL_STOP
+    }
+
+    pjsip_sip_uri* sip_path_uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
+    return _ft->find_flow(PJUtils::pj_str_to_string(&sip_path_uri->user));
+  }
+  else
+  {
+    return _ft->find_create_flow(tsx->transport,
+                                 &tsx->addr);
+  }
+
 }

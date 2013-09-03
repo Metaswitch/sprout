@@ -47,5 +47,19 @@ public:
                            const pjsip_transaction* tsx,
                            const pjsip_event* event,
                            bool is_client);
+private:
+  void on_dialog_start(const pjsip_tx_data* original_request,
+                       const pjsip_transaction* tsx,
+                       const pjsip_event* event,
+                       bool is_client);
 
+  void on_dialog_end(const pjsip_tx_data* original_request,
+                     const pjsip_transaction* tsx,
+                     const pjsip_event* event,
+                     bool is_client);
+
+  Flow* get_client_flow(const pjsip_tx_data* original_request,
+                       const pjsip_transaction* tsx,
+                       const pjsip_event* event,
+                       bool is_client);
 };
