@@ -43,9 +43,9 @@ class DialogTracker {
   FlowTable* _ft;
 public:
   DialogTracker(FlowTable* ft): _ft(ft) {};
-  void on_tsx_state(const pjsip_tx_data* original_request,
-                    const pjsip_transaction* tsx,
-                    const pjsip_event* event,
-                    bool is_client);
+  void on_uas_tsx_complete(const pjsip_tx_data* original_request,
+                           const pjsip_transaction* tsx,
+                           const pjsip_event* event,
+                           bool is_client);
 
 };

@@ -2321,13 +2321,20 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
 {
   enter_context();
 
-  bool is_client = determine_source(_tsx->transport, _tsx->addr);
-  dialog_tracker->on_tsx_state(_req, _tsx, event, is_client);
-
   if (_tsx->state == PJSIP_TSX_STATE_COMPLETED)
   {
     // UAS transaction has completed, so do any transaction completion
     // log activities
+
+    // This has to be conditional on a completed state, else
+    // _tsx->transport might not be set.
+    if (edge_proxy)
+    {
+      SourceType stype  = determine_source(_tsx->transport, _tsx->addr);
+      bool is_client = (stype == client);
+      dialog_tracker->on_uas_tsx_complete(_req, _tsx, event, is_client);
+    }
+
     log_on_tsx_complete();
   }
 
