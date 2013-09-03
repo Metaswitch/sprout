@@ -207,6 +207,11 @@ void FlowTable::remove_flow(Flow* flow)
 
   delete flow;
 
+  if (_tp2flow_map.empty() && is_quiescing())
+  {
+    // TODO: Call into code to start transaction-based quiescing.
+  }
+
   pthread_mutex_unlock(&_flow_map_lock);
 }
 
