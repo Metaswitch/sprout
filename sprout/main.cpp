@@ -46,6 +46,7 @@ extern "C" {
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <semaphore.h>
 
 // Common STL includes.
 #include <cassert>
@@ -117,7 +118,10 @@ struct options
 };
 
 
-static pj_bool_t quit_flag = PJ_FALSE;
+static sem_t term_sem;
+
+static pj_bool_t quiescing = PJ_FALSE;
+static sem_t quiescing_sem;
 
 static void usage(void)
 {
@@ -435,7 +439,7 @@ int daemonize()
 }
 
 
-// Exception handler that simply dumps the stack and then crashes out.
+// Signal handler that simply dumps the stack and then crashes out.
 void exception_handler(int sig)
 {
   // Reset the signal handlers so that another exception will cause a crash.
@@ -447,6 +451,69 @@ void exception_handler(int sig)
 
   // Dump a core.
   abort();
+}
+
+
+// Signal handler that receives requests to (un)quiesce.
+void quiesce_unquiesce_handler(int sig)
+{
+  // Set the flag indicating whether we're quiescing or not.
+  if (sig == SIGQUIT)
+  {
+    LOG_STATUS("Quiesce signal received");
+    quiescing = PJ_TRUE;
+  }
+  else
+  {
+    LOG_STATUS("Unquiesce signal received");
+    quiescing = PJ_FALSE;
+  }
+
+  // Wake up the thread that acts on the notification (don't act on it in this
+  // thread since we're in a signal haandler).
+  sem_post(&quiescing_sem);
+}
+
+
+// Signal handler that triggers sprout termination.
+void terminate_handler(int sig)
+{
+  sem_post(&term_sem);
+}
+
+
+void on_stack_quiesced()
+{
+  sem_post(&term_sem);
+}
+
+void *quiesce_unquiesce_thread_func(void *_)
+{
+  pj_bool_t curr_quiescing = quiescing;
+  pj_bool_t new_quiescing;
+
+  while (PJ_TRUE)
+  {
+    // Wait for the quiescing flag to be written to and read in the new value.
+    // Read into a local variable to avoid issues if the flag changes under our
+    // feet.
+    sem_wait(&quiescing_sem);
+    new_quiescing = quiescing;
+
+    // Only act if the quiescing state has changed.
+    if (curr_quiescing != new_quiescing)
+    {
+      curr_quiescing = new_quiescing;
+
+      if (new_quiescing) {
+        quiesce_stack(on_stack_quiesced);
+      } else {
+        unquiesce_stack();
+      }
+    }
+  }
+
+  return NULL;
 }
 
 
@@ -464,10 +531,27 @@ int main(int argc, char *argv[])
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
+  pthread_t quiesce_unquiesce_thread;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
+
+  // Initialize the semaphore that unblocks the quiesce thread, and the thread
+  // itself.
+  sem_init(&quiescing_sem, 0, 0);
+  pthread_create(&quiesce_unquiesce_thread,
+                 NULL,
+                 quiesce_unquiesce_thread_func,
+                 NULL);
+
+  // Set up our signal handler for (un)quiesce signals. SIGQUIT means quiesce
+  // and SIGUSR1 means unquiesce.
+  signal(SIGQUIT, quiesce_unquiesce_handler);
+  signal(SIGUSR1, quiesce_unquiesce_handler);
+
+  sem_init(&term_sem, 0, 0);
+  signal(SIGTERM, terminate_handler);
 
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
@@ -715,42 +799,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  while (!quit_flag)
-  {
-    if (opt.daemon || !opt.interactive)
-    {
-      sleep(10);
-    }
-    else
-    {
-      char line[10];
-
-      puts("\n"
-           "Menu:\n"
-           "  q    quit\n"
-           "  d    dump status\n"
-           "  dd   dump detailed status\n"
-           "");
-
-      if (fgets(line, sizeof(line), stdin) == NULL)
-      {
-        puts("EOF while reading stdin, will quit now..");
-        quit_flag = PJ_TRUE;
-        break;
-      }
-
-      if (line[0] == 'q')
-      {
-        quit_flag = PJ_TRUE;
-      }
-      else if (line[0] == 'd')
-      {
-        pj_bool_t detail = (line[1] == 'd');
-        pjsip_endpt_dump(stack_data.endpt, detail);
-        pjsip_tsx_layer_dump(detail);
-      }
-    }
-  }
+  // Wait here until the quite semaphore is signaled.
+  sem_wait(&term_sem);
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -788,6 +838,9 @@ int main(int argc, char *argv[])
   {
     RegData::destroy_local_store(registrar_store);
   }
+
+  sem_destroy(&quiescing_sem);
+  sem_destroy(&term_sem);
 
   return 0;
 }

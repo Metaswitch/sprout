@@ -73,6 +73,7 @@ static std::vector<pj_thread_t*> pjsip_threads;
 static std::vector<pj_thread_t*> worker_threads;
 static volatile pj_bool_t quit_flag;
 
+stack_quiesced_callback_t stack_quiesced_callback = NULL;
 
 // Queue for incoming messages.
 struct rx_msg_qe
@@ -648,6 +649,19 @@ pj_status_t start_stack()
   return status;
 }
 
+void quiesce_stack(stack_quiesced_callback_t callback)
+{
+  stack_quiesced_callback = callback;
+
+  // TODO
+}
+
+void unquiesce_stack()
+{
+  stack_quiesced_callback = NULL;
+
+  // TODO
+}
 
 void stop_stack()
 {
