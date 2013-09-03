@@ -99,7 +99,7 @@ class Ifcs
 {
 public:
   Ifcs();
-  Ifcs(std::shared_ptr<rapidxml::xml_document<> > ifc_doc, rapidxml::xml_node<>* sp);
+  Ifcs(std::shared_ptr<rapidxml::xml_document<>> ifc_doc, rapidxml::xml_node<>* sp);
   ~Ifcs();
 
   size_t size() const

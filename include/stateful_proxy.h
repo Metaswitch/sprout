@@ -194,16 +194,16 @@ private:
   AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
-  Ifcs lookup_ifcs(std::string public_id, SAS::TrailId trail);
-  std::vector<std::string> get_associated_uris(std::string public_id, SAS::TrailId trail);
+  HSSCallInformation& get_data_from_hss(std::string public_id, SAS::TrailId trail);
+  Ifcs& lookup_ifcs(std::string public_id, SAS::TrailId trail);
+  std::vector<std::string>& get_associated_uris(std::string public_id, SAS::TrailId trail);
 
   void proxy_calculate_targets(pjsip_msg* msg,
-			       pj_pool_t* pool,
-			       const TrustBoundary* trust,
-			       target_list& targets,
-			       int max_targets,
-			       SAS::TrailId trail);
-
+                               pj_pool_t* pool,
+                               const TrustBoundary* trust,
+                               target_list& targets,
+                               int max_targets,
+                               SAS::TrailId trail);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
@@ -226,7 +226,7 @@ private:
   int                  _context_count;
   AsChainLink          _as_chain_link;
   std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
-  std::map<std::string, HSSCallInformation> cached_hss_data;
+  std::map<std::string, HSSCallInformation> cached_hss_data; // Maps public IDs to their associated URIs and IFC
 };
 
 // This is the data that is attached to the UAC transaction

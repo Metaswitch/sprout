@@ -56,7 +56,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  const std::string& served_user,
                  bool is_registered,
                  SAS::TrailId trail,
-                 Ifcs ifcs) :
+                 Ifcs& ifcs) :
   _as_chain_table(as_chain_table),
   _refs(2),  // one for the chain being returned,
              // and one for the reference in the table.
@@ -151,7 +151,7 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          const std::string& served_user,
                                          bool is_registered,
                                          SAS::TrailId trail,
-                                         Ifcs ifcs)
+                                         Ifcs& ifcs)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
