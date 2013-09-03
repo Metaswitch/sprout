@@ -139,7 +139,7 @@ private:
   /// by a thread which currently holds the FlowTable::_flow_map_lock.
   int _refs;
 
-  std::atomic_uint _dialogs;
+  std::atomic_long _dialogs;
 
   /// Timer identifiers - the timer either runs as an expiry timer (when there
   /// are active identities) or an idle timer (when there are no active

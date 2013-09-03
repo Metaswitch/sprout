@@ -563,23 +563,13 @@ void Flow::dec_ref()
 // Increments the dialog count atomically.
 void Flow::increment_dialogs()
 {
-  _dialogs++;
+  ++_dialogs;
 }
 
-// Decrements the dialog count atomically, without letting it fall
-// below 0.
+// Decrements the dialog count atomically.
 void Flow::decrement_dialogs()
 {
-  unsigned int old_value = _dialogs;
-  unsigned int new_value;
-  do
-  {
-    if (old_value == 0) {
-      LOG_WARNING("Attempt to bring dialog count below 0 on a flow");
-      break;
-    }
-    new_value = old_value - 1;
-  } while (!_dialogs.compare_exchange_weak(old_value, new_value));
+  --_dialogs;
 }
 
 // Returns true if we should quiesce the flow by redirecting new
@@ -588,7 +578,9 @@ void Flow::decrement_dialogs()
 
 bool Flow::should_quiesce()
 {
-  return ((_dialogs == 0) && _flow_table->is_quiescing());
+  // We check for <= 0 because we might double-count (as our dialog
+  // counting is only heuristic).
+  return ((_dialogs <= 0) && _flow_table->is_quiescing());
 }
 
 /// Called by PJSIP when a reliable transport connection changes state.
