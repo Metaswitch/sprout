@@ -210,6 +210,7 @@ void FlowTable::remove_flow(Flow* flow)
   if (_tp2flow_map.empty() && is_quiescing())
   {
     LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
+    quiesce_stack(_callback_on_quiesce);
     // TODO: Call into code to start transaction-based quiescing.
   }
 
@@ -225,14 +226,16 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
-void FlowTable::quiesce()
+void FlowTable::quiesce(stack_quiesced_callback_t callback)
 {
+  _callback_on_quiesce = callback;
   _quiescing = true;
 }
 
 void FlowTable::unquiesce()
 {
   _quiescing = false;
+  unquiesce_stack();
 }
 
 bool FlowTable::is_quiescing()

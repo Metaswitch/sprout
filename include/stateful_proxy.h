@@ -284,6 +284,11 @@ void destroy_stateful_proxy();
 
 enum SourceType {trustedPort, configuredTrunk, client};
 
+void edge_proxy_quiesce();
+
+void edge_proxy_unquiesce();
+
+
 #ifdef UNIT_TEST
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata);

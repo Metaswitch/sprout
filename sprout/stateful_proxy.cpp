@@ -3661,3 +3661,12 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
 
 ///@}
 
+void edge_proxy_quiesce(stack_quiesced_callback_t callback)
+{
+  flow_table->quiesce(callback);
+}
+
+void edge_proxy_unquiesce()
+{
+  flow_table->unquiesce();
+}

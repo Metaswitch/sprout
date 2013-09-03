@@ -505,10 +505,27 @@ void *quiesce_unquiesce_thread_func(void *_)
     {
       curr_quiescing = new_quiescing;
 
-      if (new_quiescing) {
-        quiesce_stack(on_stack_quiesced);
-      } else {
-        unquiesce_stack();
+      if (new_quiescing)
+      {
+        if (edge_proxy)
+        {
+          edge_proxy_quiesce(on_stack_quiesced);
+        }
+        else
+        {
+          quiesce_stack(on_stack_quiesced);
+        }
+      }
+      else
+      {
+        if (edge_proxy)
+        {
+          edge_proxy_unquiesce();
+        }
+        else
+        {
+          unquiesce_stack();
+        }
       }
     }
   }

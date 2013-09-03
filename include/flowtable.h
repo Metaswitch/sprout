@@ -52,6 +52,7 @@ extern "C" {
 #include <atomic>
 
 #include "statistic.h"
+#include "stack.h"
 
 class FlowTable;
 
@@ -178,7 +179,7 @@ public:
   void remove_flow(Flow* flow);
 
   // Functions for quiescing a Bono.
-  void quiesce();
+  void quiesce(stack_quiesced_callback_t callback);
   void unquiesce();
   bool is_quiescing();
 
@@ -232,6 +233,8 @@ private:
   void report_flow_count();
   Statistic _statistic;
   bool _quiescing;
+  stack_quiesced_callback_t _callback_on_quiesce;
+
 };
 
 #endif
