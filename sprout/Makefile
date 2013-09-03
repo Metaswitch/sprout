@@ -44,7 +44,8 @@ TARGET_SOURCES := logger.cpp \
                   aschain.cpp \
                   sas.cpp \
                   custom_headers.cpp \
-                  accumulator.cpp
+                  accumulator.cpp \
+		  connection_tracker.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
