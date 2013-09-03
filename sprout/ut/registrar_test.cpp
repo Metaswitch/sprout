@@ -74,12 +74,13 @@ public:
                                 "</ServiceProfile></IMSSubscription>";
 
     _store = RegData::create_local_store();
+    _remote_store = RegData::create_local_store();
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, NULL, _hss_connection, _analytics, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
   }
@@ -90,6 +91,7 @@ public:
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
+    RegData::destroy_local_store(_remote_store); _remote_store = NULL;
     RegData::destroy_local_store(_store); _store = NULL;
     fakecurl_responses.clear();
     SipTest::TearDownTestCase();
@@ -99,6 +101,7 @@ public:
   {
     _analytics->_logger = &_log;
     _store->flush_all();  // start from a clean slate on each test
+    _remote_store->flush_all();
   }
 
   ~RegistrarTest()
@@ -108,12 +111,14 @@ public:
 
 protected:
   static RegData::Store* _store;
+  static RegData::Store* _remote_store;
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static FakeHSSConnection* _hss_connection;
 };
 
 RegData::Store* RegistrarTest::_store;
+RegData::Store* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 FakeHSSConnection* RegistrarTest::_hss_connection;

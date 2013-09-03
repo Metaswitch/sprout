@@ -475,7 +475,9 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     // Failed to connect to the local store.  Reject the register with a 500
     // response.
+    // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    // LCOV_EXCL_STOP
   }
 
   // Build and send the reply.
