@@ -1,5 +1,5 @@
 /**
- * @file memcachedstorefactory.h Factory function for creating instances of the MemcachedStore class.
+ * @file memcachedstoreupdater.h Declarations for MemcachedStoreUpdater class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,17 +34,23 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef MEMCACHEDSTOREFACTORY_H__
-#define MEMCACHEDSTOREFACTORY_H__
+#include "memcachedstore.h"
 
-#include "regdata.h"
-
-namespace RegData
+class MemcachedStoreUpdater
 {
-  RegData::Store* create_memcached_store(bool binary=true);
+public:
+  MemcachedStoreUpdater(RegData::Store* store, std::string file);
+  ~MemcachedStoreUpdater();
 
-  void destroy_memcached_store(RegData::Store* store);
 
-} // namespace RegData
+private:
+  void update_view();
 
-#endif
+  static void* updater_thread(void* p);
+  void updater();
+
+  RegData::MemcachedStore* _store;
+  std::string _file;
+
+  pthread_t _updater;
+};

@@ -105,8 +105,10 @@ private:
 class MemcachedStore : public Store
 {
 public:
-  MemcachedStore(const std::list<std::string>& servers, int pool_size, bool binary=true);
+  MemcachedStore(bool binary=true);
   ~MemcachedStore();
+
+  void new_view(const std::list<std::string>& servers);
 
   void flush_all();
 
@@ -124,8 +126,6 @@ private:
   } connection;
 
   connection* get_connection();
-
-  void new_view(const std::list<std::string>& servers);
 
   /// Helper: to_string method using ostringstream.
   template <class T>

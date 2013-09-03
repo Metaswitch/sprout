@@ -52,24 +52,16 @@
 #include <time.h>
 
 #include "memcachedstorefactory.h"
+#include "memcachedstoreupdater.h"
 #include "log.h"
 
 namespace RegData {
 
+
 /// Create a new store object, using the memcached implementation.
-///
-/// For syntax of servers see
-/// http://docs.libmemcached.org/libmemcached_configuration.html#description,
-/// e.g., "localhost:11211".
-RegData::Store* create_memcached_store(const std::list<std::string>& servers,
-                                       ///< list of servers to be used
-                                       int connections,
-                                       ///< size of pool (used as init and
-                                       /// max)
-                                       bool binary)
-                                       ///< use binary protocol?
+RegData::Store* create_memcached_store(bool binary)    ///< use binary protocol?
 {
-  return new MemcachedStore(servers, connections, binary);
+  return new MemcachedStore(binary);
 }
 
 
@@ -81,27 +73,19 @@ void destroy_memcached_store(RegData::Store* store)
 
 
 /// Constructor: get a handle to the memcached connection pool of interest.
-///
-/// For syntax of servers see
-/// http://docs.libmemcached.org/libmemcached_configuration.html#description,
-/// e.g., "localhost:11211".
-MemcachedStore::MemcachedStore(const std::list<std::string>& servers, ///< list of servers to be used
-                               int pool_size,                         ///< size of pool (used as init and max)
-                               bool binary) :                         ///< use binary protocol?
+MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   _binary(binary),
   _replicas(2),
   _view(0),
   _options(),
-  _vbuckets()
+  _vbuckets(),
+  _vbucket_map()
 {
   // Create the thread local key for the per thread data.
   pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
 
   // Create the lock for protecting the current view.
   pthread_mutex_init(&_view_lock, NULL);
-
-  // Set up the initial view of the servers.
-  new_view(servers);
 }
 
 
@@ -132,9 +116,10 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
 
   ++_view;
   _options = "";
-  for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
+
+  if (!_vbucket_map.empty())
   {
-    delete _vbucket_map[ii];
+    delete _vbucket_map[0];
   }
 
   _servers = servers.size();

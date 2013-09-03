@@ -83,9 +83,7 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         enum_server=127.0.0.1
         sas_server=0.0.0.0
-        memstore=$local_ip:11211
         . /etc/clearwater/config
-        [ -r /etc/clearwater/cluster_settings ] && . /etc/clearwater/cluster_settings
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -117,7 +115,7 @@ do_start()
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore $memstore --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore /etc/clearwater/cluster_settings --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
 
         if [ ! -z $reg_max_expires ]
         then
@@ -202,18 +200,16 @@ case "$1" in
         esac
         ;;
   status)
-       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
-       ;;
-  #reload|force-reload)
+        status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+        ;;
+  reload|force-reload)
         #
         # If do_reload() is not implemented then leave this commented out
         # and leave 'force-reload' as an alias for 'restart'.
         #
-        #log_daemon_msg "Reloading $DESC" "$NAME"
-        #do_reload
-        #log_end_msg $?
-        #;;
-  restart|force-reload)
+        do_reload
+        ;;
+  restart)
         #
         # If the "reload" option is implemented then remove the
         # 'force-reload' alias
