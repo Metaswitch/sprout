@@ -55,7 +55,8 @@ extern "C" {
 FlowTable::FlowTable() :
   _tp2flow_map(),
   _tk2flow_map(),
-  _statistic("client_count")
+  _statistic("client_count"),
+  _quiescing(false)
 {
   pthread_mutex_init(&_flow_map_lock, NULL);
   report_flow_count();
@@ -206,6 +207,11 @@ void FlowTable::remove_flow(Flow* flow)
 
   delete flow;
 
+  if (_tp2flow_map.empty() && is_quiescing())
+  {
+    // TODO: Call into code to start transaction-based quiescing.
+  }
+
   pthread_mutex_unlock(&_flow_map_lock);
 }
 
@@ -218,6 +224,20 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
+void FlowTable::quiesce()
+{
+  _quiescing = true;
+}
+
+void FlowTable::unquiesce()
+{
+  _quiescing = false;
+}
+
+bool FlowTable::is_quiescing()
+{
+  return _quiescing;
+}
 
 Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr* remote_addr) :
   _flow_table(flow_table),
@@ -227,7 +247,8 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _token(),
   _authorized_ids(),
   _default_id(),
-  _refs(1)
+  _refs(1),
+  _dialogs(0)
 {
   // Create the lock for protecting the authorized_ids and default_id.
   pthread_mutex_init(&_flow_lock, NULL);
@@ -544,6 +565,28 @@ void Flow::dec_ref()
   }
 }
 
+// Increments the dialog count atomically.
+void Flow::increment_dialogs()
+{
+  ++_dialogs;
+}
+
+// Decrements the dialog count atomically.
+void Flow::decrement_dialogs()
+{
+  --_dialogs;
+}
+
+// Returns true if we should quiesce the flow by redirecting new
+// REGISTERs to other Bonos. This is the case if there are no dialogs
+// on this flow, and Bono is currently quiescing.
+
+bool Flow::should_quiesce()
+{
+  // We check for <= 0 because we might double-count (as our dialog
+  // counting is only heuristic).
+  return ((_dialogs <= 0) && _flow_table->is_quiescing());
+}
 
 /// Called by PJSIP when a reliable transport connection changes state.
 void Flow::on_transport_state_changed(pjsip_transport *tp,

@@ -282,6 +282,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
 void destroy_stateful_proxy();
 
+enum SourceType {trustedPort, configuredTrunk, client};
+
 #ifdef UNIT_TEST
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata);
@@ -292,6 +294,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              target_list& targets,
                              int max_targets,
                              SAS::TrailId trail);
+
 #endif
 
 #endif
