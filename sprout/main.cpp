@@ -118,9 +118,10 @@ struct options
 };
 
 
-static pj_bool_t quit_flag = PJ_FALSE;
+static sem_t term_sem;
+
 static pj_bool_t quiescing = PJ_FALSE;
-sem_t quiescing_sem;
+static sem_t quiescing_sem;
 
 static void usage(void)
 {
@@ -473,9 +474,17 @@ void quiesce_unquiesce_handler(int sig)
   sem_post(&quiescing_sem);
 }
 
+
+// Signal handler that triggers sprout termination.
+void terminate_handler(int sig)
+{
+  sem_post(&term_sem);
+}
+
+
 void on_stack_quiesced()
 {
-  quit_flag = PJ_TRUE;
+  sem_post(&term_sem);
 }
 
 void *quiesce_unquiesce_thread_func(void *_)
@@ -540,6 +549,9 @@ int main(int argc, char *argv[])
   // and SIGUSR1 means unquiesce.
   signal(SIGQUIT, quiesce_unquiesce_handler);
   signal(SIGUSR1, quiesce_unquiesce_handler);
+
+  sem_init(&term_sem, 0, 0);
+  signal(SIGTERM, terminate_handler);
 
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
@@ -787,42 +799,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  while (!quit_flag)
-  {
-    if (opt.daemon || !opt.interactive)
-    {
-      sleep(10);
-    }
-    else
-    {
-      char line[10];
-
-      puts("\n"
-           "Menu:\n"
-           "  q    quit\n"
-           "  d    dump status\n"
-           "  dd   dump detailed status\n"
-           "");
-
-      if (fgets(line, sizeof(line), stdin) == NULL)
-      {
-        puts("EOF while reading stdin, will quit now..");
-        quit_flag = PJ_TRUE;
-        break;
-      }
-
-      if (line[0] == 'q')
-      {
-        quit_flag = PJ_TRUE;
-      }
-      else if (line[0] == 'd')
-      {
-        pj_bool_t detail = (line[1] == 'd');
-        pjsip_endpt_dump(stack_data.endpt, detail);
-        pjsip_tsx_layer_dump(detail);
-      }
-    }
-  }
+  // Wait here until the quite semaphore is signaled.
+  sem_wait(&term_sem);
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -862,6 +840,7 @@ int main(int argc, char *argv[])
   }
 
   sem_destroy(&quiescing_sem);
+  sem_destroy(&term_sem);
 
   return 0;
 }
