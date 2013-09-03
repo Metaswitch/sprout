@@ -34,10 +34,17 @@
 
 #include "dialog_tracker.hpp"
 
+// Called when a UASTransaction completes in edge proxy mode.
+// Checks whether this transaction starts or ends a dialog, and takes
+// appropriate action.
+
+// The check is only heuristic - we aren't actually dialog-stateful,
+// and this could produce erroneous results if there are spurious BYEs
+// outside a dialog or if both endpoints fail (and so never send BYEs).
 void DialogTracker::on_uas_tsx_complete(const pjsip_tx_data* original_request,
-                                 const pjsip_transaction* tsx,
-                                 const pjsip_event* event,
-                                 bool is_client)
+                                        const pjsip_transaction* tsx,
+                                        const pjsip_event* event,
+                                        bool is_client)
 {
   return;
 }

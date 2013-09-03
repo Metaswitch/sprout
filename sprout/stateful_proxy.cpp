@@ -828,9 +828,11 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
+    // Reject the REGISTER with a 305 if Bono is trying to quiesce and
+    // there are no active dialogs on this flow.
     if (src_flow->should_quiesce())
     {
-      LOG_DEBUG("REGISTER request received on a quiescing flow - redirecting");
+      LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
       PJUtils::respond_stateless(stack_data.endpt,
                                  rdata,
                                  PJSIP_SC_USE_PROXY,

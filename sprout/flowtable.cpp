@@ -560,11 +560,14 @@ void Flow::dec_ref()
   }
 }
 
+// Increments the dialog count atomically.
 void Flow::increment_dialogs()
 {
   _dialogs++;
 }
 
+// Decrements the dialog count atomically, without letting it fall
+// below 0.
 void Flow::decrement_dialogs()
 {
   unsigned int old_value = _dialogs;
@@ -578,6 +581,10 @@ void Flow::decrement_dialogs()
     new_value = old_value - 1;
   } while (!_dialogs.compare_exchange_weak(old_value, new_value));
 }
+
+// Returns true if we should quiesce the flow by redirecting new
+// REGISTERs to other Bonos. This is the case if there are no dialogs
+// on this flow, and Bono is currently quiescing.
 
 bool Flow::should_quiesce()
 {
