@@ -828,6 +828,16 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
+    if (src_flow->should_quiesce())
+    {
+      LOG_DEBUG("REGISTER request received on a quiescing flow - redirecting");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_USE_PROXY,
+                                 NULL, NULL, NULL);
+      return PJ_ENOTFOUND;
+    }
+
     // Touch the flow to make sure it doesn't time out while we are waiting
     // for the REGISTER response from upstream.
     src_flow->touch();
