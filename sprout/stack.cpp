@@ -652,7 +652,7 @@ pj_status_t start_stack()
 void quiesce_stack(stack_quiesced_callback_t callback)
 {
   stack_quiesced_callback = callback;
-
+  LOG_DEBUG("In quiesce_stack, beginning transaction-based quiescing");
   // TODO
 }
 

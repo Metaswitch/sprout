@@ -284,7 +284,7 @@ void destroy_stateful_proxy();
 
 enum SourceType {trustedPort, configuredTrunk, client};
 
-void edge_proxy_quiesce();
+void edge_proxy_quiesce(stack_quiesced_callback_t callback);
 
 void edge_proxy_unquiesce();
 

@@ -837,6 +837,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                  rdata,
                                  PJSIP_SC_USE_PROXY,
                                  NULL, NULL, NULL);
+      src_flow->dec_ref();
       return PJ_ENOTFOUND;
     }
 

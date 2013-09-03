@@ -123,6 +123,8 @@ static sem_t term_sem;
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 
+struct options opt;
+
 static void usage(void)
 {
   puts("Options:\n"
@@ -507,18 +509,21 @@ void *quiesce_unquiesce_thread_func(void *_)
 
       if (new_quiescing)
       {
-        if (edge_proxy)
+        LOG_DEBUG("Choosing type of quiescing");
+        if (opt.edge_proxy)
         {
+          LOG_DEBUG("Starting edge proxy quiescing");
           edge_proxy_quiesce(on_stack_quiesced);
         }
         else
         {
+          LOG_DEBUG("Starting routing proxy quiescing");
           quiesce_stack(on_stack_quiesced);
         }
       }
       else
       {
-        if (edge_proxy)
+        if (opt.edge_proxy)
         {
           edge_proxy_unquiesce();
         }
@@ -540,7 +545,6 @@ void *quiesce_unquiesce_thread_func(void *_)
 int main(int argc, char *argv[])
 {
   pj_status_t status;
-  struct options opt;
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;

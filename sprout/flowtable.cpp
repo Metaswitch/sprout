@@ -211,7 +211,6 @@ void FlowTable::remove_flow(Flow* flow)
   {
     LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
     quiesce_stack(_callback_on_quiesce);
-    // TODO: Call into code to start transaction-based quiescing.
   }
 
   pthread_mutex_unlock(&_flow_map_lock);
@@ -228,8 +227,20 @@ void FlowTable::report_flow_count()
 
 void FlowTable::quiesce(stack_quiesced_callback_t callback)
 {
+   pthread_mutex_lock(&_flow_map_lock);
+
   _callback_on_quiesce = callback;
   _quiescing = true;
+
+  // If we have no flows, quiesce now - otherwise we do this in
+  // remove_flow when the last flow disappears
+  if (_tp2flow_map.empty())
+  {
+    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing immediately");
+    quiesce_stack(_callback_on_quiesce);
+  }
+
+  pthread_mutex_unlock(&_flow_map_lock);
 }
 
 void FlowTable::unquiesce()
@@ -573,12 +584,14 @@ void Flow::dec_ref()
 void Flow::increment_dialogs()
 {
   ++_dialogs;
+  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
 }
 
 // Decrements the dialog count atomically.
 void Flow::decrement_dialogs()
 {
   --_dialogs;
+  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
 }
 
 // Returns true if we should quiesce the flow by redirecting new
