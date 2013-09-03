@@ -209,6 +209,7 @@ void FlowTable::remove_flow(Flow* flow)
 
   if (_tp2flow_map.empty() && is_quiescing())
   {
+    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
     // TODO: Call into code to start transaction-based quiescing.
   }
 
