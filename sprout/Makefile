@@ -45,7 +45,8 @@ TARGET_SOURCES := logger.cpp \
                   sas.cpp \
                   custom_headers.cpp \
                   accumulator.cpp \
-		  connection_tracker.cpp
+		  connection_tracker.cpp \
+		  quiescing_manager.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
