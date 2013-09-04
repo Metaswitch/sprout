@@ -49,11 +49,10 @@
 using namespace std;
 
 /// Fixture for IfcHandlerTest
-class DialogTrackerTest : public SipTest
+class FlowTest : public SipTest
 {
 public:
   FakeLogger _log;
-  static DialogTracker* dialog_tracker;
   static FlowTable* ft;
   Flow* flow;
   static pj_sockaddr addr;
@@ -63,61 +62,89 @@ public:
     SipTest::SetUpTestCase();
     ft = new FlowTable();
     addr.addr.sa_family = PJ_AF_INET;
-    dialog_tracker = new DialogTracker(ft);
   }
 
   static void TearDownTestCase()
   {
-    delete dialog_tracker;
-    dialog_tracker = NULL;
     delete ft;
     ft = NULL;
 
     SipTest::TearDownTestCase();
   }
 
-  DialogTrackerTest() : SipTest(NULL)
+  FlowTest() : SipTest(NULL)
   {
     // Restore a clean state
     ft->unquiesce();
     flow = ft->find_create_flow( _udp_tp_untrusted, &addr);
   }
 
-  ~DialogTrackerTest()
+  ~FlowTest()
   {
     ft->remove_flow(flow);
   }
 };
 
-FlowTable* DialogTrackerTest::ft;
-DialogTracker* DialogTrackerTest::dialog_tracker;
-pj_sockaddr DialogTrackerTest::addr;
+FlowTable* FlowTest::ft;
+pj_sockaddr FlowTest::addr;
 
-TEST_F(DialogTrackerTest, MainlineDialogTracking)
+TEST_F(FlowTest, EmptyFlowNoQuiesce)
 {
-  pjsip_tx_data tdata;
-  pjsip_transaction tsx;
-  tsx.transport = _udp_tp_untrusted;
-  tsx.addr = addr;
-  pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
-  pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);
-  to->tag = pj_str("");
-  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)to);
-  pjsip_event event;
-  tdata.msg = msg;
+  EXPECT_FALSE(flow->should_quiesce());
+}
 
-  tsx.method.id = PJSIP_INVITE_METHOD;
-  tsx.status_code = 200;
-
+TEST_F(FlowTest, EmptyFlowQuiesce)
+{
   ft->quiesce(NULL);
   EXPECT_TRUE(flow->should_quiesce());
+}
 
-  // Track the start of a dialog, and check that we keep the flow alive
-  dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
+
+TEST_F(FlowTest, FlowQuiesceWithDialogs)
+{
+  ft->quiesce(NULL);
+  flow->increment_dialogs();
   EXPECT_FALSE(flow->should_quiesce());
+}
 
-  // Travk the end of a dialog, and check that the flow can now be quiesced
-  tsx.method.id = PJSIP_BYE_METHOD;
-  dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
+TEST_F(FlowTest, FlowQuiesceMidDialogs)
+{
+  EXPECT_FALSE(flow->should_quiesce());
+  flow->increment_dialogs();
+  EXPECT_FALSE(flow->should_quiesce());
+  ft->quiesce(NULL);
+  EXPECT_FALSE(flow->should_quiesce());
+}
+
+TEST_F(FlowTest, FlowQuiesceWhenDialogsEnd)
+{
+  ft->quiesce(NULL);
+  EXPECT_TRUE(flow->should_quiesce());
+  flow->increment_dialogs();
+  EXPECT_FALSE(flow->should_quiesce());
+  flow->decrement_dialogs();
   EXPECT_TRUE(flow->should_quiesce());
 }
+
+
+TEST_F(FlowTest, EmptyFlowUnquiesce)
+{
+  ft->quiesce(NULL);
+  EXPECT_TRUE(flow->should_quiesce());
+  ft->unquiesce();
+  EXPECT_FALSE(flow->should_quiesce());
+}
+
+
+TEST_F(FlowTest, FlowUnQuiesceMidDialog)
+{
+  ft->quiesce(NULL);
+  EXPECT_TRUE(flow->should_quiesce());
+  flow->increment_dialogs();
+  EXPECT_FALSE(flow->should_quiesce());
+  ft->unquiesce();
+  EXPECT_FALSE(flow->should_quiesce());
+  flow->decrement_dialogs();
+  EXPECT_FALSE(flow->should_quiesce());
+}
+

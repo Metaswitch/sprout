@@ -80,7 +80,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        ifchandler_test.cpp \
                        custom_headers_test.cpp \
                        accumulator_test.cpp \
-                       dialog_tracker_test.cpp
+                       dialog_tracker_test.cpp \
+                       flow_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
