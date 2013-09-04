@@ -84,32 +84,6 @@ private:
 // The quiescing manager is a finite state machine that controls the processing
 // required for quiescing bono/sprout, and ensures the right actions are carried
 // out at the right time.
-//
-// The state machine is descibed by the table below where each cell sepcifies
-// the state to move to (as a number) and the action to take (as a letter).
-// Dashes indicate no state change / action. Empty cells are not hittable.
-//
-//
-// Inputs \ States |  0  |  1  |  2  |  3  |
-// ----------------+-----+-----+-----+-----+
-// QUIESCE         | 1 A |     |     | - - |
-// FLOWS_GONE      | - - | 2 B | - - |     |
-// CONNS_GONE      | - - | - - | 3 C |     |
-// UNQUIESCE       |     | 0 D | 0 E | - - |
-//
-// States:
-//   0  ACTIVE
-//   1  QUIESCING_FLOWS
-//   2  QUIESCING_CONNS
-//   3  QUIESCED
-//
-// Actions:
-//   A  Call quiesce_untrusted_interface
-//   B  Call quiesce_connections
-//   C  Call quiesce_complete
-//   D  Call unquiesce_untrusted_interface
-//   E  Call unquiesce_connections and unquiesce_untrusted_interface
-//
 class QuiescingManager : public SynchronizedFSM
 {
 public:
@@ -128,7 +102,7 @@ public:
 private:
   void process_input(int input);
 
-  // The quiescing manager's states, and string representations (for logging).
+  // The quiescing manager's states and inputs.
   enum {
     STATE_ACTIVE,
     STATE_QUIESCING_FLOWS,
@@ -136,9 +110,6 @@ private:
     STATE_QUIESCED,
   };
 
-  static const char *STATE_NAMES[4];
-
-  // The quiescing manager's inputs, and string representations (for logging).
   enum {
     INPUT_QUIESCE,
     INPUT_FLOWS_GONE,
@@ -146,6 +117,7 @@ private:
     INPUT_UNQUIESCE
   };
 
+  static const char *STATE_NAMES[4];
   static const char *INPUT_NAMES[4];
 
   // Pointer to the object tracking TCP connections.
@@ -154,9 +126,8 @@ private:
   // Whether we're currently running as an edge proxy.
   bool _edge_proxy;
 
-  // Utility method that should be called when the FSM encounters receives an
+  // Utility method that should is called when the FSM encounters receives an
   // input that is invalid for the current state.
-
   void invalid_input(int input, int state);
 
   // Private methods called as part of the state machine implementation.
@@ -168,7 +139,11 @@ private:
   void unquiesce_untrusted_interface();
 };
 
+// Definitions of the names for the quiescing manager's inputs and states.
+// Wrapped in a pre-processor directive so that these are only defined once (in
+// quiescing_manager.cpp).
 #ifdef QUIESCING_MANAGER_DEFINE_VARS
+
 const char *QuiescingManager::STATE_NAMES[4] = {
   "ACTIVE",
   "QUIESCING_FLOWS",
