@@ -180,6 +180,7 @@ public:
   void remove_flow(Flow* flow);
 
   // Functions for quiescing a Bono.
+  void check_quiescing_state();
   void quiesce();
   void unquiesce();
   bool is_quiescing();

@@ -183,6 +183,14 @@ Flow* FlowTable::find_flow(const std::string& token)
   return flow;
 }
 
+void FlowTable::check_quiescing_state()
+{
+  if (_tp2flow_map.empty() && is_quiescing() && (_qm != NULL))
+  {
+    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
+    _qm->flows_gone();
+  }
+}
 
 void FlowTable::remove_flow(Flow* flow)
 {
@@ -208,15 +216,10 @@ void FlowTable::remove_flow(Flow* flow)
 
   delete flow;
 
-  if (_tp2flow_map.empty() && is_quiescing() && (_qm != NULL))
-  {
-    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
-    _qm->flows_gone();
-  }
+  check_quiescing_state();
 
   pthread_mutex_unlock(&_flow_map_lock);
 }
-
 
 void FlowTable::report_flow_count()
 {
@@ -233,11 +236,7 @@ void FlowTable::quiesce()
 
   // If we have no flows, quiesce now - otherwise we do this in
   // remove_flow when the last flow disappears
-  if (_tp2flow_map.empty() && (_qm != NULL))
-  {
-    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing immediately");
-    _qm->flows_gone();
-  }
+  check_quiescing_state();
 
   pthread_mutex_unlock(&_flow_map_lock);
 }
