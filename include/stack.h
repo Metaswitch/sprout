@@ -52,6 +52,7 @@ extern "C" {
 #include <string>
 
 #include "sas.h"
+#include "quiescing_manager.h"
 
 /* Pre-declariations */
 class LastValueCache;
@@ -122,7 +123,8 @@ extern pj_status_t init_stack(const std::string& system_name,
                               const std::string& sprout_domain,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
-                              int num_worker_threads);
+                              int num_worker_threads,
+                              QuiescingManager *quiescing_mgr);
 extern pj_status_t start_stack();
 extern void stop_stack();
 extern void unregister_stack_modules(void);
