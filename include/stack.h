@@ -62,7 +62,8 @@ struct stack_data_struct
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
-  pjsip_tpfactory     *tcp_factory;
+  pjsip_tpfactory     *trusted_tcp_factory;
+  pjsip_tpfactory     *untrusted_tcp_factory;
   int                  module_id;
 
   int                  trusted_port;
@@ -128,12 +129,5 @@ extern void unregister_stack_modules(void);
 extern void destroy_stack();
 extern pj_status_t init_pjsip();
 extern void term_pjsip();
-
-// Callback that is passed as an argument to quiesce_stack and is called once
-// the stack has been quiesced.
-typedef void (*stack_quiesced_callback_t)(void);
-
-extern void quiesce_stack(stack_quiesced_callback_t callback);
-extern void unquiesce_stack();
 
 #endif

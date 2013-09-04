@@ -41,9 +41,12 @@
 #include "pjutils.h"
 #include "connection_tracker.h"
 
-ConnectionTracker::ConnectionTracker() :
+ConnectionTracker::ConnectionTracker(
+                              ConnectionsQuiescedInterface *on_quiesced_handler)
+:
   _connections(),
   _quiescing(PJ_FALSE)
+  _on_quiesced_handler(on_quiesced_handler)
 {
   pthread_mutex_init(&_lock, NULL);
 }
@@ -88,7 +91,7 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
     // If quiescing is now complete notify the quiescing manager.  This is done
     // without holding the lock to avoid potential deadlocks.
     if (quiesce_complete) {
-      // TODO Call back into the quiescing manager.
+      _on_quiesced_handler->quiesce_complete();
     }
   }
 }
@@ -161,7 +164,7 @@ void ConnectionTracker::quiesce()
   // If quiescing is now complete notify the quiescing manager.  This is done
   // without holding the lock to avoid potential deadlocks.
   if (quiesce_complete) {
-    // TODO Callback into the quiescing manager.
+    _on_quiesced_handler->quiesce_complete();
   }
 }
 

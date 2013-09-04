@@ -48,10 +48,15 @@ extern "C" {
 // Common STL includes.
 #include <set>
 
+class ConnectionsQuiescedInterface()
+{
+  virtual void quiesce_complete() = 0;
+}
+
 class ConnectionTracker
 {
 public:
-  ConnectionTracker();
+  ConnectionTracker(ConnectionsQuiescedInterface *handler);
   ~ConnectionTracker();
 
   // Notify the connection tracker that a connection is active (usually because
@@ -92,6 +97,9 @@ private:
 
   // Whether the connection manager is quiescing it's connections.
   pj_bool_t _quiescing;
+
+  // Pointer to the object that handles quiesce-complete notifications.
+  ConnectionsQuiescedInterface *_on_quiesced_handler;
 
   void connection_state_update(pjsip_transport* tp,
                                pjsip_transport_state state);

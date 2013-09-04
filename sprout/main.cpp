@@ -78,6 +78,7 @@ extern "C" {
 #include "pjutils.h"
 #include "log.h"
 #include "zmq_lvc.h"
+#include "quiescing_manager.h"
 
 struct options
 {
@@ -122,6 +123,7 @@ static sem_t term_sem;
 
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
+QuiescingManager *quiescing_mgr;
 
 static void usage(void)
 {
@@ -482,11 +484,6 @@ void terminate_handler(int sig)
 }
 
 
-void on_stack_quiesced()
-{
-  sem_post(&term_sem);
-}
-
 void *quiesce_unquiesce_thread_func(void *_)
 {
   pj_bool_t curr_quiescing = quiescing;
@@ -506,14 +503,22 @@ void *quiesce_unquiesce_thread_func(void *_)
       curr_quiescing = new_quiescing;
 
       if (new_quiescing) {
-        quiesce_stack(on_stack_quiesced);
+        quiescing_mgr->quiesce();
       } else {
-        unquiesce_stack();
+        quiescing_mgr->unquiesce();
       }
     }
   }
 
   return NULL;
+}
+
+class QuiesceCompleteHandler : public QuiesceCompletionInterface
+{
+  void quiesce_complete()
+  {
+    sem_post(&term_sem);
+  }
 }
 
 
@@ -552,6 +557,11 @@ int main(int argc, char *argv[])
 
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
+
+  // Create a new quiescing manager instance and register our completion handler
+  // with it.
+  quiescing_mgr = new QuiescingManager();
+  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
@@ -664,7 +674,8 @@ int main(int argc, char *argv[])
                       opt.sprout_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
-                      opt.worker_threads);
+                      opt.worker_threads,
+                      quiescing_mgr);
 
   if (status != PJ_SUCCESS)
   {
@@ -752,7 +763,7 @@ int main(int argc, char *argv[])
                                analytics_logger,
                                enum_service,
                                bgcf_service,
-                               hss_connection);
+                               hss_connection)
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",
@@ -829,6 +840,7 @@ int main(int argc, char *argv[])
   delete xdm_connection;
   delete enum_service;
   delete bgcf_service;
+  delete quiescing_mgr;
 
   if (opt.store_servers != "")
   {

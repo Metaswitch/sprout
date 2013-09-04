@@ -66,14 +66,16 @@ extern "C" {
 #include "statistic.h"
 #include "custom_headers.h"
 #include "accumulator.h"
+#include "connection_tracker.h"
+#include "quiescing_manager.h"
+
+class StackQuiesceHandler;
 
 struct stack_data_struct stack_data;
 
 static std::vector<pj_thread_t*> pjsip_threads;
 static std::vector<pj_thread_t*> worker_threads;
 static volatile pj_bool_t quit_flag;
-
-stack_quiesced_callback_t stack_quiesced_callback = NULL;
 
 // Queue for incoming messages.
 struct rx_msg_qe
@@ -83,9 +85,11 @@ struct rx_msg_qe
 };
 eventq<struct rx_msg_qe> rx_msg_q;
 
-
 static Accumulator* latency_accumulator;
 
+static QuiescingManager *quiescing_mgr;
+static StackQuiesceHandler *stack_quiesce_handler;
+static ConnectionTracker *connection_tracker;
 
 // We register a single module to handle scheduling plus local and
 // SAS logging.
@@ -108,6 +112,7 @@ static pjsip_module mod_stack =
   &on_tx_msg,                         /* on_tx_response()     */
   NULL,                               /* on_tsx_state()       */
 };
+
 
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
@@ -323,6 +328,9 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
 
+  // Notify the connection tracker that the transport is active.
+  connection_tracker->connection_active(rdata->tp_info.transport);
+
   // Clone the message and queue it to a scheduler thread.
   pjsip_rx_data* clone_rdata;
   pj_status_t status = pjsip_rx_data_clone(rdata, 0, &clone_rdata);
@@ -391,45 +399,138 @@ void init_pjsip_logging(int log_level,
   pj_log_set_log_func(&pjsip_log_handler);
 }
 
+void fill_transport_details(int port,
+                            pj_sockaddr_in *addr,
+                            pjsip_host_port *published_name)
+{
+  addr->sin_family = pj_AF_INET();
+  addr->sin_addr.s_addr = 0;
+  addr->sin_port = pj_htons((pj_uint16_t)port);
 
-pj_status_t create_listener_transports(int port, pjsip_tpfactory** tcp_factory)
+  published_name->host = stack_data.local_host;
+  published_name->port = port;
+}
+
+
+pj_status_t create_udp_transport(int port)
 {
   pj_status_t status;
   pj_sockaddr_in addr;
   pjsip_host_port published_name;
 
-  addr.sin_family = pj_AF_INET();
-  addr.sin_addr.s_addr = 0;
-  addr.sin_port = pj_htons((pj_uint16_t)port);
-
-  published_name.host = stack_data.local_host;
-  published_name.port = port;
-
+  fill_transport_details(port, &addr, &published_name);
   status = pjsip_udp_transport_start(stack_data.endpt,
                                      &addr,
                                      &published_name,
                                      50,
                                      NULL);
-  if (status != PJ_SUCCESS)
-  {
+  if (status != PJ_SUCCESS) {
     LOG_ERROR("Failed to start UDP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
-    return status;
   }
 
+  return status;
+}
+
+
+pj_status_t create_tcp_listener_transport(port, pjsip_tpfactory **tcp_factory)
+{
+  pj_status_t status;
+  pj_sockaddr_in addr;
+  pjsip_host_port published_name;
+
+  fill_transport_details(port, &addr, &published_name);
   status = pjsip_tcp_transport_start2(stack_data.endpt,
                                       &addr,
                                       &published_name,
                                       50,
                                       tcp_factory);
-  if (status != PJ_SUCCESS)
-  {
+  if (status != PJ_SUCCESS) {
     LOG_ERROR("Failed to start TCP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
+  }
+
+  return status;
+}
+
+
+void destroy_tcp_listener_transport(pj_tpfactory *tcp_factory)
+{
+  LOG_STATUS("Destroyed TCP transport for port %d", port);
+  tcp_factory->destroy();
+}
+
+
+pj_status_t start_transports(int port, pjsip_tpfactory** tcp_factory)
+{
+  pj_status_t status;
+
+  status = create_udp_transport(port);
+
+  if (status != PJ_SUCCESS) {
+    return status;
+  }
+
+  status = create_tcp_listener_transport(port, tcp_factory);
+
+  if (status != PJ_SUCCESS) {
     return status;
   }
 
   LOG_STATUS("Listening on port %d", port);
 
   return PJ_SUCCESS;
+}
+
+
+// This class distributes quiescing work within the stack module.  It receives
+// requests from the QuiscingManager and Connection Manager, and calls the
+// relvant methods in the stack module, QuiescingManager and ConnectionManager
+// as appropriate.
+class StackQuiesceHandler :
+  public QuiesceConnectionsInterface,
+  public ConnectionsQuiescedInterface
+{
+public:
+
+  //
+  // The following methods are from QuiesceConnectionsInterface.
+  //
+  void close_untrusted_port()
+  {
+    destroy_tcp_listener_transport(stack_data.untrusted_tcp_factory);
+  }
+
+  void close_trusted_port()
+  {
+    destroy_tcp_listener_transport(stack_data.trusted_tcp_factory);
+  }
+
+  void open_trusted_port()
+  {
+    create_tcp_listener_transport(stack_data.trusted_tcp_factory);
+  }
+
+  void open_untrusted_port()
+  {
+    create_tcp_listener_transport(stack_data.untrusted_tcp_factory);
+  }
+
+  void quiesce()
+  {
+    connection_tracker->quiesce();
+  }
+
+  void unquiesce()
+  {
+    connection_tracker->unquiesce();
+  }
+
+  //
+  // The following methods are from ConnectionsQuiescedInterface.
+  //
+  void connections_quiesced()
+  {
+    quiescing_mgr->conns_gone();
+  }
 }
 
 
@@ -482,7 +583,8 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
-                       int num_worker_threads)
+                       int num_worker_threads,
+                       QuiescingManager quiescing_mgr_arg)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -527,12 +629,14 @@ pj_status_t init_stack(const std::string& system_name,
   // Create listening transports for trusted and untrusted ports.
   if (stack_data.trusted_port != 0)
   {
-    status = create_listener_transports(stack_data.trusted_port, &stack_data.tcp_factory);
+    status = start_transports(stack_data.trusted_port,
+                              &stack_data.trusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
   if (stack_data.untrusted_port != 0)
   {
-    status = create_listener_transports(stack_data.untrusted_port, NULL);
+    status = start_transports(stack_data.untrusted_port,
+                              &stack_data.untrusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
@@ -605,6 +709,19 @@ pj_status_t init_stack(const std::string& system_name,
 
   latency_accumulator = new StatisticAccumulator("latency_us");
 
+  quiescing_mgr = quiescing_mgr_arg;
+
+  // Create an instance of the stack quiesce handler. This acts as a glue class
+  // between the stack modulem connections tracker, and the quiescing manager.
+  stack_quiesce_handler = new StackQuiesceHandler();
+
+  // Create a new connection tracker, and register the quiesce handler with it.
+  connection_tracker = new ConnectionTracker(stack_quiesce_handler);
+
+  // Register the quiesce handler with the quiescing manager (the former
+  // implements the connection hanling interface).
+  quiescing_mgr->register_conns_handler(stack_quiesce_handler);
+
   return status;
 }
 
@@ -647,20 +764,6 @@ pj_status_t start_stack()
   }
 
   return status;
-}
-
-void quiesce_stack(stack_quiesced_callback_t callback)
-{
-  stack_quiesced_callback = callback;
-
-  // TODO
-}
-
-void unquiesce_stack()
-{
-  stack_quiesced_callback = NULL;
-
-  // TODO
 }
 
 void stop_stack()
@@ -718,6 +821,13 @@ void destroy_stack(void)
   delete latency_accumulator;
   latency_accumulator = NULL;
   delete stack_data.stats_aggregator;
+
+  delete stack_quiesce_handler;
+  stack_quiesce_handler = NULL;
+
+  delete connection_tracker;
+  connection_tracker = NULL;
+
   pjsip_threads.clear();
   worker_threads.clear();
 
