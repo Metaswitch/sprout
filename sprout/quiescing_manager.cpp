@@ -159,6 +159,7 @@ void QuiescingManager::process_input(int input)
           invalid_input(input, _state);
           break;
       }
+      break;
 
     case STATE_QUIESCING_FLOWS:
 
