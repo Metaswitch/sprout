@@ -87,9 +87,9 @@ eventq<struct rx_msg_qe> rx_msg_q;
 
 static Accumulator* latency_accumulator;
 
-static QuiescingManager *quiescing_mgr;
-static StackQuiesceHandler *stack_quiesce_handler;
-static ConnectionTracker *connection_tracker;
+static QuiescingManager *quiescing_mgr = NULL;
+static StackQuiesceHandler *stack_quiesce_handler = NULL;
+static ConnectionTracker *connection_tracker = NULL;
 
 // We register a single module to handle scheduling plus local and
 // SAS logging.
@@ -724,18 +724,23 @@ pj_status_t init_stack(const std::string& system_name,
 
   latency_accumulator = new StatisticAccumulator("latency_us");
 
-  quiescing_mgr = quiescing_mgr_arg;
+  if (quiescing_mgr_arg != NULL)
+  {
+    quiescing_mgr = quiescing_mgr_arg;
 
-  // Create an instance of the stack quiesce handler. This acts as a glue class
-  // between the stack modulem connections tracker, and the quiescing manager.
-  stack_quiesce_handler = new StackQuiesceHandler();
+    // Create an instance of the stack quiesce handler. This acts as a glue
+    // class between the stack modulem connections tracker, and the quiescing
+    // manager.
+    stack_quiesce_handler = new StackQuiesceHandler();
 
-  // Create a new connection tracker, and register the quiesce handler with it.
-  connection_tracker = new ConnectionTracker(stack_quiesce_handler);
+    // Create a new connection tracker, and register the quiesce handler with
+    // it.
+    connection_tracker = new ConnectionTracker(stack_quiesce_handler);
 
-  // Register the quiesce handler with the quiescing manager (the former
-  // implements the connection hanling interface).
-  quiescing_mgr->register_conns_handler(stack_quiesce_handler);
+    // Register the quiesce handler with the quiescing manager (the former
+    // implements the connection hanling interface).
+    quiescing_mgr->register_conns_handler(stack_quiesce_handler);
+  }
 
   return status;
 }
