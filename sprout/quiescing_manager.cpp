@@ -44,7 +44,6 @@
 #define QUIESCING_MANAGER_DEFINE_VARS
 #include "quiescing_manager.h"
 
-
 SynchronizedFSM::SynchronizedFSM() :
   _running(false),
   _input_q()
@@ -99,8 +98,35 @@ QuiescingManager::QuiescingManager(bool edge_proxy,
 {}
 
 
-// Implement the state machine descibed in the comments for the QuiescingManager
-// class.
+// Implement the state machine for the QuiescingManager class.
+//
+// The state machine is descibed by the table below where each cell sepcifies
+// the state to move to (as a number) and the action to take (as a letter).
+// Dashes indicate no state change / action. Empty cells are not hittable.
+//
+// Inputs \ States |  0  |  1  |  2  |  3  |
+// ----------------+-----+-----+-----+-----+
+// QUIESCE         | 1 A |     |     | - - |
+// FLOWS_GONE      | - - | 2 B | - - |     |
+// CONNS_GONE      | - - | - - | 3 C |     |
+// UNQUIESCE       |     | 0 D | 0 E | - - |
+//
+// States:
+//   0  ACTIVE
+//   1  QUIESCING_FLOWS
+//   2  QUIESCING_CONNS
+//   3  QUIESCED
+//
+// Actions:
+//   A  Call quiesce_untrusted_interface
+//   B  Call quiesce_connections
+//   C  Call quiesce_complete
+//   D  Call unquiesce_untrusted_interface
+//   E  Call unquiesce_connections followed by unquiesce_untrusted_interface
+//
+// This method just implements the transition table.  The actual processing
+// associated with actions is handled by various submethods.
+//
 void QuiescingManager::process_input(int input)
 {
   // Check that we're in a valid state and have received a valid input.
