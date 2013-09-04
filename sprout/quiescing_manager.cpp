@@ -60,6 +60,7 @@ void SynchronizedFSM::send_input(int input)
 {
   pthread_mutex_lock(&_lock);
 
+  LOG_DEBUG("FSM send_input %d - current state %d\n", input, _state);
   // Queue the new input, even if we can't process it immediately.
   _input_q.push(input);
 
@@ -129,6 +130,9 @@ QuiescingManager::QuiescingManager() :
 //
 void QuiescingManager::process_input(int input)
 {
+  LOG_DEBUG("FSM process_input %d - current state %d\n", input, _state);
+
+  int old_state = _state;
   // Check that we're in a valid state and have received a valid input.
   assert((input == INPUT_QUIESCE) ||
          (input == INPUT_FLOWS_GONE) ||
@@ -226,6 +230,7 @@ void QuiescingManager::process_input(int input)
       }
       break;
   }
+  LOG_DEBUG("Moved from state %d to %d after input %d", old_state, _state, input);
 }
 
 
