@@ -48,10 +48,11 @@ extern "C" {
 // Common STL includes.
 #include <set>
 
-class ConnectionsQuiescedInterface()
+class ConnectionsQuiescedInterface
 {
-  virtual void quiesce_complete() = 0;
-}
+public:
+  virtual void connections_quiesced() = 0;
+};
 
 class ConnectionTracker
 {

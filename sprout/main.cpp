@@ -515,11 +515,12 @@ void *quiesce_unquiesce_thread_func(void *_)
 
 class QuiesceCompleteHandler : public QuiesceCompletionInterface
 {
+public:
   void quiesce_complete()
   {
     sem_post(&term_sem);
   }
-}
+};
 
 
 /*
@@ -763,7 +764,7 @@ int main(int argc, char *argv[])
                                analytics_logger,
                                enum_service,
                                bgcf_service,
-                               hss_connection)
+                               hss_connection);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",

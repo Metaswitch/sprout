@@ -432,7 +432,7 @@ pj_status_t create_udp_transport(int port)
 }
 
 
-pj_status_t create_tcp_listener_transport(port, pjsip_tpfactory **tcp_factory)
+pj_status_t create_tcp_listener_transport(int port, pjsip_tpfactory **tcp_factory)
 {
   pj_status_t status;
   pj_sockaddr_in addr;
@@ -452,10 +452,10 @@ pj_status_t create_tcp_listener_transport(port, pjsip_tpfactory **tcp_factory)
 }
 
 
-void destroy_tcp_listener_transport(pj_tpfactory *tcp_factory)
+void destroy_tcp_listener_transport(int port, pjsip_tpfactory *tcp_factory)
 {
   LOG_STATUS("Destroyed TCP transport for port %d", port);
-  tcp_factory->destroy();
+  tcp_factory->destroy(tcp_factory);
 }
 
 
@@ -496,22 +496,34 @@ public:
   //
   void close_untrusted_port()
   {
-    destroy_tcp_listener_transport(stack_data.untrusted_tcp_factory);
+    if (stack_data.untrusted_tcp_factory != NULL) {
+      destroy_tcp_listener_transport(stack_data.untrusted_port,
+                                     stack_data.untrusted_tcp_factory);
+    }
   }
 
   void close_trusted_port()
   {
-    destroy_tcp_listener_transport(stack_data.trusted_tcp_factory);
+    if (stack_data.trusted_tcp_factory != NULL) {
+      destroy_tcp_listener_transport(stack_data.trusted_port,
+                                     stack_data.trusted_tcp_factory);
+    }
   }
 
   void open_trusted_port()
   {
-    create_tcp_listener_transport(stack_data.trusted_tcp_factory);
+    if (stack_data.trusted_port != 0) {
+      create_tcp_listener_transport(stack_data.trusted_port,
+                                    &stack_data.trusted_tcp_factory);
+    }
   }
 
   void open_untrusted_port()
   {
-    create_tcp_listener_transport(stack_data.untrusted_tcp_factory);
+    if (stack_data.untrusted_port != 0) {
+      create_tcp_listener_transport(stack_data.untrusted_port,
+                                    &stack_data.untrusted_tcp_factory);
+    }
   }
 
   void quiesce()
@@ -529,9 +541,9 @@ public:
   //
   void connections_quiesced()
   {
-    quiescing_mgr->conns_gone();
+    quiescing_mgr->connections_gone();
   }
-}
+};
 
 
 pj_status_t init_pjsip()
@@ -584,7 +596,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads,
-                       QuiescingManager quiescing_mgr_arg)
+                       QuiescingManager *quiescing_mgr_arg)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -627,12 +639,15 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.module_id = mod_stack.id;
 
   // Create listening transports for trusted and untrusted ports.
+  stack_data.trusted_tcp_factory = NULL;
   if (stack_data.trusted_port != 0)
   {
     status = start_transports(stack_data.trusted_port,
                               &stack_data.trusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
+
+  stack_data.untrusted_tcp_factory = NULL;
   if (stack_data.untrusted_port != 0)
   {
     status = start_transports(stack_data.untrusted_port,
