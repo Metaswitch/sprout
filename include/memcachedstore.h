@@ -108,7 +108,8 @@ public:
   MemcachedStore(bool binary=true);
   ~MemcachedStore();
 
-  void new_view(const std::list<std::string>& servers);
+  void new_view(const std::list<std::string>& servers,
+                const std::vector<std::vector<std::string> >& vbuckets);
 
   void flush_all();
 
@@ -137,6 +138,8 @@ private:
     return oss.str();
   }
 
+  char* vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets);
+
   static std::string serialize_aor(MemcachedAoR* aor_data);
   static MemcachedAoR* deserialize_aor(const std::string& s);
 
@@ -150,8 +153,6 @@ private:
 
   int _servers;
   std::string _options;
-
-  static const int NUM_VBUCKETS = 256;
 
   uint32_t _vbuckets;
   std::vector<uint32_t*> _vbucket_map;

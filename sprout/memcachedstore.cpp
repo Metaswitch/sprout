@@ -75,7 +75,7 @@ void destroy_memcached_store(RegData::Store* store)
 /// Constructor: get a handle to the memcached connection pool of interest.
 MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   _binary(binary),
-  _replicas(2),
+  _replicas(0),
   _view(0),
   _options(),
   _vbuckets(),
@@ -108,21 +108,36 @@ MemcachedStore::~MemcachedStore()
 // LCOV_EXCL_START - need real memcached to test
 
 
+/// Converts a vbucket map to a printable string.
+char* MemcachedStore::vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets)
+{
+  char* wptr = buf;
+  for (int ii = 0; ii < vbuckets - 1; ++ii)
+  {
+    wptr += snprintf(wptr, (buf_size - (wptr - buf)), "%d, ", vbucket_map[ii]);
+  }
+  snprintf(wptr, (buf_size - (wptr - buf)), "%d", vbucket_map[vbuckets - 1]);
+
+  return buf;
+}
+
+
 /// Set up a new view of the memcached cluster(s).  The view determines
 /// how data is distributed around the cluster.
-void MemcachedStore::new_view(const std::list<std::string>& servers)
+void MemcachedStore::new_view(const std::list<std::string>& servers,
+                              const std::vector<std::vector<std::string> >& vbuckets)
 {
   pthread_mutex_lock(&_view_lock);
 
   ++_view;
   _options = "";
-
-  if (!_vbucket_map.empty())
+  for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
   {
-    delete _vbucket_map[0];
+    delete _vbucket_map[ii];
   }
 
   _servers = servers.size();
+  _replicas = vbuckets.size();
 
   for (std::list<std::string>::const_iterator i = servers.begin();
        i != servers.end();
@@ -147,23 +162,20 @@ void MemcachedStore::new_view(const std::list<std::string>& servers)
   }
   LOG_DEBUG("%d active replicas", active_replicas);
 
+  _vbuckets = vbuckets[0].size();
   _vbucket_map.resize(active_replicas);
 
-  // Set up the primary vbucket map.  Allow (active_replicas - 1) extra entries
-  // so we can use the same array for all replicas.
-  _vbuckets = NUM_VBUCKETS;
-  _vbucket_map[0] = new uint32_t[_vbuckets + active_replicas - 1];
-  LOG_DEBUG("Setting up primary vbucket_map");
-  for (size_t ii = 0; ii < _vbuckets + active_replicas - 1; ++ii)
+  for (size_t ii = 0; ii < vbuckets.size(); ++ii)
   {
-    _vbucket_map[0][ii] = ii % _servers;
-  }
-
-  // Set up the replica vbucket maps if there are enough servers.
-  for (int jj = 1; jj < active_replicas; ++jj)
-  {
-    LOG_DEBUG("Setting up vbucket_map for replica %d", jj);
-    _vbucket_map[jj] = &_vbucket_map[0][jj];
+    _vbucket_map[ii] = new uint32_t[_vbuckets];
+    for (size_t jj = 0; jj < _vbuckets; ++jj)
+    {
+      _vbucket_map[ii][jj] = atoi(vbuckets[ii][jj].c_str());
+    }
+    char buf[500];
+    LOG_DEBUG("vbucket map for replica %d = %s",
+              ii,
+              vbucket_to_string(buf, sizeof(buf), _vbucket_map[ii], _vbuckets));
   }
 
   pthread_mutex_unlock(&_view_lock);

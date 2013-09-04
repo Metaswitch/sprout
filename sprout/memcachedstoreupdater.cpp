@@ -83,6 +83,7 @@ void MemcachedStoreUpdater::update_view()
   // Read the memstore file.
   std::ifstream f(_file);
   std::list<std::string> servers;
+  std::vector<std::vector<std::string> > vbuckets;
 
   if (f.is_open())
   {
@@ -103,12 +104,18 @@ void MemcachedStoreUpdater::update_view()
           break;
         }
 
-        LOG_DEBUG("Parameter name is %s", tokens[0].c_str());
+        LOG_DEBUG("Parameter name is %s, value is %s", tokens[0].c_str(), tokens[1].c_str());
 
-        if (tokens[0] == "memstore")
+        if (tokens[0] == "servers")
         {
           // Found line defining servers.
           Utils::split_string(tokens[1], ',', servers, 0, true);
+        }
+        else if (tokens[0] == "vbuckets")
+        {
+          // Found the a vbucket map.
+          vbuckets.push_back(std::vector<std::string>());
+          Utils::split_string(tokens[1], ',', vbuckets[vbuckets.size() - 1], 0, true);
         }
       }
     }
@@ -116,7 +123,7 @@ void MemcachedStoreUpdater::update_view()
 
     servers.sort();
     LOG_DEBUG("Update store %p", _store);
-    _store->new_view(servers);
+    _store->new_view(servers, vbuckets);
   }
   else
   {
