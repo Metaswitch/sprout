@@ -191,6 +191,8 @@ class StatefulProxyTestBase : public SipTest
 {
 public:
   FakeLogger _log;
+  static QuiescingManager _quiescing_manager;
+
 
   /// TX data for testing.  Will be cleaned up.  Each message in a
   /// forked flow has its URI stored in _uris, and its txdata stored
@@ -237,7 +239,8 @@ public:
                                           _analytics,
                                           _enum_service,
                                           _bgcf_service,
-                                          _hss_connection);
+                                          _hss_connection,
+                                          &_quiescing_manager);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -347,6 +350,7 @@ EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
+QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
 {
@@ -1477,7 +1481,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
 {
   SCOPED_TRACE("");
 
-  edge_proxy_quiesce(NULL);
+  _quiescing_manager.quiesce();
 
   // Register client.
   TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
@@ -1502,7 +1506,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
   pjsip_tx_data* tdata = current_txdata();
   r1.matches(tdata->msg);
 
-  edge_proxy_unquiesce();
+  _quiescing_manager.unquiesce();
+
   delete xiTp;
 }
 

@@ -59,6 +59,7 @@ class UACTransaction;
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "aschain.h"
+#include "quiescing_manager.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -278,15 +279,12 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
-                                HSSConnection* hss_connection);
+                                HSSConnection* hss_connection,
+                                QuiescingManager* quiescing_manager);
 
 void destroy_stateful_proxy();
 
 enum SourceType {trustedPort, configuredTrunk, client};
-
-void edge_proxy_quiesce(stack_quiesced_callback_t callback);
-
-void edge_proxy_unquiesce();
 
 
 #ifdef UNIT_TEST

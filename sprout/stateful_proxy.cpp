@@ -127,6 +127,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "custom_headers.h"
 #include "dialog_tracker.hpp"
+#include "quiescing_manager.h"
 
 static RegData::Store* store;
 
@@ -3334,7 +3335,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
-                                HSSConnection* hss_connection)
+                                HSSConnection* hss_connection,
+                                QuiescingManager* quiescing_manager)
 {
   pj_status_t status;
 
@@ -3354,8 +3356,10 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
-    // Create a flow table object to manage the client flow records.
-    flow_table = new FlowTable;
+    // Create a flow table object to manage the client flow records
+    // and handle edge proxy quiescing.
+    flow_table = new FlowTable(quiescing_manager);
+    quiescing_manager->register_flows_handler(flow_table);
 
     // Create a dialog tracker to count dialogs on each flow
     dialog_tracker = new DialogTracker(flow_table);
@@ -3661,13 +3665,3 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
 }
 
 ///@}
-
-void edge_proxy_quiesce(stack_quiesced_callback_t callback)
-{
-  flow_table->quiesce(callback);
-}
-
-void edge_proxy_unquiesce()
-{
-  flow_table->unquiesce();
-}

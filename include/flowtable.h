@@ -53,6 +53,7 @@ extern "C" {
 
 #include "statistic.h"
 #include "stack.h"
+#include "quiescing_manager.h"
 
 class FlowTable;
 
@@ -156,10 +157,10 @@ private:
 };
 
 
-class FlowTable
+class FlowTable : public QuiesceFlowsInterface
 {
 public:
-  FlowTable();
+  FlowTable(QuiescingManager* qm);
   ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.
@@ -179,7 +180,7 @@ public:
   void remove_flow(Flow* flow);
 
   // Functions for quiescing a Bono.
-  void quiesce(stack_quiesced_callback_t callback);
+  void quiesce();
   void unquiesce();
   bool is_quiescing();
 
@@ -233,7 +234,7 @@ private:
   void report_flow_count();
   Statistic _statistic;
   bool _quiescing;
-  stack_quiesced_callback_t _callback_on_quiesce;
+  QuiescingManager* _qm;
 
 };
 

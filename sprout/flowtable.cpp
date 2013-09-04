@@ -52,11 +52,12 @@ extern "C" {
 #include "flowtable.h"
 
 
-FlowTable::FlowTable() :
+FlowTable::FlowTable(QuiescingManager* qm) :
   _tp2flow_map(),
   _tk2flow_map(),
   _statistic("client_count"),
-  _quiescing(false)
+  _quiescing(false),
+  _qm(qm)
 {
   pthread_mutex_init(&_flow_map_lock, NULL);
   report_flow_count();
@@ -207,10 +208,10 @@ void FlowTable::remove_flow(Flow* flow)
 
   delete flow;
 
-  if (_tp2flow_map.empty() && is_quiescing())
+  if (_tp2flow_map.empty() && is_quiescing() && (_qm != NULL))
   {
     LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
-    quiesce_stack(_callback_on_quiesce);
+    _qm->flows_gone();
   }
 
   pthread_mutex_unlock(&_flow_map_lock);
@@ -225,19 +226,17 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
-void FlowTable::quiesce(stack_quiesced_callback_t callback)
+void FlowTable::quiesce()
 {
-   pthread_mutex_lock(&_flow_map_lock);
-
-  _callback_on_quiesce = callback;
   _quiescing = true;
+  pthread_mutex_lock(&_flow_map_lock);
 
   // If we have no flows, quiesce now - otherwise we do this in
   // remove_flow when the last flow disappears
-  if (_tp2flow_map.empty())
+  if (_tp2flow_map.empty() && (_qm != NULL))
   {
     LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing immediately");
-    quiesce_stack(_callback_on_quiesce);
+    _qm->flows_gone();
   }
 
   pthread_mutex_unlock(&_flow_map_lock);
@@ -246,7 +245,6 @@ void FlowTable::quiesce(stack_quiesced_callback_t callback)
 void FlowTable::unquiesce()
 {
   _quiescing = false;
-  unquiesce_stack();
 }
 
 bool FlowTable::is_quiescing()

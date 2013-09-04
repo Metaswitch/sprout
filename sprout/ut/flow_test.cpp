@@ -54,13 +54,15 @@ class FlowTest : public SipTest
 public:
   FakeLogger _log;
   static FlowTable* ft;
+  static QuiescingManager* qm;
   Flow* flow;
   static pj_sockaddr addr;
 
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    ft = new FlowTable();
+    qm = NULL;
+    ft = new FlowTable(qm);
     addr.addr.sa_family = PJ_AF_INET;
   }
 
@@ -68,6 +70,8 @@ public:
   {
     delete ft;
     ft = NULL;
+    delete qm;
+    qm = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -85,6 +89,7 @@ public:
   }
 };
 
+QuiescingManager* FlowTest::qm;
 FlowTable* FlowTest::ft;
 pj_sockaddr FlowTest::addr;
 
@@ -95,14 +100,14 @@ TEST_F(FlowTest, EmptyFlowNoQuiesce)
 
 TEST_F(FlowTest, EmptyFlowQuiesce)
 {
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_TRUE(flow->should_quiesce());
 }
 
 
 TEST_F(FlowTest, FlowQuiesceWithDialogs)
 {
-  ft->quiesce(NULL);
+  ft->quiesce();
   flow->increment_dialogs();
   EXPECT_FALSE(flow->should_quiesce());
 }
@@ -112,13 +117,13 @@ TEST_F(FlowTest, FlowQuiesceMidDialogs)
   EXPECT_FALSE(flow->should_quiesce());
   flow->increment_dialogs();
   EXPECT_FALSE(flow->should_quiesce());
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_FALSE(flow->should_quiesce());
 }
 
 TEST_F(FlowTest, FlowQuiesceWhenDialogsEnd)
 {
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_TRUE(flow->should_quiesce());
   flow->increment_dialogs();
   EXPECT_FALSE(flow->should_quiesce());
@@ -129,7 +134,7 @@ TEST_F(FlowTest, FlowQuiesceWhenDialogsEnd)
 
 TEST_F(FlowTest, EmptyFlowUnquiesce)
 {
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_TRUE(flow->should_quiesce());
   ft->unquiesce();
   EXPECT_FALSE(flow->should_quiesce());
@@ -138,7 +143,7 @@ TEST_F(FlowTest, EmptyFlowUnquiesce)
 
 TEST_F(FlowTest, FlowUnQuiesceMidDialog)
 {
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_TRUE(flow->should_quiesce());
   flow->increment_dialogs();
   EXPECT_FALSE(flow->should_quiesce());

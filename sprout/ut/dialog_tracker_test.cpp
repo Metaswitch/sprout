@@ -55,13 +55,15 @@ public:
   FakeLogger _log;
   static DialogTracker* dialog_tracker;
   static FlowTable* ft;
+  static QuiescingManager* qm;
   Flow* flow;
   static pj_sockaddr addr;
 
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    ft = new FlowTable();
+    qm = NULL;
+    ft = new FlowTable(qm);
     addr.addr.sa_family = PJ_AF_INET;
     dialog_tracker = new DialogTracker(ft);
   }
@@ -89,6 +91,7 @@ public:
   }
 };
 
+QuiescingManager* DialogTrackerTest::qm;
 FlowTable* DialogTrackerTest::ft;
 DialogTracker* DialogTrackerTest::dialog_tracker;
 pj_sockaddr DialogTrackerTest::addr;
@@ -109,7 +112,7 @@ TEST_F(DialogTrackerTest, MainlineDialogTracking)
   tsx.method.id = PJSIP_INVITE_METHOD;
   tsx.status_code = 200;
 
-  ft->quiesce(NULL);
+  ft->quiesce();
   EXPECT_TRUE(flow->should_quiesce());
 
   // Track the start of a dialog, and check that we keep the flow alive
