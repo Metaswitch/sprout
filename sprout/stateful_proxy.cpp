@@ -778,6 +778,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
+  SourceType source_type = determine_source(rdata->tp_info.transport,
+                                            rdata->pkt_info.src_addr);
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
@@ -786,7 +788,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   {
     // Received a REGISTER request.  Check if we should act as the edge proxy
     // for the request.
-    if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+    if (source_type == trustedPort)
     {
       // Reject REGISTER request received from within the trust domain.
       LOG_DEBUG("Reject REGISTER received on trusted port");
@@ -797,8 +799,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    if ((ibcf) &&
-        (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+    if (source_type == configuredTrunk)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
       PJUtils::respond_stateless(stack_data.endpt,
@@ -887,13 +888,12 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // (that is, a client flow).
     bool trusted = false;
 
-    if (rdata->tp_info.transport->local_name.port != stack_data.trusted_port)
+    if (source_type != trustedPort)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
       LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-      if ((ibcf) &&
-          (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+      if (source_type == configuredTrunk)
       {
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
