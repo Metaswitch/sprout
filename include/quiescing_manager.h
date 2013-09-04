@@ -87,17 +87,31 @@ private:
 class QuiescingManager : public SynchronizedFSM
 {
 public:
-  QuiescingManager(bool edge_proxy,
-                   ConnectionTracker *connection_tracker);
+  QuiescingManager();
 
   // Inputs methods for the state machine.
   //
   // These just send a new input to the state machine, so we define the
   // implmentation of them here.
-  void quiesce() { send_input(INPUT_QUIESCE); }
-  void flows_gone() { send_input(INPUT_FLOWS_GONE); }
+  void quiesce()          { send_input(INPUT_QUIESCE); }
+  void flows_gone()       { send_input(INPUT_FLOWS_GONE); }
   void connections_gone() { send_input(INPUT_CONNS_GONE); }
-  void unquiesce() { send_input(INPUT_UNQUIESCE); }
+  void unquiesce()        { send_input(INPUT_UNQUIESCE); }
+
+  void register_conns_handler(QuiesceConnectionsInterface *handler)
+  {
+    _conns_handler = handler;
+  }
+
+  void register_flows_handler(QuiesceFlowsInterface *handler)
+  {
+    _flows_handler = handler;
+  }
+
+  void register_completion_handler(QuiesceCompletionInterface *handler)
+  {
+    _completion_handler = handler
+  }
 
 private:
   void process_input(int input);
@@ -120,12 +134,6 @@ private:
   static const char *STATE_NAMES[4];
   static const char *INPUT_NAMES[4];
 
-  // Pointer to the object tracking TCP connections.
-  ConnectionTracker *_conn_tracker;
-
-  // Whether we're currently running as an edge proxy.
-  bool _edge_proxy;
-
   // Utility method that should is called when the FSM encounters receives an
   // input that is invalid for the current state.
   void invalid_input(int input, int state);
@@ -134,10 +142,43 @@ private:
   void quiesce_untrusted_interface();
   void quiesce_connections();
   void quiesce_complete();
-
   void unquiesce_connections();
   void unquiesce_untrusted_interface();
+
+  // Handlers that implement the various interfaces exposed by the quiescing
+  // manager.
+  QuiesceConnectionsInterface *_conns_handler;
+  QuiesceFlowsInterface *_flows_handler;
+  QuiesceCompletionInterface *_completion_handler;
 };
+
+class QuiesceConnectionsInterface
+{
+  virtual void close_untrusted_port() = 0;
+
+  virtual void close_trusted_port() = 0;
+
+  virtual void quiesce() = 0;
+
+  virtual void unquiesce() = 0;
+
+  virtual void open_trusted_port() = 0;
+
+  virtual void open_untruested_port() = 0;
+};
+
+class QuiesceFlowsInterface
+{
+  virtual void quiesce() = 0;
+
+  virtual void unquiesce() = 0;
+};
+
+class QuiesceCompletionInterface
+{
+  virtual void quiesce_complete() = 0;
+};
+
 
 // Definitions of the names for the quiescing manager's inputs and states.
 // Wrapped in a pre-processor directive so that these are only defined once (in

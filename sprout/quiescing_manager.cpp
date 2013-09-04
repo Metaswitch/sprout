@@ -90,11 +90,11 @@ void SynchronizedFSM::send_input(int input)
 }
 
 
-QuiescingManager::QuiescingManager(bool edge_proxy,
-                                   ConnectionTracker *connection_tracker) :
+QuiescingManager::QuiescingManager()
   SynchronizedFSM(),
-  _conn_tracker(connection_tracker),
-  _edge_proxy(edge_proxy)
+  _conns_handler(NULL),
+  _flows_handler(NULL),
+  _completion_handler(NULL)
 {}
 
 
@@ -240,53 +240,75 @@ void QuiescingManager::invalid_input(int input, int state)
 
 void QuiescingManager::quiesce_untrusted_interface()
 {
-  if (_edge_proxy)
+  if (_conns_handler != NULL)
   {
-    // Close the untructed listening port.  This prevents any new clinets from
-    // connecting. TODO
+    // Close the untructed listening port.  This prevents any new clients from
+    // connecting.
+    _conns_handler->close_untrusted_port();
+  }
 
+  if (_flows_handler != NULL)
+  {
     // Instruct the FlowTable to quiesce.  This waits until all flows have
-    // expired, at which case it calls flows_gone(). TODO.
+    // expired, at which case it calls flows_gone().
+    _flows_handler->quiesce();
   }
   else
   {
-    // We're not on an edge proxy so there aren't any flows.
+    // No flows handler so there can't be any flows to quiesce.
     flows_gone();
   }
 }
 
-
 void QuiescingManager::quiesce_connections()
 {
-  // Close the trusted listening port.  This prevents any new connections from
-  // being established (note that on an edge proxy we should already have closed
-  // the untructed listening port).  TODO
+  if (_conns_handler != NULL)
+  {
+    // Close the trusted listening port.  This prevents any new connections from
+    // being established (note that on an edge proxy we should already have
+    // closed the untructed listening port).
+    _conns_handler->close_trusted_port();
 
-  // Quiesce open connections.  This will close them when they no longer have
-  // any outstanding transactions.  When this process has completed the
-  // connection tracker will call connections_gone().
-  _conn_tracker->quiesce();
+    // Quiesce open connections.  This will close them when they no longer have
+    // any outstanding transactions.  When this process has completed the
+    // connection tracker will call connections_gone().
+    _conns_handler->quiesce();
+  }
 }
 
 void QuiescingManager::quiesce_complete()
 {
-  // Notify the stack module that quiescing is now complete. TODO
+  if (_completion_handler != NULL)
+  {
+    // Notify the completion handler that quiescing is done.
+    _completion_handler->quiesce_complete();
+  }
 }
 
 void QuiescingManager::unquiesce_connections()
 {
-  // Repoen the untrusted listening port. TODO
+  if (_conns_handler != NULL)
+  {
+    // Unquiesce connections (so that new connections can be accepted).
+    _conns_handler->unquiesce();
 
-  _conn_tracker->unquiesce();
+    // Repoen the untrusted listening port.
+    _conns_handler->open_trusted_port();
+  }
 }
 
 void QuiescingManager::unquiesce_untrusted_interface()
 {
-  if (_edge_proxy)
+  if (_flows_handler != NULL)
   {
-    // Reopen untrusted listening port. TODO
+    // Take the flows out of quiescing mode.
+    _flows_handler->unquiesce();
+  }
 
-    // Take the FlowTable out of quiescing mode.
+  if (_conns_handler != NULL)
+  {
+    // Reopen untrusted listening port.
+    _conns_handler->open_untrusted_port()
   }
 }
 
