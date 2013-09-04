@@ -90,7 +90,7 @@ void SynchronizedFSM::send_input(int input)
 }
 
 
-QuiescingManager::QuiescingManager()
+QuiescingManager::QuiescingManager() :
   SynchronizedFSM(),
   _conns_handler(NULL),
   _flows_handler(NULL),
@@ -308,7 +308,7 @@ void QuiescingManager::unquiesce_untrusted_interface()
   if (_conns_handler != NULL)
   {
     // Reopen untrusted listening port.
-    _conns_handler->open_untrusted_port()
+    _conns_handler->open_untrusted_port();
   }
 }
 

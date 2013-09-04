@@ -80,6 +80,36 @@ private:
   std::queue<int> _input_q;
 };
 
+class QuiesceConnectionsInterface
+{
+public:
+  virtual void close_untrusted_port() = 0;
+
+  virtual void close_trusted_port() = 0;
+
+  virtual void quiesce() = 0;
+
+  virtual void unquiesce() = 0;
+
+  virtual void open_trusted_port() = 0;
+
+  virtual void open_untrusted_port() = 0;
+};
+
+class QuiesceFlowsInterface
+{
+public:
+  virtual void quiesce() = 0;
+
+  virtual void unquiesce() = 0;
+};
+
+class QuiesceCompletionInterface
+{
+public:
+  virtual void quiesce_complete() = 0;
+};
+
 
 // The quiescing manager is a finite state machine that controls the processing
 // required for quiescing bono/sprout, and ensures the right actions are carried
@@ -110,7 +140,7 @@ public:
 
   void register_completion_handler(QuiesceCompletionInterface *handler)
   {
-    _completion_handler = handler
+    _completion_handler = handler;
   }
 
 private:
@@ -150,33 +180,6 @@ private:
   QuiesceConnectionsInterface *_conns_handler;
   QuiesceFlowsInterface *_flows_handler;
   QuiesceCompletionInterface *_completion_handler;
-};
-
-class QuiesceConnectionsInterface
-{
-  virtual void close_untrusted_port() = 0;
-
-  virtual void close_trusted_port() = 0;
-
-  virtual void quiesce() = 0;
-
-  virtual void unquiesce() = 0;
-
-  virtual void open_trusted_port() = 0;
-
-  virtual void open_untruested_port() = 0;
-};
-
-class QuiesceFlowsInterface
-{
-  virtual void quiesce() = 0;
-
-  virtual void unquiesce() = 0;
-};
-
-class QuiesceCompletionInterface
-{
-  virtual void quiesce_complete() = 0;
 };
 
 
