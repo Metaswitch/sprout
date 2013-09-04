@@ -190,6 +190,10 @@ void FlowTable::check_quiescing_state()
     LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
     _qm->flows_gone();
   }
+  else
+  {
+    LOG_DEBUG("Checked quiescing state: flow_map is %d, quiescing is %d, qm is %d", _tp2flow_map.empty(), is_quiescing(), _qm);
+  }
 }
 
 void FlowTable::remove_flow(Flow* flow)
@@ -231,6 +235,7 @@ void FlowTable::report_flow_count()
 
 void FlowTable::quiesce()
 {
+  LOG_DEBUG("FlowTable was kicked to quiesce");
   _quiescing = true;
   pthread_mutex_lock(&_flow_map_lock);
 
@@ -557,6 +562,7 @@ void Flow::restart_timer(int id, int timeout)
 void Flow::inc_ref()
 {
   ++_refs;
+  LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
 }
 
 
@@ -573,7 +579,8 @@ void Flow::dec_ref()
   }
   else
   {
-    pthread_mutex_unlock(&_flow_table->_flow_map_lock);
+    LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
+    pthread_mutex_unlock(&_flow_table->_flow_map_lock); 
   }
 }
 
