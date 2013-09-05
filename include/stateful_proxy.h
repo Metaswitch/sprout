@@ -284,7 +284,13 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
 void destroy_stateful_proxy();
 
-enum SourceType {trustedPort, configuredTrunk, client};
+enum SourceType
+{
+  SOURCETYPE_TRUSTED_PORT,
+  SOURCETYPE_CONFIGURED_TRUNK,
+  SOURCETYPE_CLIENT,
+  SOURCETYPE_CANT_TELL
+};
 
 
 #ifdef UNIT_TEST
