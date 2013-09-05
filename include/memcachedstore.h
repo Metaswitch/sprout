@@ -44,6 +44,7 @@
 #define MEMCACHEDSTORE_H__
 
 #include <sstream>
+#include <vector>
 
 extern "C" {
 #include <libmemcached/memcached.h>
@@ -54,83 +55,108 @@ extern "C" {
 
 namespace RegData {
 
-  /// @class RegData::MemcachedAoR
-  ///
-  /// A memcached-based implementation of the Address of Record class.
-  class MemcachedAoR : public AoR
+/// @class RegData::MemcachedAoR
+///
+/// A memcached-based implementation of the Address of Record class.
+class MemcachedAoR : public AoR
+{
+public:
+  MemcachedAoR() :
+    AoR(),
+    _cas(0)
   {
-  public:
-    MemcachedAoR() :
-      AoR(),
-      _cas(0)
-      {
-      }
+  }
 
-    inline void set_cas(uint64_t cas) { _cas = cas; };
+  inline void set_cas(uint64_t cas) { _cas = cas; };
 
-    inline uint64_t get_cas() { return _cas; };
+  inline uint64_t get_cas() { return _cas; };
 
-    // Override copy constructor and operator= to ensure cas gets copied
-    // across also.
-    MemcachedAoR(const MemcachedAoR& to_copy) :
-      AoR(to_copy)
-    {
-      if (&to_copy != this)
-      {
-        _cas = to_copy._cas;
-      }
-    }
-
-    void operator=(const MemcachedAoR& to_copy)
-      {
-        if (&to_copy != this)
-        {
-          AoR::operator=((AoR&)to_copy);
-          _cas = to_copy._cas;
-        }
-      }
-
-  private:
-    /// Stored CAS sequence number. This tracks the version of the data
-    /// supplied by memcached, so we can detect concurrent modifications and
-    /// avoid lost updates.
-    uint64_t _cas;
-  };
-
-  /// @class RegData::MemcachedStore
-  ///
-  /// A memcached-based implementation of the Store class.
-  class MemcachedStore : public Store
+  // Override copy constructor and operator= to ensure cas gets copied
+  // across also.
+  MemcachedAoR(const MemcachedAoR& to_copy) :
+    AoR(to_copy)
   {
-  public:
-    MemcachedStore(const std::list<std::string>& servers, int pool_size, bool binary=true);
-    ~MemcachedStore();
-
-    void flush_all();
-
-    AoR* get_aor_data(const std::string& aor_id);
-    bool set_aor_data(const std::string& aor_id, AoR* aor_data);
-
-  private:
-    /// Helper: to_string method using ostringstream.
-    template <class T>
-      std::string to_string(T t, ///< datum to convert
-                            std::ios_base & (*f)(std::ios_base&)
-                            ///< modifier to apply
-                           )
+    if (&to_copy != this)
     {
-      std::ostringstream oss;
-      oss << f << t;
-      return oss.str();
+      _cas = to_copy._cas;
     }
+  }
 
-    static std::string serialize_aor(MemcachedAoR* aor_data);
-    static MemcachedAoR* deserialize_aor(const std::string& s);
+  void operator=(const MemcachedAoR& to_copy)
+  {
+    if (&to_copy != this)
+    {
+      AoR::operator=((AoR&)to_copy);
+      _cas = to_copy._cas;
+    }
+  }
 
-    /// The memcached pool in use. Owned by this object.
-    memcached_pool_st* _pool;
+private:
+  /// Stored CAS sequence number. This tracks the version of the data
+  /// supplied by memcached, so we can detect concurrent modifications and
+  /// avoid lost updates.
+  uint64_t _cas;
+};
 
-  };
+
+/// @class RegData::MemcachedStore
+///
+/// A memcached-based implementation of the Store class.
+class MemcachedStore : public Store
+{
+public:
+  MemcachedStore(bool binary=true);
+  ~MemcachedStore();
+
+  void new_view(const std::list<std::string>& servers,
+                const std::vector<std::vector<std::string> >& vbuckets);
+
+  void flush_all();
+
+  AoR* get_aor_data(const std::string& aor_id);
+  bool set_aor_data(const std::string& aor_id, AoR* aor_data);
+
+  static void cleanup_connection(void* p);
+
+private:
+
+  typedef struct connection
+  {
+    uint64_t view;
+    std::vector<memcached_st*> st;
+  } connection;
+
+  connection* get_connection();
+
+  /// Helper: to_string method using ostringstream.
+  template <class T>
+  std::string to_string(T t,                                  ///< datum to convert
+                        std::ios_base & (*f)(std::ios_base&)) ///< modifier to apply
+  {
+    std::ostringstream oss;
+    oss << f << t;
+    return oss.str();
+  }
+
+  char* vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets);
+
+  static std::string serialize_aor(MemcachedAoR* aor_data);
+  static MemcachedAoR* deserialize_aor(const std::string& s);
+
+  pthread_key_t _thread_local;
+
+  bool _binary;
+  int _replicas;
+
+  uint64_t _view;
+  pthread_mutex_t _view_lock;
+
+  int _servers;
+  std::string _options;
+
+  uint32_t _vbuckets;
+  std::vector<uint32_t*> _vbucket_map;
+};
 
 } // namespace RegData
 

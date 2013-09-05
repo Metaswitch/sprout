@@ -71,6 +71,7 @@ extern "C" {
 #include "authentication.h"
 #include "options.h"
 #include "memcachedstorefactory.h"
+#include "memcachedstoreupdater.h"
 #include "localstorefactory.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
@@ -471,6 +472,17 @@ int main(int argc, char *argv[])
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
 
+  // Mask off SIGHUP from this thread and all child threads, as this will be
+  // handled by a dedicated thread.
+  sigset_t sset;
+  sigemptyset(&sset);
+  sigaddset(&sset, SIGHUP);
+  pthread_sigmask(SIG_BLOCK, &sset, NULL);
+
+  // opt.system_name = "";
+  // opt.local_host = "";
+  // opt.home_domain = "";
+  // opt.alias_hosts = "";
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
   opt.ibcf = PJ_FALSE;
@@ -596,13 +608,15 @@ int main(int argc, char *argv[])
   }
 
   RegData::Store* registrar_store = NULL;
+  MemcachedStoreUpdater* memstore_updater = NULL;
   if (opt.store_servers != "")
   {
     // Use memcached store.
     LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    std::list<std::string> servers;
-    Utils::split_string(opt.store_servers, ',', servers, 0, true);
-    registrar_store = RegData::create_memcached_store(servers, 100, false);
+    registrar_store = RegData::create_memcached_store(false);
+
+    // Create an updater to keep the store configured appropriately.
+    memstore_updater = new MemcachedStoreUpdater(registrar_store, opt.store_servers);
   }
   else
   {
@@ -789,6 +803,7 @@ int main(int argc, char *argv[])
 
   if (opt.store_servers != "")
   {
+    delete memstore_updater;
     RegData::destroy_memcached_store(registrar_store);
   }
   else
@@ -798,4 +813,6 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+
 

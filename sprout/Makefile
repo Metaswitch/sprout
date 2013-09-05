@@ -28,6 +28,7 @@ TARGET_SOURCES := logger.cpp \
                   store.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
+									memcachedstoreupdater.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
