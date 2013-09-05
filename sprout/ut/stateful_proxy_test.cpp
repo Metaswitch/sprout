@@ -48,6 +48,7 @@
 #include "analyticslogger.h"
 #include "stateful_proxy.h"
 #include "fakelogger.hpp"
+#include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
@@ -214,7 +215,7 @@ public:
     if (ifcs)
     {
       _xdm_connection = new FakeXDMConnection();
-      _ifc_handler = new IfcHandler(_hss_connection, _store);
+      _ifc_handler = new IfcHandler();
       _call_services = new CallServices(_xdm_connection);
     }
     // We only test with a JSONEnumService, not with a DNSEnumService - since
@@ -1322,7 +1323,9 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
   parse_rxdata(rdata);
 
   target_list targets;
-  proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
+  UASTransaction* uastx = NULL;
+  UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, &uastx);
+  uastx->proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;
   for (target_list::const_iterator i = targets.begin();
@@ -2434,9 +2437,10 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 TEST_F(IscTest, SimpleMainline)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2453,7 +2457,7 @@ TEST_F(IscTest, SimpleMainline)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2526,9 +2530,10 @@ TEST_F(IscTest, SimpleMainline)
 TEST_F(IscTest, SimpleNextOrigFlow)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>0</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2561,7 +2566,7 @@ TEST_F(IscTest, SimpleNextOrigFlow)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2632,9 +2637,10 @@ TEST_F(IscTest, SimpleNextOrigFlow)
 TEST_F(IscTest, SimpleReject)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2651,7 +2657,7 @@ TEST_F(IscTest, SimpleReject)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2718,9 +2724,10 @@ TEST_F(IscTest, SimpleReject)
 TEST_F(IscTest, SimpleNonLocalReject)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2737,7 +2744,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2805,9 +2812,10 @@ TEST_F(IscTest, SimpleNonLocalReject)
 TEST_F(IscTest, SimpleAccept)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2824,7 +2832,7 @@ TEST_F(IscTest, SimpleAccept)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2891,9 +2899,10 @@ TEST_F(IscTest, SimpleAccept)
 TEST_F(IscTest, SimpleRedirect)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2910,7 +2919,7 @@ TEST_F(IscTest, SimpleRedirect)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -2978,9 +2987,10 @@ TEST_F(IscTest, SimpleRedirect)
 TEST_F(IscTest, DefaultHandlingTerminate)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -2997,7 +3007,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -3065,9 +3075,11 @@ TEST_F(IscTest, DefaultHandlingTerminate)
 TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -3084,7 +3096,7 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -3149,9 +3161,10 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
 TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -3168,7 +3181,7 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -3241,9 +3254,10 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 TEST_F(IscTest, InterestingAs)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
@@ -3276,10 +3290,11 @@ TEST_F(IscTest, InterestingAs)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                </ServiceProfile></IMSSubscription>)";
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -3334,7 +3349,7 @@ TEST_F(IscTest, InterestingAs)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -3485,9 +3500,10 @@ TEST_F(IscTest, InterestingAs)
 void IscTest::doAsOriginated(Message& msg, bool expect_orig)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -3504,10 +3520,11 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+                                </ServiceProfile></IMSSubscription>)";
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -3524,7 +3541,7 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS0(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
@@ -3655,10 +3672,12 @@ TEST_F(IscTest, AsOriginatedTerm)
 TEST_F(IscTest, Cdiv)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
   register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
@@ -3703,7 +3722,7 @@ TEST_F(IscTest, Cdiv)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
@@ -3881,9 +3900,10 @@ TEST_F(IscTest, MmtelCdiv)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
@@ -3928,7 +3948,7 @@ TEST_F(IscTest, MmtelCdiv)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4033,9 +4053,10 @@ TEST_F(IscTest, MmtelCdiv)
 TEST_F(IscTest, MmtelDoubleCdiv)
 {
   register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -4058,7 +4079,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4078,9 +4099,10 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_user_ifc("sip:6505555678@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505555678%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
@@ -4125,7 +4147,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505555678@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4237,9 +4259,10 @@ TEST_F(IscTest, MmtelDoubleCdiv)
 TEST_F(IscTest, ExpiredChain)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                "<IMSSubscription><ServiceProfile>"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -4256,7 +4279,7 @@ TEST_F(IscTest, ExpiredChain)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
@@ -4344,9 +4367,10 @@ TEST_F(IscTest, ExpiredChain)
 TEST_F(IscTest, MmtelFlow)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4363,7 +4387,7 @@ TEST_F(IscTest, MmtelFlow)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4375,9 +4399,10 @@ TEST_F(IscTest, MmtelFlow)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -4394,7 +4419,7 @@ TEST_F(IscTest, MmtelFlow)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
@@ -4481,9 +4506,10 @@ TEST_F(IscTest, MmtelFlow)
 TEST_F(IscTest, MmtelThenExternal)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4516,7 +4542,7 @@ TEST_F(IscTest, MmtelThenExternal)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4528,9 +4554,10 @@ TEST_F(IscTest, MmtelThenExternal)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4563,7 +4590,7 @@ TEST_F(IscTest, MmtelThenExternal)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4701,9 +4728,10 @@ TEST_F(IscTest, MmtelThenExternal)
 TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://github.com/Metaswitch/sprout/issues/44
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551000@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4736,7 +4764,7 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4748,9 +4776,10 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4799,7 +4828,7 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">

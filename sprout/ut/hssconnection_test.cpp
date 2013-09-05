@@ -59,15 +59,20 @@ class HssConnectionTest : public BaseTest
     _hss("narcissus")
   {
     fakecurl_responses.clear();
-    fakecurl_responses["http://narcissus/credentials/pubid42/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/credentials/pubid42/privid_corrupt/digest"] = "{\"digest\"; \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/associatedpublicbypublic/sip%3A123%40example.com"] = "{\"public_ids\":[\"sip:123@example.com\", \"sip:456@example.com\"]}";
-    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_notobject"] = "[]";
-    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_nopublicids"] = "{}";
-    fakecurl_responses["http://narcissus/associatedpublicbypublic/pubid_notfound"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://narcissus/filtercriteria/pubid42"] =
+    fakecurl_responses["http://narcissus/impi/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
+    fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=pubid42"] = "{\"digest\": \"myhashhere\"}";
+    fakecurl_responses["http://narcissus/impi/privid_corrupt/digest?public_id=pubid42"] = "{\"digest\"; \"myhashhere\"}";
+    fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=wrongpubid"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://narcissus/impu/pubid42"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<IMSSubscription>"
       "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:123@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>sip:456@example.com</Identity>"
+      "</PublicIdentity>"
         "<InitialFilterCriteria>"
           "<TriggerPoint>"
             "<ConditionTypeCNF>0</ConditionTypeCNF>"
@@ -83,8 +88,40 @@ class HssConnectionTest : public BaseTest
             "<DefaultHandling>0</DefaultHandling>"
           "</ApplicationServer>"
         "</InitialFilterCriteria>"
-      "</ServiceProfile>";
-    fakecurl_responses["http://narcissus/filtercriteria/pubid44"] = CURLE_REMOTE_FILE_NOT_FOUND;
+      "</ServiceProfile>"
+      "</IMSSubscription>";
+    fakecurl_responses["http://narcissus/impu/pubid42_malformed"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+              "<Grou";
+    fakecurl_responses["http://narcissus/impu/pubid43_malformed"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<NonsenseWord>"
+      "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:123@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>sip:456@example.com</Identity>"
+      "</PublicIdentity>"
+        "<InitialFilterCriteria>"
+          "<TriggerPoint>"
+            "<ConditionTypeCNF>0</ConditionTypeCNF>"
+            "<SPT>"
+              "<ConditionNegated>0</ConditionNegated>"
+              "<Group>0</Group>"
+              "<Method>INVITE</Method>"
+              "<Extension></Extension>"
+            "</SPT>"
+          "</TriggerPoint>"
+          "<ApplicationServer>"
+            "<ServerName>mmtel.narcissi.example.com</ServerName>"
+            "<DefaultHandling>0</DefaultHandling>"
+          "</ApplicationServer>"
+        "</InitialFilterCriteria>"
+      "</ServiceProfile>"
+      "</NonsenseWord>";
+ 
+    fakecurl_responses["http://narcissus/impu/pubid44"] = CURLE_REMOTE_FILE_NOT_FOUND;
   }
 
   virtual ~HssConnectionTest()
@@ -94,7 +131,7 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleDigest)
 {
-  Json::Value* actual = _hss.get_digest_data("pubid42", "privid69", 0);
+  Json::Value* actual = _hss.get_digest_data("privid69", "pubid42",  0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("myhashhere", actual->get("digest", "").asString());
   delete actual;
@@ -102,7 +139,7 @@ TEST_F(HssConnectionTest, SimpleDigest)
 
 TEST_F(HssConnectionTest, CorruptDigest)
 {
-  Json::Value* actual = _hss.get_digest_data("pubid42", "privid_corrupt", 0);
+  Json::Value* actual = _hss.get_digest_data("privid_corrupt", "pubid42", 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
   delete actual;
@@ -110,44 +147,46 @@ TEST_F(HssConnectionTest, CorruptDigest)
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
-  Json::Value* actual = _hss.get_associated_uris("sip:123@example.com", 0);
-  ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ(2u, actual->size());
-  EXPECT_EQ("sip:123@example.com", actual->get((Json::Value::ArrayIndex)0, "").asString());
-  EXPECT_EQ("sip:456@example.com", actual->get((Json::Value::ArrayIndex)1, "").asString());
-  delete actual;
-}
-
-TEST_F(HssConnectionTest, NotObjectAssociatedUris)
-{
-  Json::Value* actual = _hss.get_associated_uris("pubid_notobject", 0);
-  ASSERT_TRUE(actual == NULL);
-}
-
-TEST_F(HssConnectionTest, NoPublicIdsAssociatedUris)
-{
-  Json::Value* actual = _hss.get_associated_uris("pubid_nopublicids", 0);
-  ASSERT_TRUE(actual == NULL);
-}
-
-TEST_F(HssConnectionTest, NotFoundAssociatedUris)
-{
-  Json::Value* actual = _hss.get_associated_uris("pubid_notfound", 0);
-  ASSERT_TRUE(actual == NULL);
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
+  EXPECT_EQ(2u, uris.size());
+  EXPECT_EQ("sip:123@example.com", uris[0]);
+  EXPECT_EQ("sip:456@example.com", uris[1]);
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)
 {
-  std::string actual;
-  bool res = _hss.get_user_ifc("pubid42", actual, 0);
-  EXPECT_TRUE(res);
-  EXPECT_EQ(fakecurl_responses["http://narcissus/filtercriteria/pubid42"]._body, actual);
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
+  EXPECT_FALSE(ifcs_map.empty());
+}
+
+TEST_F(HssConnectionTest, BadXML)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid42_malformed", "", ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+}
+
+
+TEST_F(HssConnectionTest, BadXML2)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid43_malformed", "", ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
 }
 
 TEST_F(HssConnectionTest, ServerFailure)
 {
-  std::string actual;
-  bool res = _hss.get_user_ifc("pubid44", actual, 0);
-  EXPECT_FALSE(res);
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  _hss.get_subscription_data("pubid44", "", ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("HTTP error response"));
 }

@@ -63,17 +63,17 @@ void send_register_to_as(pjsip_rx_data* received_register,
     const std::string&,
     SAS::TrailId);
 
-void deregister_with_application_servers(IfcHandler*, RegData::Store* store, const std::string&, SAS::TrailId trail);
+void deregister_with_application_servers(Ifcs&, RegData::Store* store, const std::string&, SAS::TrailId trail);
 
-void deregister_with_application_servers(IfcHandler *ifchandler,
+void deregister_with_application_servers(Ifcs& ifcs,
                                          RegData::Store* store,
                                          const std::string& served_user,
                                          SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifchandler, store, NULL, NULL, 0, served_user, trail);
+  RegistrationUtils::register_with_application_servers(ifcs, store, NULL, NULL, 0, served_user, trail);
 }
 
-void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler,
+void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                        RegData::Store* store,
                                        pjsip_rx_data *received_register,
                                        pjsip_tx_data *ok_response, // Can only be NULL if received_register is
@@ -95,7 +95,6 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
   // constraints for REGISTER messages, but we only get the served user from the From address in an
   // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
   // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
-  Ifcs* ifcs = ifchandler->lookup_ifcs(SessionCase::Originating, served_user, trail);
 
   if (received_register == NULL) {
     pj_status_t status;
@@ -124,17 +123,15 @@ void RegistrationUtils::register_with_application_servers(IfcHandler *ifchandler
     assert(status == PJ_SUCCESS);
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-
-    ifcs->interpret(SessionCase::Originating, true, tdata->msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, tdata->msg, as_list);
 
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    ifcs->interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
   }
-  delete ifcs;
   LOG_INFO("Found %d Application Servers", as_list.size());
-
+  
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
     send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
@@ -296,12 +293,12 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
   }
 };
 
-void RegistrationUtils::network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
+void RegistrationUtils::network_initiated_deregistration(RegData::Store *store, Ifcs& ifcs, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
 {
   expire_bindings(store, served_user, binding_id);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifchandler, store, served_user, trail);
+  deregister_with_application_servers(ifcs, store, served_user, trail);
   notify_application_servers();
 };

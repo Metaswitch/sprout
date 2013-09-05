@@ -49,6 +49,7 @@
 #include "registrar.h"
 #include "registration_utils.h"
 #include "fakelogger.hpp"
+#include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 
 using namespace std;
@@ -58,18 +59,24 @@ using testing::MatchesRegex;
 class RegistrarTest : public SipTest
 {
 public:
+
   FakeLogger _log;
 
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    fakecurl_responses.clear();
+    fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
 
     _store = RegData::create_local_store();
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
-    _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550231%40homedomain"),
-                              std::string("{\"public_ids\":[\"sip:6505550231@homedomain\"]}"));
-    _ifc_handler = new IfcHandler(_hss_connection, _store);
+    _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
     pj_status_t ret = init_registrar(_store, _hss_connection, _analytics, _ifc_handler, 300);
@@ -84,7 +91,7 @@ public:
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
     RegData::destroy_local_store(_store); _store = NULL;
-
+    fakecurl_responses.clear();
     SipTest::TearDownTestCase();
   }
 
@@ -407,9 +414,9 @@ TEST_F(RegistrarTest, NoPath)
 // First case - REGISTER is generated with a multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
-  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -428,7 +435,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
                                 "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
@@ -473,9 +480,10 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
-  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -493,7 +501,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
                                 "      <Extension><IncludeRegisterRequest/></Extension>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
@@ -535,9 +543,9 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
 /// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
-  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -554,7 +562,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
 
@@ -593,9 +601,13 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
 /// Check that the network-initiated deregistration code works as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 {
-  _hss_connection->set_user_ifc("sip:6505550231@homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<ServiceProfile>\n"
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  std::string user = "sip:6505550231@homedomain";
+  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
                                 "    <TriggerPoint>\n"
@@ -612,18 +624,18 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile>");
+                                "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-
-  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
   RegData::AoR* aor_data;
-  aor_data = _store->get_aor_data("sip:6505550231@homedomain");
+  aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
+  std::map<std::string, Ifcs> ifc_map;
+  std::vector<std::string> uris;
+  _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_ifc_handler, _store, "sip:6505550231@homedomain", "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
@@ -636,7 +648,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   free_txdata();
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data("sip:6505551234@homedomain");
+  aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -647,6 +659,8 @@ TEST_F(RegistrarTest, ErrorAssociatedUris)
 {
   Message msg;
   msg._user = "6505550232";
+  fakecurl_responses["http://localhost/impu/sip%3A6505550232%40homedomain"] = CURLE_REMOTE_FILE_NOT_FOUND;
+
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
@@ -659,9 +673,14 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
 {
   Message msg;
   msg._user = "6505550233";
-  _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550233%40homedomain"),
-                            std::string("{\"public_ids\":[\"sip:6505550233@homedomain\","
-                                                         "\"sip:6505550234@homedomain\"]}"));
+  fakecurl_responses["http://localhost/impu/sip%3A6505550233%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+    "<PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>"
+    "<PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
@@ -678,9 +697,14 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
-  _hss_connection->set_json(std::string("/associatedpublicbypublic/sip%3A6505550234%40homedomain"),
-                            std::string("{\"public_ids\":[\"sip:6505550233@homedomain\","
-                                                         "\"sip:6505550234@homedomain\"]}"));
+  fakecurl_responses["http://localhost/impu/sip%3A6505550234%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+    "<PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>"
+    "<PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;

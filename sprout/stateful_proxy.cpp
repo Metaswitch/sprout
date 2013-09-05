@@ -123,6 +123,7 @@ extern "C" {
 #include "trustboundary.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "hssconnection.h"
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"
@@ -1237,19 +1238,44 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+HSSCallInformation& UASTransaction::get_data_from_hss(std::string public_id, SAS::TrailId trail)
+{
+  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
+  if (data == cached_hss_data.end())
+  { 
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+    cached_hss_data[public_id] = {ifc_map[public_id], uris};
+    data = cached_hss_data.find(public_id);
+  }
+  return data->second;
+}
+
+// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
+std::vector<std::string>& UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+{
+  HSSCallInformation& data = get_data_from_hss(public_id, trail);
+  return data.uris;
+}
+
+// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
+Ifcs& UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+{
+  HSSCallInformation& data = get_data_from_hss(public_id, trail);
+  return data.ifcs;
+}
+
 ///@{
 // IN-TRANSACTION PROCESSING
 
 /// Calculate a list of targets for the message.
-#ifndef UNIT_TEST
-static
-#endif
-void proxy_calculate_targets(pjsip_msg* msg,
-                             pj_pool_t* pool,
-                             const TrustBoundary* trust,
-                             target_list& targets,
-                             int max_targets,
-                             SAS::TrailId trail)
+void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
+                                             pj_pool_t* pool,
+                                             const TrustBoundary* trust,
+                                             target_list& targets,
+                                             int max_targets,
+                                             SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
@@ -1371,14 +1397,13 @@ void proxy_calculate_targets(pjsip_msg* msg,
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
     std::string public_id = PJUtils::aor_from_uri(req_uri);
-    Json::Value* uris = hss->get_associated_uris(public_id, trail);
+    std::vector<std::string> uris = get_associated_uris(public_id, trail);
     std::string aor;
 
-    if ((uris != NULL) &&
-        (uris->size() > 0))
+    if (uris.size() > 0)
     {
       // Take the first associated URI as the AOR.
-      aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+      aor = uris.front();
     }
     else
     {
@@ -1475,10 +1500,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
         targets.push_back(target);
       }
     }
-
     delete aor_data;
-
-    delete uris;
   }
 }
 
@@ -3178,7 +3200,11 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      RegistrationUtils::network_initiated_deregistration(ifc_handler, store, aor, binding_id, trail());
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      hss->get_subscription_data(aor, "", ifc_map, uris, trail());
+
+      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
     }
   }
 
@@ -3547,6 +3573,7 @@ bool is_user_registered(std::string served_user)
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                             std::string served_user)  //< Served user, if already known, else ""
 {
+  Ifcs ifcs;
   if (ifc_handler == NULL)
   {
     // LCOV_EXCL_START No easy way to hit.
@@ -3562,21 +3589,14 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                     _req->pool);
   }
 
-  Ifcs* ifcs;
   bool is_registered = false;
 
-  if (served_user.empty())
-  {
-    ifcs = new Ifcs();
-  }
-  else
+  if (!served_user.empty())
   {
     is_registered = is_user_registered(served_user);
-    ifcs = ifc_handler->lookup_ifcs(session_case,
-                                    served_user,
-                                    trail());
+    ifcs = lookup_ifcs(served_user,
+                       trail());
   }
-
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.
   //

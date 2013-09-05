@@ -257,12 +257,16 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
 
   // Query the HSS for the associated URIs.
-  // This should really include the private ID, but we don't yet have a
-  // homestead API for it.  Homestead won't be able to query a third-party HSS
-  // without the private ID.
-  Json::Value* uris = hss->get_associated_uris(public_id, trail);
-  if ((uris == NULL) ||
-      (uris->size() == 0))
+
+  // The second parameter should be the private ID, but this isn't necessary
+  // until we implement support for receiving updates from the HSS.
+  // TODO in sto281:
+  //   reinstate the get_private_id function and pass the private ID in.
+
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifc_map;
+  hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+  if (uris.size() == 0)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
@@ -279,7 +283,7 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+  std::string aor = uris.front();
   LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Find the expire headers in the message.
@@ -562,24 +566,29 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Add P-Associated-URI headers for all of the associated URIs.
   static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
-  for (Json::ValueIterator it = uris->begin(); it != uris->end(); it++)
+  for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
   {
-    pj_str_t associated_uri = {(char*)(*it).asCString(), strlen((*it).asCString())};
+    pj_str_t tmp_associated_uri;
+    const pj_str_t* associated_uri = pj_cstr(&tmp_associated_uri, it->c_str());
     pjsip_hdr* associated_uri_hdr =
       (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                   &p_associated_uri_hdr_name,
-                                                  &associated_uri);
+                                                  associated_uri);
     pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
   }
-  delete uris;
 
   // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
   // ASes of the 200 OK response we sent.
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  std::string served_user = ifchandler->served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool);
-  RegistrationUtils::register_with_application_servers(ifchandler, store, rdata, tdata, expiry, served_user, trail);
+  // TODO in sto397: we should do third-party registration once per
+  // service profile (i.e. once per iFC, using an arbitrary public
+  // ID). hss->get_subscription_data should be enhanced to provide an
+  // appropriate data structure (representing the ServiceProfile
+  // nodes) and we should loop through that.
+
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -616,7 +625,11 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
 
     // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    RegistrationUtils::network_initiated_deregistration(ifchandler, store, aor, "*", get_trail(tsx));
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+
+    RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
     // LCOV_EXCL_STOP
   }
 }
