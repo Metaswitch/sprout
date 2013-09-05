@@ -87,7 +87,7 @@ void MemcachedStoreUpdater::update_view()
 
   if (f.is_open())
   {
-    LOG_DEBUG("Opened %s file", _file.c_str());
+    LOG_STATUS("Reloading memcached configuration from %s file", _file.c_str());
     while (f.good())
     {
       std::string line;
@@ -104,7 +104,7 @@ void MemcachedStoreUpdater::update_view()
           break;
         }
 
-        LOG_DEBUG("Parameter name is %s, value is %s", tokens[0].c_str(), tokens[1].c_str());
+        LOG_STATUS("  %s=%s", tokens[0].c_str(), tokens[1].c_str());
 
         if (tokens[0] == "servers")
         {
@@ -121,9 +121,11 @@ void MemcachedStoreUpdater::update_view()
     }
     f.close();
 
-    servers.sort();
-    LOG_DEBUG("Update store %p", _store);
-    _store->new_view(servers, vbuckets);
+    if (servers.size() > 0)
+    {
+      LOG_DEBUG("Update memcached store");
+      _store->new_view(servers, vbuckets);
+    }
   }
   else
   {
