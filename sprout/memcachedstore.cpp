@@ -297,15 +297,15 @@ AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
     {
       // Failed to find a record on an active replica, so flag that we may
       // need to do a read repair to this node.
-      LOG_INFO("Read for %s on replica %d returned not_found", aor_id.c_str(), ii);
+      LOG_DEBUG("Read for %s on replica %d returned NOTFOUND", aor_id.c_str(), ii);
       read_repair[ii] = true;
       memcached_result_free(&result);
     }
     else
     {
       // Error from this node, so consider it inactive.
-      LOG_INFO("Read for %s on replica %d returned error %d (%s) for %s",
-               aor_id.c_str(), ii, rc, memcached_strerror(conn->st[ii], rc));
+      LOG_DEBUG("Read for %s on replica %d returned error %d (%s) for %s",
+                aor_id.c_str(), ii, rc, memcached_strerror(conn->st[ii], rc));
       ++failed_replicas;
     }
   }
@@ -315,31 +315,29 @@ AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
     // Deserialize the result and expire any bindings that are out of date.
     LOG_DEBUG("Deserialize record");
     aor_data = deserialize_aor(std::string(memcached_result_value(&result), memcached_result_length(&result)));
+    aor_data->set_cas(memcached_result_cas(&result));
     int now = time(NULL);
     int max_expires = expire_bindings(aor_data, now);
 
-    if (max_expires > now)
+    // See if we need to do a read repair on any nodes that didn't find the record.
+    bool first_repair = true;
+    for (size_t jj = 0; jj < ii; ++jj)
     {
-      // Found an unexpired record, so set the CAS value.
-      aor_data->set_cas(memcached_result_cas(&result));
-
-      // See if we need to do a read repair on any nodes that didn't find the record.
-      bool first_repair = true;
-      for (size_t jj = 0; jj < ii; ++jj)
+      if (read_repair[jj])
       {
-        if (read_repair[jj])
+        if (max_expires > now)
         {
           LOG_INFO("Do read repair for %s on replica %d, expiry = %d", aor_id.c_str(), jj, max_expires - now);
           if (first_repair)
           {
-            LOG_INFO("First repair replica, so must do synchronous add");
+            LOG_DEBUG("First repair replica, so must do synchronous add");
             memcached_return_t repair_rc;
             repair_rc = memcached_add(conn->st[jj], key_ptr, key_len, memcached_result_value(&result), memcached_result_length(&result), max_expires, 0);
             if (memcached_success(repair_rc))
             {
               // Read repair worked, but we have to do another read to get the
               // CAS value on the primary server.
-              LOG_INFO("Read repair on replica %d successful", jj);
+              LOG_DEBUG("Read repair on replica %d successful", jj);
               repair_rc = memcached_mget(conn->st[jj], &key_ptr, &key_len, 1);
               if (memcached_success(repair_rc))
               {
@@ -372,11 +370,20 @@ AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
           {
             // Not the first read repair, so can just do the add asynchronously
             // on a best efforts basis.
-            LOG_INFO("Not first repair replica, so do asynchronous add");
+            LOG_DEBUG("Not first repair replica, so do asynchronous add");
             memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 1);
             memcached_add(conn->st[jj], key_ptr, key_len, memcached_result_value(&result), memcached_result_length(&result), max_expires, 0);
             memcached_behavior_set(conn->st[jj], MEMCACHED_BEHAVIOR_NOREPLY, 0);
           }
+        }
+        else
+        {
+          // We would do a read repair here, but the record has expired so
+          // there is no point.  To make sure the next write is successful
+          // we need to set the CAS value on the record we are about to return
+          // to zero so the write will be processed as an add, not a cas.
+          LOG_DEBUG("Force CAS to zero on expired record");
+          aor_data->set_cas(0);
         }
       }
     }
@@ -452,19 +459,30 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
     }
     else
     {
-      LOG_INFO("memcached_%s command for %s failed on replica %d, rc = %d (%s), expiry = %d",
-               (aor_data->get_cas() == 0) ? "add" : "cas",
-               aor_id.c_str(),
-               ii,
-               rc,
-               memcached_strerror(conn->st[ii], rc),
-               max_expires - now);
+      LOG_DEBUG("memcached_%s command for %s failed on replica %d, rc = %d (%s), expiry = %d",
+                (aor_data->get_cas() == 0) ? "add" : "cas",
+                aor_id.c_str(),
+                ii,
+                rc,
+                memcached_strerror(conn->st[ii], rc),
+                max_expires - now);
+
+      if ((rc == MEMCACHED_NOTSTORED) ||
+          (rc == MEMCACHED_DATA_EXISTS))
+      {
+        // A NOT_STORED or EXISTS response indicates a concurrent write failure,
+        // so return this to the application immediately - don't go on to
+        // other replicas.
+        LOG_INFO("Contention writing data for %s to store", aor_id.c_str());
+        break;
+      }
     }
   }
 
-  if (ii < conn->st.size())
+  if ((rc == MEMCACHED_SUCCESS) &&
+      (ii < conn->st.size()))
   {
-    // Write must have succeeded, so write unconditionally (and asynchronously)
+    // Write has succeeded, so write unconditionally (and asynchronously)
     // to the replicas.
     for (size_t jj = ii + 1; jj < conn->st.size(); ++jj)
     {
@@ -475,7 +493,9 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
     }
   }
 
-  if (!memcached_success(rc))
+  if ((!memcached_success(rc)) &&
+      (rc != MEMCACHED_NOTSTORED) &&
+      (rc != MEMCACHED_DATA_EXISTS))
   {
     LOG_ERROR("Failed to write AoR data for %s to %d replicas",
               aor_id.c_str(), conn->st.size());
