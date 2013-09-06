@@ -184,9 +184,8 @@ TEST_F(HssConnectionTest, BadXML2)
 
 TEST_F(HssConnectionTest, ServerFailure)
 {
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid44", "", ifcs_map, uris, 0);
-  EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("HTTP error response"));
+  std::string actual;
+  bool res = _hss.get_user_ifc("pubid44", actual, 0);
+  EXPECT_FALSE(res);
+  EXPECT_TRUE(_log.contains("GET http://narcissus/filtercriteria/pubid44 failed"));
 }

@@ -1590,6 +1590,11 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         targets.push_back(target);
       }
     }
+
+    if (targets.size() == 0)
+    {
+      LOG_ERROR("Failed to find any valid bindings for %s in registration store", aor.c_str());
+    }
     delete aor_data;
   }
 }

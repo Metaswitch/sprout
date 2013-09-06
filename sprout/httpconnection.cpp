@@ -88,6 +88,7 @@ public:
   }
 
   void setRemoteIp(std::string value);
+  const std::string& getRemoteIp() const { return _remoteIp; };
 
   /// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
   /// current time, in milliseconds.
@@ -154,21 +155,20 @@ void PoolEntry::setRemoteIp(std::string value)  //< Remote IP, or "" if no conne
 
   if (!_remoteIp.empty())
   {
-    if (--_parent->_serverCount[_remoteIp] == 0)
+    // Decrement the number of connections to this address.
+    if (--_parent->_serverCount[_remoteIp] <= 0)
     {
+      // No more connections to this address, so remove it from the map.
       _parent->_serverCount.erase(_remoteIp);
     }
   }
 
   if (!value.empty())
   {
-    if (_parent->_serverCount.find(value) == _parent->_serverCount.end()) {
-      _parent->_serverCount[value] = 1;
-    }
-    else
-    {
-      ++_parent->_serverCount[value]; // LCOV_EXCL_LINE Our UTs only test a single thread, so can't hit this.
-    }
+    // Increment the count of connections to this address.  (Note this is
+    // safe even if this is the first connection as the [] operator will
+    // insert an entry initialised to 0.)
+    ++_parent->_serverCount[value];
   }
 
   _remoteIp = value;
@@ -314,7 +314,6 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, extra_headers);
   }
 
-
   // Determine whether to recycle the connection, based on
   // previously-calculated deadline.
   struct timespec tp;
@@ -359,12 +358,20 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     else
     {
       // Report the error to SAS
-      LOG_ERROR("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
+      LOG_DEBUG("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
+
       SAS::Event http_err_event(trail, _sasEventBase + SASEvent::HTTP_ERR, 1u);
       http_err_event.add_static_param(rc);
       http_err_event.add_var_param(url);
       http_err_event.add_var_param(curl_easy_strerror(rc));
       SAS::report_event(http_err_event);
+
+      long http_rc = 0;
+      if (rc == CURLE_HTTP_RETURNED_ERROR)
+      {
+        // Get the HTTP error code returned from the server.
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_rc);
+      }
 
       // Is this an error we should retry? If cURL itself has already
       // retried (e.g., CURLE_COULDNT_CONNECT) then there is no point
@@ -374,17 +381,24 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
       // ourselves.
       bool non_fatal = ((rc == CURLE_OPERATION_TIMEDOUT) ||
                         (rc == CURLE_SEND_ERROR) ||
-                        (rc == CURLE_RECV_ERROR));
+                        (rc == CURLE_RECV_ERROR) ||
+                        ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 503)));
 
-      if (!recycle_conn && non_fatal)
+      char* remote_ip;
+      curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &remote_ip);
+
+      if ((non_fatal) && (i == 0))
       {
-        // Loop around and try again.  Always request a fresh
-        // connection.
+        // Loop around and try again.  Always request a fresh connection.
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
       }
       else
       {
-        // Fatal error - we're done!
+        // Fatal error or we've already retried once - we're done!
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         break;
       }
     }
