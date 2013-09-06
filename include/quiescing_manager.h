@@ -80,30 +80,55 @@ private:
   std::queue<int> _input_q;
 };
 
+
+// Interface that the QuiescingManager uses to control (un)quiesing TCP
+// connections.
 class QuiesceConnectionsInterface
 {
 public:
+  // Stop listening for new connections on the untrusted interface.  If not
+  // running as an edge proxy this will be a no-op.
   virtual void close_untrusted_port() = 0;
 
+  // Stop listening for new connections on the trusted interface.
   virtual void close_trusted_port() = 0;
 
+  // Quiesce all currently active TCP connections.  This method should shut down
+  // connections gracefully such that transactions in progress are not dropped.
+  //
+  // Once all connections have been closed QuiescingManager::connections_gone
+  // must be called.
   virtual void quiesce() = 0;
 
+  // Unquiesce TCP connections (stop actively trying to get rid of them).
   virtual void unquiesce() = 0;
 
+  // Start listening for new connections on the trusted interface.
   virtual void open_trusted_port() = 0;
 
+  // Start listening for new connections on the untrusted interface.  If not
+  // running as an edge proxy this will be a no-op.
   virtual void open_untrusted_port() = 0;
 };
 
+
+// Interface that the QuiescingManager uses to manage (un)quiescing flows.
 class QuiesceFlowsInterface
 {
 public:
+  // Quiesce all currently active flows.  This method should gracefully shutdown
+  // flows so that subscribers do not lose service.
+  //
+  // Once all flows have been deleted QuiescingManager::flows_gone must be
+  // called.
   virtual void quiesce() = 0;
 
+  // Unquiesce flows (stop actively trying to get rid of them).
   virtual void unquiesce() = 0;
 };
 
+
+// Interface that the QuiescingManager notifies when quiescing is complete.
 class QuiesceCompletionInterface
 {
 public:
@@ -119,15 +144,16 @@ class QuiescingManager : public SynchronizedFSM
 public:
   QuiescingManager();
 
-  // Inputs methods for the state machine.
-  //
-  // These just send a new input to the state machine, so we define the
-  // implmentation of them here.
+  // Inputs methods for the state machine.  These just send a new method to the
+  // state machine.
   void quiesce()          { send_input(INPUT_QUIESCE); }
   void flows_gone()       { send_input(INPUT_FLOWS_GONE); }
   void connections_gone() { send_input(INPUT_CONNS_GONE); }
   void unquiesce()        { send_input(INPUT_UNQUIESCE); }
 
+  // The quiescing manager uses three interfaces to communicate with other
+  // components in bono/sprout.  The following methods are used to register
+  // implementations of these interfaces (which we refer to as 'handlers').
   void register_conns_handler(QuiesceConnectionsInterface *handler)
   {
     _conns_handler = handler;

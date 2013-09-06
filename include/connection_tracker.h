@@ -48,6 +48,8 @@ extern "C" {
 // Common STL includes.
 #include <set>
 
+// Interface that the ConnectionTracker notifies when quiescing connections has
+// completed.
 class ConnectionsQuiescedInterface
 {
 public:
