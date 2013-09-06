@@ -43,6 +43,8 @@
 #ifndef MEMCACHEDSTORE_H__
 #define MEMCACHEDSTORE_H__
 
+#include <pthread.h>
+
 #include <sstream>
 #include <vector>
 
@@ -126,8 +128,6 @@ private:
     std::vector<memcached_st*> st;
   } connection;
 
-  connection* get_connection();
-
   /// Helper: to_string method using ostringstream.
   template <class T>
   std::string to_string(T t,                                  ///< datum to convert
@@ -140,6 +140,9 @@ private:
 
   char* vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets);
 
+  bool ping_server(const std::string& server);
+  connection* get_connection();
+
   static std::string serialize_aor(MemcachedAoR* aor_data);
   static MemcachedAoR* deserialize_aor(const std::string& s);
 
@@ -149,7 +152,7 @@ private:
   int _replicas;
 
   uint64_t _view;
-  pthread_mutex_t _view_lock;
+  pthread_rwlock_t _view_lock;
 
   int _servers;
   std::string _options;

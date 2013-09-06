@@ -54,6 +54,7 @@
 #include "memcachedstorefactory.h"
 #include "memcachedstoreupdater.h"
 #include "log.h"
+#include "utils.h"
 
 namespace RegData {
 
@@ -85,7 +86,7 @@ MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
 
   // Create the lock for protecting the current view.
-  pthread_mutex_init(&_view_lock, NULL);
+  pthread_rwlock_init(&_view_lock, NULL);
 }
 
 
@@ -101,7 +102,7 @@ MemcachedStore::~MemcachedStore()
     cleanup_connection(conn);
   }
 
-  pthread_mutex_destroy(&_view_lock);
+  pthread_rwlock_destroy(&_view_lock);
 }
 
 
@@ -127,11 +128,10 @@ char* MemcachedStore::vbucket_to_string(char* buf, int buf_size, const uint32_t*
 void MemcachedStore::new_view(const std::list<std::string>& servers,
                               const std::vector<std::vector<std::string> >& vbuckets)
 {
-  pthread_mutex_lock(&_view_lock);
+  pthread_rwlock_wrlock(&_view_lock);
 
   LOG_STATUS("Updating memcached store configuration");
 
-  ++_view;
   _options = "";
   for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
   {
@@ -180,7 +180,74 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
               vbucket_to_string(buf, sizeof(buf), _vbucket_map[ii], _vbuckets));
   }
 
-  pthread_mutex_unlock(&_view_lock);
+  // In some cloud environments establishing TCP connections to other nodes
+  // for the first time can take a while, so rather than risk blocking
+  // worker threads as they switch to the new view, attempt to connect to each
+  // server in the list before flagging the new view is ready to go.
+  for (std::list<std::string>::const_iterator i = servers.begin();
+       i != servers.end();
+       ++i)
+  {
+    ping_server(*i);
+  }
+
+  // Update the view number as the last thing here, otherwise we could stall
+  // other threads waiting for the lock.
+  LOG_STATUS("Finished preparing new view, so flag that workers should switch to it");
+
+  ++_view;
+
+  pthread_rwlock_unlock(&_view_lock);
+}
+
+
+/// Pings a memcached server by opening a TCP connection then immediately
+/// closing it.
+bool MemcachedStore::ping_server(const std::string& server)
+{
+  int rc;
+  int sock;
+  struct sockaddr_in addr;
+
+  LOG_STATUS("Attempting to ping memcached server %s", server.c_str());
+
+  std::vector<std::string> host_port;
+  Utils::split_string(server, ':', host_port, 0, true);
+  if ((host_port.size() != 1) &&
+      (host_port.size() != 2))
+  {
+    LOG_ERROR("Badly formatted memcached server %s", server.c_str());
+    return false;
+  }
+
+  if ((sock = ::socket(AF_INET, SOCK_STREAM, 0)) == -1)
+  {
+    LOG_ERROR("Failed to open memcached socket: %d (%s)", errno, ::strerror(errno));
+    return false;
+  }
+
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = (host_port.size() == 2) ? htons(atoi(host_port[1].c_str())) : htons(11211);
+  addr.sin_addr.s_addr = inet_addr(host_port[0].c_str());
+
+  rc = ::connect(sock, (struct sockaddr*)&addr, sizeof(addr));
+
+  if (rc != 0)
+  {
+    LOG_ERROR("Failed to connect to memcached server %s : %d %s", server.c_str(), errno, ::strerror(errno));
+    ::close(sock);
+    return false;
+  }
+
+  LOG_DEBUG("Connected to memcached server %s:%d", server.c_str());
+
+  // Close the socket to complete the ping.
+  ::close(sock);
+
+  LOG_STATUS("Completed ping of memcached server %s", server.c_str());
+
+  return true;
 }
 
 
@@ -200,7 +267,7 @@ MemcachedStore::connection* MemcachedStore::get_connection()
   {
     // Either the view has changed or has not yet been set up, so create a
     // new memcached_st.
-    pthread_mutex_lock(&_view_lock);
+    pthread_rwlock_rdlock(&_view_lock);
 
     LOG_DEBUG("Set up new view %d for thread", _view);
     for (size_t ii = 0; ii < conn->st.size(); ++ii)
@@ -212,7 +279,7 @@ MemcachedStore::connection* MemcachedStore::get_connection()
 
     for (size_t ii = 0; ii < conn->st.size(); ++ii)
     {
-      LOG_DEBUG("Setting up replica %d", ii);
+      LOG_STATUS("Setting up replica %d for connection %p", ii, conn);
 
       // Create a new memcached_st.
       conn->st[ii] = memcached(_options.c_str(), _options.length());
@@ -220,13 +287,13 @@ MemcachedStore::connection* MemcachedStore::get_connection()
       // Set up the virtual buckets.
       memcached_bucket_set(conn->st[ii], _vbucket_map[ii], NULL, _vbuckets, 1);
 
-      LOG_DEBUG("Set up memcached_st and vbucket for replica %d", ii);
+      LOG_STATUS("Set up memcached_st and vbucket for replica %d on connection %p", ii, conn);
     }
 
     // Flag that we are in sync with the latest view.
     conn->view = _view;
 
-    pthread_mutex_unlock(&_view_lock);
+    pthread_rwlock_unlock(&_view_lock);
   }
 
   return conn;
