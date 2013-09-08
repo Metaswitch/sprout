@@ -184,11 +184,14 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
   // for the first time can take a while, so rather than risk blocking
   // worker threads as they switch to the new view, attempt to connect to each
   // server in the list before flagging the new view is ready to go.
-  for (std::list<std::string>::const_iterator i = servers.begin();
-       i != servers.end();
-       ++i)
+  for (int ii = 0; ii < 5; ++ii)
   {
-    ping_server(*i);
+    for (std::list<std::string>::const_iterator i = servers.begin();
+         i != servers.end();
+         ++i)
+    {
+      ping_server(*i);
+    }
   }
 
   // Update the view number as the last thing here, otherwise we could stall
