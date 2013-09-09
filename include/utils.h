@@ -44,6 +44,9 @@
 #include <list>
 #include <vector>
 #include <cctype>
+#include <string.h>
+
+#include "log.h"
 
 namespace Utils
 {
@@ -173,6 +176,50 @@ namespace Utils
 
   private:
     std::vector<double> _cdf;
+  };
+
+  /// Measures time delay in microseconds
+  class StopWatch
+  {
+  public:
+    inline StopWatch() : _got_start(false) {};
+
+    /// Starts the stop-watch, returning whether it was successful.  It's OK
+    /// to ignore the return code - it will also be returned on stop().
+    inline bool start()
+    {
+      _got_start = (clock_gettime(CLOCK_MONOTONIC, &_start) == 0);
+      if (!_got_start)
+      {
+        LOG_ERROR("Failed to get start timestamp: %s", strerror(errno));
+      }
+      return _got_start;
+    }
+
+    /// Stops the stop-watch, giving the result in result_us and returning
+    /// whether it was successful.  result_us is not valid on failure.
+    inline bool stop(unsigned long& result_us)
+    {
+      struct timespec now;
+      if (_got_start)
+      {
+        if (clock_gettime(CLOCK_MONOTONIC, &now) == 0)
+        {
+          result_us = (now.tv_nsec - _start.tv_nsec) / 1000L +
+                      (now.tv_sec - _start.tv_sec) * 1000000L;
+          return true;
+        }
+        else
+        {
+          LOG_ERROR("Failed to get stop timestamp: %s", strerror(errno));
+        }
+      }
+      return false;
+    }
+
+  private:
+    struct timespec _start;
+    bool _got_start;
   };
 
 } // namespace Utils

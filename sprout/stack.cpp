@@ -65,6 +65,7 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "statistic.h"
 #include "custom_headers.h"
+#include "utils.h"
 #include "accumulator.h"
 
 struct stack_data_struct stack_data;
@@ -78,7 +79,7 @@ static volatile pj_bool_t quit_flag;
 struct rx_msg_qe
 {
   pjsip_rx_data* rdata;    // received message
-  struct timespec rx_time; // time at which it was received
+  Utils::StopWatch stop_watch;    // stop watch for tracking message latency
 };
 eventq<struct rx_msg_qe> rx_msg_q;
 
@@ -153,14 +154,11 @@ static int worker_thread(void* p)
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
 
-      struct timespec done_time;
-      if (clock_gettime(CLOCK_MONOTONIC, &done_time) == 0)
+      unsigned long latency_us;
+      if (qe.stop_watch.stop(latency_us))
       {
-        long latency_us = (done_time.tv_nsec - qe.rx_time.tv_nsec) / 1000L +
-                          (done_time.tv_sec - qe.rx_time.tv_sec) * 1000000L;
         LOG_DEBUG("Request latency = %ldus", latency_us);
         latency_accumulator->accumulate(latency_us);
-        latency_accumulator->refresh();
       }
       else
       {
@@ -312,11 +310,7 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
   struct rx_msg_qe qe;
-  if (clock_gettime(CLOCK_MONOTONIC, &qe.rx_time) != 0)
-  {
-    LOG_ERROR("Failed to get receive timestamp: %s", strerror(errno));
-    return PJ_TRUE;
-  }
+  qe.stop_watch.start();
 
   // Do logging.
   local_log_rx_msg(rdata);
