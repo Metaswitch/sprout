@@ -54,7 +54,7 @@ XDMConnection::XDMConnection(const std::string& server) :
                            true,
                            SASEvent::TX_XDM_GET_BASE,
                            "connected_homers")),
-  _latencyStatistic("xdm_latency_us")
+  _latency_stat("xdm_latency_us")
 {
 }
 
@@ -62,7 +62,7 @@ XDMConnection::XDMConnection(const std::string& server) :
 /// to this object.
 XDMConnection::XDMConnection(HttpConnection* http) :
   _http(http),
-  _latencyStatistic("xdm_latency_us")
+  _latency_stat("xdm_latency_us")
 {
 }
 
@@ -85,7 +85,7 @@ bool XDMConnection::get_simservs(const std::string& user,
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
   {
-    _latencyStatistic.accumulate(latency_us);
+    _latency_stat.accumulate(latency_us);
   }
 
   return rc;

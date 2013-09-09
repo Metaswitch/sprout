@@ -54,10 +54,10 @@ HSSConnection::HSSConnection(const std::string& server) :
                            false,
                            SASEvent::TX_HSS_BASE,
                            "connected_homesteads")),
-  _latencyStatistic("hss_latency_us"),
-  _digestLatencyStatistic("hss_digest_latency_us"),
-  _associatedUriLatencyStatistic("hss_assoc_uri_latency_us"),
-  _ifcLatencyStatistic("hss_ifc_latency_us")
+  _latency_stat("hss_latency_us"),
+  _digest_latency_stat("hss_digest_latency_us"),
+  _associated_uri_latency_stat("hss_assoc_uri_latency_us"),
+  _ifc_latency_stat("hss_ifc_latency_us")
 {
 }
 
@@ -86,8 +86,8 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
   {
-    _latencyStatistic.accumulate(latency_us);
-    _digestLatencyStatistic.accumulate(latency_us);
+    _latency_stat.accumulate(latency_us);
+    _digest_latency_stat.accumulate(latency_us);
   }
 
   return rc;
@@ -108,8 +108,8 @@ Json::Value* HSSConnection::get_associated_uris(const std::string& public_user_i
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
   {
-    _latencyStatistic.accumulate(latency_us);
-    _associatedUriLatencyStatistic.accumulate(latency_us);
+    _latency_stat.accumulate(latency_us);
+    _associated_uri_latency_stat.accumulate(latency_us);
   }
 
   Json::Value* uris = NULL;
@@ -153,8 +153,8 @@ bool HSSConnection::get_user_ifc(const std::string& public_user_identity,
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
   {
-    _latencyStatistic.accumulate(latency_us);
-    _ifcLatencyStatistic.accumulate(latency_us);
+    _latency_stat.accumulate(latency_us);
+    _ifc_latency_stat.accumulate(latency_us);
   }
 
   return rc;

@@ -57,7 +57,7 @@ public:
 
 private:
   HttpConnection* _http;
-  StatisticAccumulator _latencyStatistic;
+  StatisticAccumulator _latency_stat;
 };
 
 #endif

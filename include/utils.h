@@ -189,9 +189,11 @@ namespace Utils
     inline bool start()
     {
       _got_start = (clock_gettime(CLOCK_MONOTONIC, &_start) == 0);
-      if (!_got_start)
+      if ((!_got_start) &&
+          (!_already_logged))
       {
         LOG_ERROR("Failed to get start timestamp: %s", strerror(errno));
+        _already_logged = true;
       }
       return _got_start;
     }
@@ -220,6 +222,7 @@ namespace Utils
   private:
     struct timespec _start;
     bool _got_start;
+    static bool _already_logged;
   };
 
 } // namespace Utils
