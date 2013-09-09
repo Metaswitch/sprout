@@ -44,6 +44,7 @@
 #include <curl/curl.h>
 #include "httpconnection.h"
 #include "sas.h"
+#include "accumulator.h"
 
 class XDMConnection
 {
@@ -56,6 +57,7 @@ public:
 
 private:
   HttpConnection* _http;
+  StatisticAccumulator _latency_stat;
 };
 
 #endif

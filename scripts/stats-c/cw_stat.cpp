@@ -219,7 +219,12 @@ int main(int argc, char** argv)
     {
       render_call_stats(msgs);
     }
-    else if (msgs[0] == "latency_us")
+    else if ((msgs[0] == "latency_us") ||
+             (msgs[0] == "hss_latency_us") ||
+             (msgs[0] == "hss_digest_latency_us") ||
+             (msgs[0] == "hss_assoc_uri_latency_us") ||
+             (msgs[0] == "hss_ifc_latency_us") ||
+             (msgs[0] == "xdm_latency_us"))
     {
       render_latency_us(msgs);
     }
