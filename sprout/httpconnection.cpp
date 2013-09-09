@@ -87,11 +87,11 @@ public:
   {
   }
 
-  void setRemoteIp(std::string value);
+  void set_remote_ip(std::string value);
 
   /// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
   /// current time, in milliseconds.
-  inline bool isConnectionExpired(unsigned long now_ms)
+  inline bool is_connection_expired(unsigned long now_ms)
   {
     return (now_ms > _deadline_ms);
   }
@@ -99,7 +99,7 @@ public:
   /// Update deadline to next appropriate value. Expects
   /// CLOCK_MONOTONIC current time, in milliseconds.  Call on
   /// successful connection.
-  inline void updateDeadline(unsigned long now_ms)
+  inline void update_deadline(unsigned long now_ms)
   {
     // Get the next desired inter-arrival time. Choose this
     // randomly so as to avoid spikes.
@@ -143,7 +143,7 @@ private:
 
 
 /// Set the remote IP, and update statistics.
-void PoolEntry::setRemoteIp(std::string value)  //< Remote IP, or "" if no connection.
+void PoolEntry::set_remote_ip(std::string value)  //< Remote IP, or "" if no connection.
 {
   if (value == _remoteIp)
   {
@@ -207,7 +207,7 @@ static void cleanup_curl(void* curlptr)
   if (rc == CURLE_OK)
   {
     // Connection has closed.
-    entry->setRemoteIp("");
+    entry->set_remote_ip("");
     delete entry;
   }
 
@@ -321,7 +321,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
   int rv = clock_gettime(CLOCK_MONOTONIC, &tp);
   assert(rv == 0);
   unsigned long now_ms = tp.tv_sec * 1000 + (tp.tv_nsec / 1000000);
-  bool recycle_conn = entry->isConnectionExpired(now_ms);
+  bool recycle_conn = entry->is_connection_expired(now_ms);
 
   // Try to get a decent connection. We may need to retry, but only
   // once - cURL itself does most of the retrying for us.
@@ -350,7 +350,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
       if (recycle_conn)
       {
-        entry->updateDeadline(now_ms);
+        entry->update_deadline(now_ms);
       }
 
       // Success!
@@ -399,16 +399,16 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
     if (rc == CURLE_OK)
     {
-      entry->setRemoteIp(remote_ip);
+      entry->set_remote_ip(remote_ip);
     }
     else
     {
-      entry->setRemoteIp("UNKNOWN");  // LCOV_EXCL_LINE Can't happen.
+      entry->set_remote_ip("UNKNOWN");  // LCOV_EXCL_LINE Can't happen.
     }
   }
   else
   {
-    entry->setRemoteIp("");
+    entry->set_remote_ip("");
   }
 
   return (rc == CURLE_OK);

@@ -87,4 +87,4 @@ std::string Utils::url_escape(const std::string& s)
   return r;
 }
 
-
+bool Utils::StopWatch::_already_logged = false;
