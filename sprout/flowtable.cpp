@@ -251,6 +251,12 @@ void FlowTable::quiesce()
 
 void FlowTable::unquiesce()
 {
+  // Note that it's OK to unquiesce even if we've started
+  // transaction-based quiescing, as long as whatever kicks us to
+  // unquiesce also stops all other quiescing activity and reopens the
+  // transports. This is because this flag only affects whether we
+  // reject REGISTERs with a 305, and whether we call flows_gone on
+  // the QuiescingManager when our flow cont falls to 0.
   _quiescing = false;
 }
 
