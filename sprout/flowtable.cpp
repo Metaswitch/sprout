@@ -192,7 +192,10 @@ void FlowTable::check_quiescing_state()
   }
   else
   {
-    LOG_DEBUG("Checked quiescing state: flow_map is %d, quiescing is %d, qm is %d", _tp2flow_map.empty(), is_quiescing(), _qm);
+    LOG_DEBUG("Checked quiescing state: flow_map is %s, is_quiescing() result is %s, _qm (QuiescingManager reference) is %s",
+              _tp2flow_map.empty() ? "empty" : "not empty",
+              is_quiescing()? "true" ? "false",
+              (_qm == NULL) ? "NULL" : "not NULL";
   }
 }
 

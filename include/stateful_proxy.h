@@ -284,12 +284,12 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
 void destroy_stateful_proxy();
 
-enum SourceType
+enum SIPPeerType
 {
-  SOURCETYPE_TRUSTED_PORT,
-  SOURCETYPE_CONFIGURED_TRUNK,
-  SOURCETYPE_CLIENT,
-  SOURCETYPE_CANT_TELL
+  SIP_PEER_TRUSTED_PORT,
+  SIP_PEER_CONFIGURED_TRUNK,
+  SIP_PEER_CLIENT,
+  SIP_PEER_UNKNOWN
 };
 
 

@@ -119,8 +119,65 @@ TEST_F(DialogTrackerTest, MainlineDialogTracking)
   dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
   EXPECT_FALSE(flow->should_quiesce());
 
-  // Travk the end of a dialog, and check that the flow can now be quiesced
+  // Track the end of a dialog, and check that the flow can now be quiesced
   tsx.method.id = PJSIP_BYE_METHOD;
+  tsx.status_code = 200;
+  dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
+  EXPECT_TRUE(flow->should_quiesce());
+}
+
+TEST_F(DialogTrackerTest, ReinviteDialogTracking)
+{
+  pjsip_tx_data tdata;
+  pjsip_transaction tsx;
+  tsx.transport = _udp_tp_untrusted;
+  tsx.addr = addr;
+  pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
+  pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);
+  to->tag = pj_str("existing-tag");
+  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)to);
+  pjsip_event event;
+  tdata.msg = msg;
+
+  tsx.method.id = PJSIP_INVITE_METHOD;
+  tsx.status_code = 200;
+
+  ft->quiesce();
+  EXPECT_TRUE(flow->should_quiesce());
+
+  // Track a reINVITE, and check that this does not affect our
+  // decision on quiescing
+  dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
+  EXPECT_TRUE(flow->should_quiesce());
+}
+
+
+TEST_F(DialogTrackerTest, DialogTrackingWithErrorOnBYE)
+{
+  pjsip_tx_data tdata;
+  pjsip_transaction tsx;
+  tsx.transport = _udp_tp_untrusted;
+  tsx.addr = addr;
+  pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
+  pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);
+  to->tag = pj_str("");
+  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)to);
+  pjsip_event event;
+  tdata.msg = msg;
+
+  tsx.method.id = PJSIP_INVITE_METHOD;
+  tsx.status_code = 200;
+
+  ft->quiesce();
+  EXPECT_TRUE(flow->should_quiesce());
+
+  // Track the start of a dialog, and check that we keep the flow alive
+  dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
+  EXPECT_FALSE(flow->should_quiesce());
+
+  // Check that an error response to a BYE still ends the dialog
+  tsx.method.id = PJSIP_BYE_METHOD;
+  tsx.status_code = 408;
   dialog_tracker->on_uas_tsx_complete(&tdata, &tsx, &event, true);
   EXPECT_TRUE(flow->should_quiesce());
 }

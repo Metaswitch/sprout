@@ -660,13 +660,13 @@ static SourceType determine_source(pjsip_transport* transport, pj_sockaddr addr)
 {
   if (transport == NULL) {
     LOG_DEBUG("determine_source called with a NULL pjsip_transport");
-    return SOURCETYPE_CANT_TELL;
+    return SIP_PEER_UNKNOWN;
   }
   if (transport->local_name.port == stack_data.trusted_port)
   {
     // Request received on trusted port.
     LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
-    return SOURCETYPE_TRUSTED_PORT;
+    return SIP_PEER_TRUSTED_PORT;
   }
 
   LOG_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
@@ -676,38 +676,39 @@ static SourceType determine_source(pjsip_transport* transport, pj_sockaddr addr)
       (ibcf_trusted_peer(addr)))
   {
     LOG_DEBUG("Request received on configured SIP trunk");
-    return SOURCETYPE_CONFIGURED_TRUNK;
+    return SIP_PEER_CONFIGURED_TRUNK;
   }
 
-  return SOURCETYPE_CLIENT;
+  return SIP_PEER_CLIENT;
 }
 
 /// Checks whether the request was received from a trusted source.
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 {
-  SourceType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
-  if ((source == SOURCETYPE_TRUSTED_PORT) || (source == SOURCETYPE_CONFIGURED_TRUNK))
+  SIPPeerType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
+  pj_bool_t trusted = PJ_FALSE;
+
+  if ((source == SIP_PEER_TRUSTED_PORT)
+      || (source == SIP_PEER_CONFIGURED_TRUNK))
   {
-    return PJ_TRUE;
+    trusted = PJ_TRUE;
   }
-  else if (source == SOURCETYPE_CLIENT)
+  else if (source == SIP_PEER_CLIENT)
   {
     Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
-                                         &rdata->pkt_info.src_addr);
+                                           &rdata->pkt_info.src_addr);
     if (src_flow != NULL)
     {
       // Request received on a known flow, so check it is authenticated.
-      pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
       if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
       {
         LOG_DEBUG("Request received on authenticated client flow.");
-        src_flow->dec_ref();
-        return PJ_TRUE;
+        trusted = PJ_TRUE;
       }
       src_flow->dec_ref();
     }
   }
-  return PJ_FALSE;
+  return trusted;
 }
 
 
@@ -793,7 +794,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   {
     // Received a REGISTER request.  Check if we should act as the edge proxy
     // for the request.
-    if (source_type == SOURCETYPE_TRUSTED_PORT)
+    if (source_type == SIP_PEER_TRUSTED_PORT)
     {
       // Reject REGISTER request received from within the trust domain.
       LOG_DEBUG("Reject REGISTER received on trusted port");
@@ -804,7 +805,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    if (source_type == SOURCETYPE_CONFIGURED_TRUNK)
+    if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
       PJUtils::respond_stateless(stack_data.endpt,
@@ -844,7 +845,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                  PJSIP_SC_USE_PROXY,
                                  NULL, NULL, NULL);
       src_flow->dec_ref();
-      return PJ_ENOTFOUND;
+
+      // Of the PJSIP error codes, EIGNORED seems most appropriate -
+      // but anything that's not PJ_SUCCESS will do.
+      return PJ_EIGNORED;
     }
 
     // Touch the flow to make sure it doesn't time out while we are waiting
@@ -893,12 +897,12 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // (that is, a client flow).
     bool trusted = false;
 
-    if (source_type != SOURCETYPE_TRUSTED_PORT)
+    if (source_type != SIP_PEER_TRUSTED_PORT)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
       LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-      if (source_type == SOURCETYPE_CONFIGURED_TRUNK)
+      if (source_type == SIP_PEER_CONFIGURED_TRUNK)
       {
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
@@ -2349,7 +2353,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     if (edge_proxy)
     {
       SourceType stype  = determine_source(_tsx->transport, _tsx->addr);
-      bool is_client = (stype == SOURCETYPE_CLIENT);
+      bool is_client = (stype == SIP_PEER_CLIENT);
       dialog_tracker->on_uas_tsx_complete(_req, _tsx, event, is_client);
     }
 

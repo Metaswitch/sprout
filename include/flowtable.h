@@ -141,6 +141,8 @@ private:
   /// by a thread which currently holds the FlowTable::_flow_map_lock.
   int _refs;
 
+  // Counts the number of active dialogs on this flow. This can be
+  // updated or tested without FlowTable::_flow_map_lock being held.
   std::atomic_long _dialogs;
 
   /// Timer identifiers - the timer either runs as an expiry timer (when there

@@ -509,28 +509,9 @@ void *quiesce_unquiesce_thread_func(void *_)
 
       if (new_quiescing)
       {
-        LOG_DEBUG("Choosing type of quiescing");
-        if (opt.edge_proxy)
-        {
-          LOG_DEBUG("Starting edge proxy quiescing");
-          edge_proxy_quiesce(on_stack_quiesced);
-        }
-        else
-        {
-          LOG_DEBUG("Starting routing proxy quiescing");
-          quiesce_stack(on_stack_quiesced);
-        }
       }
       else
       {
-        if (opt.edge_proxy)
-        {
-          edge_proxy_unquiesce();
-        }
-        else
-        {
-          unquiesce_stack();
-        }
       }
     }
   }
