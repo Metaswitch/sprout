@@ -3479,34 +3479,54 @@ static pj_bool_t is_user_numeric(const std::string& user)
   return PJ_TRUE;
 }
 
-/// Adds a Path header when functioning as an edge proxy.
+/// Adds a Path header when functioning as an edge proxy or as a load-balancing
+/// proxy for a commercial SBC.
 ///
-/// The path header consists of a SIP URI with our host and a user portion that
+/// If we're the edge-proxy (and thus supplying outbound support for the client,
+/// the path header consists of a SIP URI with our host and a user portion that
 /// identifies the client flow.
+///
+/// If we're merely acting as a loadbalancing proxy for a commercial SBC, we'll
+/// simply add a path to the bono cluster.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
 {
+  // Look for an existing Path header on the message (indicating that an upstream
+  // SBC is handling NAT traversal).
+  pjsip_hdr* existing_path = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg,
+                                                                    &STR_PATH,
+                                                                    NULL);
+
+  // Determine if the connection is secured (so we use the correct scheme in the
+  // generated Path header).
   pjsip_to_hdr* to_hdr = rdata->msg_info.to;
   pj_bool_t secure = (to_hdr != NULL) ? PJSIP_URI_SCHEME_IS_SIPS(to_hdr->uri) : false;
 
-  // Create a path URI with our host name and port, and the flow token in
-  // the user field.
   pjsip_sip_uri* path_uri = pjsip_sip_uri_create(tdata->pool, secure);
-  pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
-  path_uri->host = stack_data.local_host;
   path_uri->port = stack_data.trusted_port;
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 
-  if (PJUtils::is_first_hop(rdata->msg_info.msg))
-  {
-    // We own the outbound flow to the UAC.  We must indicate that by adding
-    // the ob parameter.
-    pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-    pj_strdup2(tdata->pool, &ob_node->name, "ob");
-    pj_strdup2(tdata->pool, &ob_node->value, "");
-    pj_list_insert_after(&path_uri->other_param, ob_node);
+  if (!existing_path) {
+    // Specify this particular node, as only we can find the client.
+    path_uri->host = stack_data.local_host;
+
+    // Add the flow token and "ob" parameter.
+    pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
+
+    if (PJUtils::is_first_hop(rdata->msg_info.msg))
+    {
+      // We own the outbound flow to the UAC.  We must indicate that by adding
+      // the ob parameter.
+      pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup2(tdata->pool, &ob_node->name, "ob");
+      pj_strdup2(tdata->pool, &ob_node->value, "");
+      pj_list_insert_after(&path_uri->other_param, ob_node);
+    }
+  } else {
+    // Specify the bono cluster, as any of them can find the upstream SBC.
+    path_uri->host = stack_data.home_domain;
   }
 
   // Render the URI as a string.
