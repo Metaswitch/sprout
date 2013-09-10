@@ -46,6 +46,13 @@
 
 #include "statistic.h"
 
+typedef long HTTPCode;
+#define HTTP_OK 200
+#define HTTP_BAD_RESULT 400
+#define HTTP_NOT_FOUND 404
+#define HTTP_TEMP_UNAVAILABLE 480
+#define HTTP_SERVER_ERROR 500
+
 /// Provides managed access to data on a single HTTP server. Properly
 /// supports round-robin DNS load balancing.
 ///
@@ -55,10 +62,11 @@ public:
   HttpConnection(const std::string& server, bool assertUser, int sasEventBase, const std::string& statName);
   virtual ~HttpConnection();
 
-  virtual bool get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
+  virtual long get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
 
 private:
   CURL* get_curl_handle();
+  HTTPCode curl_code_to_http_code(CURL* curl, CURLcode code);
 
   const std::string _server;
   const bool _assertUser;

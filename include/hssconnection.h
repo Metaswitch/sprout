@@ -62,14 +62,14 @@ public:
   Json::Value* get_digest_data(const std::string& private_user_id,
                                const std::string& public_user_id,
                                SAS::TrailId trail);
-  void get_subscription_data(const std::string& public_user_identity,
+  long get_subscription_data(const std::string& public_user_identity,
                              const std::string& private_user_identity,
                              std::map<std::string, Ifcs >& service_profiles,
                              std::vector<std::string>& associated_uris,
                              SAS::TrailId trail);
 private:
   virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
-  virtual rapidxml::xml_document<>* get_xml_object(const std::string& path, SAS::TrailId trail);
+  virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;
 };

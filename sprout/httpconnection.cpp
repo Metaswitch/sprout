@@ -291,11 +291,46 @@ CURL* HttpConnection::get_curl_handle()
   return curl;
 }
 
-/// Get data; return true iff OK
-bool HttpConnection::get(const std::string& path,       //< Absolute path to request from server - must start with "/"
-                         std::string& doc,             //< OUT: Retrieved document
-                         const std::string& username,  //< Username to assert (if assertUser was true, else ignored).
-                         SAS::TrailId trail)          //< SAS trail to use
+// Map the CURLcode into a sensible HTTP return code.
+HTTPCode HttpConnection::curl_code_to_http_code(CURL* curl, CURLcode code)
+{
+  switch (code)
+  {
+  case CURLE_OK:
+    return HTTP_OK;
+  // LCOV_EXCL_START
+  case CURLE_URL_MALFORMAT:
+  case CURLE_NOT_BUILT_IN:
+    return HTTP_BAD_RESULT;
+  // LCOV_EXCL_STOP
+  case CURLE_REMOTE_FILE_NOT_FOUND:
+    return HTTP_NOT_FOUND;
+  // LCOV_EXCL_START
+  case CURLE_COULDNT_RESOLVE_PROXY:
+  case CURLE_COULDNT_RESOLVE_HOST:
+  case CURLE_COULDNT_CONNECT:
+  case CURLE_AGAIN:
+    return HTTP_NOT_FOUND;
+  case CURLE_HTTP_RETURNED_ERROR:
+    // We have an actual HTTP error available, so use that.
+  {
+    long http_code = 0;
+    CURLcode rc = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    assert(rc == CURLE_OK);
+    return http_code;
+  }
+  default:
+    return HTTP_SERVER_ERROR;
+  // LCOV_EXCL_STOP
+  }
+}
+
+
+/// Get data; return a HTTP return code
+HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to request from server - must start with "/"
+                             std::string& doc,             //< OUT: Retrieved document
+                             const std::string& username,  //< Username to assert (if assertUser was true, else ignored).
+                             SAS::TrailId trail)          //< SAS trail to use
 {
   std::string url = "http://" + _server + path;
   struct curl_slist *extra_headers = NULL;
@@ -411,6 +446,11 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     entry->setRemoteIp("");
   }
 
-  return (rc == CURLE_OK);
+  HTTPCode http_code = curl_code_to_http_code(curl, rc);
+  if ((rc != CURLE_OK) && (rc != CURLE_REMOTE_FILE_NOT_FOUND))
+  {
+    LOG_ERROR("cURL failure with cURL error code %d (see man 3 libcurl-errors) and HTTP error code %ld", (int)rc, http_code);  // LCOV_EXCL_LINE
+  }
+  return http_code;
 }
 
