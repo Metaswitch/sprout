@@ -104,7 +104,7 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
   {
     pthread_mutex_lock(&_lock);
 
-    if (_connections.find(tp) != _connections.end())
+    if (_connections.find(tp) == _connections.end())
     {
       // New connection. Add it to the connections set, and register a state
       // listener so we know when it gets destroyed.

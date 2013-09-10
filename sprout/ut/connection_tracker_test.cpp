@@ -115,9 +115,9 @@ TEST_F(ConnectionTrackerTest, QuiesceWithNoConnections)
 
 TEST_F(ConnectionTrackerTest, QuiesceWithOneConnection)
 {
+  // Create a new TCP transport.
   pjsip_transport *tp;
   pj_sockaddr rem_addr;
-
   pj_str_t addr_str = pj_str("1.2.3.4");
   pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.trusted_port);
 
@@ -125,22 +125,25 @@ TEST_F(ConnectionTrackerTest, QuiesceWithOneConnection)
                                              (pj_sockaddr_t*)&rem_addr,
                                              sizeof(pj_sockaddr_in),
                                              &tp);
-  pjsip_transport_add_ref(tp);
   EXPECT_EQ(PJ_SUCCESS, status);
 
+  // Reference the transport.  This makes it look like there is a transaction in
+  // progress.
+  pjsip_transport_add_ref(tp);
 
+  // Notify the connection tracker of the connection.
   _conn_tracker->connection_active(tp);
 
-
-
+  // Quiesce the connection manager.  The transport gets shutdown, but the
+  // manager does not report it has quiesced (as there is still a reference on
+  // the transport).
   _conn_tracker->quiesce();
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+  EXPECT_TRUE(tp->is_shutdown);
+
+  // Unref the transport.  The tracker reports quiesce complete.
+  pjsip_transport_dec_ref(tp);
   EXPECT_TRUE(_conns_quiesced_handler->quiesced);
 }
-
-
-
-
-
-
 
 TEST_F(ConnectionTrackerTest, AlwaysFails) { EXPECT_TRUE(false); }
