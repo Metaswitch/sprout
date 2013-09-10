@@ -42,9 +42,12 @@
 #include <json/reader.h>
 
 #include "utils.h"
+#include "stack.h"
 #include "connection_tracker.h"
 
-#include "basetest.hpp"
+#include "faketransport_udp.hpp"
+#include "faketransport_tcp.hpp"
+#include "siptest.hpp"
 
 using namespace std;
 
@@ -67,9 +70,15 @@ public:
 private:
 };
 
-class ConnectionTrackerTest : public BaseTest
+class ConnectionTrackerTest : public SipTest
 {
 public:
+  // Called before any testcases have been run.
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
   // Called at the start of every testcase.
   ConnectionTrackerTest()
   {
@@ -77,13 +86,24 @@ public:
     _conn_tracker = new ConnectionTracker(_conns_quiesced_handler);
   }
 
+  // Called at the end of every testcase.
   virtual ~ConnectionTrackerTest() {}
+
+  // Called after all testcases have ben run.
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
 
 private:
 
   ConnectionTracker *_conn_tracker;
   ConnectionsQuiescedHandler *_conns_quiesced_handler;
 };
+
+//
+// Tests defined below.
+//
 
 // When the connection tracker does not know about any connections, it quiesces
 // immediately.
@@ -93,3 +113,34 @@ TEST_F(ConnectionTrackerTest, QuiesceWithNoConnections)
   EXPECT_TRUE(_conns_quiesced_handler->quiesced);
 }
 
+TEST_F(ConnectionTrackerTest, QuiesceWithOneConnection)
+{
+  pjsip_transport *tp;
+  pj_sockaddr rem_addr;
+
+  pj_str_t addr_str = pj_str("1.2.3.4");
+  pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.trusted_port);
+
+  pj_status_t status = pjsip_fake_tcp_accept(_tcp_tpfactory_trusted,
+                                             (pj_sockaddr_t*)&rem_addr,
+                                             sizeof(pj_sockaddr_in),
+                                             &tp);
+  pjsip_transport_add_ref(tp);
+  EXPECT_EQ(PJ_SUCCESS, status);
+
+
+  _conn_tracker->connection_active(tp);
+
+
+
+  _conn_tracker->quiesce();
+  EXPECT_TRUE(_conns_quiesced_handler->quiesced);
+}
+
+
+
+
+
+
+
+TEST_F(ConnectionTrackerTest, AlwaysFails) { EXPECT_TRUE(false); }

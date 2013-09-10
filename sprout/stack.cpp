@@ -482,7 +482,7 @@ pj_status_t start_transports(int port, pjsip_tpfactory** tcp_factory)
 
 
 // This class distributes quiescing work within the stack module.  It receives
-// requests from the QuiscingManager and Connection Manager, and calls the
+// requests from the QuiscingManager and ConnectionTracker, and calls the
 // relvant methods in the stack module, QuiescingManager and ConnectionManager
 // as appropriate.
 class StackQuiesceHandler :
