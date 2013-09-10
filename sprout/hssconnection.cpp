@@ -91,7 +91,7 @@ Json::Value* HSSConnection::get_json_object(const std::string& path,
   std::string json_data;
   Json::Value* root = NULL;
 
-  if (_http->get(path, json_data, "", trail) == 200)
+  if (_http->get(path, json_data, "", trail) == HTTP_OK)
   {
     root = new Json::Value;
     Json::Reader reader;
@@ -110,15 +110,15 @@ Json::Value* HSSConnection::get_json_object(const std::string& path,
 
 
 /// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
-long HSSConnection::get_xml_object(const std::string& path,
+HTTPCode HSSConnection::get_xml_object(const std::string& path,
                                    rapidxml::xml_document<>*& root,
                                    SAS::TrailId trail)
 {
   std::string raw_data;
 
-  long http_code = _http->get(path, raw_data, "", trail);
+  HTTPCode http_code = _http->get(path, raw_data, "", trail);
 
-  if (http_code == 200)
+  if (http_code == HTTP_OK)
   {
     root = new rapidxml::xml_document<>;
     try
@@ -143,13 +143,13 @@ long HSSConnection::get_xml_object(const std::string& path,
 //  corresponding to each in the ifcs_map parameter.
 
 // Returns the HTTP code from Homestead - callers should check that
-// this is 200 OK before relying on the output parameters.
+// this is HTTP_OK before relying on the output parameters.
 
-long HSSConnection::get_subscription_data(const std::string& public_user_identity,
-                                          const std::string& private_user_identity,
-                                          std::map<std::string, Ifcs >& ifcs_map,
-                                          std::vector<std::string>& associated_uris,
-                                          SAS::TrailId trail)
+HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_identity,
+                                              const std::string& private_user_identity,
+                                              std::map<std::string, Ifcs >& ifcs_map,
+                                              std::vector<std::string>& associated_uris,
+                                              SAS::TrailId trail)
 {
   std::string path = "/impu/" +
                      Utils::url_escape(public_user_identity);
@@ -159,11 +159,11 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  long http_code = get_xml_object(path, root_underlying_ptr, trail);
+  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   rapidxml::xml_node<>* sp = NULL;
 
-  if (http_code != 200)
+  if (http_code != HTTP_OK)
   {
     // If get_xml_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
@@ -176,7 +176,7 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
     LOG_ERROR("Malformed HSS XML - document couldn't be parsed"); 
-    return 500;
+    return HTTP_SERVER_ERROR;
   }
 
   rapidxml::xml_node<>* imss = root->first_node("IMSSubscription");
@@ -184,7 +184,7 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
   if (!imss)
   {
     LOG_ERROR("Malformed HSS XML - no IMSSubscription element"); 
-    return 500;
+    return HTTP_SERVER_ERROR;
   }
 
   for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile"))
@@ -200,13 +200,13 @@ long HSSConnection::get_subscription_data(const std::string& public_user_identit
       {
         std::string uri = std::string(identity->value());
         LOG_DEBUG("Processing Identity node from HSS XML - %s\n", uri.c_str());
-        
+
         associated_uris.push_back(uri);
         ifcs_map[uri] = ifc;
       }
     }
   }
-  return 200;
+  return HTTP_OK;
 }
 
 

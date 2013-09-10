@@ -265,8 +265,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
-  long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-  if (http_code != 200)
+  HTTPCode http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+  if (http_code != HTTP_OK)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
@@ -623,9 +623,9 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    long http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+    HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
 
-    if (http_code == 200)
+    if (http_code == HTTP_OK)
     {
       RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
     }

@@ -1241,13 +1241,16 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 // Gets the subscriber's associated URIs and iFCs for each URI from
 // the HSS. Returns true on success, false on failure.
 
+// The info parameter is only filled in correctly if this function
+// returns true,
 bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation& info, SAS::TrailId trail)
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
+  bool rc = false;
   if (data != cached_hss_data.end())
-  { 
+  {
     info = data->second;
-    return true;
+    rc = true;
   }
   else
   {
@@ -1258,14 +1261,15 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     if (http_code == 200)
     {
       cached_hss_data[public_id] = info;
-      return true;
+      rc = true;
     }
   }
-  return false;
+  return rc;
 }
 
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
-// Returns true if it got useful information, false otherwise.
+// The uris parameter is only filled in correctly if this function
+// returns true,
 bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail) 
 {
   HSSCallInformation data;
@@ -1278,6 +1282,8 @@ bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std:
 }
 
 // Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).  
+// The ifcs parameter is only filled in correctly if this function
+// returns true,
 bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail) 
 {
   HSSCallInformation data; 
@@ -1956,7 +1962,7 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
       success = lookup_ifcs(served_user, ifcs, trail());
       if (success)
       {
-	_as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
+        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
     }
   }
