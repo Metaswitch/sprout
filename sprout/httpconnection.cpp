@@ -34,12 +34,9 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #include <curl/curl.h>
 #include <cassert>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
 
 #include "utils.h"
 #include "log.h"
@@ -76,153 +73,14 @@ static const long SINGLE_CONNECT_TIMEOUT_MS = 50;
 static const double CONNECTION_AGE_MS = 60 * 1000.0;
 
 
-/// A single entry in the connection pool. Stored inside a cURL handle.
-class PoolEntry
-{
-public:
-  PoolEntry(HttpConnection* parent) :
-    _parent(parent),
-    _deadline_ms(0L),
-    _rand(1.0 / CONNECTION_AGE_MS)
-  {
-  }
-
-  void set_remote_ip(std::string value);
-
-  /// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
-  /// current time, in milliseconds.
-  inline bool is_connection_expired(unsigned long now_ms)
-  {
-    return (now_ms > _deadline_ms);
-  }
-
-  /// Update deadline to next appropriate value. Expects
-  /// CLOCK_MONOTONIC current time, in milliseconds.  Call on
-  /// successful connection.
-  inline void update_deadline(unsigned long now_ms)
-  {
-    // Get the next desired inter-arrival time. Choose this
-    // randomly so as to avoid spikes.
-    unsigned long interval_ms = (unsigned long)_rand();
-
-    if ((_deadline_ms == 0L) ||
-        ((_deadline_ms + interval_ms) < now_ms))
-    {
-      // This is the first request, or the next arrival has
-      // already passed (in which case things must be pretty
-      // quiet). Just bump the next deadline into the future.
-      _deadline_ms = now_ms + interval_ms;
-    }
-    else
-    {
-      // The next arrival is yet to come. Schedule it relative to
-      // the last intended time, so as not to skew the mean
-      // upwards.
-      _deadline_ms += interval_ms;
-    }
-  }
-
-private:
-
-  /// Parent HttpConnection object.
-  HttpConnection* _parent;
-
-  /// Time beyond which this connection should be recycled, in
-  // CLOCK_MONOTONIC milliseconds, or 0 for ASAP.
-  unsigned long _deadline_ms;
-
-  /// Random distribution to use for determining connection lifetimes.
-  /// Use an exponential distribution because it is memoryless. This
-  /// gives us a Poisson distribution of recyle events, both for
-  /// individual threads and for the overall application.
-  Utils::ExponentialDistribution _rand;
-
-  /// Server IP we're connected to, if any.
-  std::string _remoteIp;
-};
-
-
-/// Set the remote IP, and update statistics.
-void PoolEntry::set_remote_ip(std::string value)  //< Remote IP, or "" if no connection.
-{
-  if (value == _remoteIp)
-  {
-    return;
-  }
-
-  pthread_mutex_lock(&_parent->_lock);
-
-  if (!_remoteIp.empty())
-  {
-    if (--_parent->_serverCount[_remoteIp] == 0)
-    {
-      _parent->_serverCount.erase(_remoteIp);
-    }
-  }
-
-  if (!value.empty())
-  {
-    if (_parent->_serverCount.find(value) == _parent->_serverCount.end()) {
-      _parent->_serverCount[value] = 1;
-    }
-    else
-    {
-      ++_parent->_serverCount[value]; // LCOV_EXCL_LINE Our UTs only test a single thread, so can't hit this.
-    }
-  }
-
-  _remoteIp = value;
-
-  // Now build the statistics to report.
-  std::vector<std::string> new_value;
-
-  for (std::map<std::string, int>::iterator iter = _parent->_serverCount.begin();
-       iter != _parent->_serverCount.end();
-       ++iter)
-  {
-    new_value.push_back(iter->first);
-    new_value.push_back(boost::lexical_cast<std::string>(iter->second));
-  }
-
-  pthread_mutex_unlock(&_parent->_lock);
-
-  // Actually report outside the mutex to avoid any risk of deadlock.
-  _parent->_statistic.report_change(new_value);
-}
-
-/// cURL helper - write data into string.
-static size_t string_store(void* ptr, size_t size, size_t nmemb, void* stream)
-{
-  ((std::string*)stream)->append((char*)ptr, size * nmemb);
-  return (size * nmemb);
-}
-
-/// Called to clean up the cURL handle.
-static void cleanup_curl(void* curlptr)
-{
-  CURL* curl = (CURL*)curlptr;
-
-  PoolEntry* entry;
-  CURLcode rc = curl_easy_getinfo(curl, CURLINFO_PRIVATE, (char**)&entry);
-  if (rc == CURLE_OK)
-  {
-    // Connection has closed.
-    entry->set_remote_ip("");
-    delete entry;
-  }
-
-  curl_easy_cleanup(curl);
-}
-
-
-HttpConnection::HttpConnection(const std::string& server,  //< Server to send HTTP requests to.
-                               bool assertUser,            //< Assert user in header?
-                               int sasEventBase,           //< SAS events: sasEventBase - will have  SASEvent::HTTP_REQ / RSP / ERR added to it.
-                               const std::string& statName) :  //< Name of statistic to report connection info to.
+HttpConnection::HttpConnection(const std::string& server,      //< Server to send HTTP requests to.
+                               bool assert_user,               //< Assert user in header?
+                               int sas_event_base,             //< SAS events: sas_event_base - will have  SASEvent::HTTP_REQ / RSP / ERR added to it.
+                               const std::string& stat_name) : //< Name of statistic to report connection info to.
   _server(server),
-  _assertUser(assertUser),
-  _sasEventBase(sasEventBase),
-  _statistic(statName)
+  _assert_user(assert_user),
+  _sas_event_base(sas_event_base),
+  _statistic(stat_name)
 {
   pthread_key_create(&_thread_local, cleanup_curl);
   pthread_mutex_init(&_lock, NULL);
@@ -230,6 +88,7 @@ HttpConnection::HttpConnection(const std::string& server,  //< Server to send HT
   std::vector<std::string> no_stats;
   _statistic.report_change(no_stats);
 }
+
 
 HttpConnection::~HttpConnection()
 {
@@ -243,6 +102,7 @@ HttpConnection::~HttpConnection()
     cleanup_curl(curl);
   }
 }
+
 
 /// Get the thread-local curl handle if it exists, and create it if not.
 CURL* HttpConnection::get_curl_handle()
@@ -291,6 +151,7 @@ CURL* HttpConnection::get_curl_handle()
   return curl;
 }
 
+
 /// Get data; return true iff OK
 bool HttpConnection::get(const std::string& path,       //< Absolute path to request from server - must start with "/"
                          std::string& doc,             //< OUT: Retrieved document
@@ -308,12 +169,11 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &doc);
   curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
-  if (_assertUser)
+  if (_assert_user)
   {
     extra_headers = curl_slist_append(extra_headers, ("X-XCAP-Asserted-Identity: " + username).c_str());
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, extra_headers);
   }
-
 
   // Determine whether to recycle the connection, based on
   // previously-calculated deadline.
@@ -325,25 +185,26 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
   // Try to get a decent connection. We may need to retry, but only
   // once - cURL itself does most of the retrying for us.
-  for (int i = 0; i < 2; i++)
+  for (int attempt = 0; attempt < 2; attempt++)
   {
     curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, recycle_conn ? 1L : 0L);
 
     // Report the request to SAS.
-    SAS::Event http_req_event(trail, _sasEventBase + SASEvent::HTTP_REQ, 1u);
+    SAS::Event http_req_event(trail, _sas_event_base + SASEvent::HTTP_REQ, 1u);
     http_req_event.add_var_param(url);
     SAS::report_event(http_req_event);
 
     // Send the request.
     doc.clear();
-    LOG_DEBUG("Sending HTTP request : GET %s (try %d) %s", url.c_str(), i, (recycle_conn) ? "on new connection" : "");
+    LOG_DEBUG("Sending HTTP request : GET %s (try %d) %s", url.c_str(), attempt, (recycle_conn) ? "on new connection" : "");
     rc = curl_easy_perform(curl);
 
     if (rc == CURLE_OK)
     {
-      // Report the response to SAS.
       LOG_DEBUG("Received HTTP response : %s", doc.c_str());
-      SAS::Event http_rsp_event(trail, _sasEventBase + SASEvent::HTTP_RSP, 1u);
+
+      // Report the response to SAS.
+      SAS::Event http_rsp_event(trail, _sas_event_base + SASEvent::HTTP_RSP, 1u);
       http_rsp_event.add_var_param(url);
       http_rsp_event.add_var_param(doc);
       SAS::report_event(http_rsp_event);
@@ -358,13 +219,21 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     }
     else
     {
+      LOG_DEBUG("Received HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
+
       // Report the error to SAS
-      LOG_ERROR("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
-      SAS::Event http_err_event(trail, _sasEventBase + SASEvent::HTTP_ERR, 1u);
+      SAS::Event http_err_event(trail, _sas_event_base + SASEvent::HTTP_ERR, 1u);
       http_err_event.add_static_param(rc);
       http_err_event.add_var_param(url);
       http_err_event.add_var_param(curl_easy_strerror(rc));
       SAS::report_event(http_err_event);
+
+      long http_rc = 0;
+      if (rc == CURLE_HTTP_RETURNED_ERROR)
+      {
+        // Get the HTTP error code returned from the server.
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_rc);
+      }
 
       // Is this an error we should retry? If cURL itself has already
       // retried (e.g., CURLE_COULDNT_CONNECT) then there is no point
@@ -374,17 +243,24 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
       // ourselves.
       bool non_fatal = ((rc == CURLE_OPERATION_TIMEDOUT) ||
                         (rc == CURLE_SEND_ERROR) ||
-                        (rc == CURLE_RECV_ERROR));
+                        (rc == CURLE_RECV_ERROR) ||
+                        ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 503)));
 
-      if (!recycle_conn && non_fatal)
+      char* remote_ip;
+      curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &remote_ip);
+
+      if ((non_fatal) && (attempt == 0))
       {
-        // Loop around and try again.  Always request a fresh
-        // connection.
+        // Loop around and try again.  Always request a fresh connection.
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
       }
       else
       {
-        // Fatal error - we're done!
+        // Fatal error or we've already retried once - we're done!
+        LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
+                  url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         break;
       }
     }
@@ -413,4 +289,129 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
   return (rc == CURLE_OK);
 }
+
+
+/// cURL helper - write data into string.
+size_t HttpConnection::string_store(void* ptr, size_t size, size_t nmemb, void* stream)
+{
+  ((std::string*)stream)->append((char*)ptr, size * nmemb);
+  return (size * nmemb);
+}
+
+
+/// Called to clean up the cURL handle.
+void HttpConnection::cleanup_curl(void* curlptr)
+{
+  CURL* curl = (CURL*)curlptr;
+
+  PoolEntry* entry;
+  CURLcode rc = curl_easy_getinfo(curl, CURLINFO_PRIVATE, (char**)&entry);
+  if (rc == CURLE_OK)
+  {
+    // Connection has closed.
+    entry->set_remote_ip("");
+    delete entry;
+  }
+
+  curl_easy_cleanup(curl);
+}
+
+
+/// PoolEntry constructor
+HttpConnection::PoolEntry::PoolEntry(HttpConnection* parent) :
+  _parent(parent),
+  _deadline_ms(0L),
+  _rand(1.0 / CONNECTION_AGE_MS)
+{
+}
+
+
+/// PoolEntry destructor
+HttpConnection::PoolEntry::~PoolEntry()
+{
+}
+
+
+/// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
+/// current time, in milliseconds.
+bool HttpConnection::PoolEntry::is_connection_expired(unsigned long now_ms)
+{
+  return (now_ms > _deadline_ms);
+}
+
+
+/// Update deadline to next appropriate value. Expects
+/// CLOCK_MONOTONIC current time, in milliseconds.  Call on
+/// successful connection.
+void HttpConnection::PoolEntry::update_deadline(unsigned long now_ms)
+{
+  // Get the next desired inter-arrival time. Choose this
+  // randomly so as to avoid spikes.
+  unsigned long interval_ms = (unsigned long)_rand();
+
+  if ((_deadline_ms == 0L) ||
+      ((_deadline_ms + interval_ms) < now_ms))
+  {
+    // This is the first request, or the next arrival has
+    // already passed (in which case things must be pretty
+    // quiet). Just bump the next deadline into the future.
+    _deadline_ms = now_ms + interval_ms;
+  }
+  else
+  {
+    // The next arrival is yet to come. Schedule it relative to
+    // the last intended time, so as not to skew the mean
+    // upwards.
+    _deadline_ms += interval_ms;
+  }
+}
+
+
+/// Set the remote IP, and update statistics.
+void HttpConnection::PoolEntry::set_remote_ip(const std::string& value)  //< Remote IP, or "" if no connection.
+{
+  if (value == _remote_ip)
+  {
+    return;
+  }
+
+  pthread_mutex_lock(&_parent->_lock);
+
+  if (!_remote_ip.empty())
+  {
+    // Decrement the number of connections to this address.
+    if (--_parent->_server_count[_remote_ip] <= 0)
+    {
+      // No more connections to this address, so remove it from the map.
+      _parent->_server_count.erase(_remote_ip);
+    }
+  }
+
+  if (!value.empty())
+  {
+    // Increment the count of connections to this address.  (Note this is
+    // safe even if this is the first connection as the [] operator will
+    // insert an entry initialised to 0.)
+    ++_parent->_server_count[value];
+  }
+
+  _remote_ip = value;
+
+  // Now build the statistics to report.
+  std::vector<std::string> new_value;
+
+  for (std::map<std::string, int>::iterator iter = _parent->_server_count.begin();
+       iter != _parent->_server_count.end();
+       ++iter)
+  {
+    new_value.push_back(iter->first);
+    new_value.push_back(std::to_string(iter->second));
+  }
+
+  pthread_mutex_unlock(&_parent->_lock);
+
+  // Actually report outside the mutex to avoid any risk of deadlock.
+  _parent->_statistic.report_change(new_value);
+}
+
 

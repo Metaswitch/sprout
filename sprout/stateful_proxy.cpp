@@ -1476,6 +1476,11 @@ void proxy_calculate_targets(pjsip_msg* msg,
       }
     }
 
+    if (targets.empty())
+    {
+      LOG_ERROR("Failed to find any valid bindings for %s in registration store", aor.c_str());
+    }
+
     delete aor_data;
 
     delete uris;

@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #pragma once
 
 #include <map>
@@ -44,6 +41,7 @@
 #include <curl/curl.h>
 #include <sas.h>
 
+#include "utils.h"
 #include "statistic.h"
 
 /// Provides managed access to data on a single HTTP server. Properly
@@ -52,23 +50,58 @@
 class HttpConnection
 {
 public:
-  HttpConnection(const std::string& server, bool assertUser, int sasEventBase, const std::string& statName);
+  HttpConnection(const std::string& server, bool assert_user, int sas_event_base, const std::string& stat_name);
   virtual ~HttpConnection();
 
   virtual bool get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
 
+  static size_t string_store(void* ptr, size_t size, size_t nmemb, void* stream);
+  static void cleanup_curl(void* curlptr);
+
 private:
+
+  /// A single entry in the connection pool. Stored inside a cURL handle.
+  class PoolEntry
+  {
+  public:
+    PoolEntry(HttpConnection* parent);
+    ~PoolEntry();
+
+    void set_remote_ip(const std::string& value);
+    const std::string& get_remote_ip() const { return _remote_ip; };
+
+    bool is_connection_expired(unsigned long now_ms);
+    void update_deadline(unsigned long now_ms);
+
+  private:
+    /// Parent HttpConnection object.
+    HttpConnection* _parent;
+
+    /// Time beyond which this connection should be recycled, in
+    // CLOCK_MONOTONIC milliseconds, or 0 for ASAP.
+    unsigned long _deadline_ms;
+
+    /// Random distribution to use for determining connection lifetimes.
+    /// Use an exponential distribution because it is memoryless. This
+    /// gives us a Poisson distribution of recyle events, both for
+    /// individual threads and for the overall application.
+    Utils::ExponentialDistribution _rand;
+
+    /// Server IP we're connected to, if any.
+    std::string _remote_ip;
+  };
+
   CURL* get_curl_handle();
 
   const std::string _server;
-  const bool _assertUser;
-  const int _sasEventBase;
+  const bool _assert_user;
+  const int _sas_event_base;
   pthread_key_t _thread_local;
 
   Statistic _statistic;
 
   pthread_mutex_t _lock;
-  std::map<std::string, int> _serverCount;  // must access under _lock
+  std::map<std::string, int> _server_count;  // must access under _lock
 
   friend class PoolEntry; // so it can update stats
 };
