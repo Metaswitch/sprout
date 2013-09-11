@@ -289,6 +289,11 @@ public:
     return _q.front();
   };
 
+  int size() const
+  {
+    return _q.size();
+  };
+
 private:
 
   bool _open;

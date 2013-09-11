@@ -293,23 +293,32 @@ CURLcode curl_easy_getinfo(CURL* handle, CURLINFO info, ...)
 
   switch (info)
   {
-  case CURLINFO_PRIVATE:
-  {
-    char** dataptr = va_arg(args, char**);
-    *(void**)dataptr = curl->_private;
-  }
-  break;
-  case CURLINFO_PRIMARY_IP:
-  {
-    static char ip[] = "10.42.42.42";
-    char** dataptr = va_arg(args, char**);
-    *dataptr = ip;
-  }
-  break;
-  default:
-  {
-    throw runtime_error("cURL info unknown to FakeCurl");
-  }
+    case CURLINFO_PRIVATE:
+    {
+      char** dataptr = va_arg(args, char**);
+      *(void**)dataptr = curl->_private;
+    }
+    break;
+
+    case CURLINFO_PRIMARY_IP:
+    {
+      static char ip[] = "10.42.42.42";
+      char** dataptr = va_arg(args, char**);
+      *dataptr = ip;
+    }
+    break;
+
+    case CURLINFO_RESPONSE_CODE:
+    {
+      long* dataptr = va_arg(args, long*);
+      *dataptr = 503;
+    }
+    break;
+
+    default:
+    {
+      throw runtime_error("cURL info unknown to FakeCurl");
+    }
   }
 
   va_end(args);  // http://www.gnu.org/software/gnu-c-manual/gnu-c-manual.html#Variable-Length-Parameter-Lists clarifies that in GCC this does nothing, so is fine even in the presence of exceptions
