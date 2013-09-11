@@ -141,18 +141,20 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
   _servers = servers.size();
   _replicas = vbuckets.size();
 
-  for (std::list<std::string>::const_iterator i = servers.begin();
-       i != servers.end();
-       ++i)
-  {
-    _options += "--SERVER=" + (*i) + " ";
-  }
-  _options += "--SUPPORT-CAS";
+  // We use a very short connect timeout because libmemcached tries to connect
+  // to all servers sequentially during start-up, and if any are not up we
+  // don't want to wait for any significant length of time.
+  _options += "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
   if (_binary)
   {
     _options += " --BINARY-PROTOCOL";
   }
-  _options += " --CONNECT-TIMEOUT=200";
+  for (std::list<std::string>::const_iterator i = servers.begin();
+       i != servers.end();
+       ++i)
+  {
+    _options += " --SERVER=" + (*i);
+  }
 
   LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
 
@@ -180,20 +182,6 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
               vbucket_to_string(buf, sizeof(buf), _vbucket_map[ii], _vbuckets));
   }
 
-  // In some cloud environments establishing TCP connections to other nodes
-  // for the first time can take a while, so rather than risk blocking
-  // worker threads as they switch to the new view, attempt to connect to each
-  // server in the list before flagging the new view is ready to go.
-  for (int ii = 0; ii < 5; ++ii)
-  {
-    for (std::list<std::string>::const_iterator i = servers.begin();
-         i != servers.end();
-         ++i)
-    {
-      ping_server(*i);
-    }
-  }
-
   // Update the view number as the last thing here, otherwise we could stall
   // other threads waiting for the lock.
   LOG_STATUS("Finished preparing new view, so flag that workers should switch to it");
@@ -201,56 +189,6 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
   ++_view;
 
   pthread_rwlock_unlock(&_view_lock);
-}
-
-
-/// Pings a memcached server by opening a TCP connection then immediately
-/// closing it.
-bool MemcachedStore::ping_server(const std::string& server)
-{
-  int rc;
-  int sock;
-  struct sockaddr_in addr;
-
-  LOG_STATUS("Attempting to ping memcached server %s", server.c_str());
-
-  std::vector<std::string> host_port;
-  Utils::split_string(server, ':', host_port, 0, true);
-  if ((host_port.size() != 1) &&
-      (host_port.size() != 2))
-  {
-    LOG_ERROR("Badly formatted memcached server %s", server.c_str());
-    return false;
-  }
-
-  if ((sock = ::socket(AF_INET, SOCK_STREAM, 0)) == -1)
-  {
-    LOG_ERROR("Failed to open memcached socket: %d (%s)", errno, ::strerror(errno));
-    return false;
-  }
-
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_port = (host_port.size() == 2) ? htons(atoi(host_port[1].c_str())) : htons(11211);
-  addr.sin_addr.s_addr = inet_addr(host_port[0].c_str());
-
-  rc = ::connect(sock, (struct sockaddr*)&addr, sizeof(addr));
-
-  if (rc != 0)
-  {
-    LOG_ERROR("Failed to connect to memcached server %s : %d %s", server.c_str(), errno, ::strerror(errno));
-    ::close(sock);
-    return false;
-  }
-
-  LOG_DEBUG("Connected to memcached server %s:%d", server.c_str());
-
-  // Close the socket to complete the ping.
-  ::close(sock);
-
-  LOG_STATUS("Completed ping of memcached server %s", server.c_str());
-
-  return true;
 }
 
 
@@ -289,6 +227,9 @@ MemcachedStore::connection* MemcachedStore::get_connection()
 
       // Set up the virtual buckets.
       memcached_bucket_set(conn->st[ii], _vbucket_map[ii], NULL, _vbuckets, 1);
+
+      // Switch to a longer connect timeout from here on.
+      memcached_behavior_set(conn->st[ii], MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT, 50);
 
       LOG_STATUS("Set up memcached_st and vbucket for replica %d on connection %p", ii, conn);
     }

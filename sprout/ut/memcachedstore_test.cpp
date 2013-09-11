@@ -226,12 +226,16 @@ TEST_F(MemcachedStoreTest, SimpleLocal)
 TEST_F(MemcachedStoreTest, DISABLED_SimpleMemcached)
 {
   SCOPED_TRACE("memcached");
-  Store* store;
+  MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
+  store = (MemcachedStore*)create_memcached_store(false);
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11211"));
-  store = create_memcached_store(servers, 10);
+  std::vector<std::vector<std::string> > vbuckets;
+  vbuckets.resize(1);
+  vbuckets[0].push_back("0");
+  store->new_view(servers, vbuckets);
 
   do_test_simple(*store);
 
@@ -243,12 +247,16 @@ TEST_F(MemcachedStoreTest, DISABLED_SimpleMemcached)
 TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
 {
   SCOPED_TRACE("memcached");
-  Store* store;
+  MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
+  store = (MemcachedStore*)create_memcached_store(false);
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11209"));
-  store = create_memcached_store(servers, 10);
+  std::vector<std::vector<std::string> > vbuckets;
+  vbuckets.resize(1);
+  vbuckets[0].push_back("0");
+  store->new_view(servers, vbuckets);
 
   // Test 2.2 - flush the server.
   store->flush_all();
