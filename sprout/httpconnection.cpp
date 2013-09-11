@@ -34,12 +34,9 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #include <curl/curl.h>
 #include <cassert>
 #include <iostream>
-#include <boost/lexical_cast.hpp>
 
 #include "utils.h"
 #include "log.h"
@@ -76,90 +73,57 @@ static const long SINGLE_CONNECT_TIMEOUT_MS = 50;
 static const double CONNECTION_AGE_MS = 60 * 1000.0;
 
 
-/// A single entry in the connection pool. Stored inside a cURL handle.
-class PoolEntry
+/// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
+/// current time, in milliseconds.
+bool PoolEntry::is_connection_expired(unsigned long now_ms)
 {
-public:
-  PoolEntry(HttpConnection* parent) :
-    _parent(parent),
-    _deadline_ms(0L),
-    _rand(1.0 / CONNECTION_AGE_MS)
+  return (now_ms > _deadline_ms);
+}
+
+/// Update deadline to next appropriate value. Expects
+/// CLOCK_MONOTONIC current time, in milliseconds.  Call on
+/// successful connection.
+void PoolEntry::update_deadline(unsigned long now_ms)
+{
+  // Get the next desired inter-arrival time. Choose this
+  // randomly so as to avoid spikes.
+  unsigned long interval_ms = (unsigned long)_rand();
+
+  if ((_deadline_ms == 0L) ||
+      ((_deadline_ms + interval_ms) < now_ms))
   {
+    // This is the first request, or the next arrival has
+    // already passed (in which case things must be pretty
+    // quiet). Just bump the next deadline into the future.
+    _deadline_ms = now_ms + interval_ms;
   }
-
-  void setRemoteIp(std::string value);
-  const std::string& getRemoteIp() const { return _remoteIp; };
-
-  /// Is it time to recycle the connection? Expects CLOCK_MONOTONIC
-  /// current time, in milliseconds.
-  inline bool isConnectionExpired(unsigned long now_ms)
+  else
   {
-    return (now_ms > _deadline_ms);
+    // The next arrival is yet to come. Schedule it relative to
+    // the last intended time, so as not to skew the mean
+    // upwards.
+    _deadline_ms += interval_ms;
   }
-
-  /// Update deadline to next appropriate value. Expects
-  /// CLOCK_MONOTONIC current time, in milliseconds.  Call on
-  /// successful connection.
-  inline void updateDeadline(unsigned long now_ms)
-  {
-    // Get the next desired inter-arrival time. Choose this
-    // randomly so as to avoid spikes.
-    unsigned long interval_ms = (unsigned long)_rand();
-
-    if ((_deadline_ms == 0L) ||
-        ((_deadline_ms + interval_ms) < now_ms))
-    {
-      // This is the first request, or the next arrival has
-      // already passed (in which case things must be pretty
-      // quiet). Just bump the next deadline into the future.
-      _deadline_ms = now_ms + interval_ms;
-    }
-    else
-    {
-      // The next arrival is yet to come. Schedule it relative to
-      // the last intended time, so as not to skew the mean
-      // upwards.
-      _deadline_ms += interval_ms;
-    }
-  }
-
-private:
-
-  /// Parent HttpConnection object.
-  HttpConnection* _parent;
-
-  /// Time beyond which this connection should be recycled, in
-  // CLOCK_MONOTONIC milliseconds, or 0 for ASAP.
-  unsigned long _deadline_ms;
-
-  /// Random distribution to use for determining connection lifetimes.
-  /// Use an exponential distribution because it is memoryless. This
-  /// gives us a Poisson distribution of recyle events, both for
-  /// individual threads and for the overall application.
-  Utils::ExponentialDistribution _rand;
-
-  /// Server IP we're connected to, if any.
-  std::string _remoteIp;
-};
+}
 
 
 /// Set the remote IP, and update statistics.
-void PoolEntry::setRemoteIp(std::string value)  //< Remote IP, or "" if no connection.
+void PoolEntry::set_remote_ip(const std::string& value)  //< Remote IP, or "" if no connection.
 {
-  if (value == _remoteIp)
+  if (value == _remote_ip)
   {
     return;
   }
 
   pthread_mutex_lock(&_parent->_lock);
 
-  if (!_remoteIp.empty())
+  if (!_remote_ip.empty())
   {
     // Decrement the number of connections to this address.
-    if (--_parent->_serverCount[_remoteIp] <= 0)
+    if (--_parent->_server_count[_remote_ip] <= 0)
     {
       // No more connections to this address, so remove it from the map.
-      _parent->_serverCount.erase(_remoteIp);
+      _parent->_server_count.erase(_remote_ip);
     }
   }
 
@@ -168,20 +132,20 @@ void PoolEntry::setRemoteIp(std::string value)  //< Remote IP, or "" if no conne
     // Increment the count of connections to this address.  (Note this is
     // safe even if this is the first connection as the [] operator will
     // insert an entry initialised to 0.)
-    ++_parent->_serverCount[value];
+    ++_parent->_server_count[value];
   }
 
-  _remoteIp = value;
+  _remote_ip = value;
 
   // Now build the statistics to report.
   std::vector<std::string> new_value;
 
-  for (std::map<std::string, int>::iterator iter = _parent->_serverCount.begin();
-       iter != _parent->_serverCount.end();
+  for (std::map<std::string, int>::iterator iter = _parent->_server_count.begin();
+       iter != _parent->_server_count.end();
        ++iter)
   {
     new_value.push_back(iter->first);
-    new_value.push_back(boost::lexical_cast<std::string>(iter->second));
+    new_value.push_back(std::to_string(iter->second));
   }
 
   pthread_mutex_unlock(&_parent->_lock);
@@ -207,7 +171,7 @@ static void cleanup_curl(void* curlptr)
   if (rc == CURLE_OK)
   {
     // Connection has closed.
-    entry->setRemoteIp("");
+    entry->set_remote_ip("");
     delete entry;
   }
 
@@ -320,11 +284,11 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
   int rv = clock_gettime(CLOCK_MONOTONIC, &tp);
   assert(rv == 0);
   unsigned long now_ms = tp.tv_sec * 1000 + (tp.tv_nsec / 1000000);
-  bool recycle_conn = entry->isConnectionExpired(now_ms);
+  bool recycle_conn = entry->is_connection_expired(now_ms);
 
   // Try to get a decent connection. We may need to retry, but only
   // once - cURL itself does most of the retrying for us.
-  for (int i = 0; i < 2; i++)
+  for (int attempt = 0; attempt < 2; attempt++)
   {
     curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, recycle_conn ? 1L : 0L);
 
@@ -340,8 +304,9 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
     if (rc == CURLE_OK)
     {
-      // Report the response to SAS.
       LOG_DEBUG("Received HTTP response : %s", doc.c_str());
+
+      // Report the response to SAS.
       SAS::Event http_rsp_event(trail, _sasEventBase + SASEvent::HTTP_RSP, 1u);
       http_rsp_event.add_var_param(url);
       http_rsp_event.add_var_param(doc);
@@ -349,7 +314,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
       if (recycle_conn)
       {
-        entry->updateDeadline(now_ms);
+        entry->update_deadline(now_ms);
       }
 
       // Success!
@@ -357,9 +322,9 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
     }
     else
     {
-      // Report the error to SAS
-      LOG_DEBUG("HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
+      LOG_DEBUG("Received HTTP error response : GET %s : %s", url.c_str(), curl_easy_strerror(rc));
 
+      // Report the error to SAS
       SAS::Event http_err_event(trail, _sasEventBase + SASEvent::HTTP_ERR, 1u);
       http_err_event.add_static_param(rc);
       http_err_event.add_var_param(url);
@@ -387,7 +352,7 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
       char* remote_ip;
       curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &remote_ip);
 
-      if ((non_fatal) && (i == 0))
+      if ((non_fatal) && (attempt == 0))
       {
         // Loop around and try again.  Always request a fresh connection.
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
@@ -413,16 +378,16 @@ bool HttpConnection::get(const std::string& path,       //< Absolute path to req
 
     if (rc == CURLE_OK)
     {
-      entry->setRemoteIp(remote_ip);
+      entry->set_remote_ip(remote_ip);
     }
     else
     {
-      entry->setRemoteIp("UNKNOWN");  // LCOV_EXCL_LINE Can't happen.
+      entry->set_remote_ip("UNKNOWN");  // LCOV_EXCL_LINE Can't happen.
     }
   }
   else
   {
-    entry->setRemoteIp("");
+    entry->set_remote_ip("");
   }
 
   return (rc == CURLE_OK);

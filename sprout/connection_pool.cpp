@@ -39,6 +39,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 }
+#include <unistd.h>
 
 // Common STL includes.
 #include <cassert>
@@ -59,6 +60,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _target(*target),
   _num_connections(num_connections),
   _recycle_period(recycle_period),
+  _recycle_margin((recycle_period * RECYCLE_RANDOM_MARGIN)/100),
   _pool(pool),
   _endpt(endpt),
   _tpfactory(tp_factory),
@@ -68,7 +70,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _statistic("connected_sprouts")
 {
   LOG_STATUS("Creating connection pool to %.*s:%d", _target.host.slen, _target.host.ptr, _target.port);
-  LOG_STATUS("  connections = %d, recycle time = %d seconds", _num_connections, _recycle_period);
+  LOG_STATUS("  connections = %d, recycle time = %d +/- %d seconds", _num_connections, _recycle_period, _recycle_margin);
 
   pthread_mutex_init(&_tp_hash_lock, NULL);
   _tp_hash.resize(_num_connections);
@@ -313,6 +315,12 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       _tp_hash[hash_slot].state = state;
       ++_active_connections;
       increment_connection_count(tp);
+
+      // Compute a TTL for the connection.  To avoid all the recycling being
+      // sychronized we set the TTL to the specified average recycle time
+      // perturbed by a random factor.
+      int ttl = _recycle_period + (rand() % (2 * _recycle_margin)) - _recycle_margin;
+      _tp_hash[hash_slot].recycle_time = time(NULL) + ttl;
     }
     else if (state == PJSIP_TP_STATE_DISCONNECTED)
     {
@@ -346,58 +354,33 @@ void ConnectionPool::recycle_connections()
   // The recycler periodically recycles the connections so that any new nodes
   // in the upstream proxy cluster get used reasonably soon after they are
   // active.  To avoid mucking around with variable length waits, the
-  // algorithm waits for a fixed period (one second) then recycles a
-  // number of connections.
-  //
-  // Logically the algorithm runs an independent trial for each hash slot
-  // with a success probability of (1/_recycle_period).  For efficiency this
-  // is implemented by using a binomially distributed random number to find
-  // the number of successful trials, then selecting that number of hash slots
-  // at random.
-  //
-  // Currently the selection is done with replacement which raises the possibility
-  // that one connection may be recycled twice in the same schedule, but this
-  // should only introduce a small error in the recycling rate.
-
-  Utils::BinomialDistribution rbinomial(_num_connections, 1.0/_recycle_period);
+  // algorithm waits for a fixed period (one second) then recycles connections
+  // that are due to be recycled.
 
   while (!_terminated)
   {
     sleep(1);
 
-    int recycle = rbinomial();
+    int now = time(NULL);
 
-    LOG_INFO("Recycling %d connections to %.*s:%d", recycle, _target.host.slen, _target.host.ptr, _target.port);
-
-    for (int ii = 0; ii < recycle; ++ii)
+    // Walk the vector of connections.  This is safe to do without the lock
+    // because the vector is immutable.
+    for (size_t ii = 0; ii < _tp_hash.size(); ++ii)
     {
-      // Pick a hash slot at random, and quiesce the connection (if active).
-      int hash_slot = rand() % _num_connections;
-      quiesce_connection(hash_slot);
-
-      // Create a new connection for this hash slot.
-      create_connection(hash_slot);
-    }
-
-    int index = 0;
-
-    // Walk the hash table, attempting to fill in any gaps caused by transports failing.
-    //
-    // It is safe to walk the vector without the lock since:
-    //
-    //  * The vector never changes size
-    //  * We only care about the value of the entry being NULL (atomic check)
-    //  * Only we can change a NULL value to a non-NULL value
-    //  * If we just miss a change from non-NULL to NULL (a transport suddenly dies), we'll catch it in a second.
-    for (std::vector<tp_hash_slot>::iterator it = _tp_hash.begin();
-         it != _tp_hash.end();
-         ++it)
-    {
-      if (it->tp == NULL)
+      if (_tp_hash[ii].tp == NULL)
       {
-        create_connection(index);
+        // This slot is empty, so try to populate it now.
+        create_connection(ii);
       }
-      index++;
+      else if ((_tp_hash[ii].state == PJSIP_TP_STATE_CONNECTED) &&
+               (now >= _tp_hash[ii].recycle_time))
+      {
+        // This slot is due to be recycled, so quiesce the existing
+        // connection and create a new one.
+        LOG_STATUS("Recycle TCP connection slot %d", ii);
+        quiesce_connection(ii);
+        create_connection(ii);
+      }
     }
   }
 }

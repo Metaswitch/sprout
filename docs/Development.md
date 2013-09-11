@@ -20,7 +20,7 @@ On Ubuntu 12.04,
 
         echo "deb http://repo.cw-ngv.com/latest binary/" | sudo tee /etc/apt/sources.list.d/clearwater.list
 
-    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](https://github.com/Metaswitch/zeromq3).
+    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](https://github.com/Metaswitch/zeromq3).  Note that you must install it to `/usr` (i.e. with `./configure --prefix=/usr`).
 
 2.  update the package list
 
@@ -51,7 +51,9 @@ Note that the first build can take a long time - up to an hour on a slow
 machine. It takes 20-30 minutes on an EC2 m1.medium instance.
 
 To build sprout and all its dependencies, change to the top-level `sprout`
-directory and issue `make all`.
+directory and issue `make all`.  Both the sprout and bono functions are
+provided by the same "sprout" binary - command-line parameters control which
+behavior the binary performs.
 
 On completion,
 
