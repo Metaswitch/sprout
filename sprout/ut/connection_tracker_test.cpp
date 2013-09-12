@@ -97,6 +97,22 @@ public:
 
 private:
 
+  pjsip_transport *create_new_tcp_conn()
+  {
+    pjsip_transport *tp;
+    pj_sockaddr rem_addr;
+    pj_str_t addr_str = pj_str("1.2.3.4");
+    pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.trusted_port);
+
+    pj_status_t status = pjsip_fake_tcp_accept(_tcp_tpfactory_trusted,
+                                               (pj_sockaddr_t*)&rem_addr,
+                                               sizeof(pj_sockaddr_in),
+                                               &tp);
+    EXPECT_EQ(PJ_SUCCESS, status);
+
+    return tp;
+  }
+
   ConnectionTracker *_conn_tracker;
   ConnectionsQuiescedHandler *_conns_quiesced_handler;
 };
@@ -113,19 +129,12 @@ TEST_F(ConnectionTrackerTest, QuiesceWithNoConnections)
   EXPECT_TRUE(_conns_quiesced_handler->quiesced);
 }
 
+// When the connection tracker only knows about one connection, it quiesces once
+// that connection is not longer referenced. 
 TEST_F(ConnectionTrackerTest, QuiesceWithOneConnection)
 {
   // Create a new TCP transport.
-  pjsip_transport *tp;
-  pj_sockaddr rem_addr;
-  pj_str_t addr_str = pj_str("1.2.3.4");
-  pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.trusted_port);
-
-  pj_status_t status = pjsip_fake_tcp_accept(_tcp_tpfactory_trusted,
-                                             (pj_sockaddr_t*)&rem_addr,
-                                             sizeof(pj_sockaddr_in),
-                                             &tp);
-  EXPECT_EQ(PJ_SUCCESS, status);
+  pjsip_transport *tp = create_new_tcp_conn();
 
   // Reference the transport.  This makes it look like there is a transaction in
   // progress.
@@ -141,9 +150,126 @@ TEST_F(ConnectionTrackerTest, QuiesceWithOneConnection)
   EXPECT_FALSE(_conns_quiesced_handler->quiesced);
   EXPECT_TRUE(tp->is_shutdown);
 
-  // Unref the transport.  The tracker reports quiesce complete.
-  pjsip_transport_dec_ref(tp);
+  // Unref the transport.  The tracker reports quiesce complete.  This happens
+  // on a zero length timer, which we trigger via poll. 
+  pjsip_transport_dec_ref(tp); poll();
+
   EXPECT_TRUE(_conns_quiesced_handler->quiesced);
 }
 
-TEST_F(ConnectionTrackerTest, AlwaysFails) { EXPECT_TRUE(false); }
+TEST_F(ConnectionTrackerTest, QuiesceNewConnections)
+{
+  // Create 2 new TCP transports.
+  pjsip_transport *tp1 = create_new_tcp_conn();
+  pjsip_transport *tp2 = create_new_tcp_conn();
+
+  // Reference them both.
+  pjsip_transport_add_ref(tp1);
+  pjsip_transport_add_ref(tp2);
+
+  // Notify the connection tracker of the first connection.
+  _conn_tracker->connection_active(tp1);
+
+  // Quiesce. Only the first connection is shutdown (as the connection tracker
+  // doesn't know about the other one yet). 
+  _conn_tracker->quiesce();
+  EXPECT_TRUE(tp1->is_shutdown);
+  EXPECT_FALSE(tp2->is_shutdown);
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  // Notify the connection tracker of the 2nd connection. It's shutdown
+  // immediately. 
+  _conn_tracker->connection_active(tp2);
+  EXPECT_TRUE(tp1->is_shutdown);
+  EXPECT_TRUE(tp2->is_shutdown);
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  // Unref the transports. Quiescing only comlpetes once all have been
+  // unreferenced. 
+  pjsip_transport_dec_ref(tp1); poll();
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  pjsip_transport_dec_ref(tp2); poll();
+  EXPECT_TRUE(_conns_quiesced_handler->quiesced);
+}   
+
+
+// Mainline unquiesce testcase involving one connection. 
+TEST_F(ConnectionTrackerTest, UnquiesceWithOneConnection)
+{
+  pjsip_transport *tp = create_new_tcp_conn();
+  pjsip_transport_add_ref(tp);
+
+  _conn_tracker->connection_active(tp);
+
+  _conn_tracker->quiesce();
+  EXPECT_TRUE(tp->is_shutdown);
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  _conn_tracker->unquiesce();
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  // Even when the connection is destroyed the connection tracker does not
+  // consider quiescing as complete (since we have unquiesced it). 
+  pjsip_transport_dec_ref(tp); poll();
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+}
+
+
+// Unquiescing makes the connection tracker accept new connections. 
+TEST_F(ConnectionTrackerTest, UnquiesceAllowsNewConnections)
+{
+  pjsip_transport *tp1 = create_new_tcp_conn();
+  pjsip_transport *tp2 = create_new_tcp_conn();
+  pjsip_transport_add_ref(tp1);
+  pjsip_transport_add_ref(tp2);
+
+  // Quiesce while the tracker knows about one connection. 
+  _conn_tracker->connection_active(tp1);
+  _conn_tracker->quiesce();
+  EXPECT_TRUE(tp1->is_shutdown);
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  _conn_tracker->unquiesce();
+
+  // After we've unquiesced new connections are not immediately shutdown. 
+  _conn_tracker->connection_active(tp2);
+  EXPECT_FALSE(tp2->is_shutdown);
+
+  // The first connection completes shutdown.  Quiescing is not considered
+  // complete. 
+  pjsip_transport_dec_ref(tp1); poll();
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+
+  // Unreference the 2nd connection (as if it no longer had any transactions),
+  // then shut it down.  The connection tracker does not report a quiesce (as we
+  // have unquiesced it). 
+  pjsip_transport_dec_ref(tp2); poll();
+  fake_tcp_init_shutdown((fake_tcp_transport *)tp2, 1);
+  EXPECT_FALSE(_conns_quiesced_handler->quiesced);
+}
+
+
+// Unquiesce the connection tracker after quiescing is complete.  This is a
+// non-mainline case but is allowed according to the ConnectionTracker's
+// interface.   
+
+TEST_F(ConnectionTrackerTest, UnquiescAfterQuiesceComplete)
+{
+  // Quiesce and unquiesce. 
+  _conn_tracker->quiesce();
+  EXPECT_TRUE(_conns_quiesced_handler->quiesced);
+
+  _conn_tracker->unquiesce();
+
+  // Create a new connection and tell the tracker about it.  It is not shutdown.
+  pjsip_transport *tp = create_new_tcp_conn();
+  pjsip_transport_add_ref(tp);
+
+  _conn_tracker->connection_active(tp);
+  EXPECT_FALSE(tp->is_shutdown);
+
+  // Clean up. 
+  pjsip_transport_dec_ref(tp); poll();
+  fake_tcp_init_shutdown((fake_tcp_transport *)tp, 1);
+}

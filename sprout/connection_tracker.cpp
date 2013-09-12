@@ -71,9 +71,9 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 {
   pj_bool_t quiesce_complete = PJ_FALSE;
 
-  if (state == PJSIP_TP_STATE_DISCONNECTED)
+  if (state == PJSIP_TP_STATE_DESTROYED)
   {
-    LOG_DEBUG("Connection %p has disconnected", tp);
+    LOG_DEBUG("Connection %p has been destroyed", tp);
 
     pthread_mutex_lock(&_lock);
 
@@ -83,7 +83,7 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
     // quiescing is complete.
     if (_quiescing && _connections.empty()) {
       LOG_DEBUG("Connection quiescing complete");
-      quiesce_complete = PJ_FALSE;
+      quiesce_complete = PJ_TRUE;
     }
 
     pthread_mutex_unlock(&_lock);
