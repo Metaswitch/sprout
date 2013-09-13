@@ -132,6 +132,8 @@ QuiescingManager::QuiescingManager() :
 void QuiescingManager::process_input(int input)
 {
   // Check that we're in a valid state and have received a valid input.
+
+  // LCOV_EXCL_START Preprocessor stops these lines being covered. 
   assert((input == INPUT_QUIESCE) ||
          (input == INPUT_FLOWS_GONE) ||
          (input == INPUT_CONNS_GONE) ||
@@ -140,6 +142,7 @@ void QuiescingManager::process_input(int input)
          (_state == STATE_QUIESCING_FLOWS) ||
          (_state == STATE_QUIESCING_CONNS) ||
          (_state == STATE_QUIESCED));
+  // LCOV_EXCL_STOP
 
   switch (_state)
   {
