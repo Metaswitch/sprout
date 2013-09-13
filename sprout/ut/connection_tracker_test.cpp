@@ -87,7 +87,11 @@ public:
   }
 
   // Called at the end of every testcase.
-  virtual ~ConnectionTrackerTest() {}
+  virtual ~ConnectionTrackerTest()
+  {
+    delete _conn_tracker; _conn_tracker = NULL;
+    delete _conns_quiesced_handler; _conns_quiesced_handler = NULL;
+  }
 
   // Called after all testcases have ben run.
   static void TearDownTestCase()
@@ -244,8 +248,8 @@ TEST_F(ConnectionTrackerTest, UnquiesceAllowsNewConnections)
   // Unreference the 2nd connection (as if it no longer had any transactions),
   // then shut it down.  The connection tracker does not report a quiesce (as we
   // have unquiesced it). 
-  pjsip_transport_dec_ref(tp2); poll();
   fake_tcp_init_shutdown((fake_tcp_transport *)tp2, 1);
+  pjsip_transport_dec_ref(tp2); poll();
   EXPECT_FALSE(_conns_quiesced_handler->quiesced);
 }
 
@@ -253,7 +257,6 @@ TEST_F(ConnectionTrackerTest, UnquiesceAllowsNewConnections)
 // Unquiesce the connection tracker after quiescing is complete.  This is a
 // non-mainline case but is allowed according to the ConnectionTracker's
 // interface.   
-
 TEST_F(ConnectionTrackerTest, UnquiescAfterQuiesceComplete)
 {
   // Quiesce and unquiesce. 
@@ -270,6 +273,25 @@ TEST_F(ConnectionTrackerTest, UnquiescAfterQuiesceComplete)
   EXPECT_FALSE(tp->is_shutdown);
 
   // Clean up. 
-  pjsip_transport_dec_ref(tp); poll();
   fake_tcp_init_shutdown((fake_tcp_transport *)tp, 1);
+  pjsip_transport_dec_ref(tp); poll();
 }
+
+
+// Check the connection tracker can be deleted while there are still active
+// connections it knows about. 
+TEST_F(ConnectionTrackerTest, DeleteTrackerWithConnections)
+{
+  // Create a connection and tell the tracker about it. 
+  pjsip_transport *tp = create_new_tcp_conn();
+  pjsip_transport_add_ref(tp);
+  _conn_tracker->connection_active(tp);
+
+  // Delete the tracker, then shutdown the connection it was referencing. This
+  // should not cause any crashes. 
+  delete _conn_tracker; _conn_tracker = NULL;
+
+  fake_tcp_init_shutdown((fake_tcp_transport *)tp, 1);
+  pjsip_transport_dec_ref(tp); poll();
+}
+

@@ -44,7 +44,7 @@
 ConnectionTracker::ConnectionTracker(
                               ConnectionsQuiescedInterface *on_quiesced_handler)
 :
-  _connections(),
+  _connection_listeners(),
   _quiescing(PJ_FALSE),
   _on_quiesced_handler(on_quiesced_handler)
 {
@@ -54,6 +54,16 @@ ConnectionTracker::ConnectionTracker(
 
 ConnectionTracker::~ConnectionTracker()
 {
+  for (auto it = _connection_listeners.begin(); 
+       it != _connection_listeners.end(); 
+       ++it)
+  {
+    LOG_DEBUG("Stop listening on connection %p", it->first);
+    pjsip_transport_remove_state_listener(it->first,
+                                          it->second, 
+                                          (void *)this);
+  }
+
   pthread_mutex_destroy(&_lock);
 }
 
@@ -77,11 +87,11 @@ void ConnectionTracker::connection_state_update(pjsip_transport *tp,
 
     pthread_mutex_lock(&_lock);
 
-    _connections.erase(tp);
+    _connection_listeners.erase(tp);
 
     // If we're quiescing and there are no more active connections, then
     // quiescing is complete.
-    if (_quiescing && _connections.empty()) {
+    if (_quiescing && _connection_listeners.empty()) {
       LOG_DEBUG("Connection quiescing complete");
       quiesce_complete = PJ_TRUE;
     }
@@ -104,17 +114,18 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
   {
     pthread_mutex_lock(&_lock);
 
-    if (_connections.find(tp) == _connections.end())
+    if (_connection_listeners.find(tp) == _connection_listeners.end())
     {
-      // New connection. Add it to the connections set, and register a state
-      // listener so we know when it gets destroyed.
-      _connections.insert(tp);
-
+      // New connection. Register a state listener so we know when it gets
+      // destroyed.
       pjsip_tp_state_listener_key *key;
       pjsip_transport_add_state_listener(tp,
                                          &connection_state,
                                          (void *)this,
                                          &key);
+
+      // Record the listener. 
+      _connection_listeners[tp] = key;
 
       // If we're quiescing, shutdown the transport immediately.  The connection
       // will be closed when all transactions that use it have ended.
@@ -141,7 +152,7 @@ void ConnectionTracker::quiesce()
   assert(!_quiescing);
   _quiescing = PJ_TRUE;
 
-  if (_connections.empty())
+  if (_connection_listeners.empty())
   {
     // There are no active connections, so quiescing is already complete.
     LOG_DEBUG("Connection quiescing complete");
@@ -152,10 +163,12 @@ void ConnectionTracker::quiesce()
     // Call shutdown on each connection. PJSIP's reference counting means a
     // connection will be closed once all transactions that use it have
     // completed.
-    for (auto it = _connections.begin(); it != _connections.end(); ++it)
+    for (auto it = _connection_listeners.begin(); 
+         it != _connection_listeners.end(); 
+         ++it)
     {
-      LOG_DEBUG("Shutdown connection %p", *it);
-      pjsip_transport_shutdown(*it);
+      LOG_DEBUG("Shutdown connection %p", it->first);
+      pjsip_transport_shutdown(it->first);
     }
   }
 

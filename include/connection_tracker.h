@@ -46,7 +46,7 @@ extern "C" {
 }
 
 // Common STL includes.
-#include <set>
+#include <map>
 
 // Interface that the ConnectionTracker notifies when quiescing connections has
 // completed.
@@ -93,10 +93,11 @@ private:
   // This must be held when accessing any of this object's member variables.
   pthread_mutex_t _lock;
 
-  // A set of all the connections known to the connection manager.  This is a
-  // set of pjsip transports, but only includes connection-based transports (not
-  // datagram transports).
-  std::set<pjsip_transport *> _connections;
+  // A map of all the connections known to the connection manager, and their
+  // state listeners.  This is a set of pjsip transports, but only includes
+  // connection-based transports (not datagram transports).
+  std::map<pjsip_transport *, pjsip_tp_state_listener_key *> 
+                                                          _connection_listeners;
 
   // Whether the connection manager is quiescing it's connections.
   pj_bool_t _quiescing;
