@@ -103,6 +103,7 @@ private:
   typedef struct tp_hash_slot
   {
     pjsip_transport* tp;
+    pjsip_tp_state_listener_key *listener_key;
     pjsip_transport_state state;
   } tp_hash_slot;
 

@@ -237,6 +237,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   // Store the new transport in the hash slot, but marked as disconnected.
   pthread_mutex_lock(&_tp_hash_lock);
   _tp_hash[hash_slot].tp = tp;
+  _tp_hash[hash_slot].listener_key = key;
   _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
   _tp_map[tp] = hash_slot;
 
@@ -263,8 +264,14 @@ void ConnectionPool::quiesce_connection(int hash_slot)
       decrement_connection_count(tp);
     }
 
+    // Don't listen for any more state changes on this connection. 
+    pjsip_transport_remove_state_listener(tp, 
+                                          _tp_hash[hash_slot].listener_key, 
+                                          (void *)this);
+
     // Remove the transport from the hash and the map.
     _tp_hash[hash_slot].tp = NULL;
+    _tp_hash[hash_slot].listener_key = NULL;
     _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
     _tp_map.erase(tp);
 
@@ -315,10 +322,11 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       ++_active_connections;
       increment_connection_count(tp);
     }
-    else if (state == PJSIP_TP_STATE_DISCONNECTED)
+    else if ((state == PJSIP_TP_STATE_DISCONNECTED) ||
+             (state == PJSIP_TP_STATE_DESTROYED))
     {
-      // Either a connection has failed, or a new connection failed to
-      // connect.
+      // Either a connection has failed or been shutdown, or a new connection
+      // failed to connect.
       LOG_DEBUG("Transport %s in slot %d has failed", tp->obj_name, hash_slot);
 
       if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED)
@@ -328,8 +336,14 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
         decrement_connection_count(tp);
       }
 
+      // Don't listen for any more state changes on this connection. 
+      pjsip_transport_remove_state_listener(tp, 
+                                            _tp_hash[hash_slot].listener_key, 
+                                            (void *)this);
+
       // Remove the transport from the hash and the map.
       _tp_hash[hash_slot].tp = NULL;
+      _tp_hash[hash_slot].listener_key = NULL;
       _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
       _tp_map.erase(tp);
 
