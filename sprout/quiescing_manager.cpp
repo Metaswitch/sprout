@@ -161,8 +161,10 @@ void QuiescingManager::process_input(int input)
           break;
 
         case INPUT_UNQUIESCE:
+          // LCOV_EXCL_START Don't dogmatically hit empty FSM cells.
           invalid_input(input, _state);
           break;
+          // LCOV_EXCL_STOP
       }
       break;
 
@@ -171,8 +173,10 @@ void QuiescingManager::process_input(int input)
       switch (input)
       {
         case INPUT_QUIESCE:
+          // LCOV_EXCL_START Don't dogmatically hit empty FSM cells.
           invalid_input(input, _state);
           break;
+          // LCOV_EXCL_STOP
 
         case INPUT_FLOWS_GONE:
           _state = STATE_QUIESCING_CONNS;
@@ -226,8 +230,10 @@ void QuiescingManager::process_input(int input)
 
         case INPUT_FLOWS_GONE:
         case INPUT_CONNS_GONE:
+          // LCOV_EXCL_START Don't dogmatically hit empty FSM cells.
           invalid_input(input, _state);
           break;
+          // LCOV_EXCL_STOP
       }
       break;
   }
