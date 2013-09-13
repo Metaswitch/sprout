@@ -95,14 +95,16 @@ QuiescingManager::QuiescingManager() :
   _conns_handler(NULL),
   _flows_handler(NULL),
   _completion_handler(NULL)
-{}
+{
+  _state = STATE_ACTIVE;
+}
 
 
 // Implement the state machine for the QuiescingManager class.
 //
 // The state machine is descibed by the table below where each cell sepcifies
 // the state to move to (as a number) and the action to take (as a letter).
-// Dashes indicate no state change / action. Empty cells are not hittable.
+// Dashes indicate no state change / action.  Empty cells are not hittable.
 //
 // Inputs \ States |  0  |  1  |  2  |  3  |
 // ----------------+-----+-----+-----+-----+
@@ -235,7 +237,19 @@ void QuiescingManager::invalid_input(int input, int state)
             "when in state %s (%d)",
             INPUT_NAMES[input], input,
             STATE_NAMES[state], state);
-  assert(false);
+
+  // Assert we're not in the active state.  The reasoning here is:
+  //
+  // -  If we're not active it's better to keep going rather to try ansd
+  // preserve service.  There is a chance we could get stuck quiescing, but
+  // there are other situations when this could happen. The orchestration layer
+  // expects us to be quiescing so should be monitoring us, and can kill the
+  // process if it think's we're stuck. 
+  //
+  // -  If we're active, the orchestration layer probably expects us to be
+  // active so isn't monitoring us.  It's better to abort rather than pretend
+  // we're healthy when we're not. 
+  assert(_state != STATE_ACTIVE);
 }
 
 

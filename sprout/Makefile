@@ -45,8 +45,8 @@ TARGET_SOURCES := logger.cpp \
                   sas.cpp \
                   custom_headers.cpp \
                   accumulator.cpp \
-		  connection_tracker.cpp \
-		  quiescing_manager.cpp
+            		  connection_tracker.cpp \
+            		  quiescing_manager.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -81,7 +81,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        ifchandler_test.cpp \
                        custom_headers_test.cpp \
                        accumulator_test.cpp \
-											 connection_tracker_test.cpp
+											 connection_tracker_test.cpp \
+											 quiescing_manager_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
