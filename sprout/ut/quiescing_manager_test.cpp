@@ -49,11 +49,18 @@
 
 using namespace std;
 
+// Macro to set a boolean flag to a new value, checking that it had the other
+// value first.  
 #define TOGGLE_FLAG(FLAG, NEW_VALUE)      \
   assert((FLAG) || (NEW_VALUE));          \
   assert((!(FLAG)) || (!(NEW_VALUE)));    \
   (FLAG) = (NEW_VALUE)
 
+
+// The following three classes implement the three QuiescingManager interfaces
+// that handle connection management, flow management, and notification when
+// quiescing completes.  They record what state the quiescing manager has
+// requested. 
 class TestConnectionHandler : public QuiesceConnectionsInterface
 {
 public:
@@ -102,6 +109,8 @@ public:
 
 #undef TOGGLE_FLAG
 
+
+// Test fixture. 
 class QuiescingManagerTest : public BaseTest
 {
 public:
@@ -139,6 +148,7 @@ private:
   TestFlowsHandler *_flows_handler;
   TestCompletionHandler *_completion_handler;
 };
+
 
 #define EXPECT_UNQUIESCED()                               \
   EXPECT_TRUE(_conns_handler->trusted_port_open);         \
@@ -188,6 +198,7 @@ TEST_F(QuiescingManagerTest, MainlineQuiescing)
   EXPECT_FULLY_QUIESCED();
 }
 
+
 // Unquiesce while flows are quiescing. 
 TEST_F(QuiescingManagerTest, QuiesceWhileFlowsQuiescing)
 {
@@ -198,11 +209,13 @@ TEST_F(QuiescingManagerTest, QuiesceWhileFlowsQuiescing)
   _qm->unquiesce();
   EXPECT_UNQUIESCED();
 
+  // Check that we can still quiesce successfully. 
   _qm->quiesce();
   _qm->flows_gone();
   _qm->connections_gone();
   EXPECT_FULLY_QUIESCED();
 }
+
 
 // Unquiesce while connections are quiescing. 
 TEST_F(QuiescingManagerTest, QuiesceWhileConnsQuiescing)
@@ -215,6 +228,7 @@ TEST_F(QuiescingManagerTest, QuiesceWhileConnsQuiescing)
   _qm->unquiesce();
   EXPECT_UNQUIESCED();
 
+  // Check that we can still quiesce successfully. 
   _qm->quiesce();
   _qm->flows_gone();
   _qm->connections_gone();
@@ -234,27 +248,38 @@ TEST_F(QuiescingManagerTest, CannotUnquiesceOnceQuiesced)
 
   // Try to unquiesce. Allowed, but does nothing. 
   _qm->unquiesce();
+  EXPECT_FULLY_QUIESCED();
 
   // Try to quiesce again. Allowed, but does nothing. 
   _qm->unquiesce();
+  EXPECT_FULLY_QUIESCED();
 }
 
+
+// Window condition: unquiesce while the flows_gone call is being made (so that 
+// the unquiesce call beats the flows_gone call). 
 TEST_F(QuiescingManagerTest, FlowsGoneAfterUnquiesce)
 {
   register_all();
 
   _qm->quiesce();
-  _qm->unquiesce();
-  _qm->flows_gone();
 
+  // We're expecting a flows_gone call now, but instead we quiesce. 
+  _qm->unquiesce();
+
+  // Now get flows_gone.  It is ignored. 
+  _qm->flows_gone();
   EXPECT_UNQUIESCED();
 
+  // Check that we can still quiesce successfully. 
   _qm->quiesce();
   _qm->flows_gone();
   _qm->connections_gone();
   EXPECT_FULLY_QUIESCED();
 }
 
+// Window condition: Unquiesce while the connections_gone call is being made (so
+// the unquiesce call beats the connections_gone call). 
 TEST_F(QuiescingManagerTest, ConnsGoneAfterQuiesce)
 {
   register_all();
@@ -262,28 +287,38 @@ TEST_F(QuiescingManagerTest, ConnsGoneAfterQuiesce)
   _qm->quiesce();
   _qm->flows_gone();
 
+  // We're expecting a connections_gone call now, but instead unquiesce.
   _qm->unquiesce();
-  _qm->connections_gone();
 
+  // now get connections gone. It is ignored. 
+  _qm->connections_gone();
   EXPECT_UNQUIESCED();
 
+  // Check that we can still quiesce successfully. 
   _qm->quiesce();
   _qm->flows_gone();
   _qm->connections_gone();
   EXPECT_FULLY_QUIESCED();
 }
 
+// Window condition: Unquiesce and re-quiesce before the connections_gone call 
+// is made. 
 TEST_F(QuiescingManagerTest, ComnnsGoneWhileflowsQuiescing)
 {
   register_all();
 
   _qm->quiesce();
   _qm->flows_gone();
+
+  // We're expecting a connections_gone call now, but first we unquiesce and
+  // re-quiesce. 
   _qm->unquiesce();
   _qm->quiesce();
 
+  // Now get the connections_gone.
   _qm->connections_gone();
 
+  // Finish off quiescing, to check that it still works. 
   _qm->flows_gone();
   _qm->connections_gone();
   EXPECT_FULLY_QUIESCED();
@@ -295,32 +330,44 @@ TEST_F(QuiescingManagerTest, FlowsGoneWhileConnsQuiescing)
 
   _qm->quiesce();
 
+  // Expecting flwos_gone call now, but instead unquiesce and re-quiesce. 
   _qm->unquiesce();
   _qm->quiesce();
-  _qm->flows_gone();
 
+  // Now get the flows gone for the first quiesce, followed by the flows_gone
+  // and connections_gone for the second quiesce. 
   _qm->flows_gone();
-
+  _qm->flows_gone();
   _qm->connections_gone();
   EXPECT_FULLY_QUIESCED();
 }
 
+
+// Trivial testcase to hit an invalid cell and check that error logging works. 
 TEST_F(QuiescingManagerTest, InvalidCells)
 {
   _qm->quiesce();
   _qm->quiesce();
+  EXPECT_TRUE(_log.contains("invalid input"));
 }
 
+
+// When no flows handler is registered we do not need to call flows_gone to
+// continue quiescing. 
 TEST_F(QuiescingManagerTest, QuiesceWithoutFlowsHandler)
 {
+  // Don't register the flows handler. 
   _qm->register_conns_handler(_conns_handler);
   _qm->register_completion_handler(_completion_handler);
 
+  // Quiesce.  No flows handler so we moved straight on to quiescing
+  // connections. 
   _qm->quiesce();
   EXPECT_FALSE(_conns_handler->untrusted_port_open);
   EXPECT_FALSE(_conns_handler->trusted_port_open);
   EXPECT_TRUE(_conns_handler->connections_quiesced);
 
+  // Quiescing completes successfully. 
   _qm->connections_gone();
   EXPECT_FALSE(_conns_handler->trusted_port_open);        
   EXPECT_FALSE(_conns_handler->untrusted_port_open);      
