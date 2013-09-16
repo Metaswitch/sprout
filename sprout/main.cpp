@@ -125,6 +125,9 @@ static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 QuiescingManager *quiescing_mgr;
 
+const static int QUIESCE_SIGNAL = SIGQUIT;
+const static int UNQUIESCE_SIGNAL = SIGUSR1;
+
 static void usage(void)
 {
   puts("Options:\n"
@@ -460,7 +463,7 @@ void exception_handler(int sig)
 void quiesce_unquiesce_handler(int sig)
 {
   // Set the flag indicating whether we're quiescing or not.
-  if (sig == SIGQUIT)
+  if (sig == QUIESCE_SIGNAL)
   {
     LOG_STATUS("Quiesce signal received");
     quiescing = PJ_TRUE;
@@ -486,17 +489,11 @@ void terminate_handler(int sig)
 
 void *quiesce_unquiesce_thread_func(void *_)
 {
-  pj_bool_t curr_quiescing = quiescing;
-  pj_bool_t new_quiescing;
+  pj_bool_t curr_quiescing = PJ_FALSE;
+  pj_bool_t new_quiescing = quiescing;
 
   while (PJ_TRUE)
   {
-    // Wait for the quiescing flag to be written to and read in the new value.
-    // Read into a local variable to avoid issues if the flag changes under our
-    // feet.
-    sem_wait(&quiescing_sem);
-    new_quiescing = quiescing;
-
     // Only act if the quiescing state has changed.
     if (curr_quiescing != new_quiescing)
     {
@@ -508,6 +505,15 @@ void *quiesce_unquiesce_thread_func(void *_)
         quiescing_mgr->unquiesce();
       }
     }
+
+    // Wait for the quiescing flag to be written to and read in the new value.
+    // Read into a local variable to avoid issues if the flag changes under our
+    // feet.
+    //
+    // Note that sem_wait is a cancel point, so calling pthread_cancel on this
+    // thread while it is waiting on the semaphore will cause it to cancel. 
+    sem_wait(&quiescing_sem);
+    new_quiescing = quiescing;
   }
 
   return NULL;
@@ -551,10 +557,9 @@ int main(int argc, char *argv[])
                  quiesce_unquiesce_thread_func,
                  NULL);
 
-  // Set up our signal handler for (un)quiesce signals. SIGQUIT means quiesce
-  // and SIGUSR1 means unquiesce.
-  signal(SIGQUIT, quiesce_unquiesce_handler);
-  signal(SIGUSR1, quiesce_unquiesce_handler);
+  // Set up our signal handler for (un)quiesce signals. 
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
 
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
@@ -851,6 +856,17 @@ int main(int argc, char *argv[])
   {
     RegData::destroy_local_store(registrar_store);
   }
+
+  // Unregister the handlers that use semaphores (so we can safely destroy
+  // them). 
+  signal(QUIESCE_SIGNAL, SIG_DFL);
+  signal(UNQUIESCE_SIGNAL, SIG_DFL);
+  signal(SIGTERM, SIG_DFL);
+
+  // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
+  // it uses). 
+  pthread_cancel(quiesce_unquiesce_thread);
+  pthread_join(quiesce_unquiesce_thread, NULL);
 
   sem_destroy(&quiescing_sem);
   sem_destroy(&term_sem);
