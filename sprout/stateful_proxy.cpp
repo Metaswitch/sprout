@@ -771,19 +771,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    // Received a REGISTER request.  Check if we should act as the edge proxy
-    // for the request.
-    if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
-    {
-      // Reject REGISTER request received from within the trust domain.
-      LOG_DEBUG("Reject REGISTER received on trusted port");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_METHOD_NOT_ALLOWED,
-                                 NULL, NULL, NULL);
-      return PJ_ENOTFOUND;
-    }
-
     if ((ibcf) &&
         (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
     {
@@ -795,29 +782,32 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    // The REGISTER came from outside the trust domain and not over a SIP
-    // trunk, so we must act as the edge proxy for the node.  (Previously
-    // we would only act as edge proxy for nodes that requested it with
-    // the outbound flag, or we detected were behind a NAT - now we have a
-    // well-defined trust zone we have to do it for all nodes outside
-    // the trust node.)
-    LOG_DEBUG("Message requires outbound support");
-
-    // Find or create a flow object to represent this flow.
-    src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
-                                            &rdata->pkt_info.src_addr);
-
-    if (src_flow == NULL)
+    if (rdata->tp_info.transport->local_name.port != stack_data.trusted_port)
     {
-      LOG_ERROR("Failed to create flow data record");
-      return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+      // The REGISTER came from outside the trust domain and not over a SIP
+      // trunk, so we must act as the edge proxy for the node.  (Previously
+      // we would only act as edge proxy for nodes that requested it with
+      // the outbound flag, or we detected were behind a NAT - now we have a
+      // well-defined trust zone we have to do it for all nodes outside
+      // the trust node.)
+      LOG_DEBUG("Message requires outbound support");
+
+      // Find or create a flow object to represent this flow.
+      src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
+                                              &rdata->pkt_info.src_addr);
+
+      if (src_flow == NULL)
+      {
+        LOG_ERROR("Failed to create flow data record");
+        return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+      }
+
+      LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+
+      // Touch the flow to make sure it doesn't time out while we are waiting
+      // for the REGISTER response from upstream.
+      src_flow->touch();
     }
-
-    LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
-
-    // Touch the flow to make sure it doesn't time out while we are waiting
-    // for the REGISTER response from upstream.
-    src_flow->touch();
 
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
@@ -1543,6 +1533,10 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
                                                       hvalue.slen,
                                                       0);
 
+    // The user part may be missing if the path is simply to the bono cluster
+    // (for example if a commercial SBC is in use and bono is simply providing
+    // a proxying service to it), in this case, we're not using flows so there's
+    // no need to update the authenticated URIs.
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
     {
@@ -3487,17 +3481,12 @@ static pj_bool_t is_user_numeric(const std::string& user)
 /// identifies the client flow.
 ///
 /// If we're merely acting as a loadbalancing proxy for a commercial SBC, we'll
-/// simply add a path to the bono cluster.
+/// simply add a path to the bono cluster.  This is indicated by the absence of
+/// a flow entry.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
 {
-  // Look for an existing Path header on the message (indicating that an upstream
-  // SBC is handling NAT traversal).
-  pjsip_hdr* existing_path = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg,
-                                                                    &STR_PATH,
-                                                                    NULL);
-
   // Determine if the connection is secured (so we use the correct scheme in the
   // generated Path header).
   pjsip_to_hdr* to_hdr = rdata->msg_info.to;
@@ -3508,7 +3497,8 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 
-  if (!existing_path) {
+  if (flow_data)
+  {
     // Specify this particular node, as only we can find the client.
     path_uri->host = stack_data.local_host;
 
@@ -3524,9 +3514,15 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
       pj_strdup2(tdata->pool, &ob_node->value, "");
       pj_list_insert_after(&path_uri->other_param, ob_node);
     }
-  } else {
+  }
+  else
+  {
     // Specify the bono cluster, as any of them can find the upstream SBC.
-    path_uri->host = stack_data.home_domain;
+    path_uri->host.ptr = (char*)pj_pool_zalloc(tdata->pool,
+                                               pj_strlen(&stack_data.home_domain) + 6);
+    path_uri->host.slen = 0;
+    pj_strcat2(&path_uri->host, "bono.");
+    pj_strcat(&path_uri->host, &stack_data.home_domain);
   }
 
   // Render the URI as a string.
