@@ -40,3 +40,6 @@
 [submodule "modules/websocketpp"]
 	path = modules/websocketpp
 	url = git@github.com:zaphoyd/websocketpp.git
+[submodule "modules/sas-client"]
+	path = modules/sas-client
+	url = git@github.com:Metaswitch/sas-client.git
