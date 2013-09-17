@@ -807,30 +807,32 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       // Touch the flow to make sure it doesn't time out while we are waiting
       // for the REGISTER response from upstream.
       src_flow->touch();
+
+      pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+      {
+        // The message was received on a client flow that has already been
+        // authenticated, so add an integrity-protected indication.
+        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+      }
+      else
+      {
+        // The client flow hasn't yet been authenticated, so add an integrity-protected
+        // indicator so Sprout will challenge and/or authenticate. it
+        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
+      }
+
+      // Remove the reference to the source flow since we have finished with it
+      src_flow->dec_ref();
     }
 
+    // Add a path header so we get included in the egress call flow.  If we're not
+    // acting as edge proxy, we'll add the bono cluster instead.
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
-
-    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
-    {
-      // The message was received on a client flow that has already been
-      // authenticated, so add an integrity-protected indication.
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
-    }
-    else
-    {
-      // The client flow hasn't yet been authenticated, so add an integrity-protected
-      // indicator so Sprout will challenge and/or authenticate. it
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
-    }
-
-    // Remove the reference to the source flow since we have finished with it
-    src_flow->dec_ref();
 
     // Message from client. Allow client to provide data, but don't let it discover internal data.
     *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
