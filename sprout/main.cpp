@@ -545,6 +545,13 @@ int main(int argc, char *argv[])
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
 
+  // Mask off SIGHUP from this thread and all child threads, as this will be
+  // handled by a dedicated thread.
+  sigset_t sset;
+  sigemptyset(&sset);
+  sigaddset(&sset, SIGHUP);
+  pthread_sigmask(SIG_BLOCK, &sset, NULL);
+
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
