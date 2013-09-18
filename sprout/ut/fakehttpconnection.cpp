@@ -55,15 +55,15 @@ void FakeHttpConnection::flush_all()
   _db.clear();
 }
 
-bool FakeHttpConnection::get(const std::string& uri, std::string& doc, const std::string& username, SAS::TrailId trail)
+long FakeHttpConnection::get(const std::string& uri, std::string& doc, const std::string& username, SAS::TrailId trail)
 {
   std::map<std::string, std::string>::iterator i = _db.find(uri);
   if (i != _db.end())
   {
     doc = i->second;
-    return true;
+    return 200;
   }
-  return false;
+  return 404;
 }
 
 bool FakeHttpConnection::put(const std::string& uri, const std::string& doc, const std::string& username, SAS::TrailId trail)

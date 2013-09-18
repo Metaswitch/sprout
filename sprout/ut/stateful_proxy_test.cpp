@@ -2753,7 +2753,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._route = "sip:6505551234@homedomain";
@@ -3016,7 +3016,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._route = "sip:6505551234@homedomain";
