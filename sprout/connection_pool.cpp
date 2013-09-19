@@ -335,9 +335,11 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
         decrement_connection_count(tp);
       }
 
+      // Don't listen for any more state changes on this connection (but note
+      // it's illegal to call any methods on the transport once it's entered the
+      // `destroyed` state).
       if (state != PJSIP_TP_STATE_DESTROYED)
       {
-        // Don't listen for any more state changes on this connection.
         pjsip_transport_remove_state_listener(tp,
                                               _tp_hash[hash_slot].listener_key,
                                               (void *)this);
