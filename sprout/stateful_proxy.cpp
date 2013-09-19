@@ -656,7 +656,7 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   return PJ_SUCCESS;
 }
 
-static SourceType determine_source(pjsip_transport* transport, pj_sockaddr addr)
+static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
 {
   if (transport == NULL) {
     LOG_DEBUG("determine_source called with a NULL pjsip_transport");
@@ -784,7 +784,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
-  SourceType source_type = determine_source(rdata->tp_info.transport,
+  SIPPeerType source_type = determine_source(rdata->tp_info.transport,
                                             rdata->pkt_info.src_addr);
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
@@ -2352,7 +2352,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
     // _tsx->transport might not be set.
     if (edge_proxy)
     {
-      SourceType stype  = determine_source(_tsx->transport, _tsx->addr);
+      SIPPeerType stype  = determine_source(_tsx->transport, _tsx->addr);
       bool is_client = (stype == SIP_PEER_CLIENT);
       dialog_tracker->on_uas_tsx_complete(_req, _tsx, event, is_client);
     }
@@ -2859,7 +2859,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     // Create a History-Info header for the new target.
     pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target);
 
-    // Set up the index parameter.  This is the previous value suffixed with ".1".   
+    // Set up the index parameter.  This is the previous value suffixed with ".1".
     history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
     history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
     pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
@@ -2890,7 +2890,7 @@ pjsip_history_info_hdr* UASTransaction::create_history_info_hdr(pjsip_uri* targe
   pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
   history_info_name_addr_uri->uri = history_info_uri;
   history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
-  
+
   return history_info_hdr;
 }
 
@@ -2913,7 +2913,7 @@ void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int
       param->value = STR_SIP;
 
       pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
-    
+
       // Now add the cause parameter.
       param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
       param->name = STR_CAUSE;
