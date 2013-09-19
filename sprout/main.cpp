@@ -475,7 +475,7 @@ void quiesce_unquiesce_handler(int sig)
   }
 
   // Wake up the thread that acts on the notification (don't act on it in this
-  // thread since we're in a signal haandler).
+  // thread since we're in a signal handler).
   sem_post(&quiescing_sem);
 }
 
@@ -487,7 +487,7 @@ void terminate_handler(int sig)
 }
 
 
-void *quiesce_unquiesce_thread_func(void *_)
+void *quiesce_unquiesce_thread_func(void *dummy)
 {
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
@@ -511,7 +511,7 @@ void *quiesce_unquiesce_thread_func(void *_)
     // feet.
     //
     // Note that sem_wait is a cancel point, so calling pthread_cancel on this
-    // thread while it is waiting on the semaphore will cause it to cancel. 
+    // thread while it is waiting on the semaphore will cause it to cancel.
     sem_wait(&quiescing_sem);
     new_quiescing = quiescing;
   }
@@ -557,7 +557,7 @@ int main(int argc, char *argv[])
                  quiesce_unquiesce_thread_func,
                  NULL);
 
-  // Set up our signal handler for (un)quiesce signals. 
+  // Set up our signal handler for (un)quiesce signals.
   signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
   signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
 
@@ -858,13 +858,13 @@ int main(int argc, char *argv[])
   }
 
   // Unregister the handlers that use semaphores (so we can safely destroy
-  // them). 
+  // them).
   signal(QUIESCE_SIGNAL, SIG_DFL);
   signal(UNQUIESCE_SIGNAL, SIG_DFL);
   signal(SIGTERM, SIG_DFL);
 
   // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
-  // it uses). 
+  // it uses).
   pthread_cancel(quiesce_unquiesce_thread);
   pthread_join(quiesce_unquiesce_thread, NULL);
 

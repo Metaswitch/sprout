@@ -39,7 +39,7 @@
  */
 
 //
-// The functions in this file are copies of their PJSIP equivilents, except that
+// The functions in this file are copies of their PJSIP equivalents, except that
 // calls to activesock have been commented out (meaning they don't open sockets,
 // send messages, etc).  They can be called by the testbed, either to simulate
 // parts of sprout that are not present in the test, or to simulate PJSIP acting

@@ -48,19 +48,21 @@ ConnectionTracker::ConnectionTracker(
   _quiescing(PJ_FALSE),
   _on_quiesced_handler(on_quiesced_handler)
 {
-  pthread_mutex_init(&_lock, NULL);
+  pthread_mutexattr_t attrs;
+  pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&_lock, &attrs);
 }
 
 
 ConnectionTracker::~ConnectionTracker()
 {
-  for (auto it = _connection_listeners.begin(); 
-       it != _connection_listeners.end(); 
+  for (auto it = _connection_listeners.begin();
+       it != _connection_listeners.end();
        ++it)
   {
     LOG_DEBUG("Stop listening on connection %p", it->first);
     pjsip_transport_remove_state_listener(it->first,
-                                          it->second, 
+                                          it->second,
                                           (void *)this);
   }
 
@@ -124,11 +126,17 @@ void ConnectionTracker::connection_active(pjsip_transport *tp)
                                          (void *)this,
                                          &key);
 
-      // Record the listener. 
+      // Record the listener.
       _connection_listeners[tp] = key;
 
       // If we're quiescing, shutdown the transport immediately.  The connection
       // will be closed when all transactions that use it have ended.
+      //
+      // This catches cases where the connection was established before
+      // quiescing started, but the first message was sent afterwards (so the
+      // first time the connection tracker heard about it was after quiesing had
+      // started).  Trying to establish new connections after quiescing has
+      // started should fail as the listening socket will have been closed.
       if (_quiescing) {
         pjsip_transport_shutdown(tp);
       }
@@ -163,8 +171,8 @@ void ConnectionTracker::quiesce()
     // Call shutdown on each connection. PJSIP's reference counting means a
     // connection will be closed once all transactions that use it have
     // completed.
-    for (auto it = _connection_listeners.begin(); 
-         it != _connection_listeners.end(); 
+    for (auto it = _connection_listeners.begin();
+         it != _connection_listeners.end();
          ++it)
     {
       LOG_DEBUG("Shutdown connection %p", it->first);

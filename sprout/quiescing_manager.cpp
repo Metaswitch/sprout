@@ -41,8 +41,22 @@
 #include "utils.h"
 #include "pjutils.h"
 
-#define QUIESCING_MANAGER_DEFINE_VARS
 #include "quiescing_manager.h"
+
+// Definitions of the names for the quiescing manager's inputs and states.
+const char *QuiescingManager::STATE_NAMES[4] = {
+  "ACTIVE",
+  "QUIESCING_FLOWS",
+  "QUIESCING_CONNS",
+  "QUIESCED",
+};
+
+const char *QuiescingManager::INPUT_NAMES[4] = {
+  "QUIESCE",
+  "FLOWS_GONE",
+  "CONNS_GONE",
+  "UNQUIESCE",
+};
 
 SynchronizedFSM::SynchronizedFSM() :
   _running(false),
@@ -60,7 +74,7 @@ void SynchronizedFSM::send_input(int input)
 {
   pthread_mutex_lock(&_lock);
 
-  // Queue the new input, even if we can't process it immediately.
+  // Queue the new input, even if we could process it immediately.
   _input_q.push(input);
 
   if (!_running)
@@ -133,7 +147,7 @@ void QuiescingManager::process_input(int input)
 {
   // Check that we're in a valid state and have received a valid input.
 
-  // LCOV_EXCL_START Preprocessor stops these lines being covered. 
+  // LCOV_EXCL_START Preprocessor stops these lines being covered.
   assert((input == INPUT_QUIESCE) ||
          (input == INPUT_FLOWS_GONE) ||
          (input == INPUT_CONNS_GONE) ||
@@ -253,11 +267,11 @@ void QuiescingManager::invalid_input(int input, int state)
   // preserve service.  There is a chance we could get stuck quiescing, but
   // there are other situations when this could happen. The orchestration layer
   // expects us to be quiescing so should be monitoring us, and can kill the
-  // process if it think's we're stuck. 
+  // process if it think's we're stuck.
   //
   // -  If we're active, the orchestration layer probably expects us to be
   // active so isn't monitoring us.  It's better to abort rather than pretend
-  // we're healthy when we're not. 
+  // we're healthy when we're not.
   assert(_state != STATE_ACTIVE);
 }
 
@@ -266,7 +280,7 @@ void QuiescingManager::quiesce_untrusted_interface()
 {
   if (_conns_handler != NULL)
   {
-    // Close the untructed listening port.  This prevents any new clients from
+    // Close the untrusted listening port.  This prevents any new clients from
     // connecting.
     _conns_handler->close_untrusted_port();
   }
@@ -290,7 +304,7 @@ void QuiescingManager::quiesce_connections()
   {
     // Close the trusted listening port.  This prevents any new connections from
     // being established (note that on an edge proxy we should already have
-    // closed the untructed listening port).
+    // closed the untrusted listening port).
     _conns_handler->close_trusted_port();
 
     // Quiesce open connections.  This will close them when they no longer have
