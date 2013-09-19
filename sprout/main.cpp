@@ -101,6 +101,7 @@ struct options
   std::string            hss_server;
   std::string            xdm_server;
   std::string            store_servers;
+  std::string            remote_store_servers;
   std::string            enum_server;
   std::string            enum_suffix;
   std::string            enum_file;
@@ -144,6 +145,10 @@ static void usage(void)
        " -M, --memstore <servers>   Use memcached store on comma-separated list of\n"
        "                            servers for registration state\n"
        "                            (otherwise uses local store)\n"
+       " -m, --remote-memstore <servers>\n"
+       "                            Use remote memcached store on comma-separated list of\n"
+       "                            servers for registration state\n"
+       "                            (otherwise uses no remote memcached store)\n"
        " -S, --sas <ipv4>           Use specified host as software assurance\n"
        "                            server.  Otherwise uses localhost\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
@@ -184,6 +189,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "auth",              required_argument, 0, 'A'},
     { "realm",             required_argument, 0, 'R'},
     { "memstore",          required_argument, 0, 'M'},
+    { "remote-memstore",   required_argument, 0, 'm'},
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
     { "xdms",              required_argument, 0, 'X'},
@@ -289,6 +295,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'M':
       options->store_servers = std::string(pj_optarg);
       fprintf(stdout, "Using memcached store on servers %s\n", pj_optarg);
+      break;
+
+    case 'm':
+      options->remote_store_servers = std::string(pj_optarg);
+      fprintf(stdout, "Using remote memcached store on servers %s\n", pj_optarg);
       break;
 
     case 'S':
@@ -617,6 +628,16 @@ int main(int argc, char *argv[])
     exit(0);
   }
 
+  RegData::Store* remote_reg_store = NULL;
+  if (opt.remote_store_servers != "")
+  {
+    // Use remote memcached store too.
+    LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+    std::list<std::string> servers;
+    Utils::split_string(opt.remote_store_servers, ',', servers, 0, true);
+    remote_reg_store = RegData::create_memcached_store(servers, 100, false);
+  }
+
   if (opt.hss_server != "")
   {
     // Create a connection to the HSS.
@@ -663,6 +684,7 @@ int main(int argc, char *argv[])
   }
 
   status = init_stateful_proxy(registrar_store,
+                               remote_reg_store,
                                call_services,
                                ifc_handler,
                                opt.edge_proxy,
@@ -688,6 +710,7 @@ int main(int argc, char *argv[])
   if (registrar_enabled)
   {
     status = init_registrar(registrar_store,
+                            remote_reg_store,
                             hss_connection,
                             analytics_logger,
                             ifc_handler,
@@ -794,6 +817,11 @@ int main(int argc, char *argv[])
   else
   {
     RegData::destroy_local_store(registrar_store);
+  }
+
+  if (remote_reg_store != NULL)
+  {
+    RegData::destroy_memcached_store(remote_reg_store);
   }
 
   return 0;
