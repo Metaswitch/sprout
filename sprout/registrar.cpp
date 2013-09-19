@@ -278,6 +278,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete uris;
     return;
   }
 
@@ -440,6 +441,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     delete aor_data;
+    delete uris;
     return;
     // LCOV_EXCL_STOP
   }
@@ -450,6 +452,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // we aren't covering any of those paths so we can't hit this either
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete aor_data;
+    delete uris;
     return;
     // LCOV_EXCL_STOP
   }
@@ -466,6 +469,7 @@ void process_register_request(pjsip_rx_data* rdata)
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete aor_data;
+    delete uris;
     return;
     // LCOV_EXCL_STOP
   }
