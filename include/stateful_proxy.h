@@ -59,6 +59,7 @@ class UACTransaction;
 #include "sessioncase.h"
 #include "ifchandler.h"
 #include "aschain.h"
+#include "quiescing_manager.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -278,9 +279,19 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 AnalyticsLogger* analytics_logger,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
-                                HSSConnection* hss_connection);
+                                HSSConnection* hss_connection,
+                                QuiescingManager* quiescing_manager);
 
 void destroy_stateful_proxy();
+
+enum SIPPeerType
+{
+  SIP_PEER_TRUSTED_PORT,
+  SIP_PEER_CONFIGURED_TRUNK,
+  SIP_PEER_CLIENT,
+  SIP_PEER_UNKNOWN
+};
+
 
 #ifdef UNIT_TEST
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
@@ -292,6 +303,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
                              target_list& targets,
                              int max_targets,
                              SAS::TrailId trail);
+
 #endif
 
 #endif

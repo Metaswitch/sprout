@@ -129,5 +129,11 @@ extern void destroy_stack();
 extern pj_status_t init_pjsip();
 extern void term_pjsip();
 
+// Callback that is passed as an argument to quiesce_stack and is called once
+// the stack has been quiesced.
+typedef void (*stack_quiesced_callback_t)(void);
+
+extern void quiesce_stack(stack_quiesced_callback_t callback);
+extern void unquiesce_stack();
 
 #endif
