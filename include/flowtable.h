@@ -49,8 +49,11 @@ extern "C" {
 #include <map>
 #include <unordered_map>
 #include <string>
+#include <atomic>
 
 #include "statistic.h"
+#include "stack.h"
+#include "quiescing_manager.h"
 
 class FlowTable;
 
@@ -75,6 +78,12 @@ public:
   void set_identity(const pjsip_uri* uri, bool is_default, int expires);
 
   void dec_ref();
+
+  void increment_dialogs();
+
+  void decrement_dialogs();
+
+  bool should_quiesce();
 
   static void on_transport_state_changed(pjsip_transport *tp,
                                          pjsip_transport_state state,
@@ -132,6 +141,10 @@ private:
   /// by a thread which currently holds the FlowTable::_flow_map_lock.
   int _refs;
 
+  // Counts the number of active dialogs on this flow. This can be
+  // updated or tested without FlowTable::_flow_map_lock being held.
+  std::atomic_long _dialogs;
+
   /// Timer identifiers - the timer either runs as an expiry timer (when there
   /// are active identities) or an idle timer (when there are no active
   /// identities on a non-reliable flow).
@@ -146,10 +159,10 @@ private:
 };
 
 
-class FlowTable
+class FlowTable : public QuiesceFlowsInterface
 {
 public:
-  FlowTable();
+  FlowTable(QuiescingManager* qm);
   ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.
@@ -167,6 +180,12 @@ public:
 
   /// Removes a flow from the flow table.
   void remove_flow(Flow* flow);
+
+  // Functions for quiescing a Bono.
+  void check_quiescing_state();
+  void quiesce();
+  void unquiesce();
+  bool is_quiescing();
 
   friend class Flow;
 
@@ -217,6 +236,9 @@ private:
   // Statistics
   void report_flow_count();
   Statistic _statistic;
+  bool _quiescing;
+  QuiescingManager* _qm;
+
 };
 
 #endif

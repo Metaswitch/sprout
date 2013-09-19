@@ -137,7 +137,8 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               "all-the-sprouts",            //sprout cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
                               7,                            // #PJsip threads
-                              9);                           // #worker threads
+                              9,                            // #worker threads
+                              NULL);                        // Quiescing manager
   ASSERT_EQ(PJ_SUCCESS, rc) << PjStatus(rc);
   EXPECT_TRUE(_log.contains("Listening on port 9408"));
   EXPECT_TRUE(_log.contains("Local host aliases:"));

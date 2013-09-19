@@ -105,12 +105,13 @@ private:
   int _active_connections;
 
   /// Structure to keep track of the connection in a slot in the hash.  tp
-  /// is set as soon as the connection is started, but state is disconnected
+  /// is set as soon as the connection is started, but it is disconnected
   /// until we get a notification from PJSIP that the connection is connected.
   typedef struct tp_hash_slot
   {
     pjsip_transport* tp;
-    pjsip_transport_state state;
+    pjsip_tp_state_listener_key *listener_key;
+    pj_bool_t connected;
     int recycle_time;
   } tp_hash_slot;
 
