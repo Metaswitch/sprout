@@ -536,6 +536,7 @@ int main(int argc, char *argv[])
 {
   pj_status_t status;
   struct options opt;
+
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;
@@ -769,7 +770,8 @@ int main(int argc, char *argv[])
                                analytics_logger,
                                enum_service,
                                bgcf_service,
-                               hss_connection);
+                               hss_connection,
+                               quiescing_mgr);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",

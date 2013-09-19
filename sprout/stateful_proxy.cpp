@@ -126,6 +126,8 @@ extern "C" {
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"
+#include "dialog_tracker.hpp"
+#include "quiescing_manager.h"
 
 static RegData::Store* store;
 
@@ -141,6 +143,7 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
+static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
 static HSSConnection* hss;
 
@@ -653,43 +656,61 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   return PJ_SUCCESS;
 }
 
+static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
+{
+  if (transport == NULL) {
+    LOG_DEBUG("determine_source called with a NULL pjsip_transport");
+    return SIP_PEER_UNKNOWN;
+  }
+  if (transport->local_name.port == stack_data.trusted_port)
+  {
+    // Request received on trusted port.
+    LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
+    return SIP_PEER_TRUSTED_PORT;
+  }
+
+  LOG_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
+
+  // Request received on untrusted port, so see if it came over a trunk.
+  if ((ibcf) &&
+      (ibcf_trusted_peer(addr)))
+  {
+    LOG_DEBUG("Request received on configured SIP trunk");
+    return SIP_PEER_CONFIGURED_TRUNK;
+  }
+
+  return SIP_PEER_CLIENT;
+}
 
 /// Checks whether the request was received from a trusted source.
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 {
-  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  SIPPeerType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
+  pj_bool_t trusted = PJ_FALSE;
+
+  if ((source == SIP_PEER_TRUSTED_PORT)
+      || (source == SIP_PEER_CONFIGURED_TRUNK))
   {
-    // Request received on trusted port.
-    LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
-    return PJ_TRUE;
+    trusted = PJ_TRUE;
   }
-
-  LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-
-  // Request received on untrusted port, so see if it came over a trunk.
-  if ((ibcf) &&
-      (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+  else if (source == SIP_PEER_CLIENT)
   {
-    LOG_DEBUG("Request received on configured SIP trunk");
-    return PJ_TRUE;
-  }
-
-  Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
-                                         &rdata->pkt_info.src_addr);
-  if (src_flow != NULL)
-  {
-    // Request received on a known flow, so check it is authenticated.
-    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+    Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
+                                           &rdata->pkt_info.src_addr);
+    if (src_flow != NULL)
     {
-      LOG_DEBUG("Request received on authenticated client flow.");
+      // Request received on a known flow, so check it is
+      // authenticated.
+      pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+      {
+        LOG_DEBUG("Request received on authenticated client flow.");
+        trusted = PJ_TRUE;
+      }
       src_flow->dec_ref();
-      return PJ_TRUE;
     }
-    src_flow->dec_ref();
   }
-
-  return PJ_FALSE;
+  return trusted;
 }
 
 
@@ -765,6 +786,8 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
+  SIPPeerType source_type = determine_source(rdata->tp_info.transport,
+                                            rdata->pkt_info.src_addr);
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
@@ -773,7 +796,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   {
     // Received a REGISTER request.  Check if we should act as the edge proxy
     // for the request.
-    if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+    if (source_type == SIP_PEER_TRUSTED_PORT)
     {
       // Reject REGISTER request received from within the trust domain.
       LOG_DEBUG("Reject REGISTER received on trusted port");
@@ -784,8 +807,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    if ((ibcf) &&
-        (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+    if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
       PJUtils::respond_stateless(stack_data.endpt,
@@ -815,6 +837,22 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
+    // Reject the REGISTER with a 305 if Bono is trying to quiesce and
+    // there are no active dialogs on this flow.
+    if (src_flow->should_quiesce())
+    {
+      LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_USE_PROXY,
+                                 NULL, NULL, NULL);
+      src_flow->dec_ref();
+
+      // Of the PJSIP error codes, EIGNORED seems most appropriate -
+      // but anything that's not PJ_SUCCESS will do.
+      return PJ_EIGNORED;
+    }
+
     // Touch the flow to make sure it doesn't time out while we are waiting
     // for the REGISTER response from upstream.
     src_flow->touch();
@@ -822,6 +860,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
+      src_flow->dec_ref();
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
@@ -860,13 +899,12 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // (that is, a client flow).
     bool trusted = false;
 
-    if (rdata->tp_info.transport->local_name.port != stack_data.trusted_port)
+    if (source_type != SIP_PEER_TRUSTED_PORT)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
       LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-      if ((ibcf) &&
-          (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+      if (source_type == SIP_PEER_CONFIGURED_TRUNK)
       {
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
@@ -917,6 +955,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // Cannot have more than two preferred identities.
             LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
             PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            src_flow->dec_ref();
             return PJ_ENOTFOUND;
           }
           else if (identities.size() == 0)
@@ -943,6 +982,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // Preferred identity must be sip, sips or tel URI.
               LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
@@ -970,6 +1010,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // tel URI
               LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
@@ -1059,6 +1100,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       else
       {
         LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
+      }
+      if (src_flow != NULL)
+      {
+        src_flow->dec_ref();
       }
       return PJ_ENOTFOUND;
     }
@@ -2304,6 +2349,16 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
   {
     // UAS transaction has completed, so do any transaction completion
     // log activities
+
+    // This has to be conditional on a completed state, else
+    // _tsx->transport might not be set.
+    if (edge_proxy)
+    {
+      SIPPeerType stype  = determine_source(_tsx->transport, _tsx->addr);
+      bool is_client = (stype == SIP_PEER_CLIENT);
+      dialog_tracker->on_uas_tsx_complete(_req, _tsx, event, is_client);
+    }
+
     log_on_tsx_complete();
   }
 
@@ -3290,7 +3345,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
-                                HSSConnection* hss_connection)
+                                HSSConnection* hss_connection,
+                                QuiescingManager* quiescing_manager)
 {
   pj_status_t status;
 
@@ -3310,8 +3366,13 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
-    // Create a flow table object to manage the client flow records.
-    flow_table = new FlowTable;
+    // Create a flow table object to manage the client flow records
+    // and handle edge proxy quiescing.
+    flow_table = new FlowTable(quiescing_manager);
+    quiescing_manager->register_flows_handler(flow_table);
+
+    // Create a dialog tracker to count dialogs on each flow
+    dialog_tracker = new DialogTracker(flow_table);
 
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
@@ -3380,7 +3441,11 @@ void destroy_stateful_proxy()
     delete upstream_conn_pool; upstream_conn_pool = NULL;
 
     // Destroy the flow table.
-    delete flow_table; flow_table = NULL;
+    delete flow_table;
+    flow_table = NULL;
+
+    delete dialog_tracker;
+    dialog_tracker = NULL;
   }
   else
   {
@@ -3610,4 +3675,3 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
 }
 
 ///@}
-
