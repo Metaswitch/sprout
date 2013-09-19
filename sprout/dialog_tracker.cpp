@@ -54,7 +54,9 @@ void DialogTracker::on_uas_tsx_complete(const pjsip_tx_data* original_request,
                                         bool is_client
                                         // true if the endpoint is a
                                         // client, false if it is Sprout,
-                                        // an IBCF peer, or if we can't tell)
+                                        // an IBCF peer, or if we
+                                        // can't tell
+  )
 {
   // Consider a dialog started if we have a 200 OK response to an
   // INVITE, and there was no To tag on the initial INVITE (in other

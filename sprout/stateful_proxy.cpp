@@ -699,7 +699,9 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
                                            &rdata->pkt_info.src_addr);
     if (src_flow != NULL)
     {
-      // Request received on a known flow, so check it is authenticated.
+      // Request received on a known flow, so check it is
+      // authenticated.
+      pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
       if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
       {
         LOG_DEBUG("Request received on authenticated client flow.");

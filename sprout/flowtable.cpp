@@ -194,8 +194,8 @@ void FlowTable::check_quiescing_state()
   {
     LOG_DEBUG("Checked quiescing state: flow_map is %s, is_quiescing() result is %s, _qm (QuiescingManager reference) is %s",
               _tp2flow_map.empty() ? "empty" : "not empty",
-              is_quiescing()? "true" ? "false",
-              (_qm == NULL) ? "NULL" : "not NULL";
+              is_quiescing()? "true" : "false",
+              (_qm == NULL) ? "NULL" : "not NULL");
   }
 }
 
@@ -589,7 +589,7 @@ void Flow::dec_ref()
   else
   {
     LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
-    pthread_mutex_unlock(&_flow_table->_flow_map_lock); 
+    pthread_mutex_unlock(&_flow_table->_flow_map_lock);
   }
 }
 
