@@ -52,6 +52,7 @@ extern "C" {
 extern pjsip_module mod_registrar;
 
 extern pj_status_t init_registrar(RegData::Store* registrar_store,
+                                  RegData::Store* remote_reg_store,
                                   HSSConnection* hss_connection,
                                   AnalyticsLogger* analytics_logger,
                                   IfcHandler* ifchandler_ref,

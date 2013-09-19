@@ -64,6 +64,7 @@ extern "C" {
 
 
 static RegData::Store* store;
+static RegData::Store* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -205,118 +206,68 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 //   return success;
 // }
 
-
-void process_register_request(pjsip_rx_data* rdata)
+/// Write to the registration store.
+RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write to
+                             std::string aor,               ///<address of record to write to
+                             pjsip_rx_data* rdata,          ///<received message to read headers from
+                             int now,                       ///<time now
+                             int& expiry,                   ///<[out] longest expiry time
+                             RegData::AoR* backup_aor,      ///<backup data if no entry in store
+                             RegData::Store* backup_store)  ///<backup store to read from if no entry in store and no backup data
 {
-  pj_status_t status;
-  int st_code = PJSIP_SC_OK;
-
-  // Get the URI from the To header and check it is a SIP or SIPS URI.
-  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-
-  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
-    // whether 404 is the right status code - it says 404 should be used if
-    // the AoR isn't valid for the domain in the RequestURI).
-    // LCOV_EXCL_START
-    LOG_ERROR("Rejecting register request using non SIP URI");
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_NOT_FOUND,
-                               NULL,
-                               NULL,
-                               NULL);
-    return;
-    // LCOV_EXCL_STOP
-  }
-
-  // Canonicalize the public ID from the URI in the To header.
-  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
-
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
   int cseq = rdata->msg_info.cseq->cseq;
-  pjsip_msg *msg = rdata->msg_info.msg;
-
-  // Add SAS markers to the trail attached to the message so the trail
-  // becomes searchable.
-  SAS::TrailId trail = get_trail(rdata);
-  LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
-  SAS::Marker start_marker(trail, SASMarker::INIT_TIME, 1u);
-  SAS::report_marker(start_marker);
-
-  SAS::Marker calling_dn(trail, SASMarker::CALLING_DN, 1u);
-  pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-  calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
-  SAS::report_marker(calling_dn);
-
-  SAS::Marker cid_marker(trail, SASMarker::SIP_CALL_ID, 1u);
-  cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-  SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
-
-  // Query the HSS for the associated URIs.
-
-  // The second parameter should be the private ID, but this isn't necessary
-  // until we implement support for receiving updates from the HSS.
-  // TODO in sto281:
-  //   reinstate the get_private_id function and pass the private ID in.
-
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-  if (http_code != HTTP_OK)
-  {
-    // We failed to get the list of associated URIs.  This indicates that the
-    // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.  Reject with 403.
-    LOG_ERROR("Rejecting register request with invalid public/private identity");
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_FORBIDDEN,
-                               NULL,
-                               NULL,
-                               NULL);
-    return;
-  }
-
-  // Determine the AOR from the first entry in the uris array.
-  std::string aor = uris.front();
-  LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Find the expire headers in the message.
+  pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
 
-  // Get the system time in seconds for calculating absolute expiry times.
-  int now = time(NULL);
-  int expiry = 0;
-
-  // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   RegData::AoR* aor_data = NULL;
+  bool backup_aor_alloced = false;
   do
   {
-    if (aor_data != NULL)
-    {
-      delete aor_data; // LCOV_EXCL_LINE - Single-threaded tests mean we'll
-                       //                  always pass CAS.
-    }
+    // delete NULL is safe, so we can do this on every iteration.
+    delete aor_data;
 
     // Find the current bindings for the AoR.
-    aor_data = store->get_aor_data(aor);
+    aor_data = primary_store->get_aor_data(aor);
     LOG_DEBUG("Retrieved AoR data %p", aor_data);
 
     if (aor_data == NULL)
     {
       // Failed to get data for the AoR because there is no connection
-      // to the store.  Reject the register with a 500 response.
+      // to the store.
       // LCOV_EXCL_START - local store (used in testing) never fails
       LOG_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
-      st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       break;
       // LCOV_EXCL_STOP
+    }
+
+    // If we don't have any bindings, try the backup AoR and/or store.
+    if (aor_data->bindings().empty())
+    {
+      if ((backup_aor == NULL) &&
+          (backup_store != NULL))
+      {
+        backup_aor = backup_store->get_aor_data(aor);
+        backup_aor_alloced = (backup_aor != NULL);
+      }
+
+      if ((backup_aor != NULL) &&
+          (!backup_aor->bindings().empty()))
+      {
+        for (RegData::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
+             i != backup_aor->bindings().end();
+             ++i)
+        {
+          RegData::AoR::Binding* src = i->second;
+          RegData::AoR::Binding* dst = aor_data->get_binding(i->first);
+          *dst = *src;
+        }
+      }
     }
 
     // Now loop through all the contacts.  If there are multiple contacts in
@@ -417,12 +368,121 @@ void process_register_request(pjsip_rx_data* rdata)
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
   }
-  while (!store->set_aor_data(aor, aor_data));
+  while (!primary_store->set_aor_data(aor, aor_data));
 
+  // If we allocated the backup AoR, tidy up.
+  if (backup_aor_alloced)
+  {
+    delete backup_aor;
+  }
+
+  return aor_data;
+}
+
+void process_register_request(pjsip_rx_data* rdata)
+{
+  pj_status_t status;
+  int st_code = PJSIP_SC_OK;
+
+  // Get the URI from the To header and check it is a SIP or SIPS URI.
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+
+  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // whether 404 is the right status code - it says 404 should be used if
+    // the AoR isn't valid for the domain in the RequestURI).
+    // LCOV_EXCL_START
+    LOG_ERROR("Rejecting register request using non SIP URI");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_FOUND,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Canonicalize the public ID from the URI in the To header.
+  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
+
+  // Get the call identifier and the cseq number from the respective headers.
+  std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
+  pjsip_msg *msg = rdata->msg_info.msg;
+
+  // Add SAS markers to the trail attached to the message so the trail
+  // becomes searchable.
+  SAS::TrailId trail = get_trail(rdata);
+  LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+  SAS::Marker start_marker(trail, SASMarker::INIT_TIME, 1u);
+  SAS::report_marker(start_marker);
+
+  SAS::Marker calling_dn(trail, SASMarker::CALLING_DN, 1u);
+  pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
+  calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
+  SAS::report_marker(calling_dn);
+
+  SAS::Marker cid_marker(trail, SASMarker::SIP_CALL_ID, 1u);
+  cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
+  SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
+
+  // Query the HSS for the associated URIs.
+
+  // The second parameter should be the private ID, but this isn't necessary
+  // until we implement support for receiving updates from the HSS.
+  // TODO in sto281:
+  //   reinstate the get_private_id function and pass the private ID in.
+
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifc_map;
+  HTTPCode http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+  if (http_code != HTTP_OK)
+  {
+    // We failed to get the list of associated URIs.  This indicates that the
+    // HSS is unavailable, the public identity doesn't exist or the public
+    // identity doesn't belong to the private identity.  Reject with 403.
+    LOG_ERROR("Rejecting register request with invalid public/private identity");
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_FORBIDDEN,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+  }
+
+  // Determine the AOR from the first entry in the uris array.
+  std::string aor = uris.front();
+  LOG_DEBUG("REGISTER for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
+
+  // Get the system time in seconds for calculating absolute expiry times.
+  int now = time(NULL);
+  int expiry = 0;
+
+  // Write to the local store, checking the remote store if there is no entry locally.
+  RegData::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
     log_bindings(aor, aor_data);
+
+    // If we have a remote store, try to store this there too.  We don't worry
+    // about failures in this case.
+    if (remote_store != NULL)
+    {
+      int tmp_expiry = 0;
+      (void)write_to_store(remote_store, aor, rdata, now, tmp_expiry, aor_data, NULL);
+    }
+  }
+  else
+  {
+    // Failed to connect to the local store.  Reject the register with a 500
+    // response.
+    // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
+    st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    // LCOV_EXCL_STOP
   }
 
   // Build and send the reply.
@@ -595,7 +655,6 @@ void process_register_request(pjsip_rx_data* rdata)
   delete aor_data;
 }
 
-
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
   if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
@@ -634,6 +693,7 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
 }
 
 pj_status_t init_registrar(RegData::Store* registrar_store,
+                           RegData::Store* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            IfcHandler* ifchandler_ref,
@@ -642,6 +702,7 @@ pj_status_t init_registrar(RegData::Store* registrar_store,
   pj_status_t status;
 
   store = registrar_store;
+  remote_store = remote_reg_store;
   hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;

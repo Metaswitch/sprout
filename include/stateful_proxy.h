@@ -285,6 +285,7 @@ private:
 };
 
 pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
+                                RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_edge_proxy,
