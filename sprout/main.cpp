@@ -157,9 +157,11 @@ static void usage(void)
        "                            server.  Otherwise uses localhost\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
-       " -E, --enum <server>        Name/IP address of ENUM server (default: 127.0.0.1)\n"
+       " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
+       "                            time as -f)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
-       " -f, --enum-file <file>     JSON ENUM config file (disables DNS-based ENUM lookup)\n"
+       " -f, --enum-file <file>     JSON ENUM config file (can't be enabled at same time as\n"
+       "                            -E)\n"
        " -r, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
        " -p, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
@@ -577,7 +579,6 @@ int main(int argc, char *argv[])
   opt.untrusted_port = 0;
   opt.auth_enabled = PJ_FALSE;
   opt.sas_server = "127.0.0.1";
-  opt.enum_server = "127.0.0.1";
   opt.enum_suffix = ".e164.arpa";
   opt.reg_max_expires = 300;
   opt.pjsip_threads = 1;
@@ -644,6 +645,12 @@ int main(int argc, char *argv[])
   if (opt.edge_proxy && (opt.reg_max_expires != 0))
   {
     LOG_WARNING("A registration expiry period should not be specified for an edge proxy");
+  }
+
+  if ((!opt.enum_server.empty()) &&
+      (!opt.enum_file.empty()))
+  {
+    LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
   }
 
   // Ensure our random numbers are unpredictable.
@@ -746,13 +753,13 @@ int main(int argc, char *argv[])
     status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
 
     // Create Enum and BGCF services required for SIP router.
-    if (!opt.enum_file.empty())
-    {
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    else
+    if (!opt.enum_server.empty())
     {
       enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
+    }
+    else if (!opt.enum_file.empty())
+    {
+      enum_service = new JSONEnumService(opt.enum_file);
     }
     bgcf_service = new BgcfService();
   }

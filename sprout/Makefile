@@ -42,7 +42,6 @@ TARGET_SOURCES := logger.cpp \
                   sessioncase.cpp \
                   ifchandler.cpp \
                   aschain.cpp \
-                  sas.cpp \
                   custom_headers.cpp \
                   accumulator.cpp \
             		  connection_tracker.cpp \
@@ -146,7 +145,8 @@ LDFLAGS += -lmemcached \
            -lboost_thread \
            -lboost_date_time \
            -lcares \
-           -lzmq
+           -lzmq \
+           -lsas
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl
