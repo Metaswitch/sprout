@@ -49,8 +49,10 @@ ConnectionTracker::ConnectionTracker(
   _on_quiesced_handler(on_quiesced_handler)
 {
   pthread_mutexattr_t attrs;
+  pthread_mutexattr_init(&attrs);
   pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_RECURSIVE);
   pthread_mutex_init(&_lock, &attrs);
+  pthread_mutexattr_destroy(&attrs);
 }
 
 
