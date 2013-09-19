@@ -52,6 +52,7 @@ extern "C" {
 #include <string>
 
 #include "sas.h"
+#include "quiescing_manager.h"
 
 /* Pre-declariations */
 class LastValueCache;
@@ -62,7 +63,8 @@ struct stack_data_struct
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
-  pjsip_tpfactory     *tcp_factory;
+  pjsip_tpfactory     *trusted_tcp_factory;
+  pjsip_tpfactory     *untrusted_tcp_factory;
   int                  module_id;
 
   int                  trusted_port;
@@ -121,13 +123,13 @@ extern pj_status_t init_stack(const std::string& system_name,
                               const std::string& sprout_domain,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
-                              int num_worker_threads);
+                              int num_worker_threads,
+                              QuiescingManager *quiescing_mgr);
 extern pj_status_t start_stack();
 extern void stop_stack();
 extern void unregister_stack_modules(void);
 extern void destroy_stack();
 extern pj_status_t init_pjsip();
 extern void term_pjsip();
-
 
 #endif
