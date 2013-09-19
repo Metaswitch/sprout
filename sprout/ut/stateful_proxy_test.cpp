@@ -3823,9 +3823,10 @@ TEST_F(IscTest, Cdiv)
 TEST_F(IscTest, TerminatingWithEnumRewrite)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_user_ifc("sip:6505551234@homedomain",
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <ServiceProfile>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -3848,7 +3849,7 @@ TEST_F(IscTest, TerminatingWithEnumRewrite)
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
-                                </ServiceProfile>)");
+                                </ServiceProfile></IMSSubscription>)";
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
