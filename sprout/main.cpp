@@ -123,8 +123,6 @@ static sem_t term_sem;
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 
-struct options opt;
-
 static void usage(void)
 {
   puts("Options:\n"
@@ -526,6 +524,8 @@ void *quiesce_unquiesce_thread_func(void *_)
 int main(int argc, char *argv[])
 {
   pj_status_t status;
+  struct options opt;
+
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;
