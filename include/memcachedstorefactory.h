@@ -41,7 +41,7 @@
 
 namespace RegData
 {
-  RegData::Store* create_memcached_store(bool binary=true);
+  RegData::Store* create_memcached_store(bool binary, const std::string& config_file);
 
   void destroy_memcached_store(RegData::Store* store);
 

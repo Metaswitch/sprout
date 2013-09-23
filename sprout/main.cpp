@@ -71,7 +71,6 @@ extern "C" {
 #include "authentication.h"
 #include "options.h"
 #include "memcachedstorefactory.h"
-#include "memcachedstoreupdater.h"
 #include "localstorefactory.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
@@ -610,15 +609,11 @@ int main(int argc, char *argv[])
   }
 
   RegData::Store* registrar_store = NULL;
-  MemcachedStoreUpdater* memstore_updater = NULL;
   if (opt.store_servers != "")
   {
     // Use memcached store.
     LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    registrar_store = RegData::create_memcached_store(false);
-
-    // Create an updater to keep the store configured appropriately.
-    memstore_updater = new MemcachedStoreUpdater(registrar_store, opt.store_servers);
+    registrar_store = RegData::create_memcached_store(false, opt.store_servers);
   }
   else
   {
@@ -805,7 +800,6 @@ int main(int argc, char *argv[])
 
   if (opt.store_servers != "")
   {
-    delete memstore_updater;
     RegData::destroy_memcached_store(registrar_store);
   }
   else

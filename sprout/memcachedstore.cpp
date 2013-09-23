@@ -34,7 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "memcachedstore.h"
 
 // Common STL includes.
 #include <cassert>
@@ -51,19 +50,21 @@
 #include <algorithm>
 #include <time.h>
 
+#include "log.h"
+#include "utils.h"
 #include "memcachedstorefactory.h"
 #include "memcachedstoreupdater.h"
 #include "memcachedstoreview.h"
-#include "log.h"
-#include "utils.h"
+#include "memcachedstore.h"
 
 namespace RegData {
 
 
 /// Create a new store object, using the memcached implementation.
-RegData::Store* create_memcached_store(bool binary)    ///< use binary protocol?
+RegData::Store* create_memcached_store(bool binary,                    ///< use binary protocol?
+                                       const std::string& config_file) ///< configuration file for cluster settings
 {
-  return new MemcachedStore(binary);
+  return new MemcachedStore(binary, config_file);
 }
 
 
@@ -74,7 +75,25 @@ void destroy_memcached_store(RegData::Store* store)
 }
 
 
-/// Constructor: get a handle to the memcached connection pool of interest.
+MemcachedStore::MemcachedStore(bool binary,                      ///< use binary protocol?
+                               const std::string& config_file) : ///< configuration file for cluster settings
+  _binary(binary),
+  _replicas(2),
+  _vbuckets(128),
+  _view(_vbuckets, _replicas),
+  _view_number(0),
+  _options(),
+  _active_replicas(0),
+  _vbucket_map()
+{
+  // Initialise the store.
+  init();
+
+  // Create an updater to keep the store configured appropriately.
+  _updater = new MemcachedStoreUpdater(this, config_file);
+}
+
+
 MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   _binary(binary),
   _replicas(2),
@@ -84,6 +103,32 @@ MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   _options(),
   _active_replicas(0),
   _vbucket_map()
+{
+  // Initialise the store.
+  init();
+}
+
+
+MemcachedStore::~MemcachedStore()
+{
+  // Destroy the updater (if it was created).
+  delete _updater;
+
+  // Clean up this thread's connection now, rather than waiting for
+  // pthread_exit.  This is to support use by single-threaded code
+  // (e.g., UTs), where pthread_exit is never called.
+  connection* conn = (connection*)pthread_getspecific(_thread_local);
+  if (conn != NULL)
+  {
+    pthread_setspecific(_thread_local, NULL);
+    cleanup_connection(conn);
+  }
+
+  pthread_rwlock_destroy(&_view_lock);
+}
+
+
+void MemcachedStore::init()
 {
   // Create the thread local key for the per thread data.
   pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
@@ -96,22 +141,6 @@ MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   {
     _vbucket_map[ii] = new uint32_t[_vbuckets];
   }
-}
-
-
-MemcachedStore::~MemcachedStore()
-{
-  // Clean up this thread's connection now, rather than waiting for
-  // pthread_exit.  This is to support use by single-threaded code
-  // (e.g., UTs), where pthread_exit is never called.
-  connection* conn = (connection*)pthread_getspecific(_thread_local);
-  if (conn != NULL)
-  {
-    pthread_setspecific(_thread_local, NULL);
-    cleanup_connection(conn);
-  }
-
-  pthread_rwlock_destroy(&_view_lock);
 }
 
 
@@ -152,7 +181,7 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
   _active_replicas = _replicas;
   if (_active_replicas > (int)_view.server_list().size())
   {
-    _active_replicas = (int)_view.server_list().size();
+    _active_replicas = _view.server_list().size();
   }
 
   for (int ii = 0; ii < _active_replicas; ++ii)

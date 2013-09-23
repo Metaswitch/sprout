@@ -56,6 +56,8 @@ extern "C" {
 #include "regdata.h"
 #include "memcachedstoreview.h"
 
+class MemcachedStoreUpdater;
+
 namespace RegData {
 
 /// @class RegData::MemcachedAoR
@@ -108,7 +110,8 @@ private:
 class MemcachedStore : public Store
 {
 public:
-  MemcachedStore(bool binary=true);
+  MemcachedStore(bool binary, const std::string& config_file);
+  MemcachedStore(bool binary);
   ~MemcachedStore();
 
   void new_view(const std::list<std::string>& servers,
@@ -129,10 +132,14 @@ private:
     std::vector<memcached_st*> st;
   } connection;
 
+  void init();
+
   connection* get_connection();
 
   static std::string serialize_aor(MemcachedAoR* aor_data);
   static MemcachedAoR* deserialize_aor(const std::string& s);
+
+  MemcachedStoreUpdater* _updater;
 
   pthread_key_t _thread_local;
 

@@ -42,7 +42,6 @@ public:
   MemcachedStoreUpdater(RegData::Store* store, std::string file);
   ~MemcachedStoreUpdater();
 
-
 private:
   void update_view();
 
