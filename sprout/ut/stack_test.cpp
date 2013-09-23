@@ -128,13 +128,15 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
   strcpy(dns, ent->h_name);
 
   // Now do test
-  pj_status_t rc = init_stack("plural@zalpha.example.com",  // system name
+  pj_status_t rc = init_stack(false,                        // edge_proxy
+                              "plural@zalpha.example.com",  // system name
                               "192.168.0.3",                // SAS address
                               9408,                         // trusted port
                               9409,                         // untrusted port
                               dns,                          // local host
                               "woot.example.com",           // home domain
-                              "all-the-sprouts",            //sprout cluster hostname
+                              "all-the-sprouts",            // sprout cluster hostname
+                              "all-the-bonos",              // bono cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
                               7,                            // #PJsip threads
                               9);                           // #worker threads
