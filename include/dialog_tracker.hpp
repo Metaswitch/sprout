@@ -1,6 +1,4 @@
 /**
- * @file fakecurl.hpp Fake cURL library header for testing.
- *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
  *
@@ -33,72 +31,35 @@
  * under which the OpenSSL Project distributes the OpenSSL toolkit software,
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
+}
+#include "flowtable.h"
 
-#include <string>
-#include <list>
-#include <map>
-
-#include <curl/curl.h>
-
-/// The content of a request.
-class Request
-{
+class DialogTracker {
+  FlowTable* _ft;
 public:
-  std::string _method;
-  std::list<std::string> _headers;
-  std::string _body;
-  long _httpauth; //^ OR of CURLAUTH_ constants
-  std::string _username;
-  std::string _password;
-  bool _fresh;
+  DialogTracker(FlowTable* ft): _ft(ft) {};
+  void on_uas_tsx_complete(const pjsip_tx_data* original_request,
+                           const pjsip_transaction* tsx,
+                           const pjsip_event* event,
+                           bool is_client);
+private:
+  void on_dialog_start(const pjsip_tx_data* original_request,
+                       const pjsip_transaction* tsx,
+                       const pjsip_event* event,
+                       bool is_client);
+
+  void on_dialog_end(const pjsip_tx_data* original_request,
+                     const pjsip_transaction* tsx,
+                     const pjsip_event* event,
+                     bool is_client);
+
+  Flow* get_client_flow(const pjsip_tx_data* original_request,
+                       const pjsip_transaction* tsx,
+                       const pjsip_event* event,
+                       bool is_client);
 };
-
-/// The content of a response.
-class Response
-{
-public:
-  CURLcode _code_once;  //< If not CURLE_OK, issue this code first then the other.
-  CURLcode _code;  //< cURL easy doesn't accept HTTP status codes
-  std::string _body;
-
-  Response() :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body("")
-  {
-  }
-
-  Response(const std::string& body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code_once, const std::string& body) :
-    _code_once(code_once),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(const char* body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code) :
-    _code_once(CURLE_OK),
-    _code(code),
-    _body("")
-  {
-  }
-};
-
-/// Responses to give, by URL.
-extern std::map<std::string,Response> fakecurl_responses;
-
-/// Requests received, by URL.
-extern std::map<std::string,Request> fakecurl_requests;

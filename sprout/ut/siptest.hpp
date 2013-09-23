@@ -196,12 +196,6 @@ protected:
   /// (e.g., dotted-decimal).
   static void expect_target(const char* type_name, const char* addr, int port, pjsip_tx_data* tdata);
 
-private:
-  static pj_status_t on_tx_msg(pjsip_tx_data* tdata);
-
-  /// Handle an outbound SIP message.
-  void handle_txdata(pjsip_tx_data* tdata);
-
   /// Trusted TCP factory and UDP transport
   static pjsip_tpfactory* _tcp_tpfactory_trusted;
   static pjsip_transport* _udp_tp_trusted;
@@ -209,6 +203,12 @@ private:
   /// Untrusted TCP factory and UDP transport
   static pjsip_tpfactory* _tcp_tpfactory_untrusted;
   static pjsip_transport* _udp_tp_untrusted;
+
+private:
+  static pj_status_t on_tx_msg(pjsip_tx_data* tdata);
+
+  /// Handle an outbound SIP message.
+  void handle_txdata(pjsip_tx_data* tdata);
 
   /// The transport we usually use when injecting messages.
   static TransportFlow* _tp_default;

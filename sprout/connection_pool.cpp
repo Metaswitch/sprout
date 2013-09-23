@@ -132,7 +132,7 @@ pjsip_transport* ConnectionPool::get_connection()
     // stepping through the hash until a connected entry is found.
     int start_slot = rand() % _num_connections;
     int ii = start_slot;
-    while (_tp_hash[ii].state == PJSIP_TP_STATE_DISCONNECTED)
+    while (!_tp_hash[ii].connected)
     {
       ii = (ii + 1) % _num_connections;
       if (ii == start_slot)
@@ -238,7 +238,8 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   // Store the new transport in the hash slot, but marked as disconnected.
   pthread_mutex_lock(&_tp_hash_lock);
   _tp_hash[hash_slot].tp = tp;
-  _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
+  _tp_hash[hash_slot].listener_key = key;
+  _tp_hash[hash_slot].connected = PJ_FALSE;
   _tp_map[tp] = hash_slot;
 
   // Don't increment the connection count here, wait until we get confirmation
@@ -257,16 +258,22 @@ void ConnectionPool::quiesce_connection(int hash_slot)
 
   if (tp != NULL)
   {
-    if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED)
+    if (_tp_hash[hash_slot].connected)
     {
       // Connection was established, so update statistics.
       --_active_connections;
       decrement_connection_count(tp);
     }
 
+    // Don't listen for any more state changes on this connection.
+    pjsip_transport_remove_state_listener(tp,
+                                          _tp_hash[hash_slot].listener_key,
+                                          (void *)this);
+
     // Remove the transport from the hash and the map.
     _tp_hash[hash_slot].tp = NULL;
-    _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
+    _tp_hash[hash_slot].listener_key = NULL;
+    _tp_hash[hash_slot].connected = PJ_FALSE;
     _tp_map.erase(tp);
 
     // Release the lock now so we don't have a deadlock if pjsip_transport_shutdown
@@ -307,12 +314,11 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
   {
     int hash_slot = i->second;
 
-    if ((state == PJSIP_TP_STATE_CONNECTED) &&
-        (_tp_hash[hash_slot].state == PJSIP_TP_STATE_DISCONNECTED))
+    if ((state == PJSIP_TP_STATE_CONNECTED) && (!_tp_hash[hash_slot].connected))
     {
       // New connection has connected successfully, so update the statistics.
       LOG_DEBUG("Transport %s in slot %d has connected", tp->obj_name, hash_slot);
-      _tp_hash[hash_slot].state = state;
+      _tp_hash[hash_slot].connected = PJ_TRUE;
       ++_active_connections;
       increment_connection_count(tp);
 
@@ -322,22 +328,34 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       int ttl = _recycle_period + (rand() % (2 * _recycle_margin)) - _recycle_margin;
       _tp_hash[hash_slot].recycle_time = time(NULL) + ttl;
     }
-    else if (state == PJSIP_TP_STATE_DISCONNECTED)
+    else if ((state == PJSIP_TP_STATE_DISCONNECTED) ||
+             (state == PJSIP_TP_STATE_DESTROYED))
     {
-      // Either a connection has failed, or a new connection failed to
-      // connect.
+      // Either a connection has failed or been shutdown, or a new connection
+      // failed to connect.
       LOG_DEBUG("Transport %s in slot %d has failed", tp->obj_name, hash_slot);
 
-      if (_tp_hash[hash_slot].state == PJSIP_TP_STATE_CONNECTED)
+      if (_tp_hash[hash_slot].connected)
       {
         // A connection has failed, so update the statistics.
         --_active_connections;
         decrement_connection_count(tp);
       }
 
+      // Don't listen for any more state changes on this connection (but note
+      // it's illegal to call any methods on the transport once it's entered the
+      // `destroyed` state).
+      if (state != PJSIP_TP_STATE_DESTROYED)
+      {
+        pjsip_transport_remove_state_listener(tp,
+                                              _tp_hash[hash_slot].listener_key,
+                                              (void *)this);
+      }
+
       // Remove the transport from the hash and the map.
       _tp_hash[hash_slot].tp = NULL;
-      _tp_hash[hash_slot].state = PJSIP_TP_STATE_DISCONNECTED;
+      _tp_hash[hash_slot].listener_key = NULL;
+      _tp_hash[hash_slot].connected = PJ_FALSE;
       _tp_map.erase(tp);
 
       // Remove our reference to the transport.
@@ -372,8 +390,7 @@ void ConnectionPool::recycle_connections()
         // This slot is empty, so try to populate it now.
         create_connection(ii);
       }
-      else if ((_tp_hash[ii].state == PJSIP_TP_STATE_CONNECTED) &&
-               (now >= _tp_hash[ii].recycle_time))
+      else if ((_tp_hash[ii].connected) && (now >= _tp_hash[ii].recycle_time))
       {
         // This slot is due to be recycled, so quiesce the existing
         // connection and create a new one.
