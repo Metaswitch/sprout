@@ -53,6 +53,7 @@
 
 #include "memcachedstorefactory.h"
 #include "memcachedstoreupdater.h"
+#include "memcachedstoreview.h"
 #include "log.h"
 #include "utils.h"
 
@@ -76,10 +77,12 @@ void destroy_memcached_store(RegData::Store* store)
 /// Constructor: get a handle to the memcached connection pool of interest.
 MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
   _binary(binary),
-  _replicas(0),
-  _view(0),
+  _replicas(2),
+  _vbuckets(128),
+  _view(_vbuckets, _replicas),
+  _view_number(0),
   _options(),
-  _vbuckets(),
+  _active_replicas(0),
   _vbucket_map()
 {
   // Create the thread local key for the per thread data.
@@ -87,6 +90,12 @@ MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
 
   // Create the lock for protecting the current view.
   pthread_rwlock_init(&_view_lock, NULL);
+
+  _vbucket_map.resize(_replicas);
+  for (int ii = 0; ii < _replicas; ++ii)
+  {
+    _vbucket_map[ii] = new uint32_t[_vbuckets];
+  }
 }
 
 
@@ -109,84 +118,57 @@ MemcachedStore::~MemcachedStore()
 // LCOV_EXCL_START - need real memcached to test
 
 
-/// Converts a vbucket map to a printable string.
-char* MemcachedStore::vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets)
-{
-  char* wptr = buf;
-  for (int ii = 0; ii < vbuckets - 1; ++ii)
-  {
-    wptr += snprintf(wptr, (buf_size - (wptr - buf)), "%d, ", vbucket_map[ii]);
-  }
-  snprintf(wptr, (buf_size - (wptr - buf)), "%d", vbucket_map[vbuckets - 1]);
-
-  return buf;
-}
-
-
 /// Set up a new view of the memcached cluster(s).  The view determines
 /// how data is distributed around the cluster.
 void MemcachedStore::new_view(const std::list<std::string>& servers,
-                              const std::vector<std::vector<std::string> >& vbuckets)
+                              const std::list<std::string>& new_servers)
 {
-  pthread_rwlock_wrlock(&_view_lock);
-
   LOG_STATUS("Updating memcached store configuration");
 
-  _options = "";
-  for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
-  {
-    delete _vbucket_map[ii];
-  }
+  // Update the view object.
+  _view.update(servers, new_servers);
 
-  _servers = servers.size();
-  _replicas = vbuckets.size();
+  // Now copy the view so it can be accessed by the worker threads.
+  pthread_rwlock_wrlock(&_view_lock);
 
   // We use a very short connect timeout because libmemcached tries to connect
   // to all servers sequentially during start-up, and if any are not up we
   // don't want to wait for any significant length of time.
-  _options += "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
+  _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
   if (_binary)
   {
     _options += " --BINARY-PROTOCOL";
   }
-  for (std::list<std::string>::const_iterator i = servers.begin();
-       i != servers.end();
+
+  for (std::list<std::string>::const_iterator i = _view.server_list().begin();
+       i != _view.server_list().end();
        ++i)
   {
     _options += " --SERVER=" + (*i);
   }
 
-  LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
-
-  // Work out how many active replicas we have for each bucket.
-  int active_replicas = _replicas;
-  if (active_replicas > _servers)
+  // Calculate the number of active replicas.  In most cases this will be the
+  // desired number of replicas, but if there aren't enough servers ...
+  _active_replicas = _replicas;
+  if (_active_replicas > (int)_view.server_list().size())
   {
-    active_replicas = _servers;
+    _active_replicas = (int)_view.server_list().size();
   }
-  LOG_DEBUG("%d active replicas", active_replicas);
 
-  _vbuckets = vbuckets[0].size();
-  _vbucket_map.resize(active_replicas);
-
-  for (size_t ii = 0; ii < vbuckets.size(); ++ii)
+  for (int ii = 0; ii < _active_replicas; ++ii)
   {
-    _vbucket_map[ii] = new uint32_t[_vbuckets];
-    for (size_t jj = 0; jj < _vbuckets; ++jj)
+    for (int jj = 0; jj < _vbuckets; ++jj)
     {
-      _vbucket_map[ii][jj] = atoi(vbuckets[ii][jj].c_str());
+      _vbucket_map[ii][jj] = _view.vbucket_map(ii)[jj];
     }
-    char buf[500];
-    LOG_DEBUG("vbucket map for replica %d = %s",
-              ii,
-              vbucket_to_string(buf, sizeof(buf), _vbucket_map[ii], _vbuckets));
   }
+
+  LOG_DEBUG("New memcached cluster view - %s", _options.c_str());
 
   // Update the view number as the last thing here, otherwise we could stall
   // other threads waiting for the lock.
   LOG_STATUS("Finished preparing new view, so flag that workers should switch to it");
-
-  ++_view;
+  ++_view_number;
 
   pthread_rwlock_unlock(&_view_lock);
 }
@@ -201,24 +183,24 @@ MemcachedStore::connection* MemcachedStore::get_connection()
     // Create a new connection structure for this thread.
     conn = new MemcachedStore::connection;
     pthread_setspecific(_thread_local, conn);
-    conn->view = 0;
+    conn->view_number = 0;
   }
 
-  if (conn->view != _view)
+  if (conn->view_number != _view_number)
   {
     // Either the view has changed or has not yet been set up, so create a
     // new memcached_st.
     pthread_rwlock_rdlock(&_view_lock);
 
-    LOG_DEBUG("Set up new view %d for thread", _view);
+    LOG_DEBUG("Set up new view %d for thread", _view_number);
     for (size_t ii = 0; ii < conn->st.size(); ++ii)
     {
       memcached_free(conn->st[ii]);
       conn->st[ii] = NULL;
     }
-    conn->st.resize(_vbucket_map.size());
+    conn->st.resize(_active_replicas);
 
-    for (size_t ii = 0; ii < conn->st.size(); ++ii)
+    for (int ii = 0; ii < _active_replicas; ++ii)
     {
       LOG_STATUS("Setting up replica %d for connection %p", ii, conn);
 
@@ -235,7 +217,7 @@ MemcachedStore::connection* MemcachedStore::get_connection()
     }
 
     // Flag that we are in sync with the latest view.
-    conn->view = _view;
+    conn->view_number = _view_number;
 
     pthread_rwlock_unlock(&_view_lock);
   }

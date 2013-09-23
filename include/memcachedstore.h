@@ -54,6 +54,7 @@ extern "C" {
 }
 
 #include "regdata.h"
+#include "memcachedstoreview.h"
 
 namespace RegData {
 
@@ -111,7 +112,7 @@ public:
   ~MemcachedStore();
 
   void new_view(const std::list<std::string>& servers,
-                const std::vector<std::vector<std::string> >& vbuckets);
+                const std::list<std::string>& new_servers);
 
   void flush_all();
 
@@ -124,23 +125,10 @@ private:
 
   typedef struct connection
   {
-    uint64_t view;
+    uint64_t view_number;
     std::vector<memcached_st*> st;
   } connection;
 
-  /// Helper: to_string method using ostringstream.
-  template <class T>
-  std::string to_string(T t,                                  ///< datum to convert
-                        std::ios_base & (*f)(std::ios_base&)) ///< modifier to apply
-  {
-    std::ostringstream oss;
-    oss << f << t;
-    return oss.str();
-  }
-
-  char* vbucket_to_string(char* buf, int buf_size, const uint32_t* vbucket_map, int vbuckets);
-
-  bool ping_server(const std::string& server);
   connection* get_connection();
 
   static std::string serialize_aor(MemcachedAoR* aor_data);
@@ -150,14 +138,15 @@ private:
 
   bool _binary;
   int _replicas;
+  int _vbuckets;
 
-  uint64_t _view;
+  MemcachedStoreView _view;
+
+  uint64_t _view_number;
   pthread_rwlock_t _view_lock;
 
-  int _servers;
   std::string _options;
-
-  uint32_t _vbuckets;
+  int _active_replicas;
   std::vector<uint32_t*> _vbucket_map;
 };
 
