@@ -586,13 +586,15 @@ int main(int argc, char *argv[])
   }
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.system_name,
+  status = init_stack(opt.edge_proxy,
+                      opt.system_name,
                       opt.sas_server,
                       opt.trusted_port,
                       opt.untrusted_port,
                       opt.local_host,
                       opt.home_domain,
                       opt.sprout_domain,
+                      opt.bono_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads);
