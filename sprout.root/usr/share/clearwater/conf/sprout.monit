@@ -8,6 +8,6 @@ check process sprout pidfile /var/run/sprout.pid
   if failed host localhost port 5054 type tcp
      protocol sip and target "monit@localhost:5054" and maxforward 2
      with timeout 12 seconds for 2 cycles
-     then exec "/etc/init.d/bono abort-restart"
+     then exec "/etc/init.d/sprout abort-restart"
   if memory is greater than 80% for 3 cycles
-     then exec "/etc/init.d/bono abort-restart"
+     then exec "/etc/init.d/sprout abort-restart"
