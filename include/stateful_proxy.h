@@ -184,17 +184,19 @@ private:
   pj_status_t init_uac_transactions(target_list& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
-  AsChainLink create_as_chain(const SessionCase& session_case, std::string served_user = "");
+  pjsip_history_info_hdr* create_history_info_hdr(pjsip_uri* target);
+  void update_history_info_reason(pjsip_uri* history_info_uri, int code);
+  AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
-  void handle_incoming_non_cancel(const ServingState& serving_state);
+  bool handle_incoming_non_cancel(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(target** pre_target);
-  void move_to_terminating_chain();
+  bool move_to_terminating_chain();
   AsChainLink::Disposition handle_terminating(target** pre_target);
   void handle_outgoing_non_cancel(target* pre_target);
 
-  HSSCallInformation& get_data_from_hss(std::string public_id, SAS::TrailId trail);
-  Ifcs& lookup_ifcs(std::string public_id, SAS::TrailId trail);
-  std::vector<std::string>& get_associated_uris(std::string public_id, SAS::TrailId trail);
+  bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
+  bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
+  bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
 
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,

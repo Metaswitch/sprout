@@ -16,6 +16,10 @@
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@homedomain!"
         },
+        {   "name" : "Clearwater internal numbers - rewritten",
+            "prefix" : "111555",
+            "regex"  : "!^111(.*)$!sip:650\\1@homedomain!"
+        }, 
         {   "name" : "NANP => Alameda PBX",
             "prefix" : "",
             "regex"  : "!(^.*$)!sip:\\1@198.147.226.2!"

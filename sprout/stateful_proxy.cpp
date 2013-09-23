@@ -1238,32 +1238,61 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
-HSSCallInformation& UASTransaction::get_data_from_hss(std::string public_id, SAS::TrailId trail)
+// Gets the subscriber's associated URIs and iFCs for each URI from
+// the HSS. Returns true on success, false on failure.
+
+// The info parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation& info, SAS::TrailId trail)
 {
   std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
-  if (data == cached_hss_data.end())
-  { 
+  bool rc = false;
+  if (data != cached_hss_data.end())
+  {
+    info = data->second;
+    rc = true;
+  }
+  else
+  {
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-    cached_hss_data[public_id] = {ifc_map[public_id], uris};
-    data = cached_hss_data.find(public_id);
+    long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+    info = {ifc_map[public_id], uris};
+    if (http_code == 200)
+    {
+      cached_hss_data[public_id] = info;
+      rc = true;
+    }
   }
-  return data->second;
+  return rc;
 }
 
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
-std::vector<std::string>& UASTransaction::get_associated_uris(std::string public_id, SAS::TrailId trail) 
+// The uris parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail) 
 {
-  HSSCallInformation& data = get_data_from_hss(public_id, trail);
-  return data.uris;
+  HSSCallInformation data;
+  bool success = get_data_from_hss(public_id, data, trail);
+  if (success)
+  {
+    uris = data.uris;
+  }
+  return success;
 }
 
-// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
-Ifcs& UASTransaction::lookup_ifcs(std::string public_id, SAS::TrailId trail) 
+// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).  
+// The ifcs parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail) 
 {
-  HSSCallInformation& data = get_data_from_hss(public_id, trail);
-  return data.ifcs;
+  HSSCallInformation data; 
+  bool success = get_data_from_hss(public_id, data, trail);
+  if (success)
+  {
+    ifcs = data.ifcs;
+  }
+  return success;
 }
 
 ///@{
@@ -1397,8 +1426,11 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
     std::string public_id = PJUtils::aor_from_uri(req_uri);
-    std::vector<std::string> uris = get_associated_uris(public_id, trail);
-    if (uris.size() > 0)
+    std::vector<std::string> uris;
+    bool success = get_associated_uris(public_id, uris, trail);
+
+    // If get_associated_uris fails, we'll skip this processing, we won't have any targets, and will fail with a 404.
+    if (success && (uris.size() > 0))
     {
       // Take the first associated URI as the AOR.
       std::string aor = uris.front();
@@ -1809,6 +1841,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   target* target = NULL;
+  pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
@@ -1820,7 +1853,15 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
     {
       // Do services and translation processing for requests targeted at this
       // node/home domain.
-      handle_incoming_non_cancel(serving_state);
+      bool rc = handle_incoming_non_cancel(serving_state);
+
+      if (!rc)
+      {
+        LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
+        send_response(PJSIP_SC_NOT_FOUND);
+        delete target;
+        return;
+      };
 
       // Add ourselves as orig-IOI if appropriate.
       //
@@ -1836,6 +1877,27 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
       // Do incoming (originating) half.
       disposition = handle_originating(&target);
 
+      if ((disposition == AsChainLink::Disposition::Complete) &&
+          (enum_service) &&
+          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+          (!is_uri_routeable(_req->msg->line.req.uri)))
+      {
+        // Request is targeted at this domain but URI is not currently
+        // routeable, so translate it to a routeable URI.
+        LOG_DEBUG("Translating URI");
+        status = translate_request_uri(_req, trail());
+
+        if (status != PJ_SUCCESS)
+        {
+          // An error occurred during URI translation.  This doesn't happen if
+          // there is no match, only if there is a match but there is an error
+          // performing the defined mapping.  We therefore reject the request
+          // with the not found status code and a specific reason phrase.
+          send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+          disposition = AsChainLink::Disposition::Stop;
+        }
+      }
+
       if (disposition == AsChainLink::Disposition::Complete)
       {
         if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
@@ -1844,9 +1906,15 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
           // terminating chain: switch to terminating and look up iFCs
           // again.  The served user changes here.
           LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-          move_to_terminating_chain();
+          bool success = move_to_terminating_chain();
+          if (!success)
+          {
+            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+            send_response(PJSIP_SC_NOT_FOUND);
+            delete target;
+            return;
+          }
         }
-
         // Do outgoing (terminating) half.
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
@@ -1854,7 +1922,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
     }
     else
     {
-      // Request is not target at this domain.  If the serving state is set
+      // Request is not targeted at this domain.  If the serving state is set
       // we need to release the original dialog as otherwise we may leak an
       // AsChain.
       if (serving_state.is_set())
@@ -1875,16 +1943,21 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state)
 
 
 // Handle the incoming half of a non-CANCEL message.
-void UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
+bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
 {
   LOG_DEBUG("Handle incoming transaction request, serving state = %s", serving_state.to_string().c_str());
+  bool success = true;
 
+  std::string served_user;
+  Ifcs ifcs;
   if (serving_state.is_set())
   {
     if (serving_state.original_dialog().is_set())
     {
       // Pick up existing AS chain.
       _as_chain_link = serving_state.original_dialog();
+      LOG_DEBUG("Picking up original AS chain");
+      success = true;
 
       if ((serving_state.session_case() == SessionCase::Terminating) &&
           (!_as_chain_link.matches_target(_req)))
@@ -1893,17 +1966,29 @@ void UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
         // create new AS chain with session case orig-cdiv and the
         // terminating user as served user.
         LOG_INFO("Request-URI has changed, retargeting");
-        std::string served_user = _as_chain_link.served_user();
+        served_user = _as_chain_link.served_user();
+
         _as_chain_link.release();
-        _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, served_user);
+        success = lookup_ifcs(served_user, ifcs, trail());
+        if (success)
+        {
+          _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+        }
       }
     }
     else
     {
       // No existing AS chain - create new.
-      _as_chain_link = create_as_chain(serving_state.session_case());
+      served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
+      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+      success = lookup_ifcs(served_user, ifcs, trail());
+      if (success)
+      {
+        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
+      }
     }
   }
+  return success;
 }
 
 
@@ -1945,7 +2030,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(target** target) // 
 
 
 /// Move from originating to terminating handling.
-void UASTransaction::move_to_terminating_chain()
+bool UASTransaction::move_to_terminating_chain()
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
@@ -1953,7 +2038,15 @@ void UASTransaction::move_to_terminating_chain()
 
   // Create new terminating chain.
   _as_chain_link.release();
-  _as_chain_link = create_as_chain(SessionCase::Terminating);
+  std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
+  Ifcs ifcs;
+  bool success = lookup_ifcs(served_user, ifcs, trail());
+
+  if (success)
+  {
+    _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+  }
+  return success;
 }
 
 // Perform terminating handling.
@@ -1962,50 +2055,30 @@ void UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
-  pj_status_t status;
-
-  if (!edge_proxy &&
-      (enum_service) &&
-      (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-      (!is_uri_routeable(_req->msg->line.req.uri)))
+  if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+      (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
   {
-    // Request is targeted at this domain but URI is not currently
-    // routeable, so translate it to a routeable URI.
-    LOG_DEBUG("Translating URI");
-    status = translate_request_uri(_req, trail());
+    // The URI has been translated to an off-net domain, but the user does
+    // not have a valid E.164 number that can be used to make off-net calls.
+    // Reject the call with a not found response code, which is about the
+    // most suitable for this case.
+    LOG_INFO("Rejecting off-net call from user without E.164 address");
+    send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
+    return AsChainLink::Disposition::Stop;
+  }
 
-    if (status != PJ_SUCCESS)
-    {
-      // An error occurred during URI translation.  This doesn't happen if
-      // there is no match, only if there is a match but there is an error
-      // performing the defined mapping.  We therefore reject the request
-      // with the not found status code and a specific reason phrase.
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-      return AsChainLink::Disposition::Stop;
-    }
-
-    if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-        (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
-    {
-      // The URI has been translated to an off-net domain, but the user does
-      // not have a valid E.164 number that can be used to make off-net calls.
-      // Reject the call with a not found response code, which is about the
-      // most suitable for this case.
-      LOG_INFO("Rejecting off-net call from user without E.164 address");
-      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-      return AsChainLink::Disposition::Stop;
-    }
-
-    // If the newly translated ReqURI indicates that we're the host of the
-    // target user, include ourselves as the terminating operator for
-    // billing.
-    pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-      pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-    if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
-      pcv->term_ioi = stack_data.home_domain;
-    } else if (pcv) {
-      pcv->term_ioi = pj_str("");
-    }
+  // If the newly translated ReqURI indicates that we're the host of the
+  // target user, include ourselves as the terminating operator for
+  // billing.
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+    pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri))
+  {
+    pcv->term_ioi = stack_data.home_domain;
+  }
+  else if (pcv)
+  {
+    pcv->term_ioi = pj_str("");
   }
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
@@ -2766,10 +2839,6 @@ void UASTransaction::dissociate(UACTransaction* uac_data)
 bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 {
   static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
-  static const pj_str_t STR_REASON = pj_str("Reason");
-  static const pj_str_t STR_SIP = pj_str("SIP");
-  static const pj_str_t STR_CAUSE = pj_str("cause");
-  static const pj_str_t STR_TEXT = pj_str("text");
   static const int MAX_HISTORY_INFOS = 5;
 
   // Default the code to 480 Temporarily Unavailable.
@@ -2803,55 +2872,44 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     cancel_pending_uac_tsx(code, true);
     send_response(PJSIP_SC_CALL_BEING_FORWARDED);
 
+    // Add a Diversion header with the original request URI and the reason
+    // for the diversion.
+    std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _req->msg->line.req.uri);
+    div += ";reason=";
+    div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
+           (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+           (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
+           (code == 0) ? "unconditional" :
+           "unknown";
+    pj_str_t sdiv;
+    pjsip_generic_string_hdr* diversion =
+                    pjsip_generic_string_hdr_create(_req->pool,
+                                                    &STR_DIVERSION,
+                                                    pj_cstr(&sdiv, div.c_str()));
+    pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)diversion);
+
+    // Create or update a History-Info header for the old target.
+    if (prev_history_info_hdr == NULL)
+    {
+      prev_history_info_hdr = create_history_info_hdr(_req->msg->line.req.uri);
+      prev_history_info_hdr->index = pj_str("1");
+      pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)prev_history_info_hdr);
+    }
+
+    update_history_info_reason(((pjsip_name_addr*)(prev_history_info_hdr->uri))->uri, code);
+
     // Set up the new target URI.
     _req->msg->line.req.uri = target;
 
-    // Create a History-Info header.
-    pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
+    // Create a History-Info header for the new target.
+    pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target);
 
-    // Clone the URI and set up its parameters.
-    pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
-    if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
-    {
-      // Set up the Reason parameter - this is always "SIP".
-      pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
-      pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_REASON;
-      param->value = STR_SIP;
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
+    // Set up the index parameter.  This is the previous value suffixed with ".1".   
+    history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
+    history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
 
-      // Now add the cause parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_CAUSE;
-      char cause_text[4];
-      sprintf(cause_text, "%u", code);
-      pj_strdup2(_req->pool, &param->value, cause_text);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-
-      // Finally add the text parameter.
-      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-      param->name = STR_TEXT;
-      param->value = *pjsip_get_status_text(code);
-      pj_list_insert_before(&history_info_sip_uri->header_param, param);
-    }
-    pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
-    history_info_name_addr_uri->uri = history_info_uri;
-    history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
-
-    // Set up the index parameter.  This is "1" if it is the first request and
-    // the previous value suffixed with ".1" if not.
-    if (prev_history_info_hdr == NULL)
-    {
-      history_info_hdr->index = pj_str("1");
-    }
-    else
-    {
-      history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
-      history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
-      pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
-    }
-    // Add the History-Info header to the request.
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)history_info_hdr);
 
     // Kick off outgoing processing for the new request.  Continue the
@@ -2864,6 +2922,58 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
   }
 
   return false;
+}
+
+
+pjsip_history_info_hdr* UASTransaction::create_history_info_hdr(pjsip_uri* target)
+{
+  // Create a History-Info header.
+  pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(_req->pool);
+
+  // Clone the URI and set up its parameters.
+  pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(_req->pool, (pjsip_uri*)pjsip_uri_get_uri(target));
+  pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
+  history_info_name_addr_uri->uri = history_info_uri;
+  history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
+  
+  return history_info_hdr;
+}
+
+
+void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int code)
+{
+  static const pj_str_t STR_REASON = pj_str("Reason");
+  static const pj_str_t STR_SIP = pj_str("SIP");
+  static const pj_str_t STR_CAUSE = pj_str("cause");
+  static const pj_str_t STR_TEXT = pj_str("text");
+
+  if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
+  {
+    // Set up the Reason parameter - this is always "SIP".
+    pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
+    if (pj_list_empty(&history_info_sip_uri->other_param))
+    {
+      pjsip_param *param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_REASON;
+      param->value = STR_SIP;
+
+      pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
+    
+      // Now add the cause parameter.
+      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_CAUSE;
+      char cause_text[4];
+      sprintf(cause_text, "%u", code);
+      pj_strdup2(_req->pool, &param->value, cause_text);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+
+      // Finally add the text parameter.
+      param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+      param->name = STR_TEXT;
+      param->value = *pjsip_get_status_text(code);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+    }
+  }
 }
 
 
@@ -3160,7 +3270,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       std::map<std::string, Ifcs> ifc_map;
       hss->get_subscription_data(aor, "", ifc_map, uris, trail());
 
-      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+      if (!uris.empty())
+      {
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+      }
     }
   }
 
@@ -3527,32 +3640,11 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            std::string served_user)  //< Served user, if already known, else ""
+                                            Ifcs ifcs,
+                                            std::string served_user)
 {
-  Ifcs ifcs;
-  if (ifc_handler == NULL)
-  {
-    // LCOV_EXCL_START No easy way to hit.
-    LOG_INFO("No IFC handler");
-    return AsChainLink();
-    // LCOV_EXCL_STOP
-  }
+  bool is_registered = is_user_registered(served_user);
 
-  if (served_user.empty())
-  {
-    served_user = ifc_handler->served_user_from_msg(session_case,
-                                                    _req->msg,
-                                                    _req->pool);
-  }
-
-  bool is_registered = false;
-
-  if (!served_user.empty())
-  {
-    is_registered = is_user_registered(served_user);
-    ifcs = lookup_ifcs(served_user,
-                       trail());
-  }
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.
   //
