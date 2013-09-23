@@ -549,6 +549,11 @@ pj_status_t init_stack(bool edge_proxy,
     stack_data.name[stack_data.name_cnt] = stack_data.bono_cluster_domain;
     stack_data.name_cnt++;
   }
+  else
+  {
+    stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
+    stack_data.name_cnt++;
+  }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)
   {
