@@ -2020,16 +2020,27 @@ void UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
-  if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-      (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
+  if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
   {
-    // The URI has been translated to an off-net domain, but the user does
-    // not have a valid E.164 number that can be used to make off-net calls.
-    // Reject the call with a not found response code, which is about the
-    // most suitable for this case.
-    LOG_INFO("Rejecting off-net call from user without E.164 address");
-    send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-    return AsChainLink::Disposition::Stop;
+    // This is an off-net domain.  Find the calling party, either in the
+    // P-Asserted-Identity (which really should be present) or the From (if
+    // not).
+    pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
+                             pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_ASSERTED_IDENTITY, NULL);
+    pjsip_uri* id_uri = (pjsip_uri*)((asserted_id_hdr != NULL) ?
+                                pjsip_uri_get_uri(&asserted_id_hdr->name_addr) :
+                                pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri));
+
+    if (!PJUtils::is_e164(id_uri))
+    {
+      // The URI has been translated to an off-net domain, but the user does
+      // not have a valid E.164 number that can be used to make off-net calls.
+      // Reject the call with a not found response code, which is about the
+      // most suitable for this case.
+      LOG_INFO("Rejecting off-net call from user without E.164 address");
+      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
+      return AsChainLink::Disposition::Stop;
+    }
   }
 
   // If the newly translated ReqURI indicates that we're the host of the
