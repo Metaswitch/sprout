@@ -3520,11 +3520,7 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   else
   {
     // Specify the bono cluster, as any of them can find the upstream SBC.
-    path_uri->host.ptr = (char*)pj_pool_zalloc(tdata->pool,
-                                               pj_strlen(&stack_data.home_domain) + 6);
-    path_uri->host.slen = 0;
-    pj_strcat2(&path_uri->host, "bono.");
-    pj_strcat(&path_uri->host, &stack_data.home_domain);
+    path_uri->host = stack_data.bono_cluster_domain;
   }
 
   // Render the URI as a string.
