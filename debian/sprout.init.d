@@ -156,6 +156,27 @@ do_stop()
 }
 
 #
+# Function tha aborts the daemon/service
+#
+# This is very similar to do_stop except it sends SIGABRT to dump a core file
+# and waits longer for it to complete.
+#
+do_abort()
+{
+        # Return
+        #   0 if daemon has been stopped
+        #   1 if daemon was already stopped
+        #   2 if daemon could not be stopped
+        #   other if a failure occurred
+        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
+        RETVAL="$?"
+        [ "$RETVAL" = 2 ] && return 2
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+        return "$RETVAL"
+}
+
+#
 # Function that sends a SIGHUP to the daemon/service
 #
 do_reload() {
@@ -218,6 +239,24 @@ case "$1" in
         #
         log_daemon_msg "Restarting $DESC" "$NAME"
         do_stop
+        case "$?" in
+          0|1)
+                do_start
+                case "$?" in
+                        0) log_end_msg 0 ;;
+                        1) log_end_msg 1 ;; # Old process is still running
+                        *) log_end_msg 1 ;; # Failed to start
+                esac
+                ;;
+          *)
+                # Failed to stop
+                log_end_msg 1
+                ;;
+        esac
+        ;;
+  abort-restart)
+        log_daemon_msg "Abort-Restarting $DESC" "$NAME"
+        do_abort
         case "$?" in
           0|1)
                 do_start

@@ -1,11 +1,13 @@
 # Poll every 10 seconds
 set daemon 10
 
-# Monitor the server's PID file and check its public interfaces.
+# Monitor the server's PID file and check its public interfaces and memory usage.
 check process sprout pidfile /var/run/sprout.pid
   start program = "/etc/init.d/sprout start"
   stop program = "/etc/init.d/sprout stop"
   if failed host localhost port 5054 type tcp
      protocol sip and target "monit@localhost:5054" and maxforward 2
      with timeout 12 seconds for 2 cycles
-     then restart
+     then exec "/etc/init.d/bono abort-restart"
+  if memory is greater than 80% for 3 cycles
+     then exec "/etc/init.d/bono abort-restart"
