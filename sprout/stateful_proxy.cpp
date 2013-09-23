@@ -1536,7 +1536,7 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
                                                       0);
 
     // The user part may be missing if the path is simply to the bono cluster
-    // (for example if a commercial SBC is in use and bono is simply providing
+    // (for example if a commercial P-CSCF is in use and bono is simply providing
     // a proxying service to it), in this case, we're not using flows so there's
     // no need to update the authenticated URIs.
     if ((path_uri != NULL) &&
@@ -3476,15 +3476,15 @@ static pj_bool_t is_user_numeric(const std::string& user)
 }
 
 /// Adds a Path header when functioning as an edge proxy or as a load-balancing
-/// proxy for a commercial SBC.
+/// proxy for a commercial P-CSCF/IBCF.
 ///
 /// If we're the edge-proxy (and thus supplying outbound support for the client,
 /// the path header consists of a SIP URI with our host and a user portion that
 /// identifies the client flow.
 ///
-/// If we're merely acting as a loadbalancing proxy for a commercial SBC, we'll
-/// simply add a path to the bono cluster.  This is indicated by the absence of
-/// a flow entry.
+/// If we're merely acting as a loadbalancing proxy for a commercial P-CSCF/IBCF,
+/// we'll simply add a path to the bono cluster.  This is indicated by the absence
+/// of a flow entry.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
@@ -3519,7 +3519,7 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   }
   else
   {
-    // Specify the bono cluster, as any of them can find the upstream SBC.
+    // Specify the bono cluster, as any of them can find the upstream P-CSCF/IBCF.
     path_uri->host = stack_data.bono_cluster_domain;
   }
 
