@@ -156,7 +156,7 @@ do_stop()
 }
 
 #
-# Function tha aborts the daemon/service
+# Function that aborts the daemon/service
 #
 # This is very similar to do_stop except it sends SIGABRT to dump a core file
 # and waits longer for it to complete.
