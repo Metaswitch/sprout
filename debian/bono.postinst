@@ -67,7 +67,7 @@ add_section() {
 # Function to set up the user account for the daemon
 #
 setup_user() {
-    if ! grep -q "^$NAME:" /etc/passwd ; then useradd -M -d /nonexistent -s /bin/false $NAME ; fi
+    if ! grep -q "^$NAME:" /etc/passwd ; then useradd --system -M -d /nonexistent -s /bin/false $NAME ; fi
 }
 
 #
