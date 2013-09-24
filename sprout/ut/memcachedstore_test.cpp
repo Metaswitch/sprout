@@ -226,29 +226,33 @@ TEST_F(MemcachedStoreTest, SimpleLocal)
 TEST_F(MemcachedStoreTest, DISABLED_SimpleMemcached)
 {
   SCOPED_TRACE("memcached");
-  Store* store;
+  MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
+  store = (MemcachedStore*)create_memcached_store(false, "");
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11211"));
-  store = create_memcached_store(servers, 10);
+  std::list<std::string> new_servers;
+  store->new_view(servers, new_servers);
 
   do_test_simple(*store);
 
   // Test 2.8 - destroy the MemcachedStore instance.
-  destroy_memcached_store(store);
+  destroy_memcached_store((Store*)store);
 }
 
 /// Test the real memcached server.  Alternate version that doesn't expect to work.
 TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
 {
   SCOPED_TRACE("memcached");
-  Store* store;
+  MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
+  store = (MemcachedStore*)create_memcached_store(false, "");
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11209"));
-  store = create_memcached_store(servers, 10);
+  std::list<std::string> new_servers;
+  store->new_view(servers, new_servers);
 
   // Test 2.2 - flush the server.
   store->flush_all();
@@ -258,7 +262,7 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
   ASSERT_EQ(NULL, aor_data1);
 
   // Test 2.8 - destroy the MemcachedStore instance.
-  destroy_memcached_store(store);
+  destroy_memcached_store((Store*)store);
 }
 
 /// Test the server.

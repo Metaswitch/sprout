@@ -499,6 +499,20 @@ void terminate_handler(int sig)
 
 void *quiesce_unquiesce_thread_func(void *dummy)
 {
+   // First register the thread with PJSIP.
+  pj_thread_desc desc;
+  pj_thread_t *thread;
+  pj_status_t status;
+
+  status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
+
+  if (status != PJ_SUCCESS) {
+    LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
+              "This function will not be available",
+              status);
+    return NULL;
+  }
+
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
 
@@ -559,6 +573,13 @@ int main(int argc, char *argv[])
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
+
+  // Mask off SIGHUP from this thread and all child threads, as this will be
+  // handled by a dedicated thread.
+  sigset_t sset;
+  sigemptyset(&sset);
+  sigaddset(&sset, SIGHUP);
+  pthread_sigmask(SIG_BLOCK, &sset, NULL);
 
   // Initialize the semaphore that unblocks the quiesce thread, and the thread
   // itself.
@@ -712,9 +733,7 @@ int main(int argc, char *argv[])
   {
     // Use memcached store.
     LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    std::list<std::string> servers;
-    Utils::split_string(opt.store_servers, ',', servers, 0, true);
-    registrar_store = RegData::create_memcached_store(servers, 100, false);
+    registrar_store = RegData::create_memcached_store(false, opt.store_servers);
   }
   else
   {
@@ -892,4 +911,6 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+
 
