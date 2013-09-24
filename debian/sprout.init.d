@@ -115,7 +115,7 @@ do_start()
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $public_ip --trusted-port 5054 --realm $home_domain --memstore 127.0.0.1 --hss $hs_hostname --xdms $xdms_hostname $enum_server_arg $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $public_ip --trusted-port 5054 --realm $home_domain --memstore /etc/clearwater/cluster_settings --hss $hs_hostname --xdms $xdms_hostname $enum_server_arg $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
 
         if [ ! -z $reg_max_expires ]
         then
@@ -185,7 +185,7 @@ do_reload() {
         # restarting (for example, when it is sent a SIGHUP),
         # then implement that here.
         #
-        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDILE --name $EXECNAME
+        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -221,18 +221,16 @@ case "$1" in
         esac
         ;;
   status)
-       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
-       ;;
-  #reload|force-reload)
+        status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+        ;;
+  reload|force-reload)
         #
         # If do_reload() is not implemented then leave this commented out
         # and leave 'force-reload' as an alias for 'restart'.
         #
-        #log_daemon_msg "Reloading $DESC" "$NAME"
-        #do_reload
-        #log_end_msg $?
-        #;;
-  restart|force-reload)
+        do_reload
+        ;;
+  restart)
         #
         # If the "reload" option is implemented then remove the
         # 'force-reload' alias

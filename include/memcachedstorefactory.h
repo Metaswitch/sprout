@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef MEMCACHEDSTOREFACTORY_H__
 #define MEMCACHEDSTOREFACTORY_H__
 
@@ -44,9 +41,7 @@
 
 namespace RegData
 {
-  RegData::Store* create_memcached_store(const std::list<std::string>& servers,
-                                         int connections,
-                                         bool binary=true);
+  RegData::Store* create_memcached_store(bool binary, const std::string& config_file);
 
   void destroy_memcached_store(RegData::Store* store);
 
