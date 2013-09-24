@@ -1053,6 +1053,38 @@ TEST_F(StatefulProxyTest, TestExternal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._from = "+15108581234";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingNotAllowed)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
 /// Test a forked flow - setup phase.
 void StatefulProxyTest::setupForkedFlow(SP::Message& msg)
 {
