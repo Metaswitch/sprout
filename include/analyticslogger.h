@@ -55,7 +55,8 @@ public:
                     const std::string& contact,
                     int expires);
 
-  void auth_failure(const std::string& uri);
+  void auth_failure(const std::string& auth,
+                    const std::string& to);
 
   void call_connected(const std::string& from,
                       const std::string& to,

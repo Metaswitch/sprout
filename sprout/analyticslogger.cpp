@@ -80,12 +80,14 @@ void AnalyticsLogger::registration(const std::string& aor,
 }
 
 
-void AnalyticsLogger::auth_failure(const std::string& uri)
+void AnalyticsLogger::auth_failure(const std::string& auth,
+                                   const std::string& to)
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "Auth-Failure: USER_URI=%s\n",
-           uri.c_str());
+           "Auth-Failure: Private Identity=%s Public Identity=%s\n",
+           auth.c_str(),
+           to.c_str());
   _logger->write(buf);
 }
 
