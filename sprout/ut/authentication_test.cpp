@@ -163,8 +163,8 @@ string AuthenticationMessage::get()
                                 .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\", ") : "")
                                 .append((!_uri.empty()) ? string("uri=\"").append(_uri).append("\", ") : "")
                                 .append((!_response.empty()) ? string("response=\"").append(_response).append("\", ") : "")
-                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\",") : "")
-                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\",") : "")
+                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\", ") : "")
+                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\", ") : "")
                                 .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
                                 .append("\r\n").c_str() :
                               ""
