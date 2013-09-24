@@ -158,21 +158,22 @@ string AuthenticationMessage::get()
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _auth_hdr ?
                               string("Authorization: Digest ")
-                                .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\",") : "")
-                                .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\",") : "")
-                                .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\",") : "")
-                                .append((!_uri.empty()) ? string("uri=\"").append(_uri).append("\",") : "")
-                                .append((!_response.empty()) ? string("response=\"").append(_response).append("\",") : "")
-                                .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm).append(",") : "")
-                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\",") : "")
-                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\",") : "").c_str() :
+                                .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\", ") : "")
+                                .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\", ") : "")
+                                .append((!_nonce.empty()) ? string("nonce=\"").append(_nonce).append("\", ") : "")
+                                .append((!_uri.empty()) ? string("uri=\"").append(_uri).append("\", ") : "")
+                                .append((!_response.empty()) ? string("response=\"").append(_response).append("\", ") : "")
+                                .append((!_opaque.empty()) ? string("opaque=\"").append(_opaque).append("\", ") : "")
+                                .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\", ") : "")
+                                .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
+                                .append("\r\n").c_str() :
                               ""
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
 
   string ret(buf, n);
-  // cout << ret <<endl;
+  //cout << ret <<endl;
   return ret;
 }
 
@@ -184,4 +185,22 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   msg._auth_hdr = false;
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(AuthenticationTest, NoAuthorizationReg)
+{
+  // Test that Sprout rejects REGISTER requests with no authorization header.
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = false;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_TRUE, ret);
+}
+
+TEST_F(AuthenticationTest, AuthorizationReg)
+{
+  // Test that Sprout rejects REGISTER requests where the account can't be found.
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = true;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_TRUE, ret);
 }
