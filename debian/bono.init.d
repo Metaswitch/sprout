@@ -116,7 +116,7 @@ do_start()
         # enable gdb to dump a parent bono process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --alias $public_ip --trusted-port 5058 --untrusted-port 5060 --edge-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --bono-domain bono.$home_domain --alias $public_ip --trusted-port 5058 --untrusted-port 5060 --edge-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
         # Add in IBCF configuration if there are trusted peers configured in user_settings file
         [ "$trusted_peers" ] && DAEMON_ARGS="$DAEMON_ARGS --ibcf $trusted_peers"
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \

@@ -88,6 +88,7 @@ struct options
   std::string            local_host;
   std::string            home_domain;
   std::string            sprout_domain;
+  std::string            bono_domain;
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
@@ -138,6 +139,7 @@ static void usage(void)
        " -l, --localhost <name>     Override the local host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
+       " -b, --bono-domain <name>   Override the bono cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an edge proxy using the specified node\n"
@@ -187,6 +189,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
+    { "bono-domain",       required_argument, 0, 'b'},
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
@@ -215,7 +218,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:b:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
@@ -245,6 +248,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'c':
       options->sprout_domain = std::string(pj_optarg);
       fprintf(stdout, "Override sprout cluster domain set to %s\n", pj_optarg);
+      break;
+
+    case 'b':
+      options->bono_domain = std::string(pj_optarg);
+      fprintf(stdout, "Override bono cluster domain set to %s\n", pj_optarg);
       break;
 
     case 'n':
@@ -679,13 +687,15 @@ int main(int argc, char *argv[])
   }
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.system_name,
+  status = init_stack(opt.edge_proxy,
+                      opt.system_name,
                       opt.sas_server,
                       opt.trusted_port,
                       opt.untrusted_port,
                       opt.local_host,
                       opt.home_domain,
                       opt.sprout_domain,
+                      opt.bono_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
