@@ -229,18 +229,16 @@ TEST_F(MemcachedStoreTest, DISABLED_SimpleMemcached)
   MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
-  store = (MemcachedStore*)create_memcached_store(false);
+  store = (MemcachedStore*)create_memcached_store(false, "");
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11211"));
-  std::vector<std::vector<std::string> > vbuckets;
-  vbuckets.resize(1);
-  vbuckets[0].push_back("0");
-  store->new_view(servers, vbuckets);
+  std::list<std::string> new_servers;
+  store->new_view(servers, new_servers);
 
   do_test_simple(*store);
 
   // Test 2.8 - destroy the MemcachedStore instance.
-  destroy_memcached_store(store);
+  destroy_memcached_store((Store*)store);
 }
 
 /// Test the real memcached server.  Alternate version that doesn't expect to work.
@@ -250,13 +248,11 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
   MemcachedStore* store;
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
-  store = (MemcachedStore*)create_memcached_store(false);
+  store = (MemcachedStore*)create_memcached_store(false, "");
   std::list<std::string> servers;
   servers.push_back(std::string("localhost:11209"));
-  std::vector<std::vector<std::string> > vbuckets;
-  vbuckets.resize(1);
-  vbuckets[0].push_back("0");
-  store->new_view(servers, vbuckets);
+  std::list<std::string> new_servers;
+  store->new_view(servers, new_servers);
 
   // Test 2.2 - flush the server.
   store->flush_all();
@@ -266,7 +262,7 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
   ASSERT_EQ(NULL, aor_data1);
 
   // Test 2.8 - destroy the MemcachedStore instance.
-  destroy_memcached_store(store);
+  destroy_memcached_store((Store*)store);
 }
 
 /// Test the server.

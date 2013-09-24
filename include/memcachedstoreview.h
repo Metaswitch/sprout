@@ -38,15 +38,12 @@
 #ifndef MEMCACHEDSTOREVIEW_H__
 #define MEMCACHEDSTOREVIEW_H__
 
-#include <pthread.h>
-
 #include <vector>
 
 namespace RegData {
 
 /// Tracks the current view of the underlying memcached cluster, including
 /// calculating the libmemcached server list and the vbucket configurations.
-
 class MemcachedStoreView
 {
 public:
@@ -67,23 +64,36 @@ private:
 
   std::string vbucket_to_string(std::vector<int> vbucket_map);
 
-  /// Calculates the ring used to generate the vbucket configurations.
+  /// Calculates the ring used to generate the vbucket configurations.  The
+  /// ring essentially maps each vbucket slot to a particular node which is
+  /// the primary location for data records whose key hashes to that vbucket.
+  /// secondary and subsequent replicas are decided by walking around the ring.
   class Ring
   {
   public:
     Ring(int slots);
     ~Ring();
 
+    // Updates the ring to include the specified number of nodes.
     void update(int nodes);
 
+    // Gets the list of replica nodes for the specified slot in the ring.
+    // The nodes are guaranteed to be unique if replicas <= nodes, but
+    // not otherwise.
     std::vector<int> get_nodes(int slot, int replicas);
 
   private:
 
+    // Assigns the slot to the specified node.
     void assign_slot(int slot, int node);
+
+    // Finds the nth slot owned by the node.
     int owned_slot(int node, int number);
 
+    // The number of slots in the ring.
     int _slots;
+
+    // The number of nodes currently assigned slots from the ring.
     int _nodes;
 
     // This is the master ring.
@@ -94,11 +104,20 @@ private:
     std::vector<std::map<int, int> > _node_slots;
   };
 
+  // The number of replicas required.
   int _replicas;
+
+  // The total number of servers in the memcached cluster.
   int _servers;
+
+  // The number of vbuckets being used.
   int _vbuckets;
 
+  // The full list of servers in the memcached cluster.
   std::list<std::string> _server_list;
+
+  // The vbucket maps calculated for the view.  The first index is the replica
+  // level, and the second index is the vbucket index.
   std::vector<std::vector<int>> _vbucket_map;
 };
 

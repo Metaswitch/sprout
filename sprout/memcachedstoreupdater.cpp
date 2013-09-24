@@ -52,9 +52,12 @@
 #include "memcachedstoreupdater.h"
 
 
-MemcachedStoreUpdater::MemcachedStoreUpdater(RegData::Store* store,
+namespace RegData {
+
+
+MemcachedStoreUpdater::MemcachedStoreUpdater(MemcachedStore* store,
                                              std::string file) :
-  _store((RegData::MemcachedStore*)store),
+  _store(store),
   _file(file)
 {
   LOG_DEBUG("Created updater for store %p using file %s", _store, _file.c_str());
@@ -75,6 +78,8 @@ MemcachedStoreUpdater::MemcachedStoreUpdater(RegData::Store* store,
 
 MemcachedStoreUpdater::~MemcachedStoreUpdater()
 {
+  // Cancel the updater thread.
+  pthread_cancel(_updater);
 }
 
 
@@ -160,7 +165,4 @@ void MemcachedStoreUpdater::updater()
 }
 
 
-
-
-
-
+} // namespace RegData

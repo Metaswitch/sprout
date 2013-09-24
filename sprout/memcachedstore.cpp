@@ -77,35 +77,35 @@ void destroy_memcached_store(RegData::Store* store)
 
 MemcachedStore::MemcachedStore(bool binary,                      ///< use binary protocol?
                                const std::string& config_file) : ///< configuration file for cluster settings
+  _updater(NULL),
   _binary(binary),
   _replicas(2),
   _vbuckets(128),
-  _view(_vbuckets, _replicas),
   _view_number(0),
   _options(),
   _active_replicas(0),
   _vbucket_map()
 {
-  // Initialise the store.
-  init();
+  // Create the thread local key for the per thread data.
+  pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
 
-  // Create an updater to keep the store configured appropriately.
-  _updater = new MemcachedStoreUpdater(this, config_file);
-}
+  // Create the lock for protecting the current view.
+  pthread_rwlock_init(&_view_lock, NULL);
 
+  _vbucket_map.resize(_replicas);
+  for (int ii = 0; ii < _replicas; ++ii)
+  {
+    _vbucket_map[ii] = new uint32_t[_vbuckets];
+  }
 
-MemcachedStore::MemcachedStore(bool binary) :          ///< use binary protocol?
-  _binary(binary),
-  _replicas(2),
-  _vbuckets(128),
-  _view(_vbuckets, _replicas),
-  _view_number(0),
-  _options(),
-  _active_replicas(0),
-  _vbucket_map()
-{
-  // Initialise the store.
-  init();
+  if (config_file != "")
+  {
+// LCOV_EXCL_START
+    // Create an updater to keep the store configured appropriately.
+    _updater = new MemcachedStoreUpdater(this, config_file);
+// LCOV_EXCL_STOP
+
+  }
 }
 
 
@@ -128,22 +128,6 @@ MemcachedStore::~MemcachedStore()
 }
 
 
-void MemcachedStore::init()
-{
-  // Create the thread local key for the per thread data.
-  pthread_key_create(&_thread_local, MemcachedStore::cleanup_connection);
-
-  // Create the lock for protecting the current view.
-  pthread_rwlock_init(&_view_lock, NULL);
-
-  _vbucket_map.resize(_replicas);
-  for (int ii = 0; ii < _replicas; ++ii)
-  {
-    _vbucket_map[ii] = new uint32_t[_vbuckets];
-  }
-}
-
-
 // LCOV_EXCL_START - need real memcached to test
 
 
@@ -154,8 +138,9 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
 {
   LOG_STATUS("Updating memcached store configuration");
 
-  // Update the view object.
-  _view.update(servers, new_servers);
+  // Create a new view with the new server lists.
+  MemcachedStoreView view(_vbuckets, _replicas);
+  view.update(servers, new_servers);
 
   // Now copy the view so it can be accessed by the worker threads.
   pthread_rwlock_wrlock(&_view_lock);
@@ -169,8 +154,8 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
     _options += " --BINARY-PROTOCOL";
   }
 
-  for (std::list<std::string>::const_iterator i = _view.server_list().begin();
-       i != _view.server_list().end();
+  for (std::list<std::string>::const_iterator i = view.server_list().begin();
+       i != view.server_list().end();
        ++i)
   {
     _options += " --SERVER=" + (*i);
@@ -179,16 +164,16 @@ void MemcachedStore::new_view(const std::list<std::string>& servers,
   // Calculate the number of active replicas.  In most cases this will be the
   // desired number of replicas, but if there aren't enough servers ...
   _active_replicas = _replicas;
-  if (_active_replicas > (int)_view.server_list().size())
+  if (_active_replicas > (int)view.server_list().size())
   {
-    _active_replicas = _view.server_list().size();
+    _active_replicas = view.server_list().size();
   }
 
   for (int ii = 0; ii < _active_replicas; ++ii)
   {
     for (int jj = 0; jj < _vbuckets; ++jj)
     {
-      _vbucket_map[ii][jj] = _view.vbucket_map(ii)[jj];
+      _vbucket_map[ii][jj] = view.vbucket_map(ii)[jj];
     }
   }
 
@@ -231,7 +216,7 @@ MemcachedStore::connection* MemcachedStore::get_connection()
 
     for (int ii = 0; ii < _active_replicas; ++ii)
     {
-      LOG_STATUS("Setting up replica %d for connection %p", ii, conn);
+      LOG_DEBUG("Setting up replica %d for connection %p", ii, conn);
 
       // Create a new memcached_st.
       conn->st[ii] = memcached(_options.c_str(), _options.length());
@@ -242,7 +227,7 @@ MemcachedStore::connection* MemcachedStore::get_connection()
       // Switch to a longer connect timeout from here on.
       memcached_behavior_set(conn->st[ii], MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT, 50);
 
-      LOG_STATUS("Set up memcached_st and vbucket for replica %d on connection %p", ii, conn);
+      LOG_DEBUG("Set up memcached_st and vbucket for replica %d on connection %p", ii, conn);
     }
 
     // Flag that we are in sync with the latest view.

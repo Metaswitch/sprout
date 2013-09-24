@@ -34,12 +34,17 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef MEMCACHEDSTOREUPDATER_H__
+#define MEMCACHEDSTOREUPDATER_H__
+
 #include "memcachedstore.h"
+
+namespace RegData {
 
 class MemcachedStoreUpdater
 {
 public:
-  MemcachedStoreUpdater(RegData::Store* store, std::string file);
+  MemcachedStoreUpdater(MemcachedStore* store, std::string file);
   ~MemcachedStoreUpdater();
 
 private:
@@ -48,8 +53,12 @@ private:
   static void* updater_thread(void* p);
   void updater();
 
-  RegData::MemcachedStore* _store;
+  MemcachedStore* _store;
   std::string _file;
 
   pthread_t _updater;
 };
+
+} // namespace RegData
+
+#endif

@@ -35,7 +35,6 @@
  */
 
 
-
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -122,7 +121,8 @@ void MemcachedStoreView::update(const std::list<std::string>& servers,
     for (int ii = 0; ii < _vbuckets; ++ii)
     {
       // Calculate the replica sets for this bucket for both current and
-      // target node sets.
+      // target node sets.  (Replica set means the ordered list of nodes on
+      // which data is stored for records that hash to the vbucket.)
       std::vector<int> c_nodes = c_ring.get_nodes(ii, _replicas);
       std::vector<int> n_nodes = n_ring.get_nodes(ii, _replicas);
 
@@ -144,10 +144,17 @@ void MemcachedStoreView::update(const std::list<std::string>& servers,
       if ((servers.size() == 1) &&
           (_vbucket_map[1][ii] == 0))
       {
-        // This is a special case when growing a cluster of one node.  Without
+        // As a special case when growing a cluster of one node, if the
+        //
         // this code it is possible to have the same node as both of the first
         // two replicas for this vbucket.  To avoid this loss of redundancy
         // We use the second node from the replica set instead.
+        // For example, with two replicas, the one node ring results in every
+        // slot having (0,0) as the primary and secondary replicas, and the two
+        // node ring has half of the slots with (0,1) and half with (1,0).
+        // Without this special case, during the growth stage half of the
+        // slots would end up with (0,0), so no redundancy.  With the change
+        // each slot uses (0,1) during the growth phase.
         _vbucket_map[1][ii] = n_nodes[1];
       }
     }
@@ -175,6 +182,7 @@ std::string MemcachedStoreView::vbucket_to_string(std::vector<int> vbucket_map)
 }
 
 
+/// Constructs a ring used to assign vbuckets to nodes.
 MemcachedStoreView::Ring::Ring(int slots) :
   _slots(slots),
   _nodes(0),
@@ -190,15 +198,18 @@ MemcachedStoreView::Ring::~Ring()
 }
 
 
+/// Updates the ring to have the specified number of nodes.  This is done
+/// incrementally starting from the current number of nodes and reassigning
+/// buckets to new nodes one by one.  This algorithm ensures that as the size
+/// of the ring increases, slots are either left alone or assigned to new nodes
+/// - never assigned to existing nodes.  This property is important for
+/// maintaining redundancy as the cluster grows.
+///
+/// Unfortunately we can't current see how to run the algorithm in reverse,
+/// so if the number of nodes reduces the ring must be destroyed and recreated.
 void MemcachedStoreView::Ring::update(int nodes)
 {
   LOG_DEBUG("Updating ring from %d to %d nodes", _nodes, nodes);
-
-  if (nodes < _nodes)
-  {
-    // Decreasing the number of nodes, so must run algorithm from scratch as
-    // there is no way of back-tracking.
-  }
 
   _node_slots.resize(nodes);
 
@@ -217,7 +228,9 @@ void MemcachedStoreView::Ring::update(int nodes)
   while (_nodes < nodes)
   {
     // Increasing the number of nodes, so reassign slots from existing nodes
-    // to the next new node.
+    // to the next new node.  By choosing the first slot assigned to the
+    // most heavily loaded node, then the second slot assigned to the
+    // next most heavily loaded, anon.
     int replace_slots = _slots/(_nodes+1);
 
     for (int i = 0; i < replace_slots; ++i)
@@ -234,7 +247,7 @@ void MemcachedStoreView::Ring::update(int nodes)
         }
       }
 
-      // Now replace the appropriate slot assignment.
+      // Now replace the appropriate slot assignment.  (For the first
       int slot = owned_slot(replace_node, i);
       assign_slot(slot, _nodes);
     }
@@ -246,6 +259,11 @@ void MemcachedStoreView::Ring::update(int nodes)
 }
 
 
+/// Gets the set of nodes that should be used to store a number of replicas
+/// of data where the record key hashes to the appropriate slot in the ring.
+/// This is done by starting at the slot, and returning the first n unique
+/// nodes walking around the ring.  If there are not enough unique nodes,
+/// remaining replica slots are filled with the first node.
 std::vector<int> MemcachedStoreView::Ring::get_nodes(int slot, int replicas)
 {
   std::vector<int> node_list;
@@ -256,16 +274,21 @@ std::vector<int> MemcachedStoreView::Ring::get_nodes(int slot, int replicas)
   while (node_list.size() < (size_t)std::min(replicas, _nodes))
   {
     bool unique = true;
+
+    // Check that the next node in the ring isn't already in the node list.
     for (size_t i = 0; i < node_list.size(); ++i)
     {
       if (node_list[i] == _ring[next_slot])
       {
+        // Found the node in the list, so break out and move to the next one.
         unique = false;
         break;
       }
     }
+
     if (unique)
     {
+      // Found a node that is not already in the list, so add it.
       node_list.push_back(_ring[next_slot]);
     }
     next_slot = (next_slot + 1) % _slots;
@@ -282,6 +305,8 @@ std::vector<int> MemcachedStoreView::Ring::get_nodes(int slot, int replicas)
 }
 
 
+/// Assigns the specified slot to the specified node.  This also keeps the
+/// _node_slots maps in sync.
 void MemcachedStoreView::Ring::assign_slot(int slot, int node)
 {
   int old_node = _ring[slot];
@@ -296,6 +321,9 @@ void MemcachedStoreView::Ring::assign_slot(int slot, int node)
 }
 
 
+/// Returns the nth slot owned by the specified node.  If n is greater
+/// than the number of slots owned by the node, return the nth slot modulo
+/// the total number of owned slots.
 int MemcachedStoreView::Ring::owned_slot(int node, int number)
 {
   number = number % _node_slots[node].size();

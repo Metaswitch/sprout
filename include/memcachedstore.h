@@ -56,9 +56,10 @@ extern "C" {
 #include "regdata.h"
 #include "memcachedstoreview.h"
 
-class MemcachedStoreUpdater;
 
 namespace RegData {
+
+class MemcachedStoreUpdater;
 
 /// @class RegData::MemcachedAoR
 ///
@@ -111,9 +112,11 @@ class MemcachedStore : public Store
 {
 public:
   MemcachedStore(bool binary, const std::string& config_file);
-  MemcachedStore(bool binary);
   ~MemcachedStore();
 
+  // Flags that the store should use a new view of the memcached cluster to
+  // distribute data.  Note that this is public because it is called from
+  // the MemcachedStoreUpdater class and from UT classes.
   void new_view(const std::list<std::string>& servers,
                 const std::list<std::string>& new_servers);
 
@@ -122,38 +125,69 @@ public:
   AoR* get_aor_data(const std::string& aor_id);
   bool set_aor_data(const std::string& aor_id, AoR* aor_data);
 
-  static void cleanup_connection(void* p);
 
 private:
 
+  // A copy of this structure is maintained for each worker thread, as
+  // thread local data.
   typedef struct connection
   {
+    // Indicates the view number being used by this thread.  When the view
+    // changes the global view number is updated and each thread switches to
+    // the new view by establishing new memcached_st's.
     uint64_t view_number;
-    std::vector<memcached_st*> st;
-  } connection;
 
-  void init();
+    // Contains the memcached_st's for each replication level (entry 0 is
+    // the primary replica, entry 1 is the secondary replica etc.).
+    std::vector<memcached_st*> st;
+
+  } connection;
 
   connection* get_connection();
 
   static std::string serialize_aor(MemcachedAoR* aor_data);
   static MemcachedAoR* deserialize_aor(const std::string& s);
 
+  // Called by the thread-local-storage clean-up functions when a thread ends.
+  static void cleanup_connection(void* p);
+
+  // Stores a pointer to an updater object (if one is
   MemcachedStoreUpdater* _updater;
 
+  // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;
 
+  // Flags whether the store is using the binary or ASCII protocol.  In general
+  // should use the ASCII protocol as the binary protocol stalls when a gets
+  // command is issued for a record that doesn't exist.
   bool _binary;
+
+  // Stores the number of replicas configured for the store (one means the
+  // data is stored on one server, two means it is stored on two servers etc.).
   int _replicas;
+
+  // Stores the number of vbuckets being used.  This currently doesn't change,
+  // but in future we may choose to increase it when the cluster gets
+  // sufficiently large.  Note that it _must_ be a power of two.
   int _vbuckets;
 
-  MemcachedStoreView _view;
-
+  // The current global view number.  Note that this is not protected by the
+  // _view_lock.
   uint64_t _view_number;
+
+  // The lock used to protect the view parameters below (_options,
+  // _active_replicas and _vbucket_map.
   pthread_rwlock_t _view_lock;
 
+  // The options string used to create appropriate memcached_st's for the
+  // current view.
   std::string _options;
+
+  // The number of active replicas in this view.  In general this will be the
+  // same as _replicas, but if there are not enough servers it may be lower.
   int _active_replicas;
+
+  // The vbucket maps in a format suitable for programming the memcached_st's.
   std::vector<uint32_t*> _vbucket_map;
 };
 

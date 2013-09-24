@@ -491,6 +491,20 @@ void terminate_handler(int sig)
 
 void *quiesce_unquiesce_thread_func(void *dummy)
 {
+   // First register the thread with PJSIP.
+  pj_thread_desc desc;
+  pj_thread_t *thread;
+  pj_status_t status;
+
+  status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
+
+  if (status != PJ_SUCCESS) {
+    LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
+              "This function will not be available",
+              status);
+    return NULL;
+  }
+
   pj_bool_t curr_quiescing = PJ_FALSE;
   pj_bool_t new_quiescing = quiescing;
 
