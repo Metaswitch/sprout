@@ -866,7 +866,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
-      src_flow->dec_ref();
+      if (src_flow)
+      {
+        src_flow->dec_ref();
+      }
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
