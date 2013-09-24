@@ -52,10 +52,12 @@ extern "C" {
 #include "flowtable.h"
 
 
-FlowTable::FlowTable() :
+FlowTable::FlowTable(QuiescingManager* qm) :
   _tp2flow_map(),
   _tk2flow_map(),
-  _statistic("client_count")
+  _statistic("client_count"),
+  _quiescing(false),
+  _qm(qm)
 {
   pthread_mutex_init(&_flow_map_lock, NULL);
   report_flow_count();
@@ -181,6 +183,21 @@ Flow* FlowTable::find_flow(const std::string& token)
   return flow;
 }
 
+void FlowTable::check_quiescing_state()
+{
+  if (_tp2flow_map.empty() && is_quiescing() && (_qm != NULL))
+  {
+    LOG_DEBUG("Flow map is empty and we are quiescing - start transaction-based quiescing");
+    _qm->flows_gone();
+  }
+  else
+  {
+    LOG_DEBUG("Checked quiescing state: flow_map is %s, is_quiescing() result is %s, _qm (QuiescingManager reference) is %s",
+              _tp2flow_map.empty() ? "empty" : "not empty",
+              is_quiescing()? "true" : "false",
+              (_qm == NULL) ? "NULL" : "not NULL");
+  }
+}
 
 void FlowTable::remove_flow(Flow* flow)
 {
@@ -206,9 +223,10 @@ void FlowTable::remove_flow(Flow* flow)
 
   delete flow;
 
+  check_quiescing_state();
+
   pthread_mutex_unlock(&_flow_map_lock);
 }
-
 
 void FlowTable::report_flow_count()
 {
@@ -218,6 +236,34 @@ void FlowTable::report_flow_count()
   _statistic.report_change(message);
 }
 
+void FlowTable::quiesce()
+{
+  LOG_DEBUG("FlowTable was kicked to quiesce");
+  _quiescing = true;
+  pthread_mutex_lock(&_flow_map_lock);
+
+  // If we have no flows, quiesce now - otherwise we do this in
+  // remove_flow when the last flow disappears
+  check_quiescing_state();
+
+  pthread_mutex_unlock(&_flow_map_lock);
+}
+
+void FlowTable::unquiesce()
+{
+  // Note that it's OK to unquiesce even if we've started
+  // transaction-based quiescing, as long as whatever kicks us to
+  // unquiesce also stops all other quiescing activity and reopens the
+  // transports. This is because this flag only affects whether we
+  // reject REGISTERs with a 305, and whether we call flows_gone on
+  // the QuiescingManager when our flow cont falls to 0.
+  _quiescing = false;
+}
+
+bool FlowTable::is_quiescing()
+{
+  return _quiescing;
+}
 
 Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr* remote_addr) :
   _flow_table(flow_table),
@@ -227,7 +273,8 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   _token(),
   _authorized_ids(),
   _default_id(),
-  _refs(1)
+  _refs(1),
+  _dialogs(0)
 {
   // Create the lock for protecting the authorized_ids and default_id.
   pthread_mutex_init(&_flow_lock, NULL);
@@ -524,6 +571,7 @@ void Flow::restart_timer(int id, int timeout)
 void Flow::inc_ref()
 {
   ++_refs;
+  LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
 }
 
 
@@ -540,10 +588,35 @@ void Flow::dec_ref()
   }
   else
   {
+    LOG_DEBUG("Dialog count now %d for flow %s", _refs, _default_id.c_str());
     pthread_mutex_unlock(&_flow_table->_flow_map_lock);
   }
 }
 
+// Increments the dialog count atomically.
+void Flow::increment_dialogs()
+{
+  ++_dialogs;
+  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
+}
+
+// Decrements the dialog count atomically.
+void Flow::decrement_dialogs()
+{
+  --_dialogs;
+  LOG_DEBUG("Dialog count now %ld for flow %s", _dialogs.load(), _default_id.c_str());
+}
+
+// Returns true if we should quiesce the flow by redirecting new
+// REGISTERs to other Bonos. This is the case if there are no dialogs
+// on this flow, and Bono is currently quiescing.
+
+bool Flow::should_quiesce()
+{
+  // We check for <= 0 because we might double-count (as our dialog
+  // counting is only heuristic).
+  return ((_dialogs <= 0) && _flow_table->is_quiescing());
+}
 
 /// Called by PJSIP when a reliable transport connection changes state.
 void Flow::on_transport_state_changed(pjsip_transport *tp,

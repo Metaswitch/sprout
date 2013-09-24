@@ -9,9 +9,11 @@ Bono and Sprout expose a [0MQ](http://www.zeromq.org/) subscription service that
  * Bono:
   * `connected_sprouts` - The list of connected Sprout nodes
   * `client_count` - A count of client TCP connections
+  * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
  * Sprout:
   * `connected_homers` - The list of connected Homer nodes
   * `connected_homesteads` - The list of connected Homestead nodes
+  * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
 
 _Implementation note: The topics are indicated with a Pub-Sub envelope, as described [here](http://zguide.zeromq.org/page:all#Pub-Sub-Message-Envelopes)._
 

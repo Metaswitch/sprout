@@ -81,7 +81,6 @@ log_directory=/var/log/$NAME
 get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
-        enum_server=127.0.0.1
         sas_server=0.0.0.0
         . /etc/clearwater/config
 
@@ -91,6 +90,7 @@ get_settings()
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+        [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
 }
@@ -115,7 +115,7 @@ do_start()
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore /etc/clearwater/cluster_settings --hss $hs_hostname --xdms $xdms_hostname --enum $enum_server $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
+        DAEMON_ARGS="--system $NAME@$public_hostname --domain $home_domain --localhost $public_hostname --sprout-domain $sprout_hostname --alias $sprout_hostname,$public_ip --trusted-port 5054 --realm $home_domain --memstore /etc/clearwater/cluster_settings --hss $hs_hostname --xdms $xdms_hostname $enum_server_arg $enum_suffix_arg $enum_file_arg --sas $sas_server --pjsip-threads $num_pjsip_threads --worker-threads $num_worker_threads -a $log_directory -F $log_directory -L $log_level"
 
         if [ ! -z $reg_max_expires ]
         then
@@ -150,6 +150,27 @@ do_stop()
         # sleep for some time.
         #start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
         [ "$?" = 2 ] && return 2
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+        return "$RETVAL"
+}
+
+#
+# Function that aborts the daemon/service
+#
+# This is very similar to do_stop except it sends SIGABRT to dump a core file
+# and waits longer for it to complete.
+#
+do_abort()
+{
+        # Return
+        #   0 if daemon has been stopped
+        #   1 if daemon was already stopped
+        #   2 if daemon could not be stopped
+        #   other if a failure occurred
+        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
+        RETVAL="$?"
+        [ "$RETVAL" = 2 ] && return 2
         # Many daemons don't delete their pidfiles when they exit.
         rm -f $PIDFILE
         return "$RETVAL"
@@ -216,6 +237,24 @@ case "$1" in
         #
         log_daemon_msg "Restarting $DESC" "$NAME"
         do_stop
+        case "$?" in
+          0|1)
+                do_start
+                case "$?" in
+                        0) log_end_msg 0 ;;
+                        1) log_end_msg 1 ;; # Old process is still running
+                        *) log_end_msg 1 ;; # Failed to start
+                esac
+                ;;
+          *)
+                # Failed to stop
+                log_end_msg 1
+                ;;
+        esac
+        ;;
+  abort-restart)
+        log_daemon_msg "Abort-Restarting $DESC" "$NAME"
+        do_abort
         case "$?" in
           0|1)
                 do_start
