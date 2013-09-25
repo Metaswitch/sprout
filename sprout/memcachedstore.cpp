@@ -125,6 +125,11 @@ MemcachedStore::~MemcachedStore()
   }
 
   pthread_rwlock_destroy(&_view_lock);
+
+  for (int ii = 0; ii < _replicas; ++ii)
+  {
+    delete _vbucket_map[ii];
+  }
 }
 
 
