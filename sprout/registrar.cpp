@@ -152,8 +152,10 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 }
 
 
-/// Get private ID from a received message by first checking the Authorization
-/// header and falling back to pulling the username and host from To URI.
+/// Get private ID from a received message by checking the Authorization
+/// header. If that uses the Digest scheme and contains a non-empty
+/// username, it puts that username into id and returns true;
+/// otherwise returns false.
 bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 {
   bool success = false;
@@ -165,7 +167,10 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
     if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)
     {
       id = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-      success = true;
+      if (!id.empty())
+      {
+        success = true;
+      }
     }
     else
     {
@@ -235,7 +240,18 @@ void process_register_request(pjsip_rx_data* rdata)
   std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
   bool success = get_private_id(rdata, private_id);
-  if (!success) {
+  if (!success)
+  {
+    // There are legitimate cases where we don't have a private ID
+    // here (for example, on a re-registration where Bono has set the
+    // Integrity-Protected header), so this is *not* a failure
+    // condition.
+
+    // We want the private ID here so that Homestead can use it to
+    // subscribe for updates from the HSS - but on a re-registration,
+    // Homestead should already have subscribed for updates during the
+    // initial registration, so we can just make a request using our
+    // public ID.
     private_id = "";
   }
   HTTPCode http_code = hss->get_subscription_data(public_id, private_id, ifc_map, uris, trail);
