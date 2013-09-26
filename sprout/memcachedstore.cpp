@@ -128,7 +128,7 @@ MemcachedStore::~MemcachedStore()
 
   for (int ii = 0; ii < _replicas; ++ii)
   {
-    delete _vbucket_map[ii];
+    delete[] _vbucket_map[ii];
   }
 }
 
