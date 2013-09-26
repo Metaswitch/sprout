@@ -1170,9 +1170,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     }
     else
     {
-      // Just do a single Record-Route.
+      // Message is being routed between a commercial edge proxy and Sprout (or vice-
+      // versa).  Just do a single Record-Route, using the cluster address.
       LOG_DEBUG("Single Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, false);
     }
 
     // Decrement references on flows as we have finished with them.
