@@ -226,6 +226,7 @@ public:
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     pj_status_t ret = init_stateful_proxy(_store,
+                                          NULL,
                                           _call_services,
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
@@ -3826,7 +3827,7 @@ TEST_F(IscTest, TerminatingWithEnumRewrite)
   fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
