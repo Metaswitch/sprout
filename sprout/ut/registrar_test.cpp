@@ -131,6 +131,7 @@ public:
   string _contact_params;
   string _expires;
   string _path;
+  string _auth;
 
   Message() :
     _method("REGISTER"),
@@ -140,7 +141,8 @@ public:
     _contact_instance(";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""),
     _contact_params(";expires=3600;+sip.ice;reg-id=1"),
     _expires(""),
-    _path("Path: sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob")
+    _path("Path: sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob"),
+    _auth("")
   {
   }
 
@@ -169,6 +171,7 @@ string Message::get()
                    "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
+                   "%12$s"
                    "%4$s"
                    "Content-Length:  %5$d\r\n"
                    "\r\n"
@@ -183,7 +186,9 @@ string Message::get()
                    /*  8 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
                    /*  9 */ _contact_instance.c_str(),
                    /* 10 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
-                   /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str()
+                   /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
+                   /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str()
+
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -208,6 +213,28 @@ TEST_F(RegistrarTest, NotOurs)
   msg._domain = "not-us.example.org";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
+}
+
+/// Simple correct example with Authorization header
+TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
+{
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
 }
 
 /// Simple correct example with Expires header

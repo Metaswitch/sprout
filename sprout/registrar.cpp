@@ -152,58 +152,31 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 }
 
 
-// We don't currently need this function because we don't need to provide the
-// private ID to homestead - once we do, we'll probably need to reinstate it.
-//
-// /// Get private ID from a received message by first checking the Authorization
-// /// header and falling back to pulling the username and host from To URI.
-// bool get_private_id(pjsip_rx_data* rdata, std::string& id)
-// {
-//  bool success = false;
-//
-//   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-//            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-//   if (auth_hdr != NULL)
-//   {
-//     if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)
-//     {
-//       id = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-//       success = true;
-//     }
-//     else
-//     {
-//       LOG_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
-//                   auth_hdr->scheme.slen, auth_hdr->scheme.ptr);
-//     }
-//   }
-//
-//   if (!success)
-//   {
-//     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-//     if (PJSIP_URI_SCHEME_IS_SIP(to_uri) ||
-//         PJSIP_URI_SCHEME_IS_SIPS(to_uri))
-//     {
-//       pjsip_sip_uri* to_sip_uri = (pjsip_sip_uri*)to_uri;
-//       if (to_sip_uri->user.slen > 0)
-//       {
-//         id = PJUtils::pj_str_to_string(&to_sip_uri->user) + "@" + PJUtils::pj_str_to_string(&to_sip_uri->host);
-//       }
-//       else
-//       {
-//         id = PJUtils::pj_str_to_string(&to_sip_uri->host);
-//       }
-//       success = true;
-//     }
-//     else
-//     {
-//       const pj_str_t* scheme = pjsip_uri_get_scheme(to_uri);
-//       LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
-//                   scheme->slen, scheme->ptr);
-//     }
-//   }
-//
-//   return success;
-// }
+/// Get private ID from a received message by first checking the Authorization
+/// header and falling back to pulling the username and host from To URI.
+bool get_private_id(pjsip_rx_data* rdata, std::string& id)
+{
+  bool success = false;
+
+  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+    pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+  if (auth_hdr != NULL)
+  {
+    if (pj_stricmp2(&auth_hdr->scheme, "digest") == 0)
+    {
+      id = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+      success = true;
+    }
+    else
+    {
+      // LCOV_EXCL_START
+      LOG_WARNING("Unsupported scheme \"%.*s\" in Authorization header when determining private ID - ignoring",
+                  auth_hdr->scheme.slen, auth_hdr->scheme.ptr);
+      // LCOV_EXCL_STOP
+    }
+  }
+  return success;
+}
 
 
 void process_register_request(pjsip_rx_data* rdata)
@@ -258,14 +231,14 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Query the HSS for the associated URIs.
 
-  // The second parameter should be the private ID, but this isn't necessary
-  // until we implement support for receiving updates from the HSS.
-  // TODO in sto281:
-  //   reinstate the get_private_id function and pass the private ID in.
-
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+  std::string private_id;
+  bool success = get_private_id(rdata, private_id);
+  if (!success) {
+    private_id = "";
+  }
+  HTTPCode http_code = hss->get_subscription_data(public_id, private_id, ifc_map, uris, trail);
   if (http_code != HTTP_OK)
   {
     // We failed to get the list of associated URIs.  This indicates that the
