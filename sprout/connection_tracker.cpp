@@ -58,7 +58,8 @@ ConnectionTracker::ConnectionTracker(
 
 ConnectionTracker::~ConnectionTracker()
 {
-  for (auto it = _connection_listeners.begin();
+  for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+                                             it = _connection_listeners.begin();
        it != _connection_listeners.end();
        ++it)
   {
@@ -173,7 +174,8 @@ void ConnectionTracker::quiesce()
     // Call shutdown on each connection. PJSIP's reference counting means a
     // connection will be closed once all transactions that use it have
     // completed.
-    for (auto it = _connection_listeners.begin();
+    for (std::map<pjsip_transport *, pjsip_tp_state_listener_key *>::iterator 
+                                             it = _connection_listeners.begin();
          it != _connection_listeners.end();
          ++it)
     {
