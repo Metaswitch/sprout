@@ -275,7 +275,7 @@ void MemcachedStore::flush_all()
 AoR* MemcachedStore::get_aor_data(const std::string& aor_id)
                                   ///< the SIP URI
 {
-  memcached_return_t rc = MEMCACHED_SUCCESS;
+  memcached_return_t rc = MEMCACHED_ERROR;
   MemcachedAoR* aor_data = NULL;
   memcached_result_st result;
   std::vector<bool> read_repair(_replicas);
@@ -431,7 +431,7 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
                                   AoR* data)
                                   ///< the data to store
 {
-  memcached_return_t rc = MEMCACHED_SUCCESS;
+  memcached_return_t rc = MEMCACHED_ERROR;
   MemcachedAoR* aor_data = (MemcachedAoR*)data;
 
   connection* conn = get_connection();
