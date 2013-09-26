@@ -114,17 +114,21 @@ public:
   MemcachedStore(bool binary, const std::string& config_file);
   ~MemcachedStore();
 
-  // Flags that the store should use a new view of the memcached cluster to
-  // distribute data.  Note that this is public because it is called from
-  // the MemcachedStoreUpdater class and from UT classes.
+  /// Flags that the store should use a new view of the memcached cluster to
+  /// distribute data.  Note that this is public because it is called from
+  /// the MemcachedStoreUpdater class and from UT classes.
   void new_view(const std::list<std::string>& servers,
                 const std::list<std::string>& new_servers);
 
+  /// Flushes the store.  This is only supported for test purposes - it should
+  /// never be called on a live system.
   void flush_all();
 
+  /// Gets the data for the specified Address-of-Record
   AoR* get_aor_data(const std::string& aor_id);
-  bool set_aor_data(const std::string& aor_id, AoR* aor_data);
 
+  /// Sets the data for the specified Address-of-Record
+  bool set_aor_data(const std::string& aor_id, AoR* aor_data);
 
 private:
 
@@ -143,6 +147,7 @@ private:
 
   } connection;
 
+  /// Gets the connection structure for the current thread.
   connection* get_connection();
 
   static std::string serialize_aor(MemcachedAoR* aor_data);
@@ -160,16 +165,16 @@ private:
   // Flags whether the store is using the binary or ASCII protocol.  In general
   // should use the ASCII protocol as the binary protocol stalls when a gets
   // command is issued for a record that doesn't exist.
-  bool _binary;
+  const bool _binary;
 
   // Stores the number of replicas configured for the store (one means the
   // data is stored on one server, two means it is stored on two servers etc.).
-  int _replicas;
+  const int _replicas;
 
   // Stores the number of vbuckets being used.  This currently doesn't change,
   // but in future we may choose to increase it when the cluster gets
   // sufficiently large.  Note that it _must_ be a power of two.
-  int _vbuckets;
+  const int _vbuckets;
 
   // The current global view number.  Note that this is not protected by the
   // _view_lock.
