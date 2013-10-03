@@ -223,6 +223,15 @@ TEST_F(RegistrarTest, NotOurs)
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
+  // We have a private ID in this test, so FakeCURL should expect it.
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain?private_id=Alice"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<IMSSubscription><ServiceProfile>\n"
+    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+    "  <InitialFilterCriteria>\n"
+    "  </InitialFilterCriteria>\n"
+    "</ServiceProfile></IMSSubscription>";
+
+
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
