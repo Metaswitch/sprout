@@ -73,7 +73,7 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
                                             SAS::TrailId trail)
 {
   std::string path = "/impi/" +
-                     Utils::url_escape(private_user_identity) + 
+                     Utils::url_escape(private_user_identity) +
                      "/digest";
 
   if (!public_user_identity.empty())
@@ -152,7 +152,12 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
                                               SAS::TrailId trail)
 {
   std::string path = "/impu/" +
-                     Utils::url_escape(public_user_identity);
+    Utils::url_escape(public_user_identity);
+
+  if (!private_user_identity.empty()) {
+    path = path + "?private_id=" +
+      Utils::url_escape(private_user_identity);
+  }
 
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
@@ -175,7 +180,7 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
-    LOG_ERROR("Malformed HSS XML - document couldn't be parsed"); 
+    LOG_ERROR("Malformed HSS XML - document couldn't be parsed");
     return HTTP_SERVER_ERROR;
   }
 
@@ -183,7 +188,7 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
 
   if (!imss)
   {
-    LOG_ERROR("Malformed HSS XML - no IMSSubscription element"); 
+    LOG_ERROR("Malformed HSS XML - no IMSSubscription element");
     return HTTP_SERVER_ERROR;
   }
 
