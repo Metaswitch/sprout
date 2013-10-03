@@ -205,11 +205,12 @@ public:
   }
 
   /// Caller has finished using this link.
-  void release() const
+  void release()
   {
     if (_as_chain != NULL)
     {
       _as_chain->dec_ref();
+      _as_chain = NULL;
     }
   }
 
