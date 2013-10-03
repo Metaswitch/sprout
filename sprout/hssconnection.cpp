@@ -155,8 +155,7 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
     Utils::url_escape(public_user_identity);
 
   if (!private_user_identity.empty()) {
-    path = path + "?private_id=" +
-      Utils::url_escape(private_user_identity);
+    path += "?private_id=" + Utils::url_escape(private_user_identity);
   }
 
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
