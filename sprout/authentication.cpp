@@ -119,25 +119,29 @@ pj_status_t user_lookup(pj_pool_t *pool,
             private_id.c_str(), public_id.c_str(),
             realm->slen, realm->ptr);
 
-  data = hss->get_digest_data(private_id, public_id, trail);
-
-  if (data != NULL)
+  // If no homestead is attached, return that the account could not be found.
+  if (hss != NULL)
   {
-    std::string digest = data->get("digest_ha1", "" ).asString();
-    if (digest != "")
+    data = hss->get_digest_data(private_id, public_id, trail);
+
+    if (data != NULL)
     {
-      LOG_DEBUG("Digest for user %.*s in realm %.*s = %s",
-                acc_name->slen, acc_name->ptr,
-                realm->slen, realm->ptr,
-                digest.c_str());
-      pj_strdup(pool, &cred_info->realm, realm);
-      pj_cstr(&cred_info->scheme, "digest");
-      pj_strdup(pool, &cred_info->username, acc_name);
-      cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-      pj_strdup2(pool, &cred_info->data, digest.c_str());
-      status = PJ_SUCCESS;
+      std::string digest = data->get("digest_ha1", "" ).asString();
+      if (digest != "")
+      {
+        LOG_DEBUG("Digest for user %.*s in realm %.*s = %s",
+                  acc_name->slen, acc_name->ptr,
+                  realm->slen, realm->ptr,
+                  digest.c_str());
+        pj_strdup(pool, &cred_info->realm, realm);
+        pj_cstr(&cred_info->scheme, "digest");
+        pj_strdup(pool, &cred_info->username, acc_name);
+        cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
+        pj_strdup2(pool, &cred_info->data, digest.c_str());
+        status = PJ_SUCCESS;
+      }
+      delete data;
     }
-    delete data;
   }
 
   return status;
@@ -281,7 +285,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
                 PJUtils::pj_status_to_string(status).c_str());
       if (analytics != NULL)
       {
-        analytics->auth_failure(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, rdata->msg_info.msg->line.req.uri));
+        analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
+                                PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
       }
 
       // @TODO - need more diagnostics here so we can identify and flag

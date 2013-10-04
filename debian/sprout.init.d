@@ -95,7 +95,8 @@ get_settings()
         [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
-        [ -z "$remote_memstore" ] || remote_memstore_arg="--remote-memstore $remote_memstore"
+        # Disable remote memstore support until we migrate it to use memcached redundancy configuration
+        # [ -z "$remote_memstore" ] || remote_memstore_arg="--remote-memstore $remote_memstore"
 }
 
 #
@@ -125,12 +126,11 @@ do_start()
                      --alias $sprout_hostname,$public_ip
                      --trusted-port 5054
                      --realm $home_domain
-                     --memstore $memstore
+                     --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
                      --hss $hs_hostname
                      --xdms $xdms_hostname
                      $enum_server_arg
-                     $enum_server
                      $enum_suffix_arg
                      $enum_file_arg
                      --sas $sas_server
@@ -179,6 +179,27 @@ do_stop()
 }
 
 #
+# Function that aborts the daemon/service
+#
+# This is very similar to do_stop except it sends SIGABRT to dump a core file
+# and waits longer for it to complete.
+#
+do_abort()
+{
+        # Return
+        #   0 if daemon has been stopped
+        #   1 if daemon was already stopped
+        #   2 if daemon could not be stopped
+        #   other if a failure occurred
+        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
+        RETVAL="$?"
+        [ "$RETVAL" = 2 ] && return 2
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+        return "$RETVAL"
+}
+
+#
 # Function that sends a SIGHUP to the daemon/service
 #
 do_reload() {
@@ -187,7 +208,7 @@ do_reload() {
         # restarting (for example, when it is sent a SIGHUP),
         # then implement that here.
         #
-        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDILE --name $EXECNAME
+        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -223,24 +244,40 @@ case "$1" in
         esac
         ;;
   status)
-       status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
-       ;;
-  #reload|force-reload)
+        status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+        ;;
+  reload|force-reload)
         #
         # If do_reload() is not implemented then leave this commented out
         # and leave 'force-reload' as an alias for 'restart'.
         #
-        #log_daemon_msg "Reloading $DESC" "$NAME"
-        #do_reload
-        #log_end_msg $?
-        #;;
-  restart|force-reload)
+        do_reload
+        ;;
+  restart)
         #
         # If the "reload" option is implemented then remove the
         # 'force-reload' alias
         #
         log_daemon_msg "Restarting $DESC" "$NAME"
         do_stop
+        case "$?" in
+          0|1)
+                do_start
+                case "$?" in
+                        0) log_end_msg 0 ;;
+                        1) log_end_msg 1 ;; # Old process is still running
+                        *) log_end_msg 1 ;; # Failed to start
+                esac
+                ;;
+          *)
+                # Failed to stop
+                log_end_msg 1
+                ;;
+        esac
+        ;;
+  abort-restart)
+        log_daemon_msg "Abort-Restarting $DESC" "$NAME"
+        do_abort
         case "$?" in
           0|1)
                 do_start

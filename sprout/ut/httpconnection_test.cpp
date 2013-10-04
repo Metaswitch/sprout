@@ -64,6 +64,7 @@ class HttpConnectionTest : public BaseTest
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
     fakecurl_responses["http://cyrus/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://cyrus/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
     fakecurl_responses["http://cyrus/up/up/up"] = "<message>ok, whatever...</message>";
     fakecurl_responses["http://cyrus/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
     fakecurl_responses["http://cyrus/down/down/down"] = "<message>WHOOOOSH!!</message>";
@@ -98,6 +99,8 @@ TEST_F(HttpConnectionTest, SimpleGetFailure)
   string output;
   long ret = _http.get("/blah/blah/wot", output, "gandalf", 0);
   EXPECT_EQ(404, ret);
+  ret = _http.get("/blah/blah/503", output, "gandalf", 0);
+  EXPECT_EQ(503, ret);
 }
 
 TEST_F(HttpConnectionTest, SimpleGetRetry)
@@ -145,6 +148,6 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   EXPECT_TRUE(req2._fresh);
 
   // Should be a single connection to the hardcoded fakecurl IP.
-  EXPECT_EQ(1u, _http._serverCount.size());
-  EXPECT_EQ(1, _http._serverCount["10.42.42.42"]);
+  EXPECT_EQ(1u, _http._server_count.size());
+  EXPECT_EQ(1, _http._server_count["10.42.42.42"]);
 }

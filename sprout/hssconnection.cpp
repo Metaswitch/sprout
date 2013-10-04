@@ -49,13 +49,17 @@
 #include "sasevent.h"
 #include "httpconnection.h"
 #include "hssconnection.h"
+#include "accumulator.h"
 
 
 HSSConnection::HSSConnection(const std::string& server) :
   _http(new HttpConnection(server,
                            false,
                            SASEvent::TX_HSS_BASE,
-                           "connected_homesteads"))
+                           "connected_homesteads")),
+  _latency_stat("hss_latency_us"),
+  _digest_latency_stat("hss_digest_latency_us"),
+  _subscription_latency_stat("hss_subscription_latency_us")
 {
 }
 
@@ -72,15 +76,27 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
                                             const std::string& public_user_identity,
                                             SAS::TrailId trail)
 {
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
                      "/digest";
-
   if (!public_user_identity.empty())
-    {
-      path += "?public_id=" + Utils::url_escape(public_user_identity);
-    }
-  return get_json_object(path, trail);
+  {
+    path += "?public_id=" + Utils::url_escape(public_user_identity);
+  }
+
+  Json::Value* rc = get_json_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latency_stat.accumulate(latency_us);
+    _digest_latency_stat.accumulate(latency_us);
+  }
+
+  return rc;
 }
 
 
@@ -151,10 +167,12 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
                                               std::vector<std::string>& associated_uris,
                                               SAS::TrailId trail)
 {
-  std::string path = "/impu/" +
-    Utils::url_escape(public_user_identity);
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
 
-  if (!private_user_identity.empty()) {
+  std::string path = "/impu/" + Utils::url_escape(public_user_identity);
+  if (!private_user_identity.empty())
+  {
     path += "?private_id=" + Utils::url_escape(private_user_identity);
   }
 
@@ -166,6 +184,13 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
   HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   rapidxml::xml_node<>* sp = NULL;
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latency_stat.accumulate(latency_us);
+    _subscription_latency_stat.accumulate(latency_us);
+  }
 
   if (http_code != HTTP_OK)
   {
@@ -212,5 +237,3 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
   }
   return HTTP_OK;
 }
-
-

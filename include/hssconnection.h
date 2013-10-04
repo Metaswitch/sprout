@@ -47,6 +47,7 @@
 #include "rapidxml/rapidxml.hpp"
 #include "ifchandler.h"
 #include "sas.h"
+#include "accumulator.h"
 
 /// @class HSSConnection
 ///
@@ -72,6 +73,9 @@ private:
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;
+  StatisticAccumulator _latency_stat;
+  StatisticAccumulator _digest_latency_stat;
+  StatisticAccumulator _subscription_latency_stat;
 };
 
 #endif

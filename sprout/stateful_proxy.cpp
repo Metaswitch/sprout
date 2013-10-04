@@ -127,6 +127,8 @@ extern "C" {
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"
+#include "dialog_tracker.hpp"
+#include "quiescing_manager.h"
 
 static RegData::Store* store;
 static RegData::Store* remote_store;
@@ -143,6 +145,7 @@ static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
+static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
 static HSSConnection* hss;
 
@@ -655,43 +658,61 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   return PJ_SUCCESS;
 }
 
+static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
+{
+  if (transport == NULL) {
+    LOG_DEBUG("determine_source called with a NULL pjsip_transport");
+    return SIP_PEER_UNKNOWN;
+  }
+  if (transport->local_name.port == stack_data.trusted_port)
+  {
+    // Request received on trusted port.
+    LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
+    return SIP_PEER_TRUSTED_PORT;
+  }
+
+  LOG_DEBUG("Request received on non-trusted port %d", transport->local_name.port);
+
+  // Request received on untrusted port, so see if it came over a trunk.
+  if ((ibcf) &&
+      (ibcf_trusted_peer(addr)))
+  {
+    LOG_DEBUG("Request received on configured SIP trunk");
+    return SIP_PEER_CONFIGURED_TRUNK;
+  }
+
+  return SIP_PEER_CLIENT;
+}
 
 /// Checks whether the request was received from a trusted source.
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 {
-  if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
+  SIPPeerType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
+  pj_bool_t trusted = PJ_FALSE;
+
+  if ((source == SIP_PEER_TRUSTED_PORT)
+      || (source == SIP_PEER_CONFIGURED_TRUNK))
   {
-    // Request received on trusted port.
-    LOG_DEBUG("Request received on trusted port %d", rdata->tp_info.transport->local_name.port);
-    return PJ_TRUE;
+    trusted = PJ_TRUE;
   }
-
-  LOG_DEBUG("Request received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-
-  // Request received on untrusted port, so see if it came over a trunk.
-  if ((ibcf) &&
-      (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+  else if (source == SIP_PEER_CLIENT)
   {
-    LOG_DEBUG("Request received on configured SIP trunk");
-    return PJ_TRUE;
-  }
-
-  Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
-                                         &rdata->pkt_info.src_addr);
-  if (src_flow != NULL)
-  {
-    // Request received on a known flow, so check it is authenticated.
-    pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+    Flow* src_flow = flow_table->find_flow(rdata->tp_info.transport,
+                                           &rdata->pkt_info.src_addr);
+    if (src_flow != NULL)
     {
-      LOG_DEBUG("Request received on authenticated client flow.");
+      // Request received on a known flow, so check it is
+      // authenticated.
+      pjsip_from_hdr *from_hdr = PJSIP_MSG_FROM_HDR(rdata->msg_info.msg);
+      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri)).length() > 0)
+      {
+        LOG_DEBUG("Request received on authenticated client flow.");
+        trusted = PJ_TRUE;
+      }
       src_flow->dec_ref();
-      return PJ_TRUE;
     }
-    src_flow->dec_ref();
   }
-
-  return PJ_FALSE;
+  return trusted;
 }
 
 
@@ -767,27 +788,15 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
+  SIPPeerType source_type = determine_source(rdata->tp_info.transport,
+                                            rdata->pkt_info.src_addr);
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
-    // Received a REGISTER request.  Check if we should act as the edge proxy
-    // for the request.
-    if (rdata->tp_info.transport->local_name.port == stack_data.trusted_port)
-    {
-      // Reject REGISTER request received from within the trust domain.
-      LOG_DEBUG("Reject REGISTER received on trusted port");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_METHOD_NOT_ALLOWED,
-                                 NULL, NULL, NULL);
-      return PJ_ENOTFOUND;
-    }
-
-    if ((ibcf) &&
-        (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+    if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
       PJUtils::respond_stateless(stack_data.endpt,
@@ -797,52 +806,80 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    // The REGISTER came from outside the trust domain and not over a SIP
-    // trunk, so we must act as the edge proxy for the node.  (Previously
-    // we would only act as edge proxy for nodes that requested it with
-    // the outbound flag, or we detected were behind a NAT - now we have a
-    // well-defined trust zone we have to do it for all nodes outside
-    // the trust node.)
-    LOG_DEBUG("Message requires outbound support");
-
-    // Find or create a flow object to represent this flow.
-    src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
-                                            &rdata->pkt_info.src_addr);
-
-    if (src_flow == NULL)
+    if (source_type != SIP_PEER_TRUSTED_PORT)
     {
-      LOG_ERROR("Failed to create flow data record");
-      return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+      // The REGISTER came from outside the trust domain and not over a SIP
+      // trunk, so we must act as the edge proxy for the node.  (Previously
+      // we would only act as edge proxy for nodes that requested it with
+      // the outbound flag, or we detected were behind a NAT - now we have a
+      // well-defined trust zone we have to do it for all nodes outside
+      // the trust node.)
+      LOG_DEBUG("Message requires outbound support");
+
+      // Find or create a flow object to represent this flow.
+      src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
+                                              &rdata->pkt_info.src_addr);
+
+      if (src_flow == NULL)
+      {
+        LOG_ERROR("Failed to create flow data record");
+        return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+      }
+
+      LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+
+      // Reject the REGISTER with a 305 if Bono is trying to quiesce and
+      // there are no active dialogs on this flow.
+      if (src_flow->should_quiesce())
+      {
+        LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
+        PJUtils::respond_stateless(stack_data.endpt,
+                                   rdata,
+                                   PJSIP_SC_USE_PROXY,
+                                   NULL, NULL, NULL);
+        src_flow->dec_ref();
+
+        // Of the PJSIP error codes, EIGNORED seems most appropriate -
+        // but anything that's not PJ_SUCCESS will do.
+        return PJ_EIGNORED;
+      }
+
+      // Touch the flow to make sure it doesn't time out while we are waiting
+      // for the REGISTER response from upstream.
+      src_flow->touch();
+
+      pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+      {
+        // The message was received on a client flow that has already been
+        // authenticated, so add an integrity-protected indication.
+        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+      }
+      else
+      {
+        // The client flow hasn't yet been authenticated, so add an integrity-protected
+        // indicator so Sprout will challenge and/or authenticate. it
+        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
+      }
     }
 
-    LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
-
-    // Touch the flow to make sure it doesn't time out while we are waiting
-    // for the REGISTER response from upstream.
-    src_flow->touch();
-
+    // Add a path header so we get included in the egress call flow.  If we're not
+    // acting as edge proxy, we'll add the bono cluster instead.
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
+      if (src_flow)
+      {
+        src_flow->dec_ref();
+      }
       return status; // LCOV_EXCL_LINE No failure cases exist.
     }
 
-    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+    if (src_flow)
     {
-      // The message was received on a client flow that has already been
-      // authenticated, so add an integrity-protected indication.
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+      // Remove the reference to the source flow since we have finished with it.
+      src_flow->dec_ref();
     }
-    else
-    {
-      // The client flow hasn't yet been authenticated, so add an integrity-protected
-      // indicator so Sprout will challenge and/or authenticate. it
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
-    }
-
-    // Remove the reference to the source flow since we have finished with it
-    src_flow->dec_ref();
 
     // Message from client. Allow client to provide data, but don't let it discover internal data.
     *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
@@ -862,13 +899,12 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // (that is, a client flow).
     bool trusted = false;
 
-    if (rdata->tp_info.transport->local_name.port != stack_data.trusted_port)
+    if (source_type != SIP_PEER_TRUSTED_PORT)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
       LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
-      if ((ibcf) &&
-          (ibcf_trusted_peer(rdata->pkt_info.src_addr)))
+      if (source_type == SIP_PEER_CONFIGURED_TRUNK)
       {
         LOG_DEBUG("Message received on configured SIP trunk");
         trusted = true;
@@ -919,6 +955,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
             // Cannot have more than two preferred identities.
             LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
             PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+            src_flow->dec_ref();
             return PJ_ENOTFOUND;
           }
           else if (identities.size() == 0)
@@ -945,6 +982,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // Preferred identity must be sip, sips or tel URI.
               LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
@@ -972,6 +1010,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
               // tel URI
               LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
               PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+              src_flow->dec_ref();
               return PJ_ENOTFOUND;
             }
 
@@ -1061,6 +1100,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       else
       {
         LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
+      }
+      if (src_flow != NULL)
+      {
+        src_flow->dec_ref();
       }
       return PJ_ENOTFOUND;
     }
@@ -1430,112 +1473,124 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris, trail);
 
-    // If get_associated_uris fails, we'll skip this processing, we won't have any targets, and will fail with a 404.
+    std::string aor;
     if (success && (uris.size() > 0))
     {
       // Take the first associated URI as the AOR.
-      std::string aor = uris.front();
-
-      // Look up the target in the registration data store.
-      LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-      RegData::AoR* aor_data = store->get_aor_data(aor);
-
-      // If we didn't get bindings from the local store and we have a remote
-      // store, try the remote.
-      if ((remote_store != NULL) &&
-          ((aor_data == NULL) ||
-           (aor_data->bindings().empty())))
-      {
-        delete aor_data;
-        aor_data = remote_store->get_aor_data(aor);
-      }
-
-      // Pick up to max_targets bindings to attempt to contact.  Since
-      // some of these may be stale, and we don't want stale bindings to
-      // push live bindings out, we sort by expiry time and pick those
-      // with the most distant expiry times.  See bug 45.
-      std::list<RegData::AoR::Bindings::value_type> target_bindings;
-      if (aor_data != NULL)
-      {
-        const RegData::AoR::Bindings& bindings = aor_data->bindings();
-        if ((int)bindings.size() <= max_targets)
-        {
-          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-               i != bindings.end();
-               ++i)
-          {
-            target_bindings.push_back(*i);
-          }
-        }
-        else
-        {
-          std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
-          for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
-               i != bindings.end();
-               ++i)
-          {
-            std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
-            ordered.insert(p);
-          }
-
-          int num_contacts = 0;
-          for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
-               num_contacts < max_targets;
-               ++i)
-          {
-            target_bindings.push_back(i->second);
-            num_contacts++;
-          }
-        }
-      }
-
-      for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
-           i != target_bindings.end();
-           ++i)
-      {
-        RegData::AoR::Binding* binding = i->second;
-        LOG_DEBUG("Target = %s", binding->_uri.c_str());
-        bool useable_contact = true;
-        target target;
-        target.from_store = PJ_TRUE;
-        target.aor = aor;
-        target.binding_id = i->first;
-        target.uri = PJUtils::uri_from_string(binding->_uri, pool);
-        if (target.uri == NULL)
-        {
-          LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
-                      binding->_uri.c_str(), aor.c_str());
-          useable_contact = false;
-        }
-        else
-        {
-          for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
-               j != binding->_path_headers.end();
-               ++j)
-          {
-            pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
-            if (path != NULL)
-            {
-              target.paths.push_back(path);
-            }
-            else
-            {
-              LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
-                          binding->_uri.c_str(), aor.c_str(), (*j).c_str());
-              useable_contact = false;
-              break;
-            }
-          }
-        }
-
-        if (useable_contact)
-        {
-          targets.push_back(target);
-        }
-      }
-
-      delete aor_data;
+      aor = uris.front();
     }
+    else
+    {
+      // Failed to get the associated URIs from Homestead.  We'll try to
+      // do the registration look-up with the specified target URI - this may
+      // fail, but we'll never misroute the call.
+      aor = public_id;
+    }
+
+    // Look up the target in the registration data store.
+    LOG_INFO("Look up targets in registration store: %s", aor.c_str());
+    RegData::AoR* aor_data = store->get_aor_data(aor);
+
+    // If we didn't get bindings from the local store and we have a remote
+    // store, try the remote.
+    if ((remote_store != NULL) &&
+        ((aor_data == NULL) ||
+         (aor_data->bindings().empty())))
+    {
+      delete aor_data;
+      aor_data = remote_store->get_aor_data(aor);
+    }
+
+    // Pick up to max_targets bindings to attempt to contact.  Since
+    // some of these may be stale, and we don't want stale bindings to
+    // push live bindings out, we sort by expiry time and pick those
+    // with the most distant expiry times.  See bug 45.
+    std::list<RegData::AoR::Bindings::value_type> target_bindings;
+    if (aor_data != NULL)
+    {
+      const RegData::AoR::Bindings& bindings = aor_data->bindings();
+      if ((int)bindings.size() <= max_targets)
+      {
+        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+             i != bindings.end();
+             ++i)
+        {
+          target_bindings.push_back(*i);
+        }
+      }
+      else
+      {
+        std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
+        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+             i != bindings.end();
+             ++i)
+        {
+          std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
+          ordered.insert(p);
+        }
+
+        int num_contacts = 0;
+        for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
+             num_contacts < max_targets;
+             ++i)
+        {
+          target_bindings.push_back(i->second);
+          num_contacts++;
+        }
+      }
+    }
+
+    for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
+         i != target_bindings.end();
+         ++i)
+    {
+      RegData::AoR::Binding* binding = i->second;
+      LOG_DEBUG("Target = %s", binding->_uri.c_str());
+      bool useable_contact = true;
+      target target;
+      target.from_store = PJ_TRUE;
+      target.aor = aor;
+      target.binding_id = i->first;
+      target.uri = PJUtils::uri_from_string(binding->_uri, pool);
+      if (target.uri == NULL)
+      {
+        LOG_WARNING("Ignoring badly formed contact URI %s for target %s",
+                    binding->_uri.c_str(), aor.c_str());
+        useable_contact = false;
+      }
+      else
+      {
+        for (std::list<std::string>::const_iterator j = binding->_path_headers.begin();
+             j != binding->_path_headers.end();
+             ++j)
+        {
+          pjsip_uri* path = PJUtils::uri_from_string(*j, pool);
+          if (path != NULL)
+          {
+            target.paths.push_back(path);
+          }
+          else
+          {
+            LOG_WARNING("Ignoring contact %s for target %s because of badly formed path header %s",
+                        binding->_uri.c_str(), aor.c_str(), (*j).c_str());
+            useable_contact = false;
+            break;
+          }
+        }
+      }
+
+      if (useable_contact)
+      {
+        targets.push_back(target);
+      }
+    }
+
+    if (targets.empty())
+    {
+      LOG_ERROR("Failed to find any valid bindings for %s in registration store", aor.c_str());
+    }
+
+    delete aor_data;
   }
 }
 
@@ -1600,6 +1655,10 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
                                                       hvalue.slen,
                                                       0);
 
+    // The user part may be missing if the path is simply to the bono cluster
+    // (for example if a commercial P-CSCF is in use and bono is simply providing
+    // a proxying service to it), in this case, we're not using flows so there's
+    // no need to update the authenticated URIs.
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
     {
@@ -2066,16 +2125,27 @@ bool UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
 {
-  if ((!PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-      (!PJUtils::is_e164((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri))))
+  if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
   {
-    // The URI has been translated to an off-net domain, but the user does
-    // not have a valid E.164 number that can be used to make off-net calls.
-    // Reject the call with a not found response code, which is about the
-    // most suitable for this case.
-    LOG_INFO("Rejecting off-net call from user without E.164 address");
-    send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
-    return AsChainLink::Disposition::Stop;
+    // This is an off-net domain.  Find the calling party, either in the
+    // P-Asserted-Identity (which really should be present) or the From (if
+    // not).
+    pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
+                             pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_ASSERTED_IDENTITY, NULL);
+    pjsip_uri* id_uri = (pjsip_uri*)((asserted_id_hdr != NULL) ?
+                                pjsip_uri_get_uri(&asserted_id_hdr->name_addr) :
+                                pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(_req->msg)->uri));
+
+    if (!PJUtils::is_e164(id_uri))
+    {
+      // The URI has been translated to an off-net domain, but the user does
+      // not have a valid E.164 number that can be used to make off-net calls.
+      // Reject the call with a not found response code, which is about the
+      // most suitable for this case.
+      LOG_INFO("Rejecting off-net call from user without E.164 address");
+      send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_OFFNET_DISALLOWED);
+      return AsChainLink::Disposition::Stop;
+    }
   }
 
   // If the newly translated ReqURI indicates that we're the host of the
@@ -2413,6 +2483,16 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
   {
     // UAS transaction has completed, so do any transaction completion
     // log activities
+
+    // This has to be conditional on a completed state, else
+    // _tsx->transport might not be set.
+    if (edge_proxy)
+    {
+      SIPPeerType stype  = determine_source(_tsx->transport, _tsx->addr);
+      bool is_client = (stype == SIP_PEER_CLIENT);
+      dialog_tracker->on_uas_tsx_complete(_req, _tsx, event, is_client);
+    }
+
     log_on_tsx_complete();
   }
 
@@ -2915,7 +2995,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
     // Create a History-Info header for the new target.
     pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target);
 
-    // Set up the index parameter.  This is the previous value suffixed with ".1".   
+    // Set up the index parameter.  This is the previous value suffixed with ".1".
     history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
     history_info_hdr->index.ptr = (char*)pj_pool_alloc(_req->pool, history_info_hdr->index.slen);
     pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
@@ -2946,7 +3026,7 @@ pjsip_history_info_hdr* UASTransaction::create_history_info_hdr(pjsip_uri* targe
   pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(_req->pool);
   history_info_name_addr_uri->uri = history_info_uri;
   history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
-  
+
   return history_info_hdr;
 }
 
@@ -2969,7 +3049,7 @@ void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int
       param->value = STR_SIP;
 
       pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
-    
+
       // Now add the cause parameter.
       param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
       param->name = STR_CAUSE;
@@ -3407,7 +3487,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
-                                HSSConnection* hss_connection)
+                                HSSConnection* hss_connection,
+                                QuiescingManager* quiescing_manager)
 {
   pj_status_t status;
 
@@ -3428,8 +3509,13 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
-    // Create a flow table object to manage the client flow records.
-    flow_table = new FlowTable;
+    // Create a flow table object to manage the client flow records
+    // and handle edge proxy quiescing.
+    flow_table = new FlowTable(quiescing_manager);
+    quiescing_manager->register_flows_handler(flow_table);
+
+    // Create a dialog tracker to count dialogs on each flow
+    dialog_tracker = new DialogTracker(flow_table);
 
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
@@ -3440,7 +3526,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                             edge_upstream_proxy_recycle,
                                             stack_data.pool,
                                             stack_data.endpt,
-                                            stack_data.tcp_factory);
+                                            stack_data.trusted_tcp_factory);
     upstream_conn_pool->init();
 
     ibcf = enable_ibcf;
@@ -3498,7 +3584,11 @@ void destroy_stateful_proxy()
     delete upstream_conn_pool; upstream_conn_pool = NULL;
 
     // Destroy the flow table.
-    delete flow_table; flow_table = NULL;
+    delete flow_table;
+    flow_table = NULL;
+
+    delete dialog_tracker;
+    dialog_tracker = NULL;
   }
   else
   {
@@ -3587,34 +3677,52 @@ static pj_bool_t is_user_numeric(const std::string& user)
   return PJ_TRUE;
 }
 
-/// Adds a Path header when functioning as an edge proxy.
+/// Adds a Path header when functioning as an edge proxy or as a load-balancing
+/// proxy for a commercial P-CSCF/IBCF.
 ///
-/// The path header consists of a SIP URI with our host and a user portion that
+/// If we're the edge-proxy (and thus supplying outbound support for the client,
+/// the path header consists of a SIP URI with our host and a user portion that
 /// identifies the client flow.
+///
+/// If we're merely acting as a loadbalancing proxy for a commercial P-CSCF/IBCF,
+/// we'll simply add a path to the bono cluster.  This is indicated by the absence
+/// of a flow entry.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
 {
+  // Determine if the connection is secured (so we use the correct scheme in the
+  // generated Path header).
   pjsip_to_hdr* to_hdr = rdata->msg_info.to;
   pj_bool_t secure = (to_hdr != NULL) ? PJSIP_URI_SCHEME_IS_SIPS(to_hdr->uri) : false;
 
-  // Create a path URI with our host name and port, and the flow token in
-  // the user field.
   pjsip_sip_uri* path_uri = pjsip_sip_uri_create(tdata->pool, secure);
-  pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
-  path_uri->host = stack_data.local_host;
   path_uri->port = stack_data.trusted_port;
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 
-  if (PJUtils::is_first_hop(rdata->msg_info.msg))
+  if (flow_data)
   {
-    // We own the outbound flow to the UAC.  We must indicate that by adding
-    // the ob parameter.
-    pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-    pj_strdup2(tdata->pool, &ob_node->name, "ob");
-    pj_strdup2(tdata->pool, &ob_node->value, "");
-    pj_list_insert_after(&path_uri->other_param, ob_node);
+    // Specify this particular node, as only we can find the client.
+    path_uri->host = stack_data.local_host;
+
+    // Add the flow token and "ob" parameter.
+    pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
+
+    if (PJUtils::is_first_hop(rdata->msg_info.msg))
+    {
+      // We own the outbound flow to the UAC.  We must indicate that by adding
+      // the ob parameter.
+      pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup2(tdata->pool, &ob_node->name, "ob");
+      pj_strdup2(tdata->pool, &ob_node->value, "");
+      pj_list_insert_after(&path_uri->other_param, ob_node);
+    }
+  }
+  else
+  {
+    // Specify the bono cluster, as any of them can find the upstream P-CSCF/IBCF.
+    path_uri->host = stack_data.bono_cluster_domain;
   }
 
   // Render the URI as a string.
@@ -3712,4 +3820,3 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
 }
 
 ///@}
-

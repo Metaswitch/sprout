@@ -46,6 +46,7 @@ extern "C" {
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#include <semaphore.h>
 
 // Common STL includes.
 #include <cassert>
@@ -77,6 +78,7 @@ extern "C" {
 #include "pjutils.h"
 #include "log.h"
 #include "zmq_lvc.h"
+#include "quiescing_manager.h"
 
 struct options
 {
@@ -86,6 +88,7 @@ struct options
   std::string            local_host;
   std::string            home_domain;
   std::string            sprout_domain;
+  std::string            bono_domain;
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
@@ -118,7 +121,14 @@ struct options
 };
 
 
-static pj_bool_t quit_flag = PJ_FALSE;
+static sem_t term_sem;
+
+static pj_bool_t quiescing = PJ_FALSE;
+static sem_t quiescing_sem;
+QuiescingManager *quiescing_mgr;
+
+const static int QUIESCE_SIGNAL = SIGQUIT;
+const static int UNQUIESCE_SIGNAL = SIGUSR1;
 
 static void usage(void)
 {
@@ -130,6 +140,7 @@ static void usage(void)
        " -l, --localhost <name>     Override the local host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
+       " -b, --bono-domain <name>   Override the bono cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an edge proxy using the specified node\n"
@@ -183,6 +194,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
+    { "bono-domain",       required_argument, 0, 'b'},
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
@@ -212,7 +224,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:b:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
@@ -242,6 +254,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'c':
       options->sprout_domain = std::string(pj_optarg);
       fprintf(stdout, "Override sprout cluster domain set to %s\n", pj_optarg);
+      break;
+
+    case 'b':
+      options->bono_domain = std::string(pj_optarg);
+      fprintf(stdout, "Override bono cluster domain set to %s\n", pj_optarg);
       break;
 
     case 'n':
@@ -448,7 +465,7 @@ int daemonize()
 }
 
 
-// Exception handler that simply dumps the stack and then crashes out.
+// Signal handler that simply dumps the stack and then crashes out.
 void exception_handler(int sig)
 {
   // Reset the signal handlers so that another exception will cause a crash.
@@ -463,6 +480,90 @@ void exception_handler(int sig)
 }
 
 
+// Signal handler that receives requests to (un)quiesce.
+void quiesce_unquiesce_handler(int sig)
+{
+  // Set the flag indicating whether we're quiescing or not.
+  if (sig == QUIESCE_SIGNAL)
+  {
+    LOG_STATUS("Quiesce signal received");
+    quiescing = PJ_TRUE;
+  }
+  else
+  {
+    LOG_STATUS("Unquiesce signal received");
+    quiescing = PJ_FALSE;
+  }
+
+  // Wake up the thread that acts on the notification (don't act on it in this
+  // thread since we're in a signal handler).
+  sem_post(&quiescing_sem);
+}
+
+
+// Signal handler that triggers sprout termination.
+void terminate_handler(int sig)
+{
+  sem_post(&term_sem);
+}
+
+
+void *quiesce_unquiesce_thread_func(void *dummy)
+{
+   // First register the thread with PJSIP.
+  pj_thread_desc desc;
+  pj_thread_t *thread;
+  pj_status_t status;
+
+  status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
+
+  if (status != PJ_SUCCESS) {
+    LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
+              "This function will not be available",
+              status);
+    return NULL;
+  }
+
+  pj_bool_t curr_quiescing = PJ_FALSE;
+  pj_bool_t new_quiescing = quiescing;
+
+  while (PJ_TRUE)
+  {
+    // Only act if the quiescing state has changed.
+    if (curr_quiescing != new_quiescing)
+    {
+      curr_quiescing = new_quiescing;
+
+      if (new_quiescing) {
+        quiescing_mgr->quiesce();
+      } else {
+        quiescing_mgr->unquiesce();
+      }
+    }
+
+    // Wait for the quiescing flag to be written to and read in the new value.
+    // Read into a local variable to avoid issues if the flag changes under our
+    // feet.
+    //
+    // Note that sem_wait is a cancel point, so calling pthread_cancel on this
+    // thread while it is waiting on the semaphore will cause it to cancel.
+    sem_wait(&quiescing_sem);
+    new_quiescing = quiescing;
+  }
+
+  return NULL;
+}
+
+class QuiesceCompleteHandler : public QuiesceCompletionInterface
+{
+public:
+  void quiesce_complete()
+  {
+    sem_post(&term_sem);
+  }
+};
+
+
 /*
  * main()
  */
@@ -470,6 +571,7 @@ int main(int argc, char *argv[])
 {
   pj_status_t status;
   struct options opt;
+
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;
@@ -477,10 +579,38 @@ int main(int argc, char *argv[])
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
+  pthread_t quiesce_unquiesce_thread;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
+
+  // Mask off SIGHUP from this thread and all child threads, as this will be
+  // handled by a dedicated thread.
+  sigset_t sset;
+  sigemptyset(&sset);
+  sigaddset(&sset, SIGHUP);
+  pthread_sigmask(SIG_BLOCK, &sset, NULL);
+
+  // Initialize the semaphore that unblocks the quiesce thread, and the thread
+  // itself.
+  sem_init(&quiescing_sem, 0, 0);
+  pthread_create(&quiesce_unquiesce_thread,
+                 NULL,
+                 quiesce_unquiesce_thread_func,
+                 NULL);
+
+  // Set up our signal handler for (un)quiesce signals.
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
+
+  sem_init(&term_sem, 0, 0);
+  signal(SIGTERM, terminate_handler);
+
+  // Create a new quiescing manager instance and register our completion handler
+  // with it.
+  quiescing_mgr = new QuiescingManager();
+  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
@@ -589,16 +719,19 @@ int main(int argc, char *argv[])
   }
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.system_name,
+  status = init_stack(opt.edge_proxy,
+                      opt.system_name,
                       opt.sas_server,
                       opt.trusted_port,
                       opt.untrusted_port,
                       opt.local_host,
                       opt.home_domain,
                       opt.sprout_domain,
+                      opt.bono_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
-                      opt.worker_threads);
+                      opt.worker_threads,
+                      quiescing_mgr);
 
   if (status != PJ_SUCCESS)
   {
@@ -611,9 +744,7 @@ int main(int argc, char *argv[])
   {
     // Use memcached store.
     LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    std::list<std::string> servers;
-    Utils::split_string(opt.store_servers, ',', servers, 0, true);
-    registrar_store = RegData::create_memcached_store(servers, 100, false);
+    registrar_store = RegData::create_memcached_store(false, opt.store_servers);
   }
   else
   {
@@ -633,9 +764,7 @@ int main(int argc, char *argv[])
   {
     // Use remote memcached store too.
     LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-    std::list<std::string> servers;
-    Utils::split_string(opt.remote_store_servers, ',', servers, 0, true);
-    remote_reg_store = RegData::create_memcached_store(servers, 100, false);
+    remote_reg_store = RegData::create_memcached_store(false, opt.remote_store_servers);
   }
 
   if (opt.hss_server != "")
@@ -697,7 +826,8 @@ int main(int argc, char *argv[])
                                analytics_logger,
                                enum_service,
                                bgcf_service,
-                               hss_connection);
+                               hss_connection,
+                               quiescing_mgr);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stateful proxy, %s",
@@ -745,42 +875,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  while (!quit_flag)
-  {
-    if (opt.daemon || !opt.interactive)
-    {
-      sleep(10);
-    }
-    else
-    {
-      char line[10];
-
-      puts("\n"
-           "Menu:\n"
-           "  q    quit\n"
-           "  d    dump status\n"
-           "  dd   dump detailed status\n"
-           "");
-
-      if (fgets(line, sizeof(line), stdin) == NULL)
-      {
-        puts("EOF while reading stdin, will quit now..");
-        quit_flag = PJ_TRUE;
-        break;
-      }
-
-      if (line[0] == 'q')
-      {
-        quit_flag = PJ_TRUE;
-      }
-      else if (line[0] == 'd')
-      {
-        pj_bool_t detail = (line[1] == 'd');
-        pjsip_endpt_dump(stack_data.endpt, detail);
-        pjsip_tsx_layer_dump(detail);
-      }
-    }
-  }
+  // Wait here until the quite semaphore is signaled.
+  sem_wait(&term_sem);
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -809,6 +905,7 @@ int main(int argc, char *argv[])
   delete xdm_connection;
   delete enum_service;
   delete bgcf_service;
+  delete quiescing_mgr;
 
   if (opt.store_servers != "")
   {
@@ -824,6 +921,22 @@ int main(int argc, char *argv[])
     RegData::destroy_memcached_store(remote_reg_store);
   }
 
+  // Unregister the handlers that use semaphores (so we can safely destroy
+  // them).
+  signal(QUIESCE_SIGNAL, SIG_DFL);
+  signal(UNQUIESCE_SIGNAL, SIG_DFL);
+  signal(SIGTERM, SIG_DFL);
+
+  // Cancel the (un)quiesce thread (so that we can safely destroy the semaphore
+  // it uses).
+  pthread_cancel(quiesce_unquiesce_thread);
+  pthread_join(quiesce_unquiesce_thread, NULL);
+
+  sem_destroy(&quiescing_sem);
+  sem_destroy(&term_sem);
+
   return 0;
 }
+
+
 

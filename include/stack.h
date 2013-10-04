@@ -52,6 +52,7 @@ extern "C" {
 #include <string>
 
 #include "sas.h"
+#include "quiescing_manager.h"
 
 /* Pre-declariations */
 class LastValueCache;
@@ -62,7 +63,8 @@ struct stack_data_struct
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
-  pjsip_tpfactory     *tcp_factory;
+  pjsip_tpfactory     *trusted_tcp_factory;
+  pjsip_tpfactory     *untrusted_tcp_factory;
   int                  module_id;
 
   int                  trusted_port;
@@ -70,6 +72,7 @@ struct stack_data_struct
   pj_str_t             local_host;
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
+  pj_str_t             bono_cluster_domain;
 
   unsigned             name_cnt;
   pj_str_t             name[16];
@@ -112,22 +115,24 @@ extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
 
-extern pj_status_t init_stack(const std::string& system_name,
+extern pj_status_t init_stack(bool edge_proxy,
+                              const std::string& system_name,
                               const std::string& sas_address,
                               int trusted_port,
                               int untrusted_port,
                               const std::string& local_host,
                               const std::string& home_domain,
                               const std::string& sprout_domain,
+                              const std::string& bono_domain,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
-                              int num_worker_threads);
+                              int num_worker_threads,
+                              QuiescingManager *quiescing_mgr);
 extern pj_status_t start_stack();
 extern void stop_stack();
 extern void unregister_stack_modules(void);
 extern void destroy_stack();
 extern pj_status_t init_pjsip();
 extern void term_pjsip();
-
 
 #endif

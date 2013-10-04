@@ -192,6 +192,8 @@ class StatefulProxyTestBase : public SipTest
 {
 public:
   FakeLogger _log;
+  static QuiescingManager _quiescing_manager;
+
 
   /// TX data for testing.  Will be cleaned up.  Each message in a
   /// forked flow has its URI stored in _uris, and its txdata stored
@@ -239,7 +241,8 @@ public:
                                           _analytics,
                                           _enum_service,
                                           _bgcf_service,
-                                          _hss_connection);
+                                          _hss_connection,
+                                          &_quiescing_manager);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -349,6 +352,7 @@ EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
+QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
 {
@@ -1051,6 +1055,38 @@ TEST_F(StatefulProxyTest, TestExternal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._from = "+15108581234";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingNotAllowed)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
 /// Test a forked flow - setup phase.
 void StatefulProxyTest::setupForkedFlow(SP::Message& msg)
 {
@@ -1475,6 +1511,40 @@ Message StatefulEdgeProxyTest::doInviteEdge(string token)
   msg._requri = "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob";
   inject_msg(msg.get_request());
   return msg;
+}
+
+TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
+{
+  SCOPED_TRACE("");
+
+  _quiescing_manager.quiesce();
+
+  // Register client.
+  TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        TransportFlow::Trust::UNTRUSTED,
+                                        "1.2.3.4",
+                                          49152);
+  // Register a client with the edge proxy.
+  Message msg;
+  int expires = 300;
+  msg._method = "REGISTER";
+  msg._to = msg._from;        // To header contains AoR in REGISTER requests.
+  msg._first_hop = true;
+  msg._via = xiTp->to_string(false);
+  msg._extra = "Contact: sip:wuntootreefower@";
+  msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  inject_msg(msg.get_request(), xiTp);
+  ASSERT_EQ(1, txdata_count());
+
+  // Check that we get a 305 Use Proxy response when sending a
+  // REGISTER on a flow with no dialogs when we are quiesced.
+  RespMatcher r1(305);
+  pjsip_tx_data* tdata = current_txdata();
+  r1.matches(tdata->msg);
+
+  _quiescing_manager.unquiesce();
+
+  delete xiTp;
 }
 
 TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)

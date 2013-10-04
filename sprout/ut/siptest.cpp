@@ -137,7 +137,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
 
   // Set the TCP factory used by Bono to create connections to Sprout.
-  stack_data.tcp_factory = _tcp_tpfactory_trusted;
+  stack_data.trusted_tcp_factory = _tcp_tpfactory_trusted;
 
   // Get a default TCP transport flow to use for injection.  Give it a dummy address.
   _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,

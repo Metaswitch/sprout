@@ -123,7 +123,11 @@ static std::string known_statnames[] = {
   "connected_homers",
   "connected_homesteads",
   "connected_sprouts",
-  "latency_us"
+  "latency_us",
+  "hss_latency_us",
+  "hss_digest_latency_us",
+  "hss_subscription_latency_us",
+  "xdm_latency_us"
 };
 
 

@@ -36,7 +36,7 @@
 
 ### BEGIN INIT INFO
 # Provides:          bono
-# Required-Start:    $remote_fs $syslog 
+# Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
@@ -119,6 +119,7 @@ do_start()
         DAEMON_ARGS="--system $NAME@$public_hostname \
                      --domain $home_domain \
                      --localhost $public_hostname \
+                     --bono-domain bono.$home_domain \
                      --alias $public_ip \
                      --trusted-port 5058 \
                      --untrusted-port 5060 \
@@ -159,6 +160,27 @@ do_stop()
         # sleep for some time.
         #start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
         [ "$?" = 2 ] && return 2
+        # Many daemons don't delete their pidfiles when they exit.
+        rm -f $PIDFILE
+        return "$RETVAL"
+}
+
+#
+# Function that aborts the daemon/service
+#
+# This is very similar to do_stop except it sends SIGABRT to dump a core file
+# and waits longer for it to complete.
+#
+do_abort()
+{
+        # Return
+        #   0 if daemon has been stopped
+        #   1 if daemon was already stopped
+        #   2 if daemon could not be stopped
+        #   other if a failure occurred
+        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
+        RETVAL="$?"
+        [ "$RETVAL" = 2 ] && return 2
         # Many daemons don't delete their pidfiles when they exit.
         rm -f $PIDFILE
         return "$RETVAL"
@@ -227,6 +249,24 @@ case "$1" in
         #
         log_daemon_msg "Restarting $DESC" "$NAME"
         do_stop
+        case "$?" in
+          0|1)
+                do_start
+                case "$?" in
+                        0) log_end_msg 0 ;;
+                        1) log_end_msg 1 ;; # Old process is still running
+                        *) log_end_msg 1 ;; # Failed to start
+                esac
+                ;;
+          *)
+                # Failed to stop
+                log_end_msg 1
+                ;;
+        esac
+        ;;
+  abort-restart)
+        log_daemon_msg "Abort-Restarting $DESC" "$NAME"
+        do_abort
         case "$?" in
           0|1)
                 do_start
