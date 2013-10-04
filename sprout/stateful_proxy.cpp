@@ -2109,12 +2109,18 @@ bool UASTransaction::move_to_terminating_chain()
   // Create new terminating chain.
   _as_chain_link.release();
   std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
-  Ifcs ifcs;
-  bool success = lookup_ifcs(served_user, ifcs, trail());
 
-  if (success)
+  // If we got a served user, look it up.  We won't get a served user if we've recognized that they're remote.
+  bool success = true;
+  if (!served_user.empty())
   {
-    _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+    Ifcs ifcs;
+    success = lookup_ifcs(served_user, ifcs, trail());
+
+    if (success)
+    {
+      _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+    }
   }
   return success;
 }

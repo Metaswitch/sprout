@@ -188,5 +188,5 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::map<std::string, Ifcs> ifcs_map;
   _hss.get_subscription_data("pubid44", "", ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("GET http://narcissus/filtercriteria/pubid44 failed"));
+  EXPECT_TRUE(_log.contains("GET http://narcissus/impu/pubid44 failed"));
 }

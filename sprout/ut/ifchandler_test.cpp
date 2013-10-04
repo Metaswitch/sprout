@@ -219,6 +219,7 @@ void IfcHandlerTest::doBaseTest(string description,
                   msg,
                   application_servers);
   delete ifcs;
+  free(cstr_ifc);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {

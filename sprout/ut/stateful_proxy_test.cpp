@@ -1376,6 +1376,8 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
     ret.push_back(i->binding_id);
   }
 
+  uastx->exit_context();
+
   return ret;
 }
 
