@@ -82,10 +82,9 @@ public:
 };
 
 
-Ifcs* simple_ifcs(int count, ...)
+Ifcs simple_ifcs(int count, ...)
 {
-  std::string xml = R"(<?xml version="1.0" encoding="UTF-8"?>
-                       <ServiceProfile>)";
+  std::string xml = R"(<?xml version="1.0" encoding="UTF-8"?><IMSSubscription><ServiceProfile><PublicIdentity><Identity>sip:5755550011@homedomain</Identity></PublicIdentity>)";
 
 
 
@@ -106,25 +105,25 @@ Ifcs* simple_ifcs(int count, ...)
   }
   va_end(args);
 
-  xml += "</ServiceProfile>";
+  xml += "</ServiceProfile></IMSSubscription>";
 
-  rapidxml::xml_document<>* ifc_doc = new rapidxml::xml_document<>();
+  std::shared_ptr<rapidxml::xml_document<> > ifc_doc (new rapidxml::xml_document<>);
   ifc_doc->parse<0>(ifc_doc->allocate_string(xml.c_str()));
-  return new Ifcs(ifc_doc);
+  return Ifcs(ifc_doc, ifc_doc->first_node("IMSSubscription")->first_node("ServiceProfile"));
 }
 
 
 TEST_F(AsChainTest, Basics)
 {
-  Ifcs* ifcs1 = simple_ifcs(0);
+  Ifcs ifcs1 = simple_ifcs(0);
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
   AsChainLink as_chain_link(&as_chain, 0u);
 
-  Ifcs* ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
+  Ifcs ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
   AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
-  Ifcs* ifcs3 = simple_ifcs(2, "sip:pancommunicon.cw-ngv.com", "sip:mmtel.homedomain");
+  Ifcs ifcs3 = simple_ifcs(2, "sip:pancommunicon.cw-ngv.com", "sip:mmtel.homedomain");
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
@@ -147,15 +146,15 @@ TEST_F(AsChainTest, Basics)
 
 TEST_F(AsChainTest, AsInvocation)
 {
-  Ifcs* ifcs1 = simple_ifcs(0);
+  Ifcs ifcs1 = simple_ifcs(0);
   AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
   AsChainLink as_chain_link(&as_chain, 0u);
 
-  Ifcs* ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
+  Ifcs ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
   AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
-  Ifcs* ifcs3 = simple_ifcs(1, "::invalid:pancommunicon.cw-ngv.com");
+  Ifcs ifcs3 = simple_ifcs(1, "::invalid:pancommunicon.cw-ngv.com");
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 

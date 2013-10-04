@@ -44,9 +44,19 @@ extern "C" {
 #include <string>
 #include "regdata.h"
 #include "ifchandler.h"
+#include "hssconnection.h"
 
 namespace RegistrationUtils {
-void user_initiated_deregistration(IfcHandler *ifchandler, RegData::Store *store, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail);
-void network_initiated_deregistration(IfcHandler *ifchandler, RegData::Store* store, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail);
-void register_with_application_servers(IfcHandler *ifchandler, RegData::Store *store, pjsip_rx_data *received_register, pjsip_tx_data *ok_response, int expires, const std::string& served_user, SAS::TrailId trail);
+void network_initiated_deregistration(RegData::Store* store,
+                                      Ifcs& ifcs,
+                                      const std::string& served_user,
+                                      const std::string& binding_id,
+                                      SAS::TrailId trail);
+void register_with_application_servers(Ifcs& ifcs,
+                                       RegData::Store *store,
+                                       pjsip_rx_data *received_register,
+                                       pjsip_tx_data *ok_response,
+                                       int expires,
+                                       const std::string& served_user,
+                                       SAS::TrailId trail);
 }

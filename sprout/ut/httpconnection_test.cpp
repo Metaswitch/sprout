@@ -84,8 +84,8 @@ class HttpConnectionTest : public BaseTest
 TEST_F(HttpConnectionTest, SimpleKeyAuthGet)
 {
   string output;
-  bool ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
-  EXPECT_TRUE(ret);
+  long ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
   EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>", output);
   Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
   EXPECT_EQ("GET", req._method);
@@ -97,11 +97,10 @@ TEST_F(HttpConnectionTest, SimpleKeyAuthGet)
 TEST_F(HttpConnectionTest, SimpleGetFailure)
 {
   string output;
-  bool ret;
-  ret = _http.get("/blah/blah/wot", output, "gandalf", 0);
-  EXPECT_FALSE(ret);
+  long ret = _http.get("/blah/blah/wot", output, "gandalf", 0);
+  EXPECT_EQ(404, ret);
   ret = _http.get("/blah/blah/503", output, "gandalf", 0);
-  EXPECT_FALSE(ret);
+  EXPECT_EQ(503, ret);
 }
 
 TEST_F(HttpConnectionTest, SimpleGetRetry)
@@ -109,12 +108,12 @@ TEST_F(HttpConnectionTest, SimpleGetRetry)
   string output;
 
   // Warm up the connection.
-  bool ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
-  EXPECT_TRUE(ret);
+  long ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
 
   // Get a failure on the connection and retry it.
   ret = _http.get("/down/around", output, "gandalf", 0);
-  EXPECT_TRUE(ret);
+  EXPECT_EQ(200, ret);
   EXPECT_EQ("<message>Gotcha!</message>", output);
 }
 
@@ -122,8 +121,8 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
 {
   // Warm up.
   string output;
-  bool ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
-  EXPECT_TRUE(ret);
+  long ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
 
   // Wait a very short time.
   cwtest_advance_time_ms(10L);
@@ -132,7 +131,7 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   // unlikely (~2e-4) that we'll choose to recycle already - let's
   // just take the risk of an occasional spurious test failure).
   ret = _http.get("/up/up/up", output, "legolas", 0);
-  EXPECT_TRUE(ret);
+  EXPECT_EQ(200, ret);
   Request& req = fakecurl_requests["http://cyrus/up/up/up"];
   EXPECT_FALSE(req._fresh);
 
@@ -144,7 +143,7 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   // a tiny chance (~5e-5) we'll fail here because we're still using
   // the same connection, but we'll take the risk.
   ret = _http.get("/down/down/down", output, "gimli", 0);
-  EXPECT_TRUE(ret);
+  EXPECT_EQ(200, ret);
   Request& req2 = fakecurl_requests["http://cyrus/down/down/down"];
   EXPECT_TRUE(req2._fresh);
 

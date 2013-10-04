@@ -36,6 +36,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
+#include <cassert>
 
 extern "C" {
 #include <pjlib-util.h>
@@ -44,7 +45,6 @@ extern "C" {
 
 #include "log.h"
 #include "constants.h"
-#include "hssconnection.h"
 #include "stack.h"
 #include "pjutils.h"
 
@@ -86,9 +86,7 @@ private:
 };
 
 
-IfcHandler::IfcHandler(HSSConnection* hss, RegData::Store* store) :
-  _hss(hss),
-  _store(store)
+IfcHandler::IfcHandler()
 {
 }
 
@@ -432,38 +430,6 @@ AsInvocation Ifc::as_invocation() const
 }
 
 
-/// Get the list of iFCs from the specified subscriber, ready to apply
-/// to messages in this original dialog. If there are no iFCs, the
-/// list will be empty.
-Ifcs* IfcHandler::lookup_ifcs(const SessionCase& session_case,  //< The session case
-                              const std::string& served_user,   //< The served user
-                              SAS::TrailId trail)               //< The SAS trail ID
-{
-  LOG_DEBUG("Fetching %s IFC information for %s", session_case.to_string().c_str(), served_user.c_str());
-
-  xml_document<>* ifc_doc = new xml_document<>();
-  std::string ifc_xml;
-  if (!_hss->get_user_ifc(served_user, ifc_xml, trail))
-  {
-    LOG_INFO("No iFC found - no processing will be applied");
-  }
-  else
-  {
-    try
-    {
-      ifc_doc->parse<0>(ifc_doc->allocate_string(ifc_xml.c_str()));
-    }
-    catch (parse_error err)
-    {
-      LOG_ERROR("iFCs parse error: %s", err.what());
-      ifc_doc->clear();
-    }
-  }
-
-  return new Ifcs(ifc_doc);
-}
-
-
 /// Construct an empty set of iFCs.
 Ifcs::Ifcs() :
   _ifc_doc(NULL)
@@ -474,54 +440,53 @@ Ifcs::Ifcs() :
 /// Construct a set of iFCs. Takes ownership of the ifc_doc.
 //
 // If there are any errors, yields an empty iFC doc (but does not fail).
-Ifcs::Ifcs(xml_document<>* ifc_doc) :
+Ifcs::Ifcs(std::shared_ptr<xml_document<> > ifc_doc, xml_node<>* sp) :
   _ifc_doc(ifc_doc)
 {
-  xml_node<>* sp = ifc_doc->first_node("ServiceProfile");
-  if (!sp)
-  {
-    // Failed to find the ServiceProfile node so this document is invalid.
-    LOG_ERROR("iFCs missing ServiceProfile node");
-    return;
-  }
-
   // List sorted by priority (smallest should be handled first).
   // Priority is xs:int restricted to be positive, i.e., 0..2147483647.
   std::multimap<int32_t, Ifc> ifc_map;
 
-  // Spin through the list of filter criteria, adding each to the list.
-  for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");
-       ifc;
-       ifc = ifc->next_sibling("InitialFilterCriteria"))
+  if (sp)
   {
-    try
+
+    // Spin through the list of filter criteria, adding each to the list.
+    for (xml_node<>* ifc = sp->first_node("InitialFilterCriteria");
+         ifc;
+         ifc = ifc->next_sibling("InitialFilterCriteria"))
     {
-      xml_node<>* priority_node = ifc->first_node("Priority");
-      int32_t priority = (int32_t)((priority_node) ?
-                                   parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
-                                   0);
-      ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
+      try
+      {
+        xml_node<>* priority_node = ifc->first_node("Priority");
+        int32_t priority = (int32_t)((priority_node) ?
+                                     parse_integer(priority_node, "iFC priority", 0, std::numeric_limits<int32_t>::max()) :
+                                     0);
+        ifc_map.insert(std::pair<int32_t, Ifc>(priority, Ifc(ifc)));
+      }
+      catch (ifc_error err)
+      {
+        // Ignore individual criteria which can't be parsed, and keep
+        // going with the rest.
+        LOG_ERROR("iFC evaluation error %s", err.what());
+      }
     }
-    catch (ifc_error err)
+
+    for (std::multimap<int32_t, Ifc>::iterator it = ifc_map.begin();
+         it != ifc_map.end();
+         ++it)
     {
-      // Ignore individual criteria which can't be parsed, and keep
-      // going with the rest.
-      LOG_ERROR("iFC evaluation error %s", err.what());
+      _ifcs.push_back(it->second);
     }
   }
-
-  for (std::multimap<int32_t, Ifc>::iterator it = ifc_map.begin();
-       it != ifc_map.end();
-       ++it)
+  else
   {
-    _ifcs.push_back(it->second);
+    LOG_ERROR("No ServiceProfile node in iFC!");
   }
 }
 
 
 Ifcs::~Ifcs()
 {
-  delete _ifc_doc;
 }
 
 

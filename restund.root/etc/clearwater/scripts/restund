@@ -35,7 +35,7 @@ turn_relay_addr6        ::1
 # Cope with broken TURN clients
 turn_extended_channels  yes
 # httpdb
-httpdb_url              http://hs.$home_domain:8888/privatecredentials/%s/digest/
+httpdb_url              http://hs.$home_domain:8888/impi/%s/digest
 # Relax TURN security to support buggy clients
 httpdb_uri_workaround   yes
 httpdb_uri_workaround_password  $turn_workaround

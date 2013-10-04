@@ -48,6 +48,7 @@
 #include "authentication.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "fakecurl.hpp"
 
 using namespace std;
 
@@ -117,7 +118,7 @@ public:
     _user("6505550001"),
     _domain("ut.cw-ngv.com"),
     _auth_hdr(true),
-    _auth_user("sip:6505550001@ut.cw-ngv.com"),
+    _auth_user("6505550001@ut.cw-ngv.com"),
     _auth_realm("ut.cw-ngv.com"),
     _nonce(""),
     _uri("sip:ut.cw-ngv.com"),
@@ -199,6 +200,7 @@ TEST_F(AuthenticationTest, NoAuthorizationReg)
 TEST_F(AuthenticationTest, AuthorizationReg)
 {
   // Test that Sprout rejects REGISTER requests where the account can't be found.
+  fakecurl_responses["http://localhost/impi/6505550001%40ut.cw-ngv.com/digest?public_id=sip%3A6505550001%40ut.cw-ngv.com"] = CURLE_REMOTE_FILE_NOT_FOUND;
   AuthenticationMessage msg("REGISTER");
   msg._auth_hdr = true;
   pj_bool_t ret = inject_msg_direct(msg.get());

@@ -44,6 +44,8 @@
 #include <json/value.h>
 
 #include "httpconnection.h"
+#include "rapidxml/rapidxml.hpp"
+#include "ifchandler.h"
 #include "sas.h"
 #include "accumulator.h"
 
@@ -61,20 +63,19 @@ public:
   Json::Value* get_digest_data(const std::string& private_user_id,
                                const std::string& public_user_id,
                                SAS::TrailId trail);
-  Json::Value* get_associated_uris(const std::string& private_user_id,
-                                   SAS::TrailId);
-  virtual bool get_user_ifc(const std::string& public_user_id,
-                            std::string& xml_data,
-                            SAS::TrailId trail);
-
+  long get_subscription_data(const std::string& public_user_identity,
+                             const std::string& private_user_identity,
+                             std::map<std::string, Ifcs >& service_profiles,
+                             std::vector<std::string>& associated_uris,
+                             SAS::TrailId trail);
 private:
-  virtual Json::Value* get_object(const std::string& path, SAS::TrailId trail);
+  virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
+  virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;
   StatisticAccumulator _latency_stat;
   StatisticAccumulator _digest_latency_stat;
-  StatisticAccumulator _associated_uri_latency_stat;
-  StatisticAccumulator _ifc_latency_stat;
+  StatisticAccumulator _subscription_latency_stat;
 };
 
 #endif
