@@ -208,7 +208,8 @@ static
 #endif
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata,
-                                       TrustBoundary **trust);
+                                       TrustBoundary **trust,
+                                       target **target);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
@@ -373,6 +374,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   UASTransaction* uas_data;
   ServingState serving_state;
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
+  target *target = NULL;
 
   // Verify incoming request.
   status = proxy_verify_request(rdata);
@@ -397,7 +399,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   if (edge_proxy)
   {
     // Process edge proxy routing.  This also does IBCF function if enabled.
-    status = proxy_process_edge_routing(rdata, tdata, &trust);
+    status = proxy_process_edge_routing(rdata, tdata, &trust, &target);
     if (status != PJ_SUCCESS)
     {
       // Delete the request since we're not forwarding it
@@ -532,8 +534,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     uas_data->send_trying(rdata);
   }
 
-  // Perform common initial processing.
-  uas_data->handle_non_cancel(serving_state);
+  // Perform common initial processing.  This will delete the
+  // target if specified.
+  uas_data->handle_non_cancel(serving_state, target);
 
   uas_data->exit_context();
 }
@@ -775,19 +778,89 @@ static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip
 }
 
 
+/// Create a simple target routing the call to Sprout.
+static void proxy_route_upstream(pjsip_rx_data* rdata,
+                                 pjsip_tx_data* tdata,
+                                 TrustBoundary **trust,
+                                 target** target)
+{
+  // Forward it to the upstream proxy to deal with.  We do this by creating
+  // a target with the existing request URI and a path to the upstream
+  // proxy and stripping any loose routes that might have been added by the
+  // UA.  If the request URI is a SIP URI with a domain/host that is not
+  // the home domain, change it to use the home domain.
+  LOG_INFO("Route request to upstream proxy %.*s",
+      ((pjsip_sip_uri*)upstream_proxy)->host.slen,
+      ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
+  *target = new ::target();
+  ::target* target_p = *target;
+  target_p->upstream_route = PJ_TRUE;
+  if ((PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
+      (!PJUtils::is_home_domain((pjsip_uri*)tdata->msg->line.req.uri)))
+  {
+    // Change host/domain in target to use home domain.
+    target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
+        tdata->msg->line.req.uri);
+    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.home_domain;
+  }
+  else
+  {
+    // Use request URI unchanged.
+    target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
+  }
+
+  // Route upstream.
+  pjsip_routing_hdr* route_hdr;
+  pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool,
+                                                                upstream_proxy);
+
+  // Maybe mark it as originating, so Sprout knows to
+  // apply originating handling.
+  //
+  // In theory, on the access side, the UE ought to have
+  // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+  // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header"
+  //
+  // When working on the IBCF side, the provided route will not have
+  // orig set, so we won't set in on the route upstream ether.
+  //
+  // When working as a load-balancer for a third-party P-CSCF, trust the
+  // orig parameter of the top-most Route header.
+  pjsip_param* orig_param = NULL;
+  if (PJUtils::is_top_route_local(tdata->msg, &route_hdr))
+  {
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
+    orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+  }
+
+  if (orig_param ||
+      (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
+  {
+    LOG_DEBUG("Mark originating");
+    pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+    pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+    pj_strdup2(tdata->pool, &orig_param->value, "");
+    pj_list_insert_after(&upstream_uri->other_param, orig_param);
+  }
+
+  target_p->paths.push_back((pjsip_uri*)upstream_uri);
+}
+
+
 /// Perform edge-proxy-specific routing.
 #ifndef UNIT_TEST
 static
 #endif
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata,
-                                       TrustBoundary **trust)
+                                       TrustBoundary **trust,
+                                       target **target)
 {
   pj_status_t status;
   Flow* src_flow = NULL;
   Flow* tgt_flow = NULL;
   SIPPeerType source_type = determine_source(rdata->tp_info.transport,
-                                            rdata->pkt_info.src_addr);
+                                             rdata->pkt_info.src_addr);
 
   LOG_DEBUG("Perform edge proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
@@ -881,6 +954,10 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
     // Message from client. Allow client to provide data, but don't let it discover internal data.
     *trust = &TrustBoundary::INBOUND_EDGE_CLIENT;
+
+    // Until we support routing, all REGISTER requests should be sent to the upstream sprout
+    // for processing.
+    proxy_route_upstream(rdata, tdata, trust, target);
 
     // Do standard route header processing for the request.  This may
     // remove the top route header if it corresponds to this node.
@@ -1114,6 +1191,12 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // URI in the top route header, or the request URI.
     pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
+    if (PJUtils::is_home_domain(next_hop))
+    {
+      // Route the request upstream to Sprout.
+      proxy_route_upstream(rdata, tdata, trust, target);
+    }
+
     if ((ibcf) &&
         (tgt_flow == NULL) &&
         (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
@@ -1170,7 +1253,7 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     }
     else
     {
-      // Message is being routed between a commercial edge proxy and Sprout (or vice-
+      // Message is being routed between a third-party edge proxy and Sprout (or vice-
       // versa).  Just do a single Record-Route, using the cluster address.
       LOG_DEBUG("Single Record-Route");
       PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, false);
@@ -1351,56 +1434,6 @@ void proxy_calculate_targets(pjsip_msg* msg,
         target.paths.push_back((pjsip_uri*)route_uri);
       }
     }
-
-    targets.push_back(target);
-    return;
-  }
-
-  if (edge_proxy)
-  {
-    // We're an edge proxy and there wasn't a route mandated by the message,
-    // forward it to the upstream proxy to deal with.  We do this by adding
-    // a target with the existing request URI and a path to the upstream
-    // proxy and stripping any loose routes that might have been added by the
-    // UA.  If the request URI is a SIP URI with a domain/host that is not
-    // the home domain, change it to use the home domain.
-    LOG_INFO("Route request to upstream proxy %.*s",
-             ((pjsip_sip_uri*)upstream_proxy)->host.slen,
-             ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
-    target target;
-    target.upstream_route = PJ_TRUE;
-    if ((PJSIP_URI_SCHEME_IS_SIP(req_uri)) &&
-        (!PJUtils::is_home_domain((pjsip_uri*)req_uri)))
-    {
-      // Change host/domain in target to use home domain.
-      target.uri = (pjsip_uri*)pjsip_uri_clone(pool, req_uri);
-      ((pjsip_sip_uri*)target.uri)->host = stack_data.home_domain;
-    }
-    else
-    {
-      // Use request URI unchanged.
-      target.uri = (pjsip_uri*)req_uri;
-    }
-
-    // Route upstream.
-    pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(pool, upstream_proxy);
-    if (trust == &TrustBoundary::INBOUND_EDGE_CLIENT)
-    {
-      // Mark it as originating, so Sprout knows to
-      // apply originating handling.  In theory the UE ought to have
-      // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-      // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header" c
-      // - but if we're here it didn't, so we do the work for it.
-      LOG_DEBUG("Mark originating");
-      pjsip_param *orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      pj_strdup(pool, &orig_param->name, &STR_ORIG);
-      pj_strdup2(pool, &orig_param->value, "");
-      pj_list_insert_after(&upstream_uri->other_param, orig_param);
-    }
-    target.paths.push_back((pjsip_uri*)upstream_uri);
-
-    // Select a transport for the request.
-    target.transport = upstream_conn_pool->get_connection();
 
     targets.push_back(target);
     return;
@@ -1844,16 +1877,16 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 
 /// Handle a non-CANCEL message.
-void UASTransaction::handle_non_cancel(const ServingState& serving_state)
+void UASTransaction::handle_non_cancel(const ServingState& serving_state, target *target)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
-  target* target = NULL;
   pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
 
-  if (!edge_proxy)
+  // If we're a routing proxy, perform AS handling to pick the next hop.
+  if (!target && !edge_proxy)
   {
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
@@ -2437,7 +2470,7 @@ pj_status_t UASTransaction::handle_final_response()
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
                                  _as_chain_link.next());
-      handle_non_cancel(serving_state);
+      handle_non_cancel(serving_state, NULL);
     }
     else
     {
@@ -2900,7 +2933,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
     // Kick off outgoing processing for the new request.  Continue the
     // existing AsChain. This will trigger orig-cdiv handling.
-    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
+    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link), NULL);
   }
   else
   {
