@@ -1,5 +1,5 @@
 /**
- * @file enumservice_test.cpp UT for Sprout BGCF service.
+ * @file bgcfservice_test.cpp UT for Sprout BGCF service.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -38,6 +38,7 @@
 ///----------------------------------------------------------------------------
 
 #include <string>
+#include <vector>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
@@ -78,8 +79,26 @@ public:
   void test(BgcfService& bgcf_)
   {
     SCOPED_TRACE(_in);
-    string ret = bgcf_.get_route(_in);
-    EXPECT_EQ(_out, ret);
+    vector<string> ret = bgcf_.get_route(_in);
+    //std::ostringstream oss;
+    //if (!ret.empty())
+   // {
+      // Convert all but the last element to avoid a trailing ","
+   //     std::copy(ret.begin(), ret.end()-1,
+   //     std::ostream_iterator<int>(oss, ","));
+   // }
+    // Now add the last element with no delimiter
+  //  oss << ret.back();
+//    print ret[0]; 
+    std::stringstream ss;
+    for(size_t i = 0; i < ret.size(); ++i)
+    {
+      if(i != 0)
+       { ss << ",";}
+      ss << ret[i];
+    }
+    string s = ss.str();
+    EXPECT_EQ(_out, s);
   }
 
 private:
@@ -91,14 +110,14 @@ private:
 TEST_F(BgcfServiceTest, SimpleTests)
 {
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
-
-  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
+  
   ET("ec2-54-243-253-10.compute-1.amazonaws.com", "").test(bgcf_);
   ET("",                           ""                  ).test(bgcf_);
   ET("billy2",                     ""                  ).test(bgcf_);
   ET("198.147.226.",               ""                  ).test(bgcf_);
   ET("foreign-domain.example.com", "sip.example.com"   ).test(bgcf_);
   ET("198.147.226.99",             "fd3.amazonaws.com" ).test(bgcf_);
+  ET("multiple-nodes.example.com", "sip2.example.com,sip3.example.com").test(bgcf_);
 }
 
 TEST_F(BgcfServiceTest, ParseError)
