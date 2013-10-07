@@ -91,7 +91,7 @@ public:
 
       store_strings << ret[ii];
     }
-    
+
     EXPECT_EQ(_out, store_strings.str());
   }
 
@@ -104,7 +104,8 @@ private:
 TEST_F(BgcfServiceTest, SimpleTests)
 {
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
-  
+
+  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
   ET("ec2-54-243-253-10.compute-1.amazonaws.com", "").test(bgcf_);
   ET("",                           ""                  ).test(bgcf_);
   ET("billy2",                     ""                  ).test(bgcf_);
