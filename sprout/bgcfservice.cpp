@@ -83,7 +83,6 @@ BgcfService::BgcfService(std::string configuration)
           {
             Json::Value route_val = route_vals[(int)jj];
             _route_vals.push_back(route_val.asString());
-            LOG_STATUS("Added route value");// %s", route_val.asString.c_str());
           }
 
           _routes.insert(std::make_pair(domain, _route_vals));

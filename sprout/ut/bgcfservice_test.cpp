@@ -80,25 +80,19 @@ public:
   {
     SCOPED_TRACE(_in);
     vector<string> ret = bgcf_.get_route(_in);
-    //std::ostringstream oss;
-    //if (!ret.empty())
-   // {
-      // Convert all but the last element to avoid a trailing ","
-   //     std::copy(ret.begin(), ret.end()-1,
-   //     std::ostream_iterator<int>(oss, ","));
-   // }
-    // Now add the last element with no delimiter
-  //  oss << ret.back();
-//    print ret[0]; 
-    std::stringstream ss;
-    for(size_t i = 0; i < ret.size(); ++i)
+    std::stringstream store_strings;
+
+    for(size_t ii = 0; ii < ret.size(); ++ii)
     {
-      if(i != 0)
-       { ss << ",";}
-      ss << ret[i];
+      if (ii != 0)
+      {
+        store_strings << ",";
+      }
+
+      store_strings << ret[ii];
     }
-    string s = ss.str();
-    EXPECT_EQ(_out, s);
+    
+    EXPECT_EQ(_out, store_strings.str());
   }
 
 private:
