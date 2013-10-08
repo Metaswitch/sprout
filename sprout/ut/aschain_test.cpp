@@ -177,7 +177,7 @@ TEST_F(AsChainTest, AsInvocation)
   pj_status_t status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  target *target;
+  Target *target;
   AsChainLink::Disposition disposition;
 
   // Nothing to invoke. Just proceed.

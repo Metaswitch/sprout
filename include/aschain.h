@@ -58,7 +58,7 @@ class CallServices;
 class UASTransaction;
 
 /// Short-lived data structure holding the details of a calculated target.
-struct target
+struct Target
 {
   pj_bool_t from_store;
   pj_bool_t upstream_route;
@@ -70,7 +70,7 @@ struct target
   int liveness_timeout;
 
   // Default constructor.
-  target() :
+  Target() :
     from_store(PJ_FALSE),
     upstream_route(PJ_FALSE),
     aor(),
@@ -82,7 +82,7 @@ struct target
   {
   }
 };
-typedef std::list<target> target_list;
+typedef std::list<Target> TargetList;
 
 class AsChainTable;
 
@@ -287,7 +287,7 @@ public:
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,
                                  pjsip_tx_data* tdata,
-                                 target** target);
+                                 Target** target);
 
 private:
   friend class AsChainTable;

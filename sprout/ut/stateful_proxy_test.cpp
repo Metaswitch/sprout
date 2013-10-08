@@ -1359,13 +1359,13 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
   pjsip_rx_data* rdata = build_rxdata(msg.get_request());
   parse_rxdata(rdata);
 
-  target_list targets;
+  TargetList targets;
   UASTransaction* uastx = NULL;
   UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, &uastx);
   uastx->proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;
-  for (target_list::const_iterator i = targets.begin();
+  for (TargetList::const_iterator i = targets.begin();
        i != targets.end();
        ++i)
   {
@@ -2176,43 +2176,6 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
 
   // Goes to the right place (upstream).
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
-
-  // Record-Route is added so it will come back the right way.
-  actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_THAT(actual, HasSubstr(baretoken));
-  EXPECT_THAT(actual, HasSubstr(";lr"));
-  EXPECT_THAT(actual, Not(HasSubstr(";ob")));
-
-  // Boring route header.
-  actual = get_headers(tdata->msg, "Route");
-  EXPECT_THAT(actual, HasSubstr("sip:upstreamnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP"));
-
-  // No path header.
-  actual = get_headers(tdata->msg, "Path");
-  EXPECT_EQ("", actual);
-
-  free_txdata();
-
-  // Now try a message from the client to the R.O.W., but getting the
-  // destination domain wrong (specifying this host, rather than the
-  // home domain). Edge proxy should silently correct this.
-  msg2._unique++;
-  msg2._todomain = "testnode";
-  msg2._fromdomain += ";user=phone";
-  inject_msg(msg2.get_request(), tp);
-
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-
-  // Is the right kind and method.
-  ReqMatcher r4("INVITE");
-  r4.matches(tdata->msg);
-
-  // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
-
-  // Request URI is what it was, but coerced to correct domain.
-  EXPECT_EQ("sip:6505551234@homedomain", r4.uri());
 
   // Record-Route is added so it will come back the right way.
   actual = get_headers(tdata->msg, "Record-Route");

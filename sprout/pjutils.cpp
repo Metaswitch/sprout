@@ -368,11 +368,21 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
 void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* transport,
                                int port,
-                               const char* user)
+                               const char* user,
+                               const bool specific_host)
 {
   pjsip_rr_hdr* rr = pjsip_rr_hdr_create(tdata->pool);
   pjsip_sip_uri* uri = pjsip_sip_uri_create(tdata->pool, PJ_FALSE);
-  uri->host = stack_data.name[0];
+  if (specific_host)
+  {
+    uri->host = stack_data.name[0];
+  }
+  else
+  {
+    // If Sprout ever uses this function to Record-Routes itself, this branch will need 
+    // to be made smarter.
+    uri->host = stack_data.bono_cluster_domain;
+  }
   uri->port = port;
   pj_strdup2(tdata->pool, &uri->transport_param, transport);
   uri->lr_param = PJ_TRUE;
