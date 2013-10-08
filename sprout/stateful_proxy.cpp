@@ -209,7 +209,7 @@ static
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata,
                                        TrustBoundary **trust,
-                                       target **target);
+                                       Target **target);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
@@ -374,7 +374,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   UASTransaction* uas_data;
   ServingState serving_state;
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
-  target *target = NULL;
+  Target *target = NULL;
 
   // Verify incoming request.
   status = proxy_verify_request(rdata);
@@ -782,7 +782,7 @@ static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip
 static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
                                  TrustBoundary **trust,
-                                 target** target)
+                                 Target** target)
 {
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
@@ -792,8 +792,8 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   LOG_INFO("Route request to upstream proxy %.*s",
       ((pjsip_sip_uri*)upstream_proxy)->host.slen,
       ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
-  *target = new ::target();
-  ::target* target_p = *target;
+  *target = new Target();
+  Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
   if ((PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
       (!PJUtils::is_home_domain((pjsip_uri*)tdata->msg->line.req.uri)))
@@ -854,7 +854,7 @@ static
 pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
                                        pjsip_tx_data *tdata,
                                        TrustBoundary **trust,
-                                       target **target)
+                                       Target **target)
 {
   pj_status_t status;
   Flow* src_flow = NULL;
@@ -1374,7 +1374,7 @@ static
 void proxy_calculate_targets(pjsip_msg* msg,
                              pj_pool_t* pool,
                              const TrustBoundary* trust,
-                             target_list& targets,
+                             TargetList& targets,
                              int max_targets,
                              SAS::TrailId trail)
 {
@@ -1388,7 +1388,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
   if (req_uri->maddr_param.slen)
   {
     LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
-    target target;
+    Target target;
     target.uri = (pjsip_uri*)req_uri;
     targets.push_back(target);
     return;
@@ -1402,7 +1402,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
       (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
   {
     LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
-    target target;
+    Target target;
     target.uri = (pjsip_uri*)req_uri;
 
     if ((bgcf_service) &&
@@ -1515,7 +1515,7 @@ void proxy_calculate_targets(pjsip_msg* msg,
       RegData::AoR::Binding* binding = i->second;
       LOG_DEBUG("Target = %s", binding->_uri.c_str());
       bool useable_contact = true;
-      target target;
+      Target target;
       target.from_store = PJ_TRUE;
       target.aor = aor;
       target.binding_id = i->first;
@@ -1877,7 +1877,7 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 
 /// Handle a non-CANCEL message.
-void UASTransaction::handle_non_cancel(const ServingState& serving_state, target *target)
+void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target *target)
 {
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   pj_status_t status;
@@ -2006,7 +2006,7 @@ void UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 // @returns whether processing should `Stop`, `Skip` to the end, or
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
-AsChainLink::Disposition UASTransaction::handle_originating(target** target) // OUT: target, if disposition is Skip
+AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // OUT: target, if disposition is Skip
 
 {
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_originating()))
@@ -2054,7 +2054,7 @@ void UASTransaction::move_to_terminating_chain()
 //
 // @returns whether processing should `Stop`, `Skip` to the end, or
 // is now `Complete`. Never returns `Next`.
-AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // OUT: target, if disposition is Skip
+AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // OUT: target, if disposition is Skip
 {
   if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
   {
@@ -2120,10 +2120,10 @@ AsChainLink::Disposition UASTransaction::handle_terminating(target** target) // 
 }
 
 // Handle the outgoing half of a non-CANCEL message.
-void UASTransaction::handle_outgoing_non_cancel(target* target)
+void UASTransaction::handle_outgoing_non_cancel(Target* target)
 {
   // Calculate targets
-  target_list targets;
+  TargetList targets;
   if (target != NULL)
   {
     // Already have a target, so use it.
@@ -2696,7 +2696,7 @@ void UASTransaction::log_on_tsx_complete()
 // Initializes UAC transactions to each of the specified targets.
 //
 // @returns a status code indicating whether or not the operation succeeded.
-pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
+pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
 {
   pj_status_t status = PJ_EUNKNOWN;
   pjsip_transaction *uac_tsx;
@@ -2707,7 +2707,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
   {
     // Initialise the UAC data structures for each target.
     int ii = 0;
-    for (target_list::const_iterator it = targets.begin();
+    for (TargetList::const_iterator it = targets.begin();
          it != targets.end();
          ++it)
     {
@@ -2747,7 +2747,7 @@ pj_status_t UASTransaction::init_uac_transactions(target_list& targets)
       // (this is done as a separate loop to avoid modifying the message
       // before it is cloned).
       ii = 0;
-      for (target_list::const_iterator it = targets.begin();
+      for (TargetList::const_iterator it = targets.begin();
            it != targets.end();
            ++it)
       {
@@ -3075,7 +3075,7 @@ UACTransaction* UACTransaction::get_from_tsx(pjsip_transaction* tsx)
 
 // Set the target for this UAC transaction.
 //
-void UACTransaction::set_target(const struct target& target)
+void UACTransaction::set_target(const struct Target& target)
 {
   enter_context();
 
