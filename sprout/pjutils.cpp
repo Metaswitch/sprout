@@ -379,7 +379,8 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   }
   else
   {
-    // Warning, if Sprout ever Record-Routes itself, this will need to be smarter.
+    // If Sprout ever uses this function to Record-Routes itself, this branch will need 
+    // to be made smarter.
     uri->host = stack_data.bono_cluster_domain;
   }
   uri->port = port;

@@ -535,7 +535,7 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
-  // Construct a Service-Route header pointing at the sprout cluster.  We don't
+  // Construct a Service-Route header pointing at the domain.  We don't
   // care which sprout handles the subsequent requests as they all have access
   // to all subscriber information.
   pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
