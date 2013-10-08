@@ -2,15 +2,19 @@
     "routes" : [
         {   "name" : "Alameda PBX",
             "domain" : "198.147.226.2",
-            "route" : "ec2-54-243-253-10.compute-1.amazonaws.com"
+            "route" : ["ec2-54-243-253-10.compute-1.amazonaws.com"]
         },
         {   "name" : "Oakland PBX",
             "domain" : "foreign-domain.example.com",
-            "route" : "sip.example.com"
+            "route" : ["sip.example.com"]
         },
         {   "name" : "San Leandro PBX",
             "domain" : "198.147.226.99",
-            "route" : "fd3.amazonaws.com"
+            "route" : ["fd3.amazonaws.com"]
+        },
+        {   "name" : "Multiple nodes",
+            "domain" : "multiple-nodes.example.com",
+            "route" : ["sip2.example.com","sip3.example.com"]
         }
     ]
 }

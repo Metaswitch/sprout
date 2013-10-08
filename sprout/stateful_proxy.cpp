@@ -1382,28 +1382,31 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      std::string bgcf_route = bgcf_service->get_route(domain);
+      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain);
 
       if (!bgcf_route.empty())
       {
-        // Split the route into a host and (optional) port.
-        int port = 0;
-        std::vector<std::string> bgcf_route_elems;
-        Utils::split_string(bgcf_route, ':', bgcf_route_elems, 2, true);
+        for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
+        { 
+          // Split the route into a host and (optional) port.
+          int port = 0;
+          std::vector<std::string> bgcf_route_elems;
+          Utils::split_string(*ii, ':', bgcf_route_elems, 2, true);
 
-        if (bgcf_route_elems.size() > 1)
-        {
-          port = atoi(bgcf_route_elems[1].c_str());
+          if (bgcf_route_elems.size() > 1)
+          {
+            port = atoi(bgcf_route_elems[1].c_str());
+          }
+
+          // BGCF configuration has a route to this destination, so translate to
+          // a URI.
+          pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
+          pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
+          route_uri->port = port;
+          route_uri->transport_param = pj_str("TCP");
+          route_uri->lr_param = 1;
+          target.paths.push_back((pjsip_uri*)route_uri);
         }
-
-        // BGCF configuration has a route to this destination, so translate to
-        // a URI.
-        pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
-        pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
-        route_uri->port = port;
-        route_uri->transport_param = pj_str("TCP");
-        route_uri->lr_param = 1;
-        target.paths.push_back((pjsip_uri*)route_uri);
       }
     }
 

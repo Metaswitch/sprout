@@ -49,10 +49,10 @@ public:
   BgcfService(std::string configuration = "./bgcf.json");
   ~BgcfService();
 
-  std::string get_route(const std::string &domain) const;
+  std::vector<std::string> get_route(const std::string &domain) const;
 
 private:
-  std::map<std::string, std::string> _routes;
+  std::map<std::string, std::vector<std::string>> _routes; 
 };
 
 #endif

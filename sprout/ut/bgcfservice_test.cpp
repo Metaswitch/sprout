@@ -1,5 +1,5 @@
 /**
- * @file enumservice_test.cpp UT for Sprout BGCF service.
+ * @file bgcfservice_test.cpp UT for Sprout BGCF service.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -38,6 +38,7 @@
 ///----------------------------------------------------------------------------
 
 #include <string>
+#include <vector>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
@@ -78,8 +79,20 @@ public:
   void test(BgcfService& bgcf_)
   {
     SCOPED_TRACE(_in);
-    string ret = bgcf_.get_route(_in);
-    EXPECT_EQ(_out, ret);
+    vector<string> ret = bgcf_.get_route(_in);
+    std::stringstream store_strings;
+
+    for(size_t ii = 0; ii < ret.size(); ++ii)
+    {
+      if (ii != 0)
+      {
+        store_strings << ",";
+      }
+
+      store_strings << ret[ii];
+    }
+
+    EXPECT_EQ(_out, store_strings.str());
   }
 
 private:
@@ -99,6 +112,7 @@ TEST_F(BgcfServiceTest, SimpleTests)
   ET("198.147.226.",               ""                  ).test(bgcf_);
   ET("foreign-domain.example.com", "sip.example.com"   ).test(bgcf_);
   ET("198.147.226.99",             "fd3.amazonaws.com" ).test(bgcf_);
+  ET("multiple-nodes.example.com", "sip2.example.com,sip3.example.com").test(bgcf_);
 }
 
 TEST_F(BgcfServiceTest, ParseError)
