@@ -76,17 +76,18 @@ BgcfService::BgcfService(std::string configuration)
         if ((route["domain"].isString()) &&
             (route["route"].isArray()))
         {
+          std::vector<std::string> route_vec;
           Json::Value route_vals = route["route"];       
           std::string domain = route["domain"].asString();
           
           for (size_t jj = 0; jj < route_vals.size(); ++jj)
           {
             Json::Value route_val = route_vals[(int)jj];
-            _route_vals.push_back(route_val.asString());
+            route_vec.push_back(route_val.asString());
           }
 
-          _routes.insert(std::make_pair(domain, _route_vals));
-          _route_vals.clear(); 
+          _routes.insert(std::make_pair(domain, route_vec));
+          route_vec.clear(); 
         }
         else
         {

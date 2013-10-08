@@ -52,7 +52,6 @@ public:
   std::vector<std::string> get_route(const std::string &domain) const;
 
 private:
-  std::vector<std::string> _route_vals;
   std::map<std::string, std::vector<std::string>> _routes; 
 };
 
