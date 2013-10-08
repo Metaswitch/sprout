@@ -176,7 +176,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
                                 // OUT: target to use, if disposition
                                 // is Skip. Dynamically allocated, to
                                 // be freed by caller.
-                                target** pre_target)
+                                Target** pre_target)
 {
   if (complete())
   {
@@ -249,7 +249,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
     PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
 
     // Start defining the new target.
-    target* as_target = new target;
+    Target* as_target = new Target;
 
     // Set the liveness timeout value based on the default handling defined
     // on the application server.  (Don't use ?: as it hits a GCC bug in

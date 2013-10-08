@@ -111,7 +111,7 @@ inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
   return is_next_route_local(msg, NULL, hdr);
 }
 
-void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user);
+void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user, const bool specific_host=true);
 
 void delete_header(pjsip_msg* msg,
                    const pj_str_t* name);

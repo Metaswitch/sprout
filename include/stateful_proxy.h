@@ -142,7 +142,7 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  void handle_non_cancel(const ServingState& serving_state);
+  void handle_non_cancel(const ServingState& serving_state, Target*);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
@@ -182,7 +182,7 @@ private:
                  TrustBoundary* trust);
   void log_on_tsx_start(const pjsip_rx_data* rdata);
   void log_on_tsx_complete();
-  pj_status_t init_uac_transactions(target_list& targets);
+  pj_status_t init_uac_transactions(TargetList& targets);
   void dissociate(UACTransaction *uac_data);
   bool redirect_int(pjsip_uri* target, int code);
   pjsip_history_info_hdr* create_history_info_hdr(pjsip_uri* target);
@@ -190,10 +190,10 @@ private:
   AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
   bool handle_incoming_non_cancel(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(target** pre_target);
+  AsChainLink::Disposition handle_originating(Target** pre_target);
   bool move_to_terminating_chain();
-  AsChainLink::Disposition handle_terminating(target** pre_target);
-  void handle_outgoing_non_cancel(target* pre_target);
+  AsChainLink::Disposition handle_terminating(Target** pre_target);
+  void handle_outgoing_non_cancel(Target* pre_target);
 
   bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
@@ -202,7 +202,7 @@ private:
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
                                const TrustBoundary* trust,
-                               target_list& targets,
+                               TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
 
@@ -239,7 +239,7 @@ public:
 
   static UACTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  void set_target(const struct target& target);
+  void set_target(const struct Target& target);
   void send_request();
   void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
