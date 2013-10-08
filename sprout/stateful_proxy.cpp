@@ -404,6 +404,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     status = proxy_process_edge_routing(rdata, tdata, &trust, &target);
     if (status != PJ_SUCCESS)
     {
+      delete target;
+      target = NULL;
+
       // Delete the request since we're not forwarding it
       pjsip_tx_data_dec_ref(tdata);
       return;
@@ -471,6 +474,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     {
       LOG_ERROR("Error processing route, %s",
                 PJUtils::pj_status_to_string(status).c_str());
+
+      delete target;
+      target = NULL;
       return;
     }
   }
@@ -487,6 +493,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // it will not be received by on_rx_request() callback.
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
+    // Any calculated target is going to be ignored, so clean up.
+    delete target;
+    target = NULL;
+
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.
     if (rdata->msg_info.cid != NULL)
@@ -521,6 +531,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
     PJUtils::respond_stateless(stack_data.endpt, rdata,
                                PJSIP_SC_INTERNAL_SERVER_ERROR, NULL,
                                NULL, NULL);
+    delete target;
+    target = NULL;
     return;
   }
 
