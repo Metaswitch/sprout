@@ -86,6 +86,9 @@ get_settings()
         memstore=$local_ip
         [ -r /etc/clearwater/cluster_settings ] && . /etc/clearwater/cluster_settings
 
+        # Set up a default cluster_settings file if it does not exist.
+        [ -f /etc/clearwater/cluster_settings ] || echo "servers=$local_ip:11211" > /etc/clearwater/cluster_settings
+
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
         num_pjsip_threads=1
