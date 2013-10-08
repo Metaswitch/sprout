@@ -123,6 +123,7 @@ extern "C" {
 #include "trustboundary.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "hssconnection.h"
 #include "aschain.h"
 #include "registration_utils.h"
 #include "custom_headers.h"
@@ -130,6 +131,7 @@ extern "C" {
 #include "quiescing_manager.h"
 
 static RegData::Store* store;
+static RegData::Store* remote_store;
 
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
@@ -1364,19 +1366,73 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+// Gets the subscriber's associated URIs and iFCs for each URI from
+// the HSS. Returns true on success, false on failure.
+
+// The info parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation& info, SAS::TrailId trail)
+{
+  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
+  bool rc = false;
+  if (data != cached_hss_data.end())
+  {
+    info = data->second;
+    rc = true;
+  }
+  else
+  {
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+    info = {ifc_map[public_id], uris};
+    if (http_code == 200)
+    {
+      cached_hss_data[public_id] = info;
+      rc = true;
+    }
+  }
+  return rc;
+}
+
+// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
+// The uris parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail) 
+{
+  HSSCallInformation data;
+  bool success = get_data_from_hss(public_id, data, trail);
+  if (success)
+  {
+    uris = data.uris;
+  }
+  return success;
+}
+
+// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).  
+// The ifcs parameter is only filled in correctly if this function
+// returns true,
+bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail) 
+{
+  HSSCallInformation data; 
+  bool success = get_data_from_hss(public_id, data, trail);
+  if (success)
+  {
+    ifcs = data.ifcs;
+  }
+  return success;
+}
+
 ///@{
 // IN-TRANSACTION PROCESSING
 
 /// Calculate a list of targets for the message.
-#ifndef UNIT_TEST
-static
-#endif
-void proxy_calculate_targets(pjsip_msg* msg,
-                             pj_pool_t* pool,
-                             const TrustBoundary* trust,
-                             TargetList& targets,
-                             int max_targets,
-                             SAS::TrailId trail)
+void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
+                                             pj_pool_t* pool,
+                                             const TrustBoundary* trust,
+                                             TargetList& targets,
+                                             int max_targets,
+                                             SAS::TrailId trail)
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
@@ -1410,28 +1466,31 @@ void proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      std::string bgcf_route = bgcf_service->get_route(domain);
+      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain);
 
       if (!bgcf_route.empty())
       {
-        // Split the route into a host and (optional) port.
-        int port = 0;
-        std::vector<std::string> bgcf_route_elems;
-        Utils::split_string(bgcf_route, ':', bgcf_route_elems, 2, true);
+        for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
+        { 
+          // Split the route into a host and (optional) port.
+          int port = 0;
+          std::vector<std::string> bgcf_route_elems;
+          Utils::split_string(*ii, ':', bgcf_route_elems, 2, true);
 
-        if (bgcf_route_elems.size() > 1)
-        {
-          port = atoi(bgcf_route_elems[1].c_str());
+          if (bgcf_route_elems.size() > 1)
+          {
+            port = atoi(bgcf_route_elems[1].c_str());
+          }
+
+          // BGCF configuration has a route to this destination, so translate to
+          // a URI.
+          pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
+          pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
+          route_uri->port = port;
+          route_uri->transport_param = pj_str("TCP");
+          route_uri->lr_param = 1;
+          target.paths.push_back((pjsip_uri*)route_uri);
         }
-
-        // BGCF configuration has a route to this destination, so translate to
-        // a URI.
-        pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
-        pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
-        route_uri->port = port;
-        route_uri->transport_param = pj_str("TCP");
-        route_uri->lr_param = 1;
-        target.paths.push_back((pjsip_uri*)route_uri);
       }
     }
 
@@ -1448,14 +1507,14 @@ void proxy_calculate_targets(pjsip_msg* msg,
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
     std::string public_id = PJUtils::aor_from_uri(req_uri);
-    Json::Value* uris = hss->get_associated_uris(public_id, trail);
-    std::string aor;
+    std::vector<std::string> uris;
+    bool success = get_associated_uris(public_id, uris, trail);
 
-    if ((uris != NULL) &&
-        (uris->size() > 0))
+    std::string aor;
+    if (success && (uris.size() > 0))
     {
       // Take the first associated URI as the AOR.
-      aor = uris->get((Json::ArrayIndex)0, Json::Value::null).asString();
+      aor = uris.front();
     }
     else
     {
@@ -1468,6 +1527,16 @@ void proxy_calculate_targets(pjsip_msg* msg,
     // Look up the target in the registration data store.
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
     RegData::AoR* aor_data = store->get_aor_data(aor);
+
+    // If we didn't get bindings from the local store and we have a remote
+    // store, try the remote.
+    if ((remote_store != NULL) &&
+        ((aor_data == NULL) ||
+         (aor_data->bindings().empty())))
+    {
+      delete aor_data;
+      aor_data = remote_store->get_aor_data(aor);
+    }
 
     // Pick up to max_targets bindings to attempt to contact.  Since
     // some of these may be stale, and we don't want stale bindings to
@@ -1559,8 +1628,6 @@ void proxy_calculate_targets(pjsip_msg* msg,
     }
 
     delete aor_data;
-
-    delete uris;
   }
 }
 
@@ -1893,7 +1960,15 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     {
       // Do services and translation processing for requests targeted at this
       // node/home domain.
-      handle_incoming_non_cancel(serving_state);
+      bool rc = handle_incoming_non_cancel(serving_state);
+
+      if (!rc)
+      {
+        LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
+        send_response(PJSIP_SC_NOT_FOUND);
+        delete target;
+        return;
+      };
 
       // Add ourselves as orig-IOI if appropriate.
       //
@@ -1938,17 +2013,23 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           // terminating chain: switch to terminating and look up iFCs
           // again.  The served user changes here.
           LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-          move_to_terminating_chain();
+          bool success = move_to_terminating_chain();
+          if (!success)
+          {
+            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+            send_response(PJSIP_SC_NOT_FOUND);
+            delete target;
+            return;
+          }
         }
-
-          // Do outgoing (terminating) half.
-          LOG_DEBUG("Terminating half");
-          disposition = handle_terminating(&target);
+        // Do outgoing (terminating) half.
+        LOG_DEBUG("Terminating half");
+        disposition = handle_terminating(&target);
       }
     }
     else
     {
-      // Request is not target at this domain.  If the serving state is set
+      // Request is not targeted at this domain.  If the serving state is set
       // we need to release the original dialog as otherwise we may leak an
       // AsChain.
       if (serving_state.is_set())
@@ -1969,16 +2050,21 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
 
 // Handle the incoming half of a non-CANCEL message.
-void UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
+bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
 {
   LOG_DEBUG("Handle incoming transaction request, serving state = %s", serving_state.to_string().c_str());
+  bool success = true;
 
+  std::string served_user;
+  Ifcs ifcs;
   if (serving_state.is_set())
   {
     if (serving_state.original_dialog().is_set())
     {
       // Pick up existing AS chain.
       _as_chain_link = serving_state.original_dialog();
+      LOG_DEBUG("Picking up original AS chain");
+      success = true;
 
       if ((serving_state.session_case() == SessionCase::Terminating) &&
           (!_as_chain_link.matches_target(_req)))
@@ -1987,17 +2073,29 @@ void UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
         // create new AS chain with session case orig-cdiv and the
         // terminating user as served user.
         LOG_INFO("Request-URI has changed, retargeting");
-        std::string served_user = _as_chain_link.served_user();
+        served_user = _as_chain_link.served_user();
+
         _as_chain_link.release();
-        _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, served_user);
+        success = lookup_ifcs(served_user, ifcs, trail());
+        if (success)
+        {
+          _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+        }
       }
     }
     else
     {
       // No existing AS chain - create new.
-      _as_chain_link = create_as_chain(serving_state.session_case());
+      served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
+      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+      success = lookup_ifcs(served_user, ifcs, trail());
+      if (success)
+      {
+        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
+      }
     }
   }
+  return success;
 }
 
 
@@ -2039,7 +2137,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
 
 
 /// Move from originating to terminating handling.
-void UASTransaction::move_to_terminating_chain()
+bool UASTransaction::move_to_terminating_chain()
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
@@ -2047,7 +2145,21 @@ void UASTransaction::move_to_terminating_chain()
 
   // Create new terminating chain.
   _as_chain_link.release();
-  _as_chain_link = create_as_chain(SessionCase::Terminating);
+  std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
+
+  // If we got a served user, look it up.  We won't get a served user if we've recognized that they're remote.
+  bool success = true;
+  if (!served_user.empty())
+  {
+    Ifcs ifcs;
+    success = lookup_ifcs(served_user, ifcs, trail());
+
+    if (success)
+    {
+      _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+    }
+  }
+  return success;
 }
 
 // Perform terminating handling.
@@ -2084,9 +2196,12 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
   // billing.
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri)) {
+  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri))
+  {
     pcv->term_ioi = stack_data.home_domain;
-  } else if (pcv) {
+  }
+  else if (pcv)
+  {
     pcv->term_ioi = pj_str("");
   }
 
@@ -3285,7 +3400,14 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       // record of the flow.
       std::string aor = PJUtils::pj_str_to_string(&_aor);
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      RegistrationUtils::network_initiated_deregistration(ifc_handler, store, aor, binding_id, trail());
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      hss->get_subscription_data(aor, "", ifc_map, uris, trail());
+
+      if (!uris.empty())
+      {
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+      }
     }
   }
 
@@ -3395,6 +3517,7 @@ void UACTransaction::exit_context()
 // MODULE LIFECYCLE
 
 pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
+                                RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
@@ -3414,6 +3537,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
   analytics_logger = analytics;
   store = registrar_store;
+  remote_store = remote_reg_store;
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
@@ -3668,8 +3792,19 @@ bool is_user_registered(std::string served_user)
   {
     std::string aor = served_user;
     RegData::AoR* aor_data = store->get_aor_data(aor);
+
+    // If we have a remote store and the local store suggests the subscriber is
+    // unregistered, double-check in the remote store.
+    if ((remote_store != NULL) &&
+        ((aor_data == NULL) ||
+         (aor_data->bindings().empty())))
+    {
+      delete aor_data;
+      aor_data = remote_store->get_aor_data(aor);
+    }
+
     is_registered = (aor_data != NULL) &&
-      (aor_data->bindings().size() != 0u);
+                    (aor_data->bindings().size() != 0u);
     delete aor_data; aor_data = NULL;
     LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
   }
@@ -3680,37 +3815,10 @@ bool is_user_registered(std::string served_user)
 
 /// Factory method: create AsChain by looking up iFCs.
 AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            std::string served_user)  //< Served user, if already known, else ""
+                                            Ifcs ifcs,
+                                            std::string served_user)
 {
-  if (ifc_handler == NULL)
-  {
-    // LCOV_EXCL_START No easy way to hit.
-    LOG_INFO("No IFC handler");
-    return AsChainLink();
-    // LCOV_EXCL_STOP
-  }
-
-  if (served_user.empty())
-  {
-    served_user = ifc_handler->served_user_from_msg(session_case,
-                                                    _req->msg,
-                                                    _req->pool);
-  }
-
-  Ifcs* ifcs;
-  bool is_registered = false;
-
-  if (served_user.empty())
-  {
-    ifcs = new Ifcs();
-  }
-  else
-  {
-    is_registered = is_user_registered(served_user);
-    ifcs = ifc_handler->lookup_ifcs(session_case,
-                                    served_user,
-                                    trail());
-  }
+  bool is_registered = is_user_registered(served_user);
 
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.

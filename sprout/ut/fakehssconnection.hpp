@@ -53,16 +53,7 @@ public:
 
   void flush_all();
 
-  bool get_user_ifc(const std::string& public_user_identity,
-                    std::string& xml_data,
-                    SAS::TrailId trail);
-
-  void set_user_ifc(const std::string& public_user_identity,
-                    const std::string& xml_data);
-
-  void set_json(const std::string& url, const std::string& json);
-
-private:
+  private:
   Json::Value* get_object(const std::string& url, SAS::TrailId trail);
   void set_object(const std::string& url, Json::Value& object, SAS::TrailId trail);
 

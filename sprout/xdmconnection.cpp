@@ -80,7 +80,8 @@ bool XDMConnection::get_simservs(const std::string& user,
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
-  bool rc = _http->get("/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml", xml_data, user, trail);
+  std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
+  HTTPCode http_code = _http->get(url, xml_data, user, trail);
 
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
@@ -88,6 +89,6 @@ bool XDMConnection::get_simservs(const std::string& user,
     _latency_stat.accumulate(latency_us);
   }
 
-  return rc;
+  return (http_code == HTTP_OK);
 }
 

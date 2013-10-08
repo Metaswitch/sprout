@@ -222,8 +222,7 @@ int main(int argc, char** argv)
     else if ((msgs[0] == "latency_us") ||
              (msgs[0] == "hss_latency_us") ||
              (msgs[0] == "hss_digest_latency_us") ||
-             (msgs[0] == "hss_assoc_uri_latency_us") ||
-             (msgs[0] == "hss_ifc_latency_us") ||
+             (msgs[0] == "hss_subscription_latency_us") ||
              (msgs[0] == "xdm_latency_us"))
     {
       render_latency_us(msgs);

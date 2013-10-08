@@ -69,7 +69,7 @@ public:
 
     _hss_connection = new FakeHSSConnection();
     _store = RegData::create_local_store();
-    _ifc_handler = new IfcHandler(_hss_connection, _store);
+    _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
@@ -208,21 +208,18 @@ void IfcHandlerTest::doBaseTest(string description,
                                 bool third_party_reg)
 {
   SCOPED_TRACE(description);
-  if (ifc != "")
-  {
-    _hss_connection->set_user_ifc("sip:5755550033@homedomain",
-                                  ifc);
-  }
   std::vector<AsInvocation> application_servers;
   _store->flush_all();  // start from a clean slate on each test
-  Ifcs* ifcs = _ifc_handler->lookup_ifcs(sescase,
-                                         served_user,
-                                         0);
+  std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
+  char* cstr_ifc = strdup(ifc.c_str());
+  root->parse<0>(cstr_ifc);
+  Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"));
   ifcs->interpret(sescase,
                   reg,
                   msg,
                   application_servers);
   delete ifcs;
+  free(cstr_ifc);
   EXPECT_EQ(expected ? 1u : 0u, application_servers.size());
   if (application_servers.size())
   {
@@ -286,7 +283,7 @@ TEST_F(IfcHandlerTest, NoIfc)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("No iFC found"));
+  EXPECT_TRUE(_log.contains("No ServiceProfile node in iFC!"));
 }
 
 TEST_F(IfcHandlerTest, NoPriority)
@@ -476,16 +473,6 @@ TEST_F(IfcHandlerTest, NoTrigger)
          SessionCase::Originating,
          true);
   EXPECT_TRUE(_log.contains("has no trigger point"));
-}
-
-TEST_F(IfcHandlerTest, ParseError)
-{
-  doTest("",
-         "<shrdlu ",
-         true,
-         SessionCase::Originating,
-         false);
-  EXPECT_TRUE(_log.contains("iFCs parse error"));
 }
 
 TEST_F(IfcHandlerTest, NoClass1)

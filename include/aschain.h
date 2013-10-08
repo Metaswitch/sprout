@@ -113,7 +113,7 @@ private:
           const std::string& served_user,
           bool is_registered,
           SAS::TrailId trail,
-          Ifcs* ifcs);
+          Ifcs& ifcs);
   ~AsChain();
 
   void inc_ref()
@@ -149,7 +149,7 @@ private:
   const std::string _served_user;
   const bool _is_registered;
   const SAS::TrailId _trail;
-  const Ifcs* _ifcs;  //< List of iFCs. Owned by this object.
+  const Ifcs _ifcs;  //< List of iFCs. Owned by this object.
 };
 
 
@@ -205,11 +205,12 @@ public:
   }
 
   /// Caller has finished using this link.
-  void release() const
+  void release()
   {
     if (_as_chain != NULL)
     {
       _as_chain->dec_ref();
+      _as_chain = NULL;
     }
   }
 
@@ -281,7 +282,7 @@ public:
                                      const std::string& served_user,
                                      bool is_registered,
                                      SAS::TrailId trail,
-                                     Ifcs* ifcs);
+                                     Ifcs& ifcs);
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,

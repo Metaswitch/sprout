@@ -39,6 +39,7 @@
 
 #include <cstdio>
 #include "fakehssconnection.hpp"
+#include "ifchandler.h"
 #include <json/reader.h>
 #include "gtest/gtest.h"
 
@@ -59,45 +60,3 @@ void FakeHSSConnection::flush_all()
   _ifc_db.clear();
 }
 
-Json::Value* FakeHSSConnection::get_object(const std::string& url, SAS::TrailId trail)
-{
-  std::map<std::string, Json::Value>::iterator i = _json_db.find(url);
-  if (i != _json_db.end())
-  {
-    return new Json::Value(i->second);
-  }
-  return NULL;
-}
-
-void FakeHSSConnection::set_object(const std::string& url, Json::Value& object, SAS::TrailId trail)
-{
-  _json_db[url] = object;
-}
-
-void FakeHSSConnection::set_json(const std::string& url, const std::string& json)
-{
-  Json::Value object;
-  Json::Reader reader;
-  bool json_parse_success = reader.parse(json, object);
-  ASSERT_TRUE(json_parse_success);
-  _json_db[url] = object;
-}
-
-bool FakeHSSConnection::get_user_ifc(const std::string& public_user_identity,
-                                     std::string& xml_data,
-                                     SAS::TrailId trail)
-{
-  std::map<std::string, std::string>::iterator i = _ifc_db.find(public_user_identity);
-  if (i != _ifc_db.end())
-  {
-    xml_data = i->second;
-    return true;
-  }
-  return false;
-}
-
-void FakeHSSConnection::set_user_ifc(const std::string& public_user_identity,
-                                     const std::string& xml_data)
-{
-  _ifc_db[public_user_identity] = xml_data;
-}
