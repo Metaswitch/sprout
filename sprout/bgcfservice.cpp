@@ -74,12 +74,20 @@ BgcfService::BgcfService(std::string configuration)
       {
         Json::Value route = routes[(int)ii];
         if ((route["domain"].isString()) &&
-            (route["route"].isString()))
+            (route["route"].isArray()))
         {
+          std::vector<std::string> route_vec;
+          Json::Value route_vals = route["route"];       
           std::string domain = route["domain"].asString();
-          std::string via = route["route"].asString();
-          _routes.insert(std::make_pair(domain, via));
-          LOG_STATUS("Added route to %s via %s", domain.c_str(), via.c_str());
+          
+          for (size_t jj = 0; jj < route_vals.size(); ++jj)
+          {
+            Json::Value route_val = route_vals[(int)jj];
+            route_vec.push_back(route_val.asString());
+          }
+
+          _routes.insert(std::make_pair(domain, route_vec));
+          route_vec.clear(); 
         }
         else
         {
@@ -105,17 +113,17 @@ BgcfService::~BgcfService()
 }
 
 
-std::string BgcfService::get_route(const std::string &domain) const
+std::vector<std::string> BgcfService::get_route(const std::string &domain) const
 {
   LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
-  std::map<std::string, std::string>::const_iterator i = _routes.find(domain);
+  std::map<std::string, std::vector<std::string>>::const_iterator i = _routes.find(domain);
 
   if (i != _routes.end())
   {
-    LOG_INFO("Found route to domain %s via %s", domain.c_str(), i->second.c_str());
+    LOG_INFO("Found route to domain %s", domain.c_str());
     return i->second;
   }
 
-  return std::string();
+  return std::vector<std::string>();
 }
