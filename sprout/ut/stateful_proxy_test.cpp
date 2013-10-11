@@ -607,6 +607,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   SCOPED_TRACE("doTestHeaders");
   pjsip_msg* out;
   pjsip_tx_data* invite = NULL;
+  pjsip_tx_data* prack = NULL;
 
   // Extra fields to insert in all requests and responses.
   string extra = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
@@ -673,6 +674,40 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
 
   // Check P-Access-Network-Info.
   EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
+
+  free_txdata();
+
+  // Send PRACK C->X
+  SCOPED_TRACE("PRACK");
+  msg._method = "PRACK";
+  inject_msg(msg.get_request(), tpA);
+  poll();
+  ASSERT_EQ(1, txdata_count());
+
+  // PRACK passed on X->S
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("PRACK").matches(out));
+  tpB->expect_target(current_txdata(), tpBset);
+
+  // Check P-Access-Network-Info.
+  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "PRACK";
+
+  prack = pop_txdata();
+
+  // ---------- Send 200 OK back X<-S
+  SCOPED_TRACE("200 OK (PRACK)");
+  inject_msg(respond_to_txdata(prack, 200, "", extra), tpB);
+  ASSERT_EQ(1, txdata_count());
+
+  // OK goes back C<-X
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpA->expect_target(current_txdata(), true);
+  msg.set_route(out);
+  msg._cseq++;
+
+  // Check P-Access-Network-Info.
+  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (PRACK)";
 
   free_txdata();
 
