@@ -4947,6 +4947,75 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
 }
 
 
+// Test basic ISC (AS) OPTIONS final acceptance flow (AS sinks request).
+TEST_F(IscTest, SimpleOptionsAccept)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>OPTIONS</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+  // ---------- Send OPTIONS
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain;orig";
+  msg._todomain = "";
+  msg._route = "sip:6505551234@homedomain";
+
+  msg._method = "OPTIONS";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(1, txdata_count());
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("OPTIONS (S)");
+  pjsip_msg* out = current_txdata()->msg;
+  ReqMatcher r1("OPTIONS");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 accepts it with 200.
+  string fresp = respond_to_txdata(current_txdata(), 200);
+  free_txdata();
+  inject_msg(fresp, &tpAS1);
+
+  // 200 response goes back to bono
+  SCOPED_TRACE("OK");
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  msg._cseq++;
+  free_txdata();
+}
+
+
 // @@@ WS stuff
 
 // @@@ integrity-protected handling (includes find_flow_data); relationship to auth

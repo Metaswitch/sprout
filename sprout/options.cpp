@@ -72,8 +72,7 @@ pj_bool_t on_rx_request(pjsip_rx_data* rdata)
 {
   if (rdata->msg_info.msg->line.req.method.id == PJSIP_OPTIONS_METHOD)
   {
-    if ((PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri)) ||
-        (PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)))
+    if (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))
     {
       // OPTIONS targetted at this node or at the home domain, so respond
       // statelessly.

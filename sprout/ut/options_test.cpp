@@ -89,7 +89,7 @@ public:
   Message() :
     _method("OPTIONS"),
     _user("6505550231"),
-    _domain("homedomain")
+    _domain("testnode")
   {
   }
 
@@ -140,6 +140,14 @@ TEST_F(OptionsTest, NotOurs)
 {
   Message msg;
   msg._domain = "not-us.example.org";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(OptionsTest, HomeDomain)
+{
+  Message msg;
+  msg._domain = "homedomain";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
