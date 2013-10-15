@@ -134,6 +134,7 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               9408,                         // trusted port
                               9409,                         // untrusted port
                               dns,                          // local host
+                              dns,                          // public host
                               "woot.example.com",           // home domain
                               "all-the-sprouts",            // sprout cluster hostname
                               "all-the-bonos",              // bono cluster hostname
