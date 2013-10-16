@@ -396,7 +396,8 @@ static pj_status_t ws_destroy_transport(pjsip_transport *transport)
 class sip_server_handler : public server::handler {
   public:
 
-    void validate(connection_ptr con) {
+    void validate(connection_ptr con)
+    {
       // The key validation step we need to do is on the subprotocols the
       // client requested.  This should include "sip", in which case we'll
       // select "sip" too.  If "sip" was not offered, we offer nothing and the
