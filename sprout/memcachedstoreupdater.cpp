@@ -87,8 +87,8 @@ void MemcachedStoreUpdater::update_view()
 {
   // Read the memstore file.
   std::ifstream f(_file);
-  std::list<std::string> servers;
-  std::list<std::string> new_servers;
+  std::vector<std::string> servers;
+  std::vector<std::string> new_servers;
 
   if (f.is_open())
   {

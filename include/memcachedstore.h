@@ -117,8 +117,8 @@ public:
   /// Flags that the store should use a new view of the memcached cluster to
   /// distribute data.  Note that this is public because it is called from
   /// the MemcachedStoreUpdater class and from UT classes.
-  void new_view(const std::list<std::string>& servers,
-                const std::list<std::string>& new_servers);
+  void new_view(const std::vector<std::string>& servers,
+                const std::vector<std::string>& new_servers);
 
   /// Flushes the store.  This is only supported for test purposes - it should
   /// never be called on a live system.
@@ -141,14 +141,18 @@ private:
     // the new view by establishing new memcached_st's.
     uint64_t view_number;
 
-    // Contains the memcached_st's for each replication level (entry 0 is
-    // the primary replica, entry 1 is the secondary replica etc.).
+    // Contains the memcached_st's for each server.
     std::vector<memcached_st*> st;
+
+    // Contains the set of read and write replicas for each vbucket.
+    std::vector<std::vector<memcached_st*> > write_replicas;
+    std::vector<std::vector<memcached_st*> > read_replicas;
 
   } connection;
 
-  /// Gets the connection structure for the current thread.
-  connection* get_connection();
+  /// Gets the set of connections to use for a read or write operation.
+  typedef enum {READ, WRITE} Op;
+  const std::vector<memcached_st*>& get_replicas(const std::string& key, Op operation);
 
   static std::string serialize_aor(MemcachedAoR* aor_data);
   static MemcachedAoR* deserialize_aor(const std::string& s);
@@ -162,11 +166,6 @@ private:
   // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;
 
-  // Flags whether the store is using the binary or ASCII protocol.  In general
-  // should use the ASCII protocol as the binary protocol stalls when a gets
-  // command is issued for a record that doesn't exist.
-  const bool _binary;
-
   // Stores the number of replicas configured for the store (one means the
   // data is stored on one server, two means it is stored on two servers etc.).
   const int _replicas;
@@ -176,24 +175,25 @@ private:
   // sufficiently large.  Note that it _must_ be a power of two.
   const int _vbuckets;
 
-  // The current global view number.  Note that this is not protected by the
-  // _view_lock.
-  uint64_t _view_number;
-
-  // The lock used to protect the view parameters below (_options,
-  // _active_replicas and _vbucket_map.
-  pthread_rwlock_t _view_lock;
-
   // The options string used to create appropriate memcached_st's for the
   // current view.
   std::string _options;
 
-  // The number of active replicas in this view.  In general this will be the
-  // same as _replicas, but if there are not enough servers it may be lower.
-  int _active_replicas;
+  // The current global view number.  Note that this is not protected by the
+  // _view_lock.
+  uint64_t _view_number;
 
-  // The vbucket maps in a format suitable for programming the memcached_st's.
-  std::vector<uint32_t*> _vbucket_map;
+  // The lock used to protect the view parameters below (_servers,
+  // _read_replicas and _write_replicas).
+  pthread_rwlock_t _view_lock;
+
+  // The list of servers in this view.
+  std::vector<std::string> _servers;
+
+  // The set of read and write replicas for each vbucket.  The integers in
+  // each vector index into the list of servers.
+  std::vector<std::vector<int> > _read_replicas;
+  std::vector<std::vector<int> > _write_replicas;
 };
 
 } // namespace RegData

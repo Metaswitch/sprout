@@ -43,7 +43,7 @@
 namespace RegData {
 
 /// Tracks the current view of the underlying memcached cluster, including
-/// calculating the libmemcached server list and the vbucket configurations.
+/// calculating the server list and the replica configurations.
 class MemcachedStoreView
 {
 public:
@@ -51,18 +51,22 @@ public:
   ~MemcachedStoreView();
 
   /// Updates the view for new current and target server lists.
-  void update(const std::list<std::string>& servers,
-              const std::list<std::string>& new_servers);
+  void update(const std::vector<std::string>& servers,
+              const std::vector<std::string>& new_servers);
 
   /// Returns the current server list.
-  const std::list<std::string>& server_list() const { return _server_list; };
+  const std::vector<std::string>& servers() const { return _servers; };
 
-  /// Returns the vbucket table for the specified replica.
-  const std::vector<int>& vbucket_map(int replica) const { return _vbucket_map[replica]; };
+  /// Returns the current read and write replica sets for each vbucket.
+  const std::vector<int>& read_replicas(int vbucket) const { return _read_set[vbucket]; };
+  const std::vector<int>& write_replicas(int vbucket) const { return _write_set[vbucket]; };
 
 private:
+  /// Converts the view into a string suitable for logging.
+  std::string view_to_string();
 
-  std::string vbucket_to_string(std::vector<int> vbucket_map);
+  /// Converts a set of replicas into an ordered string suitable for logging.
+  std::string replicas_to_string(const std::vector<int>& replicas);
 
   /// Calculates the ring used to generate the vbucket configurations.  The
   /// ring essentially maps each vbucket slot to a particular node which is
@@ -104,21 +108,23 @@ private:
     std::vector<std::map<int, int> > _node_slots;
   };
 
-  // The number of replicas required.
+  // The number of replicas required normally.  This may be increased during
+  // scale-up/down periods to maintain redundancy.
   int _replicas;
-
-  // The total number of servers in the memcached cluster.
-  int _servers;
 
   // The number of vbuckets being used.
   int _vbuckets;
 
   // The full list of servers in the memcached cluster.
-  std::list<std::string> _server_list;
+  std::vector<std::string> _servers;
 
-  // The vbucket maps calculated for the view.  The first index is the replica
-  // level, and the second index is the vbucket index.
-  std::vector<std::vector<int>> _vbucket_map;
+  // The read and write replica sets for each vbucket.  The first index is the
+  // vbucket number.  In stable configurations the read and write set for each
+  // vbucket will be the same and have exactly _replicas entries in each.  In
+  // unstable configurations (scale-up/scale-down) additional read and write
+  // replicas are enabled to maintain redundancy.
+  std::vector<std::vector<int> > _read_set;
+  std::vector<std::vector<int> > _write_set;
 };
 
 } // namespace RegData
