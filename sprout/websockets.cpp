@@ -396,6 +396,33 @@ static pj_status_t ws_destroy_transport(pjsip_transport *transport)
 class sip_server_handler : public server::handler {
   public:
 
+    void validate(connection_ptr con) {
+      // The key validation step we need to do is on the subprotocols the
+      // client requested.  This should include "sip", in which case we'll
+      // select "sip" too.  If "sip" was not offered, we offer nothing and the
+      // connection will probably fail.
+      LOG_DEBUG("Validating incoming web socket connection");
+      const std::vector<std::string>& subprotocols = con->get_subprotocols();
+      if (std::find(subprotocols.begin(), subprotocols.end(), SUBPROTOCOL) != subprotocols.end())
+      {
+        LOG_DEBUG("Client requested subprotocol sip - agreeing");
+        con->select_subprotocol("sip");
+      }
+      else
+      {
+        // Build a comma-separated list of subprotocols ready to log.
+        std::stringstream ss;
+        std::copy(subprotocols.begin(), subprotocols.end(), std::ostream_iterator<std::string>(ss, ","));
+        std::string str = ss.str();
+        if (!str.empty())
+        {
+          // The above added a trailing comma.  Strip it.
+          str = str.substr(0, str.length() - 1);
+        }
+        LOG_INFO("Client requested subprotocols %s - connection will probably fail", str.c_str());
+      }
+    }
+
     void on_open(connection_ptr con) {
       LOG_DEBUG("New web socket connection, creating PJSIP transport");
       pjsip_transport *transport;
@@ -456,8 +483,11 @@ class sip_server_handler : public server::handler {
     }
 
   private:
+    static std::string SUBPROTOCOL;
     std::map<connection_ptr, struct ws_transport*> connectionMap;
 };
+
+std::string sip_server_handler::SUBPROTOCOL = "sip";
 
 static int websocket_thread(void* p)
 {
