@@ -99,7 +99,7 @@ public:
                "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
                "Call-ID: 1-13919@10.151.20.48\n"
                "CSeq: 4 INVITE\n"
-               "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+               "Route: <sip:public_hostname;transport=TCP;lr;orig>\n"
                "Call-Info    : foo,\n"
                "               bar\n"
                "Accept: baz\n"
@@ -144,7 +144,7 @@ TEST_F(IfcHandlerTest, ServedUser)
               "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
               "Call-ID: 1-13919@10.151.20.48\n"
               "CSeq: 4 INVITE\n"
-              "Route: <sip:testnode;transport=TCP;lr;orig>\n"
+              "Route: <sip:public_hostname;transport=TCP;lr;orig>\n"
               "Content-Length: 0\n$2\n");
   string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@homedomain"), "$2", "");
   pjsip_rx_data* rdata = build_rxdata(str);
@@ -154,10 +154,10 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::OriginatingCdiv, rdata->msg_info.msg, rdata->tp_info.pool));
   EXPECT_EQ("sip:5755550099@homedomain", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"), "$2", "");
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"), "$2", "");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@public_hostname", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@remotenode"), "$2", "");
   rdata = build_rxdata(str);
@@ -165,23 +165,23 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   // Should obey P-Served-User URI and ignore other fields (and also ignore sescase and regstate on P-S-U), but only on originating sessions.
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
                                 "$2", "P-Served-User: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@public_hostname", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
                                 "$2", "P-Served-User: sip:billy-bob@homedomain;sescase=term;regstate=reg\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@public_hostname", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
   // Should ignore (with warning) if URI is unparseable.
   FakeLogger log;
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
                                 "$2", "P-Served-User: <sip:billy-bob@homedomain\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
@@ -189,12 +189,12 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
 
   // If no P-Served-User, try P-Asserted-Identity.
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@testnode"),
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
                                 "$2", "P-Asserted-Identity: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
-  EXPECT_EQ("sip:5755550099@testnode", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+  EXPECT_EQ("sip:5755550099@public_hostname", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
 /// Test an iFC.

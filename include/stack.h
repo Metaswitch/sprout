@@ -70,6 +70,7 @@ struct stack_data_struct
   int                  trusted_port;
   int                  untrusted_port;
   pj_str_t             local_host;
+  pj_str_t             public_host;
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
   pj_str_t             bono_cluster_domain;
@@ -121,6 +122,7 @@ extern pj_status_t init_stack(bool edge_proxy,
                               int trusted_port,
                               int untrusted_port,
                               const std::string& local_host,
+                              const std::string& public_host,
                               const std::string& home_domain,
                               const std::string& sprout_domain,
                               const std::string& bono_domain,
