@@ -5033,7 +5033,7 @@ TEST_F(IscTest, SimpleOptionsAccept)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@testnode:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
 
   // ---------- AS1 accepts it with 200.
   string fresp = respond_to_txdata(current_txdata(), 200);
