@@ -124,9 +124,10 @@ do_start()
         get_settings
         DAEMON_ARGS="--system $NAME@$public_hostname
                      --domain $home_domain
-                     --localhost $public_hostname
+                     --localhost $local_ip
+                     --public-host $local_ip
                      --sprout-domain $sprout_hostname
-                     --alias $sprout_hostname,$public_ip
+                     --alias $sprout_hostname
                      --trusted-port 5054
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings

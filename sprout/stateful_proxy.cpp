@@ -1240,37 +1240,37 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       // Message is from a client, so add separate Record-Route headers for
       // the ingress and egress hops.
       LOG_DEBUG("Message received from client - double Record-Route");
-      PJUtils::add_record_route(tdata, src_flow->transport()->type_name, src_flow->transport()->local_name.port, src_flow->token().c_str());
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL);
+      PJUtils::add_record_route(tdata, src_flow->transport()->type_name, src_flow->transport()->local_name.port, src_flow->token().c_str(), stack_data.public_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
     }
     else if (tgt_flow != NULL)
     {
       // Message is destined for a client, so add separate Record-Route headers
       // for the ingress and egress hops.
       LOG_DEBUG("Message destined for client - double Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL);
-      PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str());
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str(), stack_data.public_host);
     }
     else if ((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK))
     {
       // Received message on a trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
-      PJUtils::add_record_route(tdata, rdata->tp_info.transport->type_name, rdata->tp_info.transport->local_name.port, NULL);
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL);
+      PJUtils::add_record_route(tdata, rdata->tp_info.transport->type_name, rdata->tp_info.transport->local_name.port, NULL, stack_data.public_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
     }
     else if ((ibcf) && (*trust == &TrustBoundary::OUTBOUND_TRUNK))
     {
       // Message destined for trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL);
-      PJUtils::add_record_route(tdata, "TCP", stack_data.untrusted_port, NULL);   // @TODO - transport type?
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.untrusted_port, NULL, stack_data.public_host);   // @TODO - transport type?
     }
     else
     {
       // Message is being routed between a third-party edge proxy and Sprout (or vice-
       // versa).  Just do a single Record-Route, using the cluster address.
       LOG_DEBUG("Single Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, false);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.bono_cluster_domain);
     }
 
     // Decrement references on flows as we have finished with them.

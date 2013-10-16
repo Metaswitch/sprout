@@ -86,6 +86,7 @@ struct options
   int                    trusted_port;
   int                    untrusted_port;
   std::string            local_host;
+  std::string            public_host;
   std::string            home_domain;
   std::string            sprout_domain;
   std::string            bono_domain;
@@ -138,6 +139,7 @@ static void usage(void)
        " -t, --trusted-port N       Set local trusted listener port to N\n"
        " -u, --untrusted-port N     Set local untrusted listener port to N\n"
        " -l, --localhost <name>     Override the local host name\n"
+       " -P, --public-host <name>   Override the public host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -b, --bono-domain <name>   Override the bono cluster domain name\n"
@@ -192,6 +194,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "trusted-port",      required_argument, 0, 't'},
     { "untrusted-port",    required_argument, 0, 'u'},
     { "localhost",         required_argument, 0, 'l'},
+    { "public-host",       required_argument, 0, 'P'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
     { "bono-domain",       required_argument, 0, 'b'},
@@ -244,6 +247,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'l':
       options->local_host = std::string(pj_optarg);
       fprintf(stdout, "Override local host name set to %s\n", pj_optarg);
+      break;
+
+    case 'P':
+      options->public_host = std::string(pj_optarg);
+      fprintf(stdout, "Override public host name set to %s\n", pj_optarg);
       break;
 
     case 'D':
@@ -725,6 +733,7 @@ int main(int argc, char *argv[])
                       opt.trusted_port,
                       opt.untrusted_port,
                       opt.local_host,
+                      opt.public_host,
                       opt.home_domain,
                       opt.sprout_domain,
                       opt.bono_domain,

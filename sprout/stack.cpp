@@ -395,24 +395,25 @@ void init_pjsip_logging(int log_level,
 
 void fill_transport_details(int port,
                             pj_sockaddr_in *addr,
+                            pj_str_t& host,
                             pjsip_host_port *published_name)
 {
   addr->sin_family = pj_AF_INET();
   addr->sin_addr.s_addr = 0;
   addr->sin_port = pj_htons((pj_uint16_t)port);
 
-  published_name->host = stack_data.local_host;
+  published_name->host = host;
   published_name->port = port;
 }
 
 
-pj_status_t create_udp_transport(int port)
+pj_status_t create_udp_transport(int port, pj_str_t& host)
 {
   pj_status_t status;
   pj_sockaddr_in addr;
   pjsip_host_port published_name;
 
-  fill_transport_details(port, &addr, &published_name);
+  fill_transport_details(port, &addr, host, &published_name);
   status = pjsip_udp_transport_start(stack_data.endpt,
                                      &addr,
                                      &published_name,
@@ -426,13 +427,13 @@ pj_status_t create_udp_transport(int port)
 }
 
 
-pj_status_t create_tcp_listener_transport(int port, pjsip_tpfactory **tcp_factory)
+pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfactory **tcp_factory)
 {
   pj_status_t status;
   pj_sockaddr_in addr;
   pjsip_host_port published_name;
 
-  fill_transport_details(port, &addr, &published_name);
+  fill_transport_details(port, &addr, host, &published_name);
   status = pjsip_tcp_transport_start2(stack_data.endpt,
                                       &addr,
                                       &published_name,
@@ -453,17 +454,17 @@ void destroy_tcp_listener_transport(int port, pjsip_tpfactory *tcp_factory)
 }
 
 
-pj_status_t start_transports(int port, pjsip_tpfactory** tcp_factory)
+pj_status_t start_transports(int port, pj_str_t& host, pjsip_tpfactory** tcp_factory)
 {
   pj_status_t status;
 
-  status = create_udp_transport(port);
+  status = create_udp_transport(port, host);
 
   if (status != PJ_SUCCESS) {
     return status;
   }
 
-  status = create_tcp_listener_transport(port, tcp_factory);
+  status = create_tcp_listener_transport(port, host, tcp_factory);
 
   if (status != PJ_SUCCESS) {
     return status;
@@ -508,6 +509,7 @@ public:
   {
     if (stack_data.trusted_port != 0) {
       create_tcp_listener_transport(stack_data.trusted_port,
+                                    stack_data.local_host,
                                     &stack_data.trusted_tcp_factory);
     }
   }
@@ -516,6 +518,7 @@ public:
   {
     if (stack_data.untrusted_port != 0) {
       create_tcp_listener_transport(stack_data.untrusted_port,
+                                    stack_data.public_host,
                                     &stack_data.untrusted_tcp_factory);
     }
   }
@@ -586,6 +589,7 @@ pj_status_t init_stack(bool edge_proxy,
                        int trusted_port,
                        int untrusted_port,
                        const std::string& local_host,
+                       const std::string& public_host,
                        const std::string& home_domain,
                        const std::string& sprout_cluster_domain,
                        const std::string& bono_cluster_domain,
@@ -609,12 +613,14 @@ pj_status_t init_stack(bool edge_proxy,
   // specified, use the host name returned by pj_gethostname.
   memset(&stack_data, 0, sizeof(stack_data));
   char* local_host_cstr = strdup(local_host.c_str());
+  char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
   char* bono_cluster_domain_cstr = strdup(bono_cluster_domain.c_str());
   stack_data.trusted_port = trusted_port;
   stack_data.untrusted_port = untrusted_port;
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
+  stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.bono_cluster_domain = (bono_cluster_domain != "") ? pj_str(bono_cluster_domain_cstr) : stack_data.local_host;
@@ -641,6 +647,7 @@ pj_status_t init_stack(bool edge_proxy,
   if (stack_data.trusted_port != 0)
   {
     status = start_transports(stack_data.trusted_port,
+                              stack_data.local_host,
                               &stack_data.trusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
@@ -649,6 +656,7 @@ pj_status_t init_stack(bool edge_proxy,
   if (stack_data.untrusted_port != 0)
   {
     status = start_transports(stack_data.untrusted_port,
+                              stack_data.public_host,
                               &stack_data.untrusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
@@ -663,6 +671,12 @@ pj_status_t init_stack(bool edge_proxy,
   // to be added in Record-Route.
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
+
+  if (strcmp(local_host_cstr, public_host_cstr))
+  {
+    stack_data.name[stack_data.name_cnt] = stack_data.public_host;
+    stack_data.name_cnt++;
+  }
 
   if (edge_proxy)
   {

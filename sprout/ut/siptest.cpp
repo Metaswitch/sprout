@@ -113,15 +113,20 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   {
     cwtest_clear_host_mapping();
   }
-  cwtest_add_host_mapping("testnode", "localhost");
+  cwtest_add_host_mapping("local_ip", "localhost");
+  cwtest_add_host_mapping("public_hostname", "localhost");
+  cwtest_add_host_mapping("all.the.bonos", "localhost");
   cwtest_add_host_mapping("homedomain", "10.6.6.1");
 
   stack_data.untrusted_port = 5060;
   stack_data.trusted_port = 5058;
-  stack_data.local_host = pj_str("testnode");
+  stack_data.local_host = pj_str("local_ip");
+  stack_data.public_host = pj_str("public_hostname");
   stack_data.home_domain = pj_str("homedomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
+  stack_data.name_cnt++;
+  stack_data.name[stack_data.name_cnt] = stack_data.public_host;
   stack_data.name_cnt++;
 
   // Sort out logging.
