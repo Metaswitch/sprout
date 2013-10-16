@@ -79,6 +79,7 @@ extern "C" {
 #include "log.h"
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
+#include "load_monitor.h"
 
 struct options
 {
@@ -580,6 +581,7 @@ int main(int argc, char *argv[])
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
+  LoadMonitor* load_monitor = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -718,6 +720,9 @@ int main(int argc, char *argv[])
     analytics_logger = new AnalyticsLogger(opt.analytics_directory);
   }
 
+  // Start the load monitor
+  load_monitor = new LoadMonitor(100, 20, 10, 10);
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.edge_proxy,
                       opt.system_name,
@@ -731,7 +736,8 @@ int main(int argc, char *argv[])
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
-                      quiescing_mgr);
+                      quiescing_mgr,
+                      load_monitor);
 
   if (status != PJ_SUCCESS)
   {
@@ -906,6 +912,7 @@ int main(int argc, char *argv[])
   delete enum_service;
   delete bgcf_service;
   delete quiescing_mgr;
+  delete load_monitor; 
 
   if (opt.store_servers != "")
   {

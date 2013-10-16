@@ -90,7 +90,7 @@ private:
 
     /// Random distribution to use for determining connection lifetimes.
     /// Use an exponential distribution because it is memoryless. This
-    /// gives us a Poisson distribution of recyle events, both for
+    /// gives us a Poisson distribution of recycle events, both for
     /// individual threads and for the overall application.
     Utils::ExponentialDistribution _rand;
 

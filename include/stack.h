@@ -53,6 +53,8 @@ extern "C" {
 
 #include "sas.h"
 #include "quiescing_manager.h"
+#include "load_monitor.h"
+#include "accumulator.h"
 
 /* Pre-declariations */
 class LastValueCache;
@@ -127,7 +129,8 @@ extern pj_status_t init_stack(bool edge_proxy,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
                               int num_worker_threads,
-                              QuiescingManager *quiescing_mgr);
+                              QuiescingManager *quiescing_mgr,
+                              LoadMonitor *load_monitor);
 extern pj_status_t start_stack();
 extern void stop_stack();
 extern void unregister_stack_modules(void);
