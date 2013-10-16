@@ -89,7 +89,7 @@ public:
   Message() :
     _method("OPTIONS"),
     _user("6505550231"),
-    _domain("testnode")
+    _domain("local_ip")
   {
   }
 
