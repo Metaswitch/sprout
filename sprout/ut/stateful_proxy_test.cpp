@@ -1461,7 +1461,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
       .append(firstHop ? ";ob" : "");
     EXPECT_THAT(xoToken, MatchesRegex(expect));
 
-    // Get the bare token as just the user@host part of the URI.
+    // Get the bare token as just the user part of the URI.
     xoBareToken = xoToken.substr(xoToken.find(':')+1);
     xoBareToken = xoBareToken.substr(0, xoBareToken.find('@'));
   }
