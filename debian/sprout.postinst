@@ -86,13 +86,7 @@ case "$1" in
         setup_logging
         [ ! -x /usr/share/clearwater/bin/clearwater-logging-update ] || /usr/share/clearwater/bin/clearwater-logging-update
         add_section /etc/security/limits.conf sprout /etc/security/limits.conf.sprout
-        install -D --mode=0644 /usr/share/clearwater/conf/$NAME.monit /etc/monit/conf.d/
-        service monit reload
-        # Restart sprout.  Always do this by terminating sprout so monit will
-        # restart it more-or-less immediately.  (monit restart seems to have
-        # significant lag.)
-        # Don't fail if it's already stopped.
-        service sprout stop || /bin/true
+        /etc/clearwater/scripts/sprout.monit
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
