@@ -37,7 +37,7 @@
 . /etc/clearwater/config
 
 # Set up the monit configuration for bono with the right IP addresses and ports
-cat <<EOF
+cat > /etc/monit/conf.d/bono.monit <<EOF
 # Poll every 10 seconds
 set daemon 10
 
@@ -52,7 +52,6 @@ check process bono pidfile /var/run/bono.pid
   if memory is greater than 80% for 3 cycles
      then exec "/etc/init.d/bono abort-restart"
 EOF
-> /etc/monit/conf.d/bono.monit
 chmod 0644 /etc/monit/conf.d/bono.monit
 
 # Force monit to reload its configuration
