@@ -337,6 +337,8 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     // Discard non-OPTIONS requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
+    LOG_DEBUG("Rejected request due to overload");
+
     pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
