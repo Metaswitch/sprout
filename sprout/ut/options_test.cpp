@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
 
 #include <string>
 #include "gtest/gtest.h"
@@ -148,6 +146,22 @@ TEST_F(OptionsTest, HomeDomain)
 {
   Message msg;
   msg._domain = "homedomain";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(OptionsTest, LocalHost)
+{
+  Message msg;
+  msg._domain = "localhost";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(OptionsTest, Loopback)
+{
+  Message msg;
+  msg._domain = "127.0.0.1";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
