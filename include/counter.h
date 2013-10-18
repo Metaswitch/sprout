@@ -44,7 +44,7 @@
 
 /// @class Counter
 ///
-/// Counts things!
+/// Counts events over a set period, pushing the total number as the statistic
 class Counter
 {
 public:

@@ -107,6 +107,12 @@ LoadMonitor::LoadMonitor(int init_target_latency, int max_bucket_size,
   min_token_rate = init_min_token_rate;
 }
     
+LoadMonitor::~LoadMonitor()
+{
+  // Destroy the lock
+  pthread_mutex_destroy(&_lock);
+}
+
 bool LoadMonitor::admit_request()
 {
   pthread_mutex_lock(&_lock);

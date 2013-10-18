@@ -59,6 +59,7 @@ class LoadMonitor
   public:
     LoadMonitor(int init_target_latency, int max_bucket_size,
                 float init_token_rate, float init_min_token_rate);
+    ~LoadMonitor();
     bool admit_request();
     void incr_penalties();
     void request_complete(int latency);
