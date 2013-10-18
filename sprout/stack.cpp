@@ -347,9 +347,12 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                (pjsip_hdr*)retry_after,
                                NULL);
    
-    // If the sprout/bono is overloaded, then close the TCP connection. 
-    pjsip_transport_shutdown(rdata->tp_info.transport);
-  
+    // If the sprout/bono is overloaded, then close the connection (if it's TCP). 
+    if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
+    {  
+      pjsip_transport_shutdown(rdata->tp_info.transport);
+    }
+ 
     overload_counter->increment(); 
     return PJ_TRUE;
   } 
