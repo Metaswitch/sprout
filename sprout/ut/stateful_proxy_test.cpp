@@ -2320,6 +2320,46 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   doTestHeaders(&tp, false, _tp_default, false, msg, "", false, true, false, true, false);
 }
 
+// Test that Bono routes requests appropriately if the RequestURI contains a
+// loopback address.
+TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send an ACK from the client with four route headers - client=>bono=>bono=>client,
+  // with loopback address in RequestURI.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:6505551234@127.0.0.1;transport=tcp";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._route = "Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:123456@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>";
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("ACK");
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (bono1, which is mapped to 10.6.6.200).
+  expect_target("TCP", "10.6.6.200", stack_data.trusted_port, tdata);
+
+  free_txdata();
+}
+
 
 // Test flows into IBCF, in particular for header stripping.
 TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
