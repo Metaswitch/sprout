@@ -49,7 +49,8 @@ TARGET_SOURCES := logger.cpp \
                   connection_tracker.cpp \
                   quiescing_manager.cpp \
                   dialog_tracker.cpp \
-                  load_monitor.cpp
+                  load_monitor.cpp \
+                  counter.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -88,7 +89,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        quiescing_manager_test.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
-                       load_monitor_test.cpp
+                       load_monitor_test.cpp \
+                       counter_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

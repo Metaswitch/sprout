@@ -41,7 +41,7 @@
 using namespace std;
 
 FakeHttpConnection::FakeHttpConnection() :
-  HttpConnection("localhost", true, 0, "connected_homesteads")  // dummy values
+  HttpConnection("localhost", true, 0, "connected_homesteads", NULL)  // dummy values
 {
 }
 

@@ -48,6 +48,7 @@
 #include "ifchandler.h"
 #include "sas.h"
 #include "accumulator.h"
+#include "load_monitor.h"
 
 /// @class HSSConnection
 ///
@@ -57,7 +58,8 @@
 class HSSConnection
 {
 public:
-  HSSConnection(const std::string& server);
+  HSSConnection(const std::string& server,
+                LoadMonitor *load_monitor);
   ~HSSConnection();
 
   Json::Value* get_digest_data(const std::string& private_user_id,

@@ -76,7 +76,8 @@ static const double CONNECTION_AGE_MS = 60 * 1000.0;
 HttpConnection::HttpConnection(const std::string& server,      //< Server to send HTTP requests to.
                                bool assert_user,               //< Assert user in header?
                                int sas_event_base,             //< SAS events: sas_event_base - will have  SASEvent::HTTP_REQ / RSP / ERR added to it.
-                               const std::string& stat_name) : //< Name of statistic to report connection info to.
+                               const std::string& stat_name,   //< Name of statistic to report connection info to.
+                               LoadMonitor* load_monitor) :    //< Load Monitor.
   _server(server),
   _assert_user(assert_user),
   _sas_event_base(sas_event_base),
@@ -87,6 +88,7 @@ HttpConnection::HttpConnection(const std::string& server,      //< Server to sen
   curl_global_init(CURL_GLOBAL_DEFAULT);
   std::vector<std::string> no_stats;
   _statistic.report_change(no_stats);
+  _load_monitor = load_monitor;
 }
 
 
@@ -292,6 +294,7 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
         
+        // Record that the first error was a 503 error. 
         if (error_is_503)
         {
           first_error_503 = true;
@@ -306,7 +309,7 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         // Check whether both attempts returned 503 errors, and raise a penalty if so. 
         if (error_is_503 && first_error_503)
         {
-          //load_monitor.incr_penalties();
+          _load_monitor->incr_penalties();
         }
 
         break;

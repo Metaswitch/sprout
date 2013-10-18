@@ -70,6 +70,7 @@ extern "C" {
 #include "connection_tracker.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
+#include "counter.h"
 
 class StackQuiesceHandler;
 
@@ -88,8 +89,8 @@ struct rx_msg_qe
 eventq<struct rx_msg_qe> rx_msg_q;
 
 static Accumulator* latency_accumulator;
-static Accumulator* requests_accumulator;
-static Accumulator* overload_accumulator;
+static Counter* requests_counter;
+static Counter* overload_counter;
 
 static LoadMonitor *load_monitor = NULL; 
 static QuiescingManager *quiescing_mgr = NULL;
@@ -326,14 +327,14 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
 
-  if ((load_monitor->admit_request())                                   &&
+  requests_counter->increment();
+
+  if (!(load_monitor->admit_request())                                  &&
       (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)                  &&
       (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)     &&
-   //   (!(rdata->msg_info.msg->line.req.method.id == PJSIP_OTHER_METHOD) && 
-   //     (rdata->msg_info.msg->line.req.method.name == "PRACK"))         &&     
       (rdata->msg_info.msg->line.req.method.id != PJSIP_OPTIONS_METHOD))
   {
-    // Discard non-OPTIONS requests if queue is too big.
+    // Discard non-OPTIONS requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
     pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
@@ -344,11 +345,10 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                (pjsip_hdr*)retry_after,
                                NULL);
    
-    // If the sprout/bono is overloaded, then close the TCP connection. This 
-    // causes the connection to retry against a different (probably) instance. 
+    // If the sprout/bono is overloaded, then close the TCP connection. 
     pjsip_transport_shutdown(rdata->tp_info.transport);
   
-    //overload_accumulator->accumulate(1); 
+    overload_counter->increment(); 
     return PJ_TRUE;
   } 
 
@@ -763,8 +763,8 @@ pj_status_t init_stack(bool edge_proxy,
                                                    Statistic::known_stats());
 
   latency_accumulator = new StatisticAccumulator("latency_us");
-  requests_accumulator = new StatisticAccumulator("incoming_requests");
-  overload_accumulator = new StatisticAccumulator("rejected_overload");
+  requests_counter = new StatisticCounter("incoming_requests");
+  overload_counter = new StatisticCounter("rejected_overload");
 
   if (load_monitor_arg != NULL)
   {
@@ -887,10 +887,10 @@ void destroy_stack(void)
   // Tear down the stack.
   delete latency_accumulator;
   latency_accumulator = NULL;
-  delete requests_accumulator;
-  requests_accumulator = NULL;
-  delete overload_accumulator;
-  overload_accumulator = NULL;
+  delete requests_counter;
+  requests_counter = NULL;
+  delete overload_counter;
+  overload_counter = NULL;
   delete stack_data.stats_aggregator;
 
   delete stack_quiesce_handler;

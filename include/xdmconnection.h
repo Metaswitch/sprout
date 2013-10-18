@@ -45,11 +45,13 @@
 #include "httpconnection.h"
 #include "sas.h"
 #include "accumulator.h"
+#include "load_monitor.h"
 
 class XDMConnection
 {
 public:
-  XDMConnection(const std::string& server);
+  XDMConnection(const std::string& server,
+                LoadMonitor *load_monitor);
   XDMConnection(HttpConnection* http);
   virtual ~XDMConnection();
 

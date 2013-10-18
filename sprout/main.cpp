@@ -721,7 +721,7 @@ int main(int argc, char *argv[])
   }
 
   // Start the load monitor
-  load_monitor = new LoadMonitor(100, 20, 10, 10);
+  load_monitor = new LoadMonitor(100000, 20, 10.0, 10.0);
 
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.edge_proxy,
@@ -777,14 +777,14 @@ int main(int argc, char *argv[])
   {
     // Create a connection to the HSS.
     LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
-    hss_connection = new HSSConnection(opt.hss_server);
+    hss_connection = new HSSConnection(opt.hss_server, load_monitor);
   }
 
   if (opt.xdm_server != "")
   {
     // Create a connection to the XDMS.
     LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server);
+    xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
   }
 
   if (xdm_connection != NULL)

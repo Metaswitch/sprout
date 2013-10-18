@@ -54,7 +54,6 @@ extern "C" {
 #include "sas.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
-#include "accumulator.h"
 
 /* Pre-declariations */
 class LastValueCache;

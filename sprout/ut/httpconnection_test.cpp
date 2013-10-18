@@ -50,6 +50,7 @@
 #include "fakecurl.hpp"
 #include "test_interposer.hpp"
 #include "test_utils.hpp"
+#include "load_monitor.h"
 
 using namespace std;
 
@@ -57,9 +58,8 @@ using namespace std;
 class HttpConnectionTest : public BaseTest
 {
   HttpConnection _http;
-
   HttpConnectionTest() :
-    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers")
+    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", new LoadMonitor(100000, 20, 10, 10)) 
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";

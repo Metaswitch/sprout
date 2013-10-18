@@ -1,5 +1,5 @@
 /**
- * @file accumulator_test.cpp UT for statistics accumulator classes.
+ * @file load_monitor_test.cpp UT for LoadMonitor classes.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -43,15 +43,13 @@
 #include "basetest.hpp"
 #include "load_monitor.h"
 
-using namespace std;
-
-/// Fixture for AccumulatorTest.
+/// Fixture for LoadMonitorTest.
 class LoadMonitorTest : public BaseTest
 {
   LoadMonitor _load_monitor;
 
   LoadMonitorTest() :
-    _load_monitor(100, 20, 10, 10) // make the period large to avoid intermittent failures due to timing
+    _load_monitor(100000, 20, 10, 10)
   {
   }
 
@@ -60,104 +58,83 @@ class LoadMonitorTest : public BaseTest
   }
 };
 
-class LeakyBucketTest : public BaseTest
+class TokenBucketTest : public BaseTest
 {
-  LeakyBucket _leaky_bucket;
+  TokenBucket _token_bucket;
 
-  LeakyBucketTest() :
-    _leaky_bucket(20, 10) // make the period large to avoid intermittent failures due to timing
+  TokenBucketTest() :
+    _token_bucket(20, 10)
   {
   }
 
-  virtual ~LeakyBucketTest()
+  virtual ~TokenBucketTest()
   {
   }
 };
 
-/// Fixture for StatisticAccumulatorTest.
-//class StatisticAccumulatorTest : public BaseTest
-//{
-//  StatisticAccumulator _accumulator;
-//
-//  StatisticAccumulatorTest() :
-//    _accumulator("latency_us", 999999999999) // make the period large to avoid intermittent failures due to timing
-//  {
-//  }
-
- // virtual ~StatisticAccumulatorTest()
- // {
- // }
-//};
-
-TEST_F(LoadMonitorTest, NoSamples)
+TEST_F(LoadMonitorTest, RequestComplete)
 {
+  // Start with the expected latency. The rate will be unchanged. 
+  for (int ii = 0; ii < 40; ii++)
+  {
+   _load_monitor.request_complete(100000);
+  }
+
+  EXPECT_EQ(_load_monitor.smoothed_latency, 99517);
+
+  // Increase the latency; this will cause the token rate to decrease
+  for (int ii = 0; ii < 20; ii++)
+  {
+   _load_monitor.request_complete(200000);
+  }
+
+  EXPECT_EQ(_load_monitor.smoothed_latency, 193042);
+
+  // Dectease the latency; this will cause the token rate to increase. 
+  for (int ii = 0; ii < 20; ii++)
+  {
+    _load_monitor.request_complete(1000);
+  }
+
+  EXPECT_EQ(_load_monitor.smoothed_latency, 14288);
+
+  // Keep the latency low, but incur a penalty. The token rate increases. 
+  _load_monitor.incr_penalties();
+
+  for (int ii = 0; ii < 20; ii++)
+  {
+    _load_monitor.request_complete(1000);
+  }
+
+  EXPECT_EQ(_load_monitor.smoothed_latency, 1917);
+}
+
+TEST_F(LoadMonitorTest, AdmitRequest)
+{
+  // Test that initially the load monitor admits requests, but after a large number  
+  // of attempts in quick succession it has run out.
+  EXPECT_EQ(_load_monitor.admit_request(), true);
+
   for (int ii = 0; ii <= 50; ii++)
   {
    bool test = _load_monitor.admit_request();
   }
  
-//.refresh(true);
   EXPECT_EQ(_load_monitor.admit_request(), false);
-  _load_monitor.request_complete(1);
-  // EXPECT_EQ(_accumulator.get_mean(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_variance(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_lwm(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)0);
 }
 
-TEST_F(LeakyBucketTest, NoSamples2)
+TEST_F(TokenBucketTest, GetToken)
 {
+  // Test that initially the token bucket gives out tokens, but after a large number
+  // of attempts in quick succession it has run out.
+  bool got_token = _token_bucket.get_token();
+  EXPECT_EQ(got_token, true);
+
   for (int ii = 0; ii <= 50; ii++)
   {
-   bool test = _leaky_bucket.get_token();
+    got_token = _token_bucket.get_token();
   }
 
-//.refresh(true);
-  EXPECT_EQ(_leaky_bucket.get_token(), false);
- // EXPECT_EQ(_accumulator.get_mean(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_variance(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_lwm(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)0);
+  EXPECT_EQ(got_token, false);
+
 }
-
-TEST_F(LeakyBucketTest, NoSamples3)
-{
-  _leaky_bucket.update_rate(1);
-  _leaky_bucket.update_max_size(1);
-  _leaky_bucket.replenish_bucket();
-  for (int ii = 0; ii <= 50; ii++)
-  {
-   bool test = _leaky_bucket.get_token();
-  }
-
-//.refresh(true);
-  EXPECT_EQ(_leaky_bucket.get_token(), false);
- // EXPECT_EQ(_accumulator.get_mean(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_variance(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_lwm(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)0);
-}
-
-TEST_F(LoadMonitorTest, NoSamples4)
-{
-  for (int ii = 0; ii <= 50; ii++)
-  {
-    _load_monitor.request_complete(1);
-  }
-
-//.refresh(true);
- // EXPECT_EQ(_load_monitor.admit_request(), false);
-//  _load_monitor.request_complete(1);
-  // EXPECT_EQ(_accumulator.get_mean(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_variance(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_lwm(), (uint_fast64_t)0);
- // EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)0);
-}
-
-
-//TEST_F(StatisticAccumulatorTest, BasicTest)
-//{
-//  _accumulator.accumulate(1234);
-//  _accumulator.refresh(true);
-  // No easy way to read statistics back.
-//}

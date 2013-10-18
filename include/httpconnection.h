@@ -43,6 +43,7 @@
 
 #include "utils.h"
 #include "statistic.h"
+#include "load_monitor.h"
 
 typedef long HTTPCode;
 #define HTTP_OK 200
@@ -57,7 +58,7 @@ typedef long HTTPCode;
 class HttpConnection
 {
 public:
-  HttpConnection(const std::string& server, bool assert_user, int sas_event_base, const std::string& stat_name);
+  HttpConnection(const std::string& server, bool assert_user, int sas_event_base, const std::string& stat_name, LoadMonitor* load_monitor);
   virtual ~HttpConnection();
 
   virtual long get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
@@ -107,7 +108,7 @@ private:
   pthread_key_t _thread_local;
 
   Statistic _statistic;
-
+  LoadMonitor* _load_monitor;
   pthread_mutex_t _lock;
   std::map<std::string, int> _server_count;  // must access under _lock
 

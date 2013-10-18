@@ -1,10 +1,44 @@
+/**
+ * @file load_monitor.cpp LoadMonitor class methods.
+ *
+ * Project Clearwater - IMS in the Cloud
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version, along with the "Special Exception" for use of
+ * the program along with SSL, set forth below. This program is distributed
+ * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details. You should have received a copy of the GNU General Public
+ * License along with this program.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by
+ * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ *
+ * Special Exception
+ * Metaswitch Networks Ltd  grants you permission to copy, modify,
+ * propagate, and distribute a work formed by combining OpenSSL with The
+ * Software, or a work derivative of such a combination, even if such
+ * copying, modification, propagation, or distribution would otherwise
+ * violate the terms of the GPL. You must comply with the GPL in all
+ * respects for all of the code used other than OpenSSL.
+ * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
+ * Project and licensed under the OpenSSL Licenses, or a work based on such
+ * software and licensed under the OpenSSL Licenses.
+ * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
+ * under which the OpenSSL Project distributes the OpenSSL toolkit software,
+ * as those licenses appear in the file LICENSE-OPENSSL.
+ */
+
 #include "load_monitor.h"
 #include <time.h>
-#include <mutex>
 #include "log.h" 
 
-// a MS header, then replace printf with LOG_DEBUG
-//using namespace std;
+
 TokenBucket::TokenBucket(int s, float r)
 {
   max_size = s;
@@ -15,76 +49,48 @@ TokenBucket::TokenBucket(int s, float r)
 
 bool TokenBucket::get_token()
 {
-  m.lock();
-  time_t new_replenish_time = time(0);
-  tokens += (int) (rate * (new_replenish_time - replenish_time));
-  replenish_time = new_replenish_time;
-        
-  if (tokens > max_size)
-  {
-    tokens = max_size;
-  }
- 
+  replenish_bucket();   
   bool rc = (tokens >= 1);
-  
+
   if (rc)
   {
     tokens -= 1;
   }
-
-  m.unlock();
-
+      
   return rc;
-}
+} 
 
 void TokenBucket::update_rate(float new_rate)
 {
   rate = new_rate;
 }
 
-void TokenBucket::update_max_size(int new_max_size)
-{
-  max_size = new_max_size;
-}
-    
 void TokenBucket::replenish_bucket()
 {
   time_t new_replenish_time = time(0);
-  tokens += (int) (rate * (new_replenish_time - replenish_time));
+  tokens +=  (rate * (new_replenish_time - replenish_time));
   replenish_time = new_replenish_time;
 
-  if (tokens > max_size)
+  if (tokens >= max_size)
   {
     tokens = max_size;
   }
 }
 
-PenaltyCounter::PenaltyCounter()
-{
-  penalties = 0;
-}
-
-void PenaltyCounter::reset_penalties()
-{
-  penalties = 0;
-}
-
-int PenaltyCounter::get_penalties()
-{
-  return penalties;
-}
-
-void PenaltyCounter::incr_penalties()
-{
-  penalties += 1;
-}
-
-    // I believe the magic colon syntax is what you need to initialise bucket
 LoadMonitor::LoadMonitor(int init_target_latency, int max_bucket_size,
                          float init_token_rate, float init_min_token_rate)
-                         : bucket(max_bucket_size, init_token_rate), penalty_counter()
+                         : bucket(max_bucket_size, init_token_rate)
 {
+  pthread_mutexattr_t attrs;
+  pthread_mutexattr_init(&attrs);
+  pthread_mutexattr_settype(&attrs, PTHREAD_MUTEX_RECURSIVE);
+  pthread_mutex_init(&_lock, &attrs);
+  pthread_mutexattr_destroy(&attrs);
+
+  // Number of requests processed before each adjustment of token bucket rate
   ADJUST_PERIOD = 20;
+  
+  // Adjustment parameters for token bucket
   DECREASE_THRESHOLD = 0.0;
   DECREASE_FACTOR = 1.2;
   INCREASE_THRESHOLD = -0.005;
@@ -103,6 +109,8 @@ LoadMonitor::LoadMonitor(int init_target_latency, int max_bucket_size,
     
 bool LoadMonitor::admit_request()
 {
+  pthread_mutex_lock(&_lock);
+
   if (bucket.get_token())
   {
     // Got a token from the bucket, so admit the request
@@ -114,23 +122,28 @@ bool LoadMonitor::admit_request()
       max_pending_count = pending_count;
     }
     
+    pthread_mutex_unlock(&_lock);
     return true;
   }
   else
   {
     rejected += 1;
+    pthread_mutex_unlock(&_lock);
     return false;
   }        
 }
 
 void LoadMonitor::incr_penalties()
 {
+  pthread_mutex_lock(&_lock);
   penalties += 1;
+  pthread_mutex_unlock(&_lock);
 }
 
     
 void LoadMonitor::request_complete(int latency)
 {
+  pthread_mutex_lock(&_lock);
   pending_count -= 1;
   smoothed_latency = (7 * smoothed_latency + latency) / 8;
   adjust_count -= 1;
@@ -169,8 +182,7 @@ void LoadMonitor::request_complete(int latency)
     }
     else if (err < INCREASE_THRESHOLD)
     {
-      float new_rate = bucket.rate + 
-                        (-1 * err * bucket.max_size * INCREASE_FACTOR);
+      float new_rate = bucket.rate + (-1 * err * bucket.max_size * INCREASE_FACTOR);
       bucket.update_rate(new_rate);
 
       LOG_DEBUG("Increase rate to %f", bucket.rate);
@@ -186,4 +198,6 @@ void LoadMonitor::request_complete(int latency)
     rejected = 0;
     penalties = 0;
   }
+
+  pthread_mutex_unlock(&_lock);
 }

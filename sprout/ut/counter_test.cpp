@@ -1,5 +1,5 @@
 /**
- * @file xdmconnection_test.cpp UT for Sprout XDM connection and underlying
+ * @file counter_test.cpp UT for statistics counter classes.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,61 +34,63 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-/// HttpConnection.
 ///
 ///----------------------------------------------------------------------------
 
 #include <string>
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
-#include "utils.h"
-#include "sas.h"
-#include "httpconnection.h"
-#include "xdmconnection.h"
 #include "basetest.hpp"
-#include "fakecurl.hpp"
-#include "fakelogger.hpp"
-#include "test_utils.hpp"
+#include "counter.h"
 
 using namespace std;
 
-/// Fixture for XdmConnectionTest.
-class XdmConnectionTest : public BaseTest
+/// Fixture for CounterTest.
+class CounterTest : public BaseTest
 {
-  XDMConnection _xdm;
+  Counter _counter;
 
-  XdmConnectionTest() :
-    _xdm("cyrus", NULL)
+  CounterTest() :
+    _counter(999999999999) // make the period large to avoid intermittent failures due to timing
   {
-    fakecurl_responses.clear();
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf2/simservs.xml"] = "yadda";
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf3/simservs.xml"] = "wherizzit?";
   }
 
-  virtual ~XdmConnectionTest()
+  virtual ~CounterTest()
   {
-    fakecurl_responses.clear();
-    fakecurl_requests.clear();
   }
 };
 
-
-// Now test the higher-level methods.
-
-TEST_F(XdmConnectionTest, SimServsGet)
+/// Fixture for StatisticCounterTest.
+class StatisticCounterTest : public BaseTest
 {
-  string output;
-  bool ret = _xdm.get_simservs("gand/alf", output, "friend_and_enter", 0);
-  EXPECT_TRUE(ret);
-  EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>", output);
-  Request& req = fakecurl_requests["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"];
-  EXPECT_EQ("GET", req._method);
-  EXPECT_FALSE(req._httpauth & CURLAUTH_DIGEST) << req._httpauth;
-  EXPECT_EQ("", req._username);
-  EXPECT_EQ("", req._password);
-  EXPECT_CONTAINED("X-XCAP-Asserted-Identity: gand/alf", req._headers);
+  StatisticCounter _counter;
+
+  StatisticCounterTest() :
+    _counter("incoming_requests", 999999999999) // make the period large to avoid intermittent failures due to timing
+  {
+  }
+
+  virtual ~StatisticCounterTest()
+  {
+  }
+};
+
+TEST_F(CounterTest, NoSamples)
+{
+  _counter.refresh(true);
+  EXPECT_EQ(_counter.get_count(), (uint_fast64_t)0);
 }
 
+TEST_F(CounterTest, OneSample)
+{
+  _counter.increment();
+  _counter.refresh(true);
+  EXPECT_EQ(_counter.get_count(), (uint_fast64_t)1);
+}
+
+TEST_F(StatisticCounterTest, BasicTest)
+{
+  _counter.increment();
+  _counter.refresh(true);
+  // No easy way to read statistics back.
+}
