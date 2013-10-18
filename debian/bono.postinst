@@ -86,8 +86,8 @@ case "$1" in
         setup_logging
         [ ! -x /usr/share/clearwater/bin/clearwater-logging-update ] || /usr/share/clearwater/bin/clearwater-logging-update
         add_section /etc/security/limits.conf bono /etc/security/limits.conf.bono
-        install -D --mode=0644 /usr/share/clearwater/conf/$NAME.monit /etc/monit/conf.d/
-        service monit reload
+        /etc/clearwater/scripts/bono.monit
+
         # Restart bono.  Always do this by terminating bono so monit will
         # restart it more-or-less immediately.  (monit restart seems to have
         # significant lag.)

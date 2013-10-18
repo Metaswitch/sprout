@@ -102,10 +102,121 @@ namespace SP
       unique += 10; // leave room for manual increments
     }
 
-    string get_request();
-    string get_response();
+    void set_route(pjsip_msg* msg)
+    {
+      string route = get_headers(msg, "Record-Route");
+      if (route != "")
+      {
+        // Convert to a Route set by replacing all instances of Record-Route: with Route:
+        for (size_t n = 0; (n = route.find("Record-Route:", n)) != string::npos;)
+        {
+          route.replace(n, 13, "Route:");
+        }
+      }
+      _route = route;
+    }
 
-    void set_route(pjsip_msg* msg);
+    string get_request()
+    {
+      char buf[16384];
+
+      // The remote target.
+      string target = string(_toscheme).append(":").append(_to);
+      if (!_todomain.empty())
+      {
+        target.append("@").append(_todomain);
+      }
+
+      // If there's no route, the target goes in the request
+      // URI. Otherwise it goes in the Route:, and the route goes in the
+      // request URI.
+      //string requri = _route.empty() ? target : _route;
+      //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
+      string requri = target;
+      string route = _route.empty() ? "" : _route.append("\r\n");
+
+      int n = snprintf(buf, sizeof(buf),
+                       "%1$s %9$s SIP/2.0\r\n"
+                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
+                       "%12$s"
+                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                       "To: <%10$s>\r\n"
+                       "Max-Forwards: %8$d\r\n"
+                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                       "CSeq: %15$d %1$s\r\n"
+                       "User-Agent: Accession 2.0.0.0\r\n"
+                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                       "%4$s"
+                       "%7$s"
+                       "%14$s"
+                       "Content-Length: %5$d\r\n"
+                       "\r\n"
+                       "%6$s",
+                       /*  1 */ _method.c_str(),
+                       /*  2 */ _from.c_str(),
+                       /*  3 */ _fromdomain.c_str(),
+                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                       /*  5 */ (int)_body.length(),
+                       /*  6 */ _body.c_str(),
+                       /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
+                       /*  8 */ _forwards,
+                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
+                       /* 10 */ target.c_str(),
+                       /* 11 */ _unique,
+                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
+                       /* 13 */ _via.c_str(),
+                       /* 14 */ route.c_str(),
+                       /* 15 */ _cseq
+        );
+
+      EXPECT_LT(n, (int)sizeof(buf));
+
+      string ret(buf, n);
+      // cout << ret <<endl;
+      return ret;
+    }
+
+    string get_response()
+    {
+      char buf[16384];
+
+      int n = snprintf(buf, sizeof(buf),
+                       "SIP/2.0 %9$s\r\n"
+                       "Via: SIP/2.0/TCP %14$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
+                       "%12$s"
+                       "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                       "To: <sip:%7$s%8$s>\r\n"
+                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                       "CSeq: %13$d %1$s\r\n"
+                       "User-Agent: Accession 2.0.0.0\r\n"
+                       "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
+                       "%4$s"
+                       "%10$s"
+                       "Content-Length: %5$d\r\n"
+                       "\r\n"
+                       "%6$s",
+                       /*  1 */ _method.c_str(),
+                       /*  2 */ _from.c_str(),
+                       /*  3 */ _fromdomain.c_str(),
+                       /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
+                       /*  5 */ (int)_body.length(),
+                       /*  6 */ _body.c_str(),
+                       /*  7 */ _to.c_str(),
+                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
+                       /*  9 */ _status.c_str(),
+                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
+                       /* 11 */ _unique,
+                       /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
+                       /* 13 */ _cseq,
+                       /* 14 */ _via.c_str()
+        );
+
+      EXPECT_LT(n, (int)sizeof(buf));
+
+      string ret(buf, n);
+      // cout << ret <<endl;
+      return ret;
+    }
   };
 }
 
@@ -335,6 +446,7 @@ protected:
                      TransportFlow* tpB,
                      bool tpBset,
                      SP::Message& msg,
+                     string route,
                      bool expect_100,
                      bool pani_AB,
                      bool pani_BA,
@@ -474,118 +586,6 @@ public:
   void doAsOriginated(SP::Message& msg, bool expect_orig);
 };
 
-void SP::Message::set_route(pjsip_msg* msg)
-{
-  string route = get_headers(msg, "Record-Route");
-  if (route != "")
-  {
-    route.erase(0, strlen("Record-Route: <"));
-    route.erase(route.find(">"));
-    _route = route;
-  }
-}
-
-string SP::Message::get_request()
-{
-  char buf[16384];
-
-  string attodomain;
-  if (!_todomain.empty())
-  {
-    attodomain.append("@").append(_todomain);
-  }
-
-  // The remote target.
-  string target = string(_toscheme).append(":").append(_to).append(attodomain);
-
-  // If there's no route, the target goes in the request
-  // URI. Otherwise it goes in the Route:, and the route goes in the
-  // request URI.
-  string requri = _route.empty() ? target : _route;
-  string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
-
-  int n = snprintf(buf, sizeof(buf),
-                   "%1$s %9$s SIP/2.0\r\n"
-                   "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                   "%12$s"
-                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "To: <%10$s>\r\n"
-                   "Max-Forwards: %8$d\r\n"
-                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                   "CSeq: %15$d %1$s\r\n"
-                   "User-Agent: Accession 2.0.0.0\r\n"
-                   "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                   "%4$s"
-                   "%7$s"
-                   "%14$s"
-                   "Content-Length: %5$d\r\n"
-                   "\r\n"
-                   "%6$s",
-                   /*  1 */ _method.c_str(),
-                   /*  2 */ _from.c_str(),
-                   /*  3 */ _fromdomain.c_str(),
-                   /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                   /*  5 */ (int)_body.length(),
-                   /*  6 */ _body.c_str(),
-                   /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                   /*  8 */ _forwards,
-                   /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
-                   /* 10 */ target.c_str(),
-                   /* 11 */ _unique,
-                   /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                   /* 13 */ _via.c_str(),
-                   /* 14 */ route.c_str(),
-                   /* 15 */ _cseq
-    );
-
-  EXPECT_LT(n, (int)sizeof(buf));
-
-  string ret(buf, n);
-  // cout << ret <<endl;
-  return ret;
-}
-
-string SP::Message::get_response()
-{
-  char buf[16384];
-
-  int n = snprintf(buf, sizeof(buf),
-                   "SIP/2.0 %9$s\r\n"
-                   "Via: SIP/2.0/TCP %14$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
-                   "%12$s"
-                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "To: <sip:%7$s%8$s>\r\n"
-                   "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                   "CSeq: %13$d %1$s\r\n"
-                   "User-Agent: Accession 2.0.0.0\r\n"
-                   "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
-                   "%4$s"
-                   "%10$s"
-                   "Content-Length: %5$d\r\n"
-                   "\r\n"
-                   "%6$s",
-                   /*  1 */ _method.c_str(),
-                   /*  2 */ _from.c_str(),
-                   /*  3 */ _fromdomain.c_str(),
-                   /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
-                   /*  5 */ (int)_body.length(),
-                   /*  6 */ _body.c_str(),
-                   /*  7 */ _to.c_str(),
-                   /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                   /*  9 */ _status.c_str(),
-                   /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                   /* 11 */ _unique,
-                   /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
-                   /* 13 */ _cseq,
-                   /* 14 */ _via.c_str()
-    );
-
-  EXPECT_LT(n, (int)sizeof(buf));
-
-  string ret(buf, n);
-  // cout << ret <<endl;
-  return ret;
-}
 
 using SP::Message;
 
@@ -598,6 +598,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           TransportFlow* tpB,  //< Bob's transport.
                                           bool tpBset,         //< Expect all requests to Bob on same transport?
                                           SP::Message& msg,    //< Message to use for testing.
+                                          string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
                                           bool pani_AB,        //< Should P-A-N-I be passed on requests?
                                           bool pani_BA,        //< Should P-A-N-I be passed on responses?
@@ -620,6 +621,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   // ---------- Send INVITE C->X
   SCOPED_TRACE("INVITE");
   msg._method = "INVITE";
+  msg._route = route;
   inject_msg(msg.get_request(), tpA);
   poll();
   ASSERT_EQ(expect_100 ? 2 : 1, txdata_count());
@@ -802,6 +804,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   // ---------- Send INVITE C->X (this is an attempt to establish a second dialog)
   SCOPED_TRACE("INVITE (#2)");
   msg._method = "INVITE";
+  msg._route = route;
   msg._unique++;
   inject_msg(msg.get_request(), tpA);
   poll();
@@ -991,7 +994,7 @@ TEST_F(StatefulProxyTest, TestMainlineHeadersSprout)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  doTestHeaders(_tp_default, false, _tp_default, false, msg, true, true, true, false, true);
+  doTestHeaders(_tp_default, false, _tp_default, false, msg, "", true, true, true, false, true);
 }
 
 TEST_F(StatefulProxyTest, TestNotRegisteredTo)
@@ -2244,11 +2247,12 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
-  msg._extra = string("Route: ").append(token);
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
+  string route = string("Route: <").append(token).append(">");
+
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, true, false, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, route, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), first hop, in particular for header stripping.
@@ -2266,9 +2270,10 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   Message msg;
   msg._first_hop = true;
   msg._via = "10.83.18.37:36531;transport=tcp";
+
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, true, false, true, false);
+  doTestHeaders(&tp, true, _tp_default, false, msg, "", false, true, false, true, false);
 }
 
 // Test flows out of Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -2284,13 +2289,14 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
-  msg._extra = string("Route: ").append(token);
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
+  string route = string("Route: <").append(token).append(">");
+
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
   // Strip PANI outbound - leaving the trust zone.
-  doTestHeaders(_tp_default, false, &tp, false, msg, false, false, true, false, false);
+  doTestHeaders(_tp_default, false, &tp, false, msg, route, false, false, true, false, false);
 }
 
 // Test flows into Bono (P-CSCF), not first hop, in particular for header stripping.
@@ -2311,7 +2317,47 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   // the right address.
   // Strip PANI in outbound direction - leaving the trust zone.
   // This is originating; mark it so.
-  doTestHeaders(&tp, false, _tp_default, false, msg, false, true, false, true, false);
+  doTestHeaders(&tp, false, _tp_default, false, msg, "", false, true, false, true, false);
+}
+
+// Test that Bono routes requests appropriately if the RequestURI contains a
+// loopback address.
+TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send an ACK from the client with four route headers - client=>bono=>bono=>client,
+  // with loopback address in RequestURI.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:6505551234@127.0.0.1;transport=tcp";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._route = "Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:123456@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>";
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("ACK");
+  r1.matches(tdata->msg);
+
+  // Goes to the right place (bono1, which is mapped to 10.6.6.200).
+  expect_target("TCP", "10.6.6.200", stack_data.trusted_port, tdata);
+
+  free_txdata();
 }
 
 
@@ -2333,7 +2379,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
   // This cannot be originating, because it's IBCF! It's a foreign domain.
-  doTestHeaders(&tp, true, _tp_default, false, msg, false, false, false, false, false);
+  doTestHeaders(&tp, true, _tp_default, false, msg, "", false, false, false, false, false);
 }
 
 // Test flows out of IBCF, in particular for header stripping.
@@ -2354,7 +2400,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
-  doTestHeaders(_tp_default, false, &tp, true, msg, false, false, false, false, false);
+  doTestHeaders(_tp_default, false, &tp, true, msg, "", false, false, false, false, false);
 }
 
 // Check configured trusted host is respected
@@ -2443,9 +2489,10 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   // Set up default message.
   Message msg;
   msg._method = "INVITE";
-  msg._to = "public_hostname;orig";
-  msg._todomain = "";
-  msg._route = "sip:6505551000@homedomain";
+  msg._to = "public_hostname";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "homedomain";
+  msg._requri = "sip:6505551000@homedomain";
   msg._from = "+12125551212";
   msg._fromdomain = "foreign-domain.example.com";
 
@@ -2537,9 +2584,10 @@ TEST_F(IscTest, SimpleMainline)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2646,9 +2694,10 @@ TEST_F(IscTest, SimpleNextOrigFlow)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2737,9 +2786,9 @@ TEST_F(IscTest, SimpleReject)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2827,7 +2876,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2912,9 +2961,9 @@ TEST_F(IscTest, SimpleAccept)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2999,9 +3048,9 @@ TEST_F(IscTest, SimpleRedirect)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3090,7 +3139,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3176,9 +3225,9 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3261,9 +3310,9 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3432,9 +3481,10 @@ TEST_F(IscTest, InterestingAs)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3710,9 +3760,10 @@ TEST_F(IscTest, AsOriginatedOrig)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
 //  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
 
@@ -3730,7 +3781,8 @@ TEST_F(IscTest, AsOriginatedTerm)
 //  msg._via = "10.99.88.11:12345;transport=TCP";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
 
   msg._method = "INVITE";
 
@@ -3803,9 +3855,10 @@ TEST_F(IscTest, Cdiv)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3929,9 +3982,10 @@ TEST_F(IscTest, TerminatingWithEnumRewrite)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "1115551234@homedomain;orig";
+  msg._to = "1115551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:1115551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:1115551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4048,9 +4102,10 @@ TEST_F(IscTest, MmtelCdiv)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4247,9 +4302,10 @@ TEST_F(IscTest, MmtelDoubleCdiv)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4360,9 +4416,10 @@ TEST_F(IscTest, ExpiredChain)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4500,9 +4557,10 @@ TEST_F(IscTest, MmtelFlow)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4683,9 +4741,10 @@ TEST_F(IscTest, MmtelThenExternal)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4920,9 +4979,10 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -5015,9 +5075,10 @@ TEST_F(IscTest, SimpleOptionsAccept)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain;orig";
+  msg._to = "6505551234@homedomain";
   msg._todomain = "";
-  msg._route = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
 
   msg._method = "OPTIONS";
   inject_msg(msg.get_request(), &tpBono);

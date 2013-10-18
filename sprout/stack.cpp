@@ -712,14 +712,8 @@ pj_status_t init_stack(bool edge_proxy,
     }
   }
 
-  // Add loopback address.
-#if PJ_IP_HELPER_IGNORE_LOOPBACK_IF
-  stack_data.name[stack_data.name_cnt] = pj_str("127.0.0.1");
-  stack_data.name_cnt++;
-#endif
+  // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
-  stack_data.name[stack_data.name_cnt] = pj_str("localhost");
-  stack_data.name_cnt++;
   // Parse the list of alias host names.
   if (alias_hosts != "")
   {
