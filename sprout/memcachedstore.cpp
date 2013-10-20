@@ -97,10 +97,7 @@ MemcachedStore::MemcachedStore(bool binary,                      ///< use binary
   // during start-up, and if any are not up we don't want to wait for any
   // significant length of time.
   _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
-  if (binary)
-  {
-    _options += " --BINARY-PROTOCOL";
-  }
+  _options += (binary) ? " --BINARY_PROTOCOL" : "";
 
   if (config_file != "")
   {
