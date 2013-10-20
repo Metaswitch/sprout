@@ -53,13 +53,9 @@ namespace RegData {
 MemcachedStoreView::MemcachedStoreView(int vbuckets, int replicas) :
   _replicas(replicas),
   _vbuckets(vbuckets),
-  _vbucket_map()
+  _read_set(vbuckets),
+  _write_set(vbuckets)
 {
-  _vbucket_map.resize(_replicas);
-  for (int ii = 0; ii < _replicas; ++ii)
-  {
-    _vbucket_map[ii].resize(_vbuckets);
-  }
 }
 
 
@@ -69,29 +65,32 @@ MemcachedStoreView::~MemcachedStoreView()
 
 
 /// Updates the view for new current and target server lists.
-void MemcachedStoreView::update(const std::list<std::string>& servers,
-                                const std::list<std::string>& new_servers)
+void MemcachedStoreView::update(const std::vector<std::string>& servers,
+                                const std::vector<std::string>& new_servers)
 {
   // Generate the appropriate rings and the resulting vbuckets arrays.
   if (new_servers.empty())
   {
     // Stable configuration.
     LOG_DEBUG("View is stable with %d nodes", servers.size());
-    _servers = servers.size();
-    _server_list = servers;
+    _servers = servers;
 
     // Only need to generate a single ring.
     Ring ring(_vbuckets);
-    ring.update(_servers);
+    ring.update(_servers.size());
 
-    // Generate the vbuckets arrays from the rings.
+    int replicas = _replicas;
+    if (replicas > (int)_servers.size())
+    {
+      // Not enough servers for the required level of replication.
+      replicas = _servers.size();
+    }
+
+    // Generate the read and write replica sets from the rings.
     for (int ii = 0; ii < _vbuckets; ++ii)
     {
-      std::vector<int> nodes = ring.get_nodes(ii, _replicas);
-      for (int jj = 0; jj < _replicas; ++jj)
-      {
-        _vbucket_map[jj][ii] = nodes[jj];
-      }
+      _read_set[ii] = ring.get_nodes(ii, replicas);
+      _write_set[ii] = _read_set[ii];
     }
   }
   else
@@ -101,18 +100,16 @@ void MemcachedStoreView::update(const std::list<std::string>& servers,
     {
       // Shrinking the cluster, so use the current server list.
       LOG_DEBUG("Cluster is shrinking from %d nodes to %d nodes", servers.size(), new_servers.size());
-      _servers = servers.size();
-      _server_list = servers;
+      _servers = servers;
     }
     else
     {
       // Growing the cluster, so use the new server list.
       LOG_DEBUG("Cluster is growing from %d nodes to %d nodes", servers.size(), new_servers.size());
-      _servers = new_servers.size();
-      _server_list = new_servers;
+      _servers = new_servers;
     }
 
-    // Calculate the two rings needed to generate the vbuckets.
+    // Calculate the two rings needed to generate the vbucket replica sets
     Ring c_ring(_vbuckets);
     c_ring.update(servers.size());
     Ring n_ring(_vbuckets);
@@ -120,65 +117,83 @@ void MemcachedStoreView::update(const std::list<std::string>& servers,
 
     for (int ii = 0; ii < _vbuckets; ++ii)
     {
-      // Calculate the replica sets for this bucket for both current and
-      // target node sets.  (Replica set means the ordered list of nodes on
-      // which data is stored for records that hash to the vbucket.)
+      // Keep track of which nodes are in the replica sets to avoid duplicates.
+      std::vector<bool> in_set(_servers.size());
+
+      // Calculate the read and write replica sets for this bucket for both
+      // current and target node sets.
       std::vector<int> c_nodes = c_ring.get_nodes(ii, _replicas);
       std::vector<int> n_nodes = n_ring.get_nodes(ii, _replicas);
 
-      // Set the primary vbucket to the second node in the current replica set.
-      // This ensures most reads will complete successfully on the first
-      // server, while still maintaining redundancy by ensure the first
-      // two replicas are on different servers.
-      _vbucket_map[0][ii] = c_nodes[1];
+      // Set the first read and write replica to the first node in the
+      // current replica set.  This ensures most reads will complete
+      // successfully on the first server.
+      _read_set[ii].push_back(c_nodes[0]);
+      _write_set[ii].push_back(c_nodes[0]);
+      in_set[c_nodes[0]] = true;
 
-      // Set the second and subsequent replica vbuckets to the first _replicas-1
-      // nodes in the new replica set.  This ensures that immediately after
-      // the subsequent switch to a stable configuration the top _replicas-1
-      // nodes should have the right data.
-      for (int jj = 1; jj < _replicas; ++jj)
+      // Set the second and subsequent read and write replicas to the
+      // first _replicas nodes in the new replica set, but only if the
+      // node is not already in the replica set.  This ensures that
+      // immediately after the subsequent switch to a stable configuration
+      // all nodes in the new replica set will have the full set of data.
+      for (int jj = 0; jj < _replicas; ++jj)
       {
-        _vbucket_map[jj][ii] = n_nodes[jj - 1];
+        if (!in_set[n_nodes[jj]])
+        {
+          _read_set[ii].push_back(n_nodes[jj]);
+          _write_set[ii].push_back(n_nodes[jj]);
+          in_set[n_nodes[jj]] = true;
+        }
       }
 
-      if ((servers.size() == 1) &&
-          (_vbucket_map[1][ii] == 0))
+      // Finally, add extra read replicas from the current replica set, to
+      // maintain redundancy on reads while we are waiting for data to
+      // propagate to the new replicas.  Again, only add replicas that are
+      // not already in the set.
+      for (int jj = 1; jj < _replicas; ++jj)
       {
-        // As a special case when growing a cluster of one node, if the
-        //
-        // this code it is possible to have the same node as both of the first
-        // two replicas for this vbucket.  To avoid this loss of redundancy
-        // We use the second node from the replica set instead.
-        // For example, with two replicas, the one node ring results in every
-        // slot having (0,0) as the primary and secondary replicas, and the two
-        // node ring has half of the slots with (0,1) and half with (1,0).
-        // Without this special case, during the growth stage half of the
-        // slots would end up with (0,0), so no redundancy.  With the change
-        // each slot uses (0,1) during the growth phase.
-        _vbucket_map[1][ii] = n_nodes[1];
+        if (!in_set[c_nodes[jj]])
+        {
+          _read_set[ii].push_back(c_nodes[jj]);
+          in_set[c_nodes[jj]] = true;
+        }
       }
     }
   }
 
-  for (size_t ii = 0; ii < _vbucket_map.size(); ++ii)
-  {
-    LOG_DEBUG("Replica %d vbucket : %s", ii, vbucket_to_string(_vbucket_map[ii]).c_str());
-  }
+  LOG_DEBUG("New view -\n%s", view_to_string().c_str());
 }
 
 
-/// Converts a vbucket map to a printable string.
-std::string MemcachedStoreView::vbucket_to_string(std::vector<int> vbucket_map)
+/// Renders the view as a concise string suitable for logging.
+std::string MemcachedStoreView::view_to_string()
 {
+  // Render the view with vbuckets as rows and replicas as columns.
   std::ostringstream oss;
 
-  for (size_t ii = 0; ii < vbucket_map.size() - 1; ++ii)
+  // Write the header.
+  oss << "Bucket Write           Read" << std::endl;
+  for (int ii = 0; ii < _vbuckets; ++ii)
   {
-    oss << std::setw(3) << std::dec << vbucket_map[ii] << " ";
+    oss << std::left << std::setw(7) << std::setfill(' ') << std::to_string(ii);
+    oss << std::left << std::setw(16) << std::setfill(' ') << replicas_to_string(_write_set[ii]);
+    oss << replicas_to_string(_read_set[ii]) << std::endl;
   }
-  oss << std::setw(3) << std::dec << vbucket_map[vbucket_map.size() - 1];
-
   return oss.str();
+}
+
+
+std::string MemcachedStoreView::replicas_to_string(const std::vector<int>& replicas)
+{
+  std::string s;
+  for (size_t ii = 0; ii < replicas.size()-1; ++ii)
+  {
+    s += std::to_string(replicas[ii]) + "/";
+  }
+  s += std::to_string(replicas[replicas.size()-1]);
+
+  return s;
 }
 
 
