@@ -318,17 +318,13 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
-  // Before we start, get a timestamp.  This will track the time from
-  // receiving a message to forwarding it on (or rejecting it).
-  struct rx_msg_qe qe;
-  qe.stop_watch.start();
-
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
 
   requests_counter->increment();
 
+  // Check whether the request should be processed
   if (!(load_monitor->admit_request())                                  &&
       (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)                  &&
       (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)     &&
@@ -356,6 +352,11 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     overload_counter->increment(); 
     return PJ_TRUE;
   } 
+
+  // Before we start, get a timestamp.  This will track the time from
+  // receiving a message to forwarding it on (or rejecting it).
+  struct rx_msg_qe qe;
+  qe.stop_watch.start();
 
   // Notify the connection tracker that the transport is active.
   connection_tracker->connection_active(rdata->tp_info.transport);

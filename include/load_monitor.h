@@ -49,7 +49,7 @@ class TokenBucket
     bool get_token();
     void update_rate(float new_rate); 
   private:
-    time_t replenish_time;
+    timespec replenish_time;
     float tokens;
     void replenish_bucket();
 };

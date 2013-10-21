@@ -45,21 +45,6 @@
 
 using namespace std;
 
-/// Fixture for AccumulatorTest.
-class AccumulatorTest : public BaseTest
-{
-  Accumulator _accumulator;
-
-  AccumulatorTest() :
-    _accumulator(999999999999) // make the period large to avoid intermittent failures due to timing
-  {
-  }
-
-  virtual ~AccumulatorTest()
-  {
-  }
-};
-
 /// Fixture for StatisticAccumulatorTest.
 class StatisticAccumulatorTest : public BaseTest
 {
@@ -75,7 +60,7 @@ class StatisticAccumulatorTest : public BaseTest
   }
 };
 
-TEST_F(AccumulatorTest, NoSamples)
+TEST_F(StatisticAccumulatorTest, NoSamples)
 {
   _accumulator.refresh(true);
   EXPECT_EQ(_accumulator.get_n(), (uint_fast64_t)0);
@@ -85,7 +70,7 @@ TEST_F(AccumulatorTest, NoSamples)
   EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)0);
 }
 
-TEST_F(AccumulatorTest, OneSample)
+TEST_F(StatisticAccumulatorTest, OneSample)
 {
   _accumulator.accumulate((uint_fast64_t)1234);
   _accumulator.refresh(true);
@@ -96,7 +81,7 @@ TEST_F(AccumulatorTest, OneSample)
   EXPECT_EQ(_accumulator.get_hwm(), (uint_fast64_t)1234);
 }
 
-TEST_F(AccumulatorTest, MultipleSamples)
+TEST_F(StatisticAccumulatorTest, MultipleSamples)
 {
   uint_fast64_t variance = 0;
   for (int ii = 1000; ii <= 2000; ii++)

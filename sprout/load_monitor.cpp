@@ -35,7 +35,6 @@
  */
 
 #include "load_monitor.h"
-#include <time.h>
 #include "log.h" 
 
 
@@ -44,7 +43,7 @@ TokenBucket::TokenBucket(int s, float r)
   max_size = s;
   tokens = max_size;
   rate = r;
-  replenish_time = time(0);
+  clock_gettime(CLOCK_MONOTONIC, &replenish_time);
 }
 
 bool TokenBucket::get_token()
@@ -67,8 +66,12 @@ void TokenBucket::update_rate(float new_rate)
 
 void TokenBucket::replenish_bucket()
 {
-  time_t new_replenish_time = time(0);
-  tokens +=  (rate * (new_replenish_time - replenish_time));
+  timespec new_replenish_time;
+  clock_gettime(CLOCK_MONOTONIC, &new_replenish_time);
+  float timediff = (new_replenish_time.tv_nsec - replenish_time.tv_nsec) / 1000.0 +
+                   (new_replenish_time.tv_sec - replenish_time.tv_sec) * 1000000.0;
+  // The rate is in tokens/sec, and the timediff is in usec.  
+  tokens += ((rate * timediff) / 1000000.0);
   replenish_time = new_replenish_time;
 
   if (tokens >= max_size)

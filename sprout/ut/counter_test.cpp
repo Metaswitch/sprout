@@ -45,21 +45,6 @@
 
 using namespace std;
 
-/// Fixture for CounterTest.
-class CounterTest : public BaseTest
-{
-  Counter _counter;
-
-  CounterTest() :
-    _counter(999999999999) // make the period large to avoid intermittent failures due to timing
-  {
-  }
-
-  virtual ~CounterTest()
-  {
-  }
-};
-
 /// Fixture for StatisticCounterTest.
 class StatisticCounterTest : public BaseTest
 {
@@ -75,13 +60,13 @@ class StatisticCounterTest : public BaseTest
   }
 };
 
-TEST_F(CounterTest, NoSamples)
+TEST_F(StatisticCounterTest, NoSamples)
 {
   _counter.refresh(true);
   EXPECT_EQ(_counter.get_count(), (uint_fast64_t)0);
 }
 
-TEST_F(CounterTest, OneSample)
+TEST_F(StatisticCounterTest, OneSample)
 {
   _counter.increment();
   _counter.refresh(true);

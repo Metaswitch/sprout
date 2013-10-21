@@ -117,7 +117,7 @@ TEST_F(LoadMonitorTest, AdmitRequest)
 
   for (int ii = 0; ii <= 50; ii++)
   {
-   bool test = _load_monitor.admit_request();
+    _load_monitor.admit_request();
   }
  
   EXPECT_EQ(_load_monitor.admit_request(), false);

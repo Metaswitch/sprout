@@ -131,6 +131,11 @@ QuiescingManager *quiescing_mgr;
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 
+const static int TARGET_LATENCY = 1000000;
+const static int MAX_TOKENS = 20;
+const static float INITIAL_TOKEN_RATE = 100.0;
+const static float MIN_TOKEN_RATE = 10.0;
+
 static void usage(void)
 {
   puts("Options:\n"
@@ -721,7 +726,7 @@ int main(int argc, char *argv[])
   }
 
   // Start the load monitor
-  load_monitor = new LoadMonitor(100000, 20, 10.0, 10.0);
+  load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.edge_proxy,
