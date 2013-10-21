@@ -52,11 +52,12 @@
 #include "accumulator.h"
 
 
-HSSConnection::HSSConnection(const std::string& server) :
+HSSConnection::HSSConnection(const std::string& server, LoadMonitor *load_monitor) :
   _http(new HttpConnection(server,
                            false,
                            SASEvent::TX_HSS_BASE,
-                           "connected_homesteads")),
+                           "connected_homesteads",
+                           load_monitor)),
   _latency_stat("hss_latency_us"),
   _digest_latency_stat("hss_digest_latency_us"),
   _subscription_latency_stat("hss_subscription_latency_us")

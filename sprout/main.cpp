@@ -79,6 +79,7 @@ extern "C" {
 #include "log.h"
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
+#include "load_monitor.h"
 
 struct options
 {
@@ -130,6 +131,11 @@ QuiescingManager *quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
+
+const static int TARGET_LATENCY = 1000000;
+const static int MAX_TOKENS = 20;
+const static float INITIAL_TOKEN_RATE = 100.0;
+const static float MIN_TOKEN_RATE = 10.0;
 
 static void usage(void)
 {
@@ -588,6 +594,7 @@ int main(int argc, char *argv[])
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
+  LoadMonitor* load_monitor = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -726,6 +733,9 @@ int main(int argc, char *argv[])
     analytics_logger = new AnalyticsLogger(opt.analytics_directory);
   }
 
+  // Start the load monitor
+  load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.edge_proxy,
                       opt.system_name,
@@ -740,7 +750,8 @@ int main(int argc, char *argv[])
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
-                      quiescing_mgr);
+                      quiescing_mgr,
+                      load_monitor);
 
   if (status != PJ_SUCCESS)
   {
@@ -780,14 +791,14 @@ int main(int argc, char *argv[])
   {
     // Create a connection to the HSS.
     LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
-    hss_connection = new HSSConnection(opt.hss_server);
+    hss_connection = new HSSConnection(opt.hss_server, load_monitor);
   }
 
   if (opt.xdm_server != "")
   {
     // Create a connection to the XDMS.
     LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server);
+    xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
   }
 
   if (xdm_connection != NULL)
@@ -915,6 +926,7 @@ int main(int argc, char *argv[])
   delete enum_service;
   delete bgcf_service;
   delete quiescing_mgr;
+  delete load_monitor; 
 
   if (opt.store_servers != "")
   {

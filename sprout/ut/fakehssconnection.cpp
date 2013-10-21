@@ -45,7 +45,7 @@
 
 using namespace std;
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost")
+FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL)
 {
 }
 

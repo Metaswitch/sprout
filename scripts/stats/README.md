@@ -1,6 +1,6 @@
 # Statistic Collector
 
-This document describes the addition of a new statistics interface to Bono (and hence to Sprout).  This interface may be used to query a running system of it's state by a remote client.
+This document describes the addition of a new statistics interface to Bono (and hence to Sprout).  This interface may be used to query a running system of its state by a remote client.
 
 ## Interface defintion
 
@@ -10,10 +10,14 @@ Bono and Sprout expose a [0MQ](http://www.zeromq.org/) subscription service that
   * `connected_sprouts` - The list of connected Sprout nodes
   * `client_count` - A count of client TCP connections
   * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
+  * `incoming_requests` - A count of the incoming requests 
+  * `rejected_overload` - A count of the incoming requests rejected due to overload
  * Sprout:
   * `connected_homers` - The list of connected Homer nodes
   * `connected_homesteads` - The list of connected Homestead nodes
   * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
+  * `incoming_requests` - A count of the incoming requests
+  * `rejected_overload` - A count of the incoming requests rejected due to overload
 
 _Implementation note: The topics are indicated with a Pub-Sub envelope, as described [here](http://zguide.zeromq.org/page:all#Pub-Sub-Message-Envelopes)._
 

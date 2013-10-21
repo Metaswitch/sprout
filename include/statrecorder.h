@@ -1,5 +1,5 @@
 /**
- * @file xdmconnection.h External interface file for the XDMS client class
+ * @file statrecorder.h abstract class definition for a statistics accumulator
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,32 +34,60 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
+#ifndef STATRECORDER_H__
+#define STATRECORDER_H__
 
-#ifndef XDMCONNECTION_H__
-#define XDMCONNECTION_H__
+#include "statistic.h"
 
-#include <string>
-#include <curl/curl.h>
-#include "httpconnection.h"
-#include "sas.h"
-#include "accumulator.h"
-#include "load_monitor.h"
-
-class XDMConnection
+class StatRecorder
 {
 public:
-  XDMConnection(const std::string& server,
-                LoadMonitor *load_monitor);
-  XDMConnection(HttpConnection* http);
-  virtual ~XDMConnection();
+  /// Default accumulation period, in microseconds.
+  static const uint_fast64_t DEFAULT_PERIOD_US = 5 * 1000 * 1000;
+  
+  /// Constructor.
+  inline StatRecorder(uint_fast64_t period_us = DEFAULT_PERIOD_US) :
+           _target_period_us(period_us) {}
+  
+  /// Refresh our calculations - called at the end of each period, or
+  /// optionally at other times to get an up-to-date result.
+  /// must be implemented by subclass
+  virtual void refresh(bool force = false) = 0;
+  
+  /// Resets the accumulator - must be implemented by subclass
+  virtual void reset() = 0;
+  
+  /// Callback whenever the accumulated statistics are refreshed. Default is
+  /// to do nothing.
+  /// must be implemented by subclass
+  virtual void refreshed() = 0;
+  
+protected:
+  /// Maximum value of a uint_fast64_t (assuming 2s-complement). There is a
+  /// #define for this, but it's unavailable in C++.
+  static const uint_fast64_t MAX_UINT_FAST64 = ~((uint_fast64_t)0);
 
-  bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);
+  /// Target period (in microseconds) over which samples are accumulated.
+  /// Might be inaccurate due to timing errors, or because events don't come
+  /// in frequently enough.
+  uint_fast64_t _target_period_us;
+  
+  /// Get a timestamp in microseconds.
+  inline uint_fast64_t get_timestamp_us()
+  {
+    uint_fast64_t timestamp = 0;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0)
+    {
+      timestamp = (ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+    }
+    return timestamp;
+  }
 
 private:
-  HttpConnection* _http;
-  StatisticAccumulator _latency_stat;
+  /// Read the accumulated statistics, calculate their properties and report
+  /// them as the last set of statistics. Must be implemented by subclass
+  virtual void read(uint_fast64_t period_us) = 0;
 };
 
 #endif
