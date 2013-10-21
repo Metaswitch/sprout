@@ -43,7 +43,7 @@
 #include "sas.h"
 #include "sasevent.h"
 #include "httpconnection.h"
-
+#include "load_monitor.h"
 
 /// Total time to wait for a response from the server before giving
 /// up.  This is the value that affects the user experience, so should
@@ -68,7 +68,7 @@ static const long SINGLE_CONNECT_TIMEOUT_MS = 50;
 
 /// Mean age of a connection before we recycle it. Ensures we respect
 /// DNS changes, and that we rebalance load when servers come back up
-/// after failure. Actual connection recyle events are
+/// after failure. Actual connection recycle events are
 /// Poisson-distributed with this mean inter-arrival time.
 static const double CONNECTION_AGE_MS = 60 * 1000.0;
 
@@ -76,7 +76,8 @@ static const double CONNECTION_AGE_MS = 60 * 1000.0;
 HttpConnection::HttpConnection(const std::string& server,      //< Server to send HTTP requests to.
                                bool assert_user,               //< Assert user in header?
                                int sas_event_base,             //< SAS events: sas_event_base - will have  SASEvent::HTTP_REQ / RSP / ERR added to it.
-                               const std::string& stat_name) : //< Name of statistic to report connection info to.
+                               const std::string& stat_name,   //< Name of statistic to report connection info to.
+                               LoadMonitor* load_monitor) :    //< Load Monitor.
   _server(server),
   _assert_user(assert_user),
   _sas_event_base(sas_event_base),
@@ -87,6 +88,7 @@ HttpConnection::HttpConnection(const std::string& server,      //< Server to sen
   curl_global_init(CURL_GLOBAL_DEFAULT);
   std::vector<std::string> no_stats;
   _statistic.report_change(no_stats);
+  _load_monitor = load_monitor;
 }
 
 
@@ -215,7 +217,8 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
   assert(rv == 0);
   unsigned long now_ms = tp.tv_sec * 1000 + (tp.tv_nsec / 1000000);
   bool recycle_conn = entry->is_connection_expired(now_ms);
-
+  bool first_error_503 = false;
+  
   // Try to get a decent connection. We may need to retry, but only
   // once - cURL itself does most of the retrying for us.
   for (int attempt = 0; attempt < 2; attempt++)
@@ -268,6 +271,8 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_rc);
       }
 
+      bool error_is_503 = ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 503));
+
       // Is this an error we should retry? If cURL itself has already
       // retried (e.g., CURLE_COULDNT_CONNECT) then there is no point
       // in us retrying. But if the remote application has hung
@@ -277,7 +282,7 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
       bool non_fatal = ((rc == CURLE_OPERATION_TIMEDOUT) ||
                         (rc == CURLE_SEND_ERROR) ||
                         (rc == CURLE_RECV_ERROR) ||
-                        ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 503)));
+                        (error_is_503));
 
       char* remote_ip;
       curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &remote_ip);
@@ -288,12 +293,25 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
+        
+        // Record that the first error was a 503 error. 
+        if (error_is_503)
+        {
+          first_error_503 = true;
+        }
       }
       else
       {
         // Fatal error or we've already retried once - we're done!
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
+
+        // Check whether both attempts returned 503 errors, and raise a penalty if so. 
+        if (error_is_503 && first_error_503)
+        {
+          _load_monitor->incr_penalties();
+        }
+
         break;
       }
     }

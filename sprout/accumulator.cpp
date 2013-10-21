@@ -80,7 +80,7 @@ void Accumulator::refresh(bool force)
   // If we're forced, or this period is already long enough, read the new
   // values and make the refreshed() callback.
   if ((force ||
-       (timestamp_us_now >= timestamp_us + _target_period_us)) &&
+      (timestamp_us_now >= timestamp_us + _target_period_us)) &&
       (_current._timestamp_us.compare_exchange_weak(timestamp_us, timestamp_us_now)))
   {
     read(timestamp_us_now - timestamp_us);

@@ -205,7 +205,9 @@ int main(int argc, char** argv)
       (msgs[1] == "OK"))
   {
     // Determine which statistic we have and output it.
-    if (msgs[0] == "client_count")
+    if ((msgs[0] == "client_count")      ||
+        (msgs[0] == "incoming_requests") ||
+        (msgs[0] == "rejected_overload"))
     {
       render_simple_stat(msgs);
     }

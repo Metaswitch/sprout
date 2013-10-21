@@ -49,11 +49,12 @@
 #include "accumulator.h"
 
 /// Main constructor.
-XDMConnection::XDMConnection(const std::string& server) :
+XDMConnection::XDMConnection(const std::string& server, LoadMonitor *load_monitor) :
   _http(new HttpConnection(server,
                            true,
                            SASEvent::TX_XDM_GET_BASE,
-                           "connected_homers")),
+                           "connected_homers",
+                           load_monitor)),
   _latency_stat("xdm_latency_us")
 {
 }

@@ -69,6 +69,8 @@ extern "C" {
 #include "accumulator.h"
 #include "connection_tracker.h"
 #include "quiescing_manager.h"
+#include "load_monitor.h"
+#include "counter.h"
 
 class StackQuiesceHandler;
 
@@ -87,7 +89,10 @@ struct rx_msg_qe
 eventq<struct rx_msg_qe> rx_msg_q;
 
 static Accumulator* latency_accumulator;
+static Counter* requests_counter;
+static Counter* overload_counter;
 
+static LoadMonitor *load_monitor = NULL; 
 static QuiescingManager *quiescing_mgr = NULL;
 static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
@@ -99,21 +104,20 @@ static pj_status_t on_tx_msg(pjsip_tx_data* tdata);
 
 static pjsip_module mod_stack =
 {
-  NULL, NULL,                         /* prev, next.          */
-  pj_str("mod-stack"),                 /* Name.                */
-  -1,                                 /* Id                   */
-  PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1,/* Priority            */
-  NULL,                               /* load()               */
-  NULL,                               /* start()              */
-  NULL,                               /* stop()               */
-  NULL,                               /* unload()             */
-  &on_rx_msg,                         /* on_rx_request()      */
-  &on_rx_msg,                         /* on_rx_response()     */
-  &on_tx_msg,                         /* on_tx_request.       */
-  &on_tx_msg,                         /* on_tx_response()     */
-  NULL,                               /* on_tsx_state()       */
+  NULL, NULL,                           /* prev, next.          */
+  pj_str("mod-stack"),                  /* Name.                */
+  -1,                                   /* Id                   */
+  PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1, /* Priority             */
+  NULL,                                 /* load()               */
+  NULL,                                 /* start()              */
+  NULL,                                 /* stop()               */
+  NULL,                                 /* unload()             */
+  &on_rx_msg,                           /* on_rx_request()      */
+  &on_rx_msg,                           /* on_rx_response()     */
+  &on_tx_msg,                           /* on_tx_request()      */
+  &on_tx_msg,                           /* on_tx_response()     */
+  NULL,                                 /* on_tsx_state()       */
 };
-
 
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
@@ -165,6 +169,7 @@ static int worker_thread(void* p)
       {
         LOG_DEBUG("Request latency = %ldus", latency_us);
         latency_accumulator->accumulate(latency_us);
+        load_monitor->request_complete(latency_us);
       }
       else
       {
@@ -313,14 +318,45 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
 
 static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 {
+  // Do logging.
+  local_log_rx_msg(rdata);
+  sas_log_rx_msg(rdata);
+
+  requests_counter->increment();
+
+  // Check whether the request should be processed
+  if (!(load_monitor->admit_request())                                  &&
+      (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)                  &&
+      (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)     &&
+      (rdata->msg_info.msg->line.req.method.id != PJSIP_OPTIONS_METHOD))
+  {
+    // Discard non-OPTIONS requests if there are no available tokens.
+    // Respond statelessly with a 503 Service Unavailable, including a
+    // Retry-After header with a zero length timeout.
+    LOG_DEBUG("Rejected request due to overload");
+
+    pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_SERVICE_UNAVAILABLE,
+                               NULL,
+                               (pjsip_hdr*)retry_after,
+                               NULL);
+   
+    // If the sprout/bono is overloaded, then close the connection (if it's TCP). 
+    if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
+    {  
+      pjsip_transport_shutdown(rdata->tp_info.transport);
+    }
+ 
+    overload_counter->increment(); 
+    return PJ_TRUE;
+  } 
+
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
   struct rx_msg_qe qe;
   qe.stop_watch.start();
-
-  // Do logging.
-  local_log_rx_msg(rdata);
-  sas_log_rx_msg(rdata);
 
   // Notify the connection tracker that the transport is active.
   connection_tracker->connection_active(rdata->tp_info.transport);
@@ -596,7 +632,8 @@ pj_status_t init_stack(bool edge_proxy,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads,
-                       QuiescingManager *quiescing_mgr_arg)
+                       QuiescingManager *quiescing_mgr_arg,
+                       LoadMonitor *load_monitor_arg)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -740,6 +777,13 @@ pj_status_t init_stack(bool edge_proxy,
                                                    Statistic::known_stats());
 
   latency_accumulator = new StatisticAccumulator("latency_us");
+  requests_counter = new StatisticCounter("incoming_requests");
+  overload_counter = new StatisticCounter("rejected_overload");
+
+  if (load_monitor_arg != NULL)
+  {
+    load_monitor = load_monitor_arg;
+  }
 
   if (quiescing_mgr_arg != NULL)
   {
@@ -755,7 +799,7 @@ pj_status_t init_stack(bool edge_proxy,
     connection_tracker = new ConnectionTracker(stack_quiesce_handler);
 
     // Register the quiesce handler with the quiescing manager (the former
-    // implements the connection hanling interface).
+    // implements the connection handling interface).
     quiescing_mgr->register_conns_handler(stack_quiesce_handler);
   }
 
@@ -857,6 +901,10 @@ void destroy_stack(void)
   // Tear down the stack.
   delete latency_accumulator;
   latency_accumulator = NULL;
+  delete requests_counter;
+  requests_counter = NULL;
+  delete overload_counter;
+  overload_counter = NULL;
   delete stack_data.stats_aggregator;
 
   delete stack_quiesce_handler;

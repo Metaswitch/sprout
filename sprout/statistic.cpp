@@ -127,7 +127,9 @@ static std::string known_statnames[] = {
   "hss_latency_us",
   "hss_digest_latency_us",
   "hss_subscription_latency_us",
-  "xdm_latency_us"
+  "xdm_latency_us",
+  "incoming_requests",
+  "rejected_overload"
 };
 
 
