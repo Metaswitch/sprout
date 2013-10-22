@@ -601,13 +601,6 @@ int main(int argc, char *argv[])
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
 
-  // Mask off SIGHUP from this thread and all child threads, as this will be
-  // handled by a dedicated thread.
-  sigset_t sset;
-  sigemptyset(&sset);
-  sigaddset(&sset, SIGHUP);
-  pthread_sigmask(SIG_BLOCK, &sset, NULL);
-
   // Initialize the semaphore that unblocks the quiesce thread, and the thread
   // itself.
   sem_init(&quiescing_sem, 0, 0);

@@ -54,7 +54,7 @@ private:
   static void* updater_thread(void* p);
   void updater();
 
-  static SignalHandler<SIGHUP> _sig_handler;
+  static SignalHandler<SIGHUP> _sighup_handler;
 
   MemcachedStore* _store;
   std::string _file;

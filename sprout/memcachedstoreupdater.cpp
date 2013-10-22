@@ -55,7 +55,7 @@
 namespace RegData {
 
 
-SignalHandler<SIGHUP> MemcachedStoreUpdater::_sig_handler;
+SignalHandler<SIGHUP> MemcachedStoreUpdater::_sighup_handler;
 
 
 MemcachedStoreUpdater::MemcachedStoreUpdater(MemcachedStore* store,
@@ -155,7 +155,7 @@ void MemcachedStoreUpdater::updater()
   while (true)
   {
     // Wait for the SIGHUP signal.
-    _sig_handler.wait_for_signal();
+    _sighup_handler.wait_for_signal();
     update_view();
   }
 }

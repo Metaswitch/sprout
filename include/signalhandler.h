@@ -41,9 +41,13 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#include "log.h"
 
 /// Singleton class template for handling UNIX signals.  Only a single
 /// instance of this class should be created for each UNIX signal type.
+/// This has to be templated because there has to be a unique static signal
+/// handler function and semphore for each signal being hooked, so creating
+/// multiple instances of a non-templated class doesn't work
 template <int SIGNUM>
 class SignalHandler
 {
@@ -61,7 +65,16 @@ public:
     pthread_create(&_dispatcher_thread, 0, &SignalHandler::dispatcher, (void*)this);
 
     // Hook the signal.
-    signal(SIGNUM, &SignalHandler::handler);
+    sighandler_t old_handler = signal(SIGNUM, &SignalHandler::handler);
+
+    if (old_handler != SIG_DFL)
+    {
+// LCOV_EXCL_START
+      // Old handler is not the default handler, so someone else has previously
+      // hooked the signal.
+      LOG_WARNING("SIGHUP already hooked");
+// LCOV_EXCL_STOP
+    }
   }
 
   ~SignalHandler()
@@ -84,11 +97,14 @@ public:
   /// Waits for the signal to be raised.
   void wait_for_signal()
   {
-    // Call pthread_cond_wait without holding the mutex.  This is allowed, but
-    // does mean we could miss signals.  If we cannot miss signals then we may
-    // need to add sequence numbering to this API - the alternative would be
-    // to hold to mutex when returning to application code, which is
-    // probably not a good idea.
+    // Grab the mutex.  On its own this isn't enough to guarantee we won't
+    // miss a signal, but to do that we would have to hold the mutex while
+    // calling back to user code, which is not desireable.  If we really
+    // cannot miss signals then we will probably need to add sequence numbers
+    // to this API.
+    pthread_mutex_lock(&_mutex);
+
+    // Wait for the signal condition to trigger.
     pthread_cond_wait(&_cond, &_mutex);
 
     // Unlock the mutex
