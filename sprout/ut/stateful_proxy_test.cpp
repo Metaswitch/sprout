@@ -1168,8 +1168,11 @@ TEST_F(StatefulProxyTest, TestForkedFlow)
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183, "early"));
 
-  // Nothing happens yet!
-  ASSERT_EQ(0, txdata_count());
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183, "early").matches(out);
+  free_txdata();
 
   // Send 200 OK from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 200, "bbb"));
@@ -1232,8 +1235,12 @@ TEST_F(StatefulProxyTest, TestForkedFlow2)
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
-  // Nothing happens yet!
-  ASSERT_EQ(0, txdata_count());
+
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  free_txdata();
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
@@ -1286,9 +1293,11 @@ TEST_F(StatefulProxyTest, TestForkedFlow3)
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
-  // Nothing happens yet!
-  poll();
-  ASSERT_EQ(0, txdata_count());
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  free_txdata();
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
