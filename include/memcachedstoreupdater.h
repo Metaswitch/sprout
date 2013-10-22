@@ -37,6 +37,7 @@
 #ifndef MEMCACHEDSTOREUPDATER_H__
 #define MEMCACHEDSTOREUPDATER_H__
 
+#include "signalhandler.h"
 #include "memcachedstore.h"
 
 namespace RegData {
@@ -52,6 +53,8 @@ private:
 
   static void* updater_thread(void* p);
   void updater();
+
+  static SignalHandler<SIGHUP> _sighup_handler;
 
   MemcachedStore* _store;
   std::string _file;
