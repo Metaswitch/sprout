@@ -108,8 +108,9 @@ private:
     std::vector<std::map<int, int> > _node_slots;
   };
 
-  // The number of replicas required normally.  This may be increased during
-  // scale-up/down periods to maintain redundancy.
+  // The number of replicas required normally.  During scale-up/down periods
+  // some vbuckets may have more read and/or write replicas to maintain
+  // redundancy.
   int _replicas;
 
   // The number of vbuckets being used.
