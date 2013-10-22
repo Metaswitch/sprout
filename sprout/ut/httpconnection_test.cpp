@@ -57,9 +57,10 @@ using namespace std;
 /// Fixture for test.
 class HttpConnectionTest : public BaseTest
 {
+  LoadMonitor _lm;
   HttpConnection _http;
   HttpConnectionTest() :
-    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", new LoadMonitor(100000, 20, 10, 10)) 
+      _lm(100000, 20, 10, 10), _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", &_lm)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
