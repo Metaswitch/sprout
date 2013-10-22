@@ -230,9 +230,9 @@ TEST_F(MemcachedStoreTest, DISABLED_SimpleMemcached)
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
   store = (MemcachedStore*)create_memcached_store(false, "");
-  std::list<std::string> servers;
+  std::vector<std::string> servers;
   servers.push_back(std::string("localhost:11211"));
-  std::list<std::string> new_servers;
+  std::vector<std::string> new_servers;
   store->new_view(servers, new_servers);
 
   do_test_simple(*store);
@@ -249,9 +249,9 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
 
   // Test 2.1 - create a MemcachedStore instance and connect to a single server.
   store = (MemcachedStore*)create_memcached_store(false, "");
-  std::list<std::string> servers;
+  std::vector<std::string> servers;
   servers.push_back(std::string("localhost:11209"));
-  std::list<std::string> new_servers;
+  std::vector<std::string> new_servers;
   store->new_view(servers, new_servers);
 
   // Test 2.2 - flush the server.
