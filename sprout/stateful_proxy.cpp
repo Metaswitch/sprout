@@ -1201,15 +1201,21 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // Work out the next hop target for the message.  This will either be the
-    // URI in the top route header, or the request URI.
-    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
-
-    if (PJUtils::is_home_domain(next_hop))
+    // If we've run out of Route headers to follow and we're in the ReqURI,
+    // we get to chose where to route the message.  The obvious place to route
+    // to is Sprout, so do that.
+    void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    if (!top_route &&
+        (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+         PJUtils::is_uri_local(tdata->msg->line.req.uri)))
     {
       // Route the request upstream to Sprout.
       proxy_route_upstream(rdata, tdata, trust, target);
     }
+
+    // Work out the next hop target for the message.  This will either be the
+    // URI in the top route header, or the request URI.
+    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
     if ((ibcf) &&
         (tgt_flow == NULL) &&
