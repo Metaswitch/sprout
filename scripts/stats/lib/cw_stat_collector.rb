@@ -246,3 +246,5 @@ CWStatCollector.register_renderer("hss_subscription_latency_us", LatencyStatsRen
 CWStatCollector.register_renderer("xdm_latency_us", LatencyStatsRenderer)
 CWStatCollector.register_renderer("incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_renderer("rejected_overload", SimpleStatRenderer)
+CWStatCollector.register_renderer("queue_size", LatencyStatsRenderer)
+

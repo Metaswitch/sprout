@@ -12,12 +12,14 @@ Bono and Sprout expose a [0MQ](http://www.zeromq.org/) subscription service that
   * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
   * `incoming_requests` - A count of the incoming requests 
   * `rejected_overload` - A count of the incoming requests rejected due to overload
+  * `queue_size` - Average request queue size
  * Sprout:
   * `connected_homers` - The list of connected Homer nodes
   * `connected_homesteads` - The list of connected Homestead nodes
   * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
   * `incoming_requests` - A count of the incoming requests
   * `rejected_overload` - A count of the incoming requests rejected due to overload
+  * `queue_size` - Average request queue size
 
 _Implementation note: The topics are indicated with a Pub-Sub envelope, as described [here](http://zguide.zeromq.org/page:all#Pub-Sub-Message-Envelopes)._
 
