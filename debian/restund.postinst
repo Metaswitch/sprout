@@ -74,7 +74,7 @@ case "$1" in
     configure)
         setup_user
         add_section /etc/security/limits.conf restund /etc/security/limits.conf.restund
-        /etc/clearwater/scripts/restund
+        /usr/share/clearwater/infrastructure/scripts/restund
         service monit reload
         # Restart restund.  Always do this by terminating restund so monit will
         # restart it more-or-less immediately.  (monit restart seems to have
