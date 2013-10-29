@@ -49,8 +49,8 @@
 
 
 #include "faketransport_tcp.hpp"
-#include <pjsip/sip_endpoint.h>
-#include <pjsip/sip_errno.h>
+
+extern "C" {
 #include <pj/compat/socket.h>
 #include <pj/addr_resolv.h>
 #include <pj/activesock.h>
@@ -60,6 +60,9 @@
 #include <pj/os.h>
 #include <pj/pool.h>
 #include <pj/string.h>
+#include <pjsip/sip_endpoint.h>
+#include <pjsip/sip_errno.h>
+}
 
 #define THIS_FILE	"faketransport_tcp.c"
 

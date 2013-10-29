@@ -49,8 +49,7 @@
 
 
 #include "faketransport_udp.hpp"
-#include <pjsip/sip_endpoint.h>
-#include <pjsip/sip_errno.h>
+extern "C" {
 #include <pj/addr_resolv.h>
 #include <pj/assert.h>
 #include <pj/lock.h>
@@ -60,6 +59,9 @@
 #include <pj/sock.h>
 #include <pj/compat/socket.h>
 #include <pj/string.h>
+#include <pjsip/sip_endpoint.h>
+#include <pjsip/sip_errno.h>
+}
 
 
 #define THIS_FILE   "faketransport_udp.cpp"
