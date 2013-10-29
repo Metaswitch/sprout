@@ -45,8 +45,10 @@
  * @brief SIP FAKE Transport.
  */
 
+extern "C" {
 #include <pjsip/sip_transport.h>
 #include <pj/sock_qos.h>
+}
 
 
 PJ_BEGIN_DECL

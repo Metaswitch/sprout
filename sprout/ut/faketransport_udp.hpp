@@ -41,7 +41,10 @@
 #ifndef __PJSIP_TRANSPORT_FAKE_UDP_H__
 #define __PJSIP_TRANSPORT_FAKE_UDP_H__
 
+
+extern "C" {
 #include <pjsip/sip_transport.h>
+}
 
 PJ_BEGIN_DECL
 
