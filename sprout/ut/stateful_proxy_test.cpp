@@ -1459,13 +1459,13 @@ TEST_F(StatefulProxyTest, TestSIPMessageSupport)
   pjsip_msg* out;
   pjsip_tx_data* message = NULL;
 
-  // ---------- Send MESSAGE C->X
+  // Send MESSAGE 
   SCOPED_TRACE("MESSAGE");
   msg._method = "MESSAGE";
   inject_msg(msg.get_request(), _tp_default);
   poll();
 
-  // MESSAGE passed on X->S
+  // MESSAGE passed on 
   SCOPED_TRACE("MESSAGE (S)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("MESSAGE").matches(out));
@@ -1473,17 +1473,15 @@ TEST_F(StatefulProxyTest, TestSIPMessageSupport)
 
    message = pop_txdata();
 
-   // ---------- Send 200 OK back X<-S
+   // Send 200 OK back
   SCOPED_TRACE("200 OK (MESSAGE)");
   inject_msg(respond_to_txdata(message, 200), _tp_default);
   ASSERT_EQ(1, txdata_count());
 
-  // OK goes back C<-X
+  // OK goes back
   out = current_txdata()->msg;
   RespMatcher(200).matches(out);
   _tp_default->expect_target(current_txdata(), true);
-  msg.set_route(out);
-  msg._cseq++;
 
   free_txdata();
 }
