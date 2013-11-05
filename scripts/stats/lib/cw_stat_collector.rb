@@ -233,6 +233,21 @@ hwm:#{msg[3]}
   end
 end
 
+# This renders latency statistics, and provides a count of how many events
+# occured
+class LatencyCountStatsRenderer < AbstractRenderer
+  # @see AbstractRenderer#render
+  def render(msg)
+    <<-EOF
+count:#{msg[0]}
+mean:#{msg[1]}
+variance:#{msg[2]}
+lwm:#{msg[3]}
+hwm:#{msg[4]}
+    EOF
+  end
+end
+
 # Register the statistics we currently expose
 CWStatCollector.register_renderer("client_count", SimpleStatRenderer)
 CWStatCollector.register_renderer("connected_homesteads", ConnectedIpsRenderer)
@@ -248,3 +263,13 @@ CWStatCollector.register_renderer("incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_renderer("rejected_overload", SimpleStatRenderer)
 CWStatCollector.register_renderer("queue_size", LatencyStatsRenderer)
 
+# Listen for the homer/homestead stats. This currently only listens for stats
+# for the first process
+CWStatCollector.register_renderer("H_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_incoming_requests_0", SimpleStatRenderer)
+CWStatCollector.register_renderer("H_rejected_overload_0", SimpleStatRenderer)
+CWStatCollector.register_renderer("H_queue_size_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_cache_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_digest_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_subscription_latency_us_0", LatencyCountStatsRenderer)
