@@ -104,7 +104,7 @@ COVERAGE_LIST = $(TEST_OUT_DIR)/coverage_list
 COVERAGE_MASTER_LIST = ut/coverage-not-yet
 VG_XML = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).memcheck
 VG_OUT = $(TEST_OUT_DIR)/vg_$(TARGET_TEST).txt
-
+VG_LIST = $(TEST_OUT_DIR)/vg_$(TARGET_TEST)_list
 VG_SUPPRESS = $(TARGET_TEST).supp
 
 EXTRA_CLEANS += $(TEST_XML) \
@@ -195,7 +195,7 @@ include ${MK_DIR}/platform.mk
 stage-build: build
 
 .PHONY: test
-test: run_test coverage vg coverage-check
+test: run_test coverage vg coverage-check vg-check
 
 # Run the test.  You can set EXTRA_TEST_ARGS to pass extra arguments
 # to the test, e.g.,
@@ -256,6 +256,22 @@ debug: build_test
 vg: build_test | $(TEST_OUT_DIR)
 	-valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
+
+# Check whether there were any errors from valgrind. Output to screen any errors found, 
+# and details of where to find the full logs. 
+# The output file will contain <error><kind>ERROR</kind></error>, or 'XPath set is empty'
+# if there are no errors. 
+.PHONY: vg-check
+vg-check: vg
+	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \
+		sed -e 's#<kind>##g' | \
+		sed -e 's#</kind>#\n#g' | \
+		sort > $(VG_LIST)
+	@if grep -q -v "XPath set is empty" $(VG_LIST) ; then \
+		echo "Error: some memory errors have been detected" ; \
+		cat $(VG_LIST) ; \
+		echo "See $(VG_XML) for further details." ; \
+	fi
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
