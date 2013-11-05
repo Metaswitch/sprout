@@ -89,6 +89,7 @@ struct rx_msg_qe
 eventq<struct rx_msg_qe> rx_msg_q;
 
 static Accumulator* latency_accumulator;
+static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
 static Counter* overload_counter;
 
@@ -383,6 +384,9 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 
   LOG_DEBUG("Queuing cloned received message %p for worker threads", clone_rdata);
   qe.rdata = clone_rdata;
+
+  // Track the current queue size
+  queue_size_accumulator->accumulate(rx_msg_q.size());
   rx_msg_q.push(qe);
 
   // return TRUE to flag that we have absorbed the incoming message.
@@ -777,6 +781,7 @@ pj_status_t init_stack(bool edge_proxy,
                                                    Statistic::known_stats());
 
   latency_accumulator = new StatisticAccumulator("latency_us");
+  queue_size_accumulator = new StatisticAccumulator("queue_size");
   requests_counter = new StatisticCounter("incoming_requests");
   overload_counter = new StatisticCounter("rejected_overload");
 
@@ -901,6 +906,8 @@ void destroy_stack(void)
   // Tear down the stack.
   delete latency_accumulator;
   latency_accumulator = NULL;
+  delete queue_size_accumulator;
+  queue_size_accumulator = NULL;
   delete requests_counter;
   requests_counter = NULL;
   delete overload_counter;

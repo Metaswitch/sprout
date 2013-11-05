@@ -1201,15 +1201,21 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // Work out the next hop target for the message.  This will either be the
-    // URI in the top route header, or the request URI.
-    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
-
-    if (PJUtils::is_home_domain(next_hop))
+    // If we've run out of Route headers to follow and we're in the ReqURI,
+    // we get to chose where to route the message.  The obvious place to route
+    // to is Sprout, so do that.
+    void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    if (!top_route &&
+        (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+         PJUtils::is_uri_local(tdata->msg->line.req.uri)))
     {
       // Route the request upstream to Sprout.
       proxy_route_upstream(rdata, tdata, trust, target);
     }
+
+    // Work out the next hop target for the message.  This will either be the
+    // URI in the top route header, or the request URI.
+    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
     if ((ibcf) &&
         (tgt_flow == NULL) &&
@@ -1410,7 +1416,7 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
 // The uris parameter is only filled in correctly if this function
 // returns true,
-bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail) 
+bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail)
 {
   HSSCallInformation data;
   bool success = get_data_from_hss(public_id, data, trail);
@@ -1421,12 +1427,12 @@ bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std:
   return success;
 }
 
-// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).  
+// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
 // The ifcs parameter is only filled in correctly if this function
 // returns true,
-bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail) 
+bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail)
 {
-  HSSCallInformation data; 
+  HSSCallInformation data;
   bool success = get_data_from_hss(public_id, data, trail);
   if (success)
   {
@@ -1483,7 +1489,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       if (!bgcf_route.empty())
       {
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
-        { 
+        {
           // Split the route into a host and (optional) port.
           int port = 0;
           std::vector<std::string> bgcf_route_elems;
@@ -2325,51 +2331,11 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
 
     if (_num_targets > 1)
     {
-      // Do special response filtering for forked transactions.
-      if ((method() == PJSIP_INVITE_METHOD) &&
-          (status_code == 180) &&
-          (!_ringing))
+      if ((status_code > 100) &&
+          (status_code < 199))
       {
-        LOG_DEBUG("%s - 180/INVITE Ringing response", uac_data->name());
-        // We special case the first ringing response to an INVITE,
-        // sending a ringing response to the originating UAC, but
-        // pretending the response is from a UAS co-resident with the
-        // proxy.
-        pjsip_fromto_hdr *to;
-
-        _ringing = PJ_TRUE;
-
-        // Change the tag in the To header.
-        to = (pjsip_fromto_hdr* )pjsip_msg_find_hdr(tdata->msg,
-                                                    PJSIP_H_TO, NULL);
-        if (to == NULL)
-        {
-          LOG_ERROR("No To header in INVITE response", 0);
-          exit_context();
-          return;
-        }
-
-        to->tag = pj_str("xyz");
-
-        // Contact header???
-
-        // Forward response with the UAS transaction
-        pjsip_tsx_send_msg(_tsx, tdata);
-      }
-      else if ((method() == PJSIP_INVITE_METHOD) &&
-               (status_code > 100) &&
-               (status_code < 199))
-      {
-        // Discard all other provisional responses to INVITE
-        // transactions.
-        LOG_DEBUG("%s - Discard 1xx/INVITE response", uac_data->name());
-        pjsip_tx_data_dec_ref(tdata);
-      }
-      else if ((status_code > 100) &&
-               (status_code < 199))
-      {
-        // Forward all provisional responses to non-INVITE transactions.
-        LOG_DEBUG("%s - Forward 1xx/non-INVITE response", uac_data->name());
+        // Forward all provisional responses.
+        LOG_DEBUG("%s - Forward 1xx response", uac_data->name());
 
         // Forward response with the UAS transaction
         pjsip_tsx_send_msg(_tsx, tdata);

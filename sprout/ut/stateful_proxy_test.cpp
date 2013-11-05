@@ -867,7 +867,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_EQ(0, txdata_count());
   // should be swallowed by core.
 }
-
+ 
 
 /// Test a message results in a successful flow. The outgoing INVITE's
 /// URI is verified.
@@ -1168,8 +1168,11 @@ TEST_F(StatefulProxyTest, TestForkedFlow)
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183, "early"));
 
-  // Nothing happens yet!
-  ASSERT_EQ(0, txdata_count());
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183, "early").matches(out);
+  free_txdata();
 
   // Send 200 OK from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 200, "bbb"));
@@ -1232,8 +1235,12 @@ TEST_F(StatefulProxyTest, TestForkedFlow2)
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
-  // Nothing happens yet!
-  ASSERT_EQ(0, txdata_count());
+
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  free_txdata();
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
@@ -1286,9 +1293,11 @@ TEST_F(StatefulProxyTest, TestForkedFlow3)
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
-  // Nothing happens yet!
-  poll();
-  ASSERT_EQ(0, txdata_count());
+  // 183 goes back
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(183).matches(out);
+  free_txdata();
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
@@ -1437,6 +1446,44 @@ TEST_F(StatefulProxyTest, TestProxyCalcTargets2)
                                   "sip:bah@10.114.61.213:5061;transport=tcp;ob",
                                   "sip:humbug@10.114.61.213:5061;transport=tcp;ob",
                                   "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"));
+}
+
+// Test SIP Message flows
+TEST_F(StatefulProxyTest, TestSIPMessageSupport)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  Message msg;
+  msg._via = "10.99.88.11:12345";
+  pjsip_msg* out;
+  pjsip_tx_data* message = NULL;
+
+  // Send MESSAGE 
+  SCOPED_TRACE("MESSAGE");
+  msg._method = "MESSAGE";
+  inject_msg(msg.get_request(), _tp_default);
+  poll();
+
+  // MESSAGE passed on 
+  SCOPED_TRACE("MESSAGE (S)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("MESSAGE").matches(out));
+  _tp_default->expect_target(current_txdata(), false);
+
+   message = pop_txdata();
+
+   // Send 200 OK back
+  SCOPED_TRACE("200 OK (MESSAGE)");
+  inject_msg(respond_to_txdata(message, 200), _tp_default);
+  ASSERT_EQ(1, txdata_count());
+
+  // OK goes back
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  _tp_default->expect_target(current_txdata(), true);
+
+  free_txdata();
 }
 
 /// Register a client with the edge proxy, returning the flow token.

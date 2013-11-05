@@ -161,12 +161,13 @@ static void usage(void)
        "                            the pre-configured list of IP addresses\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
-       " -M, --memstore <servers>   Use memcached store on comma-separated list of\n"
-       "                            servers for registration state\n"
+       " -M, --memstore <config_file>"
+       "                            Enables local memcached store for registration state and\n"
+       "                            specifies configuration file\n"
        "                            (otherwise uses local store)\n"
-       " -m, --remote-memstore <servers>\n"
-       "                            Use remote memcached store on comma-separated list of\n"
-       "                            servers for registration state\n"
+       " -m, --remote-memstore <config file>\n"
+       "                            Enabled remote memcached store for geo-redundant storage\n"
+       "                            of registration state, and specifies configuration file\n"
        "                            (otherwise uses no remote memcached store)\n"
        " -S, --sas <ipv4>           Use specified host as software assurance\n"
        "                            server.  Otherwise uses localhost\n"
@@ -325,12 +326,12 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
 
     case 'M':
       options->store_servers = std::string(pj_optarg);
-      fprintf(stdout, "Using memcached store on servers %s\n", pj_optarg);
+      fprintf(stdout, "Using memcached store with configuration file %s\n", pj_optarg);
       break;
 
     case 'm':
       options->remote_store_servers = std::string(pj_optarg);
-      fprintf(stdout, "Using remote memcached store on servers %s\n", pj_optarg);
+      fprintf(stdout, "Using remote memcached store with configuration file %s\n", pj_optarg);
       break;
 
     case 'S':
@@ -599,13 +600,6 @@ int main(int argc, char *argv[])
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
-
-  // Mask off SIGHUP from this thread and all child threads, as this will be
-  // handled by a dedicated thread.
-  sigset_t sset;
-  sigemptyset(&sset);
-  sigaddset(&sset, SIGHUP);
-  pthread_sigmask(SIG_BLOCK, &sset, NULL);
 
   // Initialize the semaphore that unblocks the quiesce thread, and the thread
   // itself.
@@ -926,7 +920,7 @@ int main(int argc, char *argv[])
   delete enum_service;
   delete bgcf_service;
   delete quiescing_mgr;
-  delete load_monitor; 
+  delete load_monitor;
 
   if (opt.store_servers != "")
   {

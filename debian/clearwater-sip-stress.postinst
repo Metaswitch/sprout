@@ -75,7 +75,7 @@ add_section() {
 case "$1" in
     configure)
         setup_logging
-        /etc/clearwater/scripts/sip-stress
+        /usr/share/clearwater/infrastructure/scripts/sip-stress
 
         add_section /etc/sysctl.conf clearwater-sip-stress /etc/sysctl.conf.clearwater-sip-stress
         sysctl -p /etc/sysctl.conf >/dev/null
