@@ -248,6 +248,8 @@ int main(int argc, char** argv)
              (msgs[0] == "xdm_latency_us") ||
              (msgs[0] == "queue_size"))
     {
+      // Only the stats from the first homer/homestead process
+      // are tracked here
       render_latency_us(msgs);
     }
     else if ((msgs[0] == "H_latency_us_0")                  ||
