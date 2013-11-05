@@ -184,6 +184,24 @@ void render_latency_us(std::vector<std::string>& msgs)
   }
 }
 
+// Render a set of latency statistics with a total count. The names here 
+// match those in Ruby cw_stat.
+void render_count_latency_us(std::vector<std::string>& msgs)
+{
+  if (msgs.size() >= 7 )
+  {
+    printf("count:%s\n", msgs[2].c_str());
+    printf("mean:%s\n", msgs[3].c_str());
+    printf("variance:%s\n", msgs[4].c_str());
+    printf("lwm:%s\n", msgs[5].c_str());
+    printf("hwm:%s\n", msgs[6].c_str());
+  }
+  else
+  {
+    fprintf(stderr, "Too short call statistics - %d < 7", (int)msgs.size());
+  }
+}
+
 int main(int argc, char** argv)
 {
   // Check arguments.
@@ -205,9 +223,11 @@ int main(int argc, char** argv)
       (msgs[1] == "OK"))
   {
     // Determine which statistic we have and output it.
-    if ((msgs[0] == "client_count")      ||
-        (msgs[0] == "incoming_requests") ||
-        (msgs[0] == "rejected_overload"))
+    if ((msgs[0] == "client_count")          ||
+        (msgs[0] == "incoming_requests")     ||
+        (msgs[0] == "rejected_overload")     ||
+        (msgs[0] == "H_incoming_requests_0") ||
+        (msgs[0] == "H_rejected_overload_0"))
     {
       render_simple_stat(msgs);
     }
@@ -229,6 +249,15 @@ int main(int argc, char** argv)
              (msgs[0] == "queue_size"))
     {
       render_latency_us(msgs);
+    }
+    else if ((msgs[0] == "H_latency_us_0")                  ||
+             (msgs[0] == "H_cache_latency_us_0")            ||
+             (msgs[0] == "H_hss_latency_us_0")              ||
+             (msgs[0] == "H_hss_digest_latency_us_0")       ||
+             (msgs[0] == "H_hss_subscription_latency_us_0") ||
+             (msgs[0] == "H_queue_size_0"))
+    {
+      render_count_latency_us(msgs);
     }
     else
     {
