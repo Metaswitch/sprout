@@ -263,10 +263,10 @@ vg: build_test | $(TEST_OUT_DIR)
 # if there are no errors. 
 .PHONY: vg-check
 vg-check: vg
-	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 \
-		| sed -e 's#<kind>##g' \
-		| sed -e 's#</kind>#\n#g' \
-		| sort > $(VG_LIST)
+	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \
+		sed -e 's#<kind>##g' | \
+		sed -e 's#</kind>#\n#g' | \
+		sort > $(VG_LIST)
 	@if grep -q -v "XPath set is empty" $(VG_LIST) ; then \
 		echo "Error: some memory errors have been detected" ; \
 		cat $(VG_LIST) ; \
