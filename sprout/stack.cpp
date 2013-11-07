@@ -93,7 +93,7 @@ static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
 static Counter* overload_counter;
 
-static LoadMonitor *load_monitor = NULL; 
+static LoadMonitor *load_monitor = NULL;
 static QuiescingManager *quiescing_mgr = NULL;
 static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
@@ -343,16 +343,16 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                NULL,
                                (pjsip_hdr*)retry_after,
                                NULL);
-   
-    // If the sprout/bono is overloaded, then close the connection (if it's TCP). 
+
+    // If the sprout/bono is overloaded, then close the connection (if it's TCP).
     if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
-    {  
+    {
       pjsip_transport_shutdown(rdata->tp_info.transport);
     }
- 
-    overload_counter->increment(); 
+
+    overload_counter->increment();
     return PJ_TRUE;
-  } 
+  }
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
@@ -666,15 +666,14 @@ pj_status_t init_stack(bool edge_proxy,
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.bono_cluster_domain = (bono_cluster_domain != "") ? pj_str(bono_cluster_domain_cstr) : stack_data.local_host;
 
+  std::string system_name_sas = system_name;
+  std::string system_type_sas = edge_proxy ? "bono" : "sprout";
   // Initialize SAS logging.
-  if (system_name != "")
+  if (system_name_sas == "")
   {
-    SAS::init(system_name.length(), system_name.c_str(), sas_address);
+    system_name_sas = std::string(stack_data.local_host.ptr, stack_data.local_host.slen);
   }
-  else
-  {
-    SAS::init(stack_data.local_host.slen, stack_data.local_host.ptr, sas_address);
-  }
+  SAS::init(system_name, system_type_sas, "org.projectclearwater.sprout.20131107", sas_address, SAS::discard_logs);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();

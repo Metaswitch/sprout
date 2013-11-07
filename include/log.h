@@ -54,6 +54,6 @@ namespace Log
   void setLogger(Logger *log);
   void write(int level, const char *module, int line_number, const char *fmt, ...);
   void backtrace(const char *fmt, ...);
-};  
+};
 
 #endif

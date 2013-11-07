@@ -313,7 +313,7 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
   {
     SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 3u);
     cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
   }
 
   // We don't know the transaction, so be pessimistic and strip
@@ -503,7 +503,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     {
       SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 2u);
       cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+      SAS::report_marker(cid, SAS::Marker::Scope::Trace);
     }
 
     trust->process_request(tdata);
@@ -2709,7 +2709,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
   {
     SAS::Marker cid(trail(), SASMarker::SIP_CALL_ID, 1u);
     cid.add_var_param(_analytics.cid->id.slen, _analytics.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Trace);
   }
 }
 

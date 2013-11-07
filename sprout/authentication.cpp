@@ -229,7 +229,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     {
       SAS::Marker cid(trail, SASMarker::SIP_CALL_ID, 1u);
       cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+      SAS::report_marker(cid, SAS::Marker::Scope::Trace);
     }
 
     if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)

@@ -70,8 +70,7 @@ Log::setLogger(Logger *log)
   }
 }
 
-void
-Log::write(int level, const char *module, int line_number, const char *fmt, ...)
+void Log::write(int level, const char *module, int line_number, const char *fmt, ...)
 {
   if (!Log::logger) {
     return;
@@ -95,7 +94,7 @@ Log::write(int level, const char *module, int line_number, const char *fmt, ...)
   }
 
   int written = 0;
-  
+
   if (line_number) {
     written = snprintf(logline, MAX_LOGLINE - 2, "%s %s:%d: ", logLevel, module, line_number);
   } else {

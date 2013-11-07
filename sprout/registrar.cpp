@@ -405,7 +405,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
   SAS::Marker cid_marker(trail, SASMarker::SIP_CALL_ID, 1u);
   cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-  SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
+  SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
 
   // Query the HSS for the associated URIs.
 
