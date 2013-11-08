@@ -134,6 +134,9 @@ void LastValueCache::run()
   }
 
   _publisher = zmq_socket(_context, ZMQ_XPUB);
+  int verbose = 1;
+  zmq_setsockopt(_publisher, ZMQ_XPUB_VERBOSE, &verbose, sizeof(verbose));
+  LOG_DEBUG("Enabled XPUB_VERBOSE mode");
   zmq_bind(_publisher, "tcp://*:6666");
 
   while (!_terminate)
