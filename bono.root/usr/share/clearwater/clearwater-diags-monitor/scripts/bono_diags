@@ -38,4 +38,4 @@
 . /etc/clearwater/config
 
 # Check we can contact sprout.
-check_connectivity_to_domain $sprout_hostname 5054
+check_connectivity_to_domain "$sprout_hostname" 5054
