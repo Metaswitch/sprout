@@ -33,10 +33,9 @@
 # as those licenses appear in the file LICENSE-OPENSSL.
 
 # This script is executed in the context of the clearwater_diags_monitor script
-# (in the clearwater-infrastructure project).
+# (in the clearwater-infrastruture project).
 
 . /etc/clearwater/config
 
 # Check we can contact sprout.
-sprout_addr=$(add_default_port $sprout_hostname 5054)
-check_connectivity_to_domain $(split_domain_and_port $sprout_addr)
+check_connectivity_to_domain $sprout_hostname 5054

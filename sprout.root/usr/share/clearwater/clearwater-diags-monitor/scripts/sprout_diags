@@ -37,14 +37,7 @@
 
 . /etc/clearwater/config
 
-# Check we can contact homestead.
-hs_addr=$(add_default_port $hs_hostname 8888)
-check_connectivity_to_domain $(split_domain_and_port $hs_addr)
-
-# Check we can contact homer.
-xdms_addr=$(add_default_port $xdms_hostname 7888)
-check_connectivity_to_domain $(split_domain_and_port $xdms_addr)
-
-# Check we can contact bono.
-bono_addr=$(add_default_port $home_domain 5058)
-check_connectivity_to_domain $(split_domain_and_port $bono_addr)
+# Check we can contact homestead, homer and bono.
+check_connectivity_to_domain $hs_hostname 8888
+check_connectivity_to_domain $xdms_hostname 7888
+check_connectivity_to_domain $home_domain 5058
