@@ -33,7 +33,7 @@
 # as those licenses appear in the file LICENSE-OPENSSL.
 
 # This script is executed in the context of the clearwater_diags_monitor script
-# (in the clearwater-infrastruture project).
+# (in the clearwater-infrastructure project).
 
 . /etc/clearwater/config
 
