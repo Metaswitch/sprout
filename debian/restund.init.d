@@ -136,11 +136,11 @@ do_abort()
         #   1 if daemon was already stopped
         #   2 if daemon could not be stopped
         #   other if a failure occurred
-        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --pidfile $PIDFILE --name $EXECNAME
+        start-stop-daemon --stop --quiet --retry=ABRT/60/KILL/5 --name $NAME
         RETVAL="$?"
         [ "$RETVAL" = 2 ] && return 2
         # Many daemons don't delete their pidfiles when they exit.
-        rm -f $PIDFILE
+        #rm -f $PIDFILE
         return "$RETVAL"
 }
 
