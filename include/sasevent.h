@@ -39,34 +39,37 @@
 namespace SASEvent {
 
 const int HTTP_REQ = 0;
-const int HTTP_RSP = 1;
-const int HTTP_ERR = 2;
+const int HTTP_RSP = 0x40;
+const int HTTP_ERR = 0x41;
 
-const int RX_SIP_MSG = 0x50100010;
-const int TX_SIP_MSG = 0x50100011;
-const int TX_HSS_BASE = 0x50100100;
+const int SAS_BASE = 0x50000000;
+
+const int RX_SIP_MSG = SAS_BASE + 0x100000;
+const int TX_SIP_MSG = SAS_BASE + 0x110000
+const int TX_HSS_BASE = SAS_BASE +0x020000;
 const int TX_HSS_REQ = TX_HSS_BASE + HTTP_REQ;
 const int RX_HSS_RSP = TX_HSS_BASE + HTTP_RSP;
 const int RX_HSS_ERR = TX_HSS_BASE + HTTP_ERR;
-const int TX_XDM_GET_BASE = 0x50100200;
+const int TX_XDM_GET_BASE = SAS_BASE + 0x021000;
 const int TX_XDM_GET_REQ = TX_XDM_GET_BASE + HTTP_REQ;
 const int RX_XDM_GET_RSP = TX_XDM_GET_BASE + HTTP_RSP;
 const int RX_XDM_GET_ERR = TX_XDM_GET_BASE + HTTP_ERR;
-const int TX_XDM_PUT_BASE = 0x50100210;
+const int TX_XDM_PUT_BASE = SAS_BASE + 0x021100;
 const int TX_XDM_PUT_REQ = TX_XDM_PUT_BASE + HTTP_REQ;
 const int RX_XDM_PUT_RSP = TX_XDM_PUT_BASE + HTTP_RSP;
 const int RX_XDM_PUT_ERR = TX_XDM_PUT_BASE + HTTP_ERR;
-const int TX_XDM_DEL_BASE = 0x50100220;
+const int TX_XDM_DEL_BASE = SAS_BASE + 0x021200;
 const int TX_XDM_DEL_REQ = TX_XDM_DEL_BASE + HTTP_REQ;
 const int RX_XDM_DEL_RSP = TX_XDM_DEL_BASE + HTTP_RSP;
 const int RX_XDM_DEL_ERR = TX_XDM_DEL_BASE + HTTP_ERR;
-const int ENUM_START = 0x50100300;
-const int ENUM_MATCH = 0x50100301;
-const int ENUM_INCOMPLETE = 0x50100302;
-const int ENUM_COMPLETE = 0x50100303;
-const int TX_ENUM_REQ = 0x50100310;
-const int RX_ENUM_RSP = 0x50100311;
-const int RX_ENUM_ERR = 0x50100312;
+const int ENUM_BASE = SAS_BASE + 0x031000;
+const int ENUM_START = ENUM_BASE + 0x0;
+const int ENUM_MATCH = ENUM_BASE + 0x10;
+const int ENUM_INCOMPLETE = ENUM_BASE + 0x20;
+const int ENUM_COMPLETE = ENUM_BASE + 0x30;
+const int TX_ENUM_REQ = ENUM_BASE + 0x100;
+const int RX_ENUM_RSP = ENUM_BASE + 0x200;
+const int RX_ENUM_ERR = ENUM_BASE + 0x240;
 
 } // namespace SASEvent
 
