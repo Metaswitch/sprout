@@ -43,10 +43,9 @@ namespace SASEvent {
 
   const std::string CURRENT_RESOURCE_BUNDLE = "org.projectclearwater.sprout.20131107";
 
-  const int SAS_BASE = 0x50000000;
-  const int SIP_BASE = SAS_BASE + 0x010000;
-  const int HTTP_BASE = SAS_BASE + 0x020000;
-  const int DNS_BASE = SAS_BASE + 0x030000;
+  const int SIP_BASE = 0x010000;
+  const int HTTP_BASE = 0x020000;
+  const int DNS_BASE = 0x030000;
 
   const int HTTP_REQ = 0;
   const int HTTP_RSP = 1;

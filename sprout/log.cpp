@@ -70,44 +70,41 @@ Log::setLogger(Logger *log)
   }
 }
 
+// LCOV_EXCL_START
 void Log::sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
 {
   int level;
   va_list args;
 
-  if (sas_level == SAS::LOG_LEVEL_DEBUG)
-  {
-    level = Log::DEBUG_LEVEL;
-  }
-  else if (sas_level == SAS::LOG_LEVEL_VERBOSE)
-  {
-    level = Log::VERBOSE_LEVEL;
-  }
-  else if (sas_level == SAS::LOG_LEVEL_INFO)
-  {
-    level = Log::INFO_LEVEL;
-  }
-  else if (sas_level == SAS::LOG_LEVEL_STATUS)
-  {
-    level = Log::STATUS_LEVEL;
-  }
-  else if (sas_level == SAS::LOG_LEVEL_WARNING)
-  {
-    level = Log::WARNING_LEVEL;
-  }
-  else if (sas_level == SAS::LOG_LEVEL_ERROR)
-  {
-    level = Log::ERROR_LEVEL;
-  }
-  else
-  {
-    LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
-    level = Log::ERROR_LEVEL;
-  }
+  switch (sas_level) {
+    case SAS::LOG_LEVEL_DEBUG:
+      level = Log::DEBUG_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_VERBOSE:
+      level = Log::VERBOSE_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_INFO:
+      level = Log::INFO_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_STATUS:
+      level = Log::STATUS_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_WARNING:
+      level = Log::WARNING_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_ERROR:
+      level = Log::ERROR_LEVEL;
+      break;
+    default:
+      LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
+      level = Log::ERROR_LEVEL;
+    }
+
   va_start(args, fmt);
   _write(level, module, line_number, fmt, args);
   va_end(args);
 }
+// LCOV_EXCL_STOP
 
 void Log::write(int level, const char *module, int line_number, const char *fmt, ...)
 {
