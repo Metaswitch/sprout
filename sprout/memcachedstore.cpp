@@ -57,7 +57,6 @@
 #include "memcachedstoreview.h"
 #include "memcachedstore.h"
 
-
 namespace RegData {
 
 

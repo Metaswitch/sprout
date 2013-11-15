@@ -55,7 +55,7 @@ BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
   _updater(NULL)
 {
-  // Create an updater to keep the store configured appropriately.
+  // Create an updater to keep the bgcf routes configured appropriately.
   _updater = new Updater((void*) this, BgcfService::wrapper_to_update_function);
 }
 

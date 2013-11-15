@@ -96,10 +96,10 @@ public:
     // Destroy the mutex and condition.
     pthread_mutex_destroy(&_mutex);
     pthread_cond_destroy(&_cond);
-    printf("Destroy");
   }
 
-  /// Waits for the signal to be raised.
+  /// Waits for the signal to be raised, or for the wait to timeout. 
+  /// This returns true if the signal was raised, and false for timeout. 
   bool wait_for_signal()
   {
     // Grab the mutex.  On its own this isn't enough to guarantee we won't
@@ -108,11 +108,6 @@ public:
     // cannot miss signals then we will probably need to add sequence numbers
     // to this API.
     pthread_mutex_lock(&_mutex);
-
-    //struct timespec attime; 
-    //clock_gettime(CLOCK_REALTIME, &attime);
-   // attime.tv_sec += 1;
-   // printf("GETTIME1: %i", attime.tv_sec)
 
     // Wait for either the signal condition to trigger or timeout
     struct timespec ts;
@@ -127,7 +122,7 @@ public:
     // Unlock the mutex
     pthread_mutex_unlock(&_mutex);
     
-    return (rc == ETIMEDOUT);
+    return (rc != ETIMEDOUT);
   }
 
 private:

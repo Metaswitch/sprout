@@ -1,5 +1,5 @@
 /**
- * @file updater.h Declarations for MemcachedStoreUpdater class.
+ * @file updater.h Declarations for Updater class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -49,9 +49,6 @@ private:
   static SignalHandler<SIGHUP> _sighup_handler;
   static void* updater_thread(void* p);
   void updater();
-
-  /// Mutex used for signalling to waiting threads.
-  static pthread_mutex_t _mutex;
 
   volatile bool _terminate;
   void (*_func)(void*);

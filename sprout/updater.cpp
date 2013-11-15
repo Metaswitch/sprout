@@ -1,5 +1,5 @@
 /**
- * @file memcachedstoreupdater.cpp
+ * @file updater.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -89,7 +89,7 @@ void Updater::updater()
    
     // If the signal handler didn't timeout, then call the 
     // update function 
-    if (!rc)
+    if (rc)
     {
       // LCOV_EXCL_START
       _func(_arg);

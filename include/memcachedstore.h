@@ -167,7 +167,7 @@ private:
   // Called by the thread-local-storage clean-up functions when a thread ends.
   static void cleanup_connection(void* p);
 
-  // Stores a pointer to an updater object (if one is
+  // Stores a pointer to an updater object
   Updater* _updater;
 
   // Used to store a connection structure for each worker thread.
