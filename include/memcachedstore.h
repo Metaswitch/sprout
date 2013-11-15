@@ -133,7 +133,7 @@ public:
   void update_view();
   
   /// Wrapper to allow the function to be called from a pointer
-  static void Wrapper_To_Call_Display(void* pt2Object);
+  static void wrapper_to_update_function(void* pt2Object);
 
 private:
 

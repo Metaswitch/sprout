@@ -42,18 +42,17 @@
 class Updater
 {
 public:
-  Updater(std::string file, void* pt2Object, void (*func)(void* pt2Object));
+  Updater(void* pt2Object, void (*func)(void* pt2Object));
   ~Updater();
 
 private:
-  static SignalHandler<SIGHUP> _sighup_handler2;
+  static SignalHandler<SIGHUP> _sighup_handler;
   static void* updater_thread(void* p);
   void updater();
 
   /// Mutex used for signalling to waiting threads.
   static pthread_mutex_t _mutex;
 
-  std::string _file;
   volatile bool _terminate;
   void (*_func)(void*);
   pthread_t _updater;

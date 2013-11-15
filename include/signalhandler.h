@@ -79,7 +79,6 @@ public:
       LOG_WARNING("SIGNAL already hooked");
 // LCOV_EXCL_STOP
     }
-    printf("MakeSIGNALHANDLER");
   }
 
   ~SignalHandler()
@@ -101,38 +100,34 @@ public:
   }
 
   /// Waits for the signal to be raised.
-  //bool wait_for_signal()
-  void wait_for_signal()
+  bool wait_for_signal()
   {
     // Grab the mutex.  On its own this isn't enough to guarantee we won't
     // miss a signal, but to do that we would have to hold the mutex while
     // calling back to user code, which is not desireable.  If we really
     // cannot miss signals then we will probably need to add sequence numbers
     // to this API.
-    printf("GETLOCK\n");
     pthread_mutex_lock(&_mutex);
 
-    struct timespec attime; 
-    clock_gettime(CLOCK_REALTIME, &attime);
-    attime.tv_sec += 1;
-    printf("GETTIME1: %i", attime.tv_sec);
+    //struct timespec attime; 
+    //clock_gettime(CLOCK_REALTIME, &attime);
+   // attime.tv_sec += 1;
+   // printf("GETTIME1: %i", attime.tv_sec)
 
+    // Wait for either the signal condition to trigger or timeout
     struct timespec ts;
     struct timeval tp;
     gettimeofday(&tp, NULL);
     ts.tv_sec = tp.tv_sec;
     ts.tv_nsec = tp.tv_usec * 1000;
     ts.tv_sec += 1;
-    printf("GETTIME2: %i", ts.tv_sec);
 
-    printf("WAAAAIIIIIT");
-    //int rc = pthread_cond_timedwait(&_cond, &_mutex, &attime);
     int rc = pthread_cond_timedwait(&_cond, &_mutex, &ts);
-    printf("ENNNNNND");
+    
     // Unlock the mutex
     pthread_mutex_unlock(&_mutex);
-    printf("LOCK RELEASED\n");
-    //return false;//(rc == ETIMEDOUT);
+    
+    return (rc == ETIMEDOUT);
   }
 
 private:

@@ -44,30 +44,19 @@
 #include "bgcfservice.h"
 #include "log.h"
 
-// static wrapper-function to be able to callback the update function
-void BgcfService::Wrapper_To_Call_Display(void* pt2Object)
+// static wrapper function to be able to callback the update function
+void BgcfService::wrapper_to_update_function(void* pt2Object)
 {
-  // explicitly cast to a pointer to MemcachedStore
-  BgcfService* mySelf = (BgcfService*) pt2Object;
-
-  // call member
-  mySelf->update_routes();
+  BgcfService* bgcf = (BgcfService*) pt2Object;
+  bgcf->update_routes();
 }
 
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
   _updater(NULL)
 {
-  printf("in bgcf");
-   update_routes();
-
-  if (configuration != "")
-  {
-// LCOV_EXCL_START
-    // Create an updater to keep the store configured appropriately.
-    _updater = new Updater(configuration, (void*) this, BgcfService::Wrapper_To_Call_Display);
-// LCOV_EXCL_STOP
-  }
+  // Create an updater to keep the store configured appropriately.
+  _updater = new Updater((void*) this, BgcfService::wrapper_to_update_function);
 }
 
 void BgcfService::update_routes()
@@ -79,6 +68,8 @@ void BgcfService::update_routes()
   std::ifstream file;
 
   LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
+  
+  std::map<std::string, std::vector<std::string>> new_routes;
 
   file.open(_configuration.c_str());
   if (file.is_open())
@@ -112,7 +103,7 @@ void BgcfService::update_routes()
             route_vec.push_back(route_val.asString());
           }
 
-          _routes.insert(std::make_pair(domain, route_vec));
+          new_routes.insert(std::make_pair(domain, route_vec));
           route_vec.clear();
         }
         else
@@ -120,6 +111,8 @@ void BgcfService::update_routes()
           LOG_WARNING("Badly formed BGCF route entry %s", route.toStyledString().c_str());
         }
       }
+
+      _routes = new_routes;
     }
     else
     {
@@ -133,13 +126,10 @@ void BgcfService::update_routes()
 }
 BgcfService::~BgcfService()
 {
-
-  printf("out bgcf");
   // Destroy the updater (if it was created).
   delete _updater;
   _updater = NULL;
 }
-
 
 std::vector<std::string> BgcfService::get_route(const std::string &domain) const
 {

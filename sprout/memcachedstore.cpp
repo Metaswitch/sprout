@@ -76,13 +76,10 @@ void destroy_memcached_store(RegData::Store* store)
 }
 
 // static wrapper-function to be able to callback the update function
-void MemcachedStore::Wrapper_To_Call_Display(void* pt2Object)
+void MemcachedStore::wrapper_to_update_function(void* pt2Object)
 {
-  // explicitly cast to a pointer to MemcachedStore
-  MemcachedStore* mySelf = (MemcachedStore*) pt2Object;
-
-  // call member
-  mySelf->update_view();
+  MemcachedStore* memcached = (MemcachedStore*) pt2Object;
+  memcached->update_view();
 }
 
 MemcachedStore::MemcachedStore(bool binary,                      ///< use binary protocol?
@@ -110,14 +107,8 @@ MemcachedStore::MemcachedStore(bool binary,                      ///< use binary
   _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
   _options += (binary) ? " --BINARY_PROTOCOL" : "";
 
-  if (config_file != "")
-  {
-// LCOV_EXCL_START
-    // Create an updater to keep the store configured appropriately.
-    _updater = new Updater(config_file, (void*) this,  MemcachedStore::Wrapper_To_Call_Display);
-// LCOV_EXCL_STOP
-
-  }
+  // Create an updater to keep the store configured appropriately.
+  _updater = new Updater((void*) this, MemcachedStore::wrapper_to_update_function);
 }
 
 MemcachedStore::~MemcachedStore()
@@ -559,6 +550,60 @@ bool MemcachedStore::set_aor_data(const std::string& aor_id,
   return memcached_success(rc);
 }
 
+void MemcachedStore::update_view()
+{
+  // Read the memstore file.
+  std::ifstream f(_config_file);
+  std::vector<std::string> servers;
+  std::vector<std::string> new_servers;
+
+  if (f.is_open())
+  {
+    LOG_STATUS("Reloading memcached configuration from %s file", _config_file.c_str());
+    while (f.good())
+    {
+      std::string line;
+      getline(f, line);
+
+      if (line.length() > 0)
+      {
+        // Read a non-blank line.
+        std::vector<std::string> tokens;
+        Utils::split_string(line, '=', tokens, 0, true);
+        if (tokens.size() != 2)
+        {
+          LOG_ERROR("Malformed %s file", _config_file.c_str());
+          break;
+        }
+
+        LOG_STATUS(" %s=%s", tokens[0].c_str(), tokens[1].c_str());
+
+        if (tokens[0] == "servers")
+        {
+          // Found line defining servers.
+          Utils::split_string(tokens[1], ',', servers, 0, true);
+        }
+        else if (tokens[0] == "new_servers")
+        {
+          // Found line defining new servers.
+          Utils::split_string(tokens[1], ',', new_servers, 0, true);
+        }
+      }
+    }
+    f.close();
+
+    if (servers.size() > 0)
+    {
+      LOG_DEBUG("Update memcached store");
+      this->new_view(servers, new_servers);
+    }
+  }
+  else
+  {
+    LOG_ERROR("Failed to open %s file", _config_file.c_str());
+  }
+}
+
 // LCOV_EXCL_STOP
 
 
@@ -658,61 +703,4 @@ MemcachedAoR* MemcachedStore::deserialize_aor(const std::string& s)
   return aor_data;
 }
 
-void MemcachedStore::update_view()
-{
-  // Read the memstore file.
-  std::ifstream f(_config_file);
-  std::vector<std::string> servers;
-  std::vector<std::string> new_servers;
-
-  if (f.is_open())
-  {
-    LOG_STATUS("Reloading memcached configuration from %s file", _config_file.c_str());
-    while (f.good())
-    {
-      std::string line;
-      getline(f, line);
-
-      if (line.length() > 0)
-      {
-        // Read a non-blank line.
-        std::vector<std::string> tokens;
-        Utils::split_string(line, '=', tokens, 0, true);
-        if (tokens.size() != 2)
-        {
-          LOG_ERROR("Malformed %s file", _config_file.c_str());
-          break;
-        }
-
-        LOG_STATUS(" %s=%s", tokens[0].c_str(), tokens[1].c_str());
-
-        if (tokens[0] == "servers")
-        {
-          // Found line defining servers.
-          Utils::split_string(tokens[1], ',', servers, 0, true);
-        }
-        else if (tokens[0] == "new_servers")
-        {
-          // Found line defining new servers.
-          Utils::split_string(tokens[1], ',', new_servers, 0, true);
-        }
-      }
-    }
-    f.close();
-
-    if (servers.size() > 0)
-    {
-      LOG_DEBUG("Update memcached store");
-      this->new_view(servers, new_servers);
-    }
-  }
-  else
-  {
-    LOG_ERROR("Failed to open %s file", _config_file.c_str());
-  }
-}
-
-
-
 } // namespace RegData
-

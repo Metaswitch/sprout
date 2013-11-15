@@ -34,34 +34,22 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <unistd.h>
 #include <signal.h>
 #include <errno.h>
-
-// Common STL includes.
-#include <cassert>
-#include <vector>
-#include <list>
-#include <string>
-#include <iostream>
-#include <fstream>
 
 #include "log.h"
 #include "utils.h"
 #include "updater.h"
 #include "signalhandler.h"
 
+SignalHandler<SIGHUP> Updater::_sighup_handler;
 
-SignalHandler<SIGHUP> Updater::_sighup_handler2;
-
-Updater::Updater(std::string file, void* pt2Object, void (*func)(void* pt2Object)) :
-  _file(file),
+Updater::Updater(void* pt2Object, void (*func)(void* pt2Object)) :
   _terminate(false),
   _func(func),
   _arg(pt2Object)
 {
-//  pthread_mutex_init(&_term_lock, NULL);
-  LOG_DEBUG("Created updater using file %s", _file.c_str());
+  LOG_DEBUG("Created updater");
 
   // Do initial configuration.
   func(pt2Object);
@@ -75,24 +63,13 @@ Updater::Updater(std::string file, void* pt2Object, void (*func)(void* pt2Object
     LOG_ERROR("Error creating updater thread");
     // LCOV_EXCL_STOP
   }
-  printf("updatemake");
 }
 
 Updater::~Updater()
 {
-  printf("UPDATER BYYYYYYYYYYYYYYYYYYYYYYE");
-  // Cancel the updater thread.
-  //pthread_cancel(_updater);
-  //pthread_mutex_lock(&_term_lock);
+  // Destroy the updater thread.
   _terminate = true;
-  //pthread_mutex_unlock(&_term_lock);
-
-  //pthread_mutex_destroy(&_term_lock);
-
-  //pthread_cond_broadcast(&(_sighup_handler2._cond));
   pthread_join(_updater, NULL);
-
-  printf("updateend");
 }
 
 void* Updater::updater_thread(void* p)
@@ -108,13 +85,15 @@ void Updater::updater()
   while (!_terminate)
   {
     // Wait for the SIGHUP signal.
-    //bool rc = _sighup_handler2.wait_for_signal();
-    _sighup_handler2.wait_for_signal();
-    
-    //if (!rc)
-    //{
-    //  _func(_arg);
-    //}
+    bool rc = _sighup_handler.wait_for_signal();
+   
+    // If the signal handler didn't timeout, then call the 
+    // update function 
+    if (!rc)
+    {
+      // LCOV_EXCL_START
+      _func(_arg);
+      // LCOV_EXCL_STOP
+    }
   }
 }
-

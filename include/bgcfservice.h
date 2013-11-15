@@ -50,17 +50,15 @@ class BgcfService
 public:
   BgcfService(std::string configuration = "./bgcf.json");
   ~BgcfService();
-  /// Updates the cluster settings
+
+  /// Updates the bgcf routes
   void update_routes();
 
-  /// Wrapper to allow the function to be called from a pointer
-  static void Wrapper_To_Call_Display(void* pt2Object);
-//  void update_routes();
+  static void wrapper_to_update_function(void* pt2Object);
   std::vector<std::string> get_route(const std::string &domain) const;
 
 private:
   std::map<std::string, std::vector<std::string>> _routes; 
-    // Stores a pointer to an updater object (if one is
   std::string _configuration;
   Updater* _updater;
 };
