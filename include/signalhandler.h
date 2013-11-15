@@ -40,14 +40,18 @@
 #include <signal.h>
 #include <pthread.h>
 #include <semaphore.h>
-
+#include <errno.h>
 #include "log.h"
+
+#include <time.h>
+#include <sys/time.h>
 
 /// Singleton class template for handling UNIX signals.  Only a single
 /// instance of this class should be created for each UNIX signal type.
 /// This has to be templated because there has to be a unique static signal
 /// handler function and semphore for each signal being hooked, so creating
 /// multiple instances of a non-templated class doesn't work
+
 template <int SIGNUM>
 class SignalHandler
 {
@@ -72,9 +76,10 @@ public:
 // LCOV_EXCL_START
       // Old handler is not the default handler, so someone else has previously
       // hooked the signal.
-      LOG_WARNING("SIGHUP already hooked");
+      LOG_WARNING("SIGNAL already hooked");
 // LCOV_EXCL_STOP
     }
+    printf("MakeSIGNALHANDLER");
   }
 
   ~SignalHandler()
@@ -92,9 +97,11 @@ public:
     // Destroy the mutex and condition.
     pthread_mutex_destroy(&_mutex);
     pthread_cond_destroy(&_cond);
+    printf("Destroy");
   }
 
   /// Waits for the signal to be raised.
+  //bool wait_for_signal()
   void wait_for_signal()
   {
     // Grab the mutex.  On its own this isn't enough to guarantee we won't
@@ -102,13 +109,30 @@ public:
     // calling back to user code, which is not desireable.  If we really
     // cannot miss signals then we will probably need to add sequence numbers
     // to this API.
+    printf("GETLOCK\n");
     pthread_mutex_lock(&_mutex);
 
-    // Wait for the signal condition to trigger.
-    pthread_cond_wait(&_cond, &_mutex);
+    struct timespec attime; 
+    clock_gettime(CLOCK_REALTIME, &attime);
+    attime.tv_sec += 1;
+    printf("GETTIME1: %i", attime.tv_sec);
 
+    struct timespec ts;
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    ts.tv_sec = tp.tv_sec;
+    ts.tv_nsec = tp.tv_usec * 1000;
+    ts.tv_sec += 1;
+    printf("GETTIME2: %i", ts.tv_sec);
+
+    printf("WAAAAIIIIIT");
+    //int rc = pthread_cond_timedwait(&_cond, &_mutex, &attime);
+    int rc = pthread_cond_timedwait(&_cond, &_mutex, &ts);
+    printf("ENNNNNND");
     // Unlock the mutex
     pthread_mutex_unlock(&_mutex);
+    printf("LOCK RELEASED\n");
+    //return false;//(rc == ETIMEDOUT);
   }
 
 private:
@@ -152,5 +176,3 @@ template<int SIGNUM> pthread_cond_t SignalHandler<SIGNUM>::_cond;
 template<int SIGNUM> sem_t SignalHandler<SIGNUM>::_sema;
 
 #endif
-
-

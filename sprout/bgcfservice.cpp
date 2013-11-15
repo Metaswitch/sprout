@@ -44,7 +44,33 @@
 #include "bgcfservice.h"
 #include "log.h"
 
-BgcfService::BgcfService(std::string configuration)
+// static wrapper-function to be able to callback the update function
+void BgcfService::Wrapper_To_Call_Display(void* pt2Object)
+{
+  // explicitly cast to a pointer to MemcachedStore
+  BgcfService* mySelf = (BgcfService*) pt2Object;
+
+  // call member
+  mySelf->update_routes();
+}
+
+BgcfService::BgcfService(std::string configuration) :
+  _configuration(configuration),
+  _updater(NULL)
+{
+  printf("in bgcf");
+   update_routes();
+
+  if (configuration != "")
+  {
+// LCOV_EXCL_START
+    // Create an updater to keep the store configured appropriately.
+    _updater = new Updater(configuration, (void*) this, BgcfService::Wrapper_To_Call_Display);
+// LCOV_EXCL_STOP
+  }
+}
+
+void BgcfService::update_routes()
 {
   Json::Value root;
   Json::Reader reader;
@@ -52,9 +78,9 @@ BgcfService::BgcfService(std::string configuration)
   std::string jsonData;
   std::ifstream file;
 
-  LOG_STATUS("Loading BGCF configuration from %s", configuration.c_str());
+  LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
 
-  file.open(configuration.c_str());
+  file.open(_configuration.c_str());
   if (file.is_open())
   {
     if (!reader.parse(file, root))
@@ -77,9 +103,9 @@ BgcfService::BgcfService(std::string configuration)
             (route["route"].isArray()))
         {
           std::vector<std::string> route_vec;
-          Json::Value route_vals = route["route"];       
+          Json::Value route_vals = route["route"];
           std::string domain = route["domain"].asString();
-          
+
           for (size_t jj = 0; jj < route_vals.size(); ++jj)
           {
             Json::Value route_val = route_vals[(int)jj];
@@ -87,7 +113,7 @@ BgcfService::BgcfService(std::string configuration)
           }
 
           _routes.insert(std::make_pair(domain, route_vec));
-          route_vec.clear(); 
+          route_vec.clear();
         }
         else
         {
@@ -104,12 +130,14 @@ BgcfService::BgcfService(std::string configuration)
   {
     LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
   }
-
 }
-
-
 BgcfService::~BgcfService()
 {
+
+  printf("out bgcf");
+  // Destroy the updater (if it was created).
+  delete _updater;
+  _updater = NULL;
 }
 
 

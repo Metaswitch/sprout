@@ -29,7 +29,6 @@ TARGET_SOURCES := logger.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
-                  memcachedstoreupdater.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
@@ -50,7 +49,8 @@ TARGET_SOURCES := logger.cpp \
                   quiescing_manager.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
-                  counter.cpp 
+                  counter.cpp \
+                  updater.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 

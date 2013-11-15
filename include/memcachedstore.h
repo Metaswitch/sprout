@@ -55,12 +55,11 @@ extern "C" {
 
 #include "regdata.h"
 #include "memcachedstoreview.h"
-
+#include "updater.h"
 
 namespace RegData {
 
-class MemcachedStoreUpdater;
-
+class MemchachedStore;
 /// @class RegData::MemcachedAoR
 ///
 /// A memcached-based implementation of the Address of Record class.
@@ -129,6 +128,12 @@ public:
 
   /// Sets the data for the specified Address-of-Record
   bool set_aor_data(const std::string& aor_id, AoR* aor_data);
+ 
+  /// Updates the cluster settings
+  void update_view();
+  
+  /// Wrapper to allow the function to be called from a pointer
+  static void Wrapper_To_Call_Display(void* pt2Object);
 
 private:
 
@@ -150,6 +155,8 @@ private:
 
   } connection;
 
+  std::string _config_file;
+
   /// Gets the set of connections to use for a read or write operation.
   typedef enum {READ, WRITE} Op;
   const std::vector<memcached_st*>& get_replicas(const std::string& key, Op operation);
@@ -161,7 +168,7 @@ private:
   static void cleanup_connection(void* p);
 
   // Stores a pointer to an updater object (if one is
-  MemcachedStoreUpdater* _updater;
+  Updater* _updater;
 
   // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;

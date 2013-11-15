@@ -1,5 +1,5 @@
 /**
- * @file bgcfservice.h class definition for an BGCF service provider
+ * @file updater.h Declarations for MemcachedStoreUpdater class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,35 +34,30 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
+#ifndef UPDATER_H__
+#define UPDATER_H__
 
-#ifndef BGCFSERVICE_H__
-#define BGCFSERVICE_H__
-
-#include <map>
-#include <string>
-
-#include "updater.h"
-
-class BgcfService
+#include "signalhandler.h"
+#include <pthread.h>
+class Updater
 {
 public:
-  BgcfService(std::string configuration = "./bgcf.json");
-  ~BgcfService();
-  /// Updates the cluster settings
-  void update_routes();
-
-  /// Wrapper to allow the function to be called from a pointer
-  static void Wrapper_To_Call_Display(void* pt2Object);
-//  void update_routes();
-  std::vector<std::string> get_route(const std::string &domain) const;
+  Updater(std::string file, void* pt2Object, void (*func)(void* pt2Object));
+  ~Updater();
 
 private:
-  std::map<std::string, std::vector<std::string>> _routes; 
-    // Stores a pointer to an updater object (if one is
-  std::string _configuration;
-  Updater* _updater;
+  static SignalHandler<SIGHUP> _sighup_handler2;
+  static void* updater_thread(void* p);
+  void updater();
+
+  /// Mutex used for signalling to waiting threads.
+  static pthread_mutex_t _mutex;
+
+  std::string _file;
+  volatile bool _terminate;
+  void (*_func)(void*);
+  pthread_t _updater;
+  void* _arg;
 };
 
 #endif
