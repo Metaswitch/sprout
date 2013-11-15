@@ -233,7 +233,7 @@ public:
       struct timespec attime;
       if (timeout != -1)
       {
-        clock_gettime(CLOCK_REALTIME, &attime);
+        clock_gettime(CLOCK_MONOTONIC, &attime);
         attime.tv_sec += timeout / 1000;
         attime.tv_nsec += ((timeout % 1000) * 1000000);
         if (attime.tv_nsec >= 1000000000)
