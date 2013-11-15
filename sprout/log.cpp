@@ -70,7 +70,54 @@ Log::setLogger(Logger *log)
   }
 }
 
+void Log::sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
+{
+  int level;
+  va_list args;
+
+  if (sas_level == SAS::LOG_LEVEL_DEBUG)
+  {
+    level = Log::DEBUG_LEVEL;
+  }
+  else if (sas_level == SAS::LOG_LEVEL_VERBOSE)
+  {
+    level = Log::VERBOSE_LEVEL;
+  }
+  else if (sas_level == SAS::LOG_LEVEL_INFO)
+  {
+    level = Log::INFO_LEVEL;
+  }
+  else if (sas_level == SAS::LOG_LEVEL_STATUS)
+  {
+    level = Log::STATUS_LEVEL;
+  }
+  else if (sas_level == SAS::LOG_LEVEL_WARNING)
+  {
+    level = Log::WARNING_LEVEL;
+  }
+  else if (sas_level == SAS::LOG_LEVEL_ERROR)
+  {
+    level = Log::ERROR_LEVEL;
+  }
+  else
+  {
+    LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
+    level = Log::ERROR_LEVEL;
+  }
+  va_start(args, fmt);
+  _write(level, module, line_number, fmt, args);
+  va_end(args);
+}
+
 void Log::write(int level, const char *module, int line_number, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  _write(level, module, line_number, fmt, args);
+  va_end(args);
+}
+
+void Log::_write(int level, const char *module, int line_number, const char *fmt, va_list args)
 {
   if (!Log::logger) {
     return;
@@ -80,7 +127,6 @@ void Log::write(int level, const char *module, int line_number, const char *fmt,
     return;
   }
 
-  va_list args;
   char logline[MAX_LOGLINE];
   char* logLevel = NULL;
 
@@ -101,9 +147,7 @@ void Log::write(int level, const char *module, int line_number, const char *fmt,
     written = snprintf(logline, MAX_LOGLINE - 2, "%s %s: ", logLevel, module);
   }
 
-  va_start(args, fmt);
   written += vsnprintf(logline + written, MAX_LOGLINE - written - 2, fmt, args);
-  va_end(args);
 
   // Add a new line and null termination.
   logline[written] = '\n';

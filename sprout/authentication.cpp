@@ -207,11 +207,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // absorbed by the authentication module, so we need to add SAS markers
     // so the trail will become searchable.
     SAS::TrailId trail = get_trail(rdata);
-    SAS::Marker start_marker(trail, SASMarker::INIT_TIME, 1u);
+    SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
     SAS::report_marker(start_marker);
     if (rdata->msg_info.from)
     {
-      SAS::Marker calling_dn(trail, SASMarker::CALLING_DN, 1u);
+      SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
       pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
       calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
       SAS::report_marker(calling_dn);
@@ -219,7 +219,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.to)
     {
-      SAS::Marker called_dn(trail, SASMarker::CALLED_DN, 1u);
+      SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
       pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
       called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
       SAS::report_marker(called_dn);
@@ -227,7 +227,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
     if (rdata->msg_info.cid)
     {
-      SAS::Marker cid(trail, SASMarker::SIP_CALL_ID, 1u);
+      SAS::Marker cid(trail, MARKER_ID_SIP_CALL_ID, 1u);
       cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
       SAS::report_marker(cid, SAS::Marker::Scope::Trace);
     }
@@ -302,7 +302,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
 
     // Add a SAS end marker
-    SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
+    SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
     SAS::report_marker(end_marker);
   }
 

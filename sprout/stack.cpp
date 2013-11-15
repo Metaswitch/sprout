@@ -673,7 +673,11 @@ pj_status_t init_stack(bool edge_proxy,
   {
     system_name_sas = std::string(stack_data.local_host.ptr, stack_data.local_host.slen);
   }
-  SAS::init(system_name, system_type_sas, "org.projectclearwater.sprout.20131107", sas_address, SAS::discard_logs);
+  SAS::init(system_name,
+            system_type_sas,
+            SASEvent::CURRENT_RESOURCE_BUNDLE,
+            sas_address,
+            Log::sas_write);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();
