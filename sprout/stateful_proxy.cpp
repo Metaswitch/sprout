@@ -1976,9 +1976,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
     {
-      // Do services and translation processing for requests targeted at this
-      // node/home domain.
-      bool rc = handle_incoming_non_cancel(serving_state);
+      // Pick up the AS chain from the ODI, or do the iFC lookups
+      // necessary to create a new AS chain.
+      bool rc = find_as_chain(serving_state);
 
       if (!rc)
       {
@@ -1993,7 +1993,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       {
         LOG_DEBUG("Performing originating call processing");
 
-        // Do originating AS processing.
+        // Do originating handling (including AS handling and setting
+        // orig-ioi).
         disposition = handle_originating(&target);
 
         if ((disposition == AsChainLink::Disposition::Complete) &&
@@ -2001,8 +2002,14 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
             (!is_uri_routeable(_req->msg->line.req.uri)))
         {
-          // Request is targeted at this domain but URI is not currently
-          // routeable, so translate it to a routeable URI.
+          // We've finished originating handling, and the request is
+          // targeted at this domain, but the URI is not currently
+          // routeable, so do an ENUM lookup to translate it to a
+          // routeable URI.
+
+          // This may mean it is no longer targeted at
+          // this domain, so we need to recheck this below before
+          // starting terminating handling.
           LOG_DEBUG("Translating URI");
           status = translate_request_uri(_req, trail());
 
@@ -2042,7 +2049,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
       if (_as_chain_link.is_set() &&
           _as_chain_link.session_case().is_terminating()) {
-        // Do outgoing (terminating) half.
+        // Do terminating handling (including AS handling and setting
+        // orig-ioi).
+
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
       }
@@ -2069,10 +2078,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 }
 
 
-// Handle the incoming half of a non-CANCEL message.
-bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
+// Find the AS chain for this transaction, or create a new one.
+bool UASTransaction::find_as_chain(const ServingState& serving_state)
 {
-  LOG_DEBUG("Handle incoming transaction request, serving state = %s", serving_state.to_string().c_str());
+  LOG_DEBUG("Looking for AS chain for incoming transaction request, serving state = %s", serving_state.to_string().c_str());
   bool success = true;
 
   std::string served_user;
