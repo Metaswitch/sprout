@@ -489,7 +489,7 @@ public:
   }
 
 protected:
-  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers);
+  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_bye=true);
   void doFastFailureFlow(SP::Message& msg, int st_code);
   void doSlowFailureFlow(SP::Message& msg, int st_code);
   void setupForkedFlow(SP::Message& msg);
@@ -873,7 +873,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
 /// URI is verified.
 void StatefulProxyTest::doSuccessfulFlow(Message& msg,
                                          testing::Matcher<string> uri_matcher,
-                                         list<HeaderMatcher> headers)
+                                         list<HeaderMatcher> headers,
+                                         bool include_bye)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -920,23 +921,26 @@ void StatefulProxyTest::doSuccessfulFlow(Message& msg,
   ASSERT_NO_FATAL_FAILURE(req2.matches(out));
   free_txdata();
 
-  // Send a subsequent request.
-  msg._method = "BYE";
-  inject_msg(msg.get_request());
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  ReqMatcher req3("BYE");
-  ASSERT_NO_FATAL_FAILURE(req3.matches(out));
+  if (include_bye)
+  {
+    // Send a subsequent request.
+    msg._method = "BYE";
+    inject_msg(msg.get_request());
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    ReqMatcher req3("BYE");
+    ASSERT_NO_FATAL_FAILURE(req3.matches(out));
 
-  // Send a reply to that.
-  inject_msg(respond_to_current_txdata(200));
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  RespMatcher(200).matches(out);
+    // Send a reply to that.
+    inject_msg(respond_to_current_txdata(200));
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    RespMatcher(200).matches(out);
 
-  free_txdata();
+    free_txdata();
+  }
 }
 
 /// Test a message results in an immediate failure.
@@ -1096,7 +1100,7 @@ TEST_F(StatefulProxyTest, TestExternal)
 TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
-  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+  fakecurl_responses["http://localhost/impu/sip%3A%2B16505551000%40homedomain"] =
                                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
@@ -1125,7 +1129,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
@@ -1162,7 +1166,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
 
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
@@ -1197,7 +1201,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
 
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 /// Test a forked flow - setup phase.
@@ -2911,6 +2915,7 @@ TEST_F(IscTest, SimpleReject)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -2999,6 +3004,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3086,6 +3092,7 @@ TEST_F(IscTest, SimpleAccept)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3173,6 +3180,7 @@ TEST_F(IscTest, SimpleRedirect)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3262,6 +3270,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3350,6 +3359,7 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3435,6 +3445,7 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4143,13 +4154,13 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
 }
 
 // Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
-TEST_F(IscTest, TerminatingWithEnumRewrite)
+TEST_F(IscTest, TerminatingWithNoEnumRewrite)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <IMSSubscription><ServiceProfile>
-                                  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>0</Priority>
                                     <TriggerPoint>
@@ -4207,14 +4218,14 @@ TEST_F(IscTest, TerminatingWithEnumRewrite)
   tpAS1.expect_target(current_txdata(), false);
 
   // These fields of the message will only be filled in correctly if we have
-  // done an ENUM lookup before applying terminating services, and correctly
-  // recognised that "1115551234" is "6505551234".
+  // not done an ENUM lookup before applying terminating services (as
+  // ENUM is only applied when originating)
 
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_EQ("sip:1115551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+              testing::MatchesRegex("P-Served-User: <sip:1115551234@homedomain>;sescase=term;regstate=reg"));
 
   free_txdata();
 }

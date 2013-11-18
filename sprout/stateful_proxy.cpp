@@ -1991,6 +1991,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       if (_as_chain_link.is_set() &&
           _as_chain_link.session_case().is_originating())
       {
+        LOG_DEBUG("Performing originating call processing");
         // Add ourselves as orig-IOI if appropriate.
         //
         // Here we rely on the served_user not being populated unless the user
@@ -2102,6 +2103,7 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
         success = lookup_ifcs(served_user, ifcs, trail());
         if (success)
         {
+          LOG_DEBUG("Creating originating CDIV AS chain");
           _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
         }
       }
@@ -2131,9 +2133,9 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // OUT: target, if disposition is Skip
 
 {
-  if (_as_chain_link.is_set())
+  if (!_as_chain_link.is_set())
   {
-    // No chain or not an originating (or orig-cdiv) session case.  Skip.
+    LOG_DEBUG("No chain or not an originating (or orig-cdiv) session case.  Skip.");
     return AsChainLink::Disposition::Complete;
   }
 
