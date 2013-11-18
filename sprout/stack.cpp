@@ -93,7 +93,7 @@ static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
 static Counter* overload_counter;
 
-static LoadMonitor *load_monitor = NULL; 
+static LoadMonitor *load_monitor = NULL;
 static QuiescingManager *quiescing_mgr = NULL;
 static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
@@ -343,16 +343,16 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                NULL,
                                (pjsip_hdr*)retry_after,
                                NULL);
-   
-    // If the sprout/bono is overloaded, then close the connection (if it's TCP). 
+
+    // If the sprout/bono is overloaded, then close the connection (if it's TCP).
     if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
-    {  
+    {
       pjsip_transport_shutdown(rdata->tp_info.transport);
     }
- 
-    overload_counter->increment(); 
+
+    overload_counter->increment();
     return PJ_TRUE;
-  } 
+  }
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
@@ -623,7 +623,7 @@ pj_status_t init_pjsip()
 }
 
 
-pj_status_t init_stack(bool edge_proxy,
+pj_status_t init_stack(bool access_proxy,
                        const std::string& system_name,
                        const std::string& sas_address,
                        int trusted_port,
@@ -719,7 +719,7 @@ pj_status_t init_stack(bool edge_proxy,
     stack_data.name_cnt++;
   }
 
-  if (edge_proxy)
+  if (access_proxy)
   {
     stack_data.name[stack_data.name_cnt] = stack_data.bono_cluster_domain;
     stack_data.name_cnt++;

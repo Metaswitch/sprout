@@ -43,7 +43,7 @@
 #include <websocketpp/websocketpp.hpp>
 
 extern pjsip_module mod_ws_transport;
-extern pj_status_t init_websockets();
+extern pj_status_t init_websockets(unsigned short port);
 extern void  destroy_websockets();
 
 #endif
