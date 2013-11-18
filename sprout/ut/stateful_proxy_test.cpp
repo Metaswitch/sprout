@@ -2611,6 +2611,48 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   delete tp;
 }
 
+// Check that ;orig on P-CSCF trunk is legal and gets passed through
+// on the upstream Route header.
+TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
+{
+  SCOPED_TRACE("");
+
+  // Set up default message.
+  Message msg;
+  msg._method = "INVITE";
+  msg._to = "public_hostname";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "homedomain";
+  msg._requri = "sip:6505551000@homedomain";
+  msg._from = "+12125551212";
+  msg._fromdomain = "foreign-domain.example.com";
+
+  TransportFlow* tp;
+  pjsip_tx_data* tdata;
+  string actual;
+
+  // Get a connection from the trusted host.
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::TRUSTED, "10.17.17.111", 36533);
+
+  // Send an INVITE from the trusted host.
+  msg._unique++;
+  inject_msg(msg.get_request(), tp);
+
+  // Check it's the right kind and method, and goes to the right place.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that the orig parameter is copied onto the Route header
+  // Bono passes upstream.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_THAT(actual, testing::MatchesRegex(".*;orig.*"));
+
+  free_txdata();
+  delete tp;
+}
+
 TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 {
   SCOPED_TRACE("");
