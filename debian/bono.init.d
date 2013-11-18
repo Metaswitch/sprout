@@ -94,6 +94,22 @@ get_settings()
         upstream_connections=50
         upstream_recycle_connections=600
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+
+        # Work out which features are enabled.
+        EDGE_PROXY_ENABLED=Y
+        IBCF_ENABLED=Y
+        [ -f /etc/clearwater/features ] && . /etc/clearwater/features
+
+        if [ $EDGE_PROXY_ENABLED = Y ]
+        then
+          untrusted_port_arg="--untrusted-port 5060"
+          webrtc_port_arg="--webrtc-port 5062"
+        fi
+
+        if [ $IBCF_ENABLED = Y ]
+        then
+          [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
+        fi
 }
 
 #
@@ -123,16 +139,16 @@ do_start()
                      --bono-domain bono.$home_domain
                      --alias $public_ip
                      --trusted-port 5058
-                     --untrusted-port 5060
+                     $untrusted_port_arg
+                     $webrtc_port_arg
                      --edge-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory
                      -F $log_directory
-                     -L $log_level"
-        # Add in IBCF configuration if there are trusted peers configured in user_settings file
-        [ "$trusted_peers" ] && DAEMON_ARGS="$DAEMON_ARGS --ibcf $trusted_peers"
+                     -L $log_level
+                     $ibcf_arg"
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
