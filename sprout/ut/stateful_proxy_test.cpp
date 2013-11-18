@@ -600,8 +600,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           SP::Message& msg,    //< Message to use for testing.
                                           string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
-                                          bool pvani_AB,       //< Should P-A-N-I/P_V_N_I be passed on requests?
-                                          bool pvani_BA,       //< Should P-A-N-I/P_V_N_I be passed on responses?
+                                          bool pvani_AB,       //< Should P-A-N-I/P-V-N-I be passed on requests?
+                                          bool pvani_BA,       //< Should P-A-N-I/P-V-N-I be passed on responses?
                                           bool expect_orig,    //< Should we expect the INVITE to be marked originating?
                                           bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
@@ -641,7 +641,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     msg.set_route(out);
 
     // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
-    // because they never gets inserted into such messages.
+    // because they never get inserted into such messages.
     free_txdata();
   }
 
@@ -775,8 +775,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
-  // because we handle these retransmissions statelessly and hence
-  // don't have any info on trust boundary handling.
+  // because we handle these retransmissions statelessly and hence don't have any info on 
+  // trust boundary handling.
   EXPECT_EQ("", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE) (rexmt)";
   EXPECT_EQ("", get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE) (rexmt)";
 
