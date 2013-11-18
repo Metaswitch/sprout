@@ -140,7 +140,7 @@
     ]]>
   </send>
 
-  <recv response="200" rtd="register" chance="0.161" next="2">
+  <recv response="200" chance="0.161" next="2">
     <action>
       <add assign_to="reg_repeat" value="1" />
     </action>
