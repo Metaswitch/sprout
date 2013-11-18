@@ -4161,7 +4161,8 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
   free_txdata();
 }
 
-// Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
+// Test that ENUM lookups are not done if we are only doing
+// terminating processing.
 TEST_F(IscTest, TerminatingWithNoEnumRewrite)
 {
   register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
