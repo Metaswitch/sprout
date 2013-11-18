@@ -1982,50 +1982,51 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
       if (!rc)
       {
-        LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
+        LOG_INFO("Reject request with 404 due to failed %s iFC lookup", _as_chain_link.session_case().is_terminating() ? "terminating" : "originating");
         send_response(PJSIP_SC_NOT_FOUND);
         delete target;
         return;
       };
 
-      // Add ourselves as orig-IOI if appropriate.
-      //
-      // Here we rely on the served_user not being populated unless the user
-      // is locally hosted.  This is policed in served_user_from_msg().
-      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-      if (pcv && !_as_chain_link.served_user().empty())
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_originating())
       {
-        pcv->orig_ioi = stack_data.home_domain;
-      }
-
-      // Do incoming (originating) half.
-      disposition = handle_originating(&target);
-
-      if ((disposition == AsChainLink::Disposition::Complete) &&
-          (enum_service) &&
-          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          (!is_uri_routeable(_req->msg->line.req.uri)))
-      {
-        // Request is targeted at this domain but URI is not currently
-        // routeable, so translate it to a routeable URI.
-        LOG_DEBUG("Translating URI");
-        status = translate_request_uri(_req, trail());
-
-        if (status != PJ_SUCCESS)
+        // Add ourselves as orig-IOI if appropriate.
+        //
+        // Here we rely on the served_user not being populated unless the user
+        // is locally hosted.  This is policed in served_user_from_msg().
+        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+          pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+        if (pcv && !_as_chain_link.served_user().empty())
         {
-          // An error occurred during URI translation.  This doesn't happen if
-          // there is no match, only if there is a match but there is an error
-          // performing the defined mapping.  We therefore reject the request
-          // with the not found status code and a specific reason phrase.
-          send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-          disposition = AsChainLink::Disposition::Stop;
+          pcv->orig_ioi = stack_data.home_domain;
         }
-      }
 
-      if (disposition == AsChainLink::Disposition::Complete)
-      {
-        if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
+        // Do originating AS processing.
+        disposition = handle_originating(&target);
+
+        if ((disposition == AsChainLink::Disposition::Complete) &&
+            (enum_service) &&
+            (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+            (!is_uri_routeable(_req->msg->line.req.uri)))
+        {
+          // Request is targeted at this domain but URI is not currently
+          // routeable, so translate it to a routeable URI.
+          LOG_DEBUG("Translating URI");
+          status = translate_request_uri(_req, trail());
+
+          if (status != PJ_SUCCESS)
+          {
+            // An error occurred during URI translation.  This doesn't happen if
+            // there is no match, only if there is a match but there is an error
+            // performing the defined mapping.  We therefore reject the request
+            // with the not found status code and a specific reason phrase.
+            send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+            disposition = AsChainLink::Disposition::Stop;
+          }
+        }
+
+        if (disposition == AsChainLink::Disposition::Complete)
         {
           // We've completed the originating half and we don't yet have a
           // terminating chain: switch to terminating and look up iFCs
@@ -2040,6 +2041,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             return;
           }
         }
+      }
+
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_terminating()) {
         // Do outgoing (terminating) half.
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
@@ -2109,6 +2114,7 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
       success = lookup_ifcs(served_user, ifcs, trail());
       if (success)
       {
+        LOG_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
     }
@@ -2125,7 +2131,7 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // OUT: target, if disposition is Skip
 
 {
-  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_originating()))
+  if (_as_chain_link.is_set())
   {
     // No chain or not an originating (or orig-cdiv) session case.  Skip.
     return AsChainLink::Disposition::Complete;
@@ -2165,6 +2171,7 @@ bool UASTransaction::move_to_terminating_chain()
   _as_chain_link.release();
   std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
 
+  LOG_DEBUG("Looking up iFCs for served user %s", served_user.c_str());
   // If we got a served user, look it up.  We won't get a served user if we've recognized that they're remote.
   bool success = true;
   if (!served_user.empty())
