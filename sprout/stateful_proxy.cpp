@@ -857,6 +857,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     pj_list_insert_after(&upstream_uri->other_param, orig_param);
   }
 
+  // Select a transport for the request.
+  target_p->transport = upstream_conn_pool->get_connection();
+
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
 
