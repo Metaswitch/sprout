@@ -2022,11 +2022,13 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
           !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
       {
-        // We've completed the originating half, we're handling the
+        // We've completed the originating half (or we're not doing
+        // originating handling for this call), we're handling the
         // terminating half (i.e. it hasn't been ENUMed to go
-        // elsewhere), and we don't yet have a terminating chain:
-        // switch to terminating and look up iFCs again. The served
-        // user changes here.
+        // elsewhere), and we don't yet have a terminating chain.
+
+        // Switch to terminating session state, set the served user to
+        // the callee, and look up iFCs again.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
         bool success = move_to_terminating_chain();
         if (!success)

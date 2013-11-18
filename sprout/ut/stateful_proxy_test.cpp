@@ -489,7 +489,7 @@ public:
   }
 
 protected:
-  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_bye=true);
+  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true);
   void doFastFailureFlow(SP::Message& msg, int st_code);
   void doSlowFailureFlow(SP::Message& msg, int st_code);
   void setupForkedFlow(SP::Message& msg);
@@ -874,7 +874,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
 void StatefulProxyTest::doSuccessfulFlow(Message& msg,
                                          testing::Matcher<string> uri_matcher,
                                          list<HeaderMatcher> headers,
-                                         bool include_bye)
+                                         bool include_ack_and_bye)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -911,18 +911,21 @@ void StatefulProxyTest::doSuccessfulFlow(Message& msg,
   msg._cseq++;
   free_txdata();
 
-  // Send ACK
-  msg._method = "ACK";
-  inject_msg(msg.get_request());
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  ReqMatcher req2("ACK");
-  ASSERT_NO_FATAL_FAILURE(req2.matches(out));
-  free_txdata();
-
-  if (include_bye)
+  // If we're testing Sprout functionality, we want to exclude the ACK
+  // and BYE requests, as Sprout wouldn't see them in normal circumstances.
+  if (include_ack_and_bye)
   {
+
+    // Send ACK
+    msg._method = "ACK";
+    inject_msg(msg.get_request());
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    ReqMatcher req2("ACK");
+    ASSERT_NO_FATAL_FAILURE(req2.matches(out));
+    free_txdata();
+
     // Send a subsequent request.
     msg._method = "BYE";
     inject_msg(msg.get_request());
@@ -1129,6 +1132,8 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
@@ -1166,6 +1171,8 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
 
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
@@ -1187,6 +1194,8 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
 
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
