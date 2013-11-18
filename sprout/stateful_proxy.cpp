@@ -1992,16 +1992,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           _as_chain_link.session_case().is_originating())
       {
         LOG_DEBUG("Performing originating call processing");
-        // Add ourselves as orig-IOI if appropriate.
-        //
-        // Here we rely on the served_user not being populated unless the user
-        // is locally hosted.  This is policed in served_user_from_msg().
-        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-          pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-        if (pcv && !_as_chain_link.served_user().empty())
-        {
-          pcv->orig_ioi = stack_data.home_domain;
-        }
 
         // Do originating AS processing.
         disposition = handle_originating(&target);
@@ -2029,11 +2019,14 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       }
 
       if (disposition == AsChainLink::Disposition::Complete &&
+          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
           !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
       {
-        // We've completed the originating half and we don't yet have a
-        // terminating chain: switch to terminating and look up iFCs
-        // again.  The served user changes here.
+        // We've completed the originating half, we're handling the
+        // terminating half (i.e. it hasn't been ENUMed to go
+        // elsewhere), and we don't yet have a terminating chain:
+        // switch to terminating and look up iFCs again. The served
+        // user changes here.
         LOG_DEBUG("Originating AS chain complete, move to terminating chain");
         bool success = move_to_terminating_chain();
         if (!success)
@@ -2098,6 +2091,22 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
         // create new AS chain with session case orig-cdiv and the
         // terminating user as served user.
         LOG_INFO("Request-URI has changed, retargeting");
+
+        // We might not be the terminating server any more, so we
+        // should blank out the term_ioi parameter. If we are still
+        // the terminating server, we'll fill it back in when we go
+        // through handle_terminating.
+
+        // Note that there's no need to change orig_ioi - we don't
+        // actually become the originating server when we do this redirect.
+        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+          pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+        if (pcv)
+        {
+          LOG_DEBUG("Blanking out term_ioi parameter due to redirect");
+          pcv->term_ioi = pj_str("");
+        }
+
         served_user = _as_chain_link.served_user();
 
         _as_chain_link.release();
@@ -2132,12 +2141,29 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // OUT: target, if disposition is Skip
-
 {
-  if (!_as_chain_link.is_set())
+  // These are effectively the preconditions of this function - that
+  // it is only called when we know we are providing originating
+  // services for a user.
+
+  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_originating()))
   {
-    LOG_DEBUG("No chain or not an originating (or orig-cdiv) session case.  Skip.");
+    LOG_WARNING("In handle_originating despite not having an originating session case");
     return AsChainLink::Disposition::Complete;
+  }
+
+  if (_as_chain_link.served_user().empty())
+  {
+    LOG_WARNING("In handle_originating despite not having a served user specified");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  // Add ourselves as orig-IOI.
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+    pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+  if (pcv)
+  {
+    pcv->orig_ioi = stack_data.home_domain;
   }
 
   // Apply originating call services to the message
@@ -2196,24 +2222,35 @@ bool UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // OUT: target, if disposition is Skip
 {
+  // These are effectively the preconditions of this function - that
+  // it is only called when we know we are providing terminating
+  // services for a user, and the target is in our domain.
+  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+  {
+    LOG_WARNING("In handle_terminating despite not having a terminating session case");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  if (_as_chain_link.served_user().empty())
+  {
+    LOG_WARNING("In handle_terminating despite not having a served user specified");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
+  {
+    LOG_WARNING("In handle_terminating despite the request not being targeted at our domain");
+    return AsChainLink::Disposition::Complete;
+  }
+
   // If the newly translated ReqURI indicates that we're the host of the
   // target user, include ourselves as the terminating operator for
   // billing.
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri))
+  if (pcv)
   {
     pcv->term_ioi = stack_data.home_domain;
-  }
-  else if (pcv)
-  {
-    pcv->term_ioi = pj_str("");
-  }
-
-  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
-  {
-    LOG_DEBUG("Not applying terminating services");
-    return AsChainLink::Disposition::Complete;
   }
 
   // Apply terminating call services to the message
@@ -3784,6 +3821,10 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                             Ifcs ifcs,
                                             std::string served_user)
 {
+  if (served_user.empty())
+  {
+    LOG_WARNING("create_as_chain called with an empty served_user");
+  }
   bool is_registered = is_user_registered(served_user);
 
   // Create the AsChain, and schedule its destruction.  AsChain
