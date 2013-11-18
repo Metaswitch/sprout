@@ -1982,7 +1982,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
       if (!rc)
       {
-        LOG_INFO("Reject request with 404 due to failed %s iFC lookup", _as_chain_link.session_case().is_terminating() ? "terminating" : "originating");
+        LOG_INFO("Reject request with 404 due to failed iFC lookup");
         send_response(PJSIP_SC_NOT_FOUND);
         delete target;
         return;
