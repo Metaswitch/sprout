@@ -2026,21 +2026,22 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             disposition = AsChainLink::Disposition::Stop;
           }
         }
+      }
 
-        if (disposition == AsChainLink::Disposition::Complete)
+      if (disposition == AsChainLink::Disposition::Complete &&
+          !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+      {
+        // We've completed the originating half and we don't yet have a
+        // terminating chain: switch to terminating and look up iFCs
+        // again.  The served user changes here.
+        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+        bool success = move_to_terminating_chain();
+        if (!success)
         {
-          // We've completed the originating half and we don't yet have a
-          // terminating chain: switch to terminating and look up iFCs
-          // again.  The served user changes here.
-          LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-          bool success = move_to_terminating_chain();
-          if (!success)
-          {
-            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
-            send_response(PJSIP_SC_NOT_FOUND);
-            delete target;
-            return;
-          }
+          LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
         }
       }
 
@@ -2211,6 +2212,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
 
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
   {
+    LOG_DEBUG("Not applying terminating services");
     return AsChainLink::Disposition::Complete;
   }
 
