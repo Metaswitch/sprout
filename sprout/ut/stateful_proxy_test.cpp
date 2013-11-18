@@ -1178,20 +1178,6 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
@@ -3004,7 +2990,6 @@ TEST_F(IscTest, SimpleNonLocalReject)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3270,7 +3255,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
-  msg._route = "Route: <sip:homedomain;orig>";
+  msg._route = "Route: <sip:homedomain>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -4157,7 +4142,7 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
 TEST_F(IscTest, TerminatingWithNoEnumRewrite)
 {
   register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
+  fakecurl_responses["http://localhost/impu/sip%3A1115551234%40homedomain"] =
                                 R"(<?xml version="1.0" encoding="UTF-8"?>
                                 <IMSSubscription><ServiceProfile>
                                   <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
