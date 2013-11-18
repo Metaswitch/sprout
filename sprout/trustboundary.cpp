@@ -55,6 +55,7 @@ static void proxy_strip_trusted(pjsip_tx_data *tdata)
   LOG_DEBUG("Strip trusted headers");
 
   PJUtils::delete_header(tdata->msg, &STR_P_A_N_I);
+  PJUtils::delete_header(tdata->msg, &STR_P_V_N_I);
   PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
 }
 
