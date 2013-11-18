@@ -841,7 +841,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // When working as a load-balancer for a third-party P-CSCF, trust the
   // orig parameter of the top-most Route header.
   pjsip_param* orig_param = NULL;
-  if (PJUtils::is_top_route_local(tdata->msg, &route_hdr))
+  if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
   {
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
     orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
