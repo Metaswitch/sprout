@@ -448,8 +448,8 @@ protected:
                      SP::Message& msg,
                      string route,
                      bool expect_100,
-                     bool pani_AB,
-                     bool pani_BA,
+                     bool expect_trusted_headers_on_requests,
+                     bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
 };
@@ -600,8 +600,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           SP::Message& msg,    //< Message to use for testing.
                                           string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
-                                          bool pani_AB,        //< Should P-A-N-I be passed on requests?
-                                          bool pani_BA,        //< Should P-A-N-I be passed on responses?
+                                          bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
+                                          bool expect_trusted_headers_on_responses, //< Should P-A-N-I/P-V-N-I be passed on responses?
                                           bool expect_orig,    //< Should we expect the INVITE to be marked originating?
                                           bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
@@ -611,12 +611,18 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   pjsip_tx_data* prack = NULL;
 
   // Extra fields to insert in all requests and responses.
-  string extra = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
+  string pani = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
+  string pvni = "P-Visited-Network-Id: other.net, \"Other Network\"";
+  string pvani = pani + "\r\n" + pvni;
+
   if (!msg._extra.empty())
   {
     msg._extra.append("\r\n");
   }
-  msg._extra.append(extra);
+
+  msg._extra.append(pani);
+  msg._extra.append("\r\n");
+  msg._extra.append(pvni);
 
   // ---------- Send INVITE C->X
   SCOPED_TRACE("INVITE");
@@ -634,7 +640,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
     msg.set_route(out);
 
-    // Don't bother testing P-Access-Network-Info, because it never gets inserted into such messages.
+    // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
+    // because they never get inserted into such messages.
     free_txdata();
   }
 
@@ -644,8 +651,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "INVITE";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+            get_headers(out, "P-Access-Network-Info")) << "INVITE";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+            get_headers(out, "P-Visited-Network-Id")) << "INVITE";
 
   // Check originating.
   if (expect_orig)
@@ -664,7 +674,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
 
   // ---------- Send 183 Session Progress back X<-S
   SCOPED_TRACE("183 Session Progress");
-  inject_msg(respond_to_txdata(invite, 183, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 183, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // 183 goes back C<-X
@@ -674,8 +684,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
+  // Check P-Access-Network-Info and P-Visited-Network-Id
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "183 Session Progress";
 
   free_txdata();
 
@@ -691,14 +704,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("PRACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "PRACK";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+            get_headers(out, "P-Access-Network-Info")) << "PRACK";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+            get_headers(out, "P-Visited-Network-Id")) << "PRACK";
 
   prack = pop_txdata();
 
   // ---------- Send 200 OK back X<-S
   SCOPED_TRACE("200 OK (PRACK)");
-  inject_msg(respond_to_txdata(prack, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(prack, 200, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // OK goes back C<-X
@@ -708,14 +724,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (PRACK)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (PRACK)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (PRACK)";
 
   free_txdata();
 
   // ---------- Send 200 OK back X<-S
   SCOPED_TRACE("200 OK (INVITE)");
-  inject_msg(respond_to_txdata(invite, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 200, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // OK goes back C<-X
@@ -725,8 +744,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE)";
 
   free_txdata();
 
@@ -742,14 +764,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "ACK";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+            get_headers(out, "P-Access-Network-Info")) << "ACK";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+            get_headers(out, "P-Visited-Network-Id")) << "ACK";
 
   free_txdata();
 
   // ---------- Send a retransmission of that 200 OK back X<-S.  Should be processed statelessly.
   SCOPED_TRACE("200 OK (INVITE) (rexmt)");
-  inject_msg(respond_to_txdata(invite, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 200, "", pvani), tpB);
   pjsip_tx_data_dec_ref(invite);
   invite = NULL;
   ASSERT_EQ(1, txdata_count());
@@ -761,10 +786,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.  This will always be stripped,
-  // because we handle these retransmissions statelessly and hence
-  // don't have any info on trust boundary handling.
+  // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
+  // because we handle these retransmissions statelessly and hence don't have any info on 
+  // trust boundary handling.
   EXPECT_EQ("", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE) (rexmt)";
+  EXPECT_EQ("", get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE) (rexmt)";
 
   free_txdata();
 
@@ -782,12 +808,15 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("BYE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "BYE";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+            get_headers(out, "P-Access-Network-Info")) << "BYE";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+            get_headers(out, "P-Visited-Network-Id")) << "BYE";
 
   // ---------- Send a reply to that X<-S
   SCOPED_TRACE("200 OK (BYE)");
-  inject_msg(respond_to_current_txdata(200, "", extra), tpB);
+  inject_msg(respond_to_current_txdata(200, "", pvani), tpB);
   poll();
   ASSERT_EQ(1, txdata_count());
 
@@ -796,8 +825,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (BYE)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (BYE)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (BYE)";
 
   free_txdata();
 
@@ -817,7 +849,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);
 
-    // Don't bother testing P-Access-Network-Info, because this is point-to-point.
+    // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id, because this is point-to-point.
     free_txdata();
   }
 
@@ -827,14 +859,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+            get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+            get_headers(out, "P-Visited-Network-Id")) << "INVITE (#2)";
 
   invite = pop_txdata();
 
   // ---------- Send 404 Not Found back X<-S
   SCOPED_TRACE("404 Not Found (INVITE #2)");
-  inject_msg(respond_to_txdata(invite, 404, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 404, "", pvani), tpB);
   poll();
   ASSERT_EQ(2, txdata_count());
 
@@ -843,7 +878,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Don't check P-Access-Network-Info, because it's point-to-point.
+  // Don't check P-Access-Network-Info or P-Visited-Network-Id, because it's point-to-point.
 
   free_txdata();
 
@@ -854,8 +889,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "404 Not Found (INVITE #2)";
 
   free_txdata();
 
