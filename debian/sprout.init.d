@@ -96,9 +96,23 @@ get_settings()
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
-        [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
-        [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
-        [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+
+        # Work out which features are enabled.
+        ENUM_FILE_ENABLED=Y
+        MMTEL_SERVICES_ENABLED=Y
+        [ -f /etc/clearwater/features ] && . /etc/clearwater/features
+
+        if [ $ENUM_FILE_ENABLED = Y ]
+        then
+          [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
+          [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
+          [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+        fi
+
+        if [ $MMTEL_SERVICES_ENABLED = Y ]
+        then
+          [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms $xdms_hostname"
+        fi
 }
 
 #
@@ -132,7 +146,7 @@ do_start()
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
                      --hss $hs_hostname
-                     --xdms $xdms_hostname
+                     $xdms_hostname_arg
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
