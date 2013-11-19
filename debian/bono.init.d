@@ -98,7 +98,13 @@ get_settings()
         # Work out which features are enabled.
         EDGE_PROXY_ENABLED=Y
         IBCF_ENABLED=Y
-        [ -f /etc/clearwater/features ] && . /etc/clearwater/features
+        if [ -d /etc/clearwater/features.d ]
+        then
+          for $file in $(find /etc/clearwater/features.d -type f)
+          do
+            [ -r $file ] && . $file
+          done
+        fi
 
         if [ $EDGE_PROXY_ENABLED = Y ]
         then

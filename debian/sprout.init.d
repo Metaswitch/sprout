@@ -100,7 +100,13 @@ get_settings()
         # Work out which features are enabled.
         ENUM_FILE_ENABLED=Y
         MMTEL_SERVICES_ENABLED=Y
-        [ -f /etc/clearwater/features ] && . /etc/clearwater/features
+        if [ -d /etc/clearwater/features.d ]
+        then
+          for $file in $(find /etc/clearwater/features.d -type f)
+          do
+            [ -r $file ] && . $file
+          done
+        fi
 
         if [ $ENUM_FILE_ENABLED = Y ]
         then
