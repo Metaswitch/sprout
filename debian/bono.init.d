@@ -141,7 +141,7 @@ do_start()
                      --trusted-port 5058
                      $untrusted_port_arg
                      $webrtc_port_arg
-                     --edge-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
+                     --routing-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
