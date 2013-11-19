@@ -102,7 +102,7 @@ get_settings()
         MMTEL_SERVICES_ENABLED=Y
         if [ -d /etc/clearwater/features.d ]
         then
-          for $file in $(find /etc/clearwater/features.d -type f)
+          for file in $(find /etc/clearwater/features.d -type f)
           do
             [ -r $file ] && . $file
           done
