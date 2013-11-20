@@ -841,6 +841,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // When working as a load-balancer for a third-party P-CSCF, trust the
   // orig parameter of the top-most Route header.
   pjsip_param* orig_param = NULL;
+
+  // Check the rdata here, as the Route header may have been stripped
+  // from the cloned tdata.
   if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
   {
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
@@ -1984,7 +1987,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       {
         LOG_INFO("Reject request with 404 due to failed iFC lookup");
         send_response(PJSIP_SC_NOT_FOUND);
-        delete target;
+        // target is not set, so just return
         return;
       };
 
