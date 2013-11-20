@@ -351,6 +351,7 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
     LOG_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
     if ((is_home_domain(uri)) || (is_uri_local(uri)))
     {
+      LOG_DEBUG("Route header is local");
       rc = true;
       if (hdr != NULL)
       {
