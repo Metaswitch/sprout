@@ -1,5 +1,5 @@
 /**
- * @file memcachedstoreupdater.h Declarations for MemcachedStoreUpdater class.
+ * @file updater.h Declarations for Updater class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,34 +34,75 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef MEMCACHEDSTOREUPDATER_H__
-#define MEMCACHEDSTOREUPDATER_H__
+#ifndef UPDATER_H__
+#define UPDATER_H__
 
 #include "signalhandler.h"
-#include "memcachedstore.h"
+#include <pthread.h>
+#include <functional>
 
-namespace RegData {
-
-class MemcachedStoreUpdater
+template<class ReturnType, class ClassType> class Updater
 {
 public:
-  MemcachedStoreUpdater(MemcachedStore* store, std::string file);
-  ~MemcachedStoreUpdater();
+  Updater(ClassType* pointer, std::mem_fun_t<ReturnType, ClassType> myFunctor) :
+    _terminate(false),
+    _func(myFunctor),
+    _pointer(pointer)
+  {
+    LOG_DEBUG("Created updater");
+
+    // Do initial configuration.
+    myFunctor(pointer);
+
+    // Create the thread to handle further changes of view.
+    int rc = pthread_create(&_updater, NULL, &updater_thread, this);
+
+    if (rc < 0)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error creating updater thread");
+      // LCOV_EXCL_STOP
+    }
+  }
+ 
+  ~Updater()
+  {
+    // Destroy the updater thread.
+    _terminate = true;
+    pthread_join(_updater, NULL);
+  }
 
 private:
-  void update_view();
+  static void* updater_thread(void* p)
+  {
+    ((Updater*)p)->updater();
+    return NULL;
+  }
+ 
+  void updater()
+  {
+    LOG_DEBUG("Started updater thread");
 
-  static void* updater_thread(void* p);
-  void updater();
+    while (!_terminate)
+    {
+      // Wait for the SIGHUP signal.
+      bool rc = _sighup_handler.wait_for_signal();
 
-  static SignalHandler<SIGHUP> _sighup_handler;
+      // If the signal handler didn't timeout, then call the
+      // update function
+      if (rc)
+      {
+        // LCOV_EXCL_START
+        _func(_pointer);
+        // LCOV_EXCL_STOP
+      }
+    }
+  }
 
-  MemcachedStore* _store;
-  std::string _file;
-
+  volatile bool _terminate;
+  std::mem_fun_t<ReturnType, ClassType> _func;
   pthread_t _updater;
+  ClassType* _pointer;
 };
-
-} // namespace RegData
 
 #endif

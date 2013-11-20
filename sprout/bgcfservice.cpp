@@ -44,7 +44,15 @@
 #include "bgcfservice.h"
 #include "log.h"
 
-BgcfService::BgcfService(std::string configuration)
+BgcfService::BgcfService(std::string configuration) :
+  _configuration(configuration),
+  _updater(NULL)
+{
+  // Create an updater to keep the bgcf routes configured appropriately.
+  _updater = new Updater<void, BgcfService>(this, std::mem_fun(&BgcfService::update_routes));
+}
+
+void BgcfService::update_routes()
 {
   Json::Value root;
   Json::Reader reader;
@@ -52,9 +60,11 @@ BgcfService::BgcfService(std::string configuration)
   std::string jsonData;
   std::ifstream file;
 
-  LOG_STATUS("Loading BGCF configuration from %s", configuration.c_str());
+  LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
+  
+  std::map<std::string, std::vector<std::string>> new_routes;
 
-  file.open(configuration.c_str());
+  file.open(_configuration.c_str());
   if (file.is_open())
   {
     if (!reader.parse(file, root))
@@ -77,23 +87,25 @@ BgcfService::BgcfService(std::string configuration)
             (route["route"].isArray()))
         {
           std::vector<std::string> route_vec;
-          Json::Value route_vals = route["route"];       
+          Json::Value route_vals = route["route"];
           std::string domain = route["domain"].asString();
-          
+
           for (size_t jj = 0; jj < route_vals.size(); ++jj)
           {
             Json::Value route_val = route_vals[(int)jj];
             route_vec.push_back(route_val.asString());
           }
 
-          _routes.insert(std::make_pair(domain, route_vec));
-          route_vec.clear(); 
+          new_routes.insert(std::make_pair(domain, route_vec));
+          route_vec.clear();
         }
         else
         {
           LOG_WARNING("Badly formed BGCF route entry %s", route.toStyledString().c_str());
         }
       }
+
+      _routes = new_routes;
     }
     else
     {
@@ -104,14 +116,13 @@ BgcfService::BgcfService(std::string configuration)
   {
     LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
   }
-
 }
-
-
 BgcfService::~BgcfService()
 {
+  // Destroy the updater (if it was created).
+  delete _updater;
+  _updater = NULL;
 }
-
 
 std::vector<std::string> BgcfService::get_route(const std::string &domain) const
 {

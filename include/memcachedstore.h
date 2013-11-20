@@ -55,11 +55,9 @@ extern "C" {
 
 #include "regdata.h"
 #include "memcachedstoreview.h"
-
+#include "updater.h"
 
 namespace RegData {
-
-class MemcachedStoreUpdater;
 
 /// @class RegData::MemcachedAoR
 ///
@@ -129,7 +127,10 @@ public:
 
   /// Sets the data for the specified Address-of-Record
   bool set_aor_data(const std::string& aor_id, AoR* aor_data);
-
+ 
+  /// Updates the cluster settings
+  void update_view();
+  
 private:
 
   // A copy of this structure is maintained for each worker thread, as
@@ -150,6 +151,8 @@ private:
 
   } connection;
 
+  std::string _config_file;
+
   /// Gets the set of connections to use for a read or write operation.
   typedef enum {READ, WRITE} Op;
   const std::vector<memcached_st*>& get_replicas(const std::string& key, Op operation);
@@ -160,8 +163,8 @@ private:
   // Called by the thread-local-storage clean-up functions when a thread ends.
   static void cleanup_connection(void* p);
 
-  // Stores a pointer to an updater object (if one is
-  MemcachedStoreUpdater* _updater;
+  // Stores a pointer to an updater object
+  Updater<void, MemcachedStore>* _updater;
 
   // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;

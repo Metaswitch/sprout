@@ -40,14 +40,18 @@
 #include <signal.h>
 #include <pthread.h>
 #include <semaphore.h>
-
+#include <errno.h>
 #include "log.h"
+
+#include <time.h>
+#include <sys/time.h>
 
 /// Singleton class template for handling UNIX signals.  Only a single
 /// instance of this class should be created for each UNIX signal type.
 /// This has to be templated because there has to be a unique static signal
 /// handler function and semphore for each signal being hooked, so creating
 /// multiple instances of a non-templated class doesn't work
+
 template <int SIGNUM>
 class SignalHandler
 {
@@ -72,7 +76,7 @@ public:
 // LCOV_EXCL_START
       // Old handler is not the default handler, so someone else has previously
       // hooked the signal.
-      LOG_WARNING("SIGHUP already hooked");
+      LOG_WARNING("SIGNAL already hooked");
 // LCOV_EXCL_STOP
     }
   }
@@ -94,8 +98,9 @@ public:
     pthread_cond_destroy(&_cond);
   }
 
-  /// Waits for the signal to be raised.
-  void wait_for_signal()
+  /// Waits for the signal to be raised, or for the wait to timeout. 
+  /// This returns true if the signal was raised, and false for timeout. 
+  bool wait_for_signal()
   {
     // Grab the mutex.  On its own this isn't enough to guarantee we won't
     // miss a signal, but to do that we would have to hold the mutex while
@@ -104,11 +109,20 @@ public:
     // to this API.
     pthread_mutex_lock(&_mutex);
 
-    // Wait for the signal condition to trigger.
-    pthread_cond_wait(&_cond, &_mutex);
+    // Wait for either the signal condition to trigger or timeout
+    struct timespec ts;
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    ts.tv_sec = tp.tv_sec;
+    ts.tv_nsec = tp.tv_usec * 1000;
+    ts.tv_sec += 1;
 
+    int rc = pthread_cond_timedwait(&_cond, &_mutex, &ts);
+    
     // Unlock the mutex
     pthread_mutex_unlock(&_mutex);
+    
+    return (rc != ETIMEDOUT);
   }
 
 private:
@@ -151,6 +165,7 @@ template<int SIGNUM> pthread_mutex_t SignalHandler<SIGNUM>::_mutex;
 template<int SIGNUM> pthread_cond_t SignalHandler<SIGNUM>::_cond;
 template<int SIGNUM> sem_t SignalHandler<SIGNUM>::_sema;
 
+// Concrete instances of signal handers
+extern SignalHandler<SIGHUP> _sighup_handler;
+
 #endif
-
-
