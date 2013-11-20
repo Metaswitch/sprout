@@ -43,6 +43,7 @@
 #include <map>
 #include <string>
 
+#include <functional>
 #include "updater.h"
 
 class BgcfService
@@ -54,13 +55,12 @@ public:
   /// Updates the bgcf routes
   void update_routes();
 
-  static void wrapper_to_update_function(void* pt2Object);
   std::vector<std::string> get_route(const std::string &domain) const;
 
 private:
   std::map<std::string, std::vector<std::string>> _routes; 
   std::string _configuration;
-  Updater* _updater;
+  Updater<void, BgcfService>* _updater;
 };
 
 #endif

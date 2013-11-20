@@ -44,19 +44,12 @@
 #include "bgcfservice.h"
 #include "log.h"
 
-// static wrapper function to be able to callback the update function
-void BgcfService::wrapper_to_update_function(void* pt2Object)
-{
-  BgcfService* bgcf = (BgcfService*) pt2Object;
-  bgcf->update_routes();
-}
-
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
   _updater(NULL)
 {
   // Create an updater to keep the bgcf routes configured appropriately.
-  _updater = new Updater((void*) this, BgcfService::wrapper_to_update_function);
+  _updater = new Updater<void, BgcfService>(this, std::mem_fun(&BgcfService::update_routes));
 }
 
 void BgcfService::update_routes()

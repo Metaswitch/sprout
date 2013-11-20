@@ -67,18 +67,10 @@ RegData::Store* create_memcached_store(bool binary,                    ///< use 
   return new MemcachedStore(binary, config_file);
 }
 
-
 /// Destroy a store object which used the memcached implementation.
 void destroy_memcached_store(RegData::Store* store)
 {
   delete (RegData::MemcachedStore*)store;
-}
-
-// static wrapper-function to be able to callback the update function
-void MemcachedStore::wrapper_to_update_function(void* pt2Object)
-{
-  MemcachedStore* memcached = (MemcachedStore*) pt2Object;
-  memcached->update_view();
 }
 
 MemcachedStore::MemcachedStore(bool binary,                      ///< use binary protocol?
@@ -107,7 +99,7 @@ MemcachedStore::MemcachedStore(bool binary,                      ///< use binary
   _options += (binary) ? " --BINARY_PROTOCOL" : "";
 
   // Create an updater to keep the store configured appropriately.
-  _updater = new Updater((void*) this, MemcachedStore::wrapper_to_update_function);
+  _updater = new Updater<void, MemcachedStore>(this, std::mem_fun(&MemcachedStore::update_view));
 }
 
 MemcachedStore::~MemcachedStore()

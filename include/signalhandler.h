@@ -165,4 +165,7 @@ template<int SIGNUM> pthread_mutex_t SignalHandler<SIGNUM>::_mutex;
 template<int SIGNUM> pthread_cond_t SignalHandler<SIGNUM>::_cond;
 template<int SIGNUM> sem_t SignalHandler<SIGNUM>::_sema;
 
+// Concrete instances of signal handers
+extern SignalHandler<SIGHUP> _sighup_handler;
+
 #endif

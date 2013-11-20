@@ -50,7 +50,7 @@ TARGET_SOURCES := logger.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
                   counter.cpp \
-                  updater.cpp 
+                  signalhandler.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 

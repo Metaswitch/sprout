@@ -39,21 +39,70 @@
 
 #include "signalhandler.h"
 #include <pthread.h>
-class Updater
+#include <functional>
+
+template<class ReturnType, class ClassType> class Updater
 {
 public:
-  Updater(void* pt2Object, void (*func)(void* pt2Object));
-  ~Updater();
+  Updater(ClassType* pointer, std::mem_fun_t<ReturnType, ClassType> myFunctor) :
+    _terminate(false),
+    _func(myFunctor),
+    _pointer(pointer)
+  {
+    LOG_DEBUG("Created updater");
+
+    // Do initial configuration.
+    myFunctor(pointer);
+
+    // Create the thread to handle further changes of view.
+    int rc = pthread_create(&_updater, NULL, &updater_thread, this);
+
+    if (rc < 0)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error creating updater thread");
+      // LCOV_EXCL_STOP
+    }
+  }
+ 
+  ~Updater()
+  {
+    // Destroy the updater thread.
+    _terminate = true;
+    pthread_join(_updater, NULL);
+  }
 
 private:
-  static SignalHandler<SIGHUP> _sighup_handler;
-  static void* updater_thread(void* p);
-  void updater();
+  static void* updater_thread(void* p)
+  {
+    ((Updater*)p)->updater();
+    return NULL;
+  }
+ 
+  void updater()
+  {
+    LOG_DEBUG("Started updater thread");
+
+    while (!_terminate)
+    {
+      // Wait for the SIGHUP signal.
+      bool rc = _sighup_handler.wait_for_signal();
+
+      // If the signal handler didn't timeout, then call the
+      // update function
+      if (rc)
+      {
+        // LCOV_EXCL_START
+        _func(_pointer);
+        // LCOV_EXCL_STOP
+      }
+    }
+  }
 
   volatile bool _terminate;
-  void (*_func)(void*);
+  std::mem_fun_t<ReturnType, ClassType> _func;
   pthread_t _updater;
-  void* _arg;
+  ClassType* _pointer;
 };
 
 #endif

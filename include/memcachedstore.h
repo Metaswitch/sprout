@@ -59,7 +59,6 @@ extern "C" {
 
 namespace RegData {
 
-class MemchachedStore;
 /// @class RegData::MemcachedAoR
 ///
 /// A memcached-based implementation of the Address of Record class.
@@ -132,9 +131,6 @@ public:
   /// Updates the cluster settings
   void update_view();
   
-  /// Wrapper to allow the function to be called from a pointer
-  static void wrapper_to_update_function(void* pt2Object);
-
 private:
 
   // A copy of this structure is maintained for each worker thread, as
@@ -168,7 +164,7 @@ private:
   static void cleanup_connection(void* p);
 
   // Stores a pointer to an updater object
-  Updater* _updater;
+  Updater<void, MemcachedStore>* _updater;
 
   // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;

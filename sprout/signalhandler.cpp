@@ -1,5 +1,5 @@
 /**
- * @file updater.cpp
+ * @file signalhandler.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,66 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <signal.h>
-#include <errno.h>
+///
 
-#include "log.h"
-#include "utils.h"
-#include "updater.h"
 #include "signalhandler.h"
 
-SignalHandler<SIGHUP> Updater::_sighup_handler;
-
-Updater::Updater(void* pt2Object, void (*func)(void* pt2Object)) :
-  _terminate(false),
-  _func(func),
-  _arg(pt2Object)
-{
-  LOG_DEBUG("Created updater");
-
-  // Do initial configuration.
-  func(pt2Object);
-
-  // Create the thread to handle further changes of view.
-  int rc = pthread_create(&_updater, NULL, &updater_thread, this);
-
-  if (rc < 0)
-  {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error creating updater thread");
-    // LCOV_EXCL_STOP
-  }
-}
-
-Updater::~Updater()
-{
-  // Destroy the updater thread.
-  _terminate = true;
-  pthread_join(_updater, NULL);
-}
-
-void* Updater::updater_thread(void* p)
-{
-  ((Updater*)p)->updater();
-  return NULL;
-}
-
-void Updater::updater()
-{
-  LOG_DEBUG("Started updater thread");
-
-  while (!_terminate)
-  {
-    // Wait for the SIGHUP signal.
-    bool rc = _sighup_handler.wait_for_signal();
-   
-    // If the signal handler didn't timeout, then call the 
-    // update function 
-    if (rc)
-    {
-      // LCOV_EXCL_START
-      _func(_arg);
-      // LCOV_EXCL_STOP
-    }
-  }
-}
+SignalHandler<SIGHUP> _sighup_handler;
