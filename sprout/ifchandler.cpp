@@ -47,6 +47,7 @@ extern "C" {
 #include "constants.h"
 #include "stack.h"
 #include "pjutils.h"
+#include "pjmedia.h"
 
 #include "ifchandler.h"
 
@@ -58,6 +59,13 @@ static bool parse_bool(xml_node<>* node, std::string description);
 static std::string get_first_node_value(xml_node<>* node, std::string name);
 static std::string get_text_or_cdata(xml_node<>* node);
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name);
+static std::string origin_sdp_field_value(pjmedia_sdp_session *session);
+static std::string subject_sdp_field_value(pj_str_t name);
+static std::string connection_sdp_field_value(pjmedia_sdp_conn *conn);
+static std::string bandwidth_sdp_field_value(pjmedia_sdp_bandw *bandw);
+static std::string timer_sdp_field_value(pjmedia_sdp_session *session);
+static std::string attribute_sdp_field_value(pjmedia_sdp_attr *attr);
+static std::string media_sdp_field_value(pjmedia_sdp_media *media);
 
 
 /// Exception thrown internally during interpretation of filter
@@ -137,10 +145,64 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
   if (strcmp("Method", name) == 0)
   {
-    // @@@KSW TODO if node->value() is REGISTER, inspect
-    // spt_node/Extension/RegistrationType (0, 1, or 2 values) and
-    // check to see if they match the registration type.
-    ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
+    // If we have a REGISTER we may need to match on RegistrationType.
+    if ((strcmp("REGISTER", node->value()) == 0) &&
+        (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0))
+    {
+      ret=true;
+      node = node->next_sibling();
+      name = node->name();
+
+      if (strcmp(name, "Extension") == 0)
+      {
+        xml_node<>* reg_type_node = node->first_node("RegistrationType");
+
+        if (reg_type_node)
+        {
+          name = reg_type_node->name();
+          int reg_type = parse_integer(reg_type_node, "registration type", 0, 2);
+
+          // Find expiry value from SIP message if it is present to determine
+          // whether we have a de-registration.
+          pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+          pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+          int expiry = (contact != NULL && contact->expires != -1) ? contact->expires :
+                       (expires != NULL) ? expires->ivalue :
+                       3600;
+
+          switch (reg_type)
+          {
+          case 0: // INITIAL_REGISTRATION
+          {
+            ret = !is_registered && (expiry > 0);
+          }
+          break;
+          case 1: // RE-REGISTRATION
+          {
+            ret = is_registered && (expiry > 0);
+          }
+          break;
+          case 2: // DE-REGISTRATION
+          {
+            ret = is_registered && (expiry == 0);
+          }
+          break;
+          default:
+          // LCOV_EXCL_START Unreachable
+          {
+            LOG_WARNING("Impossible case %d", reg_type);
+            ret = false;
+          }
+          break;
+          // LCOV_EXCL_STOP
+          }
+        }
+      }
+    }
+    else
+    {
+      ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
+    }
   }
   else if (strcmp("SIPHeader", name) == 0)
   {
@@ -238,12 +300,257 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     // LCOV_EXCL_STOP
     }
   }
+  else if (strcmp("RequestURI", name) == 0)
+  {
+    boost::regex req_uri_regex;
+    pjsip_sip_uri* req_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+
+    // Just comparing against the hostport part of the Req URI.
+    std::string hostport = PJUtils::pj_str_to_string(&req_uri->host);
+    if (req_uri->port != 0)
+    {
+      hostport += ":" + boost::lexical_cast<std::string>(req_uri->port);
+    }
+
+    req_uri_regex = boost::regex(get_text_or_cdata(node), boost::regex_constants::no_except);
+    if (req_uri_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Request URI service point trigger");
+    }
+
+    ret = boost::regex_search(hostport, req_uri_regex);
+  }
+  else if (strcmp("SessionDescription", name) == 0)
+  {
+    xml_node<>* spt_line = node->first_node("Line");
+    xml_node<>* spt_content = node->first_node("Content");
+    boost::regex line_regex;
+    boost::regex content_regex;
+    unsigned ii = 0;
+    std::vector<std::string> sdp_line_types = {"o", "s", "c", "b", "t", "a", "m"};
+    std::string field_value;
+
+    if (!spt_line)
+    {
+      throw ifc_error("Missing Line element for SessionDescription service point trigger");
+    }
+
+    line_regex = boost::regex(get_text_or_cdata(spt_line), boost::regex_constants::no_except);
+    if (line_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Line element for Session Description service point trigger");
+    }
+
+    // Check if the message body is SDP.
+    if (msg->body &&
+        (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
+        (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
+    {
+      // Parse the SDP, using a temporary pool.
+      pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "IfcHandler", 1024, 512, NULL);
+      pjmedia_sdp_session *sdp_sess;
+      if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
+      {
+        while ((!ret) && (ii < sdp_line_types.size()))
+        {
+          if (boost::regex_search(sdp_line_types[ii], line_regex))
+          {
+            if (!spt_content)
+            {
+              // We've found a matching line type, and don't have to match on content.
+              ret = true;
+              goto success_label;
+            }
+            else
+            {
+              // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once.
+              if (content_regex.status())
+              {
+                content_regex = boost::regex(get_text_or_cdata(spt_content), boost::regex_constants::no_except);
+                if (content_regex.status())
+                {
+                  throw ifc_error("Invalid regular expression in Content element for Session Description service point trigger");
+                }
+              }
+
+              // Switch on the different SDP line types.
+              switch (ii)
+              {
+                // Session origin.
+                case 0:
+                {
+                  field_value = origin_sdp_field_value(sdp_sess);
+                  LOG_INFO("Origin: %s", field_value.c_str());
+                  if (boost::regex_search(field_value, content_regex))
+                  {
+                    // We've found a matching line.
+                    ret = true;
+                    goto success_label;
+                  }
+                }
+                break;
+
+                // Subject line.
+                case 1:
+                {
+                  field_value = subject_sdp_field_value(sdp_sess->name);
+                  LOG_INFO("Subject: %s", field_value.c_str());
+                  if (boost::regex_search(field_value, content_regex))
+                  {
+                    // We've found a matching line.
+                    ret = true;
+                    goto success_label;
+                  }
+                }
+                break;
+
+                // Connection line.
+                case 2:
+                {
+                  field_value = connection_sdp_field_value(sdp_sess->conn);
+                  LOG_INFO("Connection: %s", field_value.c_str());
+                  if (boost::regex_search(field_value, content_regex))
+                  {
+                    // We've found a matching line.
+                    ret = true;
+                    goto success_label;
+                  }
+
+                  // Check any media connection lines.
+                  for (unsigned jj = 0; jj < sdp_sess->media_count; ++jj)
+                  {
+                    if (sdp_sess->media[jj]->conn)
+                    {
+                      field_value = connection_sdp_field_value(sdp_sess->media[jj]->conn);
+                      LOG_INFO("Connection for Media %d: %s", jj+1, field_value.c_str());
+
+                      if (boost::regex_search(field_value, content_regex))
+                      {
+                        // We've found a matching line.
+                        ret = true;
+                        goto success_label;
+                      }
+                    }
+                  }
+                }
+                break;
+
+                // Bandwidth info.
+                case 3:
+                {
+                  for (unsigned jj = 0; jj < sdp_sess->bandw_count; ++jj)
+                  {
+                    field_value = bandwidth_sdp_field_value(sdp_sess->bandw[jj]);
+                    LOG_INFO("Bandwidth %d: %s", jj+1, field_value.c_str());
+                    if (boost::regex_search(field_value, content_regex))
+                    {
+                      // We've found a matching line.
+                      ret = true;
+                      goto success_label;
+                    }
+                  }
+
+                  // Check any media bandwidth lines.
+                  for (unsigned jj = 0; jj < sdp_sess->media_count; ++jj)
+                  {
+                    for (unsigned kk = 0; kk < sdp_sess->media[jj]->bandw_count; ++kk)
+                    {
+                      field_value = bandwidth_sdp_field_value(sdp_sess->media[jj]->bandw[kk]);
+                      LOG_INFO("Bandwidth %d for Media %d: %s", kk+1, jj+1, field_value.c_str());
+
+                      if (boost::regex_search(field_value, content_regex))
+                      {
+                        // We've found a matching line.
+                        ret = true;
+                        goto success_label;
+                      }
+                    }
+                  }
+
+
+                }
+                break;
+
+                // Session timer.
+                case 4:
+                {
+                  field_value = timer_sdp_field_value(sdp_sess);
+                  LOG_INFO("Timer: %s", field_value.c_str());
+                  if (boost::regex_search(field_value, content_regex))
+                  {
+                    // We've found a matching line.
+                    ret = true;
+                    goto success_label;
+                  }
+                }
+                break;
+
+                // Attribute.
+                case 5:
+                {
+                  // All attribute lines are stored under media lines.  This
+                  // means we'll check some attribute lines multiple times,
+                  // but such is life.
+                  for (unsigned jj = 0; jj < sdp_sess->media_count; ++jj)
+                  {
+                    for (unsigned kk = 0; kk < sdp_sess->media[jj]->attr_count; ++kk)
+                    {
+                      field_value = attribute_sdp_field_value(sdp_sess->media[jj]->attr[kk]);
+                      LOG_INFO("Attr %d for Media %d: %s", kk+1, jj+1, field_value.c_str());
+
+                      if (boost::regex_search(field_value, content_regex))
+                      {
+                        // We've found a matching line.
+                        ret = true;
+                        goto success_label;
+                      }
+                    }
+                  }
+                }
+                break;
+
+                // Media.
+                case 6:
+                {
+                  for (unsigned jj = 0; jj < sdp_sess->media_count; ++jj)
+                  {
+                    field_value = media_sdp_field_value(sdp_sess->media[jj]);
+                    LOG_INFO("Media %d: %s", jj+1, field_value.c_str());
+                    if (boost::regex_search(field_value, content_regex))
+                    {
+                      // We've found a matching line.
+                      ret = true;
+                      goto success_label;
+                    }
+                  }
+                }
+                break;
+
+                default:
+                // LCOV_EXCL_START Unreachable
+                {
+                  LOG_WARNING("Impossible case %d", ii);
+                }
+                break;
+                // LCOV_EXCL_STOP
+              }
+            }
+          }
+          ii++;
+        }
+      }
+
+      // Tidy up.
+      pj_pool_release(tmp_pool);
+    }
+  }
   else
   {
     LOG_WARNING("Unimplemented iFC service point trigger class: %s", name);
     ret = false;
   }
 
+success_label:
   LOG_DEBUG("SPT class %s: result %s", name, ret ? "true" : "false");
   return ret;
 }
@@ -673,3 +980,82 @@ static bool parse_bool(xml_node<>* node, std::string description)
   return ((strcmp("true", nptr) == 0) || (strcmp("1", nptr) == 0));
 }
 
+// Returns the value of a origin (o=) line in SDP.
+static std::string origin_sdp_field_value(pjmedia_sdp_session *session)
+{
+  std::string origin_string = PJUtils::pj_str_to_string(&session->origin.user) + " " +
+                              boost::lexical_cast<std::string>(session->origin.id) + " " +
+                              boost::lexical_cast<std::string>(session->origin.version) + " " +
+                              PJUtils::pj_str_to_string(&session->origin.net_type) + " " +
+                              PJUtils::pj_str_to_string(&session->origin.addr_type) + " " +
+                              PJUtils::pj_str_to_string(&session->origin.addr);
+
+  return origin_string;
+}
+
+// Returns the value of a subject (s=) line in SDP.
+static std::string subject_sdp_field_value(pj_str_t name)
+{
+  std:: string subject_string = PJUtils::pj_str_to_string(&name);
+
+  return subject_string;
+}
+
+// Returns the value of a connection (c=) line in SDP.
+static std::string connection_sdp_field_value(pjmedia_sdp_conn *conn)
+{
+  std:: string connection_string = PJUtils::pj_str_to_string(&conn->net_type) + " " +
+                                   PJUtils::pj_str_to_string(&conn->addr_type) + " " +
+                                   PJUtils::pj_str_to_string(&conn->addr);
+
+  return connection_string;
+}
+
+// Returns the value of a bandwidth (b=) line in SDP.
+static std::string bandwidth_sdp_field_value(pjmedia_sdp_bandw *bandw)
+{
+  std::string bandw_string = PJUtils::pj_str_to_string(&bandw->modifier) + ":" +
+                             boost::lexical_cast<std::string>(bandw->value);
+
+  return bandw_string;
+}
+
+// Returns the value of a timer (t=) line in SDP.
+static std::string timer_sdp_field_value(pjmedia_sdp_session *session)
+{
+  std::string timer_string = boost::lexical_cast<std::string>(session->time.start) + " " +
+                             boost::lexical_cast<std::string>(session->time.stop);
+
+  return timer_string;
+}
+
+// Returns the value of an attribute (a=) line in SDP.
+static std::string attribute_sdp_field_value(pjmedia_sdp_attr *attr)
+{
+  std::string attr_string = PJUtils::pj_str_to_string(&attr->name);
+  if (attr->value.slen)
+  {
+    attr_string += ":" + PJUtils::pj_str_to_string(&attr->value);
+  }
+  return attr_string;
+}
+
+// Returns the value of a media (m=) line in SDP.
+static std::string media_sdp_field_value(pjmedia_sdp_media *media)
+{
+  std::string media_string = PJUtils::pj_str_to_string(&media->desc.media) + " " + 
+                             boost::lexical_cast<std::string>(media->desc.port);
+  if (media->desc.port_count >= 2)
+  {
+    media_string += "/" + boost::lexical_cast<std::string>(media->desc.port_count);
+  }
+
+  media_string += " " + PJUtils::pj_str_to_string(&media->desc.transport);
+
+  for (unsigned kk = 0; kk < media->desc.fmt_count; ++kk)
+  {
+    media_string += " " + PJUtils::pj_str_to_string(&media->desc.fmt[kk]);
+  }
+
+  return media_string;
+}
