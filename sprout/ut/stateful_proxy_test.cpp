@@ -133,7 +133,8 @@ namespace SP
       //string requri = _route.empty() ? target : _route;
       //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
       string requri = target;
-      string route = _route.empty() ? "" : _route.append("\r\n");
+      string route = _route;
+      route = route.empty() ? "" : route.append("\r\n");
 
       int n = snprintf(buf, sizeof(buf),
                        "%1$s %9$s SIP/2.0\r\n"
@@ -652,9 +653,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "INVITE";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "INVITE";
 
   // Check originating.
@@ -705,9 +706,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "PRACK";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "PRACK";
 
   prack = pop_txdata();
@@ -765,9 +766,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "ACK";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "ACK";
 
   free_txdata();
@@ -787,7 +788,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
-  // because we handle these retransmissions statelessly and hence don't have any info on 
+  // because we handle these retransmissions statelessly and hence don't have any info on
   // trust boundary handling.
   EXPECT_EQ("", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE) (rexmt)";
   EXPECT_EQ("", get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE) (rexmt)";
@@ -809,9 +810,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "BYE";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "BYE";
 
   // ---------- Send a reply to that X<-S
@@ -860,9 +861,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "INVITE (#2)";
 
   invite = pop_txdata();
