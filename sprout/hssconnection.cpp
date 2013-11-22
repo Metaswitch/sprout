@@ -101,6 +101,35 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 }
 
 
+/// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
+Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_identity,
+                                            const std::string& public_user_identity,
+                                            SAS::TrailId trail)
+{
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  std::string path = "/impi/" +
+                     Utils::url_escape(private_user_identity) +
+                     "/av";
+  if (!public_user_identity.empty())
+  {
+    path += "?public_id=" + Utils::url_escape(public_user_identity);
+  }
+
+  Json::Value* rc = get_json_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latency_stat.accumulate(latency_us);
+    _digest_latency_stat.accumulate(latency_us);
+  }
+
+  return rc;
+}
+
+
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
 Json::Value* HSSConnection::get_json_object(const std::string& path,
                                             SAS::TrailId trail)
@@ -128,8 +157,8 @@ Json::Value* HSSConnection::get_json_object(const std::string& path,
 
 /// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
 HTTPCode HSSConnection::get_xml_object(const std::string& path,
-                                   rapidxml::xml_document<>*& root,
-                                   SAS::TrailId trail)
+                                       rapidxml::xml_document<>*& root,
+                                       SAS::TrailId trail)
 {
   std::string raw_data;
 

@@ -65,6 +65,9 @@ public:
   Json::Value* get_digest_data(const std::string& private_user_id,
                                const std::string& public_user_id,
                                SAS::TrailId trail);
+  Json::Value* get_auth_vector(const std::string& private_user_id,
+                               const std::string& public_user_id,
+                               SAS::TrailId trail);
   long get_subscription_data(const std::string& public_user_identity,
                              const std::string& private_user_identity,
                              std::map<std::string, Ifcs >& service_profiles,
