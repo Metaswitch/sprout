@@ -479,6 +479,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
       target = NULL;
       return;
     }
+
+      // Sprout Record-Routes itself here.
+    LOG_DEBUG("Single Record-Route");
+    PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
   }
 
   // We now know various details of this transaction:
@@ -1276,13 +1280,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       // the ingress and egress hops.
       PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, "TCP", stack_data.untrusted_port, NULL, stack_data.public_host);   // @TODO - transport type?
-    }
-    else
-    {
-      // Message is being routed between a third-party edge proxy and Sprout (or vice-
-      // versa).  Just do a single Record-Route, using the cluster address.
-      LOG_DEBUG("Single Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.bono_cluster_domain);
     }
 
     // Decrement references on flows as we have finished with them.
