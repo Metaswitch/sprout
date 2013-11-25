@@ -564,11 +564,13 @@ std::string IfcHandler::served_user_from_msg(
   {
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
+    LOG_DEBUG("Originating case - looking in P-Served-User header");
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
         pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
+      LOG_DEBUG("Found P-Served-User header");
       // Remove parameters before parsing the URI.  If there are URI parameters,
       // the URI must be enclosed in angle brackets, so we can either remove
       // everything after the first closing angle bracket, or everything after
@@ -581,6 +583,8 @@ std::string IfcHandler::served_user_from_msg(
       if (end != NULL)
       {
         served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
+        LOG_DEBUG("Removing parameters from P-Served-User header: length is now %d",
+                  served_user_hdr->hvalue.slen);
       }
 
       // Extract the field to a null terminated string
@@ -602,11 +606,13 @@ std::string IfcHandler::served_user_from_msg(
     {
       // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
       // header.
+      LOG_DEBUG("Looking in P-Asserted-Identity header");
       pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
                                            pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
 
       if (asserted_id_hdr != NULL)
       {
+        LOG_DEBUG("Found URI in P-Asserted-Identity header");
         uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
       }
     }
@@ -616,12 +622,16 @@ std::string IfcHandler::served_user_from_msg(
   {
     if (session_case.is_originating())
     {
-      // For originating services, the user is parsed from the from header.
+      // For originating services, the user is parsed from the from
+      // header.
+      LOG_DEBUG("Originating case - parsing user from From header");
       uri = PJSIP_MSG_FROM_HDR(msg)->uri;
     }
     else
     {
-      // For terminating services, the user is parsed from the request URI.
+      // For terminating services, the user is parsed from the request
+      // URI.
+      LOG_DEBUG("Terminating case - parsing user from request URI");
       uri = msg->line.req.uri;
     }
   }
@@ -632,7 +642,10 @@ std::string IfcHandler::served_user_from_msg(
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
+    LOG_DEBUG("URI is locally-hosted: converting the URI into an AoR");
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  } else {
+    LOG_DEBUG("URI is not locally hosted");
   }
 
   return user;

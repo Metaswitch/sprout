@@ -183,6 +183,8 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 /// password before rendering the URI to a string.
 std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 {
+  std::string input_uri = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)uri);
+  std::string returned_aor;
   pjsip_sip_uri aor;
   memcpy((char*)&aor, (char*)uri, sizeof(pjsip_sip_uri));
   aor.passwd.slen = 0;
@@ -195,7 +197,9 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.maddr_param.slen = 0;
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
-  return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  LOG_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
+  return returned_aor;
 }
 
 
