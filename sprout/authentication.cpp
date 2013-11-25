@@ -96,16 +96,6 @@ static AnalyticsLogger* analytics;
 pjsip_auth_srv auth_srv;
 
 
-typedef struct
-{
-
-
-} AuthVector;
-
-
-pthread_mutex _av_map_lock;
-std::map<std::string, AuthVector> _av_map;
-
 
 pj_status_t user_lookup(pj_pool_t *pool,
                         const pjsip_auth_lookup_cred_param *param,
@@ -184,12 +174,7 @@ get_auth_vector(pjsip_rx_data* rdata)
 
   if (data != NULL)
   {
-    struct av;
-    av.private_id = impi;
-    av.public_id = impu;
-    av.challenge = data->get("ch
-
-  std::string digest = data->get("digest_ha1", "" ).asString();
+    std::string realm = data->get("digest_ha1", "" ).asString();
 
 
 
