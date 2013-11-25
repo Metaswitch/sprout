@@ -235,6 +235,9 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
   }
 }
 
+// Determine the default private ID for a public ID contained in a URI.  This
+// is calculated as specified by the 3GPP specs by effectively stripping the
+// scheme.
 std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
 {
   std::string id;
