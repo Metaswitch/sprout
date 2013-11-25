@@ -95,10 +95,12 @@ get_settings()
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
+        authentication=Y
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
         [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+        [ "$authentication" != "Y" ] || authentication_arg="--authentication"
 }
 
 #
@@ -139,6 +141,7 @@ do_start()
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
+                     $authentication_arg
                      -a $log_directory
                      -F $log_directory
                      -L $log_level"
