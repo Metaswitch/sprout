@@ -583,7 +583,13 @@ std::string IfcHandler::served_user_from_msg(
         served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
       }
 
-      uri = pjsip_parse_uri(pool, served_user_hdr->hvalue.ptr, served_user_hdr->hvalue.slen, 0);
+      // Extract the field to a null terminated string
+      // first since we can't guarantee it is null terminated in the message,
+      // and pjsip_parse_uri requires a null terminated string.
+      pj_str_t hvalue;
+      pj_strdup_with_null(pool, &hvalue, &served_usr_hdr->hvalue);
+
+      uri = pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
 
       if (uri == NULL)
       {
