@@ -219,7 +219,7 @@ TEST_F(HssConnectionTest, SimpleLocation)
   delete actual;
 }
 
-TEST_F(HssConnectionTest, FullLocation)
+TEST_F(HssConnectionTest, LocationWithAuthType)
 {
   Json::Value* actual = _hss.get_location_information_request("pubid44", "", "auth-type", 0);
   ASSERT_TRUE(actual != NULL);
@@ -227,7 +227,7 @@ TEST_F(HssConnectionTest, FullLocation)
   delete actual;
 }
 
-TEST_F(HssConnectionTest, LocationWithAuthType)
+TEST_F(HssConnectionTest, FullLocation)
 {
   Json::Value* actual = _hss.get_location_information_request("pubid44", "true", "auth-type", 0);
   ASSERT_TRUE(actual != NULL);
