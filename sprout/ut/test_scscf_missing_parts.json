@@ -1,0 +1,40 @@
+{
+    "s-cscfs" : [
+        {   "server" : "cw-scscf1.cw-ngv.com",
+            "priority" : 10,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf2.cw-ngv.com",
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf3.cw-ngv.com",
+            "priority" : 0,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf4.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100
+        },
+        {   "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf5.cw-ngv.com",
+            "priority" : "0",
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf6.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : 123
+        },
+        {   "server" : "cw-scscf7.cw-ngv.com",
+            "priority" : 0,
+            "weight" : [100],
+            "capabilities" : [123, 432]
+        }
+    ]
+}
