@@ -49,6 +49,7 @@ extern "C" {
 #include <queue>
 #include <string>
 #include <boost/algorithm/string/predicate.hpp>
+#include <json/reader.h>
 
 #include "log.h"
 #include "stack.h"
@@ -58,6 +59,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "hssconnection.h"
 #include "authentication.h"
+#include "avstore.h"
 
 
 //
@@ -88,6 +90,11 @@ pjsip_module mod_auth =
 static HSSConnection* hss;
 
 
+// AV store used to store Authentication Vectors while waiting for the
+// client to respond to a challenge.
+static AVStore* av_store;
+
+
 // Analytics logger.
 static AnalyticsLogger* analytics;
 
@@ -108,52 +115,59 @@ pj_status_t user_lookup(pj_pool_t *pool,
   SAS::TrailId trail = get_trail(rdata);
 
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
-  Json::Value* data;
 
-  // The private user identity comes from the username field of the
-  // Authentication header, and the public user identity from the request-URI
-  // of the request.
+  // Get the impi and the nonce.  There must be an authorization header otherwise
+  // PJSIP wouldn't have called this method.
   std::string private_id = PJUtils::pj_str_to_string(acc_name);
-  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
+  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+  std::string nonce = PJUtils::pj_str_to_string(auth_hdr->digest.nonce);
 
-  LOG_DEBUG("Retrieve digest for user %s/%s in realm %.*s",
-            private_id.c_str(), public_id.c_str(),
-            realm->slen, realm->ptr);
+  // Get the Authentication Vector from the store.
+  Json::Value* av = av_store->get_av(impi, nonce);
 
-  // If no homestead is attached, return that the account could not be found.
-  if (hss != NULL)
+  if (av != NULL)
   {
-    data = hss->get_digest_data(private_id, public_id, trail);
-
-    if (data != NULL)
+    pj_strdup(pool, &cred_info->realm, realm);
+    pj_cstr(&cred_info->scheme, "digest");
+    pj_strdup(pool, &cred_info->username, acc_name);
+    if (av["aka"].isObject())
     {
-      std::string digest = data->get("digest_ha1", "" ).asString();
-      if (digest != "")
-      {
-        LOG_DEBUG("Digest for user %.*s in realm %.*s = %s",
-                  acc_name->slen, acc_name->ptr,
-                  realm->slen, realm->ptr,
-                  digest.c_str());
-        pj_strdup(pool, &cred_info->realm, realm);
-        pj_cstr(&cred_info->scheme, "digest");
-        pj_strdup(pool, &cred_info->username, acc_name);
-        cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-        pj_strdup2(pool, &cred_info->data, digest.c_str());
-        status = PJ_SUCCESS;
-      }
-      delete data;
+      // AKA authentication, so response is plain-text password.
+      cred_info->data_type = PJSIP_CRED_DATA_PLAINTEXT;
+      pj_strdup2(pool, &cred_info->data, av["aka"]["response"].asCString());
+      status = PJ_SUCCESS;
     }
+    else if (av["digest"].isObject())
+    {
+      // AKA authentication, so response is plain-text password.
+      cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
+      pj_strdup2(pool, &cred_info->data, av["digest"]["ha1"].asCString());
+      status = PJ_SUCCESS;
+    }
+    delete av;
   }
 
   return status;
 }
 
 
-get_auth_vector(pjsip_rx_data* rdata)
+Json::Value* get_auth_vector(const std::string& impi, const std::string& impu)
+{
+  // Get an authentication vector for the challenge.
+  Json::Value* data = hss->get_auth_vector(impi, impu, autn, get_trail(rdata));
+  return data;
+}
+
+
+void create_challenge(pjsip_authorization_hdr* auth_hdr,
+                      pjsip_rx_data* rdata,
+                      pjsip_tx_data* tdata)
 {
   // Get the public and private identities from the request.
   std::string impi;
   std::string impu;
+  std::string nonce;
 
   impu = PJUtils::public_id_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
   if ((auth_hdr != NULL) &&
@@ -169,16 +183,72 @@ get_auth_vector(pjsip_rx_data* rdata)
     impi = impu.substr(4);
   }
 
-  // Get an authentication vector for the challenge.
-  Json::Value* data = hss->get_auth_vector(impi, impu, autn, get_trail(rdata));
+  // Get the Authentication Vector from the HSS.
+  Json::Value* av = hss->get_auth_vector(impi, impu, "", get_trail(rdata));
 
-  if (data != NULL)
+  if (av != NULL)
   {
-    std::string realm = data->get("digest_ha1", "" ).asString();
+    // Retrieved a valid authentication vector, so generate the challenge.
+    char buf[16];
+    pj_str_t random;
+    random.ptr = buf;
+    random.slen = sizeof(buf);
 
+    pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
 
+    hdr->scheme = STR_DIGEST;
+    pj_strdup(tdata->pool, hdr->challenge.digest.realm, auth_srv->realm);
 
+    if (av["aka"].isObject())
+    {
+      // AKA authentication.
+      Json::Value* aka = &av["aka"];
+      hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
+      nonce = aka["challenge"].asString();
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
+      pj_create_random_string(buf, sizeof(buf));
+      pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
+      hdr->challenge.digest.qop = STR_AUTH;
+      hdr->stale = PJ_FALSE;
 
+      // Add the cryptography key parameter.
+      pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
+      ck_param->name = STR_CK;
+      pj_strdup2(tdata->pool, &ck_param, aka["cryptkey"].asCString());
+      pj_list_insert_before(&hdr->credential.common.other_param, ck_param);
+
+      // Add the integrity key parameter.
+      pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
+      ik_param->name = STR_IK;
+      pj_strdup2(tdata->pool, &ik_param, aka["integritykey"].asCString());
+      pj_list_insert_before(&hdr->credential.common.other_param, ik_param);
+    }
+    else
+    {
+      // Digest authentication.
+      Json::value digest = &av["digest"];
+      hdr->challenge.digest.algorithm = STR_MD5;
+      pj_create_random_string(buf, sizeof(buf));
+      nonce.assign(buf, sizeof(buf));
+      pj_strdup(tdata->pool, &hdr->challenge.digest.nonce, &random);
+      pj_create_random_string(buf, sizeof(buf));
+      pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
+      hdr->challenge.digest.qop = STR_AUTH;
+      hdr->stale = PJ_FALSE;
+    }
+
+    // Write the authentication vector (as a JSON string) into the AV store.
+    av_store->set(impi, nonce, av->asString());
+
+    delete av;
+  }
+  else
+  {
+    LOG_DEBUG("Failed to get Authentication vector");
+    tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
+  }
+
+  return;
 }
 
 
@@ -304,16 +374,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       return PJ_TRUE;
     }
 
-    // Get the public and private user identities from the request.
-    get_auth_vector(rdata);
-    status = pjsip_auth_srv_challenge(&auth_srv, NULL, NULL, NULL, PJ_FALSE, tdata);
-    if (status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Error building challenge response headers, %s",
-                PJUtils::pj_status_to_string(status).c_str());
-      tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-    }
-
+    create_challenge(auth_hdr, rdata, tdata);
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
   else
@@ -337,186 +398,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
-  }
-
-
-
-
-
-
-  if (sc != PJSIP_SC_FORBIDDEN)
-  {
-    // There is either no authentication header, or no response in the header,
-    // so we must issue a challenge.  First step is to get the appropriate
-    // Authentication Vector from the HSS.
-
-
-
-status = pjsip_auth_srv_challenge(&auth_srv, NULL, NULL, NULL, PJ_FALSE, tdata);
-if (status != PJ_SUCCESS)
-{
-  LOG_ERROR("Error building challenge response headers, %s",
-            PJUtils::pj_status_to_string(status).c_str());
-  tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-}
-
-status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-
-
-
-
-  if ((auth_hdr == NULL) ||
-      (auth_hdr->credential.digest.response.slen == 0))
-  {
-    // There is either no authentication header, or no response in the header,
-    // so we must issue a challenge.  First step is to get the appropriate
-    // Authentication Vector from the HSS.
-    std::string impi;
-    std::string impu;
-
-    impu = PJUtils::public_id_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
-    if ((auth_hdr != NULL) &&
-        (auth_hdr->digest.username.slen != 0))
-    {
-      // private user identity is supplied in the Authorization header so use it
-      impi = PJUtils::pj_str_to_string(&auth_hdr->digest.username);
-    }
-    else
-    {
-      // private user identity not supplied, so construct a default from the
-      // public user identity by stripping the sip: prefix.
-      impi = impu.substr(4);
-    }
-
-    Json::Value* data = hss->get_auth_vector(impi, impu, get_trail(rdata));
-
-
-
-
-
-   if (auth_hdr->credential.digest.response.slen == 0)
-  {
-    // There's no response in the header, so remove it to ensure we issue
-    // a challenge.
-    LOG_DEBUG("Remove authorization header without response field");
-    pj_list_erase(auth_hdr);
-  }
-
-  int sc;
-  LOG_DEBUG("Verify authentication information in request");
-  status = pjsip_auth_srv_verify(&auth_srv, rdata, &sc);
-  if (status == PJ_SUCCESS)
-  {
-    // The authentication information in the request was verified, so let
-    // the message through.
-    LOG_DEBUG("Request authenticated successfully");
-    return PJ_FALSE;
-
-  }
-  else
-  {
-    // The message either has insufficient authentication information, or
-    // has failed authentication.  In either case, the message will be
-    // absorbed by the authentication module, so we need to add SAS markers
-    // so the trail will become searchable.
-    SAS::TrailId trail = get_trail(rdata);
-    SAS::Marker start_marker(trail, SASMarker::INIT_TIME, 1u);
-    SAS::report_marker(start_marker);
-    if (rdata->msg_info.from)
-    {
-      SAS::Marker calling_dn(trail, SASMarker::CALLING_DN, 1u);
-      pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
-      calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
-      SAS::report_marker(calling_dn);
-    }
-
-    if (rdata->msg_info.to)
-    {
-      SAS::Marker called_dn(trail, SASMarker::CALLED_DN, 1u);
-      pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-      called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
-      SAS::report_marker(called_dn);
-    }
-
-    if (rdata->msg_info.cid)
-    {
-      SAS::Marker cid(trail, SASMarker::SIP_CALL_ID, 1u);
-      cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
-    }
-
-    if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
-    {
-      // Discard unauthenticated ACK request since we can't reject or challenge it.
-      LOG_VERBOSE("Discard unauthenticated ACK request");
-    }
-    else if (rdata->msg_info.msg->line.req.method.id == PJSIP_CANCEL_METHOD)
-    {
-      // Reject an unauthenticated CANCEL as it cannot be challenged (see RFC3261
-      // section 22.1).
-      LOG_VERBOSE("Reject unauthenticated CANCEL request");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_FORBIDDEN,
-                                 NULL,
-                                 NULL,
-                                 NULL);
-    }
-    else if (status == PJSIP_EAUTHNOAUTH)
-    {
-      // No authorization information in request, so challenge it.
-      LOG_DEBUG("No authentication information in request, so reject with challenge");
-      pjsip_tx_data* tdata;
-      status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
-      if (status != PJ_SUCCESS)
-      {
-        LOG_ERROR("Error building challenge response, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_INTERNAL_SERVER_ERROR,
-                                   NULL,
-                                   NULL,
-                                   NULL);
-        return PJ_TRUE;
-      }
-
-      status = pjsip_auth_srv_challenge(&auth_srv, NULL, NULL, NULL, PJ_FALSE, tdata);
-      if (status != PJ_SUCCESS)
-      {
-        LOG_ERROR("Error building challenge response headers, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-      }
-
-      status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-    }
-    else
-    {
-      // Authentication failed.
-      LOG_ERROR("Authentication failed, %s",
-                PJUtils::pj_status_to_string(status).c_str());
-      if (analytics != NULL)
-      {
-        analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
-                                PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
-      }
-
-      // @TODO - need more diagnostics here so we can identify and flag
-      // attacks.
-
-      // Reject the request.
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 sc,
-                                 NULL,
-                                 NULL,
-                                 NULL);
-    }
-
-    // Add a SAS end marker
-    SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
-    SAS::report_marker(end_marker);
   }
 
   return PJ_TRUE;
@@ -544,6 +425,9 @@ pj_status_t init_authentication(const std::string& realm_name,
   params.lookup2 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
+
+  // Create the AV store.
+  av_store = new AVStore();
 
   return status;
 }

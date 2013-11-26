@@ -104,6 +104,7 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
 Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_identity,
                                             const std::string& public_user_identity,
+                                            const std::string& autn,
                                             SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -116,8 +117,12 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
   {
     path += "?public_id=" + Utils::url_escape(public_user_identity);
   }
+  if (!autn.empty())
+  {
+    path += "?autn=" + Utils::url_escape(autn);
+  }
 
-  Json::Value* rc = get_json_object(path, trail);
+  Json::Value* av = get_json_object(path, trail);
 
   unsigned long latency_us;
   if (stopWatch.stop(latency_us))
@@ -126,7 +131,40 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
     _digest_latency_stat.accumulate(latency_us);
   }
 
-  return rc;
+  if (av != NULL)
+  {
+    // Check the AV is well formed.
+    if ((av["aka"].isObject()) &&
+        ((!av["aka"]["challenge"].isString()) ||
+         (!av["aka"]["response"].isString()) ||
+         (!av["aka"]["cryptkey"].isString()) ||
+         (!av["aka"]["integritykey"].isString())))
+    {
+      // Malformed AKA entry
+      LOG_ERROR("Badly formed AKA authentication vector for %d\n%s",
+                private_user_identity.c_str(), av.toStyledString().c_str());
+      delete av;
+      av = NULL;
+    }
+    else if ((av["digest"].isObject()) &&
+             (av["digest"]["realm"].isString()) &&
+             (av["digest"]["qop"].isString()) &&
+             (av["digest"]["ha1"].isString()))
+    {
+      // Malformed digest entry
+      LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
+                private_user_identity.c_str(), av.toStyledString().c_str());
+      delete av;
+      av = NULL;
+    }
+  }
+  else
+  {
+    LOG_ERROR("Failed to get Authentication Vector for %s",
+              private_user_identity.c_str());
+  }
+
+  return av;
 }
 
 

@@ -30,6 +30,7 @@ TARGET_SOURCES := logger.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
                   memcachedstoreupdater.cpp \
+									avstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
@@ -50,7 +51,7 @@ TARGET_SOURCES := logger.cpp \
                   quiescing_manager.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
-                  counter.cpp 
+                  counter.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -257,10 +258,10 @@ vg: build_test | $(TEST_OUT_DIR)
 	-valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
-# Check whether there were any errors from valgrind. Output to screen any errors found, 
-# and details of where to find the full logs. 
+# Check whether there were any errors from valgrind. Output to screen any errors found,
+# and details of where to find the full logs.
 # The output file will contain <error><kind>ERROR</kind></error>, or 'XPath set is empty'
-# if there are no errors. 
+# if there are no errors.
 .PHONY: vg-check
 vg-check: vg
 	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \

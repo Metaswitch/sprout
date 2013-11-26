@@ -1,70 +1,45 @@
+/**
+ * @file avstore.h  Definition of class for storing Authentication Vectors
+ *
+ * Project Clearwater - IMS in the Cloud
+ * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, either version 3 of the License, or (at your
+ * option) any later version, along with the "Special Exception" for use of
+ * the program along with SSL, set forth below. This program is distributed
+ * in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+ * A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details. You should have received a copy of the GNU General Public
+ * License along with this program.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * The author can be reached by email at clearwater@metaswitch.com or by
+ * post at Metaswitch Networks Ltd, 100 Church St, Enfield EN2 6BQ, UK
+ *
+ * Special Exception
+ * Metaswitch Networks Ltd  grants you permission to copy, modify,
+ * propagate, and distribute a work formed by combining OpenSSL with The
+ * Software, or a work derivative of such a combination, even if such
+ * copying, modification, propagation, or distribution would otherwise
+ * violate the terms of the GPL. You must comply with the GPL in all
+ * respects for all of the code used other than OpenSSL.
+ * "OpenSSL" means OpenSSL toolkit software distributed by the OpenSSL
+ * Project and licensed under the OpenSSL Licenses, or a work based on such
+ * software and licensed under the OpenSSL Licenses.
+ * "OpenSSL Licenses" means the OpenSSL License and Original SSLeay License
+ * under which the OpenSSL Project distributes the OpenSSL toolkit software,
+ * as those licenses appear in the file LICENSE-OPENSSL.
+ */
 
+#ifndef AVSTORE_H_
+#define AVSTORE_H_
 
-/// Generic class for holding Authentication Vectors.
-class AuthVector
-{
-public:
-  typedef enum {SIP_DIGEST, DIGEST_AKAv1_MD5} Scheme;
-
-  Scheme scheme() { return _scheme; };
-
-private:
-  Scheme _scheme;
-}
-
-
-/// Digest Authentication Vector
-class AuthVectorDigest : public AuthVector;
-{
-public:
-  AuthVectorDigest(std::string realm,
-                   std::string qop,
-                   std::string ha1) :
-    _scheme(SIP_DIGEST),
-    _realm(realm)
-    _qop(qop),
-    _ha1(ha1)
-  {
-  }
-
-  ~AuthVectorDigest()
-  {
-  }
-
-  const std::string& realm() { return _realm; };
-  const std::string& qop() { return _qop; };
-  const std::string& ha1() { return _ha1; };
-
-private:
-  std::string _realm;
-  std::string _qop;
-  std::string _ha1;
-}
-
-
-/// AKA Authentication Vector
-class AuthVectorAKA
-{
-public:
-  AuthVectorAKA(std::string challenge,
-                std::string response) :
-    _scheme(DIGEST_AKAv1_MD5),
-    _challenge(challenge),
-    _response(response)
-  {
-  }
-
-  ~AuthVector()
-  {
-  }
-
-  const std::string& challenge() { return _challenge; };
-  const std::string& response() { return _response; };
-
-private:
-  std::string _challenge;
-  std::string _response;
-};
+#include <map>
+#include <pthreads.h>
+#include <json/reader.h>
 
 class AvStore
 {
@@ -74,12 +49,14 @@ public:
 
   void set_av(const std::string& impi,
               const std::string& nonce,
-              AuthVector* av);
+              const std::string& av);
 
-  AuthVector* get_av(const std::string& impi,
+  std::string get_av(const std::string& impi,
                      const std::string& nonce);
 
 private:
   pthread_mutex_lock* _av_map_lock;
   std::map<std::string, std::string> _av_map;
 }
+
+#endif
