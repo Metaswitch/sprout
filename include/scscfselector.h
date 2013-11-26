@@ -1,5 +1,5 @@
 /**
-* @file scscfselector.h class definition for an BGCF service provider
+* @file scscfselector.h
 *
 * Project Clearwater - IMS in the Cloud
 * Copyright (C) 2013 Metaswitch Networks Ltd
