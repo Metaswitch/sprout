@@ -527,6 +527,7 @@ std::string IfcHandler::served_user_from_msg(
 {
   pjsip_uri* uri = NULL;
   std::string user;
+  std::string uri_string;
 
   // For originating:
   //
@@ -636,8 +637,11 @@ std::string IfcHandler::served_user_from_msg(
     }
   }
 
+  uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
+  LOG_DEBUG("URI retrieved is %s", uri_string.c_str());
   // Get the URI if it was encoded within a name-addr.
   uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
+  LOG_DEBUG("URI is %s after name-addr decoding", uri_string.c_str());
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))

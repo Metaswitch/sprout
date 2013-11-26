@@ -55,9 +55,21 @@ extern "C" {
 /// Utility to determine if this URI belongs to the home domain.
 pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-      (pj_stricmp(&((pjsip_sip_uri*)uri)->host, &stack_data.home_domain)==0))
+  pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
+  LOG_DEBUG("Comparing '%.*s' (host in URI) with '%.*s' (home domain)",
+            host_from_uri.slen,
+            host_from_uri.ptr,
+            stack_data.home_domain.slen,
+            stack_data.home_domain.ptr);
+  if (!(PJSIP_URI_SCHEME_IS_SIP(uri)))
   {
+    LOG_INFO("URI scheme is not SIP - treating as not locally hosted");
+  }
+  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+      (pj_stricmp(&host_from_uri,
+                  &stack_data.home_domain)==0))
+  {
+    LOG_DEBUG("Host matches");
     return PJ_TRUE;
   }
   return PJ_FALSE;
@@ -74,12 +86,22 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
     unsigned i;
     for (i=0; i<stack_data.name_cnt; ++i)
     {
+       LOG_DEBUG("Comparing '%.*s' (host in URI) with '%.*s' (local alias)",
+            host.slen,
+            host.ptr,
+            stack_data.name[i].slen,
+            stack_data.name[i].ptr);
       if (pj_stricmp(&host, &stack_data.name[i])==0)
       {
         /* Match */
+        LOG_DEBUG("Host matches");
         return PJ_TRUE;
       }
     }
+  }
+  else
+  {
+    LOG_INFO("URI scheme is not SIP - treating as not locally hosted");
   }
 
   /* Doesn't match */
