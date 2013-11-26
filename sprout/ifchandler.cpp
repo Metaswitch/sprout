@@ -574,12 +574,16 @@ std::string IfcHandler::served_user_from_msg(
       LOG_DEBUG("Found P-Served-User header");
       // Remove parameters before parsing the URI.  If there are URI parameters,
       // the URI must be enclosed in angle brackets, so we can either remove
-      // everything after the first closing angle bracket, or everything after
-      // the first semo-colon.
+      // everything after the first closing angle bracket (but not the
+      // bracket itself), or the first semi-colon and everything after it.
       char* end = pj_strchr(&served_user_hdr->hvalue, '>');
       if (end == NULL)
       {
         end = pj_strchr(&served_user_hdr->hvalue, ';');
+        if (end != NULL)
+        {
+          end = end - 1;   // Remove the semicolon too
+        }
       }
       if (end != NULL)
       {
@@ -592,7 +596,7 @@ std::string IfcHandler::served_user_from_msg(
       // first since we can't guarantee it is null terminated in the message,
       // and pjsip_parse_uri requires a null terminated string.
       pj_str_t hvalue;
-      pj_strdup_with_null(pool, &hvalue, &served_usr_hdr->hvalue);
+      pj_strdup_with_null(pool, &hvalue, &served_user_hdr->hvalue);
 
       uri = pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
 
