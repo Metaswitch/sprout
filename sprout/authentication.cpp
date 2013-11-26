@@ -129,16 +129,16 @@ pj_status_t user_lookup(pj_pool_t *pool,
     pj_strdup(pool, &cred_info->realm, realm);
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
-    if ((*av)["aka"].isObject())
+    if (av->isMember("aka"))
     {
       // AKA authentication, so response is plain-text password.
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
       pj_strdup2(pool, &cred_info->data, (*av)["aka"]["response"].asCString());
       status = PJ_SUCCESS;
     }
-    else if ((*av)["digest"].isObject())
+    else if (av->isMember("digest"))
     {
-      // AKA authentication, so response is plain-text password.
+      // Digest authentication, so ha1 field is hashed password.
       cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
       pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
       status = PJ_SUCCESS;
@@ -158,6 +158,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impi;
   std::string impu;
   std::string nonce;
+  std::string autn;
 
   impu = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
   if ((auth_hdr != NULL) &&
@@ -175,8 +176,19 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
 
+  // Check for an AUTN parameter indicating a resync is required.
+  pjsip_param* p = auth_hdr->credential.digest.other_param.next;
+  while ((p != NULL) && (p != &auth_hdr->credential.digest.other_param))
+  {
+    if (pj_stricmp(&p->name, &STR_AUTN) == 0)
+    {
+      autn = PJUtils::pj_str_to_string(&p->value);
+    }
+    p = p->next;
+  }
+
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = hss->get_auth_vector(impi, impu, "", get_trail(rdata));
+  Json::Value* av = hss->get_auth_vector(impi, impu, autn, get_trail(rdata));
 
   if (av != NULL)
   {
