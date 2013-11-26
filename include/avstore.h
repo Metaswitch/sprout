@@ -38,7 +38,7 @@
 #define AVSTORE_H_
 
 #include <map>
-#include <pthreads.h>
+#include <pthread.h>
 #include <json/reader.h>
 
 class AvStore
@@ -49,14 +49,14 @@ public:
 
   void set_av(const std::string& impi,
               const std::string& nonce,
-              const std::string& av);
+              const Json::Value* av);
 
-  std::string get_av(const std::string& impi,
-                     const std::string& nonce);
+  Json::Value* get_av(const std::string& impi,
+                      const std::string& nonce);
 
 private:
-  pthread_mutex_lock* _av_map_lock;
+  pthread_mutex_t _av_map_lock;
   std::map<std::string, std::string> _av_map;
-}
+};
 
 #endif

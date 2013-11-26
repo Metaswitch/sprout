@@ -71,7 +71,7 @@ static pj_bool_t authenticate_rx_request(pjsip_rx_data *rdata);
 pjsip_module mod_auth =
 {
   NULL, NULL,                         // prev, next
-  pj_str("mod-auth"),                  // Name
+  pj_str("mod-auth"),                 // Name
   -1,                                 // Id
   PJSIP_MOD_PRIORITY_TSX_LAYER-1,     // Priority
   NULL,                               // load()
@@ -92,7 +92,7 @@ static HSSConnection* hss;
 
 // AV store used to store Authentication Vectors while waiting for the
 // client to respond to a challenge.
-static AVStore* av_store;
+static AvStore* av_store;
 
 
 // Analytics logger.
@@ -112,16 +112,14 @@ pj_status_t user_lookup(pj_pool_t *pool,
   const pj_str_t* realm = &param->realm;
   const pjsip_rx_data* rdata = param->rdata;
 
-  SAS::TrailId trail = get_trail(rdata);
-
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
 
   // Get the impi and the nonce.  There must be an authorization header otherwise
   // PJSIP wouldn't have called this method.
-  std::string private_id = PJUtils::pj_str_to_string(acc_name);
+  std::string impi = PJUtils::pj_str_to_string(acc_name);
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-  std::string nonce = PJUtils::pj_str_to_string(auth_hdr->digest.nonce);
+  std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
   // Get the Authentication Vector from the store.
   Json::Value* av = av_store->get_av(impi, nonce);
@@ -131,32 +129,24 @@ pj_status_t user_lookup(pj_pool_t *pool,
     pj_strdup(pool, &cred_info->realm, realm);
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
-    if (av["aka"].isObject())
+    if ((*av)["aka"].isObject())
     {
       // AKA authentication, so response is plain-text password.
-      cred_info->data_type = PJSIP_CRED_DATA_PLAINTEXT;
-      pj_strdup2(pool, &cred_info->data, av["aka"]["response"].asCString());
+      cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
+      pj_strdup2(pool, &cred_info->data, (*av)["aka"]["response"].asCString());
       status = PJ_SUCCESS;
     }
-    else if (av["digest"].isObject())
+    else if ((*av)["digest"].isObject())
     {
       // AKA authentication, so response is plain-text password.
       cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-      pj_strdup2(pool, &cred_info->data, av["digest"]["ha1"].asCString());
+      pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
       status = PJ_SUCCESS;
     }
     delete av;
   }
 
   return status;
-}
-
-
-Json::Value* get_auth_vector(const std::string& impi, const std::string& impu)
-{
-  // Get an authentication vector for the challenge.
-  Json::Value* data = hss->get_auth_vector(impi, impu, autn, get_trail(rdata));
-  return data;
 }
 
 
@@ -169,18 +159,20 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impu;
   std::string nonce;
 
-  impu = PJUtils::public_id_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
+  impu = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
   if ((auth_hdr != NULL) &&
-      (auth_hdr->digest.username.slen != 0))
+      (auth_hdr->credential.digest.username.slen != 0))
   {
-    // private user identity is supplied in the Authorization header so use it
-    impi = PJUtils::pj_str_to_string(&auth_hdr->digest.username);
+    // private user identity is supplied in the Authorization header so use it.
+    impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+    LOG_DEBUG("Private identity from authorization header = %s", impi.c_str());
   }
   else
   {
     // private user identity not supplied, so construct a default from the
     // public user identity by stripping the sip: prefix.
     impi = impu.substr(4);
+    LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
 
   // Get the Authentication Vector from the HSS.
@@ -189,56 +181,66 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   if (av != NULL)
   {
     // Retrieved a valid authentication vector, so generate the challenge.
+    LOG_DEBUG("Valid AV - generate challenge");
     char buf[16];
     pj_str_t random;
     random.ptr = buf;
     random.slen = sizeof(buf);
 
+    LOG_DEBUG("Create WWW-Authenticate header");
     pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
+    LOG_DEBUG("Created");
 
     hdr->scheme = STR_DIGEST;
-    pj_strdup(tdata->pool, hdr->challenge.digest.realm, auth_srv->realm);
+    LOG_DEBUG("Add realm");
+    pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &auth_srv.realm);
 
-    if (av["aka"].isObject())
+    if (av->isMember("aka"))
     {
       // AKA authentication.
-      Json::Value* aka = &av["aka"];
+      LOG_DEBUG("Add AKA information");
+      Json::Value* aka = &(*av)["aka"];
       hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
-      nonce = aka["challenge"].asString();
+      nonce = (*aka)["challenge"].asString();
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
       hdr->challenge.digest.qop = STR_AUTH;
-      hdr->stale = PJ_FALSE;
+      hdr->challenge.digest.stale = PJ_FALSE;
 
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      pj_strdup2(tdata->pool, &ck_param, aka["cryptkey"].asCString());
-      pj_list_insert_before(&hdr->credential.common.other_param, ck_param);
+      pj_strdup2(tdata->pool, &ck_param->value, (*aka)["cryptkey"].asCString());
+      pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
 
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      pj_strdup2(tdata->pool, &ik_param, aka["integritykey"].asCString());
-      pj_list_insert_before(&hdr->credential.common.other_param, ik_param);
+      pj_strdup2(tdata->pool, &ik_param->value, (*aka)["integritykey"].asCString());
+      pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
     }
     else
     {
       // Digest authentication.
-      Json::value digest = &av["digest"];
+      LOG_DEBUG("Add Digest information");
+      Json::Value* digest = &(*av)["digest"];
       hdr->challenge.digest.algorithm = STR_MD5;
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.nonce, &random);
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
-      hdr->challenge.digest.qop = STR_AUTH;
-      hdr->stale = PJ_FALSE;
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, (*digest)["qop"].asCString());
+      hdr->challenge.digest.stale = PJ_FALSE;
     }
 
+    // Add the header to the message.
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
+
     // Write the authentication vector (as a JSON string) into the AV store.
-    av_store->set(impi, nonce, av->asString());
+    LOG_DEBUG("Write AV to store");
+    av_store->set_av(impi, nonce, av);
 
     delete av;
   }
@@ -285,8 +287,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
   }
 
-  int sc = PJSIP_SC_NOT_AUTHORIZED;
-  status = PSJIP_EAUTHNOAUTH;
+  int sc = PJSIP_SC_UNAUTHORIZED;
+  status = PJSIP_EAUTHNOAUTH;
 
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen != 0))
@@ -427,7 +429,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
 
   // Create the AV store.
-  av_store = new AVStore();
+  av_store = new AvStore();
 
   return status;
 }

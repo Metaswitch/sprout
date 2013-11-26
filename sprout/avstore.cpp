@@ -35,8 +35,9 @@
  */
 
 #include <map>
-#include <pthreads.h>
+#include <pthread.h>
 
+#include "log.h"
 #include "avstore.h"
 
 
@@ -52,26 +53,36 @@ AvStore::~AvStore()
 
 void AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
-                     const std::string& av)
+                     const Json::Value* av)
 {
   std::string key = impi + '\0' + nonce;
+  std::string data = av->toStyledString();
+  LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
 
   pthread_mutex_lock(&_av_map_lock);
-  _av_map[key] = av;
+  _av_map[key] = data;
   pthread_mutex_unlock(&_av_map_lock);
 }
 
-std::string AvStore::get_av(const std::string& impi,
-                            const std::string& nonce)
+Json::Value* AvStore::get_av(const std::string& impi,
+                             const std::string& nonce)
 {
-  std::string av;
+  Json::Value* av = NULL;
   std::string key = impi + '\0' + nonce;
 
   pthread_mutex_lock(&_av_map_lock);
   std::map<std::string, std::string>::const_iterator i = _av_map.find(key);
   if (i != _av_map.end())
   {
-    av = i->second;
+    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), i->second.c_str());
+    av = new Json::Value;
+    Json::Reader reader;
+    bool parsingSuccessful = reader.parse(i->second, *av);
+    if (!parsingSuccessful)
+    {
+      delete av;
+      av = NULL;
+    }
   }
   pthread_mutex_unlock(&_av_map_lock);
 

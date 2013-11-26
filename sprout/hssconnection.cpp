@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #include <cassert>
 #include <string>
 #include <memory>
@@ -115,8 +113,9 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
                      "/av";
   if (!public_user_identity.empty())
   {
-    path += "?public_id=" + Utils::url_escape(public_user_identity);
+    path += "?impu=" + Utils::url_escape(public_user_identity);
   }
+
   if (!autn.empty())
   {
     path += "?autn=" + Utils::url_escape(autn);
@@ -134,26 +133,44 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
   if (av != NULL)
   {
     // Check the AV is well formed.
-    if ((av["aka"].isObject()) &&
-        ((!av["aka"]["challenge"].isString()) ||
-         (!av["aka"]["response"].isString()) ||
-         (!av["aka"]["cryptkey"].isString()) ||
-         (!av["aka"]["integritykey"].isString())))
+    if (av->isMember("aka"))
     {
-      // Malformed AKA entry
-      LOG_ERROR("Badly formed AKA authentication vector for %d\n%s",
-                private_user_identity.c_str(), av.toStyledString().c_str());
-      delete av;
-      av = NULL;
+      // AKA is specified, check all the expected parameters are present.
+      LOG_DEBUG("AKA specified");
+      Json::Value& aka = (*av)["aka"];
+      if ((!aka["challenge"].isString()) ||
+          (!aka["response"].isString()) ||
+          (!aka["cryptkey"].isString()) ||
+          (!aka["integritykey"].isString()))
+      {
+        // Malformed AKA entry
+        LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
+                  private_user_identity.c_str(), av->toStyledString().c_str());
+        delete av;
+        av = NULL;
+      }
     }
-    else if ((av["digest"].isObject()) &&
-             (av["digest"]["realm"].isString()) &&
-             (av["digest"]["qop"].isString()) &&
-             (av["digest"]["ha1"].isString()))
+    else if (av->isMember("digest"))
     {
-      // Malformed digest entry
-      LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
-                private_user_identity.c_str(), av.toStyledString().c_str());
+      // Digest is specified, check all the expected parameters are present.
+      LOG_DEBUG("Digest specified");
+      Json::Value& digest = (*av)["digest"];
+      if ((!digest["realm"].isString()) ||
+          (!digest["qop"].isString()) ||
+          (!digest["ha1"].isString()))
+      {
+        // Malformed digest entry
+        LOG_ERROR("Badly formed Digest authentication vector for %s\n%s",
+                  private_user_identity.c_str(), av->toStyledString().c_str());
+        delete av;
+        av = NULL;
+      }
+    }
+    else
+    {
+      // Neither AKA nor Digest information present.
+      LOG_ERROR("No AKA or Digest object in authentication vector for %s\n%s",
+                private_user_identity.c_str(), av->toStyledString().c_str());
       delete av;
       av = NULL;
     }
