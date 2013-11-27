@@ -1122,7 +1122,7 @@ TEST_F(StatefulProxyTest, TestNonLocalPCV)
   msg._extra = "P-Charging-Vector: icid-value=3";
   msg._to = "lasthop";
   msg._todomain = "destination.com";
-  //msg._requri = "sip:homedomain";
+  msg._requri = "sip:6505551000@homedomain";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
