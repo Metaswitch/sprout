@@ -1114,6 +1114,20 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestNonLocalPCV)
+{
+  SCOPED_TRACE("");
+  // This message is passing through this proxy; it's not local
+  Message msg;
+  msg._extra = "P-Charging-Vector: icid-value=3";
+  msg._to = "lasthop";
+  msg._todomain = "destination.com";
+  //msg._requri = "sip:homedomain";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
+}
+
 TEST_F(StatefulProxyTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
 {
   SCOPED_TRACE("");
