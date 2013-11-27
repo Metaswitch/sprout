@@ -1114,12 +1114,13 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
 }
 
-TEST_F(StatefulProxyTest, TestNonLocalPCV)
+TEST_F(StatefulProxyTest, TestTerminatingPCV)
 {
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
 
-  // This message is passing through this proxy; it's not local
+  // Test that a segfault previously seen when not doing originating
+  // handling on a call with a P-Charging-Vector does not reoccur.
   Message msg;
   msg._extra = "P-Charging-Vector: icid-value=3";
   msg._to = "lasthop";
