@@ -565,13 +565,12 @@ std::string IfcHandler::served_user_from_msg(
   {
     // Inspect P-Served-User header. Format is name-addr or addr-spec
     // (containing a URI), followed by optional parameters.
-    LOG_DEBUG("Originating case - looking in P-Served-User header");
     pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
         pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
 
     if (served_user_hdr != NULL)
     {
-      LOG_DEBUG("Found P-Served-User header");
+      LOG_DEBUG("Found URI in P-Served-User header");
       // Remove parameters before parsing the URI.  If there are URI parameters,
       // the URI must be enclosed in angle brackets, so we can either remove
       // everything after the first closing angle bracket (but not the
@@ -588,8 +587,6 @@ std::string IfcHandler::served_user_from_msg(
       if (end != NULL)
       {
         served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
-        LOG_DEBUG("Removing parameters from P-Served-User header: length is now %d",
-                  served_user_hdr->hvalue.slen);
       }
 
       // Extract the field to a null terminated string
@@ -611,7 +608,6 @@ std::string IfcHandler::served_user_from_msg(
     {
       // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
       // header.
-      LOG_DEBUG("Looking in P-Asserted-Identity header");
       pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
                                            pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
 
@@ -629,14 +625,14 @@ std::string IfcHandler::served_user_from_msg(
     {
       // For originating services, the user is parsed from the from
       // header.
-      LOG_DEBUG("Originating case - parsing user from From header");
+      LOG_DEBUG("Parsing served user from From header");
       uri = PJSIP_MSG_FROM_HDR(msg)->uri;
     }
     else
     {
       // For terminating services, the user is parsed from the request
       // URI.
-      LOG_DEBUG("Terminating case - parsing user from request URI");
+      LOG_DEBUG("Parsing served user from request URI");
       uri = msg->line.req.uri;
     }
   }
@@ -645,12 +641,10 @@ std::string IfcHandler::served_user_from_msg(
   LOG_DEBUG("URI retrieved is %s", uri_string.c_str());
   // Get the URI if it was encoded within a name-addr.
   uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
-  LOG_DEBUG("URI is %s after name-addr decoding", uri_string.c_str());
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
-    LOG_DEBUG("URI is locally-hosted: converting the URI into an AoR");
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   } else {
     LOG_DEBUG("URI is not locally hosted");
