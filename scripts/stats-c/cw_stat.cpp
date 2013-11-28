@@ -245,6 +245,8 @@ int main(int argc, char** argv)
              (msgs[0] == "hss_latency_us") ||
              (msgs[0] == "hss_digest_latency_us") ||
              (msgs[0] == "hss_subscription_latency_us") ||
+             (msgs[0] == "hss_user_auth_latency_us") ||
+             (msgs[0] == "hss_location_latency_us") ||
              (msgs[0] == "xdm_latency_us") ||
              (msgs[0] == "queue_size"))
     {
