@@ -53,7 +53,7 @@ public:
   void update_scscf();
 
   // returns name of s-cscf with matching capabilities  
-  std::string get_scscf(const std::vector<int> &mandates, const std::vector<int> &options) ;
+  std::string get_scscf(const std::vector<int> &mandatory, const std::vector<int> &optional) ;
 
 private:
   typedef struct scscf

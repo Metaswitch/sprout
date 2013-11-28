@@ -90,31 +90,56 @@ private:
 };
 
 
-TEST_F(SCSCFSelectorTest, SimpleTests)
+TEST_F(SCSCFSelectorTest, ValidConfig)
 {
-  // Parse a valid file. There should be no warnings in the logs
+  // Parse a valid file. There should be no warnings in the logs. If this 
+  // test fails, so will the Select* tests below
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
   EXPECT_FALSE(_log.contains("Failed to read S-CSCF configuration data"));
   EXPECT_FALSE(_log.contains("Badly formed S-CSCF entry"));
   EXPECT_FALSE(_log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
   EXPECT_FALSE(_log.contains("Failed to read S-CSCF configuration data"));
+}
+
+TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
+{
+  // Parse a valid file. 
+  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test when there's no S-CSCF with all the mandatory capabilities
   ST({9999}, {}, "").test(scscf_);
 
   // Test when there's only one S-CSCF with all the mandatory capabilities
   ST({123, 432, 345}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
+}
+
+TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
+{
+  // Parse a valid file.
+  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites
   ST({123, 432}, {654}, "cw-scscf2.cw-ngv.com").test(scscf_);
+}
+
+TEST_F(SCSCFSelectorTest, SelectPriorities)
+{
+  // Parse a valid file. 
+  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test with S-CSCFs with the same mandatory and optional capabilities, but different priorities
   ST({}, {654, 567}, "cw-scscf4.cw-ngv.com").test(scscf_);
+}
 
-  // Test with two S-CSCFs with the same capabilities and priorites, but different weights. 
-  // One of the weights is 0 - this is for code coverage reasons to ensure that the first S-CSCF 
-  // considered is never chosen. The S-CSCFs with different weights have the same name, so that 
-  // the test can pick either randomly and still pass. 
+TEST_F(SCSCFSelectorTest, SelectWeights)
+{
+  // Parse a valid file.
+  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+
+  // Test with two S-CSCFs with the same capabilities and priorites, but different weights.
+  // One of the weights is 0 - this is for code coverage reasons to ensure that the first S-CSCF
+  // considered is never chosen. The S-CSCFs with different weights have the same name, so that
+  // the test can pick either randomly and still pass.
   ST({654}, {876}, "cw-scscf6.cw-ngv.com").test(scscf_);
 }
 

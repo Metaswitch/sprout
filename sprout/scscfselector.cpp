@@ -135,7 +135,7 @@ SCSCFSelector::~SCSCFSelector()
   _updater = NULL;
 }
 
-std::string SCSCFSelector::get_scscf(const std::vector<int> &mandates, const std::vector<int> &options) 
+std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory, const std::vector<int> &optional) 
 {
   // There are no configured S-CSCFs. 
   if (_scscfs.empty())
@@ -147,12 +147,12 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandates, const std
   // There's at least one S-CSCF, so check if any match the capabilities requested
 
   // Sort the mandatory capabilities, and remove duplicates. 
-  std::vector<int> mandatory_cap = mandates;
+  std::vector<int> mandatory_cap = mandatory;
   std::sort(mandatory_cap.begin(), mandatory_cap.end());
   mandatory_cap.erase(unique(mandatory_cap.begin(), mandatory_cap.end()), mandatory_cap.end());
 
   // Sort the optional capabilities, and remove duplicates.
-  std::vector<int> optional_cap = options;
+  std::vector<int> optional_cap = optional;
   std::sort(optional_cap.begin(), optional_cap.end());
   optional_cap.erase(unique(optional_cap.begin(), optional_cap.end()), optional_cap.end());
 
