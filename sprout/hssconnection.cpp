@@ -242,11 +242,11 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
 }
 
 // Makes a user authorization request, and returns the data as a JSON object.
-Json::Value* HSSConnection::get_user_auth_request(const std::string& private_user_identity,
-                                                  const std::string& public_user_identity,
-                                                  const std::string& visited_network,
-                                                  const std::string& auth_type,
-                                                  SAS::TrailId trail)
+Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user_identity,
+                                                 const std::string& public_user_identity,
+                                                 const std::string& visited_network,
+                                                 const std::string& auth_type,
+                                                 SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -279,10 +279,10 @@ Json::Value* HSSConnection::get_user_auth_request(const std::string& private_use
 }
 
 /// Makes a location information request, and returns the data as a JSON object. 
-Json::Value* HSSConnection::get_location_information_request(const std::string& public_user_identity,
-                                                             const std::string& originating,
-                                                             const std::string& auth_type,
-                                                             SAS::TrailId trail)
+Json::Value* HSSConnection::get_location_data(const std::string& public_user_identity,
+                                              const bool& originating,
+                                              const std::string& auth_type,
+                                              SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -291,13 +291,13 @@ Json::Value* HSSConnection::get_location_information_request(const std::string& 
                      Utils::url_escape(public_user_identity) +
                      "/location";
 
-  if (!originating.empty())
+  if (originating)
   {
-    path += "?originating=" + Utils::url_escape(originating);
+    path += "?originating=true";
   }
   if (!auth_type.empty())
   {
-    std::string prefix = (originating.empty()) ? "?" : "&";
+    std::string prefix = !originating ? "?" : "&";
     path += prefix + "auth-type=" + Utils::url_escape(auth_type);
   }
 
