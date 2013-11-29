@@ -1386,6 +1386,20 @@ TEST_F(StatefulProxyTest, TestStrictRouteThrough)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestMultipleRouteHeaders)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._extra = "Route: <sip:all.the.sprouts;transport=tcp>\r\nRoute: <sip:homedomain>";
+  list<HeaderMatcher> hdrs;
+  // Expect no Route headers out, as they all point to us
+
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+}
+
+
 TEST_F(StatefulProxyTest, TestNonLocal)
 {
   SCOPED_TRACE("");
