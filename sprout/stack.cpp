@@ -632,7 +632,6 @@ pj_status_t init_stack(bool edge_proxy,
                        const std::string& public_host,
                        const std::string& home_domain,
                        const std::string& sprout_cluster_domain,
-                       const std::string& bono_cluster_domain,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads,
@@ -658,14 +657,12 @@ pj_status_t init_stack(bool edge_proxy,
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
-  char* bono_cluster_domain_cstr = strdup(bono_cluster_domain.c_str());
   stack_data.trusted_port = trusted_port;
   stack_data.untrusted_port = untrusted_port;
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
-  stack_data.bono_cluster_domain = (bono_cluster_domain != "") ? pj_str(bono_cluster_domain_cstr) : stack_data.local_host;
 
   stack_data.record_route_on_every_hop = false;
   stack_data.record_route_on_initiation_of_originating = false;
@@ -748,12 +745,7 @@ pj_status_t init_stack(bool edge_proxy,
     stack_data.name_cnt++;
   }
 
-  if (edge_proxy)
-  {
-    stack_data.name[stack_data.name_cnt] = stack_data.bono_cluster_domain;
-    stack_data.name_cnt++;
-  }
-  else
+  if (!edge_proxy)
   {
     stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
     stack_data.name_cnt++;

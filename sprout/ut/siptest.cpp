@@ -115,7 +115,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   }
   cwtest_add_host_mapping("local_ip", "localhost");
   cwtest_add_host_mapping("public_hostname", "localhost");
-  cwtest_add_host_mapping("all.the.bonos", "localhost");
   cwtest_add_host_mapping("all.the.sprouts", "localhost");
   cwtest_add_host_mapping("homedomain", "10.6.6.1");
   cwtest_add_host_mapping("bono1", "10.6.6.200");

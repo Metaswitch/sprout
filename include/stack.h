@@ -74,7 +74,6 @@ struct stack_data_struct
   pj_str_t             public_host;
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
-  pj_str_t             bono_cluster_domain;
 
   unsigned             name_cnt;
   pj_str_t             name[16];
@@ -133,7 +132,6 @@ extern pj_status_t init_stack(bool edge_proxy,
                               const std::string& public_host,
                               const std::string& home_domain,
                               const std::string& sprout_domain,
-                              const std::string& bono_domain,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
                               int num_worker_threads,

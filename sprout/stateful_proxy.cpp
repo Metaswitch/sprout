@@ -3840,11 +3840,6 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
       pj_list_insert_after(&path_uri->other_param, ob_node);
     }
   }
-  else
-  {
-    // Specify the bono cluster, as any of them can find the upstream P-CSCF/IBCF.
-    path_uri->host = stack_data.bono_cluster_domain;
-  }
 
   // Render the URI as a string.
   char buf[500];

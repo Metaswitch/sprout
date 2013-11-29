@@ -91,7 +91,6 @@ struct options
   std::string            public_host;
   std::string            home_domain;
   std::string            sprout_domain;
-  std::string            bono_domain;
   std::string            alias_hosts;
   pj_bool_t              edge_proxy;
   std::string            upstream_proxy;
@@ -280,11 +279,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'c':
       options->sprout_domain = std::string(pj_optarg);
       fprintf(stdout, "Override sprout cluster domain set to %s\n", pj_optarg);
-      break;
-
-    case 'b':
-      options->bono_domain = std::string(pj_optarg);
-      fprintf(stdout, "Override bono cluster domain set to %s\n", pj_optarg);
       break;
 
     case 'n':
@@ -752,7 +746,6 @@ int main(int argc, char *argv[])
                       opt.public_host,
                       opt.home_domain,
                       opt.sprout_domain,
-                      opt.bono_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
