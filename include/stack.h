@@ -79,6 +79,13 @@ struct stack_data_struct
   unsigned             name_cnt;
   pj_str_t             name[16];
   LastValueCache *     stats_aggregator;
+
+  bool record_route_on_every_hop;
+  bool record_route_on_initiation_of_originating;
+  bool record_route_on_initiation_of_terminating;
+  bool record_route_on_completion_of_originating;
+  bool record_route_on_completion_of_terminating;
+
 };
 
 extern struct stack_data_struct stack_data;
@@ -130,6 +137,7 @@ extern pj_status_t init_stack(bool edge_proxy,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
                               int num_worker_threads,
+                              int record_routing_model,
                               QuiescingManager *quiescing_mgr,
                               LoadMonitor *load_monitor);
 extern pj_status_t start_stack();

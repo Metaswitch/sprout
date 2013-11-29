@@ -479,10 +479,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
       target = NULL;
       return;
     }
-
-      // Sprout Record-Routes itself here.
-    LOG_DEBUG("Single Record-Route");
-    PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
   }
 
   // We now know various details of this transaction:
@@ -734,6 +730,17 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   return trusted;
 }
 
+void UASTransaction::routing_proxy_record_route()
+{
+  if (!PJUtils::is_top_rr_local(_req->msg))
+  {
+    PJUtils::add_record_route(_req, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
+  }
+  else
+  {
+    LOG_DEBUG("Top Record-Route already points to us, not adding another");
+  }
+}
 
 /// Checks for double Record-Routing and removes superfluous Route header to
 /// avoid request spirals.
@@ -1377,7 +1384,8 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
   // If the first value in the Route header field indicates this proxy or
   // home domain, the proxy MUST remove that value from the request.
-  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
+  // We remove consecutive Route headers that point to us so we don't spiral.'
+  while (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
     pj_list_erase(hroute);
   }
@@ -1963,7 +1971,6 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAS) ? (UASTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-
 /// Handle a non-CANCEL message.
 void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target *target)
 {
@@ -1979,8 +1986,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
     {
+      if (stack_data.record_route_on_every_hop)
+      {
+        LOG_DEBUG("Single Record-Route - configured to do this on every hop");
+        routing_proxy_record_route();
+      }
+
       // Pick up the AS chain from the ODI, or do the iFC lookups
-      // necessary to create a new AS chain.
+      // necessary to create a new AS chain. If creating a new AS
+      // chain, and configured to Record-Route on initiation of
+      // originating or terminating (but not on every hop), also Record-Routes.
       bool rc = find_as_chain(serving_state);
 
       if (!rc)
@@ -2000,30 +2015,39 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // orig-ioi).
         disposition = handle_originating(&target);
 
-        if ((disposition == AsChainLink::Disposition::Complete) &&
-            (enum_service) &&
-            (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-            (!is_uri_routeable(_req->msg->line.req.uri)))
-        {
-          // We've finished originating handling, and the request is
-          // targeted at this domain, but the URI is not currently
-          // routeable, so do an ENUM lookup to translate it to a
-          // routeable URI.
+        if (disposition == AsChainLink::Disposition::Complete) {
+          // Processing at end of originating handling
 
-          // This may mean it is no longer targeted at
-          // this domain, so we need to recheck this below before
-          // starting terminating handling.
-          LOG_DEBUG("Translating URI");
-          status = translate_request_uri(_req, trail());
-
-          if (status != PJ_SUCCESS)
+          if (stack_data.record_route_on_completion_of_originating)
           {
-            // An error occurred during URI translation.  This doesn't happen if
-            // there is no match, only if there is a match but there is an error
-            // performing the defined mapping.  We therefore reject the request
-            // with the not found status code and a specific reason phrase.
-            send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-            disposition = AsChainLink::Disposition::Stop;
+            LOG_DEBUG("Single Record-Route - end of originating handling");
+            routing_proxy_record_route();
+          }
+
+          if ((enum_service) &&
+              (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+              (!is_uri_routeable(_req->msg->line.req.uri)))
+          {
+            // We've finished originating handling, and the request is
+            // targeted at this domain, but the URI is not currently
+            // routeable, so do an ENUM lookup to translate it to a
+            // routeable URI.
+
+            // This may mean it is no longer targeted at
+            // this domain, so we need to recheck this below before
+            // starting terminating handling.
+            LOG_DEBUG("Translating URI");
+            status = translate_request_uri(_req, trail());
+
+            if (status != PJ_SUCCESS)
+            {
+              // An error occurred during URI translation.  This doesn't happen if
+              // there is no match, only if there is a match but there is an error
+              // performing the defined mapping.  We therefore reject the request
+              // with the not found status code and a specific reason phrase.
+              send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+              disposition = AsChainLink::Disposition::Stop;
+            }
           }
         }
       }
@@ -2057,6 +2081,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
+
+        if (disposition == AsChainLink::Disposition::Complete) {
+          // Processing at end of terminating handling
+
+          if (stack_data.record_route_on_completion_of_terminating)
+          {
+            routing_proxy_record_route();
+            LOG_DEBUG("Single Record-Route - end of terminating handling");
+          }
+        }
       }
     }
     else
@@ -2143,6 +2177,21 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         LOG_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
+
+      if (serving_state.session_case() == SessionCase::Terminating)
+      {
+        common_start_of_terminating_processing();
+      }
+      else
+      {
+        // Processing at start of originating handling (including CDiv)
+        if (stack_data.record_route_on_initiation_of_originating)
+        {
+          LOG_ERROR("Single Record-Route - initiation of originating handling");
+          routing_proxy_record_route();
+        }
+      }
+
     }
   }
   return success;
@@ -2202,6 +2251,17 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
   return disposition;
 }
 
+// We can start terminating processing either in find_as_chain or
+// move_to_terminating_chain. This function contains processing common
+// to both.
+void UASTransaction::common_start_of_terminating_processing()
+{
+  if (stack_data.record_route_on_initiation_of_terminating)
+  {
+    LOG_DEBUG("Single Record-Route - initiation of terminating handling");
+    routing_proxy_record_route();
+  }
+}
 
 /// Move from originating to terminating handling.
 bool UASTransaction::move_to_terminating_chain()
@@ -2225,6 +2285,7 @@ bool UASTransaction::move_to_terminating_chain()
     if (success)
     {
       _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+      common_start_of_terminating_processing();
     }
   }
   return success;

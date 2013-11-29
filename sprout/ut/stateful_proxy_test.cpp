@@ -585,11 +585,294 @@ public:
   }
 
   void doAsOriginated(SP::Message& msg, bool expect_orig);
+  void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
+
 };
 
 
 using SP::Message;
 
+void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)";
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>QWERTY_UIOP</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:sholes.example.com</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>3</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)";
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
+  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpAS4(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
+
+  pjsip_rr_hdr* as1_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as1_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as1_rr_hdr->name_addr.uri)->host = pj_str("1.2.3.4");
+
+  pjsip_rr_hdr* as2_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as2_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as2_rr_hdr->name_addr.uri)->host = pj_str("4.2.3.4");
+
+  pjsip_rr_hdr* as3_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as3_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as3_rr_hdr->name_addr.uri)->host = pj_str("5.2.3.4");
+
+  pjsip_rr_hdr* as4_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as4_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as4_rr_hdr->name_addr.uri)->host = pj_str("6.2.3.4");
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as1_rr_hdr);
+  }
+
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS2
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS2.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS2 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as2_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS2);
+  free_txdata();
+
+  // 100 Trying goes back to AS2
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS3
+  SCOPED_TRACE("INVITE (3)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS3.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS3 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as3_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS3);
+  free_txdata();
+
+  // 100 Trying goes back to AS3
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS4
+  SCOPED_TRACE("INVITE (4)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS4.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS4 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as4_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS4);
+  free_txdata();
+
+  // 100 Trying goes back to AS4
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (Z)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  EXPECT_THAT(get_headers(out, "Record-Route"), testing::MatchesRegex(record_route_regex));
+
+  free_txdata();
+}
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
@@ -3553,249 +3836,108 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 // Test more interesting ISC (AS) flow.
 TEST_F(IscTest, InterestingAs)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
-                                R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)";
-  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
-                                R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>QWERTY_UIOP</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:sholes.example.com</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>3</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)";
+}
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
-  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
-  TransportFlow tpAS4(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
+// Test that when Sprout is configured to Record-Route itself only at
+// the start and end of all processing, it does.
+TEST_F(IscTest, RecordRoutingTest)
+{
+  // Expect 2 Record-Routes:
+  // - on start of originating handling
+  // - AS1's Record-Route
+  // - AS2's Record-Route
+  // - AS3's Record-Route
+  // - AS4's Record-Route
+  // - on end of terminating handling
 
-  // ---------- Send INVITE
-  // We're within the trust boundary, so no stripping should occur.
-  Message msg;
-  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
-
-  msg._method = "INVITE";
-  inject_msg(msg.get_request(), &tpBono);
-  poll();
-  ASSERT_EQ(2, txdata_count());
-
-  // 100 Trying goes back to bono
-  pjsip_msg* out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS1
-  SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
-  ReqMatcher r1("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS1.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS1 turns it around (acting as proxy)
-  const pj_str_t STR_ROUTE = pj_str("Route");
-  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS1);
-  free_txdata();
-
-  // 100 Trying goes back to AS1
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS2
-  SCOPED_TRACE("INVITE (2)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS2.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS2 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS2);
-  free_txdata();
-
-  // 100 Trying goes back to AS2
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS3
-  SCOPED_TRACE("INVITE (3)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS3.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS3 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS3);
-  free_txdata();
-
-  // 100 Trying goes back to AS3
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS4
-  SCOPED_TRACE("INVITE (4)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS4.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS4 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS4);
-  free_txdata();
-
-  // 100 Trying goes back to AS4
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to final destination
-  SCOPED_TRACE("INVITE (Z)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpBono.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
-  EXPECT_EQ("", get_headers(out, "Route"));
-
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
   free_txdata();
 }
 
+// Test that when Sprout is configured to Record-Route itself at
+// the start and end of terminating and originating processing, it does.
+TEST_F(IscTest, RecordRoutingTestStartAndEnd)
+{
+  stack_data.record_route_on_completion_of_originating = true;
+  stack_data.record_route_on_initiation_of_terminating = true;
+
+  // Expect 2 Record-Routes:
+  // - on start of originating handling
+  // - AS1's Record-Route
+  // - AS2's Record-Route
+  // - on end of originating handling/on start of terminating handling
+  // (collapsed together as they're identical)
+  // - AS3's Record-Route
+  // - AS4's Record-Route
+  // - on end of terminating handling
+
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+  stack_data.record_route_on_completion_of_originating = false;
+  stack_data.record_route_on_initiation_of_terminating = false;
+}
+
+
+// Test that when Sprout is configured to Record-Route itself on each
+// hop, it does.
+TEST_F(IscTest, RecordRoutingTestEachHop)
+{
+  stack_data.record_route_on_every_hop = true;
+  // Expect 9 Record-Routes:
+  // - between the endpoint and AS1
+  // - AS1's Record-Route
+  // - between AS1 and AS2
+  // - AS2's Record-Route
+  // - between AS2 and AS3
+  // - AS3's Record-Route
+  // - between AS3 and AS4
+  // - AS4's Record-Route
+  // - between AS4 and the endpoint
+
+  // In reality we'd expect 10 (instead of having one between AS2 and
+  // AS3, we'd have two - one for conclusion of originating processing
+  // and one for initiation of terminating processing) but we don't
+  // split originating and terminating handling like that yet.
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+  stack_data.record_route_on_every_hop = false;
+}
+
+// Test that Sprout only adds a single Record-Route if none of the Ases
+// Record-Route themselves.
+TEST_F(IscTest, RecordRoutingTestCollapse)
+{
+  // Expect 1 Record-Route
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+}
+
+// Test that even when Sprout is configured to Record-Route itself on each
+// hop, it only adds a single Record-Route if none of the Ases
+// Record-Route themselves.
+TEST_F(IscTest, RecordRoutingTestCollapseEveryHop)
+{
+  stack_data.record_route_on_every_hop = true;
+  // Expect 1 Record-Route
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+  stack_data.record_route_on_every_hop = false;
+}
 
 // Test AS-originated flow - orig.
 void IscTest::doAsOriginated(Message& msg, bool expect_orig)

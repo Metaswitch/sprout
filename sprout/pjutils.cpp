@@ -362,6 +362,29 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
   return rc;
 }
 
+/// Checks whether the top Record-Route header in the message refers
+/// to this node. If there are no Record-Route headers it
+/// returns false.
+pj_bool_t PJUtils::is_top_rr_local(const pjsip_msg* msg)
+{
+  bool rc = false;
+  pjsip_rr_hdr* rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_RECORD_ROUTE, NULL);
+
+  if (rr_hdr != NULL)
+  {
+    // Found the next Route header, so check whether the URI corresponds to
+    // this node or one of its aliases.
+    pjsip_uri* uri = rr_hdr->name_addr.uri;
+    LOG_DEBUG("Found Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
+    if ((is_home_domain(uri)) || (is_uri_local(uri)))
+    {
+      LOG_DEBUG("Record-Route header is local");
+      rc = true;
+    }
+  }
+  return rc;
+}
+
 
 /// Adds a Record-Route header to the message with the specified user name,
 /// host, port and transport.  If the user parameter is NULL the user field is

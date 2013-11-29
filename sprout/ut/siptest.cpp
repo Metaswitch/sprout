@@ -133,6 +133,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.name_cnt++;
   stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
   stack_data.name_cnt++;
+  stack_data.record_route_on_initiation_of_originating = true;
+  stack_data.record_route_on_completion_of_terminating = true;
 
   // Sort out logging.
   init_pjsip_logging(99, false, "");

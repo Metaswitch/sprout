@@ -86,6 +86,7 @@ struct options
   std::string            system_name;
   int                    trusted_port;
   int                    untrusted_port;
+  int                    record_routing_model;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
@@ -148,7 +149,6 @@ static void usage(void)
        " -P, --public-host <name>   Override the public host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
-       " -b, --bono-domain <name>   Override the bono cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an edge proxy using the specified node\n"
@@ -172,6 +172,12 @@ static void usage(void)
        " -S, --sas <ipv4>           Use specified host as software assurance\n"
        "                            server.  Otherwise uses localhost\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
+       " -C, --record-routing-model <1|2|3>\n"
+       "                            If 1, Sprout Record-Routes itself only on initiation of\n"
+       "                            originating processing and completion of terminating\n"
+       "                            processing. If 2, it also Record-Routes on completion\n"
+       "                            of originating processing and initiation of terminating\n"
+       "                            processing. If 3, it also Record-Routes between every AS.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
@@ -204,7 +210,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "public-host",       required_argument, 0, 'P'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
-    { "bono-domain",       required_argument, 0, 'b'},
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
@@ -214,6 +219,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "remote-memstore",   required_argument, 0, 'm'},
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
+    { "record-routing-model",          required_argument, 0, 'C'},
     { "xdms",              required_argument, 0, 'X'},
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
@@ -244,6 +250,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 't':
       options->trusted_port = atoi(pj_optarg);
       fprintf(stdout, "Trusted Port is set to %d\n", options->trusted_port);
+      break;
+
+    case 'C':
+      options->record_routing_model = atoi(pj_optarg);
+      fprintf(stdout, "Record-Routing model is set to %d\n", options->record_routing_model);
       break;
 
     case 'u':
@@ -744,6 +755,7 @@ int main(int argc, char *argv[])
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
+                      opt.record_routing_model,
                       quiescing_mgr,
                       load_monitor);
 

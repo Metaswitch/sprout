@@ -93,7 +93,7 @@ static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
 static Counter* overload_counter;
 
-static LoadMonitor *load_monitor = NULL; 
+static LoadMonitor *load_monitor = NULL;
 static QuiescingManager *quiescing_mgr = NULL;
 static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
@@ -343,16 +343,16 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                NULL,
                                (pjsip_hdr*)retry_after,
                                NULL);
-   
-    // If the sprout/bono is overloaded, then close the connection (if it's TCP). 
+
+    // If the sprout/bono is overloaded, then close the connection (if it's TCP).
     if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
-    {  
+    {
       pjsip_transport_shutdown(rdata->tp_info.transport);
     }
- 
-    overload_counter->increment(); 
+
+    overload_counter->increment();
     return PJ_TRUE;
-  } 
+  }
 
   // Before we start, get a timestamp.  This will track the time from
   // receiving a message to forwarding it on (or rejecting it).
@@ -636,6 +636,7 @@ pj_status_t init_stack(bool edge_proxy,
                        const std::string& alias_hosts,
                        int num_pjsip_threads,
                        int num_worker_threads,
+                       int record_routing_model,
                        QuiescingManager *quiescing_mgr_arg,
                        LoadMonitor *load_monitor_arg)
 {
@@ -665,6 +666,29 @@ pj_status_t init_stack(bool edge_proxy,
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.bono_cluster_domain = (bono_cluster_domain != "") ? pj_str(bono_cluster_domain_cstr) : stack_data.local_host;
+  stack_data.record_route_on_every_hop = false;
+  stack_data.record_route_on_initiation_of_originating = false;
+  stack_data.record_route_on_initiation_of_terminating = false;
+  stack_data.record_route_on_completion_of_originating = false;
+  stack_data.record_route_on_completion_of_terminating = false;
+  switch (record_routing_model) {
+    case 1:
+        stack_data.record_route_on_initiation_of_originating = true;
+        stack_data.record_route_on_completion_of_terminating = true;
+        break;
+    case 2:
+        stack_data.record_route_on_initiation_of_originating = true;
+        stack_data.record_route_on_initiation_of_terminating = true;
+        stack_data.record_route_on_completion_of_originating = true;
+        stack_data.record_route_on_completion_of_terminating = true;
+        break;
+    case 3:
+      stack_data.record_route_on_every_hop = true;
+      break;
+    default:
+      LOG_ERROR("Record-Route setting should be 1, 2, or 3, is %d", record_routing_model);
+      stack_data.record_route_on_every_hop = true;
+    }
 
   // Initialize SAS logging.
   if (system_name != "")
