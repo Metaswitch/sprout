@@ -642,6 +642,7 @@ int main(int argc, char *argv[])
   opt.enum_suffix = ".e164.arpa";
   opt.reg_max_expires = 300;
   opt.pjsip_threads = 1;
+  opt.record_routing_model = 1;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;

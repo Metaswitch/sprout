@@ -666,12 +666,16 @@ pj_status_t init_stack(bool edge_proxy,
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.bono_cluster_domain = (bono_cluster_domain != "") ? pj_str(bono_cluster_domain_cstr) : stack_data.local_host;
+
   stack_data.record_route_on_every_hop = false;
   stack_data.record_route_on_initiation_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_completion_of_terminating = false;
-  switch (record_routing_model) {
+
+  if (!edge_proxy)
+  {
+    switch (record_routing_model) {
     case 1:
         stack_data.record_route_on_initiation_of_originating = true;
         stack_data.record_route_on_completion_of_terminating = true;
@@ -686,9 +690,10 @@ pj_status_t init_stack(bool edge_proxy,
       stack_data.record_route_on_every_hop = true;
       break;
     default:
-      LOG_ERROR("Record-Route setting should be 1, 2, or 3, is %d", record_routing_model);
+      LOG_ERROR("Record-Route setting should be 1, 2, or 3, is %d. Defaulting to Record-Route on every hop.", record_routing_model);
       stack_data.record_route_on_every_hop = true;
     }
+  }
 
   // Initialize SAS logging.
   if (system_name != "")
