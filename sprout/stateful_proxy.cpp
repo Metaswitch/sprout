@@ -898,6 +898,16 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
+    if (source_type == SIP_PEER_TRUSTED_PORT)
+    {
+      LOG_WARNING("Rejecting REGISTER request received from within the trust domain");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_METHOD_NOT_ALLOWED,
+                                 NULL, NULL, NULL);
+      return PJ_ENOTFOUND;
+    }
+
     if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
@@ -908,61 +918,58 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    if (source_type != SIP_PEER_TRUSTED_PORT)
-    {
-      // The REGISTER came from outside the trust domain and not over a SIP
-      // trunk, so we must act as the edge proxy for the node.  (Previously
-      // we would only act as edge proxy for nodes that requested it with
-      // the outbound flag, or we detected were behind a NAT - now we have a
-      // well-defined trust zone we have to do it for all nodes outside
-      // the trust node.)
-      LOG_DEBUG("Message requires outbound support");
+    // The REGISTER came from outside the trust domain and not over a SIP
+    // trunk, so we must act as the edge proxy for the node.  (Previously
+    // we would only act as edge proxy for nodes that requested it with
+    // the outbound flag, or we detected were behind a NAT - now we have a
+    // well-defined trust zone we have to do it for all nodes outside
+    // the trust node.)
+    LOG_DEBUG("Message requires outbound support");
 
-      // Find or create a flow object to represent this flow.
-      src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
+    // Find or create a flow object to represent this flow.
+    src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
                                               &rdata->pkt_info.src_addr);
 
-      if (src_flow == NULL)
-      {
-        LOG_ERROR("Failed to create flow data record");
-        return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
-      }
+    if (src_flow == NULL)
+    {
+      LOG_ERROR("Failed to create flow data record");
+      return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+    }
 
-      LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+    LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
-      // Reject the REGISTER with a 305 if Bono is trying to quiesce and
-      // there are no active dialogs on this flow.
-      if (src_flow->should_quiesce())
-      {
-        LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
-        PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_USE_PROXY,
-                                   NULL, NULL, NULL);
-        src_flow->dec_ref();
+    // Reject the REGISTER with a 305 if Bono is trying to quiesce and
+    // there are no active dialogs on this flow.
+    if (src_flow->should_quiesce())
+    {
+      LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_USE_PROXY,
+                                 NULL, NULL, NULL);
+      src_flow->dec_ref();
 
-        // Of the PJSIP error codes, EIGNORED seems most appropriate -
-        // but anything that's not PJ_SUCCESS will do.
-        return PJ_EIGNORED;
-      }
+      // Of the PJSIP error codes, EIGNORED seems most appropriate -
+      // but anything that's not PJ_SUCCESS will do.
+      return PJ_EIGNORED;
+    }
 
-      // Touch the flow to make sure it doesn't time out while we are waiting
-      // for the REGISTER response from upstream.
-      src_flow->touch();
+    // Touch the flow to make sure it doesn't time out while we are waiting
+    // for the REGISTER response from upstream.
+    src_flow->touch();
 
-      pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
-      {
-        // The message was received on a client flow that has already been
-        // authenticated, so add an integrity-protected indication.
-        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
-      }
-      else
-      {
-        // The client flow hasn't yet been authenticated, so add an integrity-protected
-        // indicator so Sprout will challenge and/or authenticate. it
-        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
-      }
+    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+    {
+      // The message was received on a client flow that has already been
+      // authenticated, so add an integrity-protected indication.
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+    }
+    else
+    {
+      // The client flow hasn't yet been authenticated, so add an integrity-protected
+      // indicator so Sprout will challenge and/or authenticate. it
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
     }
 
     // Add a path header so we get included in the egress call flow.  If we're not
@@ -1721,10 +1728,6 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
                                                       hvalue.slen,
                                                       0);
 
-    // The user part may be missing if the path is simply to the bono cluster
-    // (for example if a commercial P-CSCF is in use and bono is simply providing
-    // a proxying service to it), in this case, we're not using flows so there's
-    // no need to update the authenticated URIs.
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
     {
@@ -3798,16 +3801,11 @@ static pj_bool_t is_user_numeric(const std::string& user)
   return PJ_TRUE;
 }
 
-/// Adds a Path header when functioning as an edge proxy or as a load-balancing
-/// proxy for a commercial P-CSCF/IBCF.
+/// Adds a Path header when functioning as an edge proxy.
 ///
-/// If we're the edge-proxy (and thus supplying outbound support for the client,
-/// the path header consists of a SIP URI with our host and a user portion that
+/// We're the edge-proxy and thus supplying outbound support for the client.
+/// The path header consists of a SIP URI with our host and a user portion that
 /// identifies the client flow.
-///
-/// If we're merely acting as a loadbalancing proxy for a commercial P-CSCF/IBCF,
-/// we'll simply add a path to the bono cluster.  This is indicated by the absence
-/// of a flow entry.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
@@ -3822,23 +3820,20 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 
-  if (flow_data)
+  // Specify this particular node, as only we can find the client.
+  path_uri->host = stack_data.local_host;
+
+  // Add the flow token and "ob" parameter.
+  pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
+
+  if (PJUtils::is_first_hop(rdata->msg_info.msg))
   {
-    // Specify this particular node, as only we can find the client.
-    path_uri->host = stack_data.local_host;
-
-    // Add the flow token and "ob" parameter.
-    pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
-
-    if (PJUtils::is_first_hop(rdata->msg_info.msg))
-    {
-      // We own the outbound flow to the UAC.  We must indicate that by adding
-      // the ob parameter.
-      pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-      pj_strdup2(tdata->pool, &ob_node->name, "ob");
-      pj_strdup2(tdata->pool, &ob_node->value, "");
-      pj_list_insert_after(&path_uri->other_param, ob_node);
-    }
+    // We own the outbound flow to the UAC.  We must indicate that by adding
+    // the ob parameter.
+    pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+    pj_strdup2(tdata->pool, &ob_node->name, "ob");
+    pj_strdup2(tdata->pool, &ob_node->value, "");
+    pj_list_insert_after(&path_uri->other_param, ob_node);
   }
 
   // Render the URI as a string.
