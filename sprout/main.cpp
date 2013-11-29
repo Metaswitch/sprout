@@ -239,7 +239,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:b:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:C:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
