@@ -860,6 +860,7 @@ int main(int argc, char *argv[])
                                enum_service,
                                bgcf_service,
                                hss_connection,
+                               opt.icscf_uri_str,
                                quiescing_mgr);
   if (status != PJ_SUCCESS)
   {
