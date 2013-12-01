@@ -101,6 +101,7 @@ get_settings()
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
+        [ -z "$icscf_uri" ] || icscf_uri_arg="--icscf $icscf_uri"
 }
 
 #
@@ -138,6 +139,7 @@ do_start()
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
+                     $icscf_uri_arg
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads

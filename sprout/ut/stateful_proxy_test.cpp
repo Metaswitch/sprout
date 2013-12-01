@@ -315,7 +315,8 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
-                            bool ifcs)
+                            bool ifcs,
+                            const string& icscf_uri_str = "")
   {
     SipTest::SetUpTestCase(false);
 
@@ -338,6 +339,7 @@ public:
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
+    _icscf_uri_str = icscf_uri_str;
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
                                           _call_services,
@@ -353,6 +355,7 @@ public:
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
+                                          _icscf_uri_str,
                                           &_quiescing_manager);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
@@ -440,6 +443,7 @@ protected:
   static BgcfService* _bgcf_service;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
+  static string _icscf_uri_str;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -464,6 +468,7 @@ EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
+string StatefulProxyTestBase::_icscf_uri_str;
 QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
@@ -471,8 +476,13 @@ class StatefulProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
+    SetUpTestCase("");
+  }
+
+  static void SetUpTestCase(const string& icscf_uri_str)
+  {
     cwtest_clear_host_mapping();
-    StatefulProxyTestBase::SetUpTestCase("", "", false);
+    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_uri_str);
   }
 
   static void TearDownTestCase()
@@ -584,6 +594,29 @@ public:
   }
 
   void doAsOriginated(SP::Message& msg, bool expect_orig);
+};
+
+class IcscfTest : public StatefulProxyTest
+{
+public:
+  static void SetUpTestCase()
+  {
+    StatefulProxyTest::SetUpTestCase("sip:icscf");
+    cwtest_add_host_mapping("icscf", "10.8.8.1");
+  }
+
+  static void TearDownTestCase()
+  {
+    StatefulProxyTest::TearDownTestCase();
+  }
+
+  IcscfTest()
+  {
+  }
+
+  ~IcscfTest()
+  {
+  }
 };
 
 
@@ -5366,6 +5399,17 @@ TEST_F(IscTest, SimpleOptionsAccept)
   msg.set_route(out);
   msg._cseq++;
   free_txdata();
+}
+
+TEST_F(IcscfTest, TestMainline)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  // Since we have an I-CSCF configured, we expect the call to be routed to it.
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:icscf;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
 }
 
 
