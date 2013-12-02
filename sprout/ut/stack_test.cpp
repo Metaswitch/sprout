@@ -128,7 +128,7 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
   strcpy(dns, ent->h_name);
 
   // Now do test
-  pj_status_t rc = init_stack(false,                        // edge_proxy
+  pj_status_t rc = init_stack(false,                        // access_proxy
                               "plural@zalpha.example.com",  // system name
                               "192.168.0.3",                // SAS address
                               9408,                         // trusted port

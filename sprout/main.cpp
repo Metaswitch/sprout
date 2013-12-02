@@ -86,13 +86,14 @@ struct options
   std::string            system_name;
   int                    trusted_port;
   int                    untrusted_port;
+  int                    webrtc_port;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
   std::string            sprout_domain;
   std::string            bono_domain;
   std::string            alias_hosts;
-  pj_bool_t              edge_proxy;
+  pj_bool_t              access_proxy;
   std::string            upstream_proxy;
   int                    upstream_proxy_port;
   int                    upstream_proxy_connections;
@@ -145,15 +146,18 @@ static void usage(void)
        " -s, --system <name>        System name for SAS logging (defaults to local host name)\n"
        " -t, --trusted-port N       Set local trusted listener port to N\n"
        " -u, --untrusted-port N     Set local untrusted listener port to N\n"
+       "                            If not specified SIP outbound support will be disabled\n"
+       " -w, --webrtc-port N        Set local WebRTC listener port to N\n"
+       "                            If not specified WebRTC support will be disabled\n"
        " -l, --localhost <name>     Override the local host name\n"
-       " -P, --public-host <name>   Override the public host name\n"
+       " -p, --public-host <name>   Override the public host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -b, --bono-domain <name>   Override the bono cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -e, --edge-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
-       "                            Operate as an edge proxy using the specified node\n"
-       "                            as the upstream proxy.  Optionally specifies the port,\n"
+       " -r, --routing-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
+       "                            Operate as an access proxy using the specified node\n"
+       "                            as the upstream routing proxy.  Optionally specifies the port,\n"
        "                            the number of parallel connections to create, and how\n"
        "                            often to recycle these connections (by default a\n"
        "                            single connection to the trusted port is used and never\n"
@@ -180,10 +184,10 @@ static void usage(void)
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
        " -f, --enum-file <file>     JSON ENUM config file (can't be enabled at same time as\n"
        "                            -E)\n"
-       " -r, --reg-max-expires <expiry>\n"
+       " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
-       " -p, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
-       " -w, --worker_threads N     Number of worker threads (default: 1)\n"
+       " -P, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
+       " -W, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
        " -A, --authentication       Enable authentication\n"
@@ -197,19 +201,38 @@ static void usage(void)
 }
 
 
+// Parse a string representing a port, retunring whether it parsed successfully.
+bool parse_port(char* port_str, int& port)
+{
+  int _port = atoi(port_str);
+
+  if ((_port > 0) && (_port <= 0xFFFF))
+  {
+    port = _port;
+    return true;
+  }
+  else
+  {
+    port = 0;
+    return false;
+  }
+}
+
+
 static pj_status_t init_options(int argc, char *argv[], struct options *options)
 {
   struct pj_getopt_option long_opt[] = {
     { "system",            required_argument, 0, 's'},
     { "trusted-port",      required_argument, 0, 't'},
     { "untrusted-port",    required_argument, 0, 'u'},
+    { "webrtc-port",       required_argument, 0, 'w'},
     { "localhost",         required_argument, 0, 'l'},
-    { "public-host",       required_argument, 0, 'P'},
+    { "public-host",       required_argument, 0, 'p'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
     { "bono-domain",       required_argument, 0, 'b'},
     { "alias",             required_argument, 0, 'n'},
-    { "edge-proxy",        required_argument, 0, 'e'},
+    { "routing-proxy",     required_argument, 0, 'r'},
     { "ibcf",              required_argument, 0, 'I'},
     { "icscf",             required_argument, 0, 'j'},
     { "auth",              required_argument, 0, 'A'},
@@ -222,9 +245,9 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
-    { "reg-max-expires",   required_argument, 0, 'r'},
-    { "pjsip-threads",     required_argument, 0, 'p'},
-    { "worker-threads",    required_argument, 0, 'w'},
+    { "reg-max-expires",   required_argument, 0, 'e'},
+    { "pjsip-threads",     required_argument, 0, 'P'},
+    { "worker-threads",    required_argument, 0, 'W'},
     { "analytics",         required_argument, 0, 'a'},
     { "authentication",    no_argument,       0, 'A'},
     { "log-file",          required_argument, 0, 'F'},
@@ -247,13 +270,39 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 't':
-      options->trusted_port = atoi(pj_optarg);
-      fprintf(stdout, "Trusted Port is set to %d\n", options->trusted_port);
+      if (parse_port(pj_optarg, options->trusted_port))
+      {
+        fprintf(stdout, "Trusted Port is set to %d\n", options->trusted_port);
+      }
+      else
+      {
+        fprintf(stdout, "Trusted Port %s is invalid\n", pj_optarg);
+        return -1;
+      }
       break;
 
     case 'u':
-      options->untrusted_port = atoi(pj_optarg);
-      fprintf(stdout, "Untrusted Port is set to %d\n", options->untrusted_port);
+      if (parse_port(pj_optarg, options->untrusted_port))
+      {
+        fprintf(stdout, "Untrusted Port is set to %d\n", options->untrusted_port);
+      }
+      else
+      {
+        fprintf(stdout, "Untrusted Port %s is invalid\n", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case 'w':
+      if (parse_port(pj_optarg, options->webrtc_port))
+      {
+        fprintf(stdout, "WebRTC Port is set to %d\n", options->webrtc_port);
+      }
+      else
+      {
+        fprintf(stdout, "WebRTC Port %s is invalid\n", pj_optarg);
+        return -1;
+      }
       break;
 
     case 'l':
@@ -261,7 +310,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Override local host name set to %s\n", pj_optarg);
       break;
 
-    case 'P':
+    case 'p':
       options->public_host = std::string(pj_optarg);
       fprintf(stdout, "Override public host name set to %s\n", pj_optarg);
       break;
@@ -286,7 +335,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Alias host names = %s\n", pj_optarg);
       break;
 
-    case 'e':
+    case 'r':
       {
         std::vector<std::string> upstream_proxy_options;
         Utils::split_string(std::string(pj_optarg), ':', upstream_proxy_options, 0, false);
@@ -314,7 +363,9 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         fprintf(stdout, "\n");
         fprintf(stdout, "  connections = %d\n", options->upstream_proxy_connections);
         fprintf(stdout, "  recycle time = %d seconds\n", options->upstream_proxy_recycle);
-        options->edge_proxy = PJ_TRUE;
+
+        // If a routing proxy is specified this node must be an access proxy.
+        options->access_proxy = PJ_TRUE;
       }
       break;
 
@@ -374,7 +425,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "ENUM file set to %s\n", pj_optarg);
       break;
 
-    case 'r':
+    case 'e':
       reg_max_expires = atoi(pj_optarg);
 
       if (reg_max_expires > 0)
@@ -393,12 +444,12 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       }
       break;
 
-    case 'p':
+    case 'P':
       options->pjsip_threads = atoi(pj_optarg);
       fprintf(stdout, "Use %d PJSIP threads\n", options->pjsip_threads);
       break;
 
-    case 'w':
+    case 'W':
       options->worker_threads = atoi(pj_optarg);
       fprintf(stdout, "Use %d worker threads\n", options->worker_threads);
       break;
@@ -636,12 +687,13 @@ int main(int argc, char *argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
-  opt.edge_proxy = PJ_FALSE;
+  opt.access_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
   opt.ibcf = PJ_FALSE;
   opt.icscf_uri_str = "";
   opt.trusted_port = 0;
   opt.untrusted_port = 0;
+  opt.webrtc_port = 0;
   opt.auth_enabled = PJ_FALSE;
   opt.sas_server = "127.0.0.1";
   opt.enum_suffix = ".e164.arpa";
@@ -669,9 +721,9 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  if ((opt.trusted_port == 0) && (opt.untrusted_port == 0))
+  if (opt.trusted_port == 0)
   {
-    LOG_ERROR("Must specify at least one listener port");
+    LOG_ERROR("Must specify a trusted port");
     return 1;
   }
 
@@ -707,9 +759,9 @@ int main(int argc, char *argv[])
     }
   }
 
-  if (opt.edge_proxy && (opt.reg_max_expires != 0))
+  if (opt.access_proxy && (opt.reg_max_expires != 0))
   {
-    LOG_WARNING("A registration expiry period should not be specified for an edge proxy");
+    LOG_WARNING("A registration expiry period should not be specified for an access proxy");
   }
 
   if ((!opt.enum_server.empty()) &&
@@ -747,7 +799,7 @@ int main(int argc, char *argv[])
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.edge_proxy,
+  status = init_stack(opt.access_proxy,
                       opt.system_name,
                       opt.sas_server,
                       opt.trusted_port,
@@ -831,7 +883,7 @@ int main(int argc, char *argv[])
     status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
   }
 
-  if (!opt.edge_proxy)
+  if (!opt.access_proxy)
   {
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_server.empty())
@@ -849,7 +901,7 @@ int main(int argc, char *argv[])
                                remote_reg_store,
                                call_services,
                                ifc_handler,
-                               opt.edge_proxy,
+                               opt.access_proxy,
                                opt.upstream_proxy,
                                opt.upstream_proxy_port,
                                opt.upstream_proxy_connections,
@@ -869,8 +921,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  // An edge proxy doesn't handle registrations, it passes them through.
-  pj_bool_t registrar_enabled = !opt.edge_proxy;
+  // A access proxy doesn't handle registrations, it passes them through.
+  pj_bool_t registrar_enabled = !opt.access_proxy;
   if (registrar_enabled)
   {
     status = init_registrar(registrar_store,
@@ -888,11 +940,10 @@ int main(int argc, char *argv[])
     }
   }
 
-  // Only the edge proxies need to handle websockets
-  pj_bool_t websockets_enabled = opt.edge_proxy;
+  pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
   if (websockets_enabled)
   {
-    status = init_websockets();
+    status = init_websockets((unsigned short)opt.webrtc_port);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error initializing websockets, %s",
