@@ -59,20 +59,37 @@ extern "C" {
 
 /// Constructor.
 ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
+                       int port,
                        int priority,
                        HSSConnection* hss,
                        SCSCFSelector* scscf_selector,
                        AnalyticsLogger* analytics_logger) :
   BasicProxy(endpt, "mod-icscf", priority, analytics_logger, false),
+  _port(port),
   _hss(hss),
   _scscf_selector(scscf_selector)
 {
 }
 
+
 /// Destructor.
 ICSCFProxy::~ICSCFProxy()
 {
 }
+
+
+/// Process received requests not absorbed by transaction layer.
+pj_bool_t ICSCFProxy::on_rx_request(pjsip_rx_data* rdata)
+{
+  if (rdata->tp_info.transport->local_name.port == _port)
+  {
+    /// Request received on I-CSCF port, so process it.
+    return BasicProxy::on_rx_request(rdata);
+  }
+
+  return PJ_FALSE;
+}
+
 
 /// Perform I-CSCF specific verification of incoming requests.
 pj_status_t ICSCFProxy::verify_request(pjsip_rx_data *rdata)

@@ -52,6 +52,7 @@ class ICSCFProxy : public BasicProxy
 public:
   /// Constructor.
   ICSCFProxy(pjsip_endpoint* endpt,
+             int port,
              int priority,
              HSSConnection* hss,
              SCSCFSelector* scscf_selector,
@@ -61,6 +62,9 @@ public:
   ~ICSCFProxy();
 
 protected:
+  /// Process received requests not absorbed by transaction layer.
+  virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);
+
   /// Perform I-CSCF specific verification of incoming requests.
   virtual pj_status_t verify_request(pjsip_rx_data *rdata);
 
@@ -119,6 +123,10 @@ private:
     /// The list of S-CSCFs already attempted for this request.
     std::vector<std::string> _attempted_scscfs;
   };
+
+  /// Port for I-CSCF function.  This proxy will only process requests
+  /// sent to this port, and leave other requests to other PJSIP modules.
+  int _port;
 
   /// Homestead connection class for performing HSS queries.
   HSSConnection* _hss;
