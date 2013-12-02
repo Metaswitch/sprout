@@ -1,4 +1,4 @@
-**                                                                           */
+/**
  * @file basicproxy.cpp  BasicProxy class implementation
  *
  * Project Clearwater - IMS in the Cloud
