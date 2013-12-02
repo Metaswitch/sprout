@@ -332,12 +332,6 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
     // We already have a target (from routing), so set it now.
     uas_tsx->add_target(target);
   }
-  else
-  {
-    // We still don't have any targets, so calculate them now.
-    calculate_targets(uas_tsx, tdata);
-  }
-
   // Process the request.
   uas_tsx->process_tsx_request();
 
@@ -530,43 +524,6 @@ pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
 }
 
 
-/// Calculate a list of targets for the message.
-void BasicProxy::calculate_targets(UASTsx* uas_tsx,
-                                   pjsip_tx_data* tdata)
-{
-  pjsip_msg* msg = tdata->msg;
-
-  // RFC 3261 Section 16.5 Determining Request Targets
-
-  pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
-
-  // If the Request-URI of the request contains an maddr parameter, the
-  // Request-URI MUST be placed into the target set as the only target
-  // URI, and the proxy MUST proceed to Section 16.6.
-  if (req_uri->maddr_param.slen)
-  {
-    LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
-    Target* target = new Target;
-    target->uri = (pjsip_uri*)req_uri;
-    uas_tsx->add_target(target);
-    return;
-  }
-
-  // If the domain of the Request-URI indicates a domain this element is
-  // not responsible for, the Request-URI MUST be placed into the target
-  // set as the only target, and the element MUST proceed to the task of
-  // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
-      (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
-  {
-    LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
-    Target* target = new Target;
-    target->uri = (pjsip_uri*)req_uri;
-    uas_tsx->add_target(target);
-    return;
-  }
-}
-
 
 /// Creates a UASTsx object
 BasicProxy::UASTsx* BasicProxy::create_uas_tsx()
@@ -589,6 +546,60 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _context_count(0)
 {
   // Don't do any set-up that could fail in here - do that in the init method.
+}
+
+
+BasicProxy::UASTsx::~UASTsx()
+{
+  LOG_DEBUG("BasicProxy::UASTsx destructor");
+
+  pj_assert(_context_count == 0);
+
+  if (_tsx != NULL)
+  {
+    _proxy->unbind_transaction(_tsx);
+  }
+
+  if (_req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+  {
+    // INVITE transaction has been terminated.  If there are any
+    // pending UAC transactions they should be cancelled.
+    cancel_pending_uac_tsx(0, PJ_TRUE);
+  }
+
+  // Disconnect all UAC transactions from the UAS transaction.
+  LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
+  for (size_t ii = 0; ii < _uac_tsx.size(); ++ii)
+  {
+    UACTsx* uac_tsx = _uac_tsx[ii];
+    if (uac_tsx != NULL)
+    {
+      dissociate(uac_tsx);
+    }
+  }
+
+  if (_req != NULL)
+  {
+    LOG_DEBUG("Free original request");
+    pjsip_tx_data_dec_ref(_req);
+    _req = NULL;
+  }
+
+  if (_best_rsp != NULL)
+  {
+    // The pre-built response hasn't been used, so free it.
+    LOG_DEBUG("Free un-used best response");
+    pjsip_tx_data_dec_ref(_best_rsp);
+    _best_rsp = NULL;
+  }
+
+  // Delete the targets.
+  for (size_t ii = 0; ii < _targets.size(); ++ii)
+  {
+    delete _targets[ii];
+  }
+
+  LOG_DEBUG("BasicProxy::UASTsx destructor completed");
 }
 
 
@@ -669,54 +680,6 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
 }
 
 
-BasicProxy::UASTsx::~UASTsx()
-{
-  LOG_DEBUG("BasicProxy::UASTsx destructor");
-
-  pj_assert(_context_count == 0);
-
-  if (_tsx != NULL)
-  {
-    _proxy->unbind_transaction(_tsx);
-  }
-
-  if (_req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-  {
-    // INVITE transaction has been terminated.  If there are any
-    // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0, PJ_TRUE);
-  }
-
-  // Disconnect all UAC transactions from the UAS transaction.
-  LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
-  for (size_t ii = 0; ii < _uac_tsx.size(); ++ii)
-  {
-    UACTsx* uac_tsx = _uac_tsx[ii];
-    if (uac_tsx != NULL)
-    {
-      dissociate(uac_tsx);
-    }
-  }
-
-  if (_req != NULL)
-  {
-    LOG_DEBUG("Free original request");
-    pjsip_tx_data_dec_ref(_req);
-    _req = NULL;
-  }
-
-  if (_best_rsp != NULL)
-  {
-    // The pre-built response hasn't been used, so free it.
-    LOG_DEBUG("Free un-used best response");
-    pjsip_tx_data_dec_ref(_best_rsp);
-    _best_rsp = NULL;
-  }
-
-  LOG_DEBUG("BasicProxy::UASTsx destructor completed");
-}
-
-
 /// Adds a target to the target list for this transaction.
 void BasicProxy::UASTsx::add_target(BasicProxy::Target* target)
 {
@@ -727,6 +690,17 @@ void BasicProxy::UASTsx::add_target(BasicProxy::Target* target)
 /// Handle the incoming half of a transaction request.
 void BasicProxy::UASTsx::process_tsx_request()
 {
+  if (_targets.size() == 0)
+  {
+    // We don't have any targets yet, so calculate them now.
+    int status_code = calculate_targets(_req);
+    if (status_code != PJSIP_SC_OK)
+    {
+      send_response(status_code);
+      return;
+    }
+  }
+
   if (_targets.size() == 0)
   {
     // No targets found, so reject with a 404 status code.
@@ -746,6 +720,43 @@ void BasicProxy::UASTsx::process_tsx_request()
     send_response(PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
+}
+
+
+/// Calculate a list of targets for the message.
+int BasicProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
+{
+  pjsip_msg* msg = tdata->msg;
+
+  // RFC 3261 Section 16.5 Determining Request Targets
+
+  pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
+
+  // If the Request-URI of the request contains an maddr parameter, the
+  // Request-URI MUST be placed into the target set as the only target
+  // URI, and the proxy MUST proceed to Section 16.6.
+  if (req_uri->maddr_param.slen)
+  {
+    LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
+    Target* target = new Target;
+    add_target(target);
+    return PJSIP_SC_OK;
+  }
+
+  // If the domain of the Request-URI indicates a domain this element is
+  // not responsible for, the Request-URI MUST be placed into the target
+  // set as the only target, and the element MUST proceed to the task of
+  // Request Forwarding (Section 16.6).
+  if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
+      (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
+  {
+    LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
+    Target* target = new Target;
+    add_target(target);
+    return PJSIP_SC_OK;
+  }
+
+  return PJSIP_SC_NOT_FOUND;
 }
 
 
@@ -1383,7 +1394,13 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
 
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
-  _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target->uri);
+  if (target->uri != NULL)
+  {
+    // Target has a URI, so write this in to the request URI in the request.
+    // Need to clone the URI to make sure it comes from the right pool.
+    _tdata->msg->line.req.uri =
+                        (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target->uri);
+  }
 
   for (std::list<pjsip_uri*>::const_iterator pit = target->paths.begin();
        pit != target->paths.end();

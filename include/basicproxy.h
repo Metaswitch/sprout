@@ -54,9 +54,11 @@ extern "C" {
 #include <vector>
 #include <list>
 
+#include "stack.h"
 #include "pjmodule.h"
 
 
+///
 class BasicProxy
 {
 public:
@@ -141,6 +143,10 @@ protected:
     void exit_context();
 
   protected:
+    /// Calculate targets for requests where Route headers do not determine
+    /// the target.
+    virtual int calculate_targets(pjsip_tx_data* tdata);
+
     /// Called when the final response has been determined and should be sent
     /// back on the UAS transaction.
     /// @Returns whether or not the send was a success.
@@ -168,7 +174,7 @@ protected:
     virtual BasicProxy::UACTsx* create_uac_tsx(size_t index);
 
     /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; };
+    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
 
     /// Owning proxy object.
     BasicProxy* _proxy;
@@ -285,10 +291,6 @@ protected:
   /// Process route information in the request.
   virtual pj_status_t process_routing(pjsip_tx_data *tdata,
                                       BasicProxy::Target*& target);
-
-  /// Calculate targets for requests where routing does not determine the
-  /// target.
-  virtual void calculate_targets(UASTsx* uas_tsx, pjsip_tx_data* tdata);
 
   /// Utility method to create a UASTsx objects for incoming requests.  Can
   /// be overriden if a subclass wants its own version of UASTsx.

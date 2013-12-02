@@ -51,6 +51,7 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
+									icscfproxy.cpp \
                   scscfselector.cpp	\
                   signalhandler.cpp
 
