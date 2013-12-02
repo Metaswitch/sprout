@@ -1983,7 +1983,7 @@ TEST_F(IfcHandlerTest, SDPLineNoMatch)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SessionDescription><Line>z</Line></SessionDescription>\n"
+         "      <SessionDescription><Line>v</Line><Content>content</Content></SessionDescription>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
