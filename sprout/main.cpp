@@ -874,7 +874,7 @@ int main(int argc, char *argv[])
     status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
   }
 
-  if (!opt.edge_proxy)
+  if (!opt.access_proxy)
   {
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_server.empty())
