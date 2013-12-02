@@ -652,9 +652,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "INVITE";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "INVITE";
 
   // Check originating.
@@ -705,9 +705,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "PRACK";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "PRACK";
 
   prack = pop_txdata();
@@ -765,9 +765,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "ACK";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "ACK";
 
   free_txdata();
@@ -787,7 +787,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg._cseq++;
 
   // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
-  // because we handle these retransmissions statelessly and hence don't have any info on 
+  // because we handle these retransmissions statelessly and hence don't have any info on
   // trust boundary handling.
   EXPECT_EQ("", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE) (rexmt)";
   EXPECT_EQ("", get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE) (rexmt)";
@@ -809,9 +809,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "BYE";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "BYE";
 
   // ---------- Send a reply to that X<-S
@@ -860,9 +860,9 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   tpB->expect_target(current_txdata(), tpBset);
 
   // Check P-Access-Network-Info and P-Visited-Network-Id.
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
             get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
-  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "", 
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
             get_headers(out, "P-Visited-Network-Id")) << "INVITE (#2)";
 
   invite = pop_txdata();
@@ -3560,34 +3560,34 @@ TEST_F(IscTest, InterestingAs)
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
                                   </InitialFilterCriteria>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
   fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
@@ -3597,56 +3597,56 @@ TEST_F(IscTest, InterestingAs)
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
                                   </InitialFilterCriteria>
                                   <InitialFilterCriteria>
                                     <Priority>2</Priority>
                                     <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>QWERTY_UIOP</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:sholes.example.com</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>QWERTY_UIOP</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:sholes.example.com</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
                                   </InitialFilterCriteria>
                                   <InitialFilterCriteria>
                                     <Priority>3</Priority>
                                     <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
+                                      <ConditionTypeCNF>0</ConditionTypeCNF>
+                                      <SPT>
+                                        <ConditionNegated>0</ConditionNegated>
+                                        <Group>0</Group>
+                                        <Method>INVITE</Method>
+                                        <Extension></Extension>
+                                      </SPT>
+                                    </TriggerPoint>
+                                    <ApplicationServer>
+                                      <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
+                                      <DefaultHandling>0</DefaultHandling>
+                                    </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 

@@ -2208,7 +2208,7 @@ bool UASTransaction::move_to_terminating_chain()
 {
   // These headers name the originating user, so should not survive
   // the changearound to the terminating chain.
-  PJUtils::delete_header(_req->msg, &STR_P_SERVED_USER);
+  PJUtils::remove_hdr(_req->msg, &STR_P_SERVED_USER);
 
   // Create new terminating chain.
   _as_chain_link.release();

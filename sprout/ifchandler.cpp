@@ -520,13 +520,10 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(
-  const SessionCase& session_case,
-  pjsip_msg* msg,
-  pj_pool_t* pool)
+std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
+                                             pjsip_msg* msg,
+                                             pj_pool_t* pool)
 {
-  pjsip_uri* uri = NULL;
-  std::string user;
 
   // For originating:
   //
@@ -559,69 +556,17 @@ std::string IfcHandler::served_user_from_msg(
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
+  pjsip_uri* uri;
+  std::string user;
 
   if (session_case.is_originating())  // (includes orig-cdiv)
   {
-    // Inspect P-Served-User header. Format is name-addr or addr-spec
-    // (containing a URI), followed by optional parameters.
-    pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
-
-    if (served_user_hdr != NULL)
-    {
-      // Remove parameters before parsing the URI.  If there are URI parameters,
-      // the URI must be enclosed in angle brackets, so we can either remove
-      // everything after the first closing angle bracket, or everything after
-      // the first semo-colon.
-      char* end = pj_strchr(&served_user_hdr->hvalue, '>');
-      if (end == NULL)
-      {
-        end = pj_strchr(&served_user_hdr->hvalue, ';');
-      }
-      if (end != NULL)
-      {
-        served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
-      }
-
-      uri = pjsip_parse_uri(pool, served_user_hdr->hvalue.ptr, served_user_hdr->hvalue.slen, 0);
-
-      if (uri == NULL)
-      {
-        LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
-      }
-    }
-
-    if (uri == NULL)
-    {
-      // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
-      // header.
-      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
-                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
-
-      if (asserted_id_hdr != NULL)
-      {
-        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
-      }
-    }
+    uri = PJUtils::orig_served_user(msg);
   }
-
-  if (uri == NULL)
+  else
   {
-    if (session_case.is_originating())
-    {
-      // For originating services, the user is parsed from the from header.
-      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
-    }
-    else
-    {
-      // For terminating services, the user is parsed from the request URI.
-      uri = msg->line.req.uri;
-    }
+    uri = PJUtils::term_served_user(msg);
   }
-
-  // Get the URI if it was encoded within a name-addr.
-  uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))

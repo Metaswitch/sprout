@@ -36,10 +36,13 @@
  */
 
 extern "C" {
-  #include <pjsip.h>
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
 }
 
-#include "pjutils.h"
+#include "log.h"
 #include "constants.h"
 #include "custom_headers.h"
 
@@ -66,9 +69,53 @@ pjsip_hdr_vptr identity_hdr_vptr =
 
 /// Custom create, clone and print functions used for the P-Associated-URI,
 /// P-Asserted-Identity and P-Preferred-Identity headers
-int identity_hdr_print(pjsip_routing_hdr *hdr,
-                              char *buf,
-                              pj_size_t size)
+pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
+  return identity_hdr_init(pool, mem, name);
+}
+
+
+pjsip_routing_hdr* identity_hdr_init(pj_pool_t* pool, void* mem, const pj_str_t name)
+{
+  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  pj_list_init(hdr);
+  hdr->vptr = &identity_hdr_vptr;
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = name;
+  hdr->sname = pj_str("");
+  pjsip_name_addr_init(&hdr->name_addr);
+  pj_list_init(&hdr->other_param);
+
+  return hdr;
+}
+
+
+pjsip_routing_hdr* identity_hdr_clone(pj_pool_t* pool,
+                                      const pjsip_routing_hdr* rhs)
+{
+  pjsip_routing_hdr *hdr = identity_hdr_create(pool, rhs->name);
+  pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
+  pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
+  return hdr;
+}
+
+
+pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t* pool,
+                                              const pjsip_routing_hdr* rhs)
+{
+  pjsip_routing_hdr *hdr = PJ_POOL_ALLOC_T(pool, pjsip_routing_hdr);
+  pj_memcpy(hdr, rhs, sizeof(*hdr));
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &rhs->other_param);
+  return hdr;
+}
+
+
+int identity_hdr_print(pjsip_routing_hdr* hdr,
+                       char* buf,
+                       pj_size_t size)
 {
   int printed;
   char *startbuf = buf;
@@ -103,26 +150,6 @@ int identity_hdr_print(pjsip_routing_hdr *hdr,
 }
 
 
-pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool,
-                                      const pjsip_routing_hdr *rhs)
-{
-  pjsip_routing_hdr *hdr = PJUtils::identity_hdr_create(pool, rhs->name);
-  pjsip_name_addr_assign(pool, &hdr->name_addr, &rhs->name_addr);
-  pjsip_param_clone(pool, &hdr->other_param, &rhs->other_param);
-  return hdr;
-}
-
-
-pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool,
-                                              const pjsip_routing_hdr *rhs)
-{
-  pjsip_routing_hdr *hdr = PJ_POOL_ALLOC_T(pool, pjsip_routing_hdr);
-  pj_memcpy(hdr, rhs, sizeof(*hdr));
-  pjsip_param_shallow_clone(pool, &hdr->other_param, &rhs->other_param);
-  return hdr;
-}
-
-
 /// Custom parser for P-Associated-URI header.  This is registered with PJSIP when
 /// we initialize the stack.
 pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
@@ -135,7 +162,7 @@ pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
 
   do
   {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
+    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_ASSOCIATED_URI);
     if (!first)
     {
       first = hdr;
@@ -150,6 +177,7 @@ pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
 
     while (*scanner->curptr == ';')
     {
+      pj_scan_get_char(scanner);    // Consume ;
       pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
       pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
       pj_list_insert_before(&hdr->other_param, p);
@@ -183,7 +211,7 @@ pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx *ctx)
 
   do
   {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
+    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_ASSERTED_IDENTITY);
     if (!first)
     {
       first = hdr;
@@ -224,7 +252,7 @@ pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx *ctx)
 
   do
   {
-    pjsip_route_hdr *hdr = PJUtils::identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
+    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_PREFERRED_IDENTITY);
     if (!first)
     {
       first = hdr;
@@ -250,6 +278,32 @@ pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx *ctx)
 
   return (pjsip_hdr*)first;
 }
+
+
+/// Custom parser for P-Served-User.  This is registered with PJSIP when
+/// we initialize the stack.
+pjsip_hdr* parse_hdr_p_served_user(pjsip_parse_ctx *ctx)
+{
+  // The P-Served-User header is a single name-addr followed by optional
+  // parameters, so we parse it to a single pjsip_route_hdr structure.
+  pj_scanner *scanner = ctx->scanner;
+
+  pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_P_SERVED_USER);
+  pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+  pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+  while (*scanner->curptr == ';')
+  {
+    pj_scan_get_char(scanner);    // Consume ;
+    pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
+    pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
+    pj_list_insert_before(&hdr->other_param, p);
+  }
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
 
 pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
 {
@@ -670,7 +724,8 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
 
 /// Register all of our custom header parsers with pjSIP.  This should be
 // called once during startup.
-pj_status_t register_custom_headers() {
+pj_status_t register_custom_headers()
+{
   pj_status_t status;
 
   status = pjsip_register_hdr_parser("Privacy", NULL, &parse_hdr_privacy);
@@ -685,6 +740,7 @@ pj_status_t register_custom_headers() {
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("P-Charging-Function-Addresses", NULL, &parse_hdr_p_charging_function_addresses);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("P-Served-User", NULL, &parse_hdr_p_served_user);
 
   return PJ_SUCCESS;
 }
