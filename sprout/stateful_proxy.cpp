@@ -148,6 +148,7 @@ static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
 static HSSConnection* hss;
+static pjsip_uri* icscf_uri = NULL;
 
 static bool ibcf = false;
 
@@ -2028,9 +2029,33 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
       }
 
-      if (disposition == AsChainLink::Disposition::Complete &&
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_originating() &&
+          disposition == AsChainLink::Disposition::Complete &&
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+          icscf_uri)
+      {
+        // We've completed the originating half, the destination is local and
+        // we have an external I-CSCF configured.  Route the call there.
+        LOG_INFO("Invoking I-CSCF %s",
+                 PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+
+        // Release any existing AS chain to avoid leaking it.
+        _as_chain_link.release();
+
+        // Start defining the new target.
+        delete target;
+        target = new Target;
+
+        // Set the I-CSCF URI as the topmost route header.
+        target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
+
+        // The Request-URI should remain unchanged
+        target->uri = _req->msg->line.req.uri;
+      }
+      else if (disposition == AsChainLink::Disposition::Complete &&
+               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+               !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
       {
         // We've completed the originating half (or we're not doing
         // originating handling for this call), we're handling the
@@ -3548,6 +3573,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager)
 {
   pj_status_t status;
@@ -3624,6 +3650,17 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   enum_service = enumService;
   bgcf_service = bgcfService;
   hss = hss_connection;
+
+  if (!icscf_uri_str.empty())
+  {
+    // Got an I-CSCF - parse it.
+    icscf_uri = PJUtils::uri_from_string(icscf_uri_str, stack_data.pool, PJ_FALSE);
+    if (PJSIP_URI_SCHEME_IS_SIP(icscf_uri))
+    {
+      // Got a SIP URI - force loose-routing.
+      ((pjsip_sip_uri*)icscf_uri)->lr_param = 1;
+    }
+  }
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

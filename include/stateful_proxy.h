@@ -300,6 +300,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager);
 
 void destroy_stateful_proxy();

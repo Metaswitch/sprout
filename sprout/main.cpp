@@ -99,6 +99,7 @@ struct options
   int                    upstream_proxy_recycle;
   pj_bool_t              ibcf;
   std::string            trusted_hosts;
+  std::string            icscf_uri_str;
   pj_bool_t              auth_enabled;
   std::string            auth_realm;
   std::string            auth_config;
@@ -159,6 +160,7 @@ static void usage(void)
        "                            recycled).\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
+       " -j, --icscf <I-CSCF URI>   Route calls to specific I-CSCF\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
        " -M, --memstore <config_file>"
@@ -209,6 +211,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "alias",             required_argument, 0, 'n'},
     { "edge-proxy",        required_argument, 0, 'e'},
     { "ibcf",              required_argument, 0, 'I'},
+    { "icscf",             required_argument, 0, 'j'},
     { "auth",              required_argument, 0, 'A'},
     { "realm",             required_argument, 0, 'R'},
     { "memstore",          required_argument, 0, 'M'},
@@ -319,6 +322,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->ibcf = PJ_TRUE;
       options->trusted_hosts = std::string(pj_optarg);
       fprintf(stdout, "IBCF mode enabled, trusted hosts = %s\n", pj_optarg);
+      break;
+
+    case 'j':
+      options->icscf_uri_str = std::string(pj_optarg);
+      fprintf(stdout, "I-CSCF enabled, URI = %s\n", pj_optarg);
       break;
 
     case 'R':
@@ -631,6 +639,7 @@ int main(int argc, char *argv[])
   opt.edge_proxy = PJ_FALSE;
   opt.upstream_proxy_port = 0;
   opt.ibcf = PJ_FALSE;
+  opt.icscf_uri_str = "";
   opt.trusted_port = 0;
   opt.untrusted_port = 0;
   opt.auth_enabled = PJ_FALSE;
@@ -851,6 +860,7 @@ int main(int argc, char *argv[])
                                enum_service,
                                bgcf_service,
                                hss_connection,
+                               opt.icscf_uri_str,
                                quiescing_mgr);
   if (status != PJ_SUCCESS)
   {
