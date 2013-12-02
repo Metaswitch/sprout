@@ -135,7 +135,9 @@ SCSCFSelector::~SCSCFSelector()
   _updater = NULL;
 }
 
-std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory, const std::vector<int> &optional) 
+std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory, 
+                                     const std::vector<int> &optional,
+                                     const std::vector<std::string> &rejects) 
 {
   // There are no configured S-CSCFs. 
   if (_scscfs.empty())
@@ -166,7 +168,10 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory, const st
 
   for (std::vector<scscf>::iterator it=_scscfs.begin(); it!=_scscfs.end(); ++it)
   {
-    if (std::includes(it->capabilities.begin(), it->capabilities.end(), mandatory_cap.begin(), mandatory_cap.end()))
+    // Only include the S-CSCF if its name isn't in the list of S-CSCFs to reject and it has all of
+    // the mandatory capabilities
+    if ((std::find(rejects.begin(), rejects.end(), it->server) == rejects.end()) &&
+        (std::includes(it->capabilities.begin(), it->capabilities.end(), mandatory_cap.begin(), mandatory_cap.end())))
     {
       std::vector<int> intersection;
       std::set_intersection(it->capabilities.begin(), it->capabilities.end(),

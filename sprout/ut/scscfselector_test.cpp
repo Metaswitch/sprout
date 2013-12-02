@@ -70,23 +70,25 @@ class SCSCFSelectorTest : public ::testing::Test
 class ST
 {
 public:
-  ST(vector<int> mandate, vector<int> optional, string out) :
+  ST(vector<int> mandate, vector<int> optional, vector<string> rejects, string out) :
     _mandate(mandate),
     _optional(optional),
+    _rejects(rejects),
     _out(out)
   {
   }
 
   void test(SCSCFSelector& scscf_)
   {
-    string ret = scscf_.get_scscf(_mandate, _optional);
+    string ret = scscf_.get_scscf(_mandate, _optional, _rejects);
     EXPECT_EQ(_out, ret);
   }
 
 private:
-  vector<int> _mandate;  // input
-  vector<int> _optional; // input
-  string _out;           // expected output
+  vector<int> _mandate;    // input
+  vector<int> _optional;   // input
+  vector<string> _rejects; // input
+  string _out;             // expected output
 };
 
 
@@ -107,10 +109,10 @@ TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test when there's no S-CSCF with all the mandatory capabilities
-  ST({9999}, {}, "").test(scscf_);
+  ST({9999}, {}, {}, "").test(scscf_);
 
   // Test when there's only one S-CSCF with all the mandatory capabilities
-  ST({123, 432, 345}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
+  ST({123, 432, 345}, {}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
@@ -119,7 +121,7 @@ TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites
-  ST({123, 432}, {654}, "cw-scscf2.cw-ngv.com").test(scscf_);
+  ST({123, 432}, {654}, {}, "cw-scscf2.cw-ngv.com").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, SelectPriorities)
@@ -128,7 +130,7 @@ TEST_F(SCSCFSelectorTest, SelectPriorities)
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test with S-CSCFs with the same mandatory and optional capabilities, but different priorities
-  ST({}, {654, 567}, "cw-scscf4.cw-ngv.com").test(scscf_);
+  ST({}, {654, 567}, {}, "cw-scscf4.cw-ngv.com").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, SelectWeights)
@@ -140,7 +142,21 @@ TEST_F(SCSCFSelectorTest, SelectWeights)
   // One of the weights is 0 - this is for code coverage reasons to ensure that the first S-CSCF
   // considered is never chosen. The S-CSCFs with different weights have the same name, so that
   // the test can pick either randomly and still pass.
-  ST({654}, {876}, "cw-scscf6.cw-ngv.com").test(scscf_);
+  ST({654}, {876}, {}, "cw-scscf6.cw-ngv.com").test(scscf_);
+}
+
+TEST_F(SCSCFSelectorTest, RejectSCSCFs)
+{
+  // Parse a valid file.
+  SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
+
+  // Test when there's only one S-CSCF with all the mandatory capabilities, but it's on the 
+  // reject list
+  ST({123, 432, 345}, {}, {"cw-scscf1.cw-ngv.com"}, "").test(scscf_);
+
+  // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites. The 
+  // one with more optional capabilities is on the reject list, so the other one should be chosen.
+  ST({123, 432}, {654}, {"cw-scscf2.cw-ngv.com"}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, ParseError)
@@ -149,7 +165,7 @@ TEST_F(SCSCFSelectorTest, ParseError)
   EXPECT_TRUE(_log.contains("Failed to read S-CSCF configuration data"));
 
   // Check that no S-CSCF is returned
-  ST({}, {}, "").test(scscf_);
+  ST({}, {}, {}, "").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, MissingParts)
@@ -159,7 +175,7 @@ TEST_F(SCSCFSelectorTest, MissingParts)
 
   // Check that only one S-CSCF returned (with low priority), as the others couldn't 
   // be parsed
-  ST({123, 432}, {123, 432}, "cw-scscf1.cw-ngv.com").test(scscf_);
+  ST({123, 432}, {123, 432}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, MissingBlock)
@@ -168,7 +184,7 @@ TEST_F(SCSCFSelectorTest, MissingBlock)
   EXPECT_TRUE(_log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
 
   // Check that no S-CSCF is returned
-  ST({}, {}, "").test(scscf_);
+  ST({}, {}, {}, "").test(scscf_);
 }
 
 TEST_F(SCSCFSelectorTest, MissingFile)
@@ -177,5 +193,5 @@ TEST_F(SCSCFSelectorTest, MissingFile)
   EXPECT_TRUE(_log.contains("Failed to read S-CSCF configuration data"));
   
   // Check that no S-CSCF is returned
-  ST({}, {}, "").test(scscf_);
+  ST({}, {}, {}, "").test(scscf_);
 }
