@@ -95,6 +95,7 @@ get_settings()
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
+        authentication=Y
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
 
         # Work out which features are enabled.
@@ -119,6 +120,8 @@ get_settings()
         then
           [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms $xdms_hostname"
         fi
+
+        [ "$authentication" != "Y" ] || authentication_arg="--authentication"
 }
 
 #
@@ -159,6 +162,7 @@ do_start()
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
+                     $authentication_arg
                      -a $log_directory
                      -F $log_directory
                      -L $log_level"

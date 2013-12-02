@@ -235,6 +235,33 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
   }
 }
 
+// Determine the default private ID for a public ID contained in a URI.  This
+// is calculated as specified by the 3GPP specs by effectively stripping the
+// scheme.
+std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
+{
+  std::string id;
+  if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
+      PJSIP_URI_SCHEME_IS_SIPS(uri))
+  {
+    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+    if (sip_uri->user.slen > 0)
+    {
+      id = PJUtils::pj_str_to_string(&sip_uri->user) + "@" + PJUtils::pj_str_to_string(&sip_uri->host);
+    }
+    else
+    {
+      id = PJUtils::pj_str_to_string(&sip_uri->host);
+    }
+  } 
+  else
+  {
+    const pj_str_t* scheme = pjsip_uri_get_scheme(uri);
+    LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
+                scheme->slen, scheme->ptr);
+  }
+  return id;
+}
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
@@ -246,7 +273,9 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
     auth_hdr->credential.digest.realm = stack_data.home_domain;
-    auth_hdr->credential.digest.username = PJUtils::uri_to_pj_str(PJSIP_URI_IN_FROMTO_HDR, tdata->msg->line.req.uri, tdata->pool);
+    pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
+    std::string username = PJUtils::default_private_id_from_uri(to_uri);
+    pj_strdup2(tdata->pool, &auth_hdr->credential.digest.username, username.c_str());
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)auth_hdr);
   }
   pjsip_param* new_param = (pjsip_param*) pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
@@ -351,6 +380,7 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
     LOG_DEBUG("Found Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
     if ((is_home_domain(uri)) || (is_uri_local(uri)))
     {
+      LOG_DEBUG("Route header is local");
       rc = true;
       if (hdr != NULL)
       {

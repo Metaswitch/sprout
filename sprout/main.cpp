@@ -188,6 +188,7 @@ static void usage(void)
        " -W, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
+       " -A, --authentication       Enable authentication\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -245,6 +246,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "pjsip-threads",     required_argument, 0, 'P'},
     { "worker-threads",    required_argument, 0, 'W'},
     { "analytics",         required_argument, 0, 'a'},
+    { "authentication",    no_argument,       0, 'A'},
     { "log-file",          required_argument, 0, 'F'},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
@@ -448,6 +450,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->analytics_enabled = PJ_TRUE;
       options->analytics_directory = std::string(pj_optarg);
       fprintf(stdout, "Analytics directory set to %s\n", pj_optarg);
+      break;
+
+    case 'A':
+      options->auth_enabled = PJ_TRUE;
+      fprintf(stdout, "Authentication enabled\n");
       break;
 
     case 'L':
@@ -862,10 +869,13 @@ int main(int argc, char *argv[])
   // Initialise the OPTIONS handling module.
   status = init_options();
 
-  if (!opt.access_proxy)
+  if (opt.auth_enabled)
   {
     status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+  }
 
+  if (!opt.edge_proxy)
+  {
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_server.empty())
     {

@@ -1,5 +1,5 @@
 /**
- * @file bgcfservice.h class definition for an BGCF service provider
+ * @file signalhandler.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -35,32 +35,7 @@
  */
 
 ///
-///
 
-#ifndef BGCFSERVICE_H__
-#define BGCFSERVICE_H__
+#include "signalhandler.h"
 
-#include <map>
-#include <string>
-
-#include <functional>
-#include "updater.h"
-
-class BgcfService
-{
-public:
-  BgcfService(std::string configuration = "./bgcf.json");
-  ~BgcfService();
-
-  /// Updates the bgcf routes
-  void update_routes();
-
-  std::vector<std::string> get_route(const std::string &domain) const;
-
-private:
-  std::map<std::string, std::vector<std::string>> _routes; 
-  std::string _configuration;
-  Updater<void, BgcfService>* _updater;
-};
-
-#endif
+SignalHandler<SIGHUP> _sighup_handler;

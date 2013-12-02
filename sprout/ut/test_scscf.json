@@ -1,0 +1,39 @@
+{
+    "s-cscfs" : [
+        {   "server" : "cw-scscf1.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432, 345]
+        },
+        {   "server" : "cw-scscf2.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432, 654]
+        },
+        {   "server" : "cw-scscf3.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 100,
+            "capabilities" : [654, 567, 789]
+        },
+        {   "server" : "cw-scscf4.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [654, 567]
+        },
+        {   "server" : "cw-scscf5.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 0,
+            "capabilities" : [654, 567, 876]
+        },
+        {   "server" : "cw-scscf6.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 10,
+            "capabilities" : [654, 567, 876]
+        },
+        {   "server" : "cw-scscf6.cw-ngv.com",
+            "priority" : 1,
+            "weight" : 100,
+            "capabilities" : [654, 567, 876]
+        }
+    ]
+}

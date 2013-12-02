@@ -189,7 +189,7 @@ private:
   void update_history_info_reason(pjsip_uri* history_info_uri, int code);
   AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
-  bool handle_incoming_non_cancel(const ServingState& serving_state);
+  bool find_as_chain(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(Target** pre_target);
   bool move_to_terminating_chain();
   AsChainLink::Disposition handle_terminating(Target** pre_target);

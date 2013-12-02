@@ -442,9 +442,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
                    uri->user.slen, uri->user.ptr,
                    original_dialog.to_string().c_str());
           session_case = &original_dialog.session_case();
-
-          // This message forms part of the AsChain trail.
-          set_trail(rdata, original_dialog.trail());
         }
         else
         {
@@ -841,7 +838,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // When working as a load-balancer for a third-party P-CSCF, trust the
   // orig parameter of the top-most Route header.
   pjsip_param* orig_param = NULL;
-  if (PJUtils::is_top_route_local(tdata->msg, &route_hdr))
+
+  // Check the rdata here, as the Route header may have been stripped
+  // from the cloned tdata.
+  if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
   {
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
     orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
@@ -1975,71 +1975,82 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
     {
-      // Do services and translation processing for requests targeted at this
-      // node/home domain.
-      bool rc = handle_incoming_non_cancel(serving_state);
+      // Pick up the AS chain from the ODI, or do the iFC lookups
+      // necessary to create a new AS chain.
+      bool rc = find_as_chain(serving_state);
 
       if (!rc)
       {
-        LOG_INFO("Reject request with 404 due to failed originating iFC lookup");
+        LOG_INFO("Reject request with 404 due to failed iFC lookup");
         send_response(PJSIP_SC_NOT_FOUND);
-        delete target;
+        // target is not set, so just return
         return;
       };
 
-      // Add ourselves as orig-IOI if appropriate.
-      //
-      // Here we rely on the served_user not being populated unless the user
-      // is locally hosted.  This is policed in served_user_from_msg().
-      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-      if (pcv && !_as_chain_link.served_user().empty())
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_originating())
       {
-        pcv->orig_ioi = stack_data.home_domain;
-      }
+        LOG_DEBUG("Performing originating call processing");
 
-      // Do incoming (originating) half.
-      disposition = handle_originating(&target);
+        // Do originating handling (including AS handling and setting
+        // orig-ioi).
+        disposition = handle_originating(&target);
 
-      if ((disposition == AsChainLink::Disposition::Complete) &&
-          (enum_service) &&
-          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          (!is_uri_routeable(_req->msg->line.req.uri)))
-      {
-        // Request is targeted at this domain but URI is not currently
-        // routeable, so translate it to a routeable URI.
-        LOG_DEBUG("Translating URI");
-        status = translate_request_uri(_req, trail());
-
-        if (status != PJ_SUCCESS)
+        if ((disposition == AsChainLink::Disposition::Complete) &&
+            (enum_service) &&
+            (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+            (!is_uri_routeable(_req->msg->line.req.uri)))
         {
-          // An error occurred during URI translation.  This doesn't happen if
-          // there is no match, only if there is a match but there is an error
-          // performing the defined mapping.  We therefore reject the request
-          // with the not found status code and a specific reason phrase.
-          send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-          disposition = AsChainLink::Disposition::Stop;
-        }
-      }
+          // We've finished originating handling, and the request is
+          // targeted at this domain, but the URI is not currently
+          // routeable, so do an ENUM lookup to translate it to a
+          // routeable URI.
 
-      if (disposition == AsChainLink::Disposition::Complete)
-      {
-        if (!_as_chain_link.is_set() || !_as_chain_link.session_case().is_terminating())
-        {
-          // We've completed the originating half and we don't yet have a
-          // terminating chain: switch to terminating and look up iFCs
-          // again.  The served user changes here.
-          LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-          bool success = move_to_terminating_chain();
-          if (!success)
+          // This may mean it is no longer targeted at
+          // this domain, so we need to recheck this below before
+          // starting terminating handling.
+          LOG_DEBUG("Translating URI");
+          status = translate_request_uri(_req, trail());
+
+          if (status != PJ_SUCCESS)
           {
-            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
-            send_response(PJSIP_SC_NOT_FOUND);
-            delete target;
-            return;
+            // An error occurred during URI translation.  This doesn't happen if
+            // there is no match, only if there is a match but there is an error
+            // performing the defined mapping.  We therefore reject the request
+            // with the not found status code and a specific reason phrase.
+            send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+            disposition = AsChainLink::Disposition::Stop;
           }
         }
-        // Do outgoing (terminating) half.
+      }
+
+      if (disposition == AsChainLink::Disposition::Complete &&
+          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+          !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+      {
+        // We've completed the originating half (or we're not doing
+        // originating handling for this call), we're handling the
+        // terminating half (i.e. it hasn't been ENUMed to go
+        // elsewhere), and we don't yet have a terminating chain.
+
+        // Switch to terminating session state, set the served user to
+        // the callee, and look up iFCs again.
+        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+        bool success = move_to_terminating_chain();
+        if (!success)
+        {
+          LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
+        }
+      }
+
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_terminating()) {
+        // Do terminating handling (including AS handling and setting
+        // orig-ioi).
+
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
       }
@@ -2066,10 +2077,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 }
 
 
-// Handle the incoming half of a non-CANCEL message.
-bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_state)
+// Find the AS chain for this transaction, or create a new one.
+bool UASTransaction::find_as_chain(const ServingState& serving_state)
 {
-  LOG_DEBUG("Handle incoming transaction request, serving state = %s", serving_state.to_string().c_str());
+  LOG_DEBUG("Looking for AS chain for incoming transaction request, serving state = %s", serving_state.to_string().c_str());
   bool success = true;
 
   std::string served_user;
@@ -2090,12 +2101,29 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
         // create new AS chain with session case orig-cdiv and the
         // terminating user as served user.
         LOG_INFO("Request-URI has changed, retargeting");
+
+        // We might not be the terminating server any more, so we
+        // should blank out the term_ioi parameter. If we are still
+        // the terminating server, we'll fill it back in when we go
+        // through handle_terminating.
+
+        // Note that there's no need to change orig_ioi - we don't
+        // actually become the originating server when we do this redirect.
+        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+          pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+        if (pcv)
+        {
+          LOG_DEBUG("Blanking out term_ioi parameter due to redirect");
+          pcv->term_ioi = pj_str("");
+        }
+
         served_user = _as_chain_link.served_user();
 
         _as_chain_link.release();
         success = lookup_ifcs(served_user, ifcs, trail());
         if (success)
         {
+          LOG_DEBUG("Creating originating CDIV AS chain");
           _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
         }
       }
@@ -2108,6 +2136,7 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
       success = lookup_ifcs(served_user, ifcs, trail());
       if (success)
       {
+        LOG_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
     }
@@ -2122,12 +2151,29 @@ bool UASTransaction::handle_incoming_non_cancel(const ServingState& serving_stat
 // continue to next chain because the current chain is
 // `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // OUT: target, if disposition is Skip
-
 {
+  // These are effectively the preconditions of this function - that
+  // it is only called when we know we are providing originating
+  // services for a user.
+
   if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_originating()))
   {
-    // No chain or not an originating (or orig-cdiv) session case.  Skip.
+    LOG_WARNING("In handle_originating despite not having an originating session case");
     return AsChainLink::Disposition::Complete;
+  }
+
+  if (_as_chain_link.served_user().empty())
+  {
+    LOG_WARNING("In handle_originating despite not having a served user specified");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  // Add ourselves as orig-IOI.
+  pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+    pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+  if (pcv)
+  {
+    pcv->orig_ioi = stack_data.home_domain;
   }
 
   // Apply originating call services to the message
@@ -2164,6 +2210,7 @@ bool UASTransaction::move_to_terminating_chain()
   _as_chain_link.release();
   std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
 
+  LOG_DEBUG("Looking up iFCs for served user %s", served_user.c_str());
   // If we got a served user, look it up.  We won't get a served user if we've recognized that they're remote.
   bool success = true;
   if (!served_user.empty())
@@ -2185,23 +2232,35 @@ bool UASTransaction::move_to_terminating_chain()
 // is now `Complete`. Never returns `Next`.
 AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // OUT: target, if disposition is Skip
 {
+  // These are effectively the preconditions of this function - that
+  // it is only called when we know we are providing terminating
+  // services for a user, and the target is in our domain.
+  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+  {
+    LOG_WARNING("In handle_terminating despite not having a terminating session case");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  if (_as_chain_link.served_user().empty())
+  {
+    LOG_WARNING("In handle_terminating despite not having a served user specified");
+    return AsChainLink::Disposition::Complete;
+  }
+
+  if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
+  {
+    LOG_WARNING("In handle_terminating despite the request not being targeted at our domain");
+    return AsChainLink::Disposition::Complete;
+  }
+
   // If the newly translated ReqURI indicates that we're the host of the
   // target user, include ourselves as the terminating operator for
   // billing.
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-  if (pcv && PJUtils::is_home_domain(_req->msg->line.req.uri))
+  if (pcv)
   {
     pcv->term_ioi = stack_data.home_domain;
-  }
-  else if (pcv)
-  {
-    pcv->term_ioi = pj_str("");
-  }
-
-  if (!(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
-  {
-    return AsChainLink::Disposition::Complete;
   }
 
   // Apply terminating call services to the message
@@ -3772,6 +3831,10 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                             Ifcs ifcs,
                                             std::string served_user)
 {
+  if (served_user.empty())
+  {
+    LOG_WARNING("create_as_chain called with an empty served_user");
+  }
   bool is_registered = is_user_registered(served_user);
 
   // Create the AsChain, and schedule its destruction.  AsChain

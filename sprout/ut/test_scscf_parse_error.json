@@ -1,0 +1,19 @@
+{
+    "s-cscfs" : [
+        {   "server" : "cw-scscf.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        }
+        {   "server" : "cw-scscf2.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        },
+        {   "server" : "cw-scscf3.cw-ngv.com",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        }
+    ]
+}
