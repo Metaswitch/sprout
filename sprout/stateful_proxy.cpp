@@ -2029,47 +2029,49 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
       }
 
-      if (disposition == AsChainLink::Disposition::Complete &&
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_originating() &&
+          disposition == AsChainLink::Disposition::Complete &&
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+          icscf_uri)
+      {
+        // We've completed the originating half, the destination is local and
+        // we have an external I-CSCF configured.  Route the call there.
+        LOG_INFO("Invoking I-CSCF %s",
+                 PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+
+        // Release any existing AS chain to avoid leaking it.
+        _as_chain_link.release();
+
+        // Start defining the new target.
+        delete target;
+        target = new Target;
+
+        // Set the I-CSCF URI as the topmost route header.
+        target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
+
+        // The Request-URI should remain unchanged
+        target->uri = _req->msg->line.req.uri;
+      }
+      else if (disposition == AsChainLink::Disposition::Complete &&
+               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+               !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
       {
         // We've completed the originating half (or we're not doing
-        // originating handling for this call), the terminating half is local
-        // (i.e. it hasn't been ENUMed to go elsewhere), and we don't yet have
-        // a terminating chain.
+        // originating handling for this call), we're handling the
+        // terminating half (i.e. it hasn't been ENUMed to go
+        // elsewhere), and we don't yet have a terminating chain.
 
-        if (icscf_uri)
+        // Switch to terminating session state, set the served user to
+        // the callee, and look up iFCs again.
+        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+        bool success = move_to_terminating_chain();
+        if (!success)
         {
-          // We have an external I-CSCF configured.  Route the call there.
-          LOG_INFO("Invoking I-CSCF %s",
-                   PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
-
-          // Release any existing AS chain to avoid leaking it.
-          _as_chain_link.release();
-     
-          // Start defining the new target.
+          LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+          send_response(PJSIP_SC_NOT_FOUND);
           delete target;
-          target = new Target;
-     
-          // Set the I-CSCF URI as the topmost route header.
-          target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
-
-          // The Request-URI should remain unchanged
-          target->uri = _req->msg->line.req.uri;
-        }
-        else
-        {
-          // Switch to terminating session state, set the served user to
-          // the callee, and look up iFCs again.
-          LOG_DEBUG("Originating AS chain complete, move to terminating chain");
-          bool success = move_to_terminating_chain();
-          if (!success)
-          {
-            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
-            send_response(PJSIP_SC_NOT_FOUND);
-            delete target;
-            return;
-          }
+          return;
         }
       }
 

@@ -5401,15 +5401,34 @@ TEST_F(IscTest, SimpleOptionsAccept)
   free_txdata();
 }
 
-TEST_F(IcscfTest, TestMainline)
+TEST_F(IcscfTest, TestOriginating)
+{
+  SCOPED_TRACE("");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                </ServiceProfile></IMSSubscription>)";
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  // Since we have an I-CSCF configured, we expect the call to be routed to it.
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:icscf;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
+
+TEST_F(IcscfTest, TestTerminating)
 {
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   list<HeaderMatcher> hdrs;
-  // Since we have an I-CSCF configured, we expect the call to be routed to it.
-  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:icscf;lr>"));
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+  // Although we have an I-CSCF configured, this is a terminating call so we don't
+  // expect the call to be routed to it.
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 
