@@ -145,7 +145,7 @@ static void usage(void)
        " -s, --system <name>        System name for SAS logging (defaults to local host name)\n"
        " -t, --trusted-port N       Set local trusted listener port to N\n"
        " -u, --untrusted-port N     Set local untrusted listener port to N\n"
-       "                            If not specified SIP outbound support will be diabled\n"
+       "                            If not specified SIP outbound support will be disabled\n"
        " -w, --webrtc-port N        Set local WebRTC listener port to N\n"
        "                            If not specified WebRTC support will be disabled\n"
        " -l, --localhost <name>     Override the local host name\n"
@@ -194,9 +194,6 @@ static void usage(void)
        " -d, --daemon               Run as daemon\n"
        " -i, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
-       "\n"
-       "If routing-proxy is specified but untrusted-port and webrtc-port are not, this\n"
-       "node acts as a simple load-balancing proxy for the upstream routing proxy\n"
     );
 }
 

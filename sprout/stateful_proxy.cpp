@@ -897,11 +897,7 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     if (source_type != SIP_PEER_TRUSTED_PORT)
     {
       // The REGISTER came from outside the trust domain and not over a SIP
-      // trunk, so we must act as the access proxy for the node.  (Previously
-      // we would only act as access proxy for nodes that requested it with
-      // the outbound flag, or we detected were behind a NAT - now we have a
-      // well-defined trust zone we have to do it for all nodes outside
-      // the trust node.)
+      // trunk, so we must act as the access proxy for the node.
       LOG_DEBUG("Message requires outbound support");
 
       // Find or create a flow object to represent this flow.
