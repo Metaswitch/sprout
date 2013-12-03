@@ -527,6 +527,7 @@ std::string IfcHandler::served_user_from_msg(
 {
   pjsip_uri* uri = NULL;
   std::string user;
+  std::string uri_string;
 
   // For originating:
   //
@@ -569,21 +570,32 @@ std::string IfcHandler::served_user_from_msg(
 
     if (served_user_hdr != NULL)
     {
+      LOG_DEBUG("Found URI in P-Served-User header");
       // Remove parameters before parsing the URI.  If there are URI parameters,
       // the URI must be enclosed in angle brackets, so we can either remove
-      // everything after the first closing angle bracket, or everything after
-      // the first semo-colon.
+      // everything after the first closing angle bracket (but not the
+      // bracket itself), or the first semi-colon and everything after it.
       char* end = pj_strchr(&served_user_hdr->hvalue, '>');
       if (end == NULL)
       {
         end = pj_strchr(&served_user_hdr->hvalue, ';');
+        if (end != NULL)
+        {
+          end = end - 1;   // Remove the semicolon too
+        }
       }
       if (end != NULL)
       {
         served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
       }
 
-      uri = pjsip_parse_uri(pool, served_user_hdr->hvalue.ptr, served_user_hdr->hvalue.slen, 0);
+      // Extract the field to a null terminated string
+      // first since we can't guarantee it is null terminated in the message,
+      // and pjsip_parse_uri requires a null terminated string.
+      pj_str_t hvalue;
+      pj_strdup_with_null(pool, &hvalue, &served_user_hdr->hvalue);
+
+      uri = pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
 
       if (uri == NULL)
       {
@@ -601,6 +613,7 @@ std::string IfcHandler::served_user_from_msg(
 
       if (asserted_id_hdr != NULL)
       {
+        LOG_DEBUG("Found URI in P-Asserted-Identity header");
         uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
       }
     }
@@ -610,16 +623,22 @@ std::string IfcHandler::served_user_from_msg(
   {
     if (session_case.is_originating())
     {
-      // For originating services, the user is parsed from the from header.
+      // For originating services, the user is parsed from the from
+      // header.
+      LOG_DEBUG("Parsing served user from From header");
       uri = PJSIP_MSG_FROM_HDR(msg)->uri;
     }
     else
     {
-      // For terminating services, the user is parsed from the request URI.
+      // For terminating services, the user is parsed from the request
+      // URI.
+      LOG_DEBUG("Parsing served user from request URI");
       uri = msg->line.req.uri;
     }
   }
 
+  uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
+  LOG_DEBUG("URI retrieved is %s", uri_string.c_str());
   // Get the URI if it was encoded within a name-addr.
   uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
@@ -627,6 +646,8 @@ std::string IfcHandler::served_user_from_msg(
       (PJUtils::is_uri_local(uri)))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  } else {
+    LOG_DEBUG("URI is not locally hosted");
   }
 
   return user;

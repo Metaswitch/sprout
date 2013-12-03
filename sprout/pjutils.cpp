@@ -55,10 +55,13 @@ extern "C" {
 /// Utility to determine if this URI belongs to the home domain.
 pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-      (pj_stricmp(&((pjsip_sip_uri*)uri)->host, &stack_data.home_domain)==0))
+  if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    return PJ_TRUE;
+    pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
+    if (pj_stricmp(&host_from_uri, &stack_data.home_domain)==0)
+    {
+      return PJ_TRUE;
+    }
   }
   return PJ_FALSE;
 }
@@ -80,6 +83,10 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
         return PJ_TRUE;
       }
     }
+  }
+  else
+  {
+    LOG_INFO("URI scheme is not SIP - treating as not locally hosted");
   }
 
   /* Doesn't match */
@@ -183,6 +190,8 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 /// password before rendering the URI to a string.
 std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 {
+  std::string input_uri = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)uri);
+  std::string returned_aor;
   pjsip_sip_uri aor;
   memcpy((char*)&aor, (char*)uri, sizeof(pjsip_sip_uri));
   aor.passwd.slen = 0;
@@ -195,7 +204,9 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.maddr_param.slen = 0;
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
-  return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  LOG_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
+  return returned_aor;
 }
 
 
@@ -253,7 +264,7 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
     {
       id = PJUtils::pj_str_to_string(&sip_uri->host);
     }
-  } 
+  }
   else
   {
     const pj_str_t* scheme = pjsip_uri_get_scheme(uri);
