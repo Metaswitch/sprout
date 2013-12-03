@@ -79,7 +79,7 @@ case "$1" in
         # Use || /bin/true to ignore a failure, because set -e is in effect.
         rm -f /etc/monit/conf.d/$NAME.monit
         service monit restart
-        service $NAME stop || /bin/true
+        service $NAME quiesce || /bin/true
         remove_user
         remove_logging
         remove_section /etc/security/limits.conf $NAME

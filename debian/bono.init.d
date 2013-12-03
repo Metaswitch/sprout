@@ -221,6 +221,32 @@ do_reload() {
         return 0
 }
 
+#
+# Sends a SIGQUIT to the daemon/service
+#
+do_start_quiesce() {
+        start-stop-daemon --stop --signal QUIT --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGQUIT to the daemon/service and waits for it to terminate
+#
+do_quiesce() {
+        # The timeout after forever is irrelevant - start-stop-daemon requires one but it doesn't
+        # actually affect processing.
+        start-stop-daemon --stop --retry QUIT/forever/10 --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGUSR1 to the daemon/service
+#
+do_unquiesce() {
+        start-stop-daemon --stop --signal USR1 --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
 # There should only be at most one bono process, and it should be the one in /var/run/bono.pid.
 # Sanity check this, and kill and log any leaked ones.
 if [ -f $PIDFILE ] ; then
@@ -304,9 +330,21 @@ case "$1" in
                 ;;
         esac
         ;;
+  start-quiesce)
+        log_daemon_msg "Start quiescing $DESC" "$NAME"
+        do_start_quiesce
+        ;;
+  quiesce)
+        log_daemon_msg "Quiescing $DESC" "$NAME"
+        do_quiesce
+        ;;
+  unquiesce)
+        log_daemon_msg "Unquiesce $DESC" "$NAME"
+        do_unquiesce
+        ;;
   *)
-        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
+        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
         exit 3
         ;;
 esac
