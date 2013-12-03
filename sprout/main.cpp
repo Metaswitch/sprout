@@ -300,6 +300,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       else
       {
         fprintf(stdout, "--record-routing-model must be one of 'pcscf', 'pcscf,icscf', or 'pcscf,icscf,as'");
+        return -1;
       }
       fprintf(stdout, "Record-Routing model is set to %d\n", options->record_routing_model);
       break;
