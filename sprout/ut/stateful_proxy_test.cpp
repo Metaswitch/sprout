@@ -1692,8 +1692,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
 
   // Register client.
   TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        TransportFlow::Trust::UNTRUSTED,
-                                        "1.2.3.4",
+                                          stack_data.untrusted_port,
+                                          "1.2.3.4",
                                           49152);
   // Register a client with the edge proxy.
   Message msg;
@@ -1724,7 +1724,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        TransportFlow::Trust::UNTRUSTED,
+                                        stack_data.untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -1801,7 +1801,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWUDP)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::UDP,
-                                        TransportFlow::Trust::UNTRUSTED,
+                                        stack_data.untrusted_port,
                                         "1.2.3.4",
                                         5060);
   string token;
@@ -1881,7 +1881,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        TransportFlow::Trust::UNTRUSTED,
+                                        stack_data.untrusted_port,
                                         "1.2.3.4",
                                         49150);
 
@@ -2138,7 +2138,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeDeregister)
 
   //Deregister client which hasn't registered yet
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        TransportFlow::Trust::UNTRUSTED,
+                                        stack_data.untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -2154,7 +2154,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        TransportFlow::Trust::UNTRUSTED,
+                                        stack_data.untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -2241,7 +2241,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 1: Declares outbound support, not behind NAT. Should get path.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         TransportFlow::Trust::UNTRUSTED,
+                         stack_data.untrusted_port,
                          "10.83.18.38",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "");
@@ -2249,7 +2249,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         TransportFlow::Trust::UNTRUSTED,
+                         stack_data.untrusted_port,
                          "10.83.18.39",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "10.22.3.4:9999");
@@ -2263,7 +2263,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         TransportFlow::Trust::UNTRUSTED,
+                         stack_data.untrusted_port,
                          "10.83.18.41",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", true, "10.22.3.5:8888");
@@ -2277,7 +2277,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         TransportFlow::Trust::UNTRUSTED,
+                         stack_data.untrusted_port,
                          "10.83.18.41",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", true, "10.22.3.5:8888");
@@ -2289,7 +2289,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true);
@@ -2371,7 +2371,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
@@ -2392,7 +2392,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
@@ -2413,7 +2413,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2436,7 +2436,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2458,7 +2458,7 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   SCOPED_TRACE("");
 
   // Register a client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2505,7 +2505,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   msg._via = "10.7.7.10:36530;transport=tcp";
 
   // Get a connection from the trusted host.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
 
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
@@ -2527,7 +2527,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
   msg._via = "10.99.88.11:12345";
 
   // Get a connection from the trusted host.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
@@ -2552,7 +2552,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   string actual;
 
   // Get a connection from the trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.10", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2596,7 +2596,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted2)
   string actual;
 
   // Get a connection from the other trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.11", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.11", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2632,7 +2632,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   string actual;
 
   // Get a connection from the other trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.7.7.11", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.11", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2670,7 +2670,7 @@ TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
   string actual;
 
   // Get a connection from the trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::TRUSTED, "10.17.17.111", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.trusted_port, "10.17.17.111", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2707,7 +2707,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
   string actual;
 
   // Get a connection from some other random (untrusted) host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.39", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.39", 36530);
 
   // Send the same INVITE from the random host.
   msg._unique++;
@@ -2750,8 +2750,8 @@ TEST_F(IscTest, SimpleMainline)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -2860,8 +2860,8 @@ TEST_F(IscTest, SimpleNextOrigFlow)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -2952,8 +2952,8 @@ TEST_F(IscTest, SimpleReject)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3040,8 +3040,8 @@ TEST_F(IscTest, SimpleNonLocalReject)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3128,8 +3128,8 @@ TEST_F(IscTest, SimpleAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3216,8 +3216,8 @@ TEST_F(IscTest, SimpleRedirect)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3305,8 +3305,8 @@ TEST_F(IscTest, DefaultHandlingTerminate)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3395,8 +3395,8 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3481,8 +3481,8 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3650,11 +3650,11 @@ TEST_F(IscTest, InterestingAs)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
-  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
-  TransportFlow tpAS4(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "4.2.3.4", 56788);
+  TransportFlow tpAS3(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpAS4(TransportFlow::Protocol::UDP, stack_data.trusted_port, "6.2.3.4", 56786);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3843,10 +3843,10 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS0(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.trusted_port, "6.2.3.4", 56786);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send spontaneous INVITE from AS0.
   inject_msg(msg.get_request(), &tpAS0);
@@ -4026,9 +4026,9 @@ TEST_F(IscTest, Cdiv)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4154,8 +4154,8 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4232,8 +4232,8 @@ TEST_F(IscTest, TerminatingWithNoEnumRewrite)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4352,8 +4352,8 @@ TEST_F(IscTest, MmtelCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4552,8 +4552,8 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4666,8 +4666,8 @@ TEST_F(IscTest, ExpiredChain)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4807,8 +4807,8 @@ TEST_F(IscTest, MmtelFlow)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4990,9 +4990,9 @@ TEST_F(IscTest, MmtelThenExternal)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5229,8 +5229,8 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5325,8 +5325,8 @@ TEST_F(IscTest, SimpleOptionsAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   // ---------- Send OPTIONS
   // We're within the trust boundary, so no stripping should occur.

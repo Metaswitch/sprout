@@ -96,10 +96,7 @@ SipTest::~SipTest()
   for_each(_out.begin(), _out.end(), pjsip_tx_data_dec_ref);
 }
 
-pjsip_tpfactory* SipTest::_tcp_tpfactory_trusted;
-pjsip_transport* SipTest::_udp_tp_trusted;
-pjsip_tpfactory* SipTest::_tcp_tpfactory_untrusted;
-pjsip_transport* SipTest::_udp_tp_untrusted;
+
 SipTest::TransportFlow* SipTest::_tp_default;
 SipTest* SipTest::_current_instance;
 
@@ -136,18 +133,13 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   // Initialise PJSIP and associated resources.
   init_pjsip();
 
-  // Initialise the trusted port.
-  init_port(stack_data.trusted_port, &_udp_tp_trusted, &_tcp_tpfactory_trusted);
-
-  // Initialise the untrusted port.
-  init_port(stack_data.untrusted_port, &_udp_tp_untrusted, &_tcp_tpfactory_untrusted);
-
-  // Set the TCP factory used by Bono to create connections to Sprout.
-  stack_data.trusted_tcp_factory = _tcp_tpfactory_trusted;
+  // Set up default UDP transports.
+  TransportFlow::udp_transport(stack_data.trusted_port);
+  TransportFlow::udp_transport(stack_data.untrusted_port);
 
   // Get a default TCP transport flow to use for injection.  Give it a dummy address.
   _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
-                                  TransportFlow::Trust::TRUSTED,
+                                  stack_data.trusted_port,
                                   "0.0.0.0",
                                   5060);
 
@@ -165,92 +157,97 @@ void SipTest::TearDownTestCase()
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
 
-  // Delete the default transport
-  delete _tp_default;
-
   // Terminate PJSIP
   term_pjsip();
+
+  // Clear out any UDP transports and TCP factories that have been created.
+  TransportFlow::reset();
 }
 
 
-/// Initialises a SIP port for both UDP and TCP transports.
-void SipTest::init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory)
+std::map<int, pjsip_transport*> SipTest::TransportFlow::_udp_transports;
+std::map<int, pjsip_tpfactory*> SipTest::TransportFlow::_tcp_factories;
+
+
+void SipTest::TransportFlow::reset()
 {
-  pj_status_t status;
-  pj_sockaddr_in addr;
-  pjsip_host_port published_name;
-
-  memset(&addr, 0, sizeof(pj_sockaddr_in));
-  addr.sin_family = pj_AF_INET();
-  addr.sin_addr.s_addr = 0;
-  addr.sin_port = pj_htons((pj_uint16_t)port);
-
-  published_name.host = stack_data.local_host;
-  published_name.port = port;
-
-  status = pjsip_fake_udp_transport_start(stack_data.endpt,
-                                          &addr,
-                                          &published_name,
-                                          50,
-                                          udp_tp);
-  ASSERT_EQ(PJ_SUCCESS, status);
-
-  status = pjsip_fake_tcp_transport_start2(stack_data.endpt,
-                                           &addr,
-                                           &published_name,
-                                           50,
-                                           tcp_factory);
-  ASSERT_EQ(PJ_SUCCESS, status);
+  _udp_transports.clear();
+  _tcp_factories.clear();
 }
 
-#if 0
-void SipTest::init_pjsip()
+pjsip_transport* SipTest::TransportFlow::udp_transport(int port)
 {
-  // Must init PJLIB first:
-  pj_status_t status = pj_init();
-  ASSERT_EQ(PJ_SUCCESS, status);
+  if (_udp_transports[port] == NULL)
+  {
+    pj_status_t status;
+    pj_sockaddr_in addr;
+    pjsip_host_port published_name;
+    pjsip_transport* udp_tp;
 
-  // Then init PJLIB-UTIL:
-  status = pjlib_util_init();
-  ASSERT_EQ(PJ_SUCCESS, status);
+    memset(&addr, 0, sizeof(pj_sockaddr_in));
+    addr.sin_family = pj_AF_INET();
+    addr.sin_addr.s_addr = 0;
+    addr.sin_port = pj_htons((pj_uint16_t)port);
 
-  // Must create a pool factory before we can allocate any memory.
-  pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
-  stack_data.pool = pj_pool_create(&stack_data.cp.factory, "unit_test", 4000, 4000, NULL);
+    published_name.host = stack_data.local_host;
+    published_name.port = port;
 
-  // Create the endpoint.
-  status = pjsip_endpt_create(stack_data.pool->factory, NULL, &stack_data.endpt);
-  ASSERT_EQ(PJ_SUCCESS, status);
+    status = pjsip_fake_udp_transport_start(stack_data.endpt,
+                                            &addr,
+                                            &published_name,
+                                            50,
+                                            &udp_tp);
+    assert(status == PJ_SUCCESS);
+    _udp_transports[port] = udp_tp;
+  }
 
-  // Init transaction layer.
-  status = pjsip_tsx_layer_init_module(stack_data.endpt);
-  ASSERT_EQ(PJ_SUCCESS, status);
-
+  return _udp_transports[port];
 }
 
-void SipTest::term_pjsip()
+
+pjsip_tpfactory* SipTest::TransportFlow::tcp_factory(int port)
 {
-  delete _tp_default;
-  pjsip_endpt_destroy(stack_data.endpt);
-  pj_pool_release(stack_data.pool);
-  pj_caching_pool_destroy(&stack_data.cp);
-  pj_shutdown();
-}
-#endif
+  if (_tcp_factories[port] == NULL)
+  {
+    pj_status_t status;
+    pj_sockaddr_in addr;
+    pjsip_host_port published_name;
+    pjsip_tpfactory* tcp_factory;
 
-SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char* addr, int port)
+    memset(&addr, 0, sizeof(pj_sockaddr_in));
+    addr.sin_family = pj_AF_INET();
+    addr.sin_addr.s_addr = 0;
+    addr.sin_port = pj_htons((pj_uint16_t)port);
+
+    published_name.host = stack_data.local_host;
+    published_name.port = port;
+
+    status = pjsip_fake_tcp_transport_start2(stack_data.endpt,
+                                             &addr,
+                                             &published_name,
+                                             50,
+                                             &tcp_factory);
+    assert(status == PJ_SUCCESS);
+    _tcp_factories[port] = tcp_factory;
+  }
+
+  return _tcp_factories[port];
+}
+
+
+SipTest::TransportFlow::TransportFlow(Protocol protocol, int local_port, const char* addr, int port)
 {
   pj_str_t addr_str = pj_str(const_cast<char*>(addr));
   pj_sockaddr_init(PJ_AF_INET, &_rem_addr, &addr_str, port);
 
   if (protocol == UDP)
   {
-    _transport = (trust == TRUSTED) ? _udp_tp_trusted : _udp_tp_untrusted;
+    _transport = udp_transport(local_port);
   }
   else
   {
     pj_status_t status;
-    pjsip_tpfactory *factory = (trust == TRUSTED) ? _tcp_tpfactory_trusted : _tcp_tpfactory_untrusted;
+    pjsip_tpfactory *factory = tcp_factory(local_port);
     status = pjsip_fake_tcp_accept(factory,
                                    (pj_sockaddr_t*)&_rem_addr,
                                    sizeof(pj_sockaddr_in),
@@ -259,6 +256,7 @@ SipTest::TransportFlow::TransportFlow(Protocol protocol, Trust trust, const char
     EXPECT_EQ(PJ_SUCCESS, status);
   }
 }
+
 
 SipTest::TransportFlow::~TransportFlow()
 {
@@ -269,15 +267,24 @@ SipTest::TransportFlow::~TransportFlow()
   }
 }
 
+
 std::string SipTest::TransportFlow::type_name()
 {
   return std::string(_transport->type_name);
 }
 
+
 int SipTest::TransportFlow::local_port()
 {
   return _transport->local_name.port;
 }
+
+
+pjsip_transport* SipTest::TransportFlow::transport()
+{
+  return _transport;
+}
+
 
 std::string SipTest::TransportFlow::to_string(bool transport)
 {
@@ -290,6 +297,7 @@ std::string SipTest::TransportFlow::to_string(bool transport)
   }
   return std::string(buf);
 }
+
 
 void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool strict)
 {
@@ -307,6 +315,7 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
     EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
   }
 }
+
 
 void SipTest::inject_msg(const string& msg, TransportFlow* tp)
 {

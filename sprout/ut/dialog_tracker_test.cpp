@@ -82,7 +82,8 @@ public:
   {
     // Restore a clean state
     ft->unquiesce();
-    flow = ft->find_create_flow( _udp_tp_untrusted, &addr);
+    flow = ft->find_create_flow(TransportFlow::udp_transport(stack_data.untrusted_port),
+                                &addr);
   }
 
   ~DialogTrackerTest()
@@ -100,7 +101,7 @@ TEST_F(DialogTrackerTest, MainlineDialogTracking)
 {
   pjsip_tx_data tdata;
   pjsip_transaction tsx;
-  tsx.transport = _udp_tp_untrusted;
+  tsx.transport = TransportFlow::udp_transport(stack_data.untrusted_port);
   tsx.addr = addr;
   pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
   pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);
@@ -130,7 +131,7 @@ TEST_F(DialogTrackerTest, ReinviteDialogTracking)
 {
   pjsip_tx_data tdata;
   pjsip_transaction tsx;
-  tsx.transport = _udp_tp_untrusted;
+  tsx.transport = TransportFlow::udp_transport(stack_data.untrusted_port);
   tsx.addr = addr;
   pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
   pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);
@@ -156,7 +157,7 @@ TEST_F(DialogTrackerTest, DialogTrackingWithErrorOnBYE)
 {
   pjsip_tx_data tdata;
   pjsip_transaction tsx;
-  tsx.transport = _udp_tp_untrusted;
+  tsx.transport = TransportFlow::udp_transport(stack_data.untrusted_port);
   tsx.addr = addr;
   pjsip_msg* msg = pjsip_msg_create(stack_data.pool, PJSIP_REQUEST_MSG);
   pjsip_to_hdr* to = pjsip_to_hdr_create(stack_data.pool);

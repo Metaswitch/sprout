@@ -478,7 +478,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
 
   SCOPED_TRACE("REGISTER (1)");
@@ -544,7 +544,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
 
   SCOPED_TRACE("REGISTER (1)");
@@ -605,7 +605,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>";
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
 
   SCOPED_TRACE("REGISTER (1)");
@@ -642,7 +642,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
 /// Check that the network-initiated deregistration code works as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 {
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
 
   std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);

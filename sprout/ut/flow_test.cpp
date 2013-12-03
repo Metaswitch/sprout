@@ -80,7 +80,8 @@ public:
   {
     // Restore a clean state
     ft->unquiesce();
-    flow = ft->find_create_flow( _udp_tp_untrusted, &addr);
+    flow = ft->find_create_flow(TransportFlow::udp_transport(stack_data.untrusted_port),
+                                &addr);
   }
 
   ~FlowTest()
