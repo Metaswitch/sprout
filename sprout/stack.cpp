@@ -671,7 +671,7 @@ pj_status_t init_stack(bool access_proxy,
   stack_data.record_route_on_completion_of_terminating = false;
   stack_data.record_route_on_diversion = false;
 
-  if (!edge_proxy)
+  if (!access_proxy)
   {
     switch (record_routing_model) {
     case 1:
