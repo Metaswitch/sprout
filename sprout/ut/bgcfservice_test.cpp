@@ -115,6 +115,17 @@ TEST_F(BgcfServiceTest, SimpleTests)
   ET("multiple-nodes.example.com", "sip2.example.com,sip3.example.com").test(bgcf_);
 }
 
+TEST_F(BgcfServiceTest, DefaultRoute)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_default_route.json"));
+
+  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
+  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "sip.example.com").test(bgcf_);
+  ET("",                           "sip.example.com"   ).test(bgcf_);
+  ET("billy2",                     "sip.example.com"   ).test(bgcf_);
+  ET("198.147.226.",               "sip.example.com"   ).test(bgcf_);
+}
+
 TEST_F(BgcfServiceTest, ParseError)
 {
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));

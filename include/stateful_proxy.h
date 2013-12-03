@@ -291,7 +291,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler,
-                                pj_bool_t enable_edge_proxy,
+                                pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
                                 int upstream_proxy_port,
                                 int upstream_proxy_connections,
@@ -302,6 +302,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager);
 
 void destroy_stateful_proxy();
@@ -316,8 +317,8 @@ enum SIPPeerType
 
 
 #ifdef UNIT_TEST
-pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
-                                       pjsip_tx_data *tdata);
+pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
+                                         pjsip_tx_data *tdata);
 #endif
 
 #endif

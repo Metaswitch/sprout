@@ -1,0 +1,12 @@
+{
+    "routes" : [
+        {   "name" : "Alameda PBX",
+            "domain" : "198.147.226.2",
+            "route" : ["ec2-54-243-253-10.compute-1.amazonaws.com"]
+        },
+        {   "name" : "Default Route",
+            "domain" : "*",
+            "route" : ["sip.example.com"]
+        }
+    ]
+}

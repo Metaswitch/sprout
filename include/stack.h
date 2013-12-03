@@ -124,7 +124,7 @@ extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
 
-extern pj_status_t init_stack(bool edge_proxy,
+extern pj_status_t init_stack(bool access_proxy,
                               const std::string& system_name,
                               const std::string& sas_address,
                               int trusted_port,

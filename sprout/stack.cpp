@@ -623,7 +623,7 @@ pj_status_t init_pjsip()
 }
 
 
-pj_status_t init_stack(bool edge_proxy,
+pj_status_t init_stack(bool access_proxy,
                        const std::string& system_name,
                        const std::string& sas_address,
                        int trusted_port,
@@ -747,7 +747,7 @@ pj_status_t init_stack(bool edge_proxy,
     stack_data.name_cnt++;
   }
 
-  if (!edge_proxy)
+  if (!access_proxy)
   {
     stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
     stack_data.name_cnt++;
