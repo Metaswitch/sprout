@@ -74,11 +74,18 @@ struct stack_data_struct
   pj_str_t             public_host;
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
-  pj_str_t             bono_cluster_domain;
 
   unsigned             name_cnt;
   pj_str_t             name[16];
   LastValueCache *     stats_aggregator;
+
+  bool record_route_on_every_hop;
+  bool record_route_on_initiation_of_originating;
+  bool record_route_on_initiation_of_terminating;
+  bool record_route_on_completion_of_originating;
+  bool record_route_on_completion_of_terminating;
+  bool record_route_on_diversion;
+
 };
 
 extern struct stack_data_struct stack_data;
@@ -126,10 +133,10 @@ extern pj_status_t init_stack(bool access_proxy,
                               const std::string& public_host,
                               const std::string& home_domain,
                               const std::string& sprout_domain,
-                              const std::string& bono_domain,
                               const std::string& alias_hosts,
                               int num_pjsip_threads,
                               int num_worker_threads,
+                              int record_routing_model,
                               QuiescingManager *quiescing_mgr,
                               LoadMonitor *load_monitor);
 extern pj_status_t start_stack();

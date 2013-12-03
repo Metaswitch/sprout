@@ -142,7 +142,6 @@ do_start()
                      --domain $home_domain
                      --localhost $local_ip
                      --public-host $public_hostname
-                     --bono-domain bono.$home_domain
                      --alias $public_ip
                      --trusted-port 5058
                      $untrusted_port_arg

@@ -191,6 +191,7 @@ private:
 
   bool find_as_chain(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(Target** pre_target);
+  void common_start_of_terminating_processing();
   bool move_to_terminating_chain();
   AsChainLink::Disposition handle_terminating(Target** pre_target);
   void handle_outgoing_non_cancel(Target* pre_target);
@@ -199,6 +200,7 @@ private:
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
   bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
 
+  void routing_proxy_record_route();
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
                                const TrustBoundary* trust,

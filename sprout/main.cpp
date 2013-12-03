@@ -86,12 +86,12 @@ struct options
   std::string            system_name;
   int                    trusted_port;
   int                    untrusted_port;
+  int                    record_routing_model;
   int                    webrtc_port;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
   std::string            sprout_domain;
-  std::string            bono_domain;
   std::string            alias_hosts;
   pj_bool_t              access_proxy;
   std::string            upstream_proxy;
@@ -153,7 +153,6 @@ static void usage(void)
        " -p, --public-host <name>   Override the public host name\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
-       " -b, --bono-domain <name>   Override the bono cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
@@ -178,6 +177,13 @@ static void usage(void)
        " -S, --sas <ipv4>           Use specified host as software assurance\n"
        "                            server.  Otherwise uses localhost\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
+       " -C, --record-routing-model <model>\n"
+       "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
+       "                            originating processing and completion of terminating\n"
+       "                            processing. If 'pcscf,icscf', it also Record-Routes on completion\n"
+       "                            of originating processing and initiation of terminating\n"
+       "                            processing (i.e. when it receives or sends to an I-CSCF).\n"
+       "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
@@ -230,7 +236,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "public-host",       required_argument, 0, 'p'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
-    { "bono-domain",       required_argument, 0, 'b'},
     { "alias",             required_argument, 0, 'n'},
     { "routing-proxy",     required_argument, 0, 'r'},
     { "ibcf",              required_argument, 0, 'I'},
@@ -241,6 +246,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "remote-memstore",   required_argument, 0, 'm'},
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
+    { "record-routing-model",          required_argument, 0, 'C'},
     { "xdms",              required_argument, 0, 'X'},
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
@@ -262,7 +268,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:b:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
+  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:C:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
     switch (c) {
     case 's':
       options->system_name = std::string(pj_optarg);
@@ -279,6 +285,24 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         fprintf(stdout, "Trusted Port %s is invalid\n", pj_optarg);
         return -1;
       }
+      break;
+
+    case 'C':
+      if (strcmp(pj_optarg, "pcscf") == 0) {
+        options->record_routing_model = 1;
+      }
+      else if (strcmp(pj_optarg, "pcscf,icscf") == 0) {
+        options->record_routing_model = 2;
+      }
+      else if (strcmp(pj_optarg, "pcscf,icscf,as") == 0) {
+        options->record_routing_model = 3;
+      }
+      else
+      {
+        fprintf(stdout, "--record-routing-model must be one of 'pcscf', 'pcscf,icscf', or 'pcscf,icscf,as'");
+        return -1;
+      }
+      fprintf(stdout, "Record-Routing model is set to %d\n", options->record_routing_model);
       break;
 
     case 'u':
@@ -323,11 +347,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'c':
       options->sprout_domain = std::string(pj_optarg);
       fprintf(stdout, "Override sprout cluster domain set to %s\n", pj_optarg);
-      break;
-
-    case 'b':
-      options->bono_domain = std::string(pj_optarg);
-      fprintf(stdout, "Override bono cluster domain set to %s\n", pj_optarg);
       break;
 
     case 'n':
@@ -699,6 +718,7 @@ int main(int argc, char *argv[])
   opt.enum_suffix = ".e164.arpa";
   opt.reg_max_expires = 300;
   opt.pjsip_threads = 1;
+  opt.record_routing_model = 1;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
@@ -808,10 +828,10 @@ int main(int argc, char *argv[])
                       opt.public_host,
                       opt.home_domain,
                       opt.sprout_domain,
-                      opt.bono_domain,
                       opt.alias_hosts,
                       opt.pjsip_threads,
                       opt.worker_threads,
+                      opt.record_routing_model,
                       quiescing_mgr,
                       load_monitor);
 

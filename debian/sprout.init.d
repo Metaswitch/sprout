@@ -82,6 +82,7 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
+        sprout_rr_level="pcscf"
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.
@@ -164,6 +165,7 @@ do_start()
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
+                     --record-routing-model $sprout_rr_level
                      $authentication_arg
                      -a $log_directory
                      -F $log_directory
