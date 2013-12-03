@@ -341,7 +341,6 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
             {
               // We've found a matching line type, and don't have to match on content.
               ret = true;
-              goto success_label;
             }
             else
             {
@@ -366,6 +365,10 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                   ret = true;
                 }
               }
+              else
+              {
+                LOG_WARNING("Found badly formatted SDP line: %s", sdp_line.c_str());
+              }
             }
           }
         }
@@ -378,7 +381,6 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     ret = false;
   }
 
-success_label:
   LOG_DEBUG("SPT class %s: result %s", name, ret ? "true" : "false");
   return ret;
 }

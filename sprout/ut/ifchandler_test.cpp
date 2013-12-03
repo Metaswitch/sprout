@@ -105,7 +105,7 @@ public:
                "Accept: baz\n"
                "Accept: quux, foo\n"
                "Content-Type: application/sdp\n"
-               "Content-Length: 230\n\n"
+               "Content-Length: 242\n\n"
                "o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\n"
                "s=SDP Seminar\n"
                "b=X-YZ:128\n"
@@ -116,6 +116,7 @@ public:
                "m=video 51372 RTP/AVP 99\n"
                "b=Z-YZ:126\n"
                "c=IN IP4 225.2.17.14\n"
+               "einvalidline\n"
                "a=rtpmap:99 h263-1998/90000\n");
     pjsip_rx_data* rdata = build_rxdata(str);
     parse_rxdata(rdata);
@@ -2110,6 +2111,25 @@ TEST_F(IfcHandlerTest, SDPOriginContentNoMatch)
          SessionCase::Originating,
          false);
 }
+
+TEST_F(IfcHandlerTest, SDPNoEqualsSign)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>e</Line><Content>invalidline</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Found badly formatted SDP line: einvalidline"));
+}
+
 
 // @@@ iFC XML parse error
 // @@@ lookup_ifcs gets no served user
