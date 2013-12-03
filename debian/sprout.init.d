@@ -82,6 +82,7 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
+        sprout_rr_level="pcscf"
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.
@@ -95,7 +96,6 @@ get_settings()
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
-        sprout_rr_level=1
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
         [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
         [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"

@@ -675,7 +675,8 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
 
 static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
 {
-  if (transport == NULL) {
+  if (transport == NULL)
+  {
     LOG_DEBUG("determine_source called with a NULL pjsip_transport");
     return SIP_PEER_UNKNOWN;
   }
@@ -732,14 +733,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 
 void UASTransaction::routing_proxy_record_route()
 {
-  if (!PJUtils::is_top_rr_local(_req->msg))
-  {
     PJUtils::add_record_route(_req, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
-  }
-  else
-  {
-    LOG_DEBUG("Top Record-Route already points to us, not adding another");
-  }
 }
 
 /// Checks for double Record-Routing and removes superfluous Route header to
@@ -2018,7 +2012,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // orig-ioi).
         disposition = handle_originating(&target);
 
-        if (disposition == AsChainLink::Disposition::Complete) {
+        if (disposition == AsChainLink::Disposition::Complete)
+        {
           // Processing at end of originating handling
 
           if (stack_data.record_route_on_completion_of_originating)
@@ -2078,14 +2073,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       }
 
       if (_as_chain_link.is_set() &&
-          _as_chain_link.session_case().is_terminating()) {
+          _as_chain_link.session_case().is_terminating())
+      {
         // Do terminating handling (including AS handling and setting
         // orig-ioi).
 
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
 
-        if (disposition == AsChainLink::Disposition::Complete) {
+        if (disposition == AsChainLink::Disposition::Complete)
+        {
           // Processing at end of terminating handling
 
           if (stack_data.record_route_on_completion_of_terminating)
@@ -2166,6 +2163,11 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         {
           LOG_DEBUG("Creating originating CDIV AS chain");
           _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+          if (stack_data.record_route_on_diversion)
+          {
+            LOG_DEBUG("Single Record-Route - originating Cdiv");
+            routing_proxy_record_route();
+          }
         }
       }
     }
@@ -2185,12 +2187,12 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
       {
         common_start_of_terminating_processing();
       }
-      else
+      else if (serving_state.session_case() == SessionCase::Originating)
       {
-        // Processing at start of originating handling (including CDiv)
+        // Processing at start of originating handling (not including CDiv)
         if (stack_data.record_route_on_initiation_of_originating)
         {
-          LOG_ERROR("Single Record-Route - initiation of originating handling");
+          LOG_DEBUG("Single Record-Route - initiation of originating handling");
           routing_proxy_record_route();
         }
       }

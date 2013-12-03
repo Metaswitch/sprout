@@ -362,39 +362,34 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
   return rc;
 }
 
-/// Checks whether the top Record-Route header in the message refers
-/// to this node. If there are no Record-Route headers it
-/// returns false.
-pj_bool_t PJUtils::is_top_rr_local(const pjsip_msg* msg)
-{
-  bool rc = false;
-  pjsip_rr_hdr* rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_RECORD_ROUTE, NULL);
-
-  if (rr_hdr != NULL)
-  {
-    // Found the next Route header, so check whether the URI corresponds to
-    // this node or one of its aliases.
-    pjsip_uri* uri = rr_hdr->name_addr.uri;
-    LOG_DEBUG("Found Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri).c_str());
-    if ((is_home_domain(uri)) || (is_uri_local(uri)))
-    {
-      LOG_DEBUG("Record-Route header is local");
-      rc = true;
-    }
-  }
-  return rc;
-}
-
-
 /// Adds a Record-Route header to the message with the specified user name,
 /// host, port and transport.  If the user parameter is NULL the user field is
-/// left blank.
+/// left blank. If the top Record-Route header already matches the
+/// added one, does nothing.
 void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* transport,
                                int port,
                                const char* user,
                                const pj_str_t& host)
 {
+  pjsip_rr_hdr* top_rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_RECORD_ROUTE, NULL);
+  if (top_rr_hdr != NULL && PJSIP_URI_SCHEME_IS_SIP(top_rr_hdr->name_addr.uri))
+  {
+    pjsip_sip_uri* top_rr_uri = (pjsip_sip_uri*)top_rr_hdr->name_addr.uri;
+    pj_str_t top_host = top_rr_uri->host;
+    pj_str_t top_user = top_rr_uri->user;
+    pj_str_t top_transport = top_rr_uri->transport_param;
+    int top_port = top_rr_uri->port;
+    if ((pj_strcmp2(&top_user, user) == 0) &&
+        (pj_strcmp(&top_host, &host) == 0) &&
+        (pj_strcmp2(&top_transport, transport) == 0) &&
+        (port == top_port))
+    {
+      LOG_DEBUG("Top Record-Route header is already identical to the one we're adding; doing nothing");
+      return;
+    }
+  }
+
   pjsip_rr_hdr* rr = pjsip_rr_hdr_create(tdata->pool);
   pjsip_sip_uri* uri = pjsip_sip_uri_create(tdata->pool, PJ_FALSE);
   uri->host = host;

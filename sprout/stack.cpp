@@ -669,6 +669,7 @@ pj_status_t init_stack(bool edge_proxy,
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_completion_of_terminating = false;
+  stack_data.record_route_on_diversion = false;
 
   if (!edge_proxy)
   {
@@ -682,6 +683,7 @@ pj_status_t init_stack(bool edge_proxy,
         stack_data.record_route_on_initiation_of_terminating = true;
         stack_data.record_route_on_completion_of_originating = true;
         stack_data.record_route_on_completion_of_terminating = true;
+        stack_data.record_route_on_diversion = true;
         break;
     case 3:
       stack_data.record_route_on_every_hop = true;

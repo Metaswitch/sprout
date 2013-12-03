@@ -171,12 +171,13 @@ static void usage(void)
        " -S, --sas <ipv4>           Use specified host as software assurance\n"
        "                            server.  Otherwise uses localhost\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
-       " -C, --record-routing-model <1|2|3>\n"
-       "                            If 1, Sprout Record-Routes itself only on initiation of\n"
+       " -C, --record-routing-model <model>\n"
+       "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
        "                            originating processing and completion of terminating\n"
-       "                            processing. If 2, it also Record-Routes on completion\n"
+       "                            processing. If 'pcscf,icscf', it also Record-Routes on completion\n"
        "                            of originating processing and initiation of terminating\n"
-       "                            processing. If 3, it also Record-Routes between every AS.\n"
+       "                            processing (i.e. when it receives or sends to an I-CSCF).\n"
+       "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
@@ -252,7 +253,19 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'C':
-      options->record_routing_model = atoi(pj_optarg);
+      if (strcmp(pj_optarg, "pcscf") == 0) {
+        options->record_routing_model = 1;
+      }
+      else if (strcmp(pj_optarg, "pcscf,icscf") == 0) {
+        options->record_routing_model = 2;
+      }
+      else if (strcmp(pj_optarg, "pcscf,icscf,as") == 0) {
+        options->record_routing_model = 3;
+      }
+      else
+      {
+        fprintf(stdout, "--record-routing-model must be one of 'pcscf', 'pcscf,icscf', or 'pcscf,icscf,as'");
+      }
       fprintf(stdout, "Record-Routing model is set to %d\n", options->record_routing_model);
       break;
 

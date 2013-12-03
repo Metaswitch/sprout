@@ -84,6 +84,7 @@ struct stack_data_struct
   bool record_route_on_initiation_of_terminating;
   bool record_route_on_completion_of_originating;
   bool record_route_on_completion_of_terminating;
+  bool record_route_on_diversion;
 
 };
 
