@@ -1,5 +1,5 @@
 /**
- * @file aschain_test.cpp UT for Sprout IfcHandler module
+ * @file ifchandler_test.cpp UT for Sprout IfcHandler module
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -91,7 +91,7 @@ public:
       _hss_connection->flush_all();
     }
 
-    string str("INVITE sip:5755550033@homedomain SIP/2.0\n"
+    string str("INVITE sip:5755550033@homedomain:3443 SIP/2.0\n"
                "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
                "Max-Forwards: 69\n"
                "From: <sip:5755550033@homedomain>;tag=13919SIPpTag0011234\n"
@@ -104,7 +104,20 @@ public:
                "               bar\n"
                "Accept: baz\n"
                "Accept: quux, foo\n"
-               "Content-Length: 0\n\n");
+               "Content-Type: application/sdp\n"
+               "Content-Length: 242\n\n"
+               "o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\n"
+               "s=SDP Seminar\n"
+               "b=X-YZ:128\n"
+               "a=recvonly\n"
+               "c=IN IP4 224.2.17.12\n"
+               "t=2873397496 2873404696\n"
+               "m=audio 49170/5 RTP/AVP 0\n"
+               "m=video 51372 RTP/AVP 99\n"
+               "b=Z-YZ:126\n"
+               "c=IN IP4 225.2.17.14\n"
+               "einvalidline\n"
+               "a=rtpmap:99 h263-1998/90000\n");
     pjsip_rx_data* rdata = build_rxdata(str);
     parse_rxdata(rdata);
     TEST_MSG = rdata->msg_info.msg;
@@ -128,6 +141,11 @@ public:
               const SessionCase& sescase,
               bool expected);
   void doCaseTest(string description, string frag, bool test[]);
+  void doRegTest(string description,
+                 string frag,
+                 bool reg,
+                 pjsip_msg* msg,
+                 bool expected);
 };
 
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
@@ -1318,8 +1336,800 @@ TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
          SessionCase::Terminating,
          false);
   EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
-
 }
+
+TEST_F(IfcHandlerTest, ReqURIMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <RequestURI>homedomain:3443</RequestURI>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, ReqURINoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <RequestURI>hoomedomain</RequestURI>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, ReqURIBadRegex)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <RequestURI>*</RequestURI>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Request URI service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, RegTypeMethodNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <Method>REGISTER</Method>\n"
+         "      <Extension>\n"
+         "        <RegistrationType>0</RegistrationType>\n"
+         "      </Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+
+
+void IfcHandlerTest::doRegTest(string description,
+                               string frag,
+                               bool reg,
+                               pjsip_msg* msg,
+                               bool expected)
+{
+  doBaseTest(description,
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             + frag +
+             "  <ApplicationServer>\n"
+             "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "    <DefaultHandling>0</DefaultHandling>\n"
+             "  </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             msg,
+             "sip:5755550033@homedomain",
+             reg,
+             SessionCase::Originating,
+             expected,
+             false);
+}
+
+TEST_F(IfcHandlerTest, RegTypes)
+{
+  string str0("REGISTER sip:5755550033@homedomain SIP/2.0\n"
+              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+              "Max-Forwards: 69\n"
+              "From: <sip:5755550033@homedomain>;tag=13919SIPpTag0011234\n"
+              "To: <sip:5755550033@homedomain>\n"
+              "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>$1\n"
+              "Call-ID: 1-13919@10.151.20.48\n"
+              "CSeq: 4 REGISTER$2\n"
+              "Content-Length: 0\n\n");
+
+  string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  pjsip_msg* msg = rdata->msg_info.msg;
+
+  doRegTest("Match initial register",
+      	    "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            false,
+            msg,
+            true);
+
+  doRegTest("Match reregister",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            true);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=0"), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("Match unregister with expiry time in contact header",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            true);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "\nExpires: 0");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("Match unregister with expiry header",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            true);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;  
+
+  doRegTest("Illegal registration type",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>3</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);  
+
+  doRegTest("No match for initial register when already registered",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);  
+
+  doRegTest("No match for reregister when not already registered",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            false,
+            msg,
+            false);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=0"), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("No match for initial register with expires in contact header set to 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            false,
+            msg,
+            false);
+
+  doRegTest("No match for reregister with expires in contact header set to 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("No match for unregister when not registered",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            false,
+            msg,
+            false);
+
+  doRegTest("No match for unregister with no expires information",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=3600"), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("No match for unregister with expires in contact header non 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "\nExpires: 3600");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("No match for unregister with expires header non 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>2</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);
+
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "\nExpires: 0");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  msg = rdata->msg_info.msg;
+
+  doRegTest("No match for initial register with expires header set to 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            false,
+            msg,
+            false);
+
+  doRegTest("No match for reregister with expires header set to 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false);
+}
+
+TEST_F(IfcHandlerTest, SDPOriginMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>o</Line><Content>jdoe 2890844526 2890842807 IN IP4 10.47.16.5</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPConnMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>c</Line><Content>IN IP4 224.2.17.12</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPTimerMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>t</Line><Content>2873397496 2873404696</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPBandwMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>b</Line><Content>X-YZ:128</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPSubjectMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>s</Line><Content>SDP Seminar</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPAttrMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>a</Line><Content>recvonly</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPMediaMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>m</Line><Content>audio 49170/5 RTP/AVP 0</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPMediaAttrMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>a</Line><Content>rtpmap:99 h263-1998/90000</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPMediaConnMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>c</Line><Content>IN IP4 225.2.17.14</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPMediaBandwMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>b</Line><Content>Z-YZ:126</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPNoLine)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Content>Z-YZ:126</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Missing Line element for SessionDescription service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, SDPBadLineRegex)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>*</Line><Content>Z-YZ:126</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Line element for Session Description service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, SDPBadContentRegex)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>a</Line><Content>*</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for Session Description service point trigger"));
+}
+
+TEST_F(IfcHandlerTest, SDPNoContentMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>a</Line></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
+TEST_F(IfcHandlerTest, SDPLineNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>v</Line><Content>content</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPAttrContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>a</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPConnContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>c</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPBandwContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>b</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPTimerContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>t</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPSubjectContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>s</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPMediaNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>m</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPOriginContentNoMatch)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>o</Line><Content>nomatch</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, SDPNoEqualsSign)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SessionDescription><Line>e</Line><Content>invalidline</Content></SessionDescription>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+  EXPECT_TRUE(_log.contains("Found badly formatted SDP line: einvalidline"));
+}
+
 
 // @@@ iFC XML parse error
 // @@@ lookup_ifcs gets no served user

@@ -47,10 +47,24 @@ extern "C" {
 #include "constants.h"
 #include "stack.h"
 #include "pjutils.h"
+#include "pjmedia.h"
 
 #include "ifchandler.h"
 
 using namespace rapidxml;
+
+// Enum values for registration type, as per 3GPP TS 29.228.
+#define INITIAL_REGISTRATION 0
+#define REREGISTRATION 1
+#define DEREGISTRATION 2
+
+// Enum values for session case, as per CxData_Type_Rel11.xsd.
+#define ORIGINATING_REGISTERED 0
+#define TERMINATING_REGISTERED 1
+#define TERMINATING_UNREGISTERED 2
+#define ORIGINATING_UNREGISTERED 3
+#define ORIGINATING_CDIV 4
+
 
 // Forward declarations.
 static long parse_integer(xml_node<>* node, std::string description, long min_value, long max_value);
@@ -58,7 +72,6 @@ static bool parse_bool(xml_node<>* node, std::string description);
 static std::string get_first_node_value(xml_node<>* node, std::string name);
 static std::string get_text_or_cdata(xml_node<>* node);
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name);
-
 
 /// Exception thrown internally during interpretation of filter
 /// criteria.
@@ -137,10 +150,53 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
   if (strcmp("Method", name) == 0)
   {
-    // @@@KSW TODO if node->value() is REGISTER, inspect
-    // spt_node/Extension/RegistrationType (0, 1, or 2 values) and
-    // check to see if they match the registration type.
-    ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
+    // If we have a REGISTER we may need to match on RegistrationType.
+    if ((strcmp("REGISTER", node->value()) == 0) &&
+        (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0))
+    {
+      ret = true;
+      node = node->next_sibling();
+      name = node->name();
+
+      if (strcmp(name, "Extension") == 0)
+      {
+        xml_node<>* reg_type_node = node->first_node("RegistrationType");
+
+        if (reg_type_node)
+        {
+          name = reg_type_node->name();
+          int reg_type = parse_integer(reg_type_node, "registration type", 0, 2);
+
+          // Find expiry value from SIP message if it is present to determine
+          // whether we have a de-registration.  Set an arbitrary default value of
+          // an hour.
+          int expiry = PJUtils::max_expires(msg, 3600);
+
+          switch (reg_type)
+          {
+          case INITIAL_REGISTRATION:
+            ret = !is_registered && (expiry > 0);
+            break;
+          case REREGISTRATION:
+            ret = is_registered && (expiry > 0);
+            break;
+          case DEREGISTRATION:
+            ret = is_registered && (expiry == 0);
+            break;
+          default:
+          // LCOV_EXCL_START Unreachable
+            LOG_WARNING("Impossible case %d", reg_type);
+            ret = false;
+            break;
+          // LCOV_EXCL_STOP
+          }
+        }
+      }
+    }
+    else
+    {
+      ret = (pj_strcmp2(&msg->line.req.method.name, node->value()) == 0);
+    }
   }
   else if (strcmp("SIPHeader", name) == 0)
   {
@@ -199,43 +255,124 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
   }
   else if (strcmp("SessionCase", name) == 0)
   {
-    // Enum values are per CxData_Type_Rel11.xsd.
     int direction = parse_integer(node, "session case", 0, 4);
     switch (direction)
     {
-    case 0: // ORIGINATING_REGISTERED
-    {
+    case ORIGINATING_REGISTERED:
       ret = (session_case == SessionCase::Originating) && is_registered;
-    }
-    break;
-    case 1: // TERMINATING_REGISTERED
-    {
+      break;
+    case TERMINATING_REGISTERED:
       ret = (session_case == SessionCase::Terminating) && is_registered;
-    }
-    break;
-    case 2: // TERMINATING_UNREGISTERED
-    {
+      break;
+    case TERMINATING_UNREGISTERED:
       ret = (session_case == SessionCase::Terminating) && !is_registered;
-    }
-    break;
-    case 3: // ORIGINATING_UNREGISTERED
-    {
+      break;
+    case ORIGINATING_UNREGISTERED:
       ret = (session_case == SessionCase::Originating) && !is_registered;
-    }
-    break;
-    case 4: // ORIGINATING_CDIV
-    {
+      break;
+    case ORIGINATING_CDIV:
       ret = (session_case == SessionCase::OriginatingCdiv);
-    }
-    break;
+      break;
     default:
       // LCOV_EXCL_START Unreachable
-    {
       LOG_WARNING("Impossible case %d", direction);
       ret = false;
-    }
-    break;
+      break;
     // LCOV_EXCL_STOP
+    }
+  }
+  else if (strcmp("RequestURI", name) == 0)
+  {
+    boost::regex req_uri_regex;
+    pjsip_sip_uri* req_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+
+    // Just comparing against the hostport part of the Req URI, as per Table F.1
+    // of 3GPP TS 29.228.
+    std::string hostport = PJUtils::pj_str_to_string(&req_uri->host);
+    if (req_uri->port != 0)
+    {
+      hostport += ":" + boost::lexical_cast<std::string>(req_uri->port);
+    }
+
+    req_uri_regex = boost::regex(get_text_or_cdata(node), boost::regex_constants::no_except);
+    if (req_uri_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Request URI service point trigger");
+    }
+
+    ret = boost::regex_search(hostport, req_uri_regex);
+  }
+  else if (strcmp("SessionDescription", name) == 0)
+  {
+    xml_node<>* spt_line = node->first_node("Line");
+    xml_node<>* spt_content = node->first_node("Content");
+    boost::regex line_regex;
+    boost::regex content_regex;
+    char newline = '\n';
+    std::stringstream sdp((char *)msg->body->data);
+    std::string sdp_line;
+
+    if (!spt_line)
+    {
+      throw ifc_error("Missing Line element for SessionDescription service point trigger");
+    }
+
+    line_regex = boost::regex(get_text_or_cdata(spt_line), boost::regex_constants::no_except);
+    if (line_regex.status())
+    {
+      throw ifc_error("Invalid regular expression in Line element for Session Description service point trigger");
+    }
+
+    // Check if the message body is SDP.
+    if (msg->body &&
+        (!pj_stricmp2(&msg->body->content_type.type, "application")) &&
+        (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
+    {
+      if (msg->body->data != NULL)
+      {
+        // Split the message body into each SDP line.
+        while((std::getline(sdp, sdp_line, newline)) && (ret == false))
+        {
+          // Match the line regex on the first character of the SDP line.
+          std::string sdp_identifier(1, sdp_line[0]);
+          if (boost::regex_search(sdp_identifier, line_regex))
+          {
+            if (!spt_content)
+            {
+              // We've found a matching line type, and don't have to match on content.
+              ret = true;
+            }
+            else
+            {
+              // status() is nonzero for an uninitialised regex, so we check this in order to only compile it once.
+              if (content_regex.status())
+              {
+                content_regex = boost::regex(get_text_or_cdata(spt_content), boost::regex_constants::no_except);
+                if (content_regex.status())
+                {
+                  throw ifc_error("Invalid regular expression in Content element for Session Description service point trigger");
+                }
+              }
+
+              // Check the second character of the line is an equals sign, and then
+              // consider the content of the SDP line.
+              if (sdp_line.find_first_of("=") == 1)
+              {
+                sdp_line.erase(0,2);
+                if (boost::regex_search(sdp_line, content_regex))
+                {
+                  // We've found a matching line.
+                  ret = true;
+                }
+              }
+              else
+              {
+                LOG_WARNING("Found badly formatted SDP line: %s", sdp_line.c_str());
+              }
+            }
+          }
+        }
+      }
     }
   }
   else
