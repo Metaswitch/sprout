@@ -156,6 +156,9 @@ void SipTest::TearDownTestCase()
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
 
+  // Delete the default TCP transport flow.
+  delete _tp_default;
+
   // Terminate PJSIP
   term_pjsip();
 
