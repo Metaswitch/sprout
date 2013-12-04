@@ -3299,6 +3299,13 @@ TEST_F(IscTest, SimpleReject)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3475,6 +3482,13 @@ TEST_F(IscTest, SimpleAccept)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3561,6 +3575,13 @@ TEST_F(IscTest, SimpleRedirect)
                                 "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
@@ -3826,6 +3847,13 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
                                 "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
                                 "    <DefaultHandling>1</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
@@ -4360,6 +4388,13 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
@@ -4558,6 +4593,13 @@ TEST_F(IscTest, MmtelCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -4758,6 +4800,13 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -5529,6 +5578,13 @@ TEST_F(IscTest, SimpleOptionsAccept)
                                 "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
