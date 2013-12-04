@@ -62,7 +62,7 @@
 /// handle_incoming_non_cancel does the following, in order:
 /// * proxy_verify_request
 /// * clone request as response
-/// * optionally, do proxy_process_edge_routing
+/// * optionally, do proxy_process_access_routing
 /// * do proxy_process_routing
 /// * create a UAS transaction object
 /// * pass to uas_data->handle_incoming_non_cancel
@@ -141,13 +141,14 @@ static AnalyticsLogger* analytics_logger;
 static EnumService *enum_service;
 static BgcfService *bgcf_service;
 
-static bool edge_proxy;
+static bool access_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
 static HSSConnection* hss;
+static pjsip_uri* icscf_uri = NULL;
 
 static bool ibcf = false;
 
@@ -208,10 +209,10 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata);
 #ifndef UNIT_TEST
 static
 #endif
-pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
-                                       pjsip_tx_data *tdata,
-                                       TrustBoundary **trust,
-                                       Target **target);
+pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
+                                         pjsip_tx_data *tdata,
+                                         TrustBoundary **trust,
+                                         Target **target);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
@@ -398,10 +399,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if (edge_proxy)
+  if (access_proxy)
   {
-    // Process edge proxy routing.  This also does IBCF function if enabled.
-    status = proxy_process_edge_routing(rdata, tdata, &trust, &target);
+    // Process access proxy routing.  This also does IBCF function if enabled.
+    status = proxy_process_access_routing(rdata, tdata, &trust, &target);
     if (status != PJ_SUCCESS)
     {
       delete target;
@@ -422,7 +423,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       // ODI token.  We need to determine the session case: is
       // this an originating request or not - see 3GPP TS 24.229
       // s5.4.3.1, s5.4.1.2.2F and the behaviour of
-      // proxy_calculate_targets as an edge proxy.
+      // proxy_calculate_targets as an access proxy.
       pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
       pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
       const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
@@ -533,12 +534,12 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if ((!edge_proxy) &&
+  if ((!access_proxy) &&
       (uas_data->method() == PJSIP_INVITE_METHOD))
   {
     // If running in routing proxy mode send the 100 Trying response before
     // applying services and routing the request as both may involve
-    // interacting with external databases.  When running in edge proxy
+    // interacting with external databases.  When running in access proxy
     // mode we hold off sending the 100 Trying until we've received one from
     // upstream so we can be sure we could route a subsequent CANCEL to the
     // right place.
@@ -672,7 +673,8 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
 
 static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
 {
-  if (transport == NULL) {
+  if (transport == NULL)
+  {
     LOG_DEBUG("determine_source called with a NULL pjsip_transport");
     return SIP_PEER_UNKNOWN;
   }
@@ -727,6 +729,10 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   return trusted;
 }
 
+void UASTransaction::routing_proxy_record_route()
+{
+    PJUtils::add_record_route(_req, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
+}
 
 /// Checks for double Record-Routing and removes superfluous Route header to
 /// avoid request spirals.
@@ -864,14 +870,14 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
 }
 
 
-/// Perform edge-proxy-specific routing.
+/// Perform access-proxy-specific routing.
 #ifndef UNIT_TEST
 static
 #endif
-pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
-                                       pjsip_tx_data *tdata,
-                                       TrustBoundary **trust,
-                                       Target **target)
+pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
+                                         pjsip_tx_data *tdata,
+                                         TrustBoundary **trust,
+                                         Target **target)
 {
   pj_status_t status;
   Flow* src_flow = NULL;
@@ -879,11 +885,21 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
   SIPPeerType source_type = determine_source(rdata->tp_info.transport,
                                              rdata->pkt_info.src_addr);
 
-  LOG_DEBUG("Perform edge proxy routing for %.*s request",
+  LOG_DEBUG("Perform access proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
+    if (source_type == SIP_PEER_TRUSTED_PORT)
+    {
+      LOG_WARNING("Rejecting REGISTER request received from within the trust domain");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_METHOD_NOT_ALLOWED,
+                                 NULL, NULL, NULL);
+      return PJ_ENOTFOUND;
+    }
+
     if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
@@ -894,65 +910,58 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       return PJ_ENOTFOUND;
     }
 
-    if (source_type != SIP_PEER_TRUSTED_PORT)
-    {
-      // The REGISTER came from outside the trust domain and not over a SIP
-      // trunk, so we must act as the edge proxy for the node.  (Previously
-      // we would only act as edge proxy for nodes that requested it with
-      // the outbound flag, or we detected were behind a NAT - now we have a
-      // well-defined trust zone we have to do it for all nodes outside
-      // the trust node.)
-      LOG_DEBUG("Message requires outbound support");
+    // The REGISTER came from outside the trust domain and not over a SIP
+    // trunk, so we must act as the access proxy for the node.
+    LOG_DEBUG("Message requires outbound support");
 
-      // Find or create a flow object to represent this flow.
-      src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
+    // Find or create a flow object to represent this flow.
+    src_flow = flow_table->find_create_flow(rdata->tp_info.transport,
                                               &rdata->pkt_info.src_addr);
 
-      if (src_flow == NULL)
-      {
-        LOG_ERROR("Failed to create flow data record");
-        return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
-      }
+    if (src_flow == NULL)
+    {
+      LOG_ERROR("Failed to create flow data record");
+      return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+    }
 
-      LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
+    LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
 
-      // Reject the REGISTER with a 305 if Bono is trying to quiesce and
-      // there are no active dialogs on this flow.
-      if (src_flow->should_quiesce())
-      {
-        LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
-        PJUtils::respond_stateless(stack_data.endpt,
-                                   rdata,
-                                   PJSIP_SC_USE_PROXY,
-                                   NULL, NULL, NULL);
-        src_flow->dec_ref();
+    // Reject the REGISTER with a 305 if Bono is trying to quiesce and
+    // there are no active dialogs on this flow.
+    if (src_flow->should_quiesce())
+    {
+      LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_USE_PROXY,
+                                 NULL, NULL, NULL);
+      src_flow->dec_ref();
 
-        // Of the PJSIP error codes, EIGNORED seems most appropriate -
-        // but anything that's not PJ_SUCCESS will do.
-        return PJ_EIGNORED;
-      }
+      // Of the PJSIP error codes, EIGNORED seems most appropriate -
+      // but anything that's not PJ_SUCCESS will do.
+      return PJ_EIGNORED;
+    }
 
-      // Touch the flow to make sure it doesn't time out while we are waiting
-      // for the REGISTER response from upstream.
-      src_flow->touch();
+    // Touch the flow to make sure it doesn't time out while we are waiting
+    // for the REGISTER response from upstream.
+    src_flow->touch();
 
-      pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-      if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
-      {
-        // The message was received on a client flow that has already been
-        // authenticated, so add an integrity-protected indication.
-        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
-      }
-      else
-      {
-        // The client flow hasn't yet been authenticated, so add an integrity-protected
-        // indicator so Sprout will challenge and/or authenticate. it
-        PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
-      }
+    pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
+    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+    {
+      // The message was received on a client flow that has already been
+      // authenticated, so add an integrity-protected indication.
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
+    }
+    else
+    {
+      // The client flow hasn't yet been authenticated, so add an integrity-protected
+      // indicator so Sprout will challenge and/or authenticate. it
+      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
     }
 
     // Add a path header so we get included in the egress call flow.  If we're not
-    // acting as edge proxy, we'll add the bono cluster instead.
+    // acting as access proxy, we'll add the bono cluster instead.
     status = add_path(tdata, src_flow, rdata);
     if (status != PJ_SUCCESS)
     {
@@ -1274,13 +1283,6 @@ pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
       PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, "TCP", stack_data.untrusted_port, NULL, stack_data.public_host);   // @TODO - transport type?
     }
-    else
-    {
-      // Message is being routed between a third-party edge proxy and Sprout (or vice-
-      // versa).  Just do a single Record-Route, using the cluster address.
-      LOG_DEBUG("Single Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.bono_cluster_domain);
-    }
 
     // Decrement references on flows as we have finished with them.
     if (tgt_flow != NULL)
@@ -1377,7 +1379,8 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
   // If the first value in the Route header field indicates this proxy or
   // home domain, the proxy MUST remove that value from the request.
-  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
+  // We remove consecutive Route headers that point to us so we don't spiral.'
+  while (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
     pj_list_erase(hroute);
   }
@@ -1713,10 +1716,6 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
                                                       hvalue.slen,
                                                       0);
 
-    // The user part may be missing if the path is simply to the bono cluster
-    // (for example if a commercial P-CSCF is in use and bono is simply providing
-    // a proxying service to it), in this case, we're not using flows so there's
-    // no need to update the authenticated URIs.
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
     {
@@ -1963,7 +1962,6 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAS) ? (UASTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-
 /// Handle a non-CANCEL message.
 void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target *target)
 {
@@ -1974,13 +1972,21 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   _trust->process_request(_req);
 
   // If we're a routing proxy, perform AS handling to pick the next hop.
-  if (!target && !edge_proxy)
+  if (!target && !access_proxy)
   {
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
     {
+      if (stack_data.record_route_on_every_hop)
+      {
+        LOG_DEBUG("Single Record-Route - configured to do this on every hop");
+        routing_proxy_record_route();
+      }
+
       // Pick up the AS chain from the ODI, or do the iFC lookups
-      // necessary to create a new AS chain.
+      // necessary to create a new AS chain. If creating a new AS
+      // chain, and configured to Record-Route on initiation of
+      // originating or terminating (but not on every hop), also Record-Routes.
       bool rc = find_as_chain(serving_state);
 
       if (!rc)
@@ -2000,37 +2006,71 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // orig-ioi).
         disposition = handle_originating(&target);
 
-        if ((disposition == AsChainLink::Disposition::Complete) &&
-            (enum_service) &&
-            (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-            (!is_uri_routeable(_req->msg->line.req.uri)))
+        if (disposition == AsChainLink::Disposition::Complete)
         {
-          // We've finished originating handling, and the request is
-          // targeted at this domain, but the URI is not currently
-          // routeable, so do an ENUM lookup to translate it to a
-          // routeable URI.
+          // Processing at end of originating handling
 
-          // This may mean it is no longer targeted at
-          // this domain, so we need to recheck this below before
-          // starting terminating handling.
-          LOG_DEBUG("Translating URI");
-          status = translate_request_uri(_req, trail());
-
-          if (status != PJ_SUCCESS)
+          if (stack_data.record_route_on_completion_of_originating)
           {
-            // An error occurred during URI translation.  This doesn't happen if
-            // there is no match, only if there is a match but there is an error
-            // performing the defined mapping.  We therefore reject the request
-            // with the not found status code and a specific reason phrase.
-            send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-            disposition = AsChainLink::Disposition::Stop;
+            LOG_DEBUG("Single Record-Route - end of originating handling");
+            routing_proxy_record_route();
+          }
+
+          if ((enum_service) &&
+              (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+              (!is_uri_routeable(_req->msg->line.req.uri)))
+          {
+            // We've finished originating handling, and the request is
+            // targeted at this domain, but the URI is not currently
+            // routeable, so do an ENUM lookup to translate it to a
+            // routeable URI.
+
+            // This may mean it is no longer targeted at
+            // this domain, so we need to recheck this below before
+            // starting terminating handling.
+            LOG_DEBUG("Translating URI");
+            status = translate_request_uri(_req, trail());
+
+            if (status != PJ_SUCCESS)
+            {
+              // An error occurred during URI translation.  This doesn't happen if
+              // there is no match, only if there is a match but there is an error
+              // performing the defined mapping.  We therefore reject the request
+              // with the not found status code and a specific reason phrase.
+              send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+              disposition = AsChainLink::Disposition::Stop;
+            }
           }
         }
       }
 
-      if (disposition == AsChainLink::Disposition::Complete &&
+      if (_as_chain_link.is_set() &&
+          _as_chain_link.session_case().is_originating() &&
+          disposition == AsChainLink::Disposition::Complete &&
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
+          icscf_uri)
+      {
+        // We've completed the originating half, the destination is local and
+        // we have an external I-CSCF configured.  Route the call there.
+        LOG_INFO("Invoking I-CSCF %s",
+                 PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+
+        // Release any existing AS chain to avoid leaking it.
+        _as_chain_link.release();
+
+        // Start defining the new target.
+        delete target;
+        target = new Target;
+
+        // Set the I-CSCF URI as the topmost route header.
+        target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
+
+        // The Request-URI should remain unchanged
+        target->uri = _req->msg->line.req.uri;
+      }
+      else if (disposition == AsChainLink::Disposition::Complete &&
+               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+               !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
       {
         // We've completed the originating half (or we're not doing
         // originating handling for this call), we're handling the
@@ -2051,12 +2091,24 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       }
 
       if (_as_chain_link.is_set() &&
-          _as_chain_link.session_case().is_terminating()) {
+          _as_chain_link.session_case().is_terminating())
+      {
         // Do terminating handling (including AS handling and setting
         // orig-ioi).
 
         LOG_DEBUG("Terminating half");
         disposition = handle_terminating(&target);
+
+        if (disposition == AsChainLink::Disposition::Complete)
+        {
+          // Processing at end of terminating handling
+
+          if (stack_data.record_route_on_completion_of_terminating)
+          {
+            routing_proxy_record_route();
+            LOG_DEBUG("Single Record-Route - end of terminating handling");
+          }
+        }
       }
     }
     else
@@ -2129,6 +2181,11 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         {
           LOG_DEBUG("Creating originating CDIV AS chain");
           _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+          if (stack_data.record_route_on_diversion)
+          {
+            LOG_DEBUG("Single Record-Route - originating Cdiv");
+            routing_proxy_record_route();
+          }
         }
       }
     }
@@ -2143,6 +2200,21 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         LOG_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
+
+      if (serving_state.session_case() == SessionCase::Terminating)
+      {
+        common_start_of_terminating_processing();
+      }
+      else if (serving_state.session_case() == SessionCase::Originating)
+      {
+        // Processing at start of originating handling (not including CDiv)
+        if (stack_data.record_route_on_initiation_of_originating)
+        {
+          LOG_DEBUG("Single Record-Route - initiation of originating handling");
+          routing_proxy_record_route();
+        }
+      }
+
     }
   }
   return success;
@@ -2202,6 +2274,17 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
   return disposition;
 }
 
+// We can start terminating processing either in find_as_chain or
+// move_to_terminating_chain. This function contains processing common
+// to both.
+void UASTransaction::common_start_of_terminating_processing()
+{
+  if (stack_data.record_route_on_initiation_of_terminating)
+  {
+    LOG_DEBUG("Single Record-Route - initiation of terminating handling");
+    routing_proxy_record_route();
+  }
+}
 
 /// Move from originating to terminating handling.
 bool UASTransaction::move_to_terminating_chain()
@@ -2225,6 +2308,7 @@ bool UASTransaction::move_to_terminating_chain()
     if (success)
     {
       _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+      common_start_of_terminating_processing();
     }
   }
   return success;
@@ -2341,7 +2425,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
     pj_status_t status;
     int status_code = rdata->msg_info.msg->line.status.code;
 
-    if ((!edge_proxy) &&
+    if ((!access_proxy) &&
         (method() == PJSIP_INVITE_METHOD) &&
         (status_code == 100))
     {
@@ -2360,11 +2444,11 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       return;
     }
 
-    if ((edge_proxy) &&
+    if ((access_proxy) &&
         (method() == PJSIP_REGISTER_METHOD) &&
         (status_code == 200))
     {
-      // Pass the REGISTER response to the edge proxy code to see if
+      // Pass the REGISTER response to the access proxy code to see if
       // the associated client flow has been authenticated.
       proxy_process_register_response(rdata);
     }
@@ -2546,7 +2630,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
 
     // This has to be conditional on a completed state, else
     // _tsx->transport might not be set.
-    if (edge_proxy)
+    if (access_proxy)
     {
       SIPPeerType stype  = determine_source(_tsx->transport, _tsx->addr);
       bool is_client = (stype == SIP_PEER_CLIENT);
@@ -3236,7 +3320,7 @@ void UACTransaction::set_target(const struct Target& target)
   // sure it comes from the right pool.
   _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
 
-  // If the target is routing to the upstream device (we're acting as an edge
+  // If the target is routing to the upstream device (we're acting as an access
   // proxy), strip any extra loose routes on the message to prevent accidental
   // double routing.
   if (target.upstream_route)
@@ -3537,17 +3621,18 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler_in,
-                                pj_bool_t enable_edge_proxy,
-                                const std::string& edge_upstream_proxy,
-                                int edge_upstream_proxy_port,
-                                int edge_upstream_proxy_connections,
-                                int edge_upstream_proxy_recycle,
+                                pj_bool_t enable_access_proxy,
+                                const std::string& upstream_proxy_arg,
+                                int upstream_proxy_port,
+                                int upstream_proxy_connections,
+                                int upstream_proxy_recycle,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager)
 {
   pj_status_t status;
@@ -3559,18 +3644,18 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
 
-  edge_proxy = enable_edge_proxy;
-  if (edge_proxy)
+  access_proxy = enable_access_proxy;
+  if (access_proxy)
   {
     // Create a URI for the upstream proxy to use in Route headers.
     upstream_proxy = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, PJ_FALSE);
-    ((pjsip_sip_uri*)upstream_proxy)->host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    ((pjsip_sip_uri*)upstream_proxy)->port = edge_upstream_proxy_port;
+    ((pjsip_sip_uri*)upstream_proxy)->host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
+    ((pjsip_sip_uri*)upstream_proxy)->port = upstream_proxy_port;
     ((pjsip_sip_uri*)upstream_proxy)->transport_param = pj_str("TCP");
     ((pjsip_sip_uri*)upstream_proxy)->lr_param = 1;
 
     // Create a flow table object to manage the client flow records
-    // and handle edge proxy quiescing.
+    // and handle access proxy quiescing.
     flow_table = new FlowTable(quiescing_manager);
     quiescing_manager->register_flows_handler(flow_table);
 
@@ -3579,11 +3664,11 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
     // Create a connection pool to the upstream proxy.
     pjsip_host_port pool_target;
-    pool_target.host = pj_strdup3(stack_data.pool, edge_upstream_proxy.c_str());
-    pool_target.port = edge_upstream_proxy_port;
+    pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
+    pool_target.port = upstream_proxy_port;
     upstream_conn_pool = new ConnectionPool(&pool_target,
-                                            edge_upstream_proxy_connections,
-                                            edge_upstream_proxy_recycle,
+                                            upstream_proxy_connections,
+                                            upstream_proxy_recycle,
                                             stack_data.pool,
                                             stack_data.endpt,
                                             stack_data.trusted_tcp_factory);
@@ -3625,6 +3710,17 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   bgcf_service = bgcfService;
   hss = hss_connection;
 
+  if (!icscf_uri_str.empty())
+  {
+    // Got an I-CSCF - parse it.
+    icscf_uri = PJUtils::uri_from_string(icscf_uri_str, stack_data.pool, PJ_FALSE);
+    if (PJSIP_URI_SCHEME_IS_SIP(icscf_uri))
+    {
+      // Got a SIP URI - force loose-routing.
+      ((pjsip_sip_uri*)icscf_uri)->lr_param = 1;
+    }
+  }
+
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_stateful_proxy);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
 
@@ -3637,7 +3733,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
 void destroy_stateful_proxy()
 {
-  if (edge_proxy)
+  if (access_proxy)
   {
     // Destroy the upstream connection pool.  This will quiesce all the TCP
     // connections.
@@ -3737,16 +3833,11 @@ static pj_bool_t is_user_numeric(const std::string& user)
   return PJ_TRUE;
 }
 
-/// Adds a Path header when functioning as an edge proxy or as a load-balancing
-/// proxy for a commercial P-CSCF/IBCF.
+/// Adds a Path header when functioning as an edge proxy.
 ///
-/// If we're the edge-proxy (and thus supplying outbound support for the client,
-/// the path header consists of a SIP URI with our host and a user portion that
+/// We're the edge-proxy and thus supplying outbound support for the client.
+/// The path header consists of a SIP URI with our host and a user portion that
 /// identifies the client flow.
-///
-/// If we're merely acting as a loadbalancing proxy for a commercial P-CSCF/IBCF,
-/// we'll simply add a path to the bono cluster.  This is indicated by the absence
-/// of a flow entry.
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata)
@@ -3761,28 +3852,20 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 
-  if (flow_data)
-  {
-    // Specify this particular node, as only we can find the client.
-    path_uri->host = stack_data.local_host;
+  // Specify this particular node, as only we can find the client.
+  path_uri->host = stack_data.local_host;
 
-    // Add the flow token and "ob" parameter.
-    pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
+  // Add the flow token and "ob" parameter.
+  pj_strdup2(tdata->pool, &path_uri->user, flow_data->token().c_str());
 
-    if (PJUtils::is_first_hop(rdata->msg_info.msg))
-    {
-      // We own the outbound flow to the UAC.  We must indicate that by adding
-      // the ob parameter.
-      pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-      pj_strdup2(tdata->pool, &ob_node->name, "ob");
-      pj_strdup2(tdata->pool, &ob_node->value, "");
-      pj_list_insert_after(&path_uri->other_param, ob_node);
-    }
-  }
-  else
+  if (PJUtils::is_first_hop(rdata->msg_info.msg))
   {
-    // Specify the bono cluster, as any of them can find the upstream P-CSCF/IBCF.
-    path_uri->host = stack_data.bono_cluster_domain;
+    // We own the outbound flow to the UAC.  We must indicate that by adding
+    // the ob parameter.
+    pjsip_param *ob_node = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+    pj_strdup2(tdata->pool, &ob_node->name, "ob");
+    pj_strdup2(tdata->pool, &ob_node->value, "");
+    pj_list_insert_after(&path_uri->other_param, ob_node);
   }
 
   // Render the URI as a string.

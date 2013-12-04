@@ -1141,12 +1141,12 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
   _hss_connection->set_result("/impu/sip%3A%2B16505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:+16505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:+16505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   Message msg;
   msg._to = "+15108580271";
@@ -1165,12 +1165,12 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
   SCOPED_TRACE("");
   Message msg;
   _hss_connection->set_result("/impu/sip%3A%2B15108581234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:+15108581234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:+15108581234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   msg._to = "+15108580271";
   msg._from = "+15108581234";
@@ -1190,12 +1190,12 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   SCOPED_TRACE("");
   Message msg;
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1691,8 +1691,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
 
   // Register client.
   TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                          stack_data.untrusted_port,
-                                          "1.2.3.4",
+                                        stack_data.untrusted_port,
+                                        "1.2.3.4",
                                           49152);
   // Register a client with the edge proxy.
   Message msg;
@@ -2728,26 +2728,26 @@ TEST_F(IscTest, SimpleMainline)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -2822,42 +2822,42 @@ TEST_F(IscTest, SimpleNextOrigFlow)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>ETAOIN_SHRDLU</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:linotype.example.org</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>0</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>ETAOIN_SHRDLU</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:linotype.example.org</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -2930,33 +2930,26 @@ TEST_F(IscTest, SimpleReject)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3025,26 +3018,26 @@ TEST_F(IscTest, SimpleNonLocalReject)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3113,33 +3106,26 @@ TEST_F(IscTest, SimpleAccept)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3208,33 +3194,26 @@ TEST_F(IscTest, SimpleRedirect)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3304,26 +3283,26 @@ TEST_F(IscTest, DefaultHandlingTerminate)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3394,26 +3373,26 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:who@example.net");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3480,33 +3459,26 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>1</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "    </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3581,101 +3553,101 @@ TEST_F(IscTest, InterestingAs)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>1</SessionCase>  <!-- terminating-registered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>QWERTY_UIOP</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:sholes.example.com</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>3</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>QWERTY_UIOP</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:sholes.example.com</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>3</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -3828,47 +3800,47 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.trusted_port, "6.2.3.4", 56786);
@@ -4004,54 +3976,54 @@ TEST_F(IscTest, Cdiv)
   register_uri(_store, _hss_connection, "6505551000", "homedomain", "sip:wuntootree@10.14.61.213:5061;transport=tcp;ob");
   register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>4</SessionCase>  <!-- originating-cdiv -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>1</SessionCase>  <!-- terminating-registered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
@@ -4154,39 +4126,32 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>1</SessionCase>  <!-- terminating-registered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
@@ -4239,32 +4204,32 @@ TEST_F(IscTest, TerminatingWithNoEnumRewrite)
 {
   register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A1115551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>1</SessionCase>  <!-- terminating-registered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                  <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
@@ -4318,54 +4283,54 @@ TEST_F(IscTest, MmtelCdiv)
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   register_uri(_store, _hss_connection, "6505555678", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>4</SessionCase>  <!-- originating-cdiv -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>1</SessionCase>  <!-- terminating-registered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4385,13 +4350,6 @@ TEST_F(IscTest, MmtelCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -4479,32 +4437,32 @@ TEST_F(IscTest, MmtelDoubleCdiv)
 {
   register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4525,54 +4483,54 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_result("/impu/sip%3A6505555678%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>4</SessionCase>  <!-- originating-cdiv -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>4</SessionCase>  <!-- originating-cdiv -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>2</SessionCase>  <!-- terminating-unregistered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505555678@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4592,13 +4550,6 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -4693,26 +4644,26 @@ TEST_F(IscTest, ExpiredChain)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-                              "<IMSSubscription><ServiceProfile>"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                "<IMSSubscription><ServiceProfile>"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
@@ -4802,26 +4753,26 @@ TEST_F(IscTest, MmtelFlow)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4834,26 +4785,26 @@ TEST_F(IscTest, MmtelFlow)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>0</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
@@ -4942,42 +4893,42 @@ TEST_F(IscTest, MmtelThenExternal)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -4990,42 +4941,42 @@ TEST_F(IscTest, MmtelThenExternal)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -5165,42 +5116,42 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551000@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -5213,58 +5164,58 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>2</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:mmtel.homedomain</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>3</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>INVITE</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:mmtel.homedomain</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>3</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -5352,33 +5303,26 @@ TEST_F(IscTest, SimpleOptionsAccept)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>OPTIONS</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>OPTIONS</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);

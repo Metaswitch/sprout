@@ -56,10 +56,13 @@ extern "C" {
 /// Utility to determine if this URI belongs to the home domain.
 pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
-  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-      (pj_stricmp(&((pjsip_sip_uri*)uri)->host, &stack_data.home_domain)==0))
+  if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    return PJ_TRUE;
+    pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
+    if (pj_stricmp(&host_from_uri, &stack_data.home_domain)==0)
+    {
+      return PJ_TRUE;
+    }
   }
   return PJ_FALSE;
 }
@@ -81,6 +84,10 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
         return PJ_TRUE;
       }
     }
+  }
+  else
+  {
+    LOG_INFO("URI scheme is not SIP - treating as not locally hosted");
   }
 
   /* Doesn't match */
@@ -184,6 +191,8 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 /// password before rendering the URI to a string.
 std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
 {
+  std::string input_uri = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)uri);
+  std::string returned_aor;
   pjsip_sip_uri aor;
   memcpy((char*)&aor, (char*)uri, sizeof(pjsip_sip_uri));
   aor.passwd.slen = 0;
@@ -196,7 +205,9 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.maddr_param.slen = 0;
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
-  return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
+  LOG_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
+  return returned_aor;
 }
 
 
@@ -426,16 +437,34 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
   return rc;
 }
 
-
 /// Adds a Record-Route header to the message with the specified user name,
 /// host, port and transport.  If the user parameter is NULL the user field is
-/// left blank.
+/// left blank. If the top Record-Route header already matches the
+/// added one, does nothing.
 void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* transport,
                                int port,
                                const char* user,
                                const pj_str_t& host)
 {
+  pjsip_rr_hdr* top_rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_RECORD_ROUTE, NULL);
+  if (top_rr_hdr != NULL && PJSIP_URI_SCHEME_IS_SIP(top_rr_hdr->name_addr.uri))
+  {
+    pjsip_sip_uri* top_rr_uri = (pjsip_sip_uri*)top_rr_hdr->name_addr.uri;
+    pj_str_t top_host = top_rr_uri->host;
+    pj_str_t top_user = top_rr_uri->user;
+    pj_str_t top_transport = top_rr_uri->transport_param;
+    int top_port = top_rr_uri->port;
+    if ((pj_strcmp2(&top_user, user) == 0) &&
+        (pj_strcmp(&top_host, &host) == 0) &&
+        (pj_strcmp2(&top_transport, transport) == 0) &&
+        (port == top_port))
+    {
+      LOG_DEBUG("Top Record-Route header is already identical to the one we're adding; doing nothing");
+      return;
+    }
+  }
+
   pjsip_rr_hdr* rr = pjsip_rr_hdr_create(tdata->pool);
   pjsip_sip_uri* uri = pjsip_sip_uri_create(tdata->pool, PJ_FALSE);
   uri->host = host;

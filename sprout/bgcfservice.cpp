@@ -128,11 +128,19 @@ std::vector<std::string> BgcfService::get_route(const std::string &domain) const
 {
   LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
+  // First try the specified domain.
   std::map<std::string, std::vector<std::string>>::const_iterator i = _routes.find(domain);
-
   if (i != _routes.end())
   {
     LOG_INFO("Found route to domain %s", domain.c_str());
+    return i->second;
+  }
+
+  // Then try the default domain (*).
+  i = _routes.find("*");
+  if (i != _routes.end())
+  {
+    LOG_INFO("Found default route");
     return i->second;
   }
 

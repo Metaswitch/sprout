@@ -94,6 +94,28 @@ get_settings()
         upstream_connections=50
         upstream_recycle_connections=600
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+
+        # Work out which features are enabled.
+        EDGE_PROXY_ENABLED=Y
+        IBCF_ENABLED=Y
+        if [ -d /etc/clearwater/features.d ]
+        then
+          for file in $(find /etc/clearwater/features.d -type f)
+          do
+            [ -r $file ] && . $file
+          done
+        fi
+
+        if [ $EDGE_PROXY_ENABLED = Y ]
+        then
+          untrusted_port_arg="--untrusted-port 5060"
+          webrtc_port_arg="--webrtc-port 5062"
+        fi
+
+        if [ $IBCF_ENABLED = Y ]
+        then
+          [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
+        fi
 }
 
 #
@@ -120,19 +142,18 @@ do_start()
                      --domain $home_domain
                      --localhost $local_ip
                      --public-host $public_hostname
-                     --bono-domain bono.$home_domain
                      --alias $public_ip
                      --trusted-port 5058
-                     --untrusted-port 5060
-                     --edge-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
+                     $untrusted_port_arg
+                     $webrtc_port_arg
+                     --routing-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory
                      -F $log_directory
-                     -L $log_level"
-        # Add in IBCF configuration if there are trusted peers configured in user_settings file
-        [ "$trusted_peers" ] && DAEMON_ARGS="$DAEMON_ARGS --ibcf $trusted_peers"
+                     -L $log_level
+                     $ibcf_arg"
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
@@ -197,6 +218,32 @@ do_reload() {
         # then implement that here.
         #
         start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGQUIT to the daemon/service
+#
+do_start_quiesce() {
+        start-stop-daemon --stop --signal QUIT --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGQUIT to the daemon/service and waits for it to terminate
+#
+do_quiesce() {
+        # The timeout after forever is irrelevant - start-stop-daemon requires one but it doesn't
+        # actually affect processing.
+        start-stop-daemon --stop --retry QUIT/forever/10 --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGUSR1 to the daemon/service
+#
+do_unquiesce() {
+        start-stop-daemon --stop --signal USR1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -283,9 +330,21 @@ case "$1" in
                 ;;
         esac
         ;;
+  start-quiesce)
+        log_daemon_msg "Start quiescing $DESC" "$NAME"
+        do_start_quiesce
+        ;;
+  quiesce)
+        log_daemon_msg "Quiescing $DESC" "$NAME"
+        do_quiesce
+        ;;
+  unquiesce)
+        log_daemon_msg "Unquiesce $DESC" "$NAME"
+        do_unquiesce
+        ;;
   *)
-        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
+        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
         exit 3
         ;;
 esac

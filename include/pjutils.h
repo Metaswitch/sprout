@@ -107,6 +107,8 @@ pjsip_uri* next_hop(pjsip_msg* msg);
 
 pj_bool_t is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr);
 
+pj_bool_t is_top_rr_local(const pjsip_msg* msg);
+
 /// Checks whether the top route header in the message refers to this node,
 /// and optionally returns the headers.  If there no Route headers it returns
 /// false.
