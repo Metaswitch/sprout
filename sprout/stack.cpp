@@ -695,7 +695,7 @@ pj_status_t init_stack(bool access_proxy,
   }
 
   std::string system_name_sas = system_name;
-  std::string system_type_sas = edge_proxy ? "bono" : "sprout";
+  std::string system_type_sas = access_proxy ? "bono" : "sprout";
   // Initialize SAS logging.
   if (system_name_sas == "")
   {
