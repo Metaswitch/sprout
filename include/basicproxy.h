@@ -63,11 +63,11 @@ class BasicProxy
 {
 public:
   BasicProxy(pjsip_endpoint* endpt,
-             const char* name,
+             std::string name,
              int priority,
              AnalyticsLogger* analytics_logger,
              bool delay_trying);
-  ~BasicProxy();
+  virtual ~BasicProxy();
 
   pj_status_t init();
 
@@ -83,6 +83,12 @@ protected:
   class Target
   {
   public:
+    Target() :
+      uri(NULL),
+      paths(),
+      transport(NULL)
+    {
+    }
     pjsip_uri* uri;
     std::list<pjsip_uri*> paths;
     pjsip_transport* transport;
@@ -99,7 +105,7 @@ protected:
     UASTsx(BasicProxy* proxy);
 
     /// Destructor.
-    ~UASTsx();
+    virtual ~UASTsx();
 
     /// Returns the name of the underlying PJSIP transaction.
     inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -289,18 +295,27 @@ protected:
   virtual pj_status_t verify_request(pjsip_rx_data *rdata);
 
   /// Process route information in the request.
-  virtual pj_status_t process_routing(pjsip_tx_data *tdata,
+  virtual pj_status_t process_routing(pjsip_tx_data* tdata,
                                       BasicProxy::Target*& target);
+
+  /// Update the route headers on the request prior to forwarding it.
+  virtual void update_route_headers(pjsip_tx_data* tdata);
 
   /// Utility method to create a UASTsx objects for incoming requests.  Can
   /// be overriden if a subclass wants its own version of UASTsx.
   virtual BasicProxy::UASTsx* create_uas_tsx();
 
-  /// PJModule binding a pjsip_module to an instance of this class.
-  static const int PJMODULE_MASK = PJCallback::ON_RX_REQUEST|
-                                   PJCallback::ON_RX_RESPONSE|
-                                   PJCallback::ON_TSX_STATE;
-  PJModule<BasicProxy, 0> _mod_proxy;
+  /// PJModule binding a pjsip_module to an instance of this class for the
+  /// on_rx_request and on_rx_response callbacks.
+  static const int PJMODULE_MASK_PROXY = PJCallback::ON_RX_REQUEST|
+                                         PJCallback::ON_RX_RESPONSE;
+  PJModule<BasicProxy, 1> _mod_proxy;
+
+
+  /// PJModule binding a pjsip_module to an instance of this class for the
+  /// on_tsx_state callbacks.
+  static const int PJMODULE_MASK_TU = PJCallback::ON_TSX_STATE;
+  PJModule<BasicProxy, 2> _mod_tu;
 
   /// Analytics logger.
   AnalyticsLogger* _analytics_logger;

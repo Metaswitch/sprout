@@ -63,12 +63,13 @@ template <class T, int I>
 class PJModule : public PJCallback
 {
 public:
-  PJModule(T* object, pjsip_endpoint* endpt, const char* name, int priority, int cbmask)
+  PJModule(T* object, pjsip_endpoint* endpt, std::string name, int priority, int cbmask)
   {
+    _name = name;
     _obj = object;
     _endpt = endpt;
 
-    pj_cstr(&_mod.name, name);
+    pj_cstr(&_mod.name, _name.c_str());
     _mod.priority = priority;
     _mod.id = -1;
 
@@ -131,11 +132,15 @@ public:
   static int id() { return _mod.id; }
 
 private:
+  static std::string _name;
   static T* _obj;
   static pjsip_endpoint* _endpt;
 
   static pjsip_module _mod;
 };
+
+template<class T, int I>
+std::string PJModule<T, I>::_name;
 
 template<class T, int I>
 T* PJModule<T, I>::_obj;

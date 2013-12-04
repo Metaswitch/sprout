@@ -61,11 +61,12 @@ extern "C" {
 
 
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
-                       const char* name,
+                       std::string name,
                        int priority,
                        AnalyticsLogger* analytics_logger,
                        bool delay_trying) :
-  _mod_proxy(this, endpt, name, priority, PJMODULE_MASK),
+  _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
+  _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
   _analytics_logger(analytics_logger),
   _delay_trying(delay_trying)
 {
@@ -84,11 +85,15 @@ pj_bool_t BasicProxy::on_rx_request(pjsip_rx_data* rdata)
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_CANCEL_METHOD)
   {
     // Request is a normal transaction request.
+    LOG_DEBUG("Process %.*s request",
+              rdata->msg_info.msg->line.req.method.name.slen,
+              rdata->msg_info.msg->line.req.method.name.ptr);
     on_tsx_request(rdata);
   }
   else
   {
     // Request is a CANCEL.
+    LOG_DEBUG("Process CANCEL request");
     on_cancel_request(rdata);
   }
 
@@ -226,21 +231,21 @@ void BasicProxy::on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 /// Binds a UASTsx or UACTsx object to a PJSIP transaction
 void BasicProxy::bind_transaction(void* uas_uac_tsx, pjsip_transaction* tsx)
 {
-  tsx->mod_data[_mod_proxy.id()] = uas_uac_tsx;
+  tsx->mod_data[_mod_tu.id()] = uas_uac_tsx;
 }
 
 
 /// Unbinds a UASTsx or UACTsx object from a PJSIP transaction
 void BasicProxy::unbind_transaction(pjsip_transaction* tsx)
 {
-  tsx->mod_data[_mod_proxy.id()] = NULL;
+  tsx->mod_data[_mod_tu.id()] = NULL;
 }
 
 
 /// Gets the UASTsx or UACTsx object bound to a PJSIP transaction
 void* BasicProxy::get_from_transaction(pjsip_transaction* tsx)
 {
-  return tsx->mod_data[_mod_proxy.id()];
+  return tsx->mod_data[_mod_tu.id()];
 }
 
 
@@ -271,6 +276,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // Process routing headers.
   status = process_routing(tdata, target);
   if (status != PJ_SUCCESS)
   {
@@ -285,6 +291,9 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   // it will not be received by on_rx_request() callback.
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
+    // Update the Route headers.
+    update_route_headers(tdata);
+
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.
     if (rdata->msg_info.cid != NULL)
@@ -327,11 +336,12 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // If we already have a target from routing add it here.
   if (target != NULL)
   {
-    // We already have a target (from routing), so set it now.
     uas_tsx->add_target(target);
   }
+
   // Process the request.
   uas_tsx->process_tsx_request();
 
@@ -510,19 +520,35 @@ pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
   // support it.  (See RFC 3261/19.1.1 - recommendation is to use Route headers
   // if requests must traverse a fixed set of proxies.)
 
-  // If the first value in the Route header field indicates this proxy or
-  // home domain, the proxy MUST remove that value from the request.
+  // If the top route header is not this node or the local domain then
+  // set up a target containing just the Request URI so the request will be
+  // routed to the next node in the route set.
   hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-  if ((hroute) &&
-      ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-       (PJUtils::is_uri_local(hroute->name_addr.uri))))
+  if ((hroute != NULL) &&
+      (!PJUtils::is_uri_local(hroute->name_addr.uri)) &&
+      (!PJUtils::is_home_domain(hroute->name_addr.uri)))
   {
-    pj_list_erase(hroute);
+    LOG_DEBUG("Route to next hop in route set");
+    target = new Target;
+    target->uri = tdata->msg->line.req.uri;
   }
 
   return PJ_SUCCESS;
 }
 
+
+/// Updates the Route headers in the request before forwarding it.
+void BasicProxy::update_route_headers(pjsip_tx_data* tdata)
+{
+  // If the first value in the Route header field indicates this proxy or
+  // home domain, the proxy MUST remove that value from the request.
+  pjsip_route_hdr* hroute;
+  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
+  {
+    LOG_DEBUG("Remove top Route header referencing this node");
+    pj_list_erase(hroute);
+  }
+}
 
 
 /// Creates a UASTsx object
@@ -551,20 +577,13 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
 
 BasicProxy::UASTsx::~UASTsx()
 {
-  LOG_DEBUG("BasicProxy::UASTsx destructor");
+  LOG_DEBUG("BasicProxy::UASTsx destructor (%p)", this);
 
   pj_assert(_context_count == 0);
 
   if (_tsx != NULL)
   {
     _proxy->unbind_transaction(_tsx);
-  }
-
-  if (_req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-  {
-    // INVITE transaction has been terminated.  If there are any
-    // pending UAC transactions they should be cancelled.
-    cancel_pending_uac_tsx(0, PJ_TRUE);
   }
 
   // Disconnect all UAC transactions from the UAS transaction.
@@ -626,8 +645,10 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
   // up targets because calculating targets may involve interacting
   // with an external database, and we need the transaction in place
   // early to ensure CANCEL gets handled correctly.
-  pjsip_transaction* uas_tsx;
-  status = pjsip_tsx_create_uas2(_proxy->_mod_proxy.module(), rdata, _lock, &uas_tsx);
+  status = pjsip_tsx_create_uas2(_proxy->_mod_tu.module(),
+                                 rdata,
+                                 _lock,
+                                 &_tsx);
   if (status != PJ_SUCCESS)
   {
     pj_grp_lock_release(_lock);
@@ -667,6 +688,7 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
   {
     // INVITE request and delay_trying is not enabled, so send the trying
     // response immediately.
+    LOG_DEBUG("Send immediate 100 Trying response");
     PJUtils::respond_stateful(stack_data.endpt,
                               _tsx,
                               rdata,
@@ -786,6 +808,9 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
                   PJUtils::pj_status_to_string(status).c_str());
         break;
       }
+      // Update the Route headers on the outgoing request.
+      _proxy->update_route_headers(uac_tdata);
+
 
       // Create and initialize the UAC transaction.
       UACTsx* uac_tsx = create_uac_tsx(index);
@@ -1288,6 +1313,9 @@ BasicProxy::UACTsx* BasicProxy::UASTsx::create_uac_tsx(size_t index)
 // exit_context must be called before the end of the method.
 void BasicProxy::UASTsx::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -1311,6 +1339,11 @@ void BasicProxy::UASTsx::exit_context()
   {
     delete this;
   }
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
+  }
 }
 
 
@@ -1333,6 +1366,7 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
 /// UACTsx destructor
 BasicProxy::UACTsx::~UACTsx()
 {
+  LOG_DEBUG("BasicProxy::UACTsx destructor (%p)", this);
   pj_assert(_context_count == 0);
 
   if (_tsx != NULL)
@@ -1369,7 +1403,10 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 
   _tdata = tdata;
 
-  status = pjsip_tsx_create_uac2(_proxy->_mod_proxy.module(), tdata, _uas_tsx->_lock, &_tsx);
+  status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
+                                 tdata,
+                                 _uas_tsx->_lock,
+                                 &_tsx);
   if (status != PJ_SUCCESS)
   {
     return status;

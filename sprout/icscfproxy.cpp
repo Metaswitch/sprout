@@ -84,6 +84,7 @@ pj_bool_t ICSCFProxy::on_rx_request(pjsip_rx_data* rdata)
   if (rdata->tp_info.transport->local_name.port == _port)
   {
     /// Request received on I-CSCF port, so process it.
+    LOG_INFO("I-CSCF processing request");
     return BasicProxy::on_rx_request(rdata);
   }
 
@@ -102,7 +103,7 @@ pj_status_t ICSCFProxy::verify_request(pjsip_rx_data *rdata)
 }
 
 
-/// Utility method to create a UASTsx objects for incoming requests.
+/// Utility method to create a UASTsx object for incoming requests.
 BasicProxy::UASTsx* ICSCFProxy::create_uas_tsx()
 {
   return (BasicProxy::UASTsx*)new ICSCFProxy::UASTsx(_hss, _scscf_selector, this);
@@ -126,6 +127,7 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
 
 ICSCFProxy::UASTsx::~UASTsx()
 {
+  LOG_DEBUG("ICSCFProxy::UASTsx destructor (%p)", this);
 }
 
 
@@ -141,7 +143,8 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
 
     // Get the public identity from the To: header.
     pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(tdata->msg);
-    std::string impu = PJUtils::public_id_from_uri(to_hdr->uri);
+    pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri);
+    std::string impu = PJUtils::public_id_from_uri(to_uri);
 
     // Get the private identity from the Authentication header, or generate
     // a default if there is no Authentication header or no username in the
@@ -188,6 +191,8 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
     std::string auth_type = (expires > 0) ? "REGISTRATION" : "DE-REGISTRATION";
 
     // Do the HSS user registration status query.
+    LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
+              impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
     Json::Value* rsp = _hss->get_user_auth_status(impi,
                                                   impu,
                                                   visited_network,
@@ -197,6 +202,7 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
     // Parse the response and potentially look at configuration to get
     // a suitable target S-CSCF.
     status_code = get_scscf(rsp);
+    delete rsp;
 
     if (status_code == PJSIP_SC_OK)
     {
@@ -245,6 +251,7 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
       // Parse the response and potentially look at configuration to get
       // a suitable target S-CSCF.
       status_code = get_scscf(rsp);
+      delete rsp;
 
       if (status_code == PJSIP_SC_OK)
       {
@@ -272,15 +279,16 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
 
       // Do the HSS location query for the user.
       std::string impu =
-            PJUtils::public_id_from_uri(PJUtils::orig_served_user(tdata->msg));
+            PJUtils::public_id_from_uri(PJUtils::term_served_user(tdata->msg));
       Json::Value* rsp = _hss->get_location_data(impu,
-                                                 true,
+                                                 false,
                                                  "",
                                                  trail());
 
       // Parse the response and potentially look at configuration to get
       // a suitable target S-CSCF.
       status_code = get_scscf(rsp);
+      delete rsp;
 
       if (status_code == PJSIP_SC_OK)
       {
@@ -340,6 +348,8 @@ void ICSCFProxy::UASTsx::on_final_response()
 
 int ICSCFProxy::UASTsx::get_scscf(Json::Value* rsp)
 {
+  LOG_DEBUG("Process UAA %p", rsp);
+
   int status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
 
