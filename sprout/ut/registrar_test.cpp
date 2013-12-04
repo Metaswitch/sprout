@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -49,7 +46,6 @@
 #include "registrar.h"
 #include "registration_utils.h"
 #include "fakelogger.hpp"
-#include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 
 using namespace std;
@@ -65,13 +61,6 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    fakecurl_responses.clear();
-    fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
 
     _store = RegData::create_local_store();
     _remote_store = RegData::create_local_store();
@@ -83,6 +72,14 @@ public:
     pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
+
+    _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
   }
 
   static void TearDownTestCase()
@@ -93,7 +90,6 @@ public:
     delete _analytics;
     RegData::destroy_local_store(_remote_store); _remote_store = NULL;
     RegData::destroy_local_store(_store); _store = NULL;
-    fakecurl_responses.clear();
     SipTest::TearDownTestCase();
   }
 
@@ -223,14 +219,14 @@ TEST_F(RegistrarTest, NotOurs)
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
-  // We have a private ID in this test, so FakeCURL should expect it.
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain?private_id=Alice"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-    "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-    "  <InitialFilterCriteria>\n"
-    "  </InitialFilterCriteria>\n"
-    "</ServiceProfile></IMSSubscription>";
-
+  // We have a private ID in this test, so set up the expect response to the query.
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -455,31 +451,31 @@ TEST_F(RegistrarTest, NoPath)
 // First case - REGISTER is generated with a multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>REGISTER</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "    <ServiceInfo>banana</ServiceInfo>\n"
-                                "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "    <SPT>\n"
+                              "      <ConditionNegated>0</ConditionNegated>\n"
+                              "      <Group>0</Group>\n"
+                              "      <Method>REGISTER</Method>\n"
+                              "      <Extension></Extension>\n"
+                              "    </SPT>\n"
+                              "  </TriggerPoint>\n"
+                              "  <ApplicationServer>\n"
+                              "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "    <DefaultHandling>0</DefaultHandling>\n"
+                              "    <ServiceInfo>banana</ServiceInfo>\n"
+                              "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
+                              "  </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-
 
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
@@ -521,31 +517,30 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] =
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>REGISTER</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "      <Extension><IncludeRegisterRequest/></Extension>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>0</DefaultHandling>\n"
+                              "      <Extension><IncludeRegisterRequest/></Extension>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-
 
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
@@ -584,29 +579,29 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
 /// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>REGISTER</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>0</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-
 
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
@@ -646,26 +641,28 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>REGISTER</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>1</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   RegData::AoR* aor_data;
   aor_data = _store->get_aor_data(user);
@@ -700,7 +697,6 @@ TEST_F(RegistrarTest, ErrorAssociatedUris)
 {
   Message msg;
   msg._user = "6505550232";
-  fakecurl_responses["http://localhost/impu/sip%3A6505550232%40homedomain"] = CURLE_REMOTE_FILE_NOT_FOUND;
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -714,13 +710,14 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
 {
   Message msg;
   msg._user = "6505550233";
-  fakecurl_responses["http://localhost/impu/sip%3A6505550233%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>"
-    "<PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+  _hss_connection->set_result("/impu/sip%3A6505550233%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
@@ -738,13 +735,14 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
-  fakecurl_responses["http://localhost/impu/sip%3A6505550234%40homedomain"] =                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>"
-    "<PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+  _hss_connection->set_result("/impu/sip%3A6505550234%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
 
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());

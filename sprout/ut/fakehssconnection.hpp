@@ -53,10 +53,12 @@ public:
 
   void flush_all();
 
-  private:
-  Json::Value* get_object(const std::string& url, SAS::TrailId trail);
-  void set_object(const std::string& url, Json::Value& object, SAS::TrailId trail);
+  void set_result(const std::string& url, const std::string& result);
+  void delete_result(const std::string& url);
 
-  std::map<std::string, Json::Value> _json_db;
-  std::map<std::string, std::string> _ifc_db;
+private:
+  Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
+  long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+
+  std::map<std::string, std::string> _results;
 };

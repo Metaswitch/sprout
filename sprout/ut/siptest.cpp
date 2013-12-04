@@ -56,7 +56,6 @@ extern "C" {
 #include "faketransport_udp.hpp"
 #include "faketransport_tcp.hpp"
 #include "fakelogger.hpp"
-#include "fakecurl.hpp"
 #include "pjutils.h"
 #include "test_interposer.hpp"
 #include "siptest.hpp"
@@ -501,12 +500,13 @@ void SipTest::register_uri(RegData::Store* store, FakeHSSConnection* hss, const 
   uri.append(user).append("@").append(domain);
   if (hss)
   {
-    fakecurl_responses[std::string("http://localhost/impu/" + Utils::url_escape(uri))] = std::string("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-    "<PublicIdentity><Identity>" + uri + "</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+    hss->set_result("/impu/" + Utils::url_escape(uri),
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                    "<IMSSubscription><ServiceProfile>\n"
+                    "  <PublicIdentity><Identity>" + uri + "</Identity></PublicIdentity>"
+                    "  <InitialFilterCriteria>\n"
+                    "  </InitialFilterCriteria>\n"
+                    "</ServiceProfile></IMSSubscription>");
   }
   RegData::AoR* aor = store->get_aor_data(uri);
   RegData::AoR::Binding* binding = aor->get_binding(contact);
