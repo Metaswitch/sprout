@@ -360,7 +360,9 @@ int ICSCFProxy::UASTsx::get_scscf(Json::Value* rsp)
     if (_have_caps)
     {
       // Received capabilities from the HSS, so select a suitable
-      _scscf = _scscf_selector->get_scscf(_mandatory_caps, _optional_caps);
+      _scscf = _scscf_selector->get_scscf(_mandatory_caps,
+                                          _optional_caps,
+                                          _attempted_scscfs);
     }
 
     if (_scscf.empty())
