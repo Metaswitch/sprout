@@ -531,35 +531,67 @@ public:
   //
   void close_untrusted_port()
   {
-    if (stack_data.untrusted_tcp_factory != NULL) {
-      destroy_tcp_listener_transport(stack_data.untrusted_port,
-                                     stack_data.untrusted_tcp_factory);
+    // This can only apply to the untrusted P-CSCF port.
+    if (stack_data.pcscf_untrusted_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.pcscf_untrusted_port,
+                                     stack_data.pcscf_untrusted_tcp_factory);
     }
   }
 
   void close_trusted_port()
   {
-    if (stack_data.trusted_tcp_factory != NULL) {
-      destroy_tcp_listener_transport(stack_data.trusted_port,
-                                     stack_data.trusted_tcp_factory);
+    // This applies to all trusted ports, so the P-CSCF trusted port, or the
+    // S-CSCF and I-CSCF ports.
+    if (stack_data.pcscf_trusted_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.pcscf_trusted_port,
+                                     stack_data.pcscf_trusted_tcp_factory);
+    }
+    if (stack_data.scscf_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.scscf_port,
+                                     stack_data.scscf_tcp_factory);
+    }
+    if (stack_data.icscf_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.icscf_port,
+                                     stack_data.icscf_tcp_factory);
     }
   }
 
   void open_trusted_port()
   {
-    if (stack_data.trusted_port != 0) {
-      create_tcp_listener_transport(stack_data.trusted_port,
+    // This applies to all trusted ports, so the P-CSCF trusted port, or the
+    // S-CSCF and I-CSCF ports.
+    if (stack_data.pcscf_trusted_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.pcscf_trusted_port,
                                     stack_data.local_host,
-                                    &stack_data.trusted_tcp_factory);
+                                    &stack_data.pcscf_trusted_tcp_factory);
+    }
+    if (stack_data.scscf_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.scscf_port,
+                                    stack_data.local_host,
+                                    &stack_data.scscf_tcp_factory);
+    }
+    if (stack_data.icscf_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.icscf_port,
+                                    stack_data.local_host,
+                                    &stack_data.icscf_tcp_factory);
     }
   }
 
   void open_untrusted_port()
   {
-    if (stack_data.untrusted_port != 0) {
-      create_tcp_listener_transport(stack_data.untrusted_port,
+    // This can only apply to the untrusted P-CSCF port.
+    if (stack_data.pcscf_untrusted_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.pcscf_untrusted_port,
                                     stack_data.public_host,
-                                    &stack_data.untrusted_tcp_factory);
+                                    &stack_data.pcscf_untrusted_tcp_factory);
     }
   }
 
@@ -623,11 +655,12 @@ pj_status_t init_pjsip()
 }
 
 
-pj_status_t init_stack(bool access_proxy,
-                       const std::string& system_name,
+pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
-                       int trusted_port,
-                       int untrusted_port,
+                       int pcscf_trusted_port,
+                       int pcscf_untrusted_port,
+                       int scscf_port,
+                       int icscf_port,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
@@ -657,8 +690,14 @@ pj_status_t init_stack(bool access_proxy,
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
-  stack_data.trusted_port = trusted_port;
-  stack_data.untrusted_port = untrusted_port;
+
+  // Copy port numbers to stack data.
+  stack_data.pcscf_trusted_port = pcscf_trusted_port;
+  stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
+  stack_data.scscf_port = scscf_port;
+  stack_data.icscf_port = icscf_port;
+
+  // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
@@ -671,9 +710,10 @@ pj_status_t init_stack(bool access_proxy,
   stack_data.record_route_on_completion_of_terminating = false;
   stack_data.record_route_on_diversion = false;
 
-  if (!access_proxy)
+  if (scscf_port != 0)
   {
-    switch (record_routing_model) {
+    switch (record_routing_model)
+    {
     case 1:
         stack_data.record_route_on_initiation_of_originating = true;
         stack_data.record_route_on_completion_of_terminating = true;
@@ -711,22 +751,40 @@ pj_status_t init_stack(bool access_proxy,
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
 
-  // Create listening transports for trusted and untrusted ports.
-  stack_data.trusted_tcp_factory = NULL;
-  if (stack_data.trusted_port != 0)
+  // Create listening transports for the ports whichtrusted and untrusted ports.
+  stack_data.pcscf_trusted_tcp_factory = NULL;
+  if (stack_data.pcscf_trusted_port != 0)
   {
-    status = start_transports(stack_data.trusted_port,
+    status = start_transports(stack_data.pcscf_trusted_port,
                               stack_data.local_host,
-                              &stack_data.trusted_tcp_factory);
+                              &stack_data.pcscf_trusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
-  stack_data.untrusted_tcp_factory = NULL;
-  if (stack_data.untrusted_port != 0)
+  stack_data.pcscf_untrusted_tcp_factory = NULL;
+  if (stack_data.pcscf_untrusted_port != 0)
   {
-    status = start_transports(stack_data.untrusted_port,
+    status = start_transports(stack_data.pcscf_untrusted_port,
                               stack_data.public_host,
-                              &stack_data.untrusted_tcp_factory);
+                              &stack_data.pcscf_untrusted_tcp_factory);
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  }
+
+  stack_data.scscf_tcp_factory = NULL;
+  if (stack_data.scscf_port != 0)
+  {
+    status = start_transports(stack_data.scscf_port,
+                              stack_data.public_host,
+                              &stack_data.scscf_tcp_factory);
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  }
+
+  stack_data.icscf_tcp_factory = NULL;
+  if (stack_data.icscf_port != 0)
+  {
+    status = start_transports(stack_data.icscf_port,
+                              stack_data.public_host,
+                              &stack_data.icscf_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
@@ -747,8 +805,9 @@ pj_status_t init_stack(bool access_proxy,
     stack_data.name_cnt++;
   }
 
-  if (!access_proxy)
+  if ((scscf_port != 0) || (icscf_port != 0))
   {
+    // S/I-CSCF enabled, so add sprout cluster domain name to hostnames.
     stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
     stack_data.name_cnt++;
   }

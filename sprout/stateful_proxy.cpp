@@ -141,7 +141,7 @@ static AnalyticsLogger* analytics_logger;
 static EnumService *enum_service;
 static BgcfService *bgcf_service;
 
-static bool access_proxy;
+static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
 static FlowTable* flow_table;
@@ -166,7 +166,7 @@ static pjsip_module mod_stateful_proxy =
   NULL, NULL,                         // prev, next
   pj_str("mod-stateful-proxy"),       // Name
   -1,                                 // Id
-  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,// Priority
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,// Priority
   NULL,                               // load()
   NULL,                               // start()
   NULL,                               // stop()
@@ -399,7 +399,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if (access_proxy)
+  if (edge_proxy)
   {
     // Process access proxy routing.  This also does IBCF function if enabled.
     status = proxy_process_access_routing(rdata, tdata, &trust, &target);
@@ -534,7 +534,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if ((!access_proxy) &&
+  if ((!edge_proxy) &&
       (uas_data->method() == PJSIP_INVITE_METHOD))
   {
     // If running in routing proxy mode send the 100 Trying response before
@@ -573,7 +573,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if (!proxy_trusted_source(rdata))
+  if ((edge_proxy) && (!proxy_trusted_source(rdata)))
   {
     // The CANCEL request has not come from a trusted source, so reject it
     // (can't challenge a CANCEL).
@@ -678,7 +678,7 @@ static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr
     LOG_DEBUG("determine_source called with a NULL pjsip_transport");
     return SIP_PEER_UNKNOWN;
   }
-  if (transport->local_name.port == stack_data.trusted_port)
+  if (transport->local_name.port == stack_data.pcscf_trusted_port)
   {
     // Request received on trusted port.
     LOG_DEBUG("Request received on trusted port %d", transport->local_name.port);
@@ -704,8 +704,8 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   SIPPeerType source = determine_source(rdata->tp_info.transport, rdata->pkt_info.src_addr);
   pj_bool_t trusted = PJ_FALSE;
 
-  if ((source == SIP_PEER_TRUSTED_PORT)
-      || (source == SIP_PEER_CONFIGURED_TRUNK))
+  if ((source == SIP_PEER_TRUSTED_PORT) ||
+      (source == SIP_PEER_CONFIGURED_TRUNK))
   {
     trusted = PJ_TRUE;
   }
@@ -731,7 +731,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 
 void UASTransaction::routing_proxy_record_route()
 {
-    PJUtils::add_record_route(_req, "TCP", stack_data.trusted_port, NULL, stack_data.sprout_cluster_domain);
+  PJUtils::add_record_route(_req, "TCP", stack_data.scscf_port, NULL, stack_data.sprout_cluster_domain);
 }
 
 /// Checks for double Record-Routing and removes superfluous Route header to
@@ -1259,14 +1259,14 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
       // the ingress and egress hops.
       LOG_DEBUG("Message received from client - double Record-Route");
       PJUtils::add_record_route(tdata, src_flow->transport()->type_name, src_flow->transport()->local_name.port, src_flow->token().c_str(), stack_data.public_host);
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
     }
     else if (tgt_flow != NULL)
     {
       // Message is destined for a client, so add separate Record-Route headers
       // for the ingress and egress hops.
       LOG_DEBUG("Message destined for client - double Record-Route");
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
       PJUtils::add_record_route(tdata, tgt_flow->transport()->type_name, tgt_flow->transport()->local_name.port, tgt_flow->token().c_str(), stack_data.public_host);
     }
     else if ((ibcf) && (*trust == &TrustBoundary::INBOUND_TRUNK))
@@ -1274,14 +1274,14 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
       // Received message on a trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
       PJUtils::add_record_route(tdata, rdata->tp_info.transport->type_name, rdata->tp_info.transport->local_name.port, NULL, stack_data.public_host);
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
     }
     else if ((ibcf) && (*trust == &TrustBoundary::OUTBOUND_TRUNK))
     {
       // Message destined for trunk, so add separate Record-Route headers for
       // the ingress and egress hops.
-      PJUtils::add_record_route(tdata, "TCP", stack_data.trusted_port, NULL, stack_data.local_host);
-      PJUtils::add_record_route(tdata, "TCP", stack_data.untrusted_port, NULL, stack_data.public_host);   // @TODO - transport type?
+      PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_trusted_port, NULL, stack_data.local_host);
+      PJUtils::add_record_route(tdata, "TCP", stack_data.pcscf_untrusted_port, NULL, stack_data.public_host);   // @TODO - transport type?
     }
 
     // Decrement references on flows as we have finished with them.
@@ -1972,7 +1972,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   _trust->process_request(_req);
 
   // If we're a routing proxy, perform AS handling to pick the next hop.
-  if (!target && !access_proxy)
+  if (!target && !edge_proxy)
   {
     if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
         (PJUtils::is_uri_local(_req->msg->line.req.uri)))
@@ -2425,7 +2425,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
     pj_status_t status;
     int status_code = rdata->msg_info.msg->line.status.code;
 
-    if ((!access_proxy) &&
+    if ((!edge_proxy) &&
         (method() == PJSIP_INVITE_METHOD) &&
         (status_code == 100))
     {
@@ -2444,7 +2444,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       return;
     }
 
-    if ((access_proxy) &&
+    if ((edge_proxy) &&
         (method() == PJSIP_REGISTER_METHOD) &&
         (status_code == 200))
     {
@@ -2630,7 +2630,7 @@ void UASTransaction::on_tsx_state(pjsip_event* event)
 
     // This has to be conditional on a completed state, else
     // _tsx->transport might not be set.
-    if (access_proxy)
+    if (edge_proxy)
     {
       SIPPeerType stype  = determine_source(_tsx->transport, _tsx->addr);
       bool is_client = (stype == SIP_PEER_CLIENT);
@@ -3621,7 +3621,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 RegData::Store* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler_in,
-                                pj_bool_t enable_access_proxy,
+                                pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy_arg,
                                 int upstream_proxy_port,
                                 int upstream_proxy_connections,
@@ -3644,8 +3644,8 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
 
-  access_proxy = enable_access_proxy;
-  if (access_proxy)
+  edge_proxy = enable_edge_proxy;
+  if (edge_proxy)
   {
     // Create a URI for the upstream proxy to use in Route headers.
     upstream_proxy = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, PJ_FALSE);
@@ -3671,7 +3671,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                             upstream_proxy_recycle,
                                             stack_data.pool,
                                             stack_data.endpt,
-                                            stack_data.trusted_tcp_factory);
+                                            stack_data.pcscf_trusted_tcp_factory);
     upstream_conn_pool->init();
 
     ibcf = enable_ibcf;
@@ -3702,7 +3702,6 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   else
   {
     // Routing proxy (Sprout).
-
     as_chain_table = new AsChainTable;
   }
 
@@ -3733,7 +3732,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
 void destroy_stateful_proxy()
 {
-  if (access_proxy)
+  if (edge_proxy)
   {
     // Destroy the upstream connection pool.  This will quiesce all the TCP
     // connections.
@@ -3748,7 +3747,8 @@ void destroy_stateful_proxy()
   }
   else
   {
-    delete as_chain_table; as_chain_table = NULL;
+    delete as_chain_table;
+    as_chain_table = NULL;
   }
 
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
@@ -3848,7 +3848,7 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   pj_bool_t secure = (to_hdr != NULL) ? PJSIP_URI_SCHEME_IS_SIPS(to_hdr->uri) : false;
 
   pjsip_sip_uri* path_uri = pjsip_sip_uri_create(tdata->pool, secure);
-  path_uri->port = stack_data.trusted_port;
+  path_uri->port = stack_data.pcscf_trusted_port;
   path_uri->transport_param = pj_str("TCP");
   path_uri->lr_param = 1;
 

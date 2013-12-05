@@ -347,7 +347,7 @@ public:
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
-                                          stack_data.trusted_port,
+                                          stack_data.pcscf_trusted_port,
                                           10,
                                           86400,
                                           !_ibcf_trusted_hosts.empty(),
@@ -725,11 +725,11 @@ void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_serve
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "4.2.3.4", 56788);
-  TransportFlow tpAS3(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
-  TransportFlow tpAS4(TransportFlow::Protocol::UDP, stack_data.trusted_port, "6.2.3.4", 56786);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "4.2.3.4", 56788);
+  TransportFlow tpAS3(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+  TransportFlow tpAS4(TransportFlow::Protocol::UDP, stack_data.scscf_port, "6.2.3.4", 56786);
 
   pjsip_rr_hdr* as1_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
   as1_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
@@ -1972,7 +1972,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
       .append(":.*@")
       .append(str_pj(stack_data.local_host))
       .append(":")
-      .append(boost::lexical_cast<string>(stack_data.trusted_port))
+      .append(boost::lexical_cast<string>(stack_data.pcscf_trusted_port))
       .append(";transport=TCP")
       .append(";lr")
       .append(firstHop ? ";ob" : "");
@@ -1988,7 +1988,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
 
   // Goes to the right place.
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Pass response back through.
   string r;
@@ -2040,8 +2040,8 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterQuiesced)
 
   // Register client.
   TransportFlow* xiTp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.untrusted_port,
-                                        "1.2.3.4",
+                                          stack_data.pcscf_untrusted_port,
+                                          "1.2.3.4",
                                           49152);
   // Register a client with the edge proxy.
   Message msg;
@@ -2072,7 +2072,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWTCP)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.untrusted_port,
+                                        stack_data.pcscf_untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -2149,7 +2149,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeRegisterFWUDP)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::UDP,
-                                        stack_data.untrusted_port,
+                                        stack_data.pcscf_untrusted_port,
                                         "1.2.3.4",
                                         5060);
   string token;
@@ -2229,7 +2229,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.untrusted_port,
+                                        stack_data.pcscf_untrusted_port,
                                         "1.2.3.4",
                                         49150);
 
@@ -2261,16 +2261,16 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   r1.matches(tdata->msg);
 
   // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Route header refers to upstream and indicates it is an originating request.
   actual = get_headers(tdata->msg, "Route");
-  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // P-Preferred-Identity header has been converted to P-Asserted-Identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2302,16 +2302,16 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   r1.matches(tdata->msg);
 
   // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Route header refers to upstream and indicates it is an originating request.
   actual = get_headers(tdata->msg, "Route");
-  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // A P-Asserted-Identity header has been added with the default identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2344,16 +2344,16 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   r1.matches(tdata->msg);
 
   // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Route header refers to upstream and indicates it is an originating request.
   actual = get_headers(tdata->msg, "Route");
-  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // P-Asserted-Identity headers have been added with both identities.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2430,16 +2430,16 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   r1.matches(tdata->msg);
 
   // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Route header refers to upstream and indicates it is an originating request.
   actual = get_headers(tdata->msg, "Route");
-  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
+  EXPECT_EQ("Route: <sip:" + _edge_upstream_proxy + ":" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr;orig>", actual);
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // A P-Asserted-Identity header has been added with the default identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2486,7 +2486,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeDeregister)
 
   //Deregister client which hasn't registered yet
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.untrusted_port,
+                                        stack_data.pcscf_untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -2502,7 +2502,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 
   // Register client.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.untrusted_port,
+                                        stack_data.pcscf_untrusted_port,
                                         "1.2.3.4",
                                         49152);
   string token;
@@ -2589,7 +2589,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 1: Declares outbound support, not behind NAT. Should get path.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         stack_data.untrusted_port,
+                         stack_data.pcscf_untrusted_port,
                          "10.83.18.38",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "");
@@ -2597,7 +2597,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         stack_data.untrusted_port,
+                         stack_data.pcscf_untrusted_port,
                          "10.83.18.39",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "outbound, path", true, "10.22.3.4:9999");
@@ -2611,7 +2611,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 4: Doesn't declare outbound support (no attr), behind NAT. Should get path anyway.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         stack_data.untrusted_port,
+                         stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "path", true, "10.22.3.5:8888");
@@ -2625,7 +2625,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
 
   // Client 6: Doesn't declare outbound support (no header), behind NAT. Should get path anyway.
   tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                         stack_data.untrusted_port,
+                         stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true, "", true, "10.22.3.5:8888");
@@ -2637,7 +2637,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(tp, token, baretoken, 300, "no", "", true);
@@ -2692,7 +2692,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   r3.matches(tdata->msg);
 
   // Goes to the right place (upstream).
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   // Record-Route is added so it will come back the right way.
   actual = get_headers(tdata->msg, "Record-Route");
@@ -2702,7 +2702,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
 
   // Boring route header.
   actual = get_headers(tdata->msg, "Route");
-  EXPECT_THAT(actual, HasSubstr("sip:upstreamnode:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP"));
+  EXPECT_THAT(actual, HasSubstr("sip:upstreamnode:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP"));
 
   // No path header.
   actual = get_headers(tdata->msg, "Path");
@@ -2719,7 +2719,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
@@ -2740,7 +2740,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
@@ -2761,7 +2761,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.38", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2784,7 +2784,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2806,7 +2806,7 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   SCOPED_TRACE("");
 
   // Register a client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken);
@@ -2819,10 +2819,10 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   msg._requri = "sip:6505551234@127.0.0.1;transport=tcp";
   msg._to = "6505551234";
   msg._from = "6505551000";
-  msg._route = "Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:123456@public_hostname:" + to_string<int>(stack_data.untrusted_port, std::dec) + ";transport=TCP;lr>";
+  msg._route = "Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:123456@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>";
   inject_msg(msg.get_request(), &tp);
 
   // Check that the message is forwarded as expected.
@@ -2834,7 +2834,7 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   r1.matches(tdata->msg);
 
   // Goes to the right place (bono1, which is mapped to 10.6.6.200).
-  expect_target("TCP", "10.6.6.200", stack_data.trusted_port, tdata);
+  expect_target("TCP", "10.6.6.200", stack_data.pcscf_trusted_port, tdata);
 
   free_txdata();
 }
@@ -2853,7 +2853,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
   msg._via = "10.7.7.10:36530;transport=tcp";
 
   // Get a connection from the trusted host.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.7.7.10", 36530);
 
   // INVITE from the "trusted" (but outside the trust zone) trunk to Sprout.
   // Stripped in both directions.
@@ -2875,7 +2875,7 @@ TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedOut)
   msg._via = "10.99.88.11:12345";
 
   // Get a connection from the trusted host.
-  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.7.7.10", 36530);
 
   // INVITE from Sprout to the "trusted" (but outside the trust zone) trunk.
   // Stripped in both directions.
@@ -2900,7 +2900,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   string actual;
 
   // Get a connection from the trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.10", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.7.7.10", 36530);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2910,7 +2910,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted1)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   r1.matches(tdata->msg);
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);  // to Sprout
 
   // Check there is no Authorization header added.
   actual = get_headers(tdata->msg, "Authorization");
@@ -2944,7 +2944,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted2)
   string actual;
 
   // Get a connection from the other trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.11", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.7.7.11", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -2954,7 +2954,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfTrusted2)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   r1.matches(tdata->msg);
-  expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);  // to Sprout
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);  // to Sprout
 
   free_txdata();
   delete tp;
@@ -2980,7 +2980,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   string actual;
 
   // Get a connection from the other trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.7.7.11", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.7.7.11", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -3018,7 +3018,7 @@ TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
   string actual;
 
   // Get a connection from the trusted host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.trusted_port, "10.17.17.111", 36533);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_trusted_port, "10.17.17.111", 36533);
 
   // Send an INVITE from the trusted host.
   msg._unique++;
@@ -3055,7 +3055,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
   string actual;
 
   // Get a connection from some other random (untrusted) host.
-  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.83.18.39", 36530);
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.39", 36530);
 
   // Send the same INVITE from the random host.
   msg._unique++;
@@ -3098,8 +3098,8 @@ TEST_F(IscTest, SimpleMainline)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3208,8 +3208,8 @@ TEST_F(IscTest, SimpleNextOrigFlow)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3307,8 +3307,8 @@ TEST_F(IscTest, SimpleReject)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3395,8 +3395,8 @@ TEST_F(IscTest, SimpleNonLocalReject)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3490,8 +3490,8 @@ TEST_F(IscTest, SimpleAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3585,8 +3585,8 @@ TEST_F(IscTest, SimpleRedirect)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3674,8 +3674,8 @@ TEST_F(IscTest, DefaultHandlingTerminate)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3764,8 +3764,8 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -3857,8 +3857,8 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4078,10 +4078,10 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.trusted_port, "6.2.3.4", 56786);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS0(TransportFlow::Protocol::UDP, stack_data.scscf_port, "6.2.3.4", 56786);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send spontaneous INVITE from AS0.
   inject_msg(msg.get_request(), &tpAS0);
@@ -4261,9 +4261,9 @@ TEST_F(IscTest, Cdiv)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4396,8 +4396,8 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4474,8 +4474,8 @@ TEST_F(IscTest, TerminatingWithNoEnumRewrite)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4601,8 +4601,8 @@ TEST_F(IscTest, MmtelCdiv)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4808,8 +4808,8 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -4922,8 +4922,8 @@ TEST_F(IscTest, ExpiredChain)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5063,8 +5063,8 @@ TEST_F(IscTest, MmtelFlow)
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5246,9 +5246,9 @@ TEST_F(IscTest, MmtelThenExternal)
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5485,8 +5485,8 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "5.2.3.4", 56787);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -5588,8 +5588,8 @@ TEST_F(IscTest, SimpleOptionsAccept)
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.untrusted_port, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.trusted_port, "1.2.3.4", 56789);
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   // ---------- Send OPTIONS
   // We're within the trust boundary, so no stripping should occur.

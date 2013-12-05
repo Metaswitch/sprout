@@ -115,8 +115,10 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   cwtest_add_host_mapping("homedomain", "10.6.6.1");
   cwtest_add_host_mapping("bono1", "10.6.6.200");
 
-  stack_data.untrusted_port = 5060;
-  stack_data.trusted_port = 5058;
+  stack_data.pcscf_untrusted_port = 5060;
+  stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
+  stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
+  stack_data.icscf_port = 5056;
   stack_data.local_host = pj_str("local_ip");
   stack_data.public_host = pj_str("public_hostname");
   stack_data.home_domain = pj_str("homedomain");
@@ -138,12 +140,14 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   init_pjsip();
 
   // Set up default UDP transports.
-  TransportFlow::udp_transport(stack_data.trusted_port);
-  TransportFlow::udp_transport(stack_data.untrusted_port);
+  TransportFlow::udp_transport(stack_data.pcscf_trusted_port);
+  TransportFlow::udp_transport(stack_data.pcscf_untrusted_port);
+  TransportFlow::udp_transport(stack_data.scscf_port);
+  TransportFlow::udp_transport(stack_data.icscf_port);
 
   // Get a default TCP transport flow to use for injection.  Give it a dummy address.
   _tp_default = new TransportFlow(TransportFlow::Protocol::TCP,
-                                  stack_data.trusted_port,
+                                  stack_data.pcscf_trusted_port,
                                   "0.0.0.0",
                                   5060);
 

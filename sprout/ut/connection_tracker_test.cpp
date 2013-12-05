@@ -106,9 +106,9 @@ private:
     pjsip_transport *tp;
     pj_sockaddr rem_addr;
     pj_str_t addr_str = pj_str("1.2.3.4");
-    pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.trusted_port);
+    pj_sockaddr_init(PJ_AF_INET, &rem_addr, &addr_str, stack_data.scscf_port);
 
-    pj_status_t status = pjsip_fake_tcp_accept(TransportFlow::tcp_factory(stack_data.trusted_port),
+    pj_status_t status = pjsip_fake_tcp_accept(TransportFlow::tcp_factory(stack_data.scscf_port),
                                                (pj_sockaddr_t*)&rem_addr,
                                                sizeof(pj_sockaddr_in),
                                                &tp);

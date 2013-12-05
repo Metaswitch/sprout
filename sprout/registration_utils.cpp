@@ -153,7 +153,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
 
   pj_str_t user_uri = pj_str(const_cast<char *>(served_user.c_str()));
-  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.trusted_port) + ">";
+  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.scscf_port) + ">";
   pj_str_t scscf_uri = pj_str(const_cast<char *>(scscf_uri_string.c_str()));
   pj_str_t as_uri = pj_str(const_cast<char *>(as.server_name.c_str()));
 

@@ -146,13 +146,12 @@ do_start()
         # enable gdb to dump a parent sprout process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname
+        DAEMON_ARGS="
                      --domain $home_domain
                      --localhost $local_ip
-                     --public-host $local_ip
                      --sprout-domain $sprout_hostname
                      --alias $sprout_hostname
-                     --trusted-port 5054
+                     --scscf 5054
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
@@ -162,7 +161,7 @@ do_start()
                      $enum_suffix_arg
                      $enum_file_arg
                      $icscf_uri_arg
-                     --sas $sas_server
+                     --sas $sas_server:$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      --record-routing-model $sprout_rr_level

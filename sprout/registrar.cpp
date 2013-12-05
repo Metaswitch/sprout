@@ -87,7 +87,7 @@ pjsip_module mod_registrar =
   NULL, NULL,                         // prev, next
   pj_str("mod-registrar"),            // Name
   -1,                                 // Id
-  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,  // Priority
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,// Priority
   NULL,                               // load()
   NULL,                               // start()
   NULL,                               // stop()
@@ -594,7 +594,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pj_strdup(tdata->pool,
             &service_route_uri->host,
             &stack_data.sprout_cluster_domain);
-  service_route_uri->port = stack_data.trusted_port;
+  service_route_uri->port = stack_data.scscf_port;
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
@@ -649,7 +649,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
-  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
+  if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
+      (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
       ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
        (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))))
   {
@@ -661,10 +662,12 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
-void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
+void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
+{
   if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
-      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
+      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
+  {
     // Can't create an AS response in UT
     // LCOV_EXCL_START
     LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
