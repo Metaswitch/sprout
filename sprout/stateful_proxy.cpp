@@ -1213,13 +1213,18 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // If we've run out of Route headers to follow and we're in the ReqURI,
-    // we get to chose where to route the message.  The obvious place to route
-    // to is Sprout, so do that.
+    // Check if we have any Route headers.  If so, we'll follow them.  If not,
+    // we get to choose where to route to, so route upstream to sprout.
     void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if (!top_route &&
-        (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-         PJUtils::is_uri_local(tdata->msg->line.req.uri)))
+    if (top_route)
+    {
+      // We already have Route headers, so just build a target that mirrors
+      // the current request URI.
+      *target = new Target();
+      (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
+    }
+    else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+             PJUtils::is_uri_local(tdata->msg->line.req.uri))
     {
       // Route the request upstream to Sprout.
       proxy_route_upstream(rdata, tdata, trust, target);
