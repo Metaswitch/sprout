@@ -2839,6 +2839,27 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   free_txdata();
 }
 
+// Test flows into Bono (P-CSCF), first hop with Route header.
+TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
+{
+  SCOPED_TRACE("");
+
+  // Register client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
+
+  Message msg;
+  msg._first_hop = true;
+  msg._via = "10.83.18.37:36531;transport=tcp";
+  msg._extra = "Route: <sip:upstreamnode;lr;orig>";
+  list<HeaderMatcher> hdrs;
+  // Strip PANI in outbound direction - leaving the trust zone.
+  // This is originating; mark it so.
+  doTestHeaders(&tp, true, _tp_default, false, msg, "", false, true, false, true, false);
+}
+
 
 // Test flows into IBCF, in particular for header stripping.
 TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
