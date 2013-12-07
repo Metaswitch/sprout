@@ -198,7 +198,7 @@ protected:
     pj_grp_lock_t* _lock;
 
     /// Targets the request is forked to.
-    std::vector<Target*> _targets;
+    std::list<Target*> _targets;
 
     /// Associated UACTsx objects for each forked request.
     std::vector<UACTsx*> _uac_tsx;
@@ -297,9 +297,6 @@ protected:
   /// Process route information in the request.
   virtual pj_status_t process_routing(pjsip_tx_data* tdata,
                                       BasicProxy::Target*& target);
-
-  /// Update the route headers on the request prior to forwarding it.
-  virtual void update_route_headers(pjsip_tx_data* tdata);
 
   /// Utility method to create a UASTsx objects for incoming requests.  Can
   /// be overriden if a subclass wants its own version of UASTsx.

@@ -291,9 +291,6 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   // it will not be received by on_rx_request() callback.
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
-    // Update the Route headers.
-    update_route_headers(tdata);
-
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.
     if (rdata->msg_info.cid != NULL)
@@ -520,34 +517,30 @@ pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
   // support it.  (See RFC 3261/19.1.1 - recommendation is to use Route headers
   // if requests must traverse a fixed set of proxies.)
 
-  // If the top route header is not this node or the local domain then
-  // set up a target containing just the Request URI so the request will be
-  // routed to the next node in the route set.
+  // Route on the top route header if present.
   hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-  if ((hroute != NULL) &&
-      (!PJUtils::is_uri_local(hroute->name_addr.uri)) &&
-      (!PJUtils::is_home_domain(hroute->name_addr.uri)))
+  if (hroute != NULL)
   {
-    LOG_DEBUG("Route to next hop in route set");
-    target = new Target;
-    target->uri = tdata->msg->line.req.uri;
+    if ((!PJUtils::is_uri_local(hroute->name_addr.uri)) &&
+        (!PJUtils::is_home_domain(hroute->name_addr.uri)))
+    {
+      // The top route header is not this node or the local domain so set up
+      // a target containing just the Request URI so the requesst will be
+      // routed to the next node in the route set.
+      LOG_DEBUG("Route to next hop in route set");
+      target = new Target;
+      target->uri = tdata->msg->line.req.uri;
+    }
+    else
+    {
+      // The top route header indicates this proxy or home domain, so
+      // MUST remove that value from the request.
+      LOG_DEBUG("Remove top Route header referencing this node/domain");
+      pj_list_erase(hroute);
+    }
   }
 
   return PJ_SUCCESS;
-}
-
-
-/// Updates the Route headers in the request before forwarding it.
-void BasicProxy::update_route_headers(pjsip_tx_data* tdata)
-{
-  // If the first value in the Route header field indicates this proxy or
-  // home domain, the proxy MUST remove that value from the request.
-  pjsip_route_hdr* hroute;
-  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
-  {
-    LOG_DEBUG("Remove top Route header referencing this node");
-    pj_list_erase(hroute);
-  }
 }
 
 
@@ -612,10 +605,11 @@ BasicProxy::UASTsx::~UASTsx()
     _best_rsp = NULL;
   }
 
-  // Delete the targets.
-  for (size_t ii = 0; ii < _targets.size(); ++ii)
+  // Delete any unactioned targets.
+  while (!_targets.empty())
   {
-    delete _targets[ii];
+    delete _targets.front();
+    _targets.pop_front();
   }
 
   LOG_DEBUG("BasicProxy::UASTsx destructor completed");
@@ -718,6 +712,7 @@ void BasicProxy::UASTsx::process_tsx_request()
     int status_code = calculate_targets(_req);
     if (status_code != PJSIP_SC_OK)
     {
+      LOG_DEBUG("Calculate targets failed with %d status code", status_code);
       send_response(status_code);
       return;
     }
@@ -789,15 +784,14 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
 {
   pj_status_t status = PJ_EUNKNOWN;
 
+  std::list<UACTsx*> new_tsx;
+
   if (_tsx != NULL)
   {
-    // Initialise the UAC data structures for each target.
-    int index = 0;
-    for (std::vector<BasicProxy::Target*>::const_iterator it = _targets.begin();
-         it != _targets.end();
-         ++it)
+    // Initialise the UAC data structures for each new target.
+    int index = _uac_tsx.size();
+    while (!_targets.empty())
     {
-      // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", index);
       pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
 
@@ -808,9 +802,6 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
                   PJUtils::pj_status_to_string(status).c_str());
         break;
       }
-      // Update the Route headers on the outgoing request.
-      _proxy->update_route_headers(uac_tdata);
-
 
       // Create and initialize the UAC transaction.
       UACTsx* uac_tsx = create_uac_tsx(index);
@@ -824,32 +815,36 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
       }
 
       // Set the target for this transaction.
-      uac_tsx->set_target(*it);
+      Target* target = _targets.front();
+      _targets.pop_front();
+      uac_tsx->set_target(target);
+      delete target;
 
-      // Add the UAC transaction to the list.
-      _uac_tsx.push_back(uac_tsx);
+      // Add the UAC transaction to the new list.
+      new_tsx.push_back(uac_tsx);
     }
 
     if (status == PJ_SUCCESS)
     {
       // All the data structures, transactions and transmit data have
       // been created, so start sending messages.
-      _pending_targets = _uac_tsx.size();
-
-      // Forward the client requests.
-      for (size_t ii = 0; ii < _pending_targets; ++ii)
+      while (!new_tsx.empty())
       {
-        _uac_tsx[ii]->send_request();
+        UACTsx* uac_tsx = new_tsx.front();
+        new_tsx.pop_front();
+        uac_tsx->send_request();
+        _uac_tsx.push_back(uac_tsx);
+        ++_pending_targets;
       }
     }
     else
     {
       // Clean up any transactions and tx data allocated.
-      for (size_t ii = 0; ii < _uac_tsx.size(); ++ii)
+      while (!new_tsx.empty())
       {
-        delete _uac_tsx[ii];
+        delete new_tsx.front();
+        new_tsx.pop_front();
       }
-      _uac_tsx.clear();
     }
   }
 
@@ -890,8 +885,10 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       return;
     }
 
+#if 0
     if (_uac_tsx.size() > 1)
     {
+#endif
       if ((status_code > 100) &&
           (status_code < 199))
       {
@@ -951,6 +948,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
           on_final_response();
         }
       }
+#if 0
     }
     else
     {
@@ -977,6 +975,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
         on_final_response();
       }
     }
+#endif
 
     exit_context();
   }
@@ -990,8 +989,10 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
   {
     enter_context();
 
+#if 0
     if (_uac_tsx.size() > 1)
     {
+#endif
       // UAC transaction has timed out or hit a transport error.  If
       // we've not received a response from on any other UAC
       // transactions then keep this as the best response.
@@ -1004,6 +1005,7 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
         LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
         on_final_response();
       }
+#if 0
     }
     else
     {
@@ -1013,6 +1015,7 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
       --_pending_targets;
       on_final_response();
     }
+#endif
 
     // Disconnect the UAC data from the UAS data so no further
     // events get passed between the two.
@@ -1098,9 +1101,12 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
   }
   else
   {
-    _best_rsp->msg->line.status.code = st_code;
-    _best_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
-    on_final_response();
+    pjsip_tx_data *best_rsp = _best_rsp;
+    _best_rsp = NULL;
+    best_rsp->msg->line.status.code = st_code;
+    best_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    set_trail(best_rsp, trail());
+    pjsip_tsx_send_msg(_tsx, best_rsp);
   }
 }
 
@@ -1429,12 +1435,16 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
 {
   enter_context();
 
+  LOG_DEBUG("Set target for UAC transaction");
+
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
   if (target->uri != NULL)
   {
     // Target has a URI, so write this in to the request URI in the request.
     // Need to clone the URI to make sure it comes from the right pool.
+    LOG_DEBUG("Update Request-URI to %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, target->uri).c_str());
     _tdata->msg->line.req.uri =
                         (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target->uri);
   }
@@ -1483,7 +1493,8 @@ void BasicProxy::UACTsx::send_request()
               _tdata->tp_sel.u.transport->info);
     pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
   }
-  LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
+  LOG_DEBUG("Sending request for %s",
+            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
   pj_status_t status = pjsip_tsx_send_msg(_tsx, _tdata);
   if (status != PJ_SUCCESS)
   {

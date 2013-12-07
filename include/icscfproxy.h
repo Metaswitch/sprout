@@ -84,6 +84,9 @@ private:
     /// Destructor.
     ~UASTsx();
 
+    /// Initialise the UAS transaction.
+    virtual pj_status_t init(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+
   protected:
     /// Calculate targets for incoming requests by querying HSS.
     virtual int calculate_targets(pjsip_tx_data* tdata);
@@ -92,8 +95,21 @@ private:
     virtual void on_final_response();
 
   private:
-    /// Gets a suitable target S-CSCF for the request.
-    int get_scscf(Json::Value* rsp);
+    /// Attempts to retry the request to an alternative S-CSCF.
+    bool retry_request(int rsp_status);
+
+    /// Performs a registration status query and finds a suitable S-CSCF
+    /// for the request.
+    int registration_status_query(const std::string& impi,
+                                  const std::string& impu,
+                                  const std::string& visited_network,
+                                  const std::string& auth_type);
+
+    /// Performs a location status query and finds a suitable S-CSCF for the
+    /// request.
+    int location_query(const std::string& impu,
+                       bool originating,
+                       const std::string& auth_type);
 
     /// Parses the HSS response.
     int parse_hss_response(Json::Value& rsp);
@@ -106,6 +122,27 @@ private:
 
     /// S-CSCF selector used to select S-CSCFs from configuration.
     SCSCFSelector* _scscf_selector;
+
+    /// Defines the session case for the current transaction.
+    typedef enum {REGISTER, ORIGINATING, TERMINATING} SessionCase;
+    SessionCase _case;
+
+    /// Private user identity parsed from the original request.  This is
+    /// only set for REGISTER requests.
+    std::string _impi;
+
+    /// Public user identity parsed from the original request.
+    std::string _impu;
+
+    /// Visited network identification parsed from the original request.  This
+    /// is only set for REGISTER requests.
+    std::string _visited_network;
+
+    /// Authenticaton type for the current transaction.  Initially set to
+    /// REGISTRATION or DE-REGISTRATION for REGISTER requests and blank for
+    /// other requests.  Set to REGISTRATION_AND_CAPABILITIES when retrieving
+    /// capabilities to select an alternate S-CSCF.
+    std::string _auth_type;
 
     /// The S-CSCF returned by the HSS or selected from configuration.
     std::string _scscf;

@@ -865,17 +865,10 @@ static pj_status_t lis_create_transport(pjsip_tpfactory *factory,
     fake_tcp->has_pending_connect = PJ_TRUE;
     // status = pj_activesock_start_connect(fake_tcp->asock, fake_tcp->base.pool, rem_addr,
     //					 addr_len);
-    // Start a zero duration timer to drive the on_connect_complete processing.
-    // This has to be async because otherwise event state listeners will miss the
-    // connected state transition.  It has to be zero duration so the timer
-    // is scheduled on the next call to pjsip_endpt_handle_events.
-    pj_time_val delay = {0, 0};
-    status = pjsip_endpt_schedule_timer(listener->endpt,
-                                        &fake_tcp->connect_timer,
-                                        &delay);
-    fake_tcp->connect_timer.id = PJ_TRUE;
-    status = PJ_EPENDING;
 
+    // Call the on_connect_complete callback immediately.  We used to do this
+    // on a timer, but that caused problems with the timing of ACKs in
+    // response to non-200 OK final responses.
     if (status == PJ_SUCCESS) {
 	on_connect_complete(fake_tcp, PJ_SUCCESS);
     } else if (status != PJ_EPENDING) {
