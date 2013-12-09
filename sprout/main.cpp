@@ -1116,8 +1116,7 @@ int main(int argc, char *argv[])
                                  stack_data.icscf_port,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
-                                 scscf_selector,
-                                 analytics_logger);
+                                 scscf_selector);
 
     if (icscf_proxy == NULL)
     {

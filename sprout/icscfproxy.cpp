@@ -62,9 +62,8 @@ ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        int port,
                        int priority,
                        HSSConnection* hss,
-                       SCSCFSelector* scscf_selector,
-                       AnalyticsLogger* analytics_logger) :
-  BasicProxy(endpt, "mod-icscf", priority, analytics_logger, false),
+                       SCSCFSelector* scscf_selector) :
+  BasicProxy(endpt, "mod-icscf", priority, false),
   _port(port),
   _hss(hss),
   _scscf_selector(scscf_selector)

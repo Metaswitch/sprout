@@ -44,7 +44,6 @@
 #include "siptest.hpp"
 #include "utils.h"
 #include "test_utils.hpp"
-#include "analyticslogger.h"
 #include "icscfproxy.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
@@ -123,8 +122,8 @@ public:
     friend class BasicProxyUT;
   };
 
-  BasicProxyUT(pjsip_endpoint* endpt, int priority, AnalyticsLogger* analytics_logger) :
-    BasicProxy(endpt, "UTProxy", priority, analytics_logger, false)
+  BasicProxyUT(pjsip_endpoint* endpt, int priority) :
+    BasicProxy(endpt, "UTProxy", priority, false)
   {
   }
 
@@ -259,13 +258,8 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
-    _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
-    _analytics->_logger = NULL;
-
     _basic_proxy = new BasicProxyUT(stack_data.endpt,
-                                    PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                    _analytics);
+                                    PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1);
 
     // Schedule timers.
     SipTest::poll();
@@ -277,7 +271,6 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _basic_proxy; _basic_proxy = NULL;
-    delete _analytics; _analytics = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -285,7 +278,6 @@ public:
   {
     Log::setLoggingLevel(99);
     _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
-    _analytics->_logger = &_log;
   }
 
   ~BasicProxyTestBase()
@@ -313,8 +305,6 @@ public:
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
-
-    _analytics->_logger = NULL;
   }
 
   class Message
@@ -474,14 +464,11 @@ public:
     }
   };
 
-
 protected:
-  static AnalyticsLogger* _analytics;
   static BasicProxyUT* _basic_proxy;
 
 };
 
-AnalyticsLogger* BasicProxyTestBase::_analytics;
 BasicProxyUT* BasicProxyTestBase::_basic_proxy;
 
 
@@ -979,7 +966,7 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
 
   // Send a 408 response from the fifth target, and check the proxy absorbs
   // this while waiting for a better offer.
-  inject_msg(respond_to_txdata(tdata4, 408));
+  inject_msg(respond_to_txdata(tdata5, 408));
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   ReqMatcher("ACK").matches(tdata->msg);

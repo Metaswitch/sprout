@@ -55,7 +55,6 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "sasevent.h"
-#include "analyticslogger.h"
 #include "constants.h"
 #include "basicproxy.h"
 
@@ -63,11 +62,9 @@ extern "C" {
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
                        int priority,
-                       AnalyticsLogger* analytics_logger,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
-  _analytics_logger(analytics_logger),
   _delay_trying(delay_trying)
 {
 }
@@ -1109,51 +1106,6 @@ void BasicProxy::UASTsx::on_tsx_complete()
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail_id);
   SAS::Marker end_marker(trail_id, SASMarker::END_TIME, 1u);
   SAS::report_marker(end_marker);
-
-  if (_proxy->_analytics_logger != NULL)
-  {
-    // Generate analytics inputs based on the end result of the UAS
-    // transaction.
-    pjsip_from_hdr* from = PJSIP_MSG_FROM_HDR(_req->msg);
-    pjsip_to_hdr* to = PJSIP_MSG_TO_HDR(_req->msg);
-    pjsip_cid_hdr* cid = PJSIP_MSG_CID_HDR(_req->msg);
-
-    if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
-        (to != NULL) &&
-        (to->tag.slen == 0))
-    {
-      // INVITE transaction with no To tag in original request, so must
-      // be a call set-up.
-      if ((_tsx->status_code >= 200) && (_tsx->status_code <= 299))
-      {
-        // 2xx response, so call connected successfully.
-        _proxy->_analytics_logger->call_connected(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(from->uri)),
-                                                  PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(to->uri)),
-                                                  PJUtils::pj_str_to_string(&cid->id));
-      }
-      else if (_tsx->status_code >= 400)
-      {
-        // non-2xx/non-3xx final response, so call failed to connect.
-        _proxy->_analytics_logger->call_not_connected(PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(from->uri)),
-                                                      PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(to->uri)),
-                                                      PJUtils::pj_str_to_string(&cid->id),
-                                                      _tsx->status_code);
-      }
-      // @TODO - what about 3xx redirect responses?
-    }
-    else if (_tsx->method.id == PJSIP_BYE_METHOD)
-    {
-      // BYE transaction, so consider this to be a normal disconnection
-      // irrespective of the result of the transaction.
-      _proxy->_analytics_logger->call_disconnected(PJUtils::pj_str_to_string(&cid->id), 0);
-    }
-    else if (_tsx->status_code >= 400)
-    {
-      // Non-INVITE/Non-BYE transaction has failed - consider this to
-      // always be a call disconnect.
-      _proxy->_analytics_logger->call_disconnected(PJUtils::pj_str_to_string(&cid->id), _tsx->status_code);
-    }
-  }
 }
 
 

@@ -43,7 +43,6 @@
 #define ICSCFPROXY_H__
 
 #include "hssconnection.h"
-#include "analyticslogger.h"
 #include "scscfselector.h"
 #include "basicproxy.h"
 
@@ -55,8 +54,7 @@ public:
              int port,
              int priority,
              HSSConnection* hss,
-             SCSCFSelector* scscf_selector,
-             AnalyticsLogger* analytics_logger);
+             SCSCFSelector* scscf_selector);
 
   /// Destructor.
   ~ICSCFProxy();
