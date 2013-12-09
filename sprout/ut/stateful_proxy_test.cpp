@@ -1486,6 +1486,18 @@ TEST_F(StatefulProxyTest, TestExternal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestExternalRecordRoute)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain = "ut.cw-ngv.com";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+}
+
 TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
