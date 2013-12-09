@@ -68,25 +68,57 @@ public:
   public:
     TestTarget(const std::string& uri) :
       _uri(uri),
-      _paths()
+      _paths(),
+      _transport(NULL)
     {
     }
 
     TestTarget(const std::list<std::string>& paths) :
       _uri(),
-      _paths(paths)
+      _paths(paths),
+      _transport(NULL)
     {
     }
 
     TestTarget(const std::string& uri, const std::list<std::string>& paths) :
       _uri(uri),
-      _paths(paths)
+      _paths(paths),
+      _transport(NULL)
+    {
+    }
+
+    TestTarget(pjsip_transport* transport) :
+      _uri(),
+      _paths(),
+      _transport(transport)
+    {
+    }
+
+    TestTarget(const std::string& uri, pjsip_transport* transport) :
+      _uri(uri),
+      _paths(),
+      _transport(transport)
+    {
+    }
+
+    TestTarget(const std::list<std::string>& paths, pjsip_transport* transport) :
+      _uri(),
+      _paths(paths),
+      _transport(transport)
+    {
+    }
+
+    TestTarget(const std::string& uri, const std::list<std::string>& paths, pjsip_transport* transport) :
+      _uri(uri),
+      _paths(paths),
+      _transport(transport)
     {
     }
 
   private:
     std::string _uri;
     std::list<std::string> _paths;
+    pjsip_transport* _transport;
 
     friend class BasicProxyUT;
   };
@@ -109,6 +141,26 @@ public:
   void add_test_target(const std::string& aor, const std::string& uri, const std::list<std::string>& paths)
   {
     _test_targets[aor].push_back(TestTarget(uri, paths));
+  }
+
+  void add_test_target(const std::string& aor, pjsip_transport* transport)
+  {
+    _test_targets[aor].push_back(TestTarget(transport));
+  }
+
+  void add_test_target(const std::string& aor, const std::string& uri, pjsip_transport* transport)
+  {
+    _test_targets[aor].push_back(TestTarget(uri, transport));
+  }
+
+  void add_test_target(const std::string& aor, const std::list<std::string>& paths, pjsip_transport* transport)
+  {
+    _test_targets[aor].push_back(TestTarget(paths, transport));
+  }
+
+  void add_test_target(const std::string& aor, const std::string& uri, const std::list<std::string>& paths, pjsip_transport* transport)
+  {
+    _test_targets[aor].push_back(TestTarget(uri, paths, transport));
   }
 
   void remove_test_targets(const std::string& aor)
@@ -271,6 +323,7 @@ public:
     string _method;
     string _requri; //< overrides toscheme:to@todomain
     string _toscheme;
+    string _fromscheme;
     string _status;
     string _from;
     string _fromdomain;
@@ -288,6 +341,7 @@ public:
     Message() :
       _method("INVITE"),
       _toscheme("sip"),
+      _fromscheme("pres"),
       _status("200 OK"),
       _from("6505551000"),
       _fromdomain("homedomain"),
@@ -322,13 +376,14 @@ public:
       char buf[16384];
 
       // The remote target.
-      string target = string(_toscheme).append(":").append(_to);
+      string target = _toscheme + ":" + _to;
       if (!_todomain.empty())
       {
-        target.append("@").append(_todomain);
+        target += "@" + _todomain;
       }
 
-      string requri = target;
+      string from = _fromscheme + ":" + _from;
+      string requri = _requri.empty() ? target : _requri;
       string route = _route.empty() ? "" : _route + "\r\n";
 
       int n = snprintf(buf, sizeof(buf),
@@ -348,14 +403,14 @@ public:
                        "\r\n"
                        "%6$s",
                        /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
+                       /*  2 */ from.c_str(),
                        /*  3 */ _fromdomain.c_str(),
                        /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                        /*  5 */ (int)_body.length(),
                        /*  6 */ _body.c_str(),
                        /*  7 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
                        /*  8 */ _forwards,
-                       /*  9 */ _requri.empty() ? requri.c_str() : _requri.c_str(),
+                       /*  9 */ requri.c_str(),
                        /* 10 */ target.c_str(),
                        /* 11 */ _unique,
                        /* 12 */ _via.c_str(),
@@ -374,33 +429,41 @@ public:
     {
       char buf[16384];
 
+      string to = _toscheme + ":" + _to;
+      if (!_todomain.empty())
+      {
+        to += "@" + _todomain;
+      }
+
+      string from = _fromscheme + ":" + _from;
+      string route = _route.empty() ? "" : _route + "\r\n";
+
       int n = snprintf(buf, sizeof(buf),
-                       "SIP/2.0 %9$s\r\n"
-                       "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI\r\n"
+                       "SIP/2.0 %8$s\r\n"
+                       "Via: SIP/2.0/TCP %12$s;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY%10$04dSPI\r\n"
                        "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <sip:%7$s%8$s>\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
-                       "CSeq: %12$d %1$s\r\n"
+                       "To: <sip:%7$s>\r\n"
+                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%10$04dohntC@10.114.61.213\r\n"
+                       "CSeq: %11$d %1$s\r\n"
                        "User-Agent: Accession 2.0.0.0\r\n"
                        "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
                        "%4$s"
-                       "%10$s"
+                       "%9$s"
                        "Content-Length: %5$d\r\n"
                        "\r\n"
                        "%6$s",
                        /*  1 */ _method.c_str(),
-                       /*  2 */ _from.c_str(),
+                       /*  2 */ from.c_str(),
                        /*  3 */ _fromdomain.c_str(),
                        /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                        /*  5 */ (int)_body.length(),
                        /*  6 */ _body.c_str(),
-                       /*  7 */ _to.c_str(),
-                       /*  8 */ _todomain.empty() ? "" : string("@").append(_todomain).c_str(),
-                       /*  9 */ _status.c_str(),
-                       /* 10 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
-                       /* 11 */ _unique,
-                       /* 12 */ _cseq,
-                       /* 13 */ _via.c_str()
+                       /*  7 */ to.c_str(),
+                       /*  8 */ _status.c_str(),
+                       /*  9 */ _extra.empty() ? "" : string(_extra).append("\r\n").c_str(),
+                       /* 10 */ _unique,
+                       /* 11 */ _cseq,
+                       /* 12 */ _via.c_str()
         );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -574,7 +637,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
 }
 
 
-TEST_F(BasicProxyTest, RouteOnRequestURI)
+TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
 {
   // Tests routing of requests to an external RequestURI.
 
@@ -586,8 +649,8 @@ TEST_F(BasicProxyTest, RouteOnRequestURI)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject a request with a Route header referring to this node and a
-  // RequestURI with an external node.
+  // Inject a request with no Route headers and a RequestURI with an external
+  // node.
   Message msg1;
   msg1._method = "INVITE";
   msg1._requri = "sip:bob@proxy1.awaydomain;transport=TCP";
@@ -595,7 +658,6 @@ TEST_F(BasicProxyTest, RouteOnRequestURI)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -616,7 +678,7 @@ TEST_F(BasicProxyTest, RouteOnRequestURI)
   // Check the RequestURI has not been altered.
   ASSERT_EQ("sip:bob@proxy1.awaydomain;transport=TCP", str_uri(tdata->msg->line.req.uri));
 
-  // Check the Route header has been removed.
+  // Check no Route headers have been added.
   string route = get_headers(tdata->msg, "Route");
   ASSERT_EQ("", route);
 
@@ -804,6 +866,12 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   _basic_proxy->add_test_target("sip:bob@homedomain",
                                 "sip:bob@node3.homedomain;transport=TCP",
                                 std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node4.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node5.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
 
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
@@ -817,8 +885,8 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and three forwarded INVITEs
-  ASSERT_EQ(4, txdata_count());
+  // Expecting 100 Trying and five forwarded INVITEs
+  ASSERT_EQ(6, txdata_count());
 
   // Check the 100 Trying.
   tdata = current_txdata();
@@ -853,13 +921,35 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   ASSERT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
             get_headers(tdata3->msg, "Route"));
 
-  // Send 100 Trying responses from all three nodes, and check they are
+  // Catch the request forked to node4.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata4 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata4);
+  ReqMatcher("INVITE").matches(tdata4->msg);
+  ASSERT_EQ("sip:bob@node4.homedomain;transport=TCP",
+            str_uri(tdata4->msg->line.req.uri));
+  ASSERT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata4->msg, "Route"));
+
+  // Catch the request forked to node5.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata5 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata5);
+  ReqMatcher("INVITE").matches(tdata5->msg);
+  ASSERT_EQ("sip:bob@node5.homedomain;transport=TCP",
+            str_uri(tdata5->msg->line.req.uri));
+  ASSERT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata5->msg, "Route"));
+
+  // Send 100 Trying responses from all five nodes, and check they are
   // absorbed.
   inject_msg(respond_to_txdata(tdata1, 100));
   ASSERT_EQ(0, txdata_count());
   inject_msg(respond_to_txdata(tdata2, 100));
   ASSERT_EQ(0, txdata_count());
   inject_msg(respond_to_txdata(tdata3, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata4, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata5, 100));
   ASSERT_EQ(0, txdata_count());
 
   // Send 180 Ringing response from node 2, and check this is passed to the
@@ -874,6 +964,22 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   // Send a 480 response from the first target, and check the proxy absorbs
   // this while waiting for a better offer.
   inject_msg(respond_to_txdata(tdata1, 480));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Send a 480 response from the fourth target, and check the proxy absorbs
+  // this while waiting for a better offer.
+  inject_msg(respond_to_txdata(tdata4, 480));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Send a 408 response from the fifth target, and check the proxy absorbs
+  // this while waiting for a better offer.
+  inject_msg(respond_to_txdata(tdata4, 408));
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   ReqMatcher("ACK").matches(tdata->msg);
@@ -938,6 +1044,9 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   _basic_proxy->add_test_target("sip:bob@homedomain",
                                 "sip:bob@node2.homedomain;transport=TCP",
                                 std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node3.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
 
   // Inject a request with a Route header referring to this node and a
   // RequestURI with a URI in the home domain.
@@ -952,7 +1061,7 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and three forwarded INVITEs
-  ASSERT_EQ(3, txdata_count());
+  ASSERT_EQ(4, txdata_count());
 
   // Check the 100 Trying.
   tdata = current_txdata();
@@ -978,10 +1087,21 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   ASSERT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
             get_headers(tdata2->msg, "Route"));
 
-  // Send 100 Trying responses from both nodes, and check they are absorbed.
+  // Catch the request forked to node2.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata3 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata3);
+  ReqMatcher("INVITE").matches(tdata3->msg);
+  ASSERT_EQ("sip:bob@node3.homedomain;transport=TCP",
+            str_uri(tdata3->msg->line.req.uri));
+  ASSERT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata3->msg, "Route"));
+
+  // Send 100 Trying responses from all three nodes, and check they are absorbed.
   inject_msg(respond_to_txdata(tdata1, 100));
   ASSERT_EQ(0, txdata_count());
   inject_msg(respond_to_txdata(tdata2, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata3, 100));
   ASSERT_EQ(0, txdata_count());
 
   // Send a 480 response from the first target, and check the proxy absorbs
@@ -992,18 +1112,25 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-  // Send a 408 request timeout from the second target.
-  inject_msg(respond_to_txdata(tdata2, 408));
+  // Send a 488 Not Acceptable Here reponse from the second target.
+  inject_msg(respond_to_txdata(tdata2, 488));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Send a 404 Not Found reponse from the third target.
+  inject_msg(respond_to_txdata(tdata3, 404));
   ASSERT_EQ(2, txdata_count());
   tdata = current_txdata();
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-  // The proxy sends the best response (the 480) to the source.
+  // The proxy sends the best response (the 404) to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
-  RespMatcher(480).matches(tdata->msg);
+  RespMatcher(404).matches(tdata->msg);
   free_txdata();
 
   // Send an ACK to complete the UAS transaction.
@@ -1186,6 +1313,14 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   inject_msg(respond_to_txdata(tdata3, 100));
   ASSERT_EQ(0, txdata_count());
 
+  // Send a 480 response from the first target, and check the proxy absorbs
+  // this while waiting for a better offer.
+  inject_msg(respond_to_txdata(tdata1, 480));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
   // Send a CANCEL from the originator.
   Message msg2;
   msg2._method = "CANCEL";
@@ -1197,8 +1332,9 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
   inject_msg(msg2.get_request(), tp);
 
-  // Expect both a 200 OK response to the CANCEL and three forwarded CANCELs.
-  ASSERT_EQ(4, txdata_count());
+  // Expect both a 200 OK response to the CANCEL and CANCELs on the two
+  // outstanding forked transactions.
+  ASSERT_EQ(3, txdata_count());
 
   // Check the 200 OK.
   tdata = current_txdata();
@@ -1206,13 +1342,6 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   RespMatcher(200).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
-
-  // Check the CANCEL is forwarded to node1.homedomain via proxy1.homedomain
-  // and send a 200 OK response (which is absorbed by the proxy).
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.1", 5060, tdata);
-  ReqMatcher("CANCEL").matches(tdata->msg);
-  inject_msg(respond_to_current_txdata(200));
 
   // Check the CANCEL is forwarded to node2.homedomain via proxy1.homedomain
   // and send a 200 OK response (which is absorbed by the proxy).
@@ -1229,14 +1358,8 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   inject_msg(respond_to_current_txdata(200));
   ASSERT_EQ(0, txdata_count());
 
-  // Now send 487 responses of each downstream node and catch the ACKs.
-  inject_msg(respond_to_txdata(tdata1, 487));
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.1", 5060, tdata);
-  ReqMatcher("ACK").matches(tdata->msg);
-  free_txdata();
-
+  // Send 487 response from node2.homedomain.  Check that this is ACKed
+  // and absorbed.
   inject_msg(respond_to_txdata(tdata2, 487));
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
@@ -1244,7 +1367,9 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-  inject_msg(respond_to_txdata(tdata3, 487));
+  // Send 480 response from node3.homedomain (this crossed with the CANCEL).
+  // Check that this is ACKed.
+  inject_msg(respond_to_txdata(tdata3, 480));
   ASSERT_EQ(2, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.2", 5060, tdata);
@@ -1621,5 +1746,193 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
 }
 
 
+TEST_F(BasicProxyTest, RequestErrors)
+{
+  // Tests various errors on requests.
 
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE request with a tel: RequestURI
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._from = "alice";
+  msg1._to = "+2425551234";
+  msg1._todomain = "";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Check the 416 Unsupported URI Scheme response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(416).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  // Inject an INVITE request with Max-Forwards <= 1.
+  Message msg2;
+  msg2._method = "INVITE";
+  msg2._requri = "sip:bob@awaydomain";
+  msg2._from = "alice";
+  msg2._to = "bob";
+  msg2._todomain = "awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg2._forwards = 1;
+  inject_msg(msg2.get_request(), tp);
+
+  // Check the 483 Too Many Hops response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(483).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg2._method = "ACK";
+  inject_msg(msg2.get_request(), tp);
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, ResponseErrors)
+{
+  // Tests various errors on stateless responses.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+
+  // Check the 100 Trying.
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Request is forwarded to the node in the top Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("INVITE").matches(tdata->msg);
+
+  // Check the RequestURI has not been altered.
+  ASSERT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+
+  // Check the Route header has not been removed.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>", route);
+
+  // Check no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Save the forwarded INVITE so we can generate multiple responses.
+  pjsip_tx_data* invite_tdata = pop_txdata();
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(invite_tdata, 200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // Leave some time for the transactions to be destroyed.
+  poll();
+
+  // Resend the 200 OK response, but remove the second Via header, so the
+  // proxy cannot stateless forward it.
+  pjsip_tx_data* rsp_tdata = create_response(invite_tdata, 200, NULL);
+  pjsip_via_hdr* via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                                          PJSIP_H_VIA,
+                                                          NULL);
+  via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                           PJSIP_H_VIA,
+                                           via->next);
+  pj_list_erase(via);
+  char buf[16384];
+  pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
+  pjsip_tx_data_dec_ref(rsp_tdata);
+  inject_msg(std::string(buf));
+  ASSERT_EQ(0, txdata_count());
+
+  // Resend the 200 OK response, but remove the received parameter from the
+  // second Via header.  The proxy can recover this by using the sent-by
+  // address instead.
+  rsp_tdata = create_response(invite_tdata, 200, NULL);
+  via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                                          PJSIP_H_VIA,
+                                                          NULL);
+  via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                           PJSIP_H_VIA,
+                                           via->next);
+  via->recvd_param.slen = 0;
+  pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
+  pjsip_tx_data_dec_ref(rsp_tdata);
+  inject_msg(std::string(buf));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // Resend the 200 OK response, but remove the rport parameter from the
+  // second Via header.  The proxy can recover this by using the sent-by
+  // port instead.
+  rsp_tdata = create_response(invite_tdata, 200, NULL);
+  via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                                          PJSIP_H_VIA,
+                                                          NULL);
+  via = (pjsip_via_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                           PJSIP_H_VIA,
+                                           via->next);
+  via->rport_param = 0;
+  pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
+  pjsip_tx_data_dec_ref(rsp_tdata);
+  inject_msg(std::string(buf));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  delete tp;
+}
 
