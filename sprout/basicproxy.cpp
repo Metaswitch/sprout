@@ -113,13 +113,15 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
   pjsip_via_hdr *hvia;
   pj_status_t status;
 
+  LOG_DEBUG("Statelessly forwarding late response");
+
   // Create response to be forwarded upstream (Via will be stripped here)
   status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
+    LOG_ERROR("Error creating response, %s",                            //LCOV_EXCL_LINE
+              PJUtils::pj_status_to_string(status).c_str());            //LCOV_EXCL_LINE
+    return PJ_TRUE;                                                     //LCOV_EXCL_LINE
   }
 
   // Get topmost Via header
@@ -176,9 +178,9 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Error forwarding response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
+    LOG_ERROR("Error forwarding response, %s",                          //LCOV_EXCL_LINE
+              PJUtils::pj_status_to_string(status).c_str());            //LCOV_EXCL_LINE
+    return PJ_TRUE;                                                     //LCOV_EXCL_LINE
   }
 
   return PJ_TRUE;
@@ -186,17 +188,17 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
 
 
 // Callback to be called to handle transmitted request.
-pj_status_t BasicProxy::on_tx_request(pjsip_tx_data* tdata)
-{
-  return PJ_SUCCESS;
-}
+pj_status_t BasicProxy::on_tx_request(pjsip_tx_data* tdata)             //LCOV_EXCL_LINE
+{                                                                       //LCOV_EXCL_LINE
+  return PJ_SUCCESS;                                                    //LCOV_EXCL_LINE
+}                                                                       //LCOV_EXCL_LINE
 
 
 // Callback to be called to handle transmitted response.
-pj_status_t BasicProxy::on_tx_response(pjsip_tx_data* tdata)
-{
-  return PJ_SUCCESS;
-}
+pj_status_t BasicProxy::on_tx_response(pjsip_tx_data* tdata)            //LCOV_EXCL_LINE
+{                                                                       //LCOV_EXCL_LINE
+  return PJ_SUCCESS;                                                    //LCOV_EXCL_LINE
+}                                                                       //LCOV_EXCL_LINE
 
 
 // Callback to be called to handle transaction state changed.
@@ -269,19 +271,24 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to clone request to forward");
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL, NULL, NULL);
-    return;
+    LOG_ERROR("Failed to clone request to forward");                    //LCOV_EXCL_LINE
+    PJUtils::respond_stateless(stack_data.endpt, rdata,                 //LCOV_EXCL_LINE
+                               PJSIP_SC_INTERNAL_SERVER_ERROR,          //LCOV_EXCL_LINE
+                               NULL, NULL, NULL);                       //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 
   // Process routing headers.
-  status = process_routing(tdata, target);
-  if (status != PJ_SUCCESS)
+  int status_code = process_routing(tdata, target);
+  if (status_code != PJSIP_SC_OK)
   {
-    LOG_ERROR("Error process routing headers");
-    return;
+    LOG_ERROR("Error process routing headers");                         //LCOV_EXCL_LINE
+    pjsip_tx_data_dec_ref(tdata);                                       //LCOV_EXCL_LINE
+    PJUtils::respond_stateless(stack_data.endpt,                        //LCOV_EXCL_LINE
+                               rdata,                                   //LCOV_EXCL_LINE
+                               status_code,                             //LCOV_EXCL_LINE
+                               NULL, NULL, NULL);                       //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 
   // If this is an ACK request, forward statelessly.
@@ -293,6 +300,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   {
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.
+    LOG_DEBUG("Statelessly forwarding ACK");
     if (rdata->msg_info.cid != NULL)
     {
       SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 1u);
@@ -304,8 +312,8 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
                                                 NULL, NULL);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error forwarding request, %s",
-                PJUtils::pj_status_to_string(status).c_str());
+      LOG_ERROR("Error forwarding request, %s",                         //LCOV_EXCL_LINE
+                PJUtils::pj_status_to_string(status).c_str());          //LCOV_EXCL_LINE
     }
 
     return;
@@ -318,25 +326,25 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
 
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to create and initialized UAS transaction, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-
-    // Delete the request since we're not forwarding it
-    pjsip_tx_data_dec_ref(tdata);
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL,
-                               NULL,
-                               NULL);
-    delete uas_tsx;
-    return;
+    LOG_ERROR("Failed to create and initialized UAS transaction, %s",   //LCOV_EXCL_LINE
+              PJUtils::pj_status_to_string(status).c_str());            //LCOV_EXCL_LINE
+                                                                        //LCOV_EXCL_LINE
+    // Delete the request since we're not forwarding it                 //LCOV_EXCL_LINE
+    pjsip_tx_data_dec_ref(tdata);                                       //LCOV_EXCL_LINE
+    PJUtils::respond_stateless(stack_data.endpt,                        //LCOV_EXCL_LINE
+                               rdata,                                   //LCOV_EXCL_LINE
+                               PJSIP_SC_INTERNAL_SERVER_ERROR,          //LCOV_EXCL_LINE
+                               NULL,                                    //LCOV_EXCL_LINE
+                               NULL,                                    //LCOV_EXCL_LINE
+                               NULL);                                   //LCOV_EXCL_LINE
+    delete uas_tsx;                                                     //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 
   // If we already have a target from routing add it here.
   if (target != NULL)
   {
-    uas_tsx->add_target(target);
+    uas_tsx->add_target(target);                                        //LCOV_EXCL_LINE
   }
 
   // Process the request.
@@ -370,10 +378,13 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &tsx);
   if (status != PJ_SUCCESS)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL, NULL, NULL);
-    return;
+    PJUtils::respond_stateless(stack_data.endpt,                        //LCOV_EXCL_LINE
+                               rdata,                                   //LCOV_EXCL_LINE
+                               PJSIP_SC_INTERNAL_SERVER_ERROR,          //LCOV_EXCL_LINE
+                               NULL,                                    //LCOV_EXCL_LINE
+                               NULL,                                    //LCOV_EXCL_LINE
+                               NULL);                                   //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 
   // Feed the CANCEL request to the transaction.
@@ -456,8 +467,8 @@ pj_status_t BasicProxy::verify_request(pjsip_rx_data *rdata)
 
 
 /// Process route information in the request
-pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
-                                        BasicProxy::Target*& target)
+int BasicProxy::process_routing(pjsip_tx_data *tdata,
+                                BasicProxy::Target*& target)
 {
   pjsip_sip_uri* req_uri;
   pjsip_route_hdr* hroute;
@@ -479,11 +490,13 @@ pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
     pjsip_sip_uri *uri;
 
     // Find the first Route header
-    r = hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+    r = hroute = (pjsip_route_hdr*)pjsip_msg_find_hdr(tdata->msg,
+                                                      PJSIP_H_ROUTE,
+                                                      NULL);
     if (r == NULL)
     {
       // No Route header. This request is destined for this proxy.
-      return PJ_SUCCESS;
+      return PJSIP_SC_OK;
     }
 
     // Find the last Route header
@@ -540,7 +553,7 @@ pj_status_t BasicProxy::process_routing(pjsip_tx_data *tdata,
     }
   }
 
-  return PJ_SUCCESS;
+  return PJSIP_SC_OK;
 }
 
 
@@ -629,8 +642,8 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
   pj_status_t status = pj_grp_lock_create(stack_data.pool, NULL, &_lock);
   if (status != PJ_SUCCESS)
   {
-    LOG_DEBUG("Failed to create group lock for transaction");
-    return status;
+    LOG_DEBUG("Failed to create group lock for transaction");           //LCOV_EXCL_LINE
+    return status;                                                      //LCOV_EXCL_LINE
   }
   pj_grp_lock_add_ref(_lock);
   pj_grp_lock_acquire(_lock);
@@ -645,9 +658,9 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
                                  &_tsx);
   if (status != PJ_SUCCESS)
   {
-    pj_grp_lock_release(_lock);
-    pj_grp_lock_dec_ref(_lock);
-    return status;
+    pj_grp_lock_release(_lock);                                         //LCOV_EXCL_LINE
+    pj_grp_lock_dec_ref(_lock);                                         //LCOV_EXCL_LINE
+    return status;                                                      //LCOV_EXCL_LINE
   }
 
   // Bind this object to the PJSIP transaction.
@@ -720,10 +733,12 @@ void BasicProxy::UASTsx::process_tsx_request()
 
   if (_targets.size() == 0)
   {
-    // No targets found, so reject with a 404 status code.
-    LOG_INFO("Reject request with 404");
-    send_response(PJSIP_SC_NOT_FOUND);
-    return;
+    // No targets found, so reject with a 404 status code.  Should never
+    // happen as calculate_targets should return PJSIP_SC_NOT_FOUND if it
+    // doesn't add any targets.
+    LOG_INFO("Reject request with 404");                                //LCOV_EXCL_LINE
+    send_response(PJSIP_SC_NOT_FOUND);                                  //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 
   // Now set up the data structures and transactions required to
@@ -732,10 +747,10 @@ void BasicProxy::UASTsx::process_tsx_request()
 
   if (status != PJ_SUCCESS)
   {
-    // Send 500/Internal Server Error to UAS transaction */
-    LOG_ERROR("Failed to allocate UAC transaction for UAS transaction");
-    send_response(PJSIP_SC_INTERNAL_SERVER_ERROR);
-    return;
+    // Send 500/Internal Server Error to UAS transaction
+    LOG_ERROR("Failed to allocate UAC transaction for UAS transaction");//LCOV_EXCL_LINE
+    send_response(PJSIP_SC_INTERNAL_SERVER_ERROR);                      //LCOV_EXCL_LINE
+    return;                                                             //LCOV_EXCL_LINE
   }
 }
 
@@ -754,7 +769,8 @@ int BasicProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
   // URI, and the proxy MUST proceed to Section 16.6.
   if (req_uri->maddr_param.slen)
   {
-    LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
+    LOG_INFO("Route request to maddr %.*s",
+             req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
     Target* target = new Target;
     add_target(target);
     return PJSIP_SC_OK;
@@ -767,7 +783,8 @@ int BasicProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
   if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
       (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
   {
-    LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
+    LOG_INFO("Route request to domain %.*s",
+             req_uri->host.slen, req_uri->host.ptr);
     Target* target = new Target;
     add_target(target);
     return PJSIP_SC_OK;
@@ -797,10 +814,10 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
 
       if (uac_tdata == NULL)
       {
-        status = PJ_ENOMEM;
-        LOG_ERROR("Failed to clone request for forked transaction, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        break;
+        status = PJ_ENOMEM;                                             //LCOV_EXCL_LINE
+        LOG_ERROR("Failed to clone request for forked transaction, %s", //LCOV_EXCL_LINE
+                  PJUtils::pj_status_to_string(status).c_str());        //LCOV_EXCL_LINE
+        break;                                                          //LCOV_EXCL_LINE
       }
 
       // Create and initialize the UAC transaction.
@@ -809,9 +826,9 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
 
       if (status != PJ_SUCCESS)
       {
-        LOG_ERROR("Failed to create/initialize UAC transaction, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        break;
+        LOG_ERROR("Failed to create/initialize UAC transaction, %s",    //LCOV_EXCL_LINE
+                  PJUtils::pj_status_to_string(status).c_str());        //LCOV_EXCL_LINE
+        break;                                                          //LCOV_EXCL_LINE
       }
 
       // Set the target for this transaction.
@@ -822,6 +839,7 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
 
       // Add the UAC transaction to the new list.
       new_tsx.push_back(uac_tsx);
+      ++index;
     }
 
     if (status == PJ_SUCCESS)
@@ -840,11 +858,11 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
     else
     {
       // Clean up any transactions and tx data allocated.
-      while (!new_tsx.empty())
-      {
-        delete new_tsx.front();
-        new_tsx.pop_front();
-      }
+      while (!new_tsx.empty())                                          //LCOV_EXCL_LINE
+      {                                                                 //LCOV_EXCL_LINE
+        delete new_tsx.front();                                         //LCOV_EXCL_LINE
+        new_tsx.pop_front();                                            //LCOV_EXCL_LINE
+      }                                                                 //LCOV_EXCL_LINE
     }
   }
 
@@ -879,103 +897,71 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
                                             &tdata);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error creating response, %s",
-                PJUtils::pj_status_to_string(status).c_str());
-      exit_context();
-      return;
+      LOG_ERROR("Error creating response, %s",                          //LCOV_EXCL_LINE
+                PJUtils::pj_status_to_string(status).c_str());          //LCOV_EXCL_LINE
+      exit_context();                                                   //LCOV_EXCL_LINE
+      return;                                                           //LCOV_EXCL_LINE
     }
 
-#if 0
-    if (_uac_tsx.size() > 1)
+    if ((status_code > 100) &&
+        (status_code < 199))
     {
-#endif
-      if ((status_code > 100) &&
-          (status_code < 199))
+      // Forward all provisional responses.
+      LOG_DEBUG("%s - Forward 1xx response", uac_tsx->name());
+
+      // Forward response with the UAS transaction
+      pjsip_tsx_send_msg(_tsx, tdata);
+    }
+    else if (status_code == 200)
+    {
+      // 200 OK.
+      LOG_DEBUG("%s - Forward 200 OK response", name());
+
+      // Send this response immediately as a final response.
+      if (_best_rsp != NULL)
       {
-        // Forward all provisional responses.
-        LOG_DEBUG("%s - Forward 1xx response", uac_tsx->name());
-
-        // Forward response with the UAS transaction
-        pjsip_tsx_send_msg(_tsx, tdata);
+        pjsip_tx_data_dec_ref(_best_rsp);
       }
-      else if (status_code == 200)
-      {
-        // 200 OK.
-        LOG_DEBUG("%s - Forward 200 OK response", name());
-
-        // Send this response immediately as a final response.
-        if (_best_rsp != NULL)
-        {
-          pjsip_tx_data_dec_ref(_best_rsp);
-        }
-        _best_rsp = tdata;
-        _pending_targets--;
-        dissociate(uac_tsx);
-        on_final_response();
-      }
-      else
-      {
-        // Final, non-OK response.  Is this the "best" response
-        // received so far?
-        LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_tsx->name());
-        if ((_best_rsp == NULL) ||
-            (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
-        {
-          LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_tsx->name());
-
-          if (_best_rsp != NULL)
-          {
-            pjsip_tx_data_dec_ref(_best_rsp);
-          }
-
-          _best_rsp = tdata;
-        }
-        else
-        {
-          pjsip_tx_data_dec_ref(tdata);
-        }
-
-        // Disconnect the UAC data from the UAS data so no further
-        // events get passed between the two.
-        dissociate(uac_tsx);
-
-        if (--_pending_targets == 0)
-        {
-          // Received responses on every UAC transaction, so check terminating
-          // call services and then send the best response on the UAS
-          // transaction.
-          LOG_DEBUG("%s - All UAC responded", name());
-          on_final_response();
-        }
-      }
-#if 0
+      _best_rsp = tdata;
+      _pending_targets--;
+      dissociate(uac_tsx);
+      on_final_response();
     }
     else
     {
-      // Non-forked transaction.  Create response to be forwarded upstream
-      // (Via will be stripped here)
-      if (rdata->msg_info.msg->line.status.code < 200)
+      // Final, non-OK response.  Is this the "best" response
+      // received so far?
+      LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_tsx->name());
+      if ((_best_rsp == NULL) ||
+          (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
       {
-        // Forward provisional response with the UAS transaction.
-        LOG_DEBUG("%s - Forward provisional response on UAS transaction", uac_tsx->name());
-        pjsip_tsx_send_msg(_tsx, tdata);
-      }
-      else
-      {
-        // Forward final response.  Disconnect the UAC data from
-        // the UAS data so no further events get passed between the two.
-        LOG_DEBUG("%s - Final response, so disconnect UAS and UAC transactions", uac_tsx->name());
+        LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_tsx->name());
+
         if (_best_rsp != NULL)
         {
           pjsip_tx_data_dec_ref(_best_rsp);
         }
+
         _best_rsp = tdata;
-        _pending_targets--;
-        dissociate(uac_tsx);
+      }
+      else
+      {
+        pjsip_tx_data_dec_ref(tdata);
+      }
+
+      // Disconnect the UAC data from the UAS data so no further
+      // events get passed between the two.
+      dissociate(uac_tsx);
+
+      if (--_pending_targets == 0)
+      {
+        // Received responses on every UAC transaction, so check terminating
+        // call services and then send the best response on the UAS
+        // transaction.
+        LOG_DEBUG("%s - All UAC responded", name());
         on_final_response();
       }
     }
-#endif
 
     exit_context();
   }
@@ -989,33 +975,18 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
   {
     enter_context();
 
-#if 0
-    if (_uac_tsx.size() > 1)
-    {
-#endif
-      // UAC transaction has timed out or hit a transport error.  If
-      // we've not received a response from on any other UAC
-      // transactions then keep this as the best response.
-      LOG_DEBUG("%s - Forked request", uac_tsx->name());
+    // UAC transaction has timed out or hit a transport error.  If
+    // we've not received a response from on any other UAC
+    // transactions then keep this as the best response.
+    LOG_DEBUG("%s - Forked request", uac_tsx->name());
 
-      if (--_pending_targets == 0)
-      {
-        // Received responses on every UAC transaction, so
-        // send the best response on the UAS transaction.
-        LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
-        on_final_response();
-      }
-#if 0
-    }
-    else
+    if (--_pending_targets == 0)
     {
-      // UAC transaction has timed out or hit a transport error for
-      // non-forked request.  Send a 408 on the UAS transaction.
-      LOG_DEBUG("%s - Not forked request", uac_tsx->name());
-      --_pending_targets;
+      // Received responses on every UAC transaction, so
+      // send the best response on the UAS transaction.
+      LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
       on_final_response();
     }
-#endif
 
     // Disconnect the UAC data from the UAS data so no further
     // events get passed between the two.
@@ -1302,6 +1273,7 @@ int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 // vice-versa.  Must be called before destroying either transaction.
 void BasicProxy::UASTsx::dissociate(UACTsx* uac_tsx)
 {
+  LOG_DEBUG("Dissociate UAC transaction %p for target %d", uac_tsx, uac_tsx->_index);
   uac_tsx->_uas_tsx = NULL;
   _uac_tsx[uac_tsx->_index] = NULL;
 }
@@ -1415,7 +1387,8 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
                                  &_tsx);
   if (status != PJ_SUCCESS)
   {
-    return status;
+    LOG_DEBUG("Failed to create PJSIP UAC transaction");                //LCOV_EXCL_LINE
+    return status;                                                      //LCOV_EXCL_LINE
   }
 
   // Set up the PJSIP transaction user module data to refer to the associated
@@ -1499,7 +1472,7 @@ void BasicProxy::UACTsx::send_request()
   if (status != PJ_SUCCESS)
   {
     // Failed to send the request.
-    pjsip_tx_data_dec_ref(_tdata);
+    pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.

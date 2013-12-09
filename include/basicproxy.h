@@ -58,7 +58,8 @@ extern "C" {
 #include "pjmodule.h"
 
 
-///
+/// Class implementing basic SIP proxy functionality.  Various methods in
+/// this class can be overriden to implement different proxy behaviours.
 class BasicProxy
 {
 public:
@@ -68,8 +69,6 @@ public:
              AnalyticsLogger* analytics_logger,
              bool delay_trying);
   virtual ~BasicProxy();
-
-  pj_status_t init();
 
   virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);
   virtual pj_bool_t on_rx_response(pjsip_rx_data* rdata);
@@ -225,7 +224,7 @@ protected:
   public:
     /// UAC Transaction constructor
     UACTsx(BasicProxy* proxy, UASTsx* uas_tsx, size_t index);
-    ~UACTsx();
+    virtual ~UACTsx();
 
     /// Returns the name of the underlying PJSIP transaction.
     inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -295,8 +294,8 @@ protected:
   virtual pj_status_t verify_request(pjsip_rx_data *rdata);
 
   /// Process route information in the request.
-  virtual pj_status_t process_routing(pjsip_tx_data* tdata,
-                                      BasicProxy::Target*& target);
+  virtual int process_routing(pjsip_tx_data* tdata,
+                              BasicProxy::Target*& target);
 
   /// Utility method to create a UASTsx objects for incoming requests.  Can
   /// be overriden if a subclass wants its own version of UASTsx.

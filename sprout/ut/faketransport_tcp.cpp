@@ -209,6 +209,15 @@ static void sockaddr_to_host_port( pj_pool_t *pool,
 
 void fake_tcp_init_shutdown(struct fake_tcp_transport *fake_tcp, pj_status_t status)
 {
+    PJ_LOG(4,(fake_tcp->base.obj_name,
+              "Shutting down FAKE_TCP transport from %.*s:%d to %.*s:%d",
+              (int)fake_tcp->base.local_name.host.slen,
+              fake_tcp->base.local_name.host.ptr,
+              fake_tcp->base.local_name.port,
+              (int)fake_tcp->base.remote_name.host.slen,
+              fake_tcp->base.remote_name.host.ptr,
+              fake_tcp->base.remote_name.port));
+
     pjsip_tp_state_callback state_cb;
 
     if (fake_tcp->close_reason == PJ_SUCCESS)
