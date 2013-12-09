@@ -124,8 +124,8 @@ get_settings()
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
         [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
-        [ -z "$scscf_port" ] || scscf_port_arg="--scscf $scscf_port"
-        [ -z "$icscf_port" ] || icscf_port_arg="--icscf $icscf_port"
+        [ -z "$scscf" ] || scscf_port_arg="--scscf $scscf"
+        [ -z "$icscf" ] || icscf_port_arg="--icscf $icscf"
 }
 
 #
