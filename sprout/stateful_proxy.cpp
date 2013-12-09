@@ -2118,6 +2118,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     }
     else
     {
+      routing_proxy_record_route();
+      LOG_DEBUG("Single Record-Route for the BGCF case");
       // Request is not targeted at this domain.  If the serving state is set
       // we need to release the original dialog as otherwise we may leak an
       // AsChain.
