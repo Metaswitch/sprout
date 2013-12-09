@@ -123,7 +123,9 @@ get_settings()
         fi
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
-        [ -z "$icscf_uri" ] || icscf_uri_arg="--icscf $icscf_uri"
+        [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
+        [ -z "$scscf_port" ] || scscf_port_arg="--scscf $scscf_port"
+        [ -z "$icscf_port" ] || icscf_port_arg="--icscf $icscf_port"
 }
 
 #
@@ -151,7 +153,8 @@ do_start()
                      --localhost $local_ip
                      --sprout-domain $sprout_hostname
                      --alias $sprout_hostname
-                     --scscf 5054
+                     $scscf_port_arg
+                     $icscf_port_arg
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
