@@ -317,6 +317,8 @@ public:
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
                             bool ifcs,
+                            bool icscf_enabled = false,
+                            bool scscf_enabled = false,                          
                             const string& icscf_uri_str = "")
   {
     SipTest::SetUpTestCase(false);
@@ -338,9 +340,12 @@ public:
     // implementation doesn't matter.
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
+    _scscf_selector = new SCSCFSelector();
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     _icscf_uri_str = icscf_uri_str;
+    _icscf = icscf_enabled;
+    _scscf = scscf_enabled;
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
                                           _call_services,
@@ -357,7 +362,10 @@ public:
                                           _bgcf_service,
                                           _hss_connection,
                                           _icscf_uri_str,
-                                          &_quiescing_manager);
+                                          &_quiescing_manager,
+                                          _scscf_selector,
+                                          _icscf,
+                                          _scscf);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -378,6 +386,7 @@ public:
     delete _xdm_connection; _xdm_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -442,9 +451,12 @@ protected:
   static IfcHandler* _ifc_handler;
   static EnumService* _enum_service;
   static BgcfService* _bgcf_service;
+  static SCSCFSelector* _scscf_selector;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
   static string _icscf_uri_str;
+  static bool _icscf;
+  static bool _scscf;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -467,9 +479,12 @@ CallServices* StatefulProxyTestBase::_call_services;
 IfcHandler* StatefulProxyTestBase::_ifc_handler;
 EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
+SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
 string StatefulProxyTestBase::_icscf_uri_str;
+bool StatefulProxyTestBase::_icscf;
+bool StatefulProxyTestBase::_scscf;
 QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
@@ -483,7 +498,13 @@ public:
   static void SetUpTestCase(const string& icscf_uri_str)
   {
     cwtest_clear_host_mapping();
-    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_uri_str);
+    StatefulProxyTestBase::SetUpTestCase("", "", false, false, false, icscf_uri_str);
+  }
+
+  static void SetUpTestCase(bool icscf_enabled, bool scscf_enabled)
+  {
+    cwtest_clear_host_mapping();
+    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_enabled, scscf_enabled, "");
   }
 
   static void TearDownTestCase()
@@ -599,7 +620,7 @@ public:
 
 };
 
-class IcscfTest : public StatefulProxyTest
+class ExternalIcscfTest : public StatefulProxyTest
 {
 public:
   static void SetUpTestCase()
@@ -613,15 +634,37 @@ public:
     StatefulProxyTest::TearDownTestCase();
   }
 
-  IcscfTest()
+  ExternalIcscfTest()
   {
   }
 
-  ~IcscfTest()
+  ~ExternalIcscfTest()
   {
   }
 };
 
+class InternalIcscfTest : public StatefulProxyTest
+{
+public:
+  static void SetUpTestCase()
+  {
+    StatefulProxyTest::SetUpTestCase(true, true);
+    cwtest_add_host_mapping("scscf1.homedomain", "10.8.8.1");
+  }
+
+  static void TearDownTestCase()
+  {
+    StatefulProxyTest::TearDownTestCase();
+  }
+
+  InternalIcscfTest()
+  {
+  }
+
+  ~InternalIcscfTest()
+  {
+  }
+};
 
 using SP::Message;
 
@@ -5631,7 +5674,7 @@ TEST_F(IscTest, SimpleOptionsAccept)
   free_txdata();
 }
 
-TEST_F(IcscfTest, TestOriginating)
+TEST_F(ExternalIcscfTest, TestOriginating)
 {
   SCOPED_TRACE("");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
@@ -5649,7 +5692,7 @@ TEST_F(IcscfTest, TestOriginating)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
 }
 
-TEST_F(IcscfTest, TestTerminating)
+TEST_F(ExternalIcscfTest, TestTerminating)
 {
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
@@ -5661,6 +5704,24 @@ TEST_F(IcscfTest, TestTerminating)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
+TEST_F(InternalIcscfTest, TestOriginating)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001, \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:scscf1.homedomain:5058;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
 
 // @@@ WS stuff
 

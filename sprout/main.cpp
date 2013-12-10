@@ -821,6 +821,12 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  if ((opt.pcscf_enabled) && ((opt.scscf_enabled)))
+  {
+    LOG_ERROR("Cannot enable both P-CSCF and S-CSCF");
+    return 1;
+  }
+
   if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
   {
     LOG_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
@@ -1050,7 +1056,10 @@ int main(int argc, char *argv[])
                                  bgcf_service,
                                  hss_connection,
                                  opt.external_icscf_uri,
-                                 quiescing_mgr);
+                                 quiescing_mgr,
+                                 scscf_selector,
+                                 opt.icscf_enabled,
+                                 opt.scscf_enabled);
 
     if (status != PJ_SUCCESS)
     {
@@ -1078,7 +1087,10 @@ int main(int argc, char *argv[])
                                  NULL,
                                  NULL,
                                  "",
-                                 quiescing_mgr);
+                                 quiescing_mgr,
+                                 scscf_selector,
+                                 opt.icscf_enabled,
+                                 opt.scscf_enabled);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Failed to enable P-CSCF edge proxy");
