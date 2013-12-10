@@ -1529,6 +1529,18 @@ TEST_F(StatefulProxyTest, TestExternal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestExternalRecordRoute)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain = "ut.cw-ngv.com";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+}
+
 TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
 {
   SCOPED_TRACE("");
@@ -2880,6 +2892,27 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   expect_target("TCP", "10.6.6.200", stack_data.pcscf_trusted_port, tdata);
 
   free_txdata();
+}
+
+// Test flows into Bono (P-CSCF), first hop with Route header.
+TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
+{
+  SCOPED_TRACE("");
+
+  // Register client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
+
+  Message msg;
+  msg._first_hop = true;
+  msg._via = "10.83.18.37:36531;transport=tcp";
+  msg._extra = "Route: <sip:upstreamnode;lr;orig>";
+  list<HeaderMatcher> hdrs;
+  // Strip PANI in outbound direction - leaving the trust zone.
+  // This is originating; mark it so.
+  doTestHeaders(&tp, true, _tp_default, false, msg, "", false, true, false, true, false);
 }
 
 

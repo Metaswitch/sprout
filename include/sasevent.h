@@ -34,48 +34,45 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#pragma once
+#ifndef SASEVENT_H__
+#define SASEVENT_H__
+
+#include <string>
 
 namespace SASEvent {
 
-const int HTTP_REQ = 0;
-const int HTTP_RSP = 1;
-const int HTTP_ERR = 2;
+  const std::string CURRENT_RESOURCE_BUNDLE = "org.projectclearwater.sprout.20131107";
 
-const int RX_SIP_MSG = 0x50100010;
-const int TX_SIP_MSG = 0x50100011;
-const int TX_HSS_BASE = 0x50100100;
-const int TX_HSS_REQ = TX_HSS_BASE + HTTP_REQ;
-const int RX_HSS_RSP = TX_HSS_BASE + HTTP_RSP;
-const int RX_HSS_ERR = TX_HSS_BASE + HTTP_ERR;
-const int TX_XDM_GET_BASE = 0x50100200;
-const int TX_XDM_GET_REQ = TX_XDM_GET_BASE + HTTP_REQ;
-const int RX_XDM_GET_RSP = TX_XDM_GET_BASE + HTTP_RSP;
-const int RX_XDM_GET_ERR = TX_XDM_GET_BASE + HTTP_ERR;
-const int TX_XDM_PUT_BASE = 0x50100210;
-const int TX_XDM_PUT_REQ = TX_XDM_PUT_BASE + HTTP_REQ;
-const int RX_XDM_PUT_RSP = TX_XDM_PUT_BASE + HTTP_RSP;
-const int RX_XDM_PUT_ERR = TX_XDM_PUT_BASE + HTTP_ERR;
-const int TX_XDM_DEL_BASE = 0x50100220;
-const int TX_XDM_DEL_REQ = TX_XDM_DEL_BASE + HTTP_REQ;
-const int RX_XDM_DEL_RSP = TX_XDM_DEL_BASE + HTTP_RSP;
-const int RX_XDM_DEL_ERR = TX_XDM_DEL_BASE + HTTP_ERR;
-const int ENUM_START = 0x50100300;
-const int ENUM_MATCH = 0x50100301;
-const int ENUM_INCOMPLETE = 0x50100302;
-const int ENUM_COMPLETE = 0x50100303;
-const int TX_ENUM_REQ = 0x50100310;
-const int RX_ENUM_RSP = 0x50100311;
-const int RX_ENUM_ERR = 0x50100312;
+  const int SIP_BASE = 0x010000;
+  const int HTTP_BASE = 0x020000;
+  const int DNS_BASE = 0x030000;
+
+  const int HTTP_REQ = 0;
+  const int HTTP_RSP = 1;
+  const int HTTP_ERR = 2;
+
+  const int RX_SIP_MSG = SIP_BASE + 0;
+  const int TX_SIP_MSG = SIP_BASE + 1;
+
+  const int TX_HSS_BASE = HTTP_BASE + 0x00;
+  const int TX_HSS_REQ = TX_HSS_BASE + HTTP_REQ;
+  const int RX_HSS_RSP = TX_HSS_BASE + HTTP_RSP;
+  const int RX_HSS_ERR = TX_HSS_BASE + HTTP_ERR;
+
+  const int TX_XDM_BASE = HTTP_BASE + 0x40;
+  const int TX_XDM_GET_BASE = TX_XDM_BASE;
+  const int TX_XDM_GET_REQ = TX_XDM_GET_BASE + HTTP_REQ;
+  const int RX_XDM_GET_RSP = TX_XDM_GET_BASE + HTTP_RSP;
+  const int RX_XDM_GET_ERR = TX_XDM_GET_BASE + HTTP_ERR;
+
+  const int ENUM_START = DNS_BASE + 0;
+  const int ENUM_MATCH = DNS_BASE + 1;
+  const int ENUM_INCOMPLETE = DNS_BASE + 2;
+  const int ENUM_COMPLETE = DNS_BASE + 3;
+  const int TX_ENUM_REQ = DNS_BASE + 4;
+  const int RX_ENUM_RSP = DNS_BASE + 5;
+  const int RX_ENUM_ERR = DNS_BASE + 6;
 
 } // namespace SASEvent
 
-namespace SASMarker {
-
-const int INIT_TIME = 0x01000003;
-const int END_TIME = 0x01000004;
-const int CALLING_DN = 0x01000006;
-const int CALLED_DN = 0x01000007;
-const int SIP_CALL_ID = 0x010C0001;
-
-} // namespace SASMarker
+#endif

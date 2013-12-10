@@ -734,15 +734,18 @@ pj_status_t init_stack(const std::string& system_name,
     }
   }
 
+  std::string system_name_sas = system_name;
+  std::string system_type_sas = (pcscf_trusted_port != 0) ? "bono" : "sprout";
   // Initialize SAS logging.
-  if (system_name != "")
+  if (system_name_sas == "")
   {
-    SAS::init(system_name.length(), system_name.c_str(), sas_address);
+    system_name_sas = std::string(stack_data.local_host.ptr, stack_data.local_host.slen);
   }
-  else
-  {
-    SAS::init(stack_data.local_host.slen, stack_data.local_host.ptr, sas_address);
-  }
+  SAS::init(system_name,
+            system_type_sas,
+            SASEvent::CURRENT_RESOURCE_BUNDLE,
+            sas_address,
+            Log::sas_write);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();

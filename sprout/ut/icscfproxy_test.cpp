@@ -44,7 +44,6 @@
 #include "siptest.hpp"
 #include "utils.h"
 #include "test_utils.hpp"
-#include "analyticslogger.h"
 #include "icscfproxy.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
@@ -72,10 +71,6 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
-    _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
-    _analytics->_logger = NULL;
-
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _hss_connection = new FakeHSSConnection();
 
@@ -83,8 +78,7 @@ public:
                                   stack_data.icscf_port,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
-                                  _scscf_selector,
-                                  _analytics);
+                                  _scscf_selector);
 
     // Schedule timers.
     SipTest::poll();
@@ -96,7 +90,6 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _icscf_proxy; _icscf_proxy = NULL;
-    delete _analytics; _analytics = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
@@ -106,7 +99,6 @@ public:
   {
     Log::setLoggingLevel(99);
     _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
-    _analytics->_logger = &_log;
     _hss_connection->flush_all();
   }
 
@@ -134,8 +126,6 @@ public:
     // Stop and restart the transaction layer just in case
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
-
-    _analytics->_logger = NULL;
   }
 
   class Message
@@ -286,14 +276,12 @@ public:
 
 
 protected:
-  static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
   static ICSCFProxy* _icscf_proxy;
 
 };
 
-AnalyticsLogger* ICSCFProxyTestBase::_analytics;
 FakeHSSConnection* ICSCFProxyTestBase::_hss_connection;
 SCSCFSelector* ICSCFProxyTestBase::_scscf_selector;
 ICSCFProxy* ICSCFProxyTestBase::_icscf_proxy;

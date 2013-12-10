@@ -66,7 +66,6 @@ public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
              int priority,
-             AnalyticsLogger* analytics_logger,
              bool delay_trying);
   virtual ~BasicProxy();
 
@@ -312,9 +311,6 @@ protected:
   /// on_tsx_state callbacks.
   static const int PJMODULE_MASK_TU = PJCallback::ON_TSX_STATE;
   PJModule<BasicProxy, 2> _mod_tu;
-
-  /// Analytics logger.
-  AnalyticsLogger* _analytics_logger;
 
   /// Indicates that 100 Trying response to INVITE requests should be delayed
   /// until at least one downstream node has sent a 100 Trying response.
