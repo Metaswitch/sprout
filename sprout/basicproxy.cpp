@@ -161,9 +161,9 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
   // associated with the INVITE transaction at SAS.
   if (rdata->msg_info.cid != NULL)
   {
-    SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 3u);
+    SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 3u);
     cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
   }
 
   // Forward response
@@ -1070,12 +1070,12 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
 
   // Report SAS markers for the transaction.
   LOG_DEBUG("Report SAS start marker - trail (%llx)", trail_id);
-  SAS::Marker start_marker(trail_id, SASMarker::INIT_TIME, 1u);
+  SAS::Marker start_marker(trail_id, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
   if (rdata->msg_info.from != NULL)
   {
-    SAS::Marker calling_dn(trail_id, SASMarker::CALLING_DN, 1u);
+    SAS::Marker calling_dn(trail_id, MARKER_ID_CALLING_DN, 1u);
     pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
     calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
     SAS::report_marker(calling_dn);
@@ -1083,7 +1083,7 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
 
   if (rdata->msg_info.to != NULL)
   {
-    SAS::Marker called_dn(trail_id, SASMarker::CALLED_DN, 1u);
+    SAS::Marker called_dn(trail_id, MARKER_ID_CALLED_DN, 1u);
     pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
     called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
     SAS::report_marker(called_dn);
@@ -1091,9 +1091,9 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
 
   if (rdata->msg_info.cid != NULL)
   {
-    SAS::Marker cid(trail_id, SASMarker::SIP_CALL_ID, 1u);
+    SAS::Marker cid(trail_id, MARKER_ID_SIP_CALL_ID, 1u);
     cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Trace);
   }
 }
 
@@ -1105,7 +1105,7 @@ void BasicProxy::UASTsx::on_tsx_complete()
 
   // Report SAS markers for the transaction.
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail_id);
-  SAS::Marker end_marker(trail_id, SASMarker::END_TIME, 1u);
+  SAS::Marker end_marker(trail_id, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 }
 
