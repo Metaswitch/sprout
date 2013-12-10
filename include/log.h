@@ -39,21 +39,31 @@
 #define LOG_H__
 
 #include "logger.h"
+#include "sas.h"
 
-#define LOG_ERROR(...) Log::write(0, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_WARNING(...) Log::write(1, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_STATUS(...) Log::write(2, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_INFO(...) Log::write(3, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_VERBOSE(...) Log::write(4, __FILE__, __LINE__, __VA_ARGS__)
-#define LOG_DEBUG(...) Log::write(5, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_ERROR(...) Log::write(Log::ERROR_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_WARNING(...) Log::write(Log::WARNING_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_STATUS(...) Log::write(Log::STATUS_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...) Log::write(Log::INFO_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_VERBOSE(...) Log::write(Log::VERBOSE_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
+#define LOG_DEBUG(...) Log::write(Log::DEBUG_LEVEL, __FILE__, __LINE__, __VA_ARGS__)
 #define LOG_BACKTRACE(...) Log::backtrace(__VA_ARGS__)
 
 namespace Log
 {
+  const int ERROR_LEVEL = 0;
+  const int WARNING_LEVEL = 1;
+  const int STATUS_LEVEL = 2;
+  const int INFO_LEVEL = 3;
+  const int VERBOSE_LEVEL = 4;
+  const int DEBUG_LEVEL = 5;
+
   void setLoggingLevel(int level);
   void setLogger(Logger *log);
   void write(int level, const char *module, int line_number, const char *fmt, ...);
+  void _write(int level, const char *module, int line_number, const char *fmt, va_list args);
+  void sas_write(SAS::log_level_t level, const char *module, int line_number, const char *fmt, ...);
   void backtrace(const char *fmt, ...);
-};  
+};
 
 #endif

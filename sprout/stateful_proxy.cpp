@@ -312,9 +312,9 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
   // associated with the INVITE transaction at SAS.
   if (rdata->msg_info.cid != NULL)
   {
-    SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 3u);
+    SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 3u);
     cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
   }
 
   // We don't know the transaction, so be pessimistic and strip
@@ -499,9 +499,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // associated with the INVITE transaction at SAS.
     if (rdata->msg_info.cid != NULL)
     {
-      SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 2u);
+      SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 2u);
       cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Scope::TrailGroup);
+      SAS::report_marker(cid, SAS::Marker::Scope::Trace);
     }
 
     trust->process_request(tdata);
@@ -1213,13 +1213,18 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // If we've run out of Route headers to follow and we're in the ReqURI,
-    // we get to chose where to route the message.  The obvious place to route
-    // to is Sprout, so do that.
+    // Check if we have any Route headers.  If so, we'll follow them.  If not,
+    // we get to choose where to route to, so route upstream to sprout.
     void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if (!top_route &&
-        (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-         PJUtils::is_uri_local(tdata->msg->line.req.uri)))
+    if (top_route)
+    {
+      // We already have Route headers, so just build a target that mirrors
+      // the current request URI.
+      *target = new Target();
+      (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
+    }
+    else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+             PJUtils::is_uri_local(tdata->msg->line.req.uri))
     {
       // Route the request upstream to Sprout.
       proxy_route_upstream(rdata, tdata, trust, target);
@@ -2113,6 +2118,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     }
     else
     {
+      routing_proxy_record_route();
+      LOG_DEBUG("Single Record-Route for the BGCF case");
       // Request is not targeted at this domain.  If the serving state is set
       // we need to release the original dialog as otherwise we may leak an
       // AsChain.
@@ -2832,12 +2839,12 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
 
   // Report SAS markers for the transaction.
   LOG_DEBUG("Report SAS start marker - trail (%llx)", trail());
-  SAS::Marker start_marker(trail(), SASMarker::INIT_TIME, 1u);
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
   if (_analytics.from)
   {
-    SAS::Marker calling_dn(trail(), SASMarker::CALLING_DN, 1u);
+    SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
     pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(_analytics.from->uri);
     calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
     SAS::report_marker(calling_dn);
@@ -2845,7 +2852,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
 
   if (_analytics.to)
   {
-    SAS::Marker called_dn(trail(), SASMarker::CALLED_DN, 1u);
+    SAS::Marker called_dn(trail(), MARKER_ID_CALLED_DN, 1u);
     pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(_analytics.to->uri);
     called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
     SAS::report_marker(called_dn);
@@ -2853,9 +2860,9 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
 
   if (_analytics.cid)
   {
-    SAS::Marker cid(trail(), SASMarker::SIP_CALL_ID, 1u);
+    SAS::Marker cid(trail(), MARKER_ID_SIP_CALL_ID, 1u);
     cid.add_var_param(_analytics.cid->id.slen, _analytics.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::TrailGroup);
+    SAS::report_marker(cid, SAS::Marker::Trace);
   }
 }
 
@@ -2864,7 +2871,7 @@ void UASTransaction::log_on_tsx_complete()
 {
   // Report SAS markers for the transaction.
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail());
-  SAS::Marker end_marker(trail(), SASMarker::END_TIME, 1u);
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
   if (analytics_logger != NULL)
