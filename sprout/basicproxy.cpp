@@ -296,9 +296,9 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
     LOG_DEBUG("Statelessly forwarding ACK");
     if (rdata->msg_info.cid != NULL)
     {
-      SAS::Marker cid(get_trail(rdata), SASMarker::SIP_CALL_ID, 1u);
+      SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 1u);
       cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::TrailGroup);
+      SAS::report_marker(cid, SAS::Marker::Trace);
     }
 
     status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
