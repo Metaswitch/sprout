@@ -308,6 +308,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error forwarding request, %s",                         //LCOV_EXCL_LINE
                 PJUtils::pj_status_to_string(status).c_str());          //LCOV_EXCL_LINE
     }
+    delete target;
 
     return;
   }
@@ -331,6 +332,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
                                NULL,                                    //LCOV_EXCL_LINE
                                NULL);                                   //LCOV_EXCL_LINE
     delete uas_tsx;                                                     //LCOV_EXCL_LINE
+    delete target;
     return;                                                             //LCOV_EXCL_LINE
   }
 
@@ -1027,8 +1029,7 @@ void BasicProxy::UASTsx::on_final_response()
       // manually for INVITE 200 OK response, otherwise the
       // transaction layer will wait for an ACK).  This will also
       // cause all other pending UAC transactions to be cancelled.
-      LOG_DEBUG("%s - Terminate UAS INVITE transaction (non-forking case)",
-                _tsx->obj_name);
+      LOG_DEBUG("%s - Terminate UAS INVITE transaction", _tsx->obj_name);
       pjsip_tsx_terminate(_tsx, 200);
     }
   }
@@ -1374,11 +1375,19 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
 
   if (target->transport != NULL)
   {
-    // The target includes a selected transport, so set it here.
+    // The target includes a selected transport, so set the transport on
+    // the transaction.
+    LOG_DEBUG("Force request to use selected transport %.*s:%d to %.*s:%d",
+              target->transport->local_name.host.slen,
+              target->transport->local_name.host.ptr,
+              target->transport->local_name.port,
+              target->transport->remote_name.host.slen,
+              target->transport->remote_name.host.ptr,
+              target->transport->remote_name.port);
     pjsip_tpselector tp_selector;
     tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
     tp_selector.u.transport = target->transport;
-    pjsip_tx_data_set_transport(_tdata, &tp_selector);
+    pjsip_tsx_set_transport(_tsx, &tp_selector);
 
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target->transport);
@@ -1393,17 +1402,9 @@ void BasicProxy::UACTsx::send_request()
 {
   enter_context();
 
-  if (_tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
-  {
-    // The transport has already been selected for this request, so
-    // add it to the transaction otherwise it will get overwritten.
-    LOG_DEBUG("Transport %s (%s) pre-selected for transaction",
-              _tdata->tp_sel.u.transport->obj_name,
-              _tdata->tp_sel.u.transport->info);
-    pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
-  }
   LOG_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
+
   pj_status_t status = pjsip_tsx_send_msg(_tsx, _tdata);
   if (status != PJ_SUCCESS)
   {
@@ -1434,13 +1435,20 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
       pjsip_endpt_create_cancel(stack_data.endpt, _tsx->last_tx, &cancel);
       if (st_code != 0)
       {
-        char reason_val_str[96];
-        const pj_str_t* st_text = pjsip_get_status_text(st_code);
-        sprintf(reason_val_str, "SIP ;cause=%d ;text=\"%.*s\"", st_code, (int)st_text->slen, st_text->ptr);
-        pj_str_t reason_name = pj_str("Reason");
-        pj_str_t reason_val = pj_str(reason_val_str);
-        pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
-        pjsip_msg_add_hdr(cancel->msg, reason_hdr);
+        char reason_val_str[96];                                        //LCOV_EXCL_LINE
+        const pj_str_t* st_text = pjsip_get_status_text(st_code);       //LCOV_EXCL_LINE
+        sprintf(reason_val_str,                                         //LCOV_EXCL_LINE
+                "SIP ;cause=%d ;text=\"%.*s\"",                         //LCOV_EXCL_LINE
+                st_code,                                                //LCOV_EXCL_LINE
+                (int)st_text->slen,                                     //LCOV_EXCL_LINE
+                st_text->ptr);                                          //LCOV_EXCL_LINE
+        pj_str_t reason_name = pj_str("Reason");                        //LCOV_EXCL_LINE
+        pj_str_t reason_val = pj_str(reason_val_str);                   //LCOV_EXCL_LINE
+        pjsip_hdr* reason_hdr =                                         //LCOV_EXCL_LINE
+               (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool,//LCOV_EXCL_LINE
+                                                           &reason_name,//LCOV_EXCL_LINE
+                                                           &reason_val);//LCOV_EXCL_LINE
+        pjsip_msg_add_hdr(cancel->msg, reason_hdr);                     //LCOV_EXCL_LINE
       }
       set_trail(cancel, get_trail(_tsx));
 
