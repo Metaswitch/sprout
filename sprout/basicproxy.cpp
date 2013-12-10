@@ -332,7 +332,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
                                NULL,                                    //LCOV_EXCL_LINE
                                NULL);                                   //LCOV_EXCL_LINE
     delete uas_tsx;                                                     //LCOV_EXCL_LINE
-    delete target;
+    delete target;                                                      //LCOV_EXCL_LINE
     return;                                                             //LCOV_EXCL_LINE
   }
 
