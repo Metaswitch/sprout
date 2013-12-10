@@ -2857,7 +2857,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
   SCOPED_TRACE("");
 
   // Register client.
-  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
   doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
