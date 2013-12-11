@@ -419,11 +419,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
 
 pj_status_t init_authentication(const std::string& realm_name,
+                                AvStore* avstore,
                                 HSSConnection* hss_connection,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
 
+  av_store = avstore;
   hss = hss_connection;
   analytics = analytics_logger;
 
@@ -439,9 +441,6 @@ pj_status_t init_authentication(const std::string& realm_name,
   params.lookup2 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
-
-  // Create the AV store.
-  av_store = new AvStore();
 
   return status;
 }

@@ -25,12 +25,12 @@ TARGET_SOURCES := logger.cpp \
                   httpconnection.cpp \
                   hssconnection.cpp \
                   websockets.cpp \
-                  store.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
                   memcachedstoreupdater.cpp \
 									avstore.cpp \
+									regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \

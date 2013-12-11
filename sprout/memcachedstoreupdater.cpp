@@ -52,8 +52,6 @@
 #include "memcachedstoreupdater.h"
 
 
-namespace RegData {
-
 
 SignalHandler<SIGHUP> MemcachedStoreUpdater::_sighup_handler;
 
@@ -160,5 +158,3 @@ void MemcachedStoreUpdater::updater()
   }
 }
 
-
-} // namespace RegData

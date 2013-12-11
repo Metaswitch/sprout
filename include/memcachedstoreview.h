@@ -38,9 +38,9 @@
 #ifndef MEMCACHEDSTOREVIEW_H__
 #define MEMCACHEDSTOREVIEW_H__
 
+#include <map>
+#include <string>
 #include <vector>
-
-namespace RegData {
 
 /// Tracks the current view of the underlying memcached cluster, including
 /// calculating the server list and the replica configurations.
@@ -127,7 +127,5 @@ private:
   std::vector<std::vector<int> > _read_set;
   std::vector<std::vector<int> > _write_set;
 };
-
-} // namespace RegData
 
 #endif

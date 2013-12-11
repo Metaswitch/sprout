@@ -47,8 +47,6 @@
 #include "log.h"
 #include "memcachedstoreview.h"
 
-namespace RegData {
-
 
 MemcachedStoreView::MemcachedStoreView(int vbuckets, int replicas) :
   _replicas(replicas),
@@ -354,5 +352,3 @@ int MemcachedStoreView::Ring::owned_slot(int node, int number)
   return i->second;
 }
 
-
-} // namespace RegData

@@ -112,7 +112,7 @@ extern "C" {
 #include "stack.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
-#include "regdata.h"
+#include "regstore.h"
 #include "stateful_proxy.h"
 #include "callservices.h"
 #include "constants.h"
@@ -130,8 +130,8 @@ extern "C" {
 #include "dialog_tracker.hpp"
 #include "quiescing_manager.h"
 
-static RegData::Store* store;
-static RegData::Store* remote_store;
+static RegStore* store;
+static RegStore* remote_store;
 
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
@@ -1544,7 +1544,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
     // Look up the target in the registration data store.
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegData::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor);
 
     // If we didn't get bindings from the local store and we have a remote
     // store, try the remote.
@@ -1560,13 +1560,13 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     // some of these may be stale, and we don't want stale bindings to
     // push live bindings out, we sort by expiry time and pick those
     // with the most distant expiry times.  See bug 45.
-    std::list<RegData::AoR::Bindings::value_type> target_bindings;
+    std::list<RegStore::AoR::Bindings::value_type> target_bindings;
     if (aor_data != NULL)
     {
-      const RegData::AoR::Bindings& bindings = aor_data->bindings();
+      const RegStore::AoR::Bindings& bindings = aor_data->bindings();
       if ((int)bindings.size() <= max_targets)
       {
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+        for (RegStore::AoR::Bindings::const_iterator i = bindings.begin();
              i != bindings.end();
              ++i)
         {
@@ -1575,17 +1575,17 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       }
       else
       {
-        std::multimap<int, RegData::AoR::Bindings::value_type> ordered;
-        for (RegData::AoR::Bindings::const_iterator i = bindings.begin();
+        std::multimap<int, RegStore::AoR::Bindings::value_type> ordered;
+        for (RegStore::AoR::Bindings::const_iterator i = bindings.begin();
              i != bindings.end();
              ++i)
         {
-          std::pair<int, RegData::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
+          std::pair<int, RegStore::AoR::Bindings::value_type> p = std::make_pair(i->second->_expires, *i);
           ordered.insert(p);
         }
 
         int num_contacts = 0;
-        for (std::multimap<int, RegData::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
+        for (std::multimap<int, RegStore::AoR::Bindings::value_type>::const_reverse_iterator i = ordered.rbegin();
              num_contacts < max_targets;
              ++i)
         {
@@ -1595,11 +1595,11 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       }
     }
 
-    for (std::list<RegData::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
+    for (std::list<RegStore::AoR::Bindings::value_type>::const_iterator i = target_bindings.begin();
          i != target_bindings.end();
          ++i)
     {
-      RegData::AoR::Binding* binding = i->second;
+      RegStore::AoR::Binding* binding = i->second;
       LOG_DEBUG("Target = %s", binding->_uri.c_str());
       bool useable_contact = true;
       Target target;
@@ -3471,8 +3471,8 @@ void UACTransaction::exit_context()
 ///@{
 // MODULE LIFECYCLE
 
-pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
-                                RegData::Store* remote_reg_store,
+pj_status_t init_stateful_proxy(RegStore* registrar_store,
+                                RegStore* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
@@ -3746,7 +3746,7 @@ bool is_user_registered(std::string served_user)
   if (store)
   {
     std::string aor = served_user;
-    RegData::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor);
 
     // If we have a remote store and the local store suggests the subscriber is
     // unregistered, double-check in the remote store.

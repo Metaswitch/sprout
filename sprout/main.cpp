@@ -61,7 +61,7 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "analyticslogger.h"
-#include "regdata.h"
+#include "regstore.h"
 #include "stack.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
@@ -71,8 +71,6 @@ extern "C" {
 #include "registrar.h"
 #include "authentication.h"
 #include "options.h"
-#include "memcachedstorefactory.h"
-#include "localstorefactory.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "pjutils.h"
@@ -80,6 +78,8 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
+#include "memcachedstore.h"
+#include "localstore.h"
 
 struct options
 {
@@ -596,6 +596,11 @@ int main(int argc, char *argv[])
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
   LoadMonitor* load_monitor = NULL;
+  Store* local_data_store = NULL;
+  Store* remote_data_store = NULL;
+  RegStore* local_reg_store = NULL;
+  RegStore* remote_reg_store = NULL;
+  AvStore* av_store = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -753,66 +758,72 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  RegData::Store* registrar_store = NULL;
-  if (opt.store_servers != "")
-  {
-    // Use memcached store.
-    LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    registrar_store = RegData::create_memcached_store(false, opt.store_servers);
-  }
-  else
-  {
-    // Use local store.
-    LOG_STATUS("Using local store");
-    registrar_store = RegData::create_local_store();
-  }
-
-  if (registrar_store == NULL)
-  {
-    LOG_ERROR("Failed to connect to data store");
-    exit(0);
-  }
-
-  RegData::Store* remote_reg_store = NULL;
-  if (opt.remote_store_servers != "")
-  {
-    // Use remote memcached store too.
-    LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-    remote_reg_store = RegData::create_memcached_store(false, opt.remote_store_servers);
-  }
-
-  if (opt.hss_server != "")
-  {
-    // Create a connection to the HSS.
-    LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
-    hss_connection = new HSSConnection(opt.hss_server, load_monitor);
-  }
-
-  if (opt.xdm_server != "")
-  {
-    // Create a connection to the XDMS.
-    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
-  }
-
-  if (xdm_connection != NULL)
-  {
-    LOG_STATUS("Creating call services handler");
-    call_services = new CallServices(xdm_connection);
-  }
-
-  if (hss_connection != NULL)
-  {
-    LOG_STATUS("Initializing iFC handler");
-    ifc_handler = new IfcHandler();
-  }
-
   // Initialise the OPTIONS handling module.
   status = init_options();
 
   if (!opt.edge_proxy)
   {
-    status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+    if (opt.store_servers != "")
+    {
+      // Use memcached store.
+      LOG_STATUS("Using memcached compatible store with ASCII protocol");
+      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+      if (opt.remote_store_servers != "")
+      {
+        // Use remote memcached store too.
+        LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+      }
+    }
+    else
+    {
+      // Use local store.
+      LOG_STATUS("Using local store");
+      local_data_store = (Store*)new LocalStore();
+    }
+
+    if (local_data_store == NULL)
+    {
+      LOG_ERROR("Failed to connect to data store");
+      exit(0);
+    }
+
+    // Create local and optionally remote registration data stores.
+    local_reg_store = new RegStore(local_data_store);
+    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store) : NULL;
+
+    if (opt.hss_server != "")
+    {
+      // Create a connection to the HSS.
+      LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+      hss_connection = new HSSConnection(opt.hss_server, load_monitor);
+    }
+
+    if (opt.xdm_server != "")
+    {
+      // Create a connection to the XDMS.
+      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+      xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
+    }
+
+    if (xdm_connection != NULL)
+    {
+      LOG_STATUS("Creating call services handler");
+      call_services = new CallServices(xdm_connection);
+    }
+
+    if (hss_connection != NULL)
+    {
+      LOG_STATUS("Initializing iFC handler");
+      ifc_handler = new IfcHandler();
+    }
+
+    if (opt.auth_enabled)
+    {
+      // Create authentication store.
+      av_store = new AvStore(local_data_store);
+      status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);
+    }
 
     // Create Enum and BGCF services required for SIP router.
     if (!opt.enum_server.empty())
@@ -826,7 +837,7 @@ int main(int argc, char *argv[])
     bgcf_service = new BgcfService();
   }
 
-  status = init_stateful_proxy(registrar_store,
+  status = init_stateful_proxy(local_reg_store,
                                remote_reg_store,
                                call_services,
                                ifc_handler,
@@ -853,7 +864,7 @@ int main(int argc, char *argv[])
   pj_bool_t registrar_enabled = !opt.edge_proxy;
   if (registrar_enabled)
   {
-    status = init_registrar(registrar_store,
+    status = init_registrar(local_reg_store,
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
@@ -921,20 +932,11 @@ int main(int argc, char *argv[])
   delete bgcf_service;
   delete quiescing_mgr;
   delete load_monitor;
-
-  if (opt.store_servers != "")
-  {
-    RegData::destroy_memcached_store(registrar_store);
-  }
-  else
-  {
-    RegData::destroy_local_store(registrar_store);
-  }
-
-  if (remote_reg_store != NULL)
-  {
-    RegData::destroy_memcached_store(remote_reg_store);
-  }
+  delete local_reg_store;
+  delete remote_reg_store;
+  delete av_store;
+  delete local_data_store;
+  delete remote_data_store;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

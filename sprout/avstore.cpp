@@ -38,18 +38,20 @@
 #include <pthread.h>
 
 #include "log.h"
+#include "store.h"
 #include "avstore.h"
 
 
-AvStore::AvStore() :
-  _av_map_lock(PTHREAD_MUTEX_INITIALIZER),
-  _av_map()
+AvStore::AvStore(Store* data_store) :
+  _data_store(data_store)
 {
 }
+
 
 AvStore::~AvStore()
 {
 }
+
 
 void AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
@@ -58,33 +60,35 @@ void AvStore::set_av(const std::string& impi,
   std::string key = impi + '\0' + nonce;
   std::string data = av->toStyledString();
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
-
-  pthread_mutex_lock(&_av_map_lock);
-  _av_map[key] = data;
-  pthread_mutex_unlock(&_av_map_lock);
+  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY);
+  if (status != Store::Status::OK)
+  {
+    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+  }
 }
+
 
 Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce)
 {
   Json::Value* av = NULL;
   std::string key = impi + '\0' + nonce;
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data("av", key, data, cas);
 
-  pthread_mutex_lock(&_av_map_lock);
-  std::map<std::string, std::string>::const_iterator i = _av_map.find(key);
-  if (i != _av_map.end())
+  if (status == Store::Status::OK)
   {
-    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), i->second.c_str());
+    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
     av = new Json::Value;
     Json::Reader reader;
-    bool parsingSuccessful = reader.parse(i->second, *av);
+    bool parsingSuccessful = reader.parse(data, *av);
     if (!parsingSuccessful)
     {
       delete av;
       av = NULL;
     }
   }
-  pthread_mutex_unlock(&_av_map_lock);
 
   return av;
 }

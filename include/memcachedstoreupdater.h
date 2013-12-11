@@ -40,8 +40,6 @@
 #include "signalhandler.h"
 #include "memcachedstore.h"
 
-namespace RegData {
-
 class MemcachedStoreUpdater
 {
 public:
@@ -61,7 +59,5 @@ private:
 
   pthread_t _updater;
 };
-
-} // namespace RegData
 
 #endif

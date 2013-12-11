@@ -37,14 +37,14 @@
 #ifndef AVSTORE_H_
 #define AVSTORE_H_
 
-#include <map>
-#include <pthread.h>
 #include <json/reader.h>
+
+#include "store.h"
 
 class AvStore
 {
 public:
-  AvStore();
+  AvStore(Store* data_store);
   ~AvStore();
 
   void set_av(const std::string& impi,
@@ -55,8 +55,10 @@ public:
                       const std::string& nonce);
 
 private:
-  pthread_mutex_t _av_map_lock;
-  std::map<std::string, std::string> _av_map;
+  Store* _data_store;
+
+  // Expire AV record after 30 seconds.
+  static const int AV_EXPIRY = 30;
 };
 
 #endif

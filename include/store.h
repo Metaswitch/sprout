@@ -1,5 +1,5 @@
 /**
- * @file localstore.h Definitions for the LocalStore class
+ * @file store.h  Abstract base class defining interface to Sprout data store.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,43 +34,39 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef LOCALSTORE_H__
-#define LOCALSTORE_H__
+#ifndef STORE_H_
+#define STORE_H_
 
-#include <map>
-#include <pthread.h>
 
-#include "store.h"
-
-class LocalStore : public Store
+/// @class Store
+///
+/// Abstract base class for the Sprout data store.  This can be used to store
+/// data that must be shared across the Sprout cluster.
+///
+class Store
 {
 public:
-  LocalStore();
-  virtual ~LocalStore();
-
-  void flush_all();
-
-  Store::Status get_data(const std::string& table,
-                         const std::string& key,
-                         std::string& data,
-                         uint64_t& cas);
-  Store::Status set_data(const std::string& table,
-                         const std::string& key,
-                         const std::string& data,
-                         uint64_t cas,
-                         int expiry);
-
-private:
-  typedef struct record
+  /// Must define a destructor, even though it does nothing, to ensure there
+  /// is an entry for it in the vtable.
+  virtual ~Store()
   {
-    std::string data;
-    int expiry;
-    uint64_t cas;
-  } Record;
+  }
 
-  pthread_mutex_t _db_lock;
-  std::map<std::string, Record> _db;
+  /// Status used to indicate success for failure of store operations.
+  typedef enum {OK, NOT_FOUND, DATA_CONTENTION, ERROR} Status;
+
+  /// Gets the data for the specified key in the specified namespace.
+  virtual Status get_data(const std::string& table,
+                          const std::string& key,
+                          std::string& data,
+                          uint64_t& cas) = 0;
+
+  /// Sets the data for the specified key in the specified namespace.
+  virtual Status set_data(const std::string& table,
+                          const std::string& key,
+                          const std::string& data,
+                          uint64_t cas,
+                          int expiry) = 0;
 };
-
 
 #endif
