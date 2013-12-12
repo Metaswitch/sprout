@@ -306,8 +306,10 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
 
-        // Check whether both attempts returned 503 errors, and raise a penalty if so. 
-        if (error_is_503 && first_error_503)
+        // Check whether both attempts returned 503 errors, or the error was 
+        // a 502 (where the HSS is overloaded)  and raise a penalty if so. 
+        if ((error_is_503 && first_error_503) ||
+            ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 502)))
         {
           _load_monitor->incr_penalties();
         }
