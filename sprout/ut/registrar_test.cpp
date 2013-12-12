@@ -752,7 +752,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   SCOPED_TRACE("REGISTER (reregister, about to inject)");
   inject_msg(msg.get());
   SCOPED_TRACE("REGISTER (reregister, injected)");
-  ASSERT_EQ(2, txdata_count());
+  ASSERT_EQ(1, txdata_count());
   SCOPED_TRACE("REGISTER (200 OK)");
   out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
