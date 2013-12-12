@@ -134,7 +134,8 @@ public:
                   bool reg,
                   const SessionCase& sescase,
                   bool expected,
-                  bool third_party_reg);
+                  bool third_party_reg,
+                  bool initial_registration=false);
   void doTest(string description,
               string frag,
               bool reg,
@@ -145,7 +146,8 @@ public:
                  string frag,
                  bool reg,
                  pjsip_msg* msg,
-                 bool expected);
+                 bool expected,
+                 bool initial_registration=false);
 };
 
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
@@ -223,7 +225,8 @@ void IfcHandlerTest::doBaseTest(string description,
                                 bool reg,
                                 const SessionCase& sescase,
                                 bool expected,
-                                bool third_party_reg)
+                                bool third_party_reg,
+                                bool initial_registration)
 {
   SCOPED_TRACE(description);
   std::vector<AsInvocation> application_servers;
@@ -234,6 +237,7 @@ void IfcHandlerTest::doBaseTest(string description,
   Ifcs* ifcs = new Ifcs(root, root->first_node("ServiceProfile"));
   ifcs->interpret(sescase,
                   reg,
+                  initial_registration,
                   msg,
                   application_servers);
   delete ifcs;
@@ -1415,7 +1419,8 @@ void IfcHandlerTest::doRegTest(string description,
                                string frag,
                                bool reg,
                                pjsip_msg* msg,
-                               bool expected)
+                               bool expected,
+                               bool initial_registration)
 {
   doBaseTest(description,
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -1434,7 +1439,8 @@ void IfcHandlerTest::doRegTest(string description,
              reg,
              SessionCase::Originating,
              expected,
-             false);
+             false,
+             initial_registration);
 }
 
 TEST_F(IfcHandlerTest, RegTypes)
@@ -1455,7 +1461,7 @@ TEST_F(IfcHandlerTest, RegTypes)
   pjsip_msg* msg = rdata->msg_info.msg;
 
   doRegTest("Match initial register",
-      	    "    <TriggerPoint>\n"
+            "    <TriggerPoint>\n"
             "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
             "    <SPT>\n"
             "      <ConditionNegated>0</ConditionNegated>\n"
@@ -1466,8 +1472,9 @@ TEST_F(IfcHandlerTest, RegTypes)
             "      </Extension>\n"
             "    </SPT>\n"
             "  </TriggerPoint>\n",
-            false,
+            true,
             msg,
+            true,
             true);
 
   doRegTest("Match reregister",
@@ -1484,7 +1491,8 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             true,
             msg,
-            true);
+            true,
+            false);
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=0"), "$2", "");
   rdata = build_rxdata(str);
@@ -1531,7 +1539,7 @@ TEST_F(IfcHandlerTest, RegTypes)
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
-  msg = rdata->msg_info.msg;  
+  msg = rdata->msg_info.msg;
 
   doRegTest("Illegal registration type",
             "    <TriggerPoint>\n"
@@ -1547,7 +1555,7 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             true,
             msg,
-            false);  
+            false);
 
   doRegTest("No match for initial register when already registered",
             "    <TriggerPoint>\n"
@@ -1563,9 +1571,10 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             true,
             msg,
-            false);  
+            false,
+            false);
 
-  doRegTest("No match for reregister when not already registered",
+  doRegTest("No match for reregister on initial registration",
             "    <TriggerPoint>\n"
             "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
             "    <SPT>\n"
@@ -1577,9 +1586,10 @@ TEST_F(IfcHandlerTest, RegTypes)
             "      </Extension>\n"
             "    </SPT>\n"
             "  </TriggerPoint>\n",
-            false,
+            true,
             msg,
-            false);
+            false,
+            true);
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=0"), "$2", "");
   rdata = build_rxdata(str);
@@ -1600,7 +1610,8 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             false,
             msg,
-            false);
+            false,
+            true);
 
   doRegTest("No match for reregister with expires in contact header set to 0",
             "    <TriggerPoint>\n"
@@ -1616,28 +1627,13 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             true,
             msg,
+            false,
             false);
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
   rdata = build_rxdata(str);
   parse_rxdata(rdata);
   msg = rdata->msg_info.msg;
-
-  doRegTest("No match for unregister when not registered",
-            "    <TriggerPoint>\n"
-            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
-            "    <SPT>\n"
-            "      <ConditionNegated>0</ConditionNegated>\n"
-            "      <Group>0</Group>\n"
-            "      <Method>REGISTER</Method>\n"
-            "      <Extension>\n"
-            "        <RegistrationType>2</RegistrationType>\n"
-            "      </Extension>\n"
-            "    </SPT>\n"
-            "  </TriggerPoint>\n",
-            false,
-            msg,
-            false);
 
   doRegTest("No match for unregister with no expires information",
             "    <TriggerPoint>\n"
@@ -1714,9 +1710,10 @@ TEST_F(IfcHandlerTest, RegTypes)
             "      </Extension>\n"
             "    </SPT>\n"
             "  </TriggerPoint>\n",
-            false,
+            true,
             msg,
-            false);
+            false,
+            true);
 
   doRegTest("No match for reregister with expires header set to 0",
             "    <TriggerPoint>\n"
@@ -1732,6 +1729,7 @@ TEST_F(IfcHandlerTest, RegTypes)
             "  </TriggerPoint>\n",
             true,
             msg,
+            false,
             false);
 }
 
