@@ -160,7 +160,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string nonce;
   std::string autn;
 
-  impu = PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri));
+  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+  impu = PJUtils::public_id_from_uri(to_uri);
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.username.slen != 0))
   {
@@ -172,19 +173,22 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   {
     // private user identity not supplied, so construct a default from the
     // public user identity by stripping the sip: prefix.
-    impi = impu.substr(4);
+    impi = PJUtils::default_private_id_from_uri(to_uri);
     LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
 
-  // Check for an AUTN parameter indicating a resync is required.
-  pjsip_param* p = auth_hdr->credential.digest.other_param.next;
-  while ((p != NULL) && (p != &auth_hdr->credential.digest.other_param))
+  if (auth_hdr != NULL)
   {
-    if (pj_stricmp(&p->name, &STR_AUTN) == 0)
+    // Check for an AUTN parameter indicating a resync is required.
+    pjsip_param* p = auth_hdr->credential.digest.other_param.next;
+    while ((p != NULL) && (p != &auth_hdr->credential.digest.other_param))
     {
-      autn = PJUtils::pj_str_to_string(&p->value);
+      if (pj_stricmp(&p->name, &STR_AUTN) == 0)
+      {
+        autn = PJUtils::pj_str_to_string(&p->value);
+      }
+      p = p->next;
     }
-    p = p->next;
   }
 
   // Get the Authentication Vector from the HSS.

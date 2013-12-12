@@ -36,21 +36,14 @@
 
 // Common STL includes.
 #include <cassert>
-#include <vector>
 #include <map>
-#include <set>
 #include <list>
-#include <queue>
 #include <string>
-#include <iostream>
-#include <sstream>
-#include <fstream>
-#include <iomanip>
-#include <algorithm>
 
 #include <time.h>
 #include <stdint.h>
 
+#include "log.h"
 #include "localstore.h"
 
 
@@ -58,6 +51,7 @@ LocalStore::LocalStore() :
   _db_lock(PTHREAD_MUTEX_INITIALIZER),
   _db()
 {
+  LOG_DEBUG("Created local store");
 }
 
 
@@ -71,6 +65,7 @@ LocalStore::~LocalStore()
 void LocalStore::flush_all()
 {
   pthread_mutex_lock(&_db_lock);
+  LOG_DEBUG("Flushing local store");
   _db.clear();
   pthread_mutex_unlock(&_db_lock);
 }
@@ -81,27 +76,36 @@ Store::Status LocalStore::get_data(const std::string& table,
                                    std::string& data,
                                    uint64_t& cas)
 {
+  LOG_DEBUG("get_data table=%s key=%s", table.c_str(), key.c_str());
+
   Store::Status status = Store::Status::NOT_FOUND;
-  int now = time(NULL);
 
   // Calculate the fully qualified key.
-  std::string fqkey = table + "\\" + key;
+  std::string fqkey = table + "\\\\" + key;
 
   pthread_mutex_lock(&_db_lock);
+
+  uint32_t now = time(NULL);
+
+  LOG_DEBUG("Search store for key %s", fqkey.c_str());
 
   std::map<std::string, Record>::iterator i = _db.find(fqkey);
   if (i != _db.end())
   {
     // Found an existing record, so check the expiry.
     Record& r = i->second;
+    LOG_DEBUG("Found record, expiry = %ld (now = %ld)", r.expiry, now);
     if (r.expiry < now)
     {
       // Record has expired, so remove it from the map and return not found.
+      LOG_DEBUG("Record has expired, remove it from store");
       _db.erase(i);
     }
     else
     {
       // Record has not expired, so return the data and the cas value.
+      LOG_DEBUG("Record has not expires, return %d bytes of data with CAS = %ld",
+                r.data.length(), r.cas);
       data = r.data;
       cas = r.cas;
       status = Store::Status::OK;
@@ -109,6 +113,8 @@ Store::Status LocalStore::get_data(const std::string& table,
   }
 
   pthread_mutex_unlock(&_db_lock);
+
+  LOG_DEBUG("get_data status = %d", status);
 
   return status;
 }
@@ -120,15 +126,19 @@ Store::Status LocalStore::set_data(const std::string& table,
                                    uint64_t cas,
                                    int expiry)
 {
+  LOG_DEBUG("set_data table=%s key=%s CAS=%ld expiry=%ld",
+            table.c_str(), key.c_str(), cas, expiry);
+
   Store::Status status = Store::Status::DATA_CONTENTION;
-  int now = time(NULL);
 
   // Calculate the fully qualified key.
-  std::string fqkey = table + "\\" + key;
+  std::string fqkey = table + "\\\\" + key;
 
   pthread_mutex_lock(&_db_lock);
 
-  now = time(NULL);
+  uint32_t now = time(NULL);
+
+  LOG_DEBUG("Search store for key %s", fqkey.c_str());
 
   std::map<std::string, Record>::iterator i = _db.find(fqkey);
 
@@ -136,21 +146,26 @@ Store::Status LocalStore::set_data(const std::string& table,
   {
     // Found an existing record, so check the expiry and CAS value.
     Record& r = i->second;
+    LOG_DEBUG("Found existing record, CAS = %ld, expiry = %ld (now = %ld)",
+              r.cas, r.expiry, now);
+
     if (((r.expiry >= now) && (cas == r.cas)) ||
         ((r.expiry < now) && (cas == 0)))
     {
       // Supplied CAS is consistent (either because record hasn't expired and
       // CAS matches, or record has expired and CAS is zero) so update the
       // record.
+      LOG_DEBUG("CAS is consistent, update record");
       r.data = data;
       r.cas = ++cas;
-      r.expiry = expiry + now;
+      r.expiry = (uint32_t)expiry + now;
       status = Store::Status::OK;
     }
   }
   else if (cas == 0)
   {
     // No existing record and supplied CAS is zero, so add a new record.
+    LOG_DEBUG("No existing record so insert");
     Record& r = _db[fqkey];
     r.data = data;
     r.cas = 1;

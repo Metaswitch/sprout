@@ -34,15 +34,14 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gtest/gtest.h"
 
 #include "siptest.hpp"
 #include "utils.h"
 #include "analyticslogger.h"
+#include "localstore.h"
+#include "avstore.h"
 #include "hssconnection.h"
 #include "authentication.h"
 #include "fakelogger.hpp"
@@ -61,11 +60,13 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    _local_data_store = new LocalStore();
+    _av_store = new AvStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("ut.cw-ngv.com", _hss_connection, _analytics);
+    pj_status_t ret = init_authentication("ut.cw-ngv.com", _av_store, _hss_connection, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -74,6 +75,8 @@ public:
     destroy_authentication();
     delete _hss_connection;
     delete _analytics;
+    delete _av_store;
+    delete _local_data_store;
 
     SipTest::TearDownTestCase();
   }
@@ -89,10 +92,14 @@ public:
   }
 
 protected:
+  static LocalStore* _local_data_store;
+  static AvStore* _av_store;
   static FakeHSSConnection* _hss_connection;
   static AnalyticsLogger* _analytics;
 };
 
+LocalStore* AuthenticationTest::_local_data_store;
+AvStore* AuthenticationTest::_av_store;
 FakeHSSConnection* AuthenticationTest::_hss_connection;
 AnalyticsLogger* AuthenticationTest::_analytics;
 
@@ -187,21 +194,3 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
   EXPECT_EQ(PJ_FALSE, ret);
 }
 
-TEST_F(AuthenticationTest, NoAuthorizationReg)
-{
-  // Test that Sprout rejects REGISTER requests with no authorization header.
-  AuthenticationMessage msg("REGISTER");
-  msg._auth_hdr = false;
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_TRUE, ret);
-}
-
-TEST_F(AuthenticationTest, AuthorizationReg)
-{
-  // Test that Sprout rejects REGISTER requests where the account can't be found.
-  fakecurl_responses["http://localhost/impi/6505550001%40ut.cw-ngv.com/digest?public_id=sip%3A6505550001%40ut.cw-ngv.com"] = CURLE_REMOTE_FILE_NOT_FOUND;
-  AuthenticationMessage msg("REGISTER");
-  msg._auth_hdr = true;
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_TRUE, ret);
-}

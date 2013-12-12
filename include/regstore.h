@@ -92,16 +92,11 @@ public:
       std::list<std::pair<std::string, std::string> > _params;
     };
 
-    /// Constructor.
-    AoR() :
-      _bindings()
-    {
-    }
+    /// Default Constructor.
+    AoR();
 
-    ~AoR()
-    {
-      clear();
-    }
+    /// Destructor.
+    ~AoR();
 
     /// Make sure copy is deep!
     AoR(const AoR& other);
@@ -125,10 +120,7 @@ public:
     typedef std::map<std::string, Binding*> Bindings;
 
     /// Retrieve all the bindings.
-    inline const Bindings& bindings()
-    {
-      return _bindings;
-    }
+    inline const Bindings& bindings() { return _bindings; }
 
   private:
     /// Map holding the bindings for a particular AoR indexed by binding ID.

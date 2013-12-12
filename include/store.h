@@ -53,7 +53,7 @@ public:
   }
 
   /// Status used to indicate success for failure of store operations.
-  typedef enum {OK, NOT_FOUND, DATA_CONTENTION, ERROR} Status;
+  typedef enum {OK=1, NOT_FOUND=2, DATA_CONTENTION=3, ERROR=4} Status;
 
   /// Gets the data for the specified key in the specified namespace.
   virtual Status get_data(const std::string& table,

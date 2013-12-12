@@ -72,21 +72,28 @@ RegStore::~RegStore()
 /// @param aor_id       The SIP Address of Record for the registration
 RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
 {
+  LOG_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
+
   std::string data;
   uint64_t cas;
   Store::Status status = _data_store->get_data("reg", aor_id, data, cas);
+  LOG_DEBUG("Data store get_data returned %d", status);
 
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
+    LOG_DEBUG("Data store returned a record, so deserialize it");
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
+    LOG_DEBUG("CAS = %ld", aor_data->_cas);
   }
   else if (status == Store::Status::NOT_FOUND)
   {
     // Data store didn't find the record, so create a new blank record.
+    LOG_DEBUG("Data store didn't find a record, so create an empty record");
     aor_data = new AoR();
+    LOG_DEBUG("CAS = %ld", aor_data->_cas);
   }
 
   return aor_data;
@@ -111,6 +118,9 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   int now = time(NULL);
   int max_expires = expire_bindings(aor_data, now);
 
+  LOG_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
+            aor_id.c_str(), aor_data->_cas, max_expires);
+
   std::string data = serialize_aor(aor_data);
 
   Store::Status status = _data_store->set_data("reg",
@@ -118,6 +128,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
                                                data,
                                                aor_data->_cas,
                                                max_expires);
+  LOG_DEBUG("Data store set_data returned %d", status);
 
   return (status == Store::Status::OK);
 }
@@ -253,7 +264,22 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
   return aor_data;
 }
 
+/// Default constructor.
+RegStore::AoR::AoR() :
+  _bindings(),
+  _cas(0)
+{
+}
 
+
+/// Destructor.
+RegStore::AoR::~AoR()
+{
+  clear();
+}
+
+
+/// Copy constructor.
 RegStore::AoR::AoR(const AoR& other)
 {
   for (Bindings::const_iterator i = other._bindings.begin();
@@ -263,6 +289,7 @@ RegStore::AoR::AoR(const AoR& other)
     Binding* bb = new Binding(*i->second);
     _bindings.insert(std::make_pair(i->first, bb));
   }
+  _cas = other._cas;
 }
 
 
@@ -280,6 +307,7 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
       Binding* bb = new Binding(*i->second);
       _bindings.insert(std::make_pair(i->first, bb));
     }
+    _cas = other._cas;
   }
 
   return *this;

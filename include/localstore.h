@@ -64,7 +64,7 @@ private:
   typedef struct record
   {
     std::string data;
-    int expiry;
+    uint32_t expiry;
     uint64_t cas;
   } Record;
 

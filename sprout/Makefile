@@ -73,7 +73,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
-                       memcachedstore_test.cpp \
+                       regstore_test.cpp \
                        registrar_test.cpp \
                        stateful_proxy_test.cpp \
                        bgcfservice_test.cpp \
