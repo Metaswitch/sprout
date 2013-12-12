@@ -43,9 +43,8 @@
 #include "utils.h"
 #include "sas.h"
 #include "memcachedstore.h"
-#include "memcachedstorefactory.h"
 #include "localstore.h"
-#include "localstorefactory.h"
+#include "regstore.h"
 #include "fakelogger.hpp"
 #include "test_utils.hpp"
 

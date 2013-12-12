@@ -43,7 +43,6 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
-#include "localstorefactory.h"
 #include "fakelogger.hpp"
 
 #include "ifchandler.h"

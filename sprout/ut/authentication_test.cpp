@@ -42,7 +42,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "localstorefactory.h"
 #include "analyticslogger.h"
 #include "hssconnection.h"
 #include "authentication.h"

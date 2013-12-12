@@ -43,7 +43,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "localstorefactory.h"
 #include "analyticslogger.h"
 #include "stack.h"
 #include "registrar.h"

@@ -44,7 +44,6 @@
 #include "siptest.hpp"
 #include "utils.h"
 #include "test_utils.hpp"
-#include "localstorefactory.h"
 #include "analyticslogger.h"
 #include "stateful_proxy.h"
 #include "fakelogger.hpp"

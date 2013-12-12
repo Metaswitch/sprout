@@ -46,6 +46,7 @@ extern "C" {
 }
 
 #include "utils.h"
+#include "localstore.h"
 #include "regstore.h"
 #include "fakehssconnection.hpp"
 
