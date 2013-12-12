@@ -58,7 +58,9 @@ HSSConnection::HSSConnection(const std::string& server, LoadMonitor *load_monito
                            load_monitor)),
   _latency_stat("hss_latency_us"),
   _digest_latency_stat("hss_digest_latency_us"),
-  _subscription_latency_stat("hss_subscription_latency_us")
+  _subscription_latency_stat("hss_subscription_latency_us"),
+  _user_auth_latency_stat("hss_user_auth_latency_us"),
+  _location_latency_stat("hss_location_latency_us")
 {
 }
 
@@ -321,4 +323,76 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
     }
   }
   return HTTP_OK;
+}
+
+// Makes a user authorization request, and returns the data as a JSON object.
+Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user_identity,
+                                                 const std::string& public_user_identity,
+                                                 const std::string& visited_network,
+                                                 const std::string& auth_type,
+                                                 SAS::TrailId trail)
+{
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  std::string path = "/impi/" +
+                     Utils::url_escape(private_user_identity) +
+                     "/registration-status" +
+                     "?impu=" + 
+                     Utils::url_escape(public_user_identity);
+
+  if (!visited_network.empty())
+  {
+    path += "&visited-network=" + Utils::url_escape(visited_network);
+  }
+  if (!auth_type.empty())
+  {
+    path += "&auth-type=" + Utils::url_escape(auth_type);
+  }
+
+  Json::Value* rc = get_json_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latency_stat.accumulate(latency_us);
+    _user_auth_latency_stat.accumulate(latency_us);
+  }
+
+  return rc;
+}
+
+/// Makes a location information request, and returns the data as a JSON object. 
+Json::Value* HSSConnection::get_location_data(const std::string& public_user_identity,
+                                              const bool& originating,
+                                              const std::string& auth_type,
+                                              SAS::TrailId trail)
+{
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  std::string path = "/impu/" +
+                     Utils::url_escape(public_user_identity) +
+                     "/location";
+
+  if (originating)
+  {
+    path += "?originating=true";
+  }
+  if (!auth_type.empty())
+  {
+    std::string prefix = !originating ? "?" : "&";
+    path += prefix + "auth-type=" + Utils::url_escape(auth_type);
+  }
+
+  Json::Value* rc = get_json_object(path, trail);
+
+  unsigned long latency_us;
+  if (stopWatch.stop(latency_us))
+  {
+    _latency_stat.accumulate(latency_us);
+    _location_latency_stat.accumulate(latency_us);
+  }
+
+  return rc;
 }

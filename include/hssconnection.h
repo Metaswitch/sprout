@@ -69,6 +69,15 @@ public:
                                const std::string& public_user_id,
                                const std::string& autn,
                                SAS::TrailId trail);
+  Json::Value* get_user_auth_status(const std::string& private_user_identity,
+                                    const std::string& public_user_identity,
+                                    const std::string& visited_network,
+                                    const std::string& auth_type,
+                                    SAS::TrailId trail);
+  Json::Value* get_location_data(const std::string& public_user_identity,
+                                 const bool& originating,
+                                 const std::string& auth_type,
+                                 SAS::TrailId trail);
   long get_subscription_data(const std::string& public_user_identity,
                              const std::string& private_user_identity,
                              std::map<std::string, Ifcs >& service_profiles,
@@ -82,6 +91,8 @@ private:
   StatisticAccumulator _latency_stat;
   StatisticAccumulator _digest_latency_stat;
   StatisticAccumulator _subscription_latency_stat;
+  StatisticAccumulator _user_auth_latency_stat;
+  StatisticAccumulator _location_latency_stat;
 };
 
 #endif

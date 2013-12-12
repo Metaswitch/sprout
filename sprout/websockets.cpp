@@ -53,6 +53,8 @@ extern "C" {
 
 using websocketpp::server;
 
+static unsigned short ws_port;
+
 //
 // mod_ws_transport is the module implementing websockets
 //
@@ -114,7 +116,7 @@ static pj_status_t ws_destroy_transport(pjsip_transport *transport);
 /*
  * ws_transport_register_type()
  *
- * Register the websocket transport type with PJSIP 
+ * Register the websocket transport type with PJSIP
  */
 int PJSIP_TRANSPORT_WS = -1;
 static int ws_transport_register_type(int port)
@@ -148,7 +150,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
   format = "ws";
 
   /* Create pool. */
-  pool = pjsip_endpt_create_pool(endpt, format, PJSIP_POOL_LEN_TRANSPORT, 
+  pool = pjsip_endpt_create_pool(endpt, format, PJSIP_POOL_LEN_TRANSPORT,
       PJSIP_POOL_INC_TRANSPORT);
   if (!pool)
   {
@@ -171,7 +173,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
   }
 
   /* Init lock. */
-  status = pj_lock_create_recursive_mutex(pool, pool->obj_name, 
+  status = pj_lock_create_recursive_mutex(pool, pool->obj_name,
       &tp->base.lock);
   if (status != PJ_SUCCESS)
   {
@@ -209,7 +211,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
                              &tp->base.remote_name.host,
                              &tp->base.key.rem_addr);
 
-  if (status != PJ_SUCCESS) 
+  if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to parse remote address for transport key");
     goto on_error;
@@ -217,7 +219,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
 
   status = pj_sockaddr_set_port(&tp->base.key.rem_addr, tp->base.remote_name.port);
 
-  if (status != PJ_SUCCESS) 
+  if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to set port in transport key");
     goto on_error;
@@ -262,7 +264,7 @@ static pj_status_t ws_transport_create(pjsip_endpoint *endpt,
     *p_transport = &tp->base;
   }
 
-  PJ_LOG(4,(tp->base.obj_name, 
+  PJ_LOG(4,(tp->base.obj_name,
         "Websockets %s started, published address is %.*s:%d",
         pjsip_transport_get_type_desc((pjsip_transport_type_e)tp->base.key.type),
         (int)tp->base.local_name.host.slen,
@@ -279,7 +281,7 @@ on_error:
 /*
  * Called when we receive a web socket message
  */
-static pj_bool_t on_ws_data(ws_transport *ws, 
+static pj_bool_t on_ws_data(ws_transport *ws,
                             server::handler::message_ptr msg)
 {
   enum { MAX_IMMEDIATE_PACKET = 10 };
@@ -344,7 +346,7 @@ static pj_bool_t on_ws_data(ws_transport *ws,
     pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
         rdata);
 
-  /* Expect the web socket to pass us complete messages, 
+  /* Expect the web socket to pass us complete messages,
    * so transport manager should consume entire message
    */
   pj_assert(size_eaten == (pj_size_t)rdata->pkt_info.len);
@@ -437,7 +439,7 @@ class sip_server_handler : public server::handler {
       else{
         LOG_DEBUG("Failed to create WS transport");
       }
-      
+
       connectionMap.insert(
           std::pair<connection_ptr, struct ws_transport*>(con, (struct ws_transport*)transport));
     }
@@ -476,7 +478,7 @@ class sip_server_handler : public server::handler {
 
       /* Instruct transport manager to gracefully shut down transport */
       pjsip_transport_shutdown(&transport->base);
-      
+
       /* Finally decrement ref count (to balance initial inc_ref at start of
        * day) to destroy transport
        */
@@ -493,11 +495,10 @@ std::string sip_server_handler::SUBPROTOCOL = "sip";
 static int websocket_thread(void* p)
 {
   LOG_DEBUG("Started Websockets thread");
-  unsigned short port = 5062;
 
-  PJSIP_TRANSPORT_WS = ws_transport_register_type(port);
+  PJSIP_TRANSPORT_WS = ws_transport_register_type(ws_port);
   LOG_DEBUG("Registered websockets transport with PJSIP, type %d", PJSIP_TRANSPORT_WS);
-  try {       
+  try {
     server::handler::ptr h(new sip_server_handler());
     server sip_endpoint(h);
 
@@ -508,8 +509,8 @@ static int websocket_thread(void* p)
     sip_endpoint.elog().set_level(websocketpp::log::elevel::RERROR);
     sip_endpoint.elog().set_level(websocketpp::log::elevel::FATAL);
 
-    LOG_DEBUG("Starting WebSocket SIP server on port %hu", port);
-    boost::asio::ip::tcp::endpoint ep(boost::asio::ip::tcp::v4(), port);
+    LOG_DEBUG("Starting WebSocket SIP server on port %hu", ws_port);
+    boost::asio::ip::tcp::endpoint ep(boost::asio::ip::tcp::v4(), ws_port);
     sip_endpoint.listen(ep);
   } catch (std::exception& e) {
     LOG_ERROR("Exception: %s", e.what());
@@ -535,11 +536,14 @@ static pj_bool_t ws_transport_on_start()
   return PJ_SUCCESS;
 }
 
-pj_status_t init_websockets()
+pj_status_t init_websockets(unsigned short port)
 {
+  ws_port = port;
+
   pj_status_t status;
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_ws_transport);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+
   return status;
 }
 

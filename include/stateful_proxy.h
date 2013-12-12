@@ -189,8 +189,9 @@ private:
   void update_history_info_reason(pjsip_uri* history_info_uri, int code);
   AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
-  bool handle_incoming_non_cancel(const ServingState& serving_state);
+  bool find_as_chain(const ServingState& serving_state);
   AsChainLink::Disposition handle_originating(Target** pre_target);
+  void common_start_of_terminating_processing();
   bool move_to_terminating_chain();
   AsChainLink::Disposition handle_terminating(Target** pre_target);
   void handle_outgoing_non_cancel(Target* pre_target);
@@ -199,6 +200,7 @@ private:
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
   bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
 
+  void routing_proxy_record_route();
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
                                const TrustBoundary* trust,
@@ -289,7 +291,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 RegStore* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler,
-                                pj_bool_t enable_edge_proxy,
+                                pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
                                 int upstream_proxy_port,
                                 int upstream_proxy_connections,
@@ -300,6 +302,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager);
 
 void destroy_stateful_proxy();
@@ -314,8 +317,8 @@ enum SIPPeerType
 
 
 #ifdef UNIT_TEST
-pj_status_t proxy_process_edge_routing(pjsip_rx_data *rdata,
-                                       pjsip_tx_data *tdata);
+pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
+                                         pjsip_tx_data *tdata);
 #endif
 
 #endif

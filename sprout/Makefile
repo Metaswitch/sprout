@@ -28,7 +28,6 @@ TARGET_SOURCES := logger.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
-                  memcachedstoreupdater.cpp \
 									avstore.cpp \
 									regstore.cpp \
                   xdmconnection.cpp \
@@ -51,7 +50,9 @@ TARGET_SOURCES := logger.cpp \
                   quiescing_manager.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
-                  counter.cpp
+                  counter.cpp \
+                  signalhandler.cpp \
+                  scscfselector.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -91,7 +92,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        dialog_tracker_test.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
-                       counter_test.cpp
+                       counter_test.cpp \
+                       scscfselector_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

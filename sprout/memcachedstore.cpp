@@ -52,7 +52,7 @@
 
 #include "log.h"
 #include "utils.h"
-#include "memcachedstoreupdater.h"
+#include "updater.h"
 #include "memcachedstoreview.h"
 #include "memcachedstore.h"
 
@@ -65,6 +65,7 @@
 ///                     file.
 MemcachedStore::MemcachedStore(bool binary,
                                const std::string& config_file) :
+  _config_file(config_file),
   _updater(NULL),
   _replicas(2),
   _vbuckets(128),
@@ -87,15 +88,9 @@ MemcachedStore::MemcachedStore(bool binary,
   _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS";
   _options += (binary) ? " --BINARY_PROTOCOL" : "";
 
-  if (config_file != "")
-  {
-// LCOV_EXCL_START
-    // Create an updater to keep the store configured appropriately.
-    _updater = new MemcachedStoreUpdater(this, config_file);
-// LCOV_EXCL_STOP
-  }
+  // Create an updater to keep the store configured appropriately.
+  _updater = new Updater<void, MemcachedStore>(this, std::mem_fun(&MemcachedStore::update_view));
 }
-
 
 MemcachedStore::~MemcachedStore()
 {
@@ -455,6 +450,60 @@ Store::Status MemcachedStore::set_data(const std::string& table,
   }
 
   return status;
+}
+
+void MemcachedStore::update_view()
+{
+  // Read the memstore file.
+  std::ifstream f(_config_file);
+  std::vector<std::string> servers;
+  std::vector<std::string> new_servers;
+
+  if (f.is_open())
+  {
+    LOG_STATUS("Reloading memcached configuration from %s file", _config_file.c_str());
+    while (f.good())
+    {
+      std::string line;
+      getline(f, line);
+
+      if (line.length() > 0)
+      {
+        // Read a non-blank line.
+        std::vector<std::string> tokens;
+        Utils::split_string(line, '=', tokens, 0, true);
+        if (tokens.size() != 2)
+        {
+          LOG_ERROR("Malformed %s file", _config_file.c_str());
+          break;
+        }
+
+        LOG_STATUS(" %s=%s", tokens[0].c_str(), tokens[1].c_str());
+
+        if (tokens[0] == "servers")
+        {
+          // Found line defining servers.
+          Utils::split_string(tokens[1], ',', servers, 0, true);
+        }
+        else if (tokens[0] == "new_servers")
+        {
+          // Found line defining new servers.
+          Utils::split_string(tokens[1], ',', new_servers, 0, true);
+        }
+      }
+    }
+    f.close();
+
+    if (servers.size() > 0)
+    {
+      LOG_DEBUG("Update memcached store");
+      this->new_view(servers, new_servers);
+    }
+  }
+  else
+  {
+    LOG_ERROR("Failed to open %s file", _config_file.c_str());
+  }
 }
 
 // LCOV_EXCL_STOP

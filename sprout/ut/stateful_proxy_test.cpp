@@ -133,7 +133,8 @@ namespace SP
       //string requri = _route.empty() ? target : _route;
       //string route = _route.empty() ? "" : string("Route: ").append(target).append("\r\n");
       string requri = target;
-      string route = _route.empty() ? "" : _route.append("\r\n");
+      string route = _route;
+      route = route.empty() ? "" : route.append("\r\n");
 
       int n = snprintf(buf, sizeof(buf),
                        "%1$s %9$s SIP/2.0\r\n"
@@ -315,7 +316,8 @@ public:
   /// Set up test case.  Caller must clear host_mapping.
   static void SetUpTestCase(const string& edge_upstream_proxy,
                             const string& ibcf_trusted_hosts,
-                            bool ifcs)
+                            bool ifcs,
+                            const string& icscf_uri_str = "")
   {
     SipTest::SetUpTestCase(false);
 
@@ -338,6 +340,7 @@ public:
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
+    _icscf_uri_str = icscf_uri_str;
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
                                           _call_services,
@@ -353,6 +356,7 @@ public:
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
+                                          _icscf_uri_str,
                                           &_quiescing_manager);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
@@ -440,6 +444,7 @@ protected:
   static BgcfService* _bgcf_service;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
+  static string _icscf_uri_str;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -448,8 +453,8 @@ protected:
                      SP::Message& msg,
                      string route,
                      bool expect_100,
-                     bool pani_AB,
-                     bool pani_BA,
+                     bool expect_trusted_headers_on_requests,
+                     bool expect_trusted_headers_on_responses,
                      bool expect_orig,
                      bool pcpi);
 };
@@ -464,6 +469,7 @@ EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
+string StatefulProxyTestBase::_icscf_uri_str;
 QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
@@ -471,8 +477,13 @@ class StatefulProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
+    SetUpTestCase("");
+  }
+
+  static void SetUpTestCase(const string& icscf_uri_str)
+  {
     cwtest_clear_host_mapping();
-    StatefulProxyTestBase::SetUpTestCase("", "", false);
+    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_uri_str);
   }
 
   static void TearDownTestCase()
@@ -489,7 +500,7 @@ public:
   }
 
 protected:
-  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers);
+  void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true);
   void doFastFailureFlow(SP::Message& msg, int st_code);
   void doSlowFailureFlow(SP::Message& msg, int st_code);
   void setupForkedFlow(SP::Message& msg);
@@ -584,11 +595,317 @@ public:
   }
 
   void doAsOriginated(SP::Message& msg, bool expect_orig);
+  void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
+
+};
+
+class IcscfTest : public StatefulProxyTest
+{
+public:
+  static void SetUpTestCase()
+  {
+    StatefulProxyTest::SetUpTestCase("sip:icscf");
+    cwtest_add_host_mapping("icscf", "10.8.8.1");
+  }
+
+  static void TearDownTestCase()
+  {
+    StatefulProxyTest::TearDownTestCase();
+  }
+
+  IcscfTest()
+  {
+  }
+
+  ~IcscfTest()
+  {
+  }
 };
 
 
 using SP::Message;
 
+void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)";
+  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>2</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>QWERTY_UIOP</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:sholes.example.com</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                  <InitialFilterCriteria>
+                                    <Priority>3</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)";
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
+  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+  TransportFlow tpAS4(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
+
+  pjsip_rr_hdr* as1_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as1_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as1_rr_hdr->name_addr.uri)->host = pj_str("1.2.3.4");
+
+  pjsip_rr_hdr* as2_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as2_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as2_rr_hdr->name_addr.uri)->host = pj_str("4.2.3.4");
+
+  pjsip_rr_hdr* as3_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as3_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as3_rr_hdr->name_addr.uri)->host = pj_str("5.2.3.4");
+
+  pjsip_rr_hdr* as4_rr_hdr = pjsip_rr_hdr_create(stack_data.pool);
+  as4_rr_hdr->name_addr.uri = (pjsip_uri*)pjsip_sip_uri_create(stack_data.pool, false);
+  ((pjsip_sip_uri*)as4_rr_hdr->name_addr.uri)->host = pj_str("6.2.3.4");
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS1 turns it around (acting as proxy)
+  const pj_str_t STR_ROUTE = pj_str("Route");
+
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as1_rr_hdr);
+  }
+
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS1);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS2
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS2.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS2 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as2_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS2);
+  free_txdata();
+
+  // 100 Trying goes back to AS2
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS3
+  SCOPED_TRACE("INVITE (3)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS3.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS3 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as3_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS3);
+  free_txdata();
+
+  // 100 Trying goes back to AS3
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS4
+  SCOPED_TRACE("INVITE (4)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS4.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+
+  // ---------- AS4 turns it around (acting as proxy)
+  if (app_servers_record_route)
+  {
+    pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)as4_rr_hdr);
+  }
+
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS4);
+  free_txdata();
+
+  // 100 Trying goes back to AS4
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to final destination
+  SCOPED_TRACE("INVITE (Z)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpBono.expect_target(current_txdata(), false);
+
+  EXPECT_THAT(get_headers(out, "Record-Route"), testing::MatchesRegex(record_route_regex));
+
+  free_txdata();
+}
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 // Check the transport each message is on, and the headers.
@@ -600,8 +917,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
                                           SP::Message& msg,    //< Message to use for testing.
                                           string route,        //< Route header to be used on INVITE
                                           bool expect_100,     //< Will we get a 100 Trying?
-                                          bool pani_AB,        //< Should P-A-N-I be passed on requests?
-                                          bool pani_BA,        //< Should P-A-N-I be passed on responses?
+                                          bool expect_trusted_headers_on_requests, //< Should P-A-N-I/P-V-N-I be passed on requests?
+                                          bool expect_trusted_headers_on_responses, //< Should P-A-N-I/P-V-N-I be passed on responses?
                                           bool expect_orig,    //< Should we expect the INVITE to be marked originating?
                                           bool pcpi)           //< Should we expect a P-Called-Party-ID?
 {
@@ -611,12 +928,18 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   pjsip_tx_data* prack = NULL;
 
   // Extra fields to insert in all requests and responses.
-  string extra = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
+  string pani = "P-Access-Network-Info: ietf-carrier-pigeon;rfc=1149";
+  string pvni = "P-Visited-Network-Id: other.net, \"Other Network\"";
+  string pvani = pani + "\r\n" + pvni;
+
   if (!msg._extra.empty())
   {
     msg._extra.append("\r\n");
   }
-  msg._extra.append(extra);
+
+  msg._extra.append(pani);
+  msg._extra.append("\r\n");
+  msg._extra.append(pvni);
 
   // ---------- Send INVITE C->X
   SCOPED_TRACE("INVITE");
@@ -634,7 +957,8 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     tpA->expect_target(current_txdata(), true);  // Requests always come back on same transport
     msg.set_route(out);
 
-    // Don't bother testing P-Access-Network-Info, because it never gets inserted into such messages.
+    // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id,
+    // because they never get inserted into such messages.
     free_txdata();
   }
 
@@ -644,8 +968,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "INVITE";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "INVITE";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "INVITE";
 
   // Check originating.
   if (expect_orig)
@@ -664,7 +991,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
 
   // ---------- Send 183 Session Progress back X<-S
   SCOPED_TRACE("183 Session Progress");
-  inject_msg(respond_to_txdata(invite, 183, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 183, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // 183 goes back C<-X
@@ -674,8 +1001,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
+  // Check P-Access-Network-Info and P-Visited-Network-Id
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "183 Session Progress";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "183 Session Progress";
 
   free_txdata();
 
@@ -691,14 +1021,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("PRACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "PRACK";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "PRACK";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "PRACK";
 
   prack = pop_txdata();
 
   // ---------- Send 200 OK back X<-S
   SCOPED_TRACE("200 OK (PRACK)");
-  inject_msg(respond_to_txdata(prack, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(prack, 200, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // OK goes back C<-X
@@ -708,14 +1041,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (PRACK)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (PRACK)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (PRACK)";
 
   free_txdata();
 
   // ---------- Send 200 OK back X<-S
   SCOPED_TRACE("200 OK (INVITE)");
-  inject_msg(respond_to_txdata(invite, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 200, "", pvani), tpB);
   ASSERT_EQ(1, txdata_count());
 
   // OK goes back C<-X
@@ -725,8 +1061,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE)";
 
   free_txdata();
 
@@ -742,14 +1081,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "ACK";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "ACK";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "ACK";
 
   free_txdata();
 
   // ---------- Send a retransmission of that 200 OK back X<-S.  Should be processed statelessly.
   SCOPED_TRACE("200 OK (INVITE) (rexmt)");
-  inject_msg(respond_to_txdata(invite, 200, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 200, "", pvani), tpB);
   pjsip_tx_data_dec_ref(invite);
   invite = NULL;
   ASSERT_EQ(1, txdata_count());
@@ -761,10 +1103,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.  This will always be stripped,
-  // because we handle these retransmissions statelessly and hence
-  // don't have any info on trust boundary handling.
+  // Check P-Access-Network-Info and P-Visited-Network-Id. These will always be stripped,
+  // because we handle these retransmissions statelessly and hence don't have any info on
+  // trust boundary handling.
   EXPECT_EQ("", get_headers(out, "P-Access-Network-Info")) << "200 OK (INVITE) (rexmt)";
+  EXPECT_EQ("", get_headers(out, "P-Visited-Network-Id")) << "200 OK (INVITE) (rexmt)";
 
   free_txdata();
 
@@ -782,12 +1125,15 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("BYE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "BYE";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "BYE";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "BYE";
 
   // ---------- Send a reply to that X<-S
   SCOPED_TRACE("200 OK (BYE)");
-  inject_msg(respond_to_current_txdata(200, "", extra), tpB);
+  inject_msg(respond_to_current_txdata(200, "", pvani), tpB);
   poll();
   ASSERT_EQ(1, txdata_count());
 
@@ -796,8 +1142,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   RespMatcher(200).matches(out);
   tpA->expect_target(current_txdata(), true);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "200 OK (BYE)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "200 OK (BYE)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "200 OK (BYE)";
 
   free_txdata();
 
@@ -817,7 +1166,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
     RespMatcher(100).matches(out);
     tpA->expect_target(current_txdata(), true);
 
-    // Don't bother testing P-Access-Network-Info, because this is point-to-point.
+    // Don't bother testing P-Access-Network-Info or P-Visited-Network-Id, because this is point-to-point.
     free_txdata();
   }
 
@@ -827,14 +1176,17 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_AB ? extra : "", get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "INVITE (#2)";
+  EXPECT_EQ(expect_trusted_headers_on_requests ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "INVITE (#2)";
 
   invite = pop_txdata();
 
   // ---------- Send 404 Not Found back X<-S
   SCOPED_TRACE("404 Not Found (INVITE #2)");
-  inject_msg(respond_to_txdata(invite, 404, "", extra), tpB);
+  inject_msg(respond_to_txdata(invite, 404, "", pvani), tpB);
   poll();
   ASSERT_EQ(2, txdata_count());
 
@@ -843,7 +1195,7 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("ACK").matches(out));
   tpB->expect_target(current_txdata(), tpBset);
 
-  // Don't check P-Access-Network-Info, because it's point-to-point.
+  // Don't check P-Access-Network-Info or P-Visited-Network-Id, because it's point-to-point.
 
   free_txdata();
 
@@ -854,8 +1206,11 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   msg.set_route(out);
   msg._cseq++;
 
-  // Check P-Access-Network-Info.
-  EXPECT_EQ(pani_BA ? extra : "", get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
+  // Check P-Access-Network-Info and P-Visited-Network-Id.
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pani : "",
+            get_headers(out, "P-Access-Network-Info")) << "404 Not Found (INVITE #2)";
+  EXPECT_EQ(expect_trusted_headers_on_responses ? pvni : "",
+            get_headers(out, "P-Visited-Network-Id")) << "404 Not Found (INVITE #2)";
 
   free_txdata();
 
@@ -867,13 +1222,14 @@ void StatefulProxyTestBase::doTestHeaders(TransportFlow* tpA,  //< Alice's trans
   ASSERT_EQ(0, txdata_count());
   // should be swallowed by core.
 }
- 
+
 
 /// Test a message results in a successful flow. The outgoing INVITE's
 /// URI is verified.
 void StatefulProxyTest::doSuccessfulFlow(Message& msg,
                                          testing::Matcher<string> uri_matcher,
-                                         list<HeaderMatcher> headers)
+                                         list<HeaderMatcher> headers,
+                                         bool include_ack_and_bye)
 {
   SCOPED_TRACE("");
   pjsip_msg* out;
@@ -910,33 +1266,39 @@ void StatefulProxyTest::doSuccessfulFlow(Message& msg,
   msg._cseq++;
   free_txdata();
 
-  // Send ACK
-  msg._method = "ACK";
-  inject_msg(msg.get_request());
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  ReqMatcher req2("ACK");
-  ASSERT_NO_FATAL_FAILURE(req2.matches(out));
-  free_txdata();
+  // If we're testing Sprout functionality, we want to exclude the ACK
+  // and BYE requests, as Sprout wouldn't see them in normal circumstances.
+  if (include_ack_and_bye)
+  {
 
-  // Send a subsequent request.
-  msg._method = "BYE";
-  inject_msg(msg.get_request());
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  ReqMatcher req3("BYE");
-  ASSERT_NO_FATAL_FAILURE(req3.matches(out));
+    // Send ACK
+    msg._method = "ACK";
+    inject_msg(msg.get_request());
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    ReqMatcher req2("ACK");
+    ASSERT_NO_FATAL_FAILURE(req2.matches(out));
+    free_txdata();
 
-  // Send a reply to that.
-  inject_msg(respond_to_current_txdata(200));
-  poll();
-  ASSERT_EQ(1, txdata_count());
-  out = current_txdata()->msg;
-  RespMatcher(200).matches(out);
+    // Send a subsequent request.
+    msg._method = "BYE";
+    inject_msg(msg.get_request());
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    ReqMatcher req3("BYE");
+    ASSERT_NO_FATAL_FAILURE(req3.matches(out));
 
-  free_txdata();
+    // Send a reply to that.
+    inject_msg(respond_to_current_txdata(200));
+    poll();
+    ASSERT_EQ(1, txdata_count());
+    out = current_txdata()->msg;
+    RespMatcher(200).matches(out);
+
+    free_txdata();
+  }
 }
 
 /// Test a message results in an immediate failure.
@@ -1057,6 +1419,20 @@ TEST_F(StatefulProxyTest, TestStrictRouteThrough)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*nexthop@intermediate.com.*"), hdrs);
 }
 
+TEST_F(StatefulProxyTest, TestMultipleRouteHeaders)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._extra = "Route: <sip:all.the.sprouts;transport=tcp>\r\nRoute: <sip:homedomain>";
+  list<HeaderMatcher> hdrs;
+  // Expect no Route headers out, as they all point to us
+
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+}
+
+
 TEST_F(StatefulProxyTest, TestNonLocal)
 {
   SCOPED_TRACE("");
@@ -1067,6 +1443,23 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestTerminatingPCV)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+
+  // Test that a segfault previously seen when not doing originating
+  // handling on a call with a P-Charging-Vector does not reoccur.
+  Message msg;
+  msg._extra = "P-Charging-Vector: icid-value=3";
+  msg._to = "lasthop";
+  msg._todomain = "destination.com";
+  msg._requri = "sip:6505551234@homedomain";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
 TEST_F(StatefulProxyTest, DISABLED_TestLooseRoute)  // @@@KSW not quite - how does this work again?
@@ -1093,36 +1486,87 @@ TEST_F(StatefulProxyTest, TestExternal)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
 
-TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
+TEST_F(StatefulProxyTest, TestExternalRecordRoute)
 {
   SCOPED_TRACE("");
   Message msg;
   msg._to = "+15108580271";
-  msg._extra = "P-Asserted-Identity: <sip:+16505551000@homedomain>";
+  msg._todomain = "ut.cw-ngv.com";
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
+{
+  SCOPED_TRACE("");
+  fakecurl_responses["http://localhost/impu/sip%3A%2B16505551000%40homedomain"] =
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:+16505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
+  Message msg;
+  msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
 {
   SCOPED_TRACE("");
   Message msg;
+  fakecurl_responses["http://localhost/impu/sip%3A%2B15108581234%40homedomain"] =
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:+15108581234@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
   msg._to = "+15108580271";
   msg._from = "+15108581234";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>";
+
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
 {
   SCOPED_TRACE("");
   Message msg;
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
   msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+
   cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 /// Test a forked flow - setup phase.
@@ -1459,13 +1903,13 @@ TEST_F(StatefulProxyTest, TestSIPMessageSupport)
   pjsip_msg* out;
   pjsip_tx_data* message = NULL;
 
-  // Send MESSAGE 
+  // Send MESSAGE
   SCOPED_TRACE("MESSAGE");
   msg._method = "MESSAGE";
   inject_msg(msg.get_request(), _tp_default);
   poll();
 
-  // MESSAGE passed on 
+  // MESSAGE passed on
   SCOPED_TRACE("MESSAGE (S)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(ReqMatcher("MESSAGE").matches(out));
@@ -1553,7 +1997,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
 
   // Check integrity=? marking.
   actual = get_headers(tdata->msg, "Authorization");
-  EXPECT_EQ("Authorization: Digest username=\"sip:6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
+  EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
 
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.trusted_port, tdata);
@@ -2407,6 +2851,27 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   free_txdata();
 }
 
+// Test flows into Bono (P-CSCF), first hop with Route header.
+TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
+{
+  SCOPED_TRACE("");
+
+  // Register client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken, 300, "no", "", true);
+
+  Message msg;
+  msg._first_hop = true;
+  msg._via = "10.83.18.37:36531;transport=tcp";
+  msg._extra = "Route: <sip:upstreamnode;lr;orig>";
+  list<HeaderMatcher> hdrs;
+  // Strip PANI in outbound direction - leaving the trust zone.
+  // This is originating; mark it so.
+  doTestHeaders(&tp, true, _tp_default, false, msg, "", false, true, false, true, false);
+}
+
 
 // Test flows into IBCF, in particular for header stripping.
 TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
@@ -2560,6 +3025,48 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   RespMatcher r1(403);
   r1.matches(tdata->msg);
   tp->expect_target(tdata, true);  // to source
+
+  free_txdata();
+  delete tp;
+}
+
+// Check that ;orig on P-CSCF trunk is legal and gets passed through
+// on the upstream Route header.
+TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
+{
+  SCOPED_TRACE("");
+
+  // Set up default message.
+  Message msg;
+  msg._method = "INVITE";
+  msg._to = "public_hostname";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "homedomain";
+  msg._requri = "sip:6505551000@homedomain";
+  msg._from = "+12125551212";
+  msg._fromdomain = "foreign-domain.example.com";
+
+  TransportFlow* tp;
+  pjsip_tx_data* tdata;
+  string actual;
+
+  // Get a connection from the trusted host.
+  tp = new TransportFlow(TransportFlow::Protocol::TCP, TransportFlow::Trust::TRUSTED, "10.17.17.111", 36533);
+
+  // Send an INVITE from the trusted host.
+  msg._unique++;
+  inject_msg(msg.get_request(), tp);
+
+  // Check it's the right kind and method, and goes to the right place.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that the orig parameter is copied onto the Route header
+  // Bono passes upstream.
+  actual = get_headers(tdata->msg, "Route");
+  EXPECT_THAT(actual, testing::MatchesRegex(".*;orig.*"));
 
   free_txdata();
   delete tp;
@@ -2836,6 +3343,7 @@ TEST_F(IscTest, SimpleReject)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3011,6 +3519,7 @@ TEST_F(IscTest, SimpleAccept)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3098,6 +3607,7 @@ TEST_F(IscTest, SimpleRedirect)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3187,6 +3697,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   msg._todomain = "";
   msg._fromdomain = "remote-base.mars.int";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3275,6 +3786,7 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3360,6 +3872,7 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._requri = "sip:6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
 
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
@@ -3420,249 +3933,108 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
 // Test more interesting ISC (AS) flow.
 TEST_F(IscTest, InterestingAs)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
-                                R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:4.2.3.4:56788;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)";
-  fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
-                                R"(<?xml version="1.0" encoding="UTF-8"?>
-                                <IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
-                                  <InitialFilterCriteria>
-                                    <Priority>1</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>2</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>QWERTY_UIOP</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:sholes.example.com</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                  <InitialFilterCriteria>
-                                    <Priority>3</Priority>
-                                    <TriggerPoint>
-                                    <ConditionTypeCNF>0</ConditionTypeCNF>
-                                    <SPT>
-                                      <ConditionNegated>0</ConditionNegated>
-                                      <Group>0</Group>
-                                      <Method>INVITE</Method>
-                                      <Extension></Extension>
-                                    </SPT>
-                                  </TriggerPoint>
-                                  <ApplicationServer>
-                                    <ServerName>sip:6.2.3.4:56786;transport=UDP</ServerName>
-                                    <DefaultHandling>0</DefaultHandling>
-                                  </ApplicationServer>
-                                  </InitialFilterCriteria>
-                                </ServiceProfile></IMSSubscription>)";
+}
 
-  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
-  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
-  TransportFlow tpAS2(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "4.2.3.4", 56788);
-  TransportFlow tpAS3(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
-  TransportFlow tpAS4(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "6.2.3.4", 56786);
+// Test that when Sprout is configured to Record-Route itself only at
+// the start and end of all processing, it does.
+TEST_F(IscTest, RecordRoutingTest)
+{
+  // Expect 2 Record-Routes:
+  // - on start of originating handling
+  // - AS1's Record-Route
+  // - AS2's Record-Route
+  // - AS3's Record-Route
+  // - AS4's Record-Route
+  // - on end of terminating handling
 
-  // ---------- Send INVITE
-  // We're within the trust boundary, so no stripping should occur.
-  Message msg;
-  msg._via = "10.99.88.11:12345;transport=TCP";
-  msg._to = "6505551234@homedomain";
-  msg._todomain = "";
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
-
-  msg._method = "INVITE";
-  inject_msg(msg.get_request(), &tpBono);
-  poll();
-  ASSERT_EQ(2, txdata_count());
-
-  // 100 Trying goes back to bono
-  pjsip_msg* out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS1
-  SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
-  ReqMatcher r1("INVITE");
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS1.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS1 turns it around (acting as proxy)
-  const pj_str_t STR_ROUTE = pj_str("Route");
-  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS1);
-  free_txdata();
-
-  // 100 Trying goes back to AS1
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS1.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS2
-  SCOPED_TRACE("INVITE (2)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS2.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS2 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS2);
-  free_txdata();
-
-  // 100 Trying goes back to AS2
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS2.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS3
-  SCOPED_TRACE("INVITE (3)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS3.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS3 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS3);
-  free_txdata();
-
-  // 100 Trying goes back to AS3
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS3.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to AS4
-  SCOPED_TRACE("INVITE (4)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS4.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
-  EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
-
-  // ---------- AS4 turns it around (acting as proxy)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-  inject_msg(out, &tpAS4);
-  free_txdata();
-
-  // 100 Trying goes back to AS4
-  out = current_txdata()->msg;
-  RespMatcher(100).matches(out);
-  tpAS4.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
-  free_txdata();
-
-  // INVITE passed on to final destination
-  SCOPED_TRACE("INVITE (Z)");
-  out = current_txdata()->msg;
-  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpBono.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
-  EXPECT_EQ("", get_headers(out, "Route"));
-
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
   free_txdata();
 }
 
+// Test that when Sprout is configured to Record-Route itself at
+// the start and end of terminating and originating processing, it does.
+TEST_F(IscTest, RecordRoutingTestStartAndEnd)
+{
+  stack_data.record_route_on_completion_of_originating = true;
+  stack_data.record_route_on_initiation_of_terminating = true;
+
+  // Expect 2 Record-Routes:
+  // - on start of originating handling
+  // - AS1's Record-Route
+  // - AS2's Record-Route
+  // - on end of originating handling/on start of terminating handling
+  // (collapsed together as they're identical)
+  // - AS3's Record-Route
+  // - AS4's Record-Route
+  // - on end of terminating handling
+
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+  stack_data.record_route_on_completion_of_originating = false;
+  stack_data.record_route_on_initiation_of_terminating = false;
+}
+
+
+// Test that when Sprout is configured to Record-Route itself on each
+// hop, it does.
+TEST_F(IscTest, RecordRoutingTestEachHop)
+{
+  stack_data.record_route_on_every_hop = true;
+  // Expect 9 Record-Routes:
+  // - between the endpoint and AS1
+  // - AS1's Record-Route
+  // - between AS1 and AS2
+  // - AS2's Record-Route
+  // - between AS2 and AS3
+  // - AS3's Record-Route
+  // - between AS3 and AS4
+  // - AS4's Record-Route
+  // - between AS4 and the endpoint
+
+  // In reality we'd expect 10 (instead of having one between AS2 and
+  // AS3, we'd have two - one for conclusion of originating processing
+  // and one for initiation of terminating processing) but we don't
+  // split originating and terminating handling like that yet.
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:6.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:5.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:4.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:1.2.3.4>\r\n"
+                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+  stack_data.record_route_on_every_hop = false;
+}
+
+// Test that Sprout only adds a single Record-Route if none of the Ases
+// Record-Route themselves.
+TEST_F(IscTest, RecordRoutingTestCollapse)
+{
+  // Expect 1 Record-Route
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+}
+
+// Test that even when Sprout is configured to Record-Route itself on each
+// hop, it only adds a single Record-Route if none of the Ases
+// Record-Route themselves.
+TEST_F(IscTest, RecordRoutingTestCollapseEveryHop)
+{
+  stack_data.record_route_on_every_hop = true;
+  // Expect 1 Record-Route
+  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+  stack_data.record_route_on_every_hop = false;
+}
 
 // Test AS-originated flow - orig.
 void IscTest::doAsOriginated(Message& msg, bool expect_orig)
@@ -3991,7 +4363,7 @@ TEST_F(IscTest, Cdiv)
 }
 
 // Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
-TEST_F(IscTest, TerminatingWithEnumRewrite)
+TEST_F(IscTest, BothEndsWithEnumRewrite)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   fakecurl_responses["http://localhost/impu/sip%3A6505551234%40homedomain"] =
@@ -4063,6 +4435,84 @@ TEST_F(IscTest, TerminatingWithEnumRewrite)
               testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  free_txdata();
+}
+
+// Test that ENUM lookups are not done if we are only doing
+// terminating processing.
+TEST_F(IscTest, TerminatingWithNoEnumRewrite)
+{
+  register_uri(_store, _hss_connection, "1115551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  fakecurl_responses["http://localhost/impu/sip%3A1115551234%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                  <PublicIdentity><Identity>sip:1115551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>0</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:5.2.3.4:56787;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)";
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, TransportFlow::Trust::UNTRUSTED, "10.99.88.11", 12345);
+  TransportFlow tpAS1(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "5.2.3.4", 56787);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "1115551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain>";
+  msg._requri = "sip:1115551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS1.expect_target(current_txdata(), false);
+
+  // These fields of the message will only be filled in correctly if we have
+  // not done an ENUM lookup before applying terminating services (as
+  // ENUM is only applied when originating)
+
+  EXPECT_EQ("sip:1115551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:1115551234@homedomain>;sescase=term;regstate=reg"));
 
   free_txdata();
 }
@@ -5156,6 +5606,36 @@ TEST_F(IscTest, SimpleOptionsAccept)
   msg.set_route(out);
   msg._cseq++;
   free_txdata();
+}
+
+TEST_F(IcscfTest, TestOriginating)
+{
+  SCOPED_TRACE("");
+  fakecurl_responses["http://localhost/impu/sip%3A6505551000%40homedomain"] =
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                </ServiceProfile></IMSSubscription>)";
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  // Since we have an I-CSCF configured, we expect the call to be routed to it.
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:icscf;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
+
+TEST_F(IcscfTest, TestTerminating)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  list<HeaderMatcher> hdrs;
+  // Although we have an I-CSCF configured, this is a terminating call so we don't
+  // expect the call to be routed to it.
+  hdrs.push_back(HeaderMatcher("Route"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 

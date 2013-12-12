@@ -82,6 +82,7 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
+        sprout_rr_level="pcscf"
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.
@@ -95,10 +96,34 @@ get_settings()
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         log_level=2
+        authentication=Y
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
-        [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
-        [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
-        [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+
+        # Work out which features are enabled.
+        ENUM_FILE_ENABLED=Y
+        MMTEL_SERVICES_ENABLED=Y
+        if [ -d /etc/clearwater/features.d ]
+        then
+          for file in $(find /etc/clearwater/features.d -type f)
+          do
+            [ -r $file ] && . $file
+          done
+        fi
+
+        if [ $ENUM_FILE_ENABLED = Y ]
+        then
+          [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
+          [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
+          [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+        fi
+
+        if [ $MMTEL_SERVICES_ENABLED = Y ]
+        then
+          [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms $xdms_hostname"
+        fi
+
+        [ "$authentication" != "Y" ] || authentication_arg="--authentication"
+        [ -z "$icscf_uri" ] || icscf_uri_arg="--icscf $icscf_uri"
 }
 
 #
@@ -132,13 +157,16 @@ do_start()
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
                      --hss $hs_hostname
-                     --xdms $xdms_hostname
+                     $xdms_hostname_arg
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
+                     $icscf_uri_arg
                      --sas $sas_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
+                     --record-routing-model $sprout_rr_level
+                     $authentication_arg
                      -a $log_directory
                      -F $log_directory
                      -L $log_level"
@@ -212,6 +240,32 @@ do_reload() {
         # then implement that here.
         #
         start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGQUIT to the daemon/service
+#
+do_start_quiesce() {
+        start-stop-daemon --stop --signal QUIT --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGQUIT to the daemon/service and waits for it to terminate
+#
+do_quiesce() {
+        # The timeout after forever is irrelevant - start-stop-daemon requires one but it doesn't
+        # actually affect processing.
+        start-stop-daemon --stop --retry QUIT/forever/10 --quiet --pidfile $PIDFILE --name $EXECNAME
+        return 0
+}
+
+#
+# Sends a SIGUSR1 to the daemon/service
+#
+do_unquiesce() {
+        start-stop-daemon --stop --signal USR1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -296,9 +350,21 @@ case "$1" in
                 ;;
         esac
         ;;
+  start-quiesce)
+        log_daemon_msg "Start quiescing $DESC" "$NAME"
+        do_start_quiesce
+        ;;
+  quiesce)
+        log_daemon_msg "Quiescing $DESC" "$NAME"
+        do_quiesce
+        ;;
+  unquiesce)
+        log_daemon_msg "Unquiesce $DESC" "$NAME"
+        do_unquiesce
+        ;;
   *)
-        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
+        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload|abort-restart|start-quiesce|quiesce|unquiesce}" >&2
         exit 3
         ;;
 esac

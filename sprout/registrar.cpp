@@ -395,17 +395,17 @@ void process_register_request(pjsip_rx_data* rdata)
   // becomes searchable.
   SAS::TrailId trail = get_trail(rdata);
   LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
-  SAS::Marker start_marker(trail, SASMarker::INIT_TIME, 1u);
+  SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  SAS::Marker calling_dn(trail, SASMarker::CALLING_DN, 1u);
+  SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
   pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
   calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
   SAS::report_marker(calling_dn);
 
-  SAS::Marker cid_marker(trail, SASMarker::SIP_CALL_ID, 1u);
+  SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
   cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-  SAS::report_marker(cid_marker, SAS::Marker::Scope::TrailGroup);
+  SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
 
   // Query the HSS for the associated URIs.
 
@@ -593,7 +593,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
   pj_strdup(tdata->pool,
             &service_route_uri->host,
-            &stack_data.home_domain);
+            &stack_data.sprout_cluster_domain);
   service_route_uri->port = stack_data.trusted_port;
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
@@ -642,7 +642,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_tx_data_dec_ref(tdata);
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
-  SAS::Marker end_marker(trail, SASMarker::END_TIME, 1u);
+  SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
   delete aor_data;
 }

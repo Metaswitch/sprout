@@ -43,16 +43,24 @@
 #include <map>
 #include <string>
 
+#include <functional>
+#include "updater.h"
+
 class BgcfService
 {
 public:
   BgcfService(std::string configuration = "./bgcf.json");
   ~BgcfService();
 
+  /// Updates the bgcf routes
+  void update_routes();
+
   std::vector<std::string> get_route(const std::string &domain) const;
 
 private:
   std::map<std::string, std::vector<std::string>> _routes; 
+  std::string _configuration;
+  Updater<void, BgcfService>* _updater;
 };
 
 #endif

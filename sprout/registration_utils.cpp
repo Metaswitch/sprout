@@ -102,8 +102,9 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
     pjsip_tx_data *tdata;
 
-    std::string bono_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.home_domain), pj_strlen(&stack_data.home_domain))+">";
-    const pj_str_t bono_uri = pj_str(const_cast<char *>(bono_uri_string.c_str()));
+    std::string sprout_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.sprout_cluster_domain),
+                                                        pj_strlen(&stack_data.sprout_cluster_domain))+">";
+    const pj_str_t sprout_uri = pj_str(const_cast<char *>(sprout_uri_string.c_str()));
 
     std::string served_user_uri_string = "<"+served_user+">";
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
@@ -111,7 +112,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
     status = pjsip_endpt_create_request(stack_data.endpt,
                                &method,       // Method
-                               &bono_uri,     // Target
+                               &sprout_uri,     // Target
                                &served_user_uri,      // From
                                &served_user_uri,      // To
                                &served_user_uri,      // Contact

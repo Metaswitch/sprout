@@ -92,7 +92,7 @@ std::string aor_from_uri(const pjsip_sip_uri* uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
 
-std::string default_private_id_from_uri(const pjsip_sip_uri* uri);
+std::string default_private_id_from_uri(const pjsip_uri* uri);
 
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
@@ -104,6 +104,8 @@ pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t& name);
 pjsip_uri* next_hop(pjsip_msg* msg);
 
 pj_bool_t is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr);
+
+pj_bool_t is_top_rr_local(const pjsip_msg* msg);
 
 /// Checks whether the top route header in the message refers to this node,
 /// and optionally returns the headers.  If there no Route headers it returns
