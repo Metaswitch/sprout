@@ -321,7 +321,8 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
-    _store = RegData::create_local_store();
+    _local_data_store = new LocalStore();
+    _store = new RegStore((Store*)_local_data_store);
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
@@ -370,7 +371,8 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
-    RegData::destroy_local_store(_store);
+    delete _store; _store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _call_services; _call_services = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
@@ -386,7 +388,7 @@ public:
     Log::setLoggingLevel(99);
     _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
     _analytics->_logger = &_log;
-    _store->flush_all();  // start from a clean slate on each test
+    _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {
       _hss_connection->flush_all();
@@ -434,7 +436,8 @@ public:
   }
 
 protected:
-  static RegData::Store* _store;
+  static LocalStore* _local_data_store;
+  static RegStore* _store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static FakeXDMConnection* _xdm_connection;
@@ -459,7 +462,8 @@ protected:
                      bool pcpi);
 };
 
-RegData::Store* StatefulProxyTestBase::_store;
+LocalStore* StatefulProxyTestBase::_local_data_store;
+RegStore* StatefulProxyTestBase::_store;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
 FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;

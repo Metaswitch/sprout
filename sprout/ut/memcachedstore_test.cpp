@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
 
 #include <string>
 #include "gmock/gmock.h"
@@ -52,7 +50,6 @@
 #include "test_utils.hpp"
 
 using namespace std;
-using namespace RegData;
 
 /// Fixture for MemcachedStoreTest.
 class MemcachedStoreTest : public ::testing::Test
@@ -71,12 +68,12 @@ class MemcachedStoreTest : public ::testing::Test
 };
 
 
-void do_expect_eq(AoR* aor_data1, AoR* aor_data2)
+void do_expect_eq(RegStore::AoR* aor_data1, RegStore::AoR* aor_data2)
 {
-  AoR::Bindings::const_iterator i1;
-  AoR::Bindings::const_iterator i2;
-  AoR::Binding* b1;
-  AoR::Binding* b2;
+  RegStore::AoR::Bindings::const_iterator i1;
+  RegStore::AoR::Bindings::const_iterator i2;
+  RegStore::AoR::Binding* b1;
+  RegStore::AoR::Binding* b2;
   std::string s;
 
   EXPECT_EQ(aor_data1->bindings().size(), aor_data2->bindings().size());
@@ -100,11 +97,11 @@ void do_expect_eq(AoR* aor_data1, AoR* aor_data2)
 /// Test serialization - independent of actual server.
 TEST_F(MemcachedStoreTest, Serialization)
 {
-  AoR* aor_data1;
-  AoR* aor_data2;
-  AoR::Bindings::const_iterator i1;
-  AoR::Bindings::const_iterator i2;
-  AoR::Binding* b1;
+  RegStore::AoR* aor_data1;
+  RegStore::AoR* aor_data2;
+  RegStore::AoR::Bindings::const_iterator i1;
+  RegStore::AoR::Bindings::const_iterator i2;
+  RegStore::AoR::Binding* b1;
   int now;
   std::string s;
 
@@ -258,7 +255,7 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
   store->flush_all();
 
   // Test 2.3 - get an initial empty AoR record and add a binding.
-  AoR* aor_data1 = store->get_aor_data(std::string("5102175698@ngc.thewholeelephant.com"));
+  RegStore::AoR* aor_data1 = store->get_aor_data(std::string("5102175698@ngc.thewholeelephant.com"));
   ASSERT_EQ(NULL, aor_data1);
 
   // Test 2.8 - destroy the MemcachedStore instance.
@@ -268,10 +265,10 @@ TEST_F(MemcachedStoreTest, SimpleMemcachedAlt)
 /// Test the server.
 void MemcachedStoreTest::do_test_simple(Store& store)
 {
-  AoR* aor_data1;
-  AoR::Bindings::const_iterator i1;
-  AoR::Bindings::const_iterator i2;
-  AoR::Binding* b1;
+  RegStore::AoR* aor_data1;
+  RegStore::AoR::Bindings::const_iterator i1;
+  RegStore::AoR::Bindings::const_iterator i2;
+  RegStore::AoR::Binding* b1;
   bool rc;
   int now;
   std::string s;
