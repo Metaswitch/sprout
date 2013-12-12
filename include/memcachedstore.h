@@ -111,13 +111,8 @@ private:
   // Called by the thread-local-storage clean-up functions when a thread ends.
   static void cleanup_connection(void* p);
 
-<<<<<<< HEAD
-  // Stores a pointer to an updater object.
-  MemcachedStoreUpdater* _updater;
-=======
   // Stores a pointer to an updater object
   Updater<void, MemcachedStore>* _updater;
->>>>>>> 6b592a2f7070dd83a2934582da1cc5f8f4cde3e7
 
   // Used to store a connection structure for each worker thread.
   pthread_key_t _thread_local;
