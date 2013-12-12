@@ -79,6 +79,7 @@ public:
 
   bool filter_matches(const SessionCase& session_case,
                       bool is_registered,
+                      bool is_initial_registration,
                       pjsip_msg* msg) const;
 
   AsInvocation as_invocation() const;
@@ -86,6 +87,7 @@ public:
 private:
   static bool spt_matches(const SessionCase& session_case,
                           bool is_registered,
+                          bool is_initial_registration,
                           pjsip_msg *msg,
                           rapidxml::xml_node<>* spt);
 
@@ -114,6 +116,7 @@ public:
 
   void interpret(const SessionCase& session_case,
                  bool is_registered,
+                 bool is_initial_registration,
                  pjsip_msg *msg,
                  std::vector<AsInvocation>& application_servers) const;
 

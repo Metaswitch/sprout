@@ -188,6 +188,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
   const Ifc& ifc = (_as_chain->_ifcs)[_index];
   if (!ifc.filter_matches(_as_chain->session_case(),
                           _as_chain->_is_registered,
+                          false,
                           tdata->msg))
   {
     LOG_DEBUG("No match for %s", to_string().c_str());

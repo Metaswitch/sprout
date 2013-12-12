@@ -189,7 +189,11 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
                              std::string aor,               ///<address of record to write to
                              pjsip_rx_data* rdata,          ///<received message to read headers from
                              int now,                       ///<time now
-                             int& expiry,                   ///<[out] longest expiry time
+                             int& expiry,                   ///<[out]
+                                                            ///longest
+                                                            ///expiry
+                                                            ///time
+                             bool& out_is_initial_registration,
                              RegData::AoR* backup_aor,      ///<backup data if no entry in store
                              RegData::Store* backup_store)  ///<backup store to read from if no entry in store and no backup data
 {
@@ -206,6 +210,7 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
   // reading, updating and writing the AoR until the write is successful.
   RegData::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
+  bool is_initial_registration = true;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -248,6 +253,8 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
         }
       }
     }
+
+    is_initial_registration = is_initial_registration && aor_data->bindings().empty();
 
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
@@ -355,6 +362,7 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
     delete backup_aor;
   }
 
+  out_is_initial_registration = is_initial_registration;
   return aor_data;
 }
 
@@ -451,9 +459,10 @@ void process_register_request(pjsip_rx_data* rdata)
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
   int expiry = 0;
+  bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegData::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, NULL, remote_store);
+  RegData::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -464,7 +473,8 @@ void process_register_request(pjsip_rx_data* rdata)
     if (remote_store != NULL)
     {
       int tmp_expiry = 0;
-      RegData::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, aor_data, NULL);
+      bool ignored;
+      RegData::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
       delete remote_aor_data;
     }
   }
@@ -636,7 +646,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, is_initial_registration, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
