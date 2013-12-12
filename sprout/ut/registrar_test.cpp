@@ -695,6 +695,148 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   delete aor_data; aor_data = NULL;
 }
 
+TEST_F(RegistrarTest, AppServersInitialRegistration)
+{
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension><RegistrationType>0</RegistrationType></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  tpAS.expect_target(current_txdata(), false);
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (reregister)");
+  Message msg2;
+  msg2._expires = "Expires: 800";
+  msg2._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (reregister, about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (reregister, injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER not passed on to AS
+  ASSERT_EQ(0, txdata_count());
+
+  free_txdata();
+}
+
+TEST_F(RegistrarTest, AppServersReRegistration)
+{
+  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "      <Extension><RegistrationType>1</RegistrationType></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>";
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(1, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  ASSERT_EQ(0, txdata_count());
+
+  SCOPED_TRACE("REGISTER (reregister)");
+  Message msg2;
+  msg2._expires = "Expires: 800";
+  msg2._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (reregister, about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (reregister, injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER not passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  tpAS.expect_target(current_txdata(), false);
+
+  free_txdata();
+}
+
+
 /// Homestead fails associated URI request
 TEST_F(RegistrarTest, ErrorAssociatedUris)
 {
