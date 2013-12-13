@@ -476,6 +476,8 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
     return status;
   }
 
+  // The UDP function call depends on the address type, which should be IPv4
+  // or IPv6, otherwise something has gone wrong so don't try to start transport.
   if (addr.addr.sa_family == PJ_AF_INET)
   {
     status = pjsip_udp_transport_start(stack_data.endpt,
@@ -492,6 +494,10 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
                                         50,
                                         NULL);
   }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+  }
 
   if (status != PJ_SUCCESS)
   {
@@ -507,14 +513,44 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   pj_status_t status;
   pj_sockaddr addr;
   pjsip_host_port published_name;
+  pjsip_tcp_transport_cfg cfg;
 
-  fill_transport_details(port, &addr, host, &published_name);
-  status = pjsip_tcp_transport_start2(stack_data.endpt,
-                                      &addr,
-                                      &published_name,
-                                      50,
-                                      tcp_factory);
-  if (status != PJ_SUCCESS) {
+  status = fill_transport_details(port, &addr, host, &published_name);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  // pjsip_tcp_transport_start2() builds up a configuration structure then calls
+  // through to pjsip_tcp_transport_start3().  However it only supports IPv4.
+  // Therefore for IPv6 mimic the steps in pjsip_tcp_transport_start2() for IPv6
+  // then call pjsip_tcp_transport_start3().  Beware that if start2() is updated
+  // those changes may need to be replicated here for IPv6.
+
+  if (addr.addr.sa_family == PJ_AF_INET)
+  {
+    status = pjsip_tcp_transport_start2(stack_data.endpt,
+                                        &addr,
+                                        &published_name,
+                                        50,
+                                        tcp_factory);
+  }
+  else if (addr.addr.sa_family == PJ_AF_INET6)
+  {
+    pjsip_tcp_transport_cfg_default(&cfg, pj_AF_INET6());
+    pj_sockaddr_cp(&cfg.bind_addr, &addr);
+    pj_memcpy(&cfg.addr_name, &published_name, sizeof(published_name));
+    cfg.async_cnt = 50;
+
+    status = pjsip_tcp_transport_start3(stack_data.endpt, &cfg, tcp_factory);
+  }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+  }
+
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Failed to start TCP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
   }
 
