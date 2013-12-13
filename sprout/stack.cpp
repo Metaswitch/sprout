@@ -433,33 +433,68 @@ void init_pjsip_logging(int log_level,
   pj_log_set_log_func(&pjsip_log_handler);
 }
 
-void fill_transport_details(int port,
-                            pj_sockaddr_in *addr,
-                            pj_str_t& host,
-                            pjsip_host_port *published_name)
+pj_status_t fill_transport_details(int port,
+                                   pj_sockaddr *addr,
+                                   pj_str_t& host,
+                                   pjsip_host_port *published_name)
 {
-  addr->sin_family = pj_AF_INET();
-  addr->sin_addr.s_addr = 0;
-  addr->sin_port = pj_htons((pj_uint16_t)port);
+  pj_status_t status;
+  count = 1;
+  pj_addrinfo addr_info[count];
+  int af = pj_AF_UNSPEC();
+
+  // Use pj_getaddrinfo() to resolve the IP address string into an IPv4 or
+  // IPv6 address.  The address string should only contain a single address.
+  status = pj_getaddrinfo(af, host, &count, addr_info);
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Failed to decode IP address %ac (%s)",
+              host.slen,
+              host.ptr,
+              PJUtils::pj_status_to_string(status).c_str())
+    return status;
+  }
+
+  pj_memcpy(addr, &addr_info[1].ai_addr, sizeof(pj_sockaddr))
 
   published_name->host = host;
   published_name->port = port;
+
+  return status;
 }
 
 
 pj_status_t create_udp_transport(int port, pj_str_t& host)
 {
   pj_status_t status;
-  pj_sockaddr_in addr;
+  pj_sockaddr addr;
   pjsip_host_port published_name;
 
-  fill_transport_details(port, &addr, host, &published_name);
-  status = pjsip_udp_transport_start(stack_data.endpt,
-                                     &addr,
-                                     &published_name,
-                                     50,
-                                     NULL);
-  if (status != PJ_SUCCESS) {
+  status = fill_transport_details(port, &addr, host, &published_name);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  if (addr.addr.sa_family == PJ_AF_INET)
+  {
+    status = pjsip_udp_transport_start(stack_data.endpt,
+                                       &addr.ipv4,
+                                       &published_name,
+                                       50,
+                                       NULL);
+  }
+  else if (addr.addr.sa_family == PJ_AF_INET6)
+  {
+    status = pjsip_udp_transport_start6(stack_data.endpt,
+                                        &addr.ipv6,
+                                        &published_name,
+                                        50,
+                                        NULL);
+  }
+
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Failed to start UDP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
   }
 
@@ -470,7 +505,7 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
 pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfactory **tcp_factory)
 {
   pj_status_t status;
-  pj_sockaddr_in addr;
+  pj_sockaddr addr;
   pjsip_host_port published_name;
 
   fill_transport_details(port, &addr, host, &published_name);
