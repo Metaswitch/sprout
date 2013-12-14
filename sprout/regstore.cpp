@@ -78,22 +78,19 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
   std::string data;
   uint64_t cas;
   Store::Status status = _data_store->get_data("reg", aor_id, data, cas);
-  LOG_DEBUG("Data store get_data returned %d", status);
 
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
-    LOG_DEBUG("Data store returned a record, so deserialize it");
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
-    LOG_DEBUG("CAS = %ld", aor_data->_cas);
+    LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
   }
   else if (status == Store::Status::NOT_FOUND)
   {
     // Data store didn't find the record, so create a new blank record.
-    LOG_DEBUG("Data store didn't find a record, so create an empty record");
     aor_data = new AoR();
-    LOG_DEBUG("CAS = %ld", aor_data->_cas);
+    LOG_DEBUG("Data store returned not found, so create new record, CAS = %ld", aor_data->_cas);
   }
 
   return aor_data;
@@ -127,7 +124,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
                                                aor_id,
                                                data,
                                                aor_data->_cas,
-                                               max_expires);
+                                               max_expires - now);
   LOG_DEBUG("Data store set_data returned %d", status);
 
   return (status == Store::Status::OK);
@@ -218,7 +215,6 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
   AoR* aor_data = new AoR();
   int num_bindings;
   iss.read((char *)&num_bindings, sizeof(int));
-  LOG_DEBUG("There are %d bindings", num_bindings);
 
   for (int ii = 0; ii < num_bindings; ++ii)
   {
@@ -237,7 +233,6 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
 
     int num_params;
     iss.read((char *)&num_params, sizeof(int));
-    LOG_DEBUG("Binding has %d params", num_params);
     b->_params.resize(num_params);
     for (std::list<std::pair<std::string, std::string> >::iterator i = b->_params.begin();
          i != b->_params.end();
@@ -245,19 +240,16 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
     {
       getline(iss, i->first, '\0');
       getline(iss, i->second, '\0');
-      LOG_DEBUG("Read param %s = %s", i->first.c_str(), i->second.c_str());
     }
 
     int num_paths = 0;
     iss.read((char *)&num_paths, sizeof(int));
     b->_path_headers.resize(num_paths);
-    LOG_DEBUG("Binding has %d paths", num_paths);
     for (std::list<std::string>::iterator i = b->_path_headers.begin();
          i != b->_path_headers.end();
          ++i)
     {
       getline(iss, *i, '\0');
-      LOG_DEBUG("Read path %s", i->c_str());
     }
   }
 

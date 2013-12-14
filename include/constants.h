@@ -71,7 +71,7 @@ const pj_str_t STR_DIGEST = pj_str("Digest");
 const pj_str_t STR_MD5 = pj_str("MD5");
 const pj_str_t STR_AKAV1_MD5 = pj_str("AKAv1-MD5");
 const pj_str_t STR_AUTH = pj_str("auth");
-const pj_str_t STR_AUTN = pj_str("autn");
+const pj_str_t STR_AUTS = pj_str("autn");
 const pj_str_t STR_CK = pj_str("ck");
 const pj_str_t STR_IK = pj_str("ik");
 

@@ -57,7 +57,7 @@ void AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
                      const Json::Value* av)
 {
-  std::string key = impi + '\0' + nonce;
+  std::string key = impi + '\\' + nonce;
   std::string data = av->toStyledString();
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY);
@@ -72,7 +72,7 @@ Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce)
 {
   Json::Value* av = NULL;
-  std::string key = impi + '\0' + nonce;
+  std::string key = impi + '\\' + nonce;
   std::string data;
   uint64_t cas;
   Store::Status status = _data_store->get_data("av", key, data, cas);

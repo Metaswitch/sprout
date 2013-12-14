@@ -246,7 +246,7 @@ Store::Status MemcachedStore::get_data(const std::string& table,
 
 
   // Construct the fully qualified key.
-  std::string fqkey = table + "\\" + key;
+  std::string fqkey = table + "\\\\" + key;
   const char* key_ptr = fqkey.data();
   const size_t key_len = fqkey.length();
 
@@ -311,6 +311,8 @@ Store::Status MemcachedStore::get_data(const std::string& table,
     // on the earlier active replica.
     data.assign(memcached_result_value(&result), memcached_result_length(&result));
     cas = (active_not_found) ? 0 : memcached_result_cas(&result);
+    LOG_DEBUG("Read %d bytes from table %s key %s, CAS = %ld",
+              data.length(), table.c_str(), key.c_str(), cas);
 
     // Free the result.
     memcached_result_free(&result);
@@ -344,16 +346,21 @@ Store::Status MemcachedStore::set_data(const std::string& table,
 {
   Store::Status status = Store::Status::OK;
 
+  LOG_DEBUG("Writing %d bytes to table %s key %s, CAS = %ld, expiry = %d",
+            data.length(), table.c_str(), key.c_str(), cas, expiry);
+
   // Construct the fully qualified key.
-  std::string fqkey = table + "\\" + key;
+  std::string fqkey = table + "\\\\" + key;
   const char* key_ptr = fqkey.data();
   const size_t key_len = fqkey.length();
 
   const std::vector<memcached_st*>& replicas = get_replicas(fqkey, Op::WRITE);
   LOG_DEBUG("%d write replicas for key %s", replicas.size(), fqkey.c_str());
 
-  int now = time(NULL);
-  expiry += now;
+  // Calculate the rough expected expiry time.  We store this in the flags
+  // as it may be useful in future for read repair function.
+  uint32_t now = time(NULL);
+  uint32_t exptime = now + expiry;
 
   // First try to write the primary data record to the first responding
   // server.
@@ -375,8 +382,8 @@ Store::Status MemcachedStore::set_data(const std::string& table,
                          key_len,
                          data.data(),
                          data.length(),
-                         expiry,
-                         (uint32_t)expiry);
+                         (time_t)expiry,
+                         (uint32_t)exptime);
     }
     else
     {
@@ -387,8 +394,8 @@ Store::Status MemcachedStore::set_data(const std::string& table,
                          key_len,
                          data.data(),
                          data.length(),
-                         expiry,
-                         (uint32_t)expiry,
+                         (time_t)expiry,
+                         (uint32_t)exptime,
                          cas);
     }
 
@@ -399,13 +406,14 @@ Store::Status MemcachedStore::set_data(const std::string& table,
     }
     else
     {
-      LOG_DEBUG("memcached_%s command for %s failed on replica %d, rc = %d (%s), expiry = %d",
+      LOG_DEBUG("memcached_%s command for %s failed on replica %d, rc = %d (%s), expiry = %d\n%s",
                 (cas == 0) ? "add" : "cas",
                 fqkey.c_str(),
                 ii,
                 rc,
                 memcached_strerror(replicas[ii], rc),
-                expiry - now);
+                expiry,
+                memcached_last_error_message(replicas[ii]));
 
       if ((rc == MEMCACHED_NOTSTORED) ||
           (rc == MEMCACHED_DATA_EXISTS))

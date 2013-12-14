@@ -131,9 +131,18 @@ pj_status_t user_lookup(pj_pool_t *pool,
     pj_strdup(pool, &cred_info->username, acc_name);
     if (av->isMember("aka"))
     {
-      // AKA authentication, so response is plain-text password.
+      // AKA authentication, so response is plain-text password.  Must convert
+      // the text into binary as this is what seems to be expected.
+      std::string response = (*av)["aka"]["response"].asString();
+      std::string xres;
+      for (size_t ii = 0; ii < response.length(); ii += 2)
+      {
+        xres.push_back((char)(pj_hex_digit_to_val(response[ii] *16 +
+                              pj_hex_digit_to_val(response[ii+1])));
+      }
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
-      pj_strdup2(pool, &cred_info->data, (*av)["aka"]["response"].asCString());
+      pj_strdup2(pool, &cred_info->data, xres.c_str());
+      LOG_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
       status = PJ_SUCCESS;
     }
     else if (av->isMember("digest"))
@@ -141,6 +150,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       // Digest authentication, so ha1 field is hashed password.
       cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
       pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
+      LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
       status = PJ_SUCCESS;
     }
     delete av;
@@ -179,11 +189,11 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
   if (auth_hdr != NULL)
   {
-    // Check for an AUTN parameter indicating a resync is required.
+    // Check for an AUTS parameter indicating a resync is required.
     pjsip_param* p = auth_hdr->credential.digest.other_param.next;
     while ((p != NULL) && (p != &auth_hdr->credential.digest.other_param))
     {
-      if (pj_stricmp(&p->name, &STR_AUTN) == 0)
+      if (pj_stricmp(&p->name, &STR_AUTS) == 0)
       {
         autn = PJUtils::pj_str_to_string(&p->value);
       }
@@ -227,13 +237,15 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      pj_strdup2(tdata->pool, &ck_param->value, (*aka)["cryptkey"].asCString());
+      std::string ck = "\"" + (*aka)["cryptkey"].asString() + "\"";
+      pj_strdup2(tdata->pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
 
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      pj_strdup2(tdata->pool, &ik_param->value, (*aka)["integritykey"].asCString());
+      std::string ik = "\"" + (*aka)["integritykey"].asString() + "\"";
+      pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
     }
     else
