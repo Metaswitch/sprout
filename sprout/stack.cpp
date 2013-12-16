@@ -439,23 +439,37 @@ pj_status_t fill_transport_details(int port,
                                    pjsip_host_port *published_name)
 {
   pj_status_t status;
-  count = 1;
+  unsigned count = 1;
   pj_addrinfo addr_info[count];
   int af = pj_AF_UNSPEC();
-
+  
   // Use pj_getaddrinfo() to resolve the IP address string into an IPv4 or
   // IPv6 address.  The address string should only contain a single address.
-  status = pj_getaddrinfo(af, host, &count, addr_info);
+  status = pj_getaddrinfo(af, &host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to decode IP address %ac (%s)",
               host.slen,
               host.ptr,
-              PJUtils::pj_status_to_string(status).c_str())
+              PJUtils::pj_status_to_string(status).c_str());
     return status;
   }
 
-  pj_memcpy(addr, &addr_info[1].ai_addr, sizeof(pj_sockaddr))
+  pj_memcpy(addr, &addr_info[0].ai_addr, sizeof(pj_sockaddr));
+  
+  // Set up the port in the appropriate part of the structure.
+  if (addr->addr.sa_family == PJ_AF_INET)
+  {
+    addr->ipv4.sin_port = pj_htons((pj_uint16_t)port);
+  }
+  else if (addr->addr.sa_family == PJ_AF_INET6)
+  {
+    addr->ipv6.sin6_port =  pj_htons((pj_uint16_t)port);
+  }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+  }
 
   published_name->host = host;
   published_name->port = port;
@@ -475,7 +489,7 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
   {
     return status;
   }
-
+  
   // The UDP function call depends on the address type, which should be IPv4
   // or IPv6, otherwise something has gone wrong so don't try to start transport.
   if (addr.addr.sa_family == PJ_AF_INET)
@@ -530,7 +544,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   if (addr.addr.sa_family == PJ_AF_INET)
   {
     status = pjsip_tcp_transport_start2(stack_data.endpt,
-                                        &addr,
+                                        &addr.ipv4,
                                         &published_name,
                                         50,
                                         tcp_factory);
