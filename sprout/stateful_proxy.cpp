@@ -2092,7 +2092,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         Json::Value* location = hss->get_location_data(public_id, false, "", trail());
 
         if (!location->isMember("result-code") ||
-            location->get("result-code", "").asString() != "2001")
+            (location->get("result-code", "").asString() != "DIAMETER_SUCCESS"))
         {
           LOG_DEBUG("Get location data did not return valid rc");
           send_response(PJSIP_SC_NOT_FOUND);
@@ -2100,36 +2100,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
 
-        // Get the S-CSCF
-        std::string server_name = "";
-        if (location->isMember("scscf"))
-        {
-          LOG_DEBUG("Subscriber had an S-CSCF");
-          server_name = location->get("scscf", "").asString();
-        }
-        else
-        {
-          // No S-CSCF provided, use the S-CSCF selector to choose one
-          std::vector<int> mandatory;
-          std::vector<int> optional;
-
-          Json::Value mandates = location->get("mandatory-capabilities", "[]");
-          for (size_t jj = 0; jj < mandates.size(); ++jj)
-          {
-            mandatory.push_back(mandates[(int)jj].asInt());
-          }
-
-          Json::Value options = location->get("optional-capabilities", "[]");
-          for (size_t jj = 0; jj < options.size(); ++jj)
-          {
-            optional.push_back(options[(int)jj].asInt());
-          }
-
-          server_name = scscf_selector->get_scscf(mandatory, optional, {});
-        }
-
-        delete location;
-
+        // Get the S-CSCF name from the location data or from the S-CSCF selector
+        std::string server_name = get_scscf_name(location);
         if (server_name == "")
         {
           LOG_DEBUG("No valid S-CSCFs found");
@@ -4083,6 +4055,42 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   _victims.push_back(ret.as_chain());
   LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
   return ret;
+}
+
+// Return S-CSCF (either from HSS or scscf_selector), or an 
+// empty string if no S-CSCFs are configured
+std::string UASTransaction::get_scscf_name(Json::Value* location)
+{
+  std::string server_name = "";
+
+  if (location->isMember("scscf"))
+  {
+    LOG_DEBUG("Subscriber had an S-CSCF");
+    server_name = location->get("scscf", "").asString();
+  }
+  else
+  {
+    // No S-CSCF provided, use the S-CSCF selector to choose one
+    std::vector<int> mandatory;
+    std::vector<int> optional;
+
+    Json::Value mandates = location->get("mandatory-capabilities", "[]");
+    for (size_t jj = 0; jj < mandates.size(); ++jj)
+    {
+      mandatory.push_back(mandates[(int)jj].asInt());
+    }
+
+    Json::Value options = location->get("optional-capabilities", "[]");
+    for (size_t jj = 0; jj < options.size(); ++jj)
+    {
+      optional.push_back(options[(int)jj].asInt());
+    }
+
+    server_name = scscf_selector->get_scscf(mandatory, optional, {});
+  }
+
+  delete location;
+  return server_name;
 }
 
 ///@}

@@ -208,6 +208,7 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
+  std::string get_scscf_name(Json::Value* location);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
