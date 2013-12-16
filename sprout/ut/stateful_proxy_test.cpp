@@ -5757,7 +5757,7 @@ TEST_F(InternalIcscfTest, TestHSSHasDifferentSCSCF)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
 }
 
-TEST_F(InternalIcscfTest, TestHSSHasCurrectSCSCF)
+TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
 {
   SCOPED_TRACE("");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",

@@ -2059,7 +2059,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
           icscf_uri)
       {
-        LOG_INFO("here");
         // We've completed the originating half, the destination is local and
         // we have an external I-CSCF configured.  Route the call there.
         LOG_INFO("Invoking I-CSCF %s",
@@ -3865,8 +3864,7 @@ void destroy_stateful_proxy()
     as_chain_table = NULL;
   }
 
-  // Set back static values to defauls (for UTs)
-//  delete icscf_uri;
+  // Set back static values to defaults (for UTs)
   icscf_uri = NULL;
   ibcf = false;
   icscf = false;

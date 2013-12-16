@@ -821,12 +821,6 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  if ((opt.pcscf_enabled) && ((opt.scscf_enabled)))
-  {
-    LOG_ERROR("Cannot enable both P-CSCF and S-CSCF");
-    return 1;
-  }
-
   if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
   {
     LOG_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
