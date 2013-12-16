@@ -190,8 +190,8 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
     // values in the request.  (Use a default of 1 because if there is no
     // expires header or expires values in the contact headers this will
     // be a registration not a deregistration.)
-    _auth_type = (PJUtils::max_expires(msg, 1) > 0) ? "REGISTRATION" :
-                                                      "DE-REGISTRATION";
+    _auth_type = (PJUtils::max_expires(msg, 1) > 0) ? "REG" :
+                                                      "DEREG";
   }
   else
   {
@@ -343,12 +343,12 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     {
       // Can do a retry (we support service restoration, so integrity-protected
       // settings in Authorization header are immaterial).
-      if (_auth_type != "DE-REGISTRATION")
+      if (_auth_type != "DEREG")
       {
         // No point retrying a DE-REGISTRATION - if the original S-CSCF is
         // dead the registration is gone anyway.
         LOG_DEBUG("Attempt retry for REGISTER request");
-        _auth_type = "REGISTRATION_AND_CAPABILITIES";
+        _auth_type = "CAPAB";
         _scscf = "";
         int status_code = registration_status_query(_impi,
                                                     _impu,
@@ -386,7 +386,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         // We don't have capabilities from the HSS yet, so do another query
         LOG_DEBUG("Attempt retry for non-REGISTER request");
         _scscf = "";
-        _auth_type = "REGISTRATION_AND_CAPABILITIES";
+        _auth_type = "CAPAB";
         int status_code = location_query(_impu,
                                          (_case == SessionCase::ORIGINATING),
                                          _auth_type);
