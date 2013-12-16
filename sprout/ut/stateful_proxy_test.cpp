@@ -5747,7 +5747,7 @@ TEST_F(InternalIcscfTest, TestHSSHasDifferentSCSCF)
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\", \"scscf\": \"sip:scscf1.homedomain:5058\"}");
+                              "{\"result-code\": 2001, \"scscf\": \"sip:scscf1.homedomain:5058\"}");
 
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
@@ -5766,7 +5766,7 @@ TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\", \"scscf\": \"sip:all.the.sprouts:5058\"}");
+                              "{\"result-code\": 2001, \"scscf\": \"sip:all.the.sprouts:5058\"}");
 
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
@@ -5784,7 +5784,7 @@ TEST_F(InternalIcscfTest, TestHSSHasNoSCSCF)
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [432]}");
 
@@ -5800,7 +5800,7 @@ TEST_F(InternalIcscfTest, TestNoValidSCSCF)
 {
   SCOPED_TRACE("");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123, 345],"
                               " \"optional-capabilities\": [432]}");
 

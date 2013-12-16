@@ -2092,7 +2092,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         Json::Value* location = hss->get_location_data(public_id, false, "", trail());
 
         if (!location->isMember("result-code") ||
-            (location->get("result-code", "").asString() != "DIAMETER_SUCCESS"))
+            ((location->get("result-code", "").asString() != "2001") &&
+             (location->get("result-code", "").asString() != "2002") &&
+             (location->get("result-code", "").asString() != "2003")))
         {
           LOG_DEBUG("Get location data did not return valid rc");
           send_response(PJSIP_SC_NOT_FOUND);

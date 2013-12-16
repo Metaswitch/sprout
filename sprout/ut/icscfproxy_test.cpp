@@ -339,7 +339,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
   // Set up the HSS response for the user registration status query using
   // a default private user identity.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
   // Inject a REGISTER request.
@@ -387,7 +387,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
   // Set up the HSS response for the user registration status query using
   // a specified private user identity.
   _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf2.homedomain:5058;transport=TCP\"}");
 
   // Inject a REGISTER request.
@@ -456,7 +456,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123, 345],"
                               " \"optional-capabilities\": [654]}");
 
@@ -509,7 +509,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
   _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [654]}");
 
@@ -579,7 +579,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [765, 123, 345],"
                               " \"optional-capabilities\": [654]}");
 
@@ -628,10 +628,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
   // auth_type=REGISTRATION) returns scscf1, the second response (specifying
   // auth_type=REGISTRATION_AND_CAPABILITIES) returns capabilities.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION_AND_CAPABILITIES",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [345]}");
 
@@ -722,10 +722,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
   // auth_type=REGISTRATION) returns scscf1, the second response (specifying
   // auth_type=REGISTRATION_AND_CAPABILITIES) returns capabilities.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION_AND_CAPABILITIES",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [345]}");
 
@@ -795,10 +795,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   // auth_type=REGISTRATION) returns scscf1, the second response (specifying
   // auth_type=REGISTRATION_AND_CAPABILITIES) returns capabilities.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION_AND_CAPABILITIES",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [123]}");
 
@@ -975,7 +975,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
   // Set up HSS response for the user registration status query, with a
   // malformed JSON response (missing the final brace).
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [123]");
 
@@ -1006,7 +1006,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
   // well structured JSON response, but where the capabilities are not
   // integers.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REGISTRATION",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
                               " \"optional-capabilities\": [123]}");
 
@@ -1049,7 +1049,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSServerName)
 
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
   // Inject a INVITE request with orig in the Route header and a P-Served-User
@@ -1119,7 +1119,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCaps)
 
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [567]}");
 
@@ -1190,7 +1190,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCapsNoMatch)
 
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [765, 654],"
                               " \"optional-capabilities\": [567]}");
 
@@ -1242,10 +1242,10 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSRetry)
 
   // Set up the HSS responses for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true&auth-type=REGISTRATION_AND_CAPABILITIES",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [567]}");
 
@@ -1395,7 +1395,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteCancel)
 
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
   // Inject a INVITE request with orig in the Route header and a P-Served-User
@@ -1502,7 +1502,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSServerName)
 
   // Set up the HSS response for the terminating location query.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
   // Inject a INVITE request with orig in the Route header and a P-Served-User
@@ -1572,7 +1572,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSCaps)
 
   // Set up the HSS response for the terminating location query.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [567],"
                               " \"optional-capabilities\": [789, 567]}");
 
@@ -1643,10 +1643,10 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
 
   // Set up the HSS responses for the terminating location query.
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location?auth-type=REGISTRATION_AND_CAPABILITIES",
-                              "{\"result-code\": \"DIAMETER_SUCCESS\","
+                              "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [567],"
                               " \"optional-capabilities\": [789, 567]}");
 

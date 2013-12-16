@@ -538,7 +538,10 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
   _optional_caps.clear();
   _scscf = "";
 
-  if (rsp["result-code"] != "DIAMETER_SUCCESS")
+  if ((!rsp.isMember("result-code")) ||
+      ((rsp["result-code"].asString() != "2001") &&
+       (rsp["result-code"].asString() != "2002") &&
+       (rsp["result-code"].asString() != "2003")))
   {
     // Error from HSS, so respond with 404 Not Found.  (This may be changed
     // to 403 Forbidden if request is a REGISTER.)
