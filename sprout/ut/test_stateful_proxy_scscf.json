@@ -1,0 +1,9 @@
+{
+    "s-cscfs" : [
+        {   "server" : "sip:scscf2.homedomain:5058",
+            "priority" : 0,
+            "weight" : 100,
+            "capabilities" : [123, 432]
+        }
+    ]
+}

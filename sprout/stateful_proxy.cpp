@@ -129,6 +129,7 @@ extern "C" {
 #include "custom_headers.h"
 #include "dialog_tracker.hpp"
 #include "quiescing_manager.h"
+#include "scscfselector.h"
 
 static RegData::Store* store;
 static RegData::Store* remote_store;
@@ -140,6 +141,7 @@ static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
 static BgcfService *bgcf_service;
+static SCSCFSelector *scscf_selector;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
@@ -151,6 +153,8 @@ static HSSConnection* hss;
 static pjsip_uri* icscf_uri = NULL;
 
 static bool ibcf = false;
+static bool icscf = false;
+static bool scscf = false;
 
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 
@@ -2073,6 +2077,73 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // The Request-URI should remain unchanged
         target->uri = _req->msg->line.req.uri;
       }
+      else if (_as_chain_link.is_set() &&
+               _as_chain_link.session_case().is_originating() &&
+               disposition == AsChainLink::Disposition::Complete &&
+               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+               (icscf && scscf))
+      {
+        // We've completed the originating half, the destination is local and
+        // both scscf and icscf function is enabled. Check whether the terminating S-CSCF
+        // is this S-CSCF
+        LOG_INFO("Sprout has I-CSCF and S-CSCF function");
+
+        std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
+        Json::Value* location = hss->get_location_data(public_id, false, "", trail());
+
+        if (!location->isMember("result-code") ||
+            (location->get("result-code", "").asString() != "DIAMETER_SUCCESS"))
+        {
+          LOG_DEBUG("Get location data did not return valid rc");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
+        }
+
+        // Get the S-CSCF name from the location data or from the S-CSCF selector
+        std::string server_name = get_scscf_name(location);
+        if (server_name == "")
+        {
+          LOG_DEBUG("No valid S-CSCFs found");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
+        }
+
+        // Check whether the returned S-CSCF is this S-CSCF
+        if (PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain).find(server_name) != std::string::npos)
+        {
+          // The S-CSCFs are the same, so continue
+          bool success = move_to_terminating_chain();
+          if (!success)
+          {
+            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+            send_response(PJSIP_SC_NOT_FOUND);
+            delete target;
+            return;
+          }
+        }
+        else
+        {
+          // The S-CSCF is different, so route the call there. 
+           _as_chain_link.release();
+ 
+          delete target;
+          target = new Target;
+
+          pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+          if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
+          {
+            // Got a SIP URI - force loose-routing.
+            ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
+          }
+
+          target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
+
+          // The Request-URI should remain unchanged
+          target->uri = _req->msg->line.req.uri;
+        }
+      }
       else if (disposition == AsChainLink::Disposition::Complete &&
                (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
                !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
@@ -3640,7 +3711,10 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 const std::string& icscf_uri_str,
-                                QuiescingManager* quiescing_manager)
+                                QuiescingManager* quiescing_manager,
+                                SCSCFSelector *scscfSelector,
+                                bool icscf_enabled,
+                                bool scscf_enabled)
 {
   pj_status_t status;
 
@@ -3650,6 +3724,9 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
+
+  icscf = icscf_enabled;
+  scscf = scscf_enabled;
 
   edge_proxy = enable_edge_proxy;
   if (edge_proxy)
@@ -3715,6 +3792,7 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
   enum_service = enumService;
   bgcf_service = bgcfService;
   hss = hss_connection;
+  scscf_selector = scscfSelector;
 
   if (!icscf_uri_str.empty())
   {
@@ -3758,6 +3836,12 @@ void destroy_stateful_proxy()
     as_chain_table = NULL;
   }
 
+  // Set back static values to defaults (for UTs)
+  icscf_uri = NULL;
+  ibcf = false;
+  icscf = false;
+  scscf = false;
+  
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_tu);
 }
@@ -3971,6 +4055,42 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   _victims.push_back(ret.as_chain());
   LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
   return ret;
+}
+
+// Return S-CSCF (either from HSS or scscf_selector), or an 
+// empty string if no S-CSCFs are configured
+std::string UASTransaction::get_scscf_name(Json::Value* location)
+{
+  std::string server_name = "";
+
+  if (location->isMember("scscf"))
+  {
+    LOG_DEBUG("Subscriber had an S-CSCF");
+    server_name = location->get("scscf", "").asString();
+  }
+  else
+  {
+    // No S-CSCF provided, use the S-CSCF selector to choose one
+    std::vector<int> mandatory;
+    std::vector<int> optional;
+
+    Json::Value mandates = location->get("mandatory-capabilities", "[]");
+    for (size_t jj = 0; jj < mandates.size(); ++jj)
+    {
+      mandatory.push_back(mandates[(int)jj].asInt());
+    }
+
+    Json::Value options = location->get("optional-capabilities", "[]");
+    for (size_t jj = 0; jj < options.size(); ++jj)
+    {
+      optional.push_back(options[(int)jj].asInt());
+    }
+
+    server_name = scscf_selector->get_scscf(mandatory, optional, {});
+  }
+
+  delete location;
+  return server_name;
 }
 
 ///@}
