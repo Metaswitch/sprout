@@ -828,8 +828,11 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
       {
         UACTsx* uac_tsx = new_tsx.front();
         new_tsx.pop_front();
-        uac_tsx->send_request();
+       
+        // Push this onto the array before sending the request (as the request could 
+        // fail and try to delete the transaction from the array)
         _uac_tsx.push_back(uac_tsx);
+        uac_tsx->send_request();
         ++_pending_targets;
       }
     }
