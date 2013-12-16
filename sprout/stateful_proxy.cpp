@@ -2059,6 +2059,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
           icscf_uri)
       {
+        LOG_INFO("here");
         // We've completed the originating half, the destination is local and
         // we have an external I-CSCF configured.  Route the call there.
         LOG_INFO("Invoking I-CSCF %s",
@@ -2086,20 +2087,21 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // We've completed the originating half, the destination is local and
         // both scscf and icscf function is enabled. Check whether the terminating S-CSCF
         // is this S-CSCF
-        LOG_INFO("Invoking S-CSCF");
+        LOG_INFO("Sprout has I-CSCF and S-CSCF function");
 
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
         Json::Value* location = hss->get_location_data(public_id, false, "", trail());
 
-        if (location->get("result-code", "").asString() != "2001")
+        if (!location->isMember("result-code") ||
+            location->get("result-code", "").asString() != "2001")
         {
-          LOG_DEBUG("Get Location Data did not return valid rc");
+          LOG_DEBUG("Get location data did not return valid rc");
           send_response(PJSIP_SC_NOT_FOUND);
           delete target;
           return;
         }
 
-        // Get the S-CSCF name
+        // Get the S-CSCF
         std::string server_name = "";
         if (location->isMember("scscf"))
         {
@@ -2159,8 +2161,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           target = new Target;
 
           pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+          if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
+          {
+            // Got a SIP URI - force loose-routing.
+            ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
+          }
+
           target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
-          //target->uri = _req->msg->line.req.uri;
+
+          // The Request-URI should remain unchanged
+          target->uri = _req->msg->line.req.uri;
         }
       }
       else if (disposition == AsChainLink::Disposition::Complete &&
@@ -3855,6 +3865,13 @@ void destroy_stateful_proxy()
     as_chain_table = NULL;
   }
 
+  // Set back static values to defauls (for UTs)
+//  delete icscf_uri;
+  icscf_uri = NULL;
+  ibcf = false;
+  icscf = false;
+  scscf = false;
+  
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_tu);
 }

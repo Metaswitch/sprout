@@ -61,6 +61,7 @@ class UACTransaction;
 #include "hssconnection.h"
 #include "aschain.h"
 #include "quiescing_manager.h"
+#include "scscfselector.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -303,7 +304,10 @@ pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 const std::string& icscf_uri_str,
-                                QuiescingManager* quiescing_manager);
+                                QuiescingManager* quiescing_manager,
+                                SCSCFSelector *scscfSelector,
+                                bool icscf_enabled,
+                                bool scscf_enabled);
 
 void destroy_stateful_proxy();
 

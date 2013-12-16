@@ -340,7 +340,7 @@ public:
     // implementation doesn't matter.
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_stateful_proxy_enum.json"));
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
-    _scscf_selector = new SCSCFSelector();
+    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
     _edge_upstream_proxy = edge_upstream_proxy;
     _ibcf_trusted_hosts = ibcf_trusted_hosts;
     _icscf_uri_str = icscf_uri_str;
@@ -498,13 +498,13 @@ public:
   static void SetUpTestCase(const string& icscf_uri_str)
   {
     cwtest_clear_host_mapping();
-    StatefulProxyTestBase::SetUpTestCase("", "", false, false, false, icscf_uri_str);
+    StatefulProxyTestBase::SetUpTestCase("", "", false, true, false, icscf_uri_str);
   }
 
   static void SetUpTestCase(bool icscf_enabled, bool scscf_enabled)
   {
     cwtest_clear_host_mapping();
-    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_enabled, scscf_enabled, "");
+    StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_enabled, scscf_enabled);
   }
 
   static void TearDownTestCase()
@@ -650,6 +650,7 @@ public:
   {
     StatefulProxyTest::SetUpTestCase(true, true);
     cwtest_add_host_mapping("scscf1.homedomain", "10.8.8.1");
+    cwtest_add_host_mapping("scscf2.homedomain", "10.8.8.2");
   }
 
   static void TearDownTestCase()
@@ -5737,7 +5738,7 @@ TEST_F(ExternalIcscfTest, TestTerminating)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
-TEST_F(InternalIcscfTest, TestOriginating)
+TEST_F(InternalIcscfTest, TestHSSHasDifferentSCSCF)
 {
   SCOPED_TRACE("");
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
@@ -5746,7 +5747,7 @@ TEST_F(InternalIcscfTest, TestOriginating)
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                 </ServiceProfile></IMSSubscription>)");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": 2001, \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+                              "{\"result-code\": 2001, \"scscf\": \"sip:scscf1.homedomain:5058\"}");
 
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
@@ -5754,6 +5755,59 @@ TEST_F(InternalIcscfTest, TestOriginating)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route", "Route: <sip:scscf1.homedomain:5058;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
+
+TEST_F(InternalIcscfTest, TestHSSHasCurrectSCSCF)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": 2001, \"scscf\": \"sip:all.the.sprouts:5058\"}");
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
+
+TEST_F(InternalIcscfTest, TestHSSHasNoSCSCF)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain",
+                                R"(<?xml version="1.0" encoding="UTF-8"?>
+                                <IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": \"2001\","
+                              " \"mandatory-capabilities\": [123],"
+                              " \"optional-capabilities\": [432]}");
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:scscf2.homedomain:5058;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+}
+
+TEST_F(InternalIcscfTest, TestNoValidSCSCF)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
+                              "{\"result-code\": \"2001\","
+                              " \"mandatory-capabilities\": [123, 345],"
+                              " \"optional-capabilities\": [432]}");
+
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  doSlowFailureFlow(msg, 404);
 }
 
 // @@@ WS stuff
