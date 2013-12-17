@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
 
 #include <cstdio>
 #include "fakehssconnection.hpp"
@@ -56,7 +54,91 @@ FakeHSSConnection::~FakeHSSConnection()
 
 void FakeHSSConnection::flush_all()
 {
-  _json_db.clear();
-  _ifc_db.clear();
+  _results.clear();
+}
+
+
+void FakeHSSConnection::set_result(const std::string& url,
+                                   const std::string& result)
+{
+  _results[url] = result;
+}
+
+
+void FakeHSSConnection::delete_result(const std::string& url)
+{
+  _results.erase(url);
+}
+
+
+Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
+                                                SAS::TrailId trail)
+{
+  Json::Value* root = NULL;
+
+  std::map<std::string, std::string>::const_iterator i = _results.find(path);
+
+  if (i != _results.end())
+  {
+    root = new Json::Value;
+    Json::Reader reader;
+    bool parsingSuccessful = reader.parse(i->second, *root);
+    if (!parsingSuccessful)
+    {
+      // report to the user the failure and their locations in the document.
+      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+                path.c_str(),
+                i->second.c_str(),
+                reader.getFormatedErrorMessages().c_str());
+      delete root;
+      root = NULL;
+    }
+  }
+  else
+  {
+    LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
+  }
+
+  return root;
+}
+
+
+long FakeHSSConnection::get_xml_object(const std::string& path,
+                                       rapidxml::xml_document<>*& root,
+                                       SAS::TrailId trail)
+{
+  HTTPCode http_code = HTTP_NOT_FOUND;
+
+  std::map<std::string, std::string>::const_iterator i = _results.find(path);
+
+  if (i != _results.end())
+  {
+    http_code = HTTP_OK;
+    root = new rapidxml::xml_document<>;
+    try
+    {
+      root->parse<0>(root->allocate_string(i->second.c_str()));
+    }
+    catch (rapidxml::parse_error& err)
+    {
+      // report to the user the failure and their locations in the document.
+      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+             path.c_str(),
+             i->second.c_str(),
+             err.what());
+      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+                path.c_str(),
+                i->second.c_str(),
+                err.what());
+      delete root;
+      root = NULL;
+    }
+  }
+  else
+  {
+    LOG_DEBUG("Failed to find XML result for URL %s", path.c_str());
+  }
+
+  return http_code;
 }
 

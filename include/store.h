@@ -52,16 +52,32 @@ public:
   {
   }
 
-  /// Status used to indicate success for failure of store operations.
+  /// Status used to indicate success or failure of store operations.
   typedef enum {OK=1, NOT_FOUND=2, DATA_CONTENTION=3, ERROR=4} Status;
 
   /// Gets the data for the specified key in the specified namespace.
+  ///
+  /// @return         Status value indicating the result of the read.
+  /// @param table    Name of the table to retrive the data.
+  /// @param key      Key of the data record to retrieve.
+  /// @param data     String to return the data.
+  /// @param cas      Variable to return the CAS value of the data.
   virtual Status get_data(const std::string& table,
                           const std::string& key,
                           std::string& data,
                           uint64_t& cas) = 0;
 
   /// Sets the data for the specified key in the specified namespace.
+  ///
+  /// @return         Status value indicating the result of the write.
+  /// @param table    Name of the table to store the data.
+  /// @param key      Key used to index the data within the table.
+  /// @param data     Data to store.
+  /// @param cas      CAS (Check-and-Set) value for the data.  Should be set
+  ///                 to the CAS value returned when the data was read, or
+  ///                 zero if writing a record for the first time.
+  /// @param expiry   Expiry period of the data (in seconds).  If zero the
+  ///                 data will expire immediately.
   virtual Status set_data(const std::string& table,
                           const std::string& key,
                           const std::string& data,

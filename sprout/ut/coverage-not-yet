@@ -17,3 +17,4 @@ flowtable.cpp
 zmq_lvc.cpp
 custom_headers.cpp
 memcachedstoreview.cpp
+memcachedstore.cpp

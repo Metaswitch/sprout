@@ -137,7 +137,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       std::string xres;
       for (size_t ii = 0; ii < response.length(); ii += 2)
       {
-        xres.push_back((char)(pj_hex_digit_to_val(response[ii] *16 +
+        xres.push_back((char)(pj_hex_digit_to_val(response[ii]) * 16 +
                               pj_hex_digit_to_val(response[ii+1])));
       }
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;

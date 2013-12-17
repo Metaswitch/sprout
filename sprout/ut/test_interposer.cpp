@@ -57,6 +57,7 @@ static pthread_mutex_t time_offset_lock = PTHREAD_MUTEX_INITIALIZER;
 static int (*real_getaddrinfo)(const char*, const char*, const struct addrinfo*, struct addrinfo**);
 static struct hostent* (*real_gethostbyname)(const char*);
 static int (*real_clock_gettime)(clockid_t, struct timespec *);
+static time_t (*real_time)(time_t*);
 
 /// Helper: add two timespecs. Arbitrary aliasing is fine.
 static inline void ts_add(struct timespec& a, struct timespec& b, struct timespec& res)
@@ -156,3 +157,31 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
   return rc;
 }
+
+
+/// Replacement time().
+time_t time(time_t* v)
+{
+  if (!real_time)
+  {
+    real_time = (time_t (*)(time_t*))dlsym(RTLD_NEXT, "time");
+  }
+
+  // Get the real time in seconds since the epoch.
+  time_t rt = real_time(NULL);
+
+  // Add the seconds portion of the time offset.
+  pthread_mutex_lock(&time_offset_lock);
+  rt += time_offset.tv_sec;
+  pthread_mutex_unlock(&time_offset_lock);
+
+  if (v != NULL)
+  {
+    // Pointer supplied, so set it to the returned value.
+    *v = rt;
+  }
+
+  return rt;
+}
+
+

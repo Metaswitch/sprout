@@ -63,7 +63,7 @@ void AvStore::set_av(const std::string& impi,
   Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY);
   if (status != Store::Status::OK)
   {
-    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());   // LCOV_EXCL_LINE
   }
 }
 
@@ -85,6 +85,8 @@ Json::Value* AvStore::get_av(const std::string& impi,
     bool parsingSuccessful = reader.parse(data, *av);
     if (!parsingSuccessful)
     {
+      LOG_DEBUG("Failed to parse AV\n%s",
+                reader.getFormattedErrorMessages().c_str());
       delete av;
       av = NULL;
     }

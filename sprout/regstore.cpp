@@ -84,6 +84,7 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
     // Retrieved the data, so deserialize it.
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
+    expire_bindings(aor_data, time(NULL));
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
   }
   else if (status == Store::Status::NOT_FOUND)

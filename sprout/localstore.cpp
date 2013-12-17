@@ -104,7 +104,7 @@ Store::Status LocalStore::get_data(const std::string& table,
     else
     {
       // Record has not expired, so return the data and the cas value.
-      LOG_DEBUG("Record has not expires, return %d bytes of data with CAS = %ld",
+      LOG_DEBUG("Record has not expired, return %d bytes of data with CAS = %ld",
                 r.data.length(), r.cas);
       data = r.data;
       cas = r.cas;
@@ -126,7 +126,7 @@ Store::Status LocalStore::set_data(const std::string& table,
                                    uint64_t cas,
                                    int expiry)
 {
-  LOG_DEBUG("set_data table=%s key=%s CAS=%ld expiry=%ld",
+  LOG_DEBUG("set_data table=%s key=%s CAS=%ld expiry=%d",
             table.c_str(), key.c_str(), cas, expiry);
 
   Store::Status status = Store::Status::DATA_CONTENTION;
@@ -155,22 +155,24 @@ Store::Status LocalStore::set_data(const std::string& table,
       // Supplied CAS is consistent (either because record hasn't expired and
       // CAS matches, or record has expired and CAS is zero) so update the
       // record.
-      LOG_DEBUG("CAS is consistent, update record");
       r.data = data;
       r.cas = ++cas;
       r.expiry = (uint32_t)expiry + now;
       status = Store::Status::OK;
+      LOG_DEBUG("CAS is consistent, updated record, CAS = %ld, expiry = %ld (now = %ld)",
+                r.cas, r.expiry, now);
     }
   }
   else if (cas == 0)
   {
     // No existing record and supplied CAS is zero, so add a new record.
-    LOG_DEBUG("No existing record so insert");
     Record& r = _db[fqkey];
     r.data = data;
     r.cas = 1;
     r.expiry = expiry + now;
     status = Store::Status::OK;
+    LOG_DEBUG("No existing record so inserted new record, CAS = %ld, expiry = %ld (now = %ld)",
+              r.cas, r.expiry, now);
   }
 
   pthread_mutex_unlock(&_db_lock);
