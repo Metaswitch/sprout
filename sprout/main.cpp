@@ -887,6 +887,18 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
+  if (opt.icscf_enabled)
+  {
+    // Create the SCSCFSelector.
+    scscf_selector = new SCSCFSelector();
+
+    if (scscf_selector == NULL)
+    {
+      LOG_ERROR("Failed to load S-CSCF capabilities configuration for I-CSCF");
+      return 1;
+    }
+  }
+
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
   {
@@ -1082,7 +1094,7 @@ int main(int argc, char *argv[])
                                  NULL,
                                  "",
                                  quiescing_mgr,
-                                 scscf_selector,
+                                 NULL,
                                  opt.icscf_enabled,
                                  opt.scscf_enabled);
     if (status != PJ_SUCCESS)
@@ -1108,15 +1120,6 @@ int main(int argc, char *argv[])
 
   if (opt.icscf_enabled)
   {
-    // Create the SCSCFSelector.
-    scscf_selector = new SCSCFSelector();
-
-    if (scscf_selector == NULL)
-    {
-      LOG_ERROR("Failed to load S-CSCF capabilities configuration for I-CSCF");
-      return 1;
-    }
-
     // Launch I-CSCF proxy.
     icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                  stack_data.icscf_port,
