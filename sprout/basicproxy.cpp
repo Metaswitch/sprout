@@ -544,7 +544,7 @@ int BasicProxy::process_routing(pjsip_tx_data *tdata,
 }
 
 
-/// Creates a UASTsx object (normally overriden by inheriting class).
+/// Creates a UASTsx object.
 BasicProxy::UASTsx* BasicProxy::create_uas_tsx()                        //LCOV_EXCL_LINE
 {                                                                       //LCOV_EXCL_LINE
   return new UASTsx(this);                                              //LCOV_EXCL_LINE

@@ -101,13 +101,15 @@ private:
     int registration_status_query(const std::string& impi,
                                   const std::string& impu,
                                   const std::string& visited_network,
-                                  const std::string& auth_type);
+                                  const std::string& auth_type
+                                  std::string& scscf);
 
     /// Performs a location status query and finds a suitable S-CSCF for the
     /// request.
     int location_query(const std::string& impu,
                        bool originating,
-                       const std::string& auth_type);
+                       const std::string& auth_type
+                       std::string& scscf);
 
     /// Parses the HSS response.
     int parse_hss_response(Json::Value& rsp);
@@ -142,18 +144,23 @@ private:
     /// capabilities to select an alternate S-CSCF.
     std::string _auth_type;
 
-    /// The S-CSCF returned by the HSS or selected from configuration.
-    std::string _scscf;
+    /// Structure storing the most recent response from the HSS for this
+    /// transaction.
+    struct
+    {
+      /// The S-CSCF returned by the HSS.
+      std::string _scscf;
 
-    /// Flag which indicates whether or not the HSS has already returned
-    /// capabilities for this.
-    bool _have_caps;
+      /// Flag which indicates whether or not the HSS returned capabilities.
+      bool _have_caps;
 
-    /// The list of mandatory capabilities returned by the HSS.
-    std::vector<int> _mandatory_caps;
+      /// The list of mandatory capabilities returned by the HSS.
+      std::vector<int> _mandatory_caps;
 
-    /// The list of optional capabilities returned by the HSS.
-    std::vector<int> _optional_caps;
+      /// The list of optional capabilities returned by the HSS.
+      std::vector<int> _optional_caps;
+
+    } _hss_rsp;
 
     /// The list of S-CSCFs already attempted for this request.
     std::vector<std::string> _attempted_scscfs;

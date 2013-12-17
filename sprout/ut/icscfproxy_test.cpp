@@ -780,7 +780,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error, and the second selected S-CSCF also
-  // responss with a retryable error.
+  // responds with a retryable error.
 
   pjsip_tx_data* tdata;
 

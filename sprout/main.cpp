@@ -157,8 +157,8 @@ static void usage(void)
        "                            If not specified WebRTC support will be disabled\n"
        " -l, --localhost [<hostname>|<private hostname>:<public hostname>]\n"
        "                            Override the local host name with the specified\n"
-       "                            hostname(s).  If one name is specified it is used\n"
-       "                            as both private and public names.\n"
+       "                            hostname(s) or IP address(es).  If one name/address\n"
+       "                            is specified it is used as both private and public names.\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
@@ -184,7 +184,7 @@ static void usage(void)
        "                            of registration state, and specifies configuration file\n"
        "                            (otherwise uses no remote memcached store)\n"
        " -S, --sas <ipv4>:<system name>\n"
-       "                            Use specified host as software assurance server and specified\n"
+       "                            Use specified host as Service Assurance Server and specified\n"
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
@@ -849,20 +849,30 @@ int main(int argc, char *argv[])
   if (((opt.scscf_enabled) || (opt.icscf_enabled)) &&
       (opt.hss_server == ""))
   {
-    LOG_ERROR("S/I-CSCF enabled with no HSS server");
+    LOG_ERROR("S/I-CSCF enabled with no Homestead server");
     return 1;
   }
 
   if ((opt.auth_enabled) && (opt.hss_server == ""))
   {
-    LOG_ERROR("Authentication enable, but no HSS server specified");
+    LOG_ERROR("Authentication enable, but no Homestead server specified");
     return 1;
   }
 
   if ((opt.xdm_server != "") && (opt.hss_server == ""))
   {
-    LOG_ERROR("XDM server configured for services, but no HSS server specified");
+    LOG_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
+  }
+
+  if ((opt.pcscf_enabled) && (opt.hss_server != ""))
+  {
+    LOG_WARNING("Homestead server configured on P-CSCF, ignoring");
+  }
+
+  if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
+  {
+    LOG_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
   if ((opt.store_servers != "") &&
