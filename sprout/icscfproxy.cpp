@@ -115,10 +115,7 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
   BasicProxy::UASTsx(proxy),
   _hss(hss),
   _scscf_selector(scscf_selector),
-  _hss_rsp._scscf(),
-  _hss_rsp._have_caps(false),
-  _hss_rsp._mandatory_caps(),
-  _hss_rsp._optional_caps(),
+  _hss_rsp(),
   _attempted_scscfs()
 {
 }
@@ -234,7 +231,7 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
     status_code = registration_status_query(_impi,
                                             _impu,
                                             _visited_network,
-                                            _auth_type
+                                            _auth_type,
                                             scscf);
 
 
@@ -377,7 +374,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
               rsp_status);
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
-      if (!_have_caps)
+      if (!_hss_rsp._have_caps)
       {
         // We don't have capabilities from the HSS yet, so do another query
         LOG_DEBUG("Attempt retry for non-REGISTER request");
@@ -385,7 +382,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         std::string scscf;
         int status_code = location_query(_impu,
                                          (_case == SessionCase::ORIGINATING),
-                                         _auth_type
+                                         _auth_type,
                                          scscf);
 
         if (status_code == PJSIP_SC_OK)
@@ -453,13 +450,13 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     if (!_hss_rsp._scscf.empty())
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp.scscf;
+      scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp.have_caps)
+    else if (_hss_rsp._have_caps)
     {
       // Received capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
-                                         _hss_rsp.optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
+                                         _hss_rsp._optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -484,11 +481,12 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 /// Perform a location query to the HSS.
 int ICSCFProxy::UASTsx::location_query(const std::string& impu,
                                        bool originating,
-                                       const std::string& auth_type)
+                                       const std::string& auth_type,
+                                       std::string& scscf)
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_have_caps)
+  if (!_hss_rsp._have_caps)
   {
     LOG_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
               impu.c_str(),
@@ -509,9 +507,9 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
     if (!_hss_rsp._scscf.empty())
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp.scscf;
+      scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp.have_caps)
+    else if (_hss_rsp._have_caps)
     {
       // Received capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
@@ -539,8 +537,8 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
   // Clear out any older response.
   _hss_rsp._have_caps = false;
   _hss_rsp._mandatory_caps.clear();
-  _hss_rsp.optional_caps.clear();
-  _hss_rsp.scscf = "";
+  _hss_rsp._optional_caps.clear();
+  _hss_rsp._scscf = "";
 
   if (rsp["result-code"] != "DIAMETER_SUCCESS")
   {
@@ -576,7 +574,7 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
       {
         // Failed to parse capabilities, so reject with 480 response.
         LOG_WARNING("Malformed required capabilities returned by HSS for %s\n%s",
-                    _impu, rsp.toStyledString().c_str());
+                    _impu.c_str(), rsp.toStyledString().c_str());
         status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
       }
     }

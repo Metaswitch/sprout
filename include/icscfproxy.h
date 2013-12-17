@@ -101,14 +101,14 @@ private:
     int registration_status_query(const std::string& impi,
                                   const std::string& impu,
                                   const std::string& visited_network,
-                                  const std::string& auth_type
+                                  const std::string& auth_type,
                                   std::string& scscf);
 
     /// Performs a location status query and finds a suitable S-CSCF for the
     /// request.
     int location_query(const std::string& impu,
                        bool originating,
-                       const std::string& auth_type
+                       const std::string& auth_type,
                        std::string& scscf);
 
     /// Parses the HSS response.
