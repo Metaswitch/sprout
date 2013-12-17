@@ -443,9 +443,10 @@ pj_status_t fill_transport_details(int port,
   pj_addrinfo addr_info[count];
   int af = pj_AF_UNSPEC();
 
-  // Use pj_getaddrinfo() to convert the host string into an IPv4 or IPv6 address.
-  // The host string could be an IP address in string format or a hostname that needs
-  // to be resolved.  The host string should only contain a single address or hostname.
+  // Use pj_getaddrinfo() to convert the host string into an IPv4 or IPv6 address in
+  // a pj_sockaddr structure.  The host string could be an IP address in string format
+  // or a hostname that needs to be resolved.  The host string should only contain a
+  // single address or hostname.
   status = pj_getaddrinfo(af, &host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
