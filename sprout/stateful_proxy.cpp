@@ -2091,7 +2091,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
         Json::Value* location = hss->get_location_data(public_id, false, "", trail());
 
-        if (!location->isMember("result-code") ||
+        if (location == NULL ||
+            !location->isMember("result-code") ||
             ((location->get("result-code", "").asString() != "2001") &&
              (location->get("result-code", "").asString() != "2002") &&
              (location->get("result-code", "").asString() != "2003")))
