@@ -196,15 +196,6 @@ TEST_F(IfcHandlerTest, ServedUser)
   EXPECT_EQ("sip:5755550099@public_hostname", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 
 
-  // Should ignore (with warning) if URI is unparseable.
-  FakeLogger log;
-  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
-                                "$2", "P-Served-User: <sip:billy-bob@homedomain\n");
-  rdata = build_rxdata(str);
-  parse_rxdata(rdata);
-  EXPECT_EQ("sip:5755550018@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
-  EXPECT_TRUE(log.contains("Unable to parse P-Served-User header"));
-
   // If no P-Served-User, try P-Asserted-Identity.
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "sip:5755550099@public_hostname"),
                                 "$2", "P-Asserted-Identity: \"Billy Bob\" <sip:billy-bob@homedomain>\n");
