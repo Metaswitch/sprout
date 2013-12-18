@@ -161,6 +161,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
 
 
 void create_challenge(pjsip_authorization_hdr* auth_hdr,
+                      std::string resync,
                       pjsip_rx_data* rdata,
                       pjsip_tx_data* tdata)
 {
@@ -168,7 +169,6 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impi;
   std::string impu;
   std::string nonce;
-  std::string autn;
 
   pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
   impu = PJUtils::public_id_from_uri(to_uri);
@@ -187,22 +187,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
 
-  if (auth_hdr != NULL)
-  {
-    // Check for an AUTS parameter indicating a resync is required.
-    pjsip_param* p = auth_hdr->credential.digest.other_param.next;
-    while ((p != NULL) && (p != &auth_hdr->credential.digest.other_param))
-    {
-      if (pj_stricmp(&p->name, &STR_AUTS) == 0)
-      {
-        autn = PJUtils::pj_str_to_string(&p->value);
-      }
-      p = p->next;
-    }
-  }
-
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = hss->get_auth_vector(impi, impu, autn, get_trail(rdata));
+  Json::Value* av = hss->get_auth_vector(impi, impu, resync, get_trail(rdata));
 
   if (av != NULL)
   {
@@ -215,10 +201,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     LOG_DEBUG("Create WWW-Authenticate header");
     pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
-    LOG_DEBUG("Created");
 
     hdr->scheme = STR_DIGEST;
-    LOG_DEBUG("Add realm");
     pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &auth_srv.realm);
 
     if (av->isMember("aka"))
@@ -285,6 +269,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
+  std::string resync;
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_REGISTER_METHOD)
   {
@@ -327,10 +312,55 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     status = pjsip_auth_srv_verify(&auth_srv, rdata, &sc);
     if (status == PJ_SUCCESS)
     {
-      // The authentication information in the request was verified, so let
-      // the message through.
+      // The authentication information in the request was verified.
       LOG_DEBUG("Request authenticated successfully");
-      return PJ_FALSE;
+
+      // If doing AKA authentication, check for an AUTS parameter.  We only
+      // check this if the request authenticated as actioning it otherwise
+      // is a potential denial of service attack.
+      if (!pj_strcmp(&auth_hdr->credential.digest.algorithm, &STR_AKAV1_MD5))
+      {
+        LOG_DEBUG("AKA authentication so check for client resync request");
+        pjsip_param* p = pjsip_param_find(&auth_hdr->credential.digest.other_param,
+                                          &STR_AUTS);
+
+        if (p != NULL)
+        {
+          // Found AUTS parameter, so UE is requesting a resync.  We need to
+          // redo the authentication, passing an auts parameter to the HSS
+          // comprising the first 16 octets of the nonce (RAND) and the 14
+          // octets of the auts parameter for the
+          LOG_DEBUG("AKA SQN resync request from UE");
+          std::string auts = PJUtils::pj_str_to_string(&p->value);
+          std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
+          if ((auts.length() != 14) ||
+              (nonce.length() != 32))
+          {
+            // AUTS and/or nonce are malformed, so reject the request.
+            LOG_WARNING("Invalid auts/nonce on resync request from private identity %.*s",
+                        auth_hdr->credential.digest.username.slen,
+                        auth_hdr->credential.digest.username.ptr);
+            status = PJSIP_EAUTHINAKACRED;
+            sc = PJSIP_SC_FORBIDDEN;
+          }
+          else
+          {
+            // auts and nonce are as expected, so create the resync string
+            // that needs to be passed to the HSS, and act as if no
+            // authentication information was received.
+            resync = nonce.substr(0,16) + auts;
+            status = PJSIP_EAUTHNOAUTH;
+            sc = PJSIP_SC_UNAUTHORIZED;
+          }
+        }
+      }
+
+      if (status == PJ_SUCCESS)
+      {
+        // Request authentication completed, so let the message through to
+        // other modules.
+        return PJ_FALSE;
+      }
     }
   }
 
@@ -368,24 +398,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  if (rdata->msg_info.msg->line.req.method.id == PJSIP_ACK_METHOD)
-  {
-    // Discard unauthenticated ACK request since we can't reject or challenge it.
-    LOG_VERBOSE("Discard unauthenticated ACK request");
-  }
-  else if (rdata->msg_info.msg->line.req.method.id == PJSIP_CANCEL_METHOD)
-  {
-    // Reject an unauthenticated CANCEL as it cannot be challenged (see RFC3261
-    // section 22.1).
-    LOG_VERBOSE("Reject unauthenticated CANCEL request");
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_FORBIDDEN,
-                               NULL,
-                               NULL,
-                               NULL);
-  }
-  else if (status == PJSIP_EAUTHNOAUTH)
+  if (status == PJSIP_EAUTHNOAUTH)
   {
     // No authorization information in request, or stale, so must issue challenge
     LOG_DEBUG("No authentication information in request, so reject with challenge");
@@ -393,18 +406,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error building challenge response, %s",
-                PJUtils::pj_status_to_string(status).c_str());
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_INTERNAL_SERVER_ERROR,
-                                 NULL,
-                                 NULL,
-                                 NULL);
-      return PJ_TRUE;
+      LOG_ERROR("Error building challenge response, %s",           // LCOV_EXCL_LINE
+                PJUtils::pj_status_to_string(status).c_str());     // LCOV_EXCL_LINE
+      PJUtils::respond_stateless(stack_data.endpt,                 // LCOV_EXCL_LINE
+                                 rdata,                            // LCOV_EXCL_LINE
+                                 PJSIP_SC_INTERNAL_SERVER_ERROR,   // LCOV_EXCL_LINE
+                                 NULL,                             // LCOV_EXCL_LINE
+                                 NULL,                             // LCOV_EXCL_LINE
+                                 NULL);                            // LCOV_EXCL_LINE
+      return PJ_TRUE;                                              // LCOV_EXCL_LINE
     }
 
-    create_challenge(auth_hdr, rdata, tdata);
+    create_challenge(auth_hdr, resync, rdata, tdata);
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
   else

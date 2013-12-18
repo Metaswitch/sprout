@@ -108,7 +108,6 @@ public:
                               std::map<std::string, std::string>& params)
   {
     std::string hdr = www_auth_hdr;
-    LOG_DEBUG("Auth hdr: %s", hdr.c_str());
     ASSERT_THAT(hdr, MatchesRegex("WWW-Authenticate *: *Digest *.*"));
     hdr = hdr.substr(hdr.find_first_of(':') + 1);
     hdr = hdr.substr(hdr.find("Digest") + 6);
@@ -128,7 +127,6 @@ public:
         p = hdr;
         hdr = "";
       }
-      LOG_DEBUG("p = \"%s\", hdr = \"%s\"", p.c_str(), hdr.c_str());
 
       i = p.find_first_of('=');
       if (i != string::npos)
@@ -142,14 +140,12 @@ public:
           // Remove quotes around parameter.
           pvalue = pvalue.substr(1, pvalue.length()-2);
         }
-        LOG_DEBUG("param[\"%s\"] = \"%s\"", pname.c_str(), pvalue.c_str());
         params[pname] = pvalue;
       }
       else
       {
         std::string pname = p;
         Utils::trim(pname);
-        LOG_DEBUG("param[\"%s\"]", pname.c_str());
         params[pname] = "";
       }
     }
@@ -186,6 +182,7 @@ public:
   string _algorithm;
   string _opaque;
   string _integ_prot;
+  string _auts;
   string _key;
 
   AuthenticationMessage(std::string method) :
@@ -203,6 +200,7 @@ public:
     _algorithm("MD5"),
     _opaque(""),
     _integ_prot(""),
+    _auts(""),
     _key("")
   {
   }
@@ -237,7 +235,6 @@ void AuthenticationMessage::calculate_digest_response()
   if (_algorithm == "AKAv1-MD5")
   {
     // Key is a plain text password, so convert to HA1
-    LOG_DEBUG("AKA, so convert plain-text password to HA1");
     md5_init(&md5);
     md5_append(&md5, (md5_byte_t*)_auth_user.data(), _auth_user.length());
     md5_append(&md5, (md5_byte_t*)":", 1);
@@ -255,14 +252,10 @@ void AuthenticationMessage::calculate_digest_response()
   else
   {
     // Key is already HA1.
-    LOG_DEBUG("SIP Digest, key is already converted to HA1");
     ha1 = _key;
   }
 
-  LOG_DEBUG("ha1 = %s", ha1.c_str());
-
   // Calculate HA2
-  LOG_DEBUG("ha2 input = %s:%s", _method.c_str(), _uri.c_str());
   md5_init(&md5);
   md5_append(&md5, (md5_byte_t*)_method.data(), _method.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
@@ -270,11 +263,7 @@ void AuthenticationMessage::calculate_digest_response()
   md5_finish(&md5, resp);
   std::string ha2 = hash2str(resp);
 
-  LOG_DEBUG("ha2 = %s", ha2.c_str());
-
   // Calculate the response.
-  LOG_DEBUG("Digest input = %s:%s:%s:%s:%s:%s",
-            ha1.c_str(), _nonce.c_str(), _nc.c_str(), _cnonce.c_str(), _qop.c_str(), ha2.c_str());
   md5_init(&md5);
   md5_append(&md5, (md5_byte_t*)ha1.data(), ha1.length());
   md5_append(&md5, (md5_byte_t*)":", 1);
@@ -336,6 +325,7 @@ string AuthenticationMessage::get()
                                 .append((!_nc.empty()) ? string("nc=").append(_nc).append(", ") : "")
                                 .append((!_cnonce.empty()) ? string("cnonce=\"").append(_cnonce).append("\", ") : "")
                                 .append((!_qop.empty()) ? string("qop=").append(_qop).append(", ") : "")
+                                .append((!_auts.empty()) ? string("auts=\"").append(_auts).append("\", ") : "")
                                 .append((!_integ_prot.empty()) ? string("integrity-protected=\"").append(_integ_prot).append("\", ") : "")
                                 .append((!_algorithm.empty()) ? string("algorithm=").append(_algorithm) : "")
                                 .append("\r\n").c_str() :
@@ -352,7 +342,8 @@ string AuthenticationMessage::get()
 
 TEST_F(AuthenticationTest, NoAuthorizationNonReg)
 {
-  // Test that Sprout accepts non-REGISTER requests with no authorization header.
+  // Test that the authentication module lets through non-REGISTER requests
+  // with no authorization header.
   AuthenticationMessage msg("INVITE");
   msg._auth_hdr = false;
   pj_bool_t ret = inject_msg_direct(msg.get());
@@ -360,7 +351,34 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
 }
 
 
-TEST_F(AuthenticationTest, DigestAuthentication)
+TEST_F(AuthenticationTest, IntegrityProtected)
+{
+  // Test that the authentication module lets through REGISTER requests
+  // with authorization headers indicating the request has been integrity
+  // protected at the P-CSCF.
+  pj_bool_t ret;
+
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = true;
+  msg1._integ_prot = "yes";
+  ret = inject_msg_direct(msg1.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+
+  AuthenticationMessage msg2("REGISTER");
+  msg2._auth_hdr = true;
+  msg2._integ_prot = "tls-yes";
+  ret = inject_msg_direct(msg2.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+
+  AuthenticationMessage msg3("REGISTER");
+  msg3._auth_hdr = true;
+  msg3._integ_prot = "ip-assoc-yes";
+  ret = inject_msg_direct(msg3.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+
+TEST_F(AuthenticationTest, DigestAuthSuccess)
 {
   // Test a successful SIP Digest authentication flow.
   pjsip_tx_data* tdata;
@@ -373,7 +391,6 @@ TEST_F(AuthenticationTest, DigestAuthentication)
   // Digest authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  LOG_VERBOSE("Inject initial REGISTER request\n%s", msg1.get().c_str());
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -400,15 +417,93 @@ TEST_F(AuthenticationTest, DigestAuthentication)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
-  LOG_VERBOSE("Inject REGISTER request with response to challenge\n%s", msg2.get().c_str());
   inject_msg(msg2.get());
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
 
-TEST_F(AuthenticationTest, AKAAuthentication)
+TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
+{
+  // Test a failed SIP Digest authentication flow where the response is wrong.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including a
+  // bas response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._response = "00000000000000000000000000000000";
+  inject_msg(msg2.get());
+
+  // Check 403 forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, DigestAuthFailBadIMPI)
+{
+  // Test a failed SIP Digest authentication flow where the response is wrong.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with an authentication header with a bad IMPI.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = true;
+  msg1._auth_user = "unknown@homedomain";
+  inject_msg(msg1.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, AKAAuthSuccess)
 {
   // Test a successful AKA authentication flow.
   pjsip_tx_data* tdata;
@@ -427,7 +522,6 @@ TEST_F(AuthenticationTest, AKAAuthentication)
   // authentication.
   AuthenticationMessage msg1("REGISTER");
   msg1._auth_hdr = false;
-  LOG_VERBOSE("Inject initial REGISTER request\n%s", msg1.get().c_str());
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -439,7 +533,9 @@ TEST_F(AuthenticationTest, AKAAuthentication)
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
-  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
   EXPECT_EQ("auth", auth_params["qop"]);
   EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
   free_txdata();
@@ -454,10 +550,233 @@ TEST_F(AuthenticationTest, AKAAuthentication)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
-  LOG_VERBOSE("Inject REGISTER request with response to challenge\n%s", msg2.get().c_str());
   inject_msg(msg2.get());
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
+
+
+TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
+{
+  // Test a failed AKA authentication flow where the response is wrong.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                                        "\"response\":\"12345678123456781234567812345678\","
+                                        "\"cryptkey\":\"0123456789abcdef\","
+                                        "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header with an incorrect
+  // response.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv1-MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._response = "00000000000000000000000000000000";
+  inject_msg(msg2.get());
+
+  // Check 403 forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
+{
+  // Test an AKA authentication flow that initially fails because the client
+  // sequence number if out of sync with the HSS sequence number.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                                        "\"response\":\"12345678123456781234567812345678\","
+                                        "\"cryptkey\":\"0123456789abcdef\","
+                                        "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Set up a second HSS response for the resync query from the authentication
+  // module.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132",
+                              "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
+                                        "\"response\":\"87654321876543218765432187654321\","
+                                        "\"cryptkey\":\"fedcba9876543210\","
+                                        "\"integritykey\":\"0123456789abcdef\"}}");
+
+  // Send a new REGISTER request with an authentication header with a correct
+  // response, but with an auts parameter indicating the sequence number in
+  // the nonce was out of sync.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv1-MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._auts = "32132132132132";
+  LOG_VERBOSE("Injecting REGISTER with auts\n%s", msg2.get().c_str());
+  inject_msg(msg2.get());
+
+  // Expect another 401 Not Authorized response with a new challenge.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  auth = get_headers(tdata->msg, "WWW-Authenticate");
+  auth_params.clear();
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("12345678123456781234567812345678", auth_params["nonce"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ck"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header with a correct
+  // response to the second challenge.
+  AuthenticationMessage msg3("REGISTER");
+  msg3._algorithm = "AKAv1-MD5";
+  msg3._key = "87654321876543218765432187654321";
+  msg3._nonce = auth_params["nonce"];
+  msg3._opaque = auth_params["opaque"];
+  msg3._nc = "00000001";
+  msg3._cnonce = "8765432187654321";
+  msg3._qop = "auth";
+  inject_msg(msg3.get());
+
+  // Expect no response, as the authentication module has let the request through.
+  ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, AKAAuthResyncFail)
+{
+  // Test an AKA authentication flow that initially fails because the client
+  // sequence number if out of sync with the HSS sequence number.  The resync
+  // fails because the auts parameter is malformed.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  // The keys in this test case are not consistent, but that won't matter for
+  // the purposes of the test as Clearwater never itself runs the MILENAGE
+  // algorithms to generate or extract keys.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                                        "\"response\":\"12345678123456781234567812345678\","
+                                        "\"cryptkey\":\"0123456789abcdef\","
+                                        "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_EQ("87654321876543218765432187654321", auth_params["nonce"]);
+  EXPECT_EQ("0123456789abcdef", auth_params["ck"]);
+  EXPECT_EQ("fedcba9876543210", auth_params["ik"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("AKAv1-MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header with a correct
+  // response, but with an auts parameter indicating the sequence number in
+  // the nonce was out of sync.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "AKAv1-MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._auts = "321321321321";    // Too short
+  LOG_VERBOSE("Injecting REGISTER with auts\n%s", msg2.get().c_str());
+  inject_msg(msg2.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
 

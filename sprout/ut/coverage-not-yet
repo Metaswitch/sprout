@@ -8,7 +8,6 @@ stateful_proxy.cpp
 connection_pool.cpp
 pjutils.cpp
 analyticslogger.cpp
-authentication.cpp
 callservices.cpp
 stack.cpp
 websockets.cpp

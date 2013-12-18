@@ -120,7 +120,8 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
 
   if (!autn.empty())
   {
-    path += "?autn=" + Utils::url_escape(autn);
+    path += public_user_identity.empty() ? "?" : "&";
+    path += "autn=" + Utils::url_escape(autn);
   }
 
   Json::Value* av = get_json_object(path, trail);
@@ -338,7 +339,7 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
                      "/registration-status" +
-                     "?impu=" + 
+                     "?impu=" +
                      Utils::url_escape(public_user_identity);
 
   if (!visited_network.empty())
@@ -362,7 +363,7 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
   return rc;
 }
 
-/// Makes a location information request, and returns the data as a JSON object. 
+/// Makes a location information request, and returns the data as a JSON object.
 Json::Value* HSSConnection::get_location_data(const std::string& public_user_identity,
                                               const bool& originating,
                                               const std::string& auth_type,
