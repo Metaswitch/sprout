@@ -1424,11 +1424,12 @@ TEST_F(StatefulProxyTest, TestMultipleRouteHeaders)
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
-  msg._extra = "Route: <sip:all.the.sprouts;transport=tcp>\r\nRoute: <sip:homedomain>";
+  msg._extra = "Route: <sip:local_ip:5054;transport=tcp;lr>\r\nRoute: <sip:local_ip:5058;lr>";
   list<HeaderMatcher> hdrs;
-  // Expect no Route headers out, as they all point to us
+  // Expect only the top Route header to be stripped, as is necessary
+  // for Sprout and Bono to be colocated
 
-  hdrs.push_back(HeaderMatcher("Route"));
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:local_ip:5058;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
