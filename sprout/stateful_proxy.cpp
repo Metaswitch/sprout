@@ -1385,8 +1385,9 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   // If the first value in the Route header field indicates this proxy or
   // home domain, the proxy MUST remove that value from the request.
   // We remove consecutive Route headers that point to us so we don't spiral.'
-  while (PJUtils::is_top_route_local(tdata->msg, &hroute))
+  if (PJUtils::is_top_route_local(tdata->msg, &hroute))
   {
+    LOG_DEBUG("Top Route header is local - erasing");
     pj_list_erase(hroute);
   }
 
