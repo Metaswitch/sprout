@@ -296,8 +296,7 @@ protected:
   virtual int process_routing(pjsip_tx_data* tdata,
                               BasicProxy::Target*& target);
 
-  /// Utility method to create a UASTsx objects for incoming requests.  Can
-  /// be overriden if a subclass wants its own version of UASTsx.
+  /// Utility method to create a UASTsx objects for incoming requests.
   virtual BasicProxy::UASTsx* create_uas_tsx();
 
   /// PJModule binding a pjsip_module to an instance of this class for the

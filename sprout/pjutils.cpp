@@ -46,7 +46,6 @@ extern "C" {
 #include <pjlib.h>
 }
 
-//#include <boost/algorithm/string.hpp>
 #include "stack.h"
 #include "log.h"
 #include "constants.h"
