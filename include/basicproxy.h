@@ -264,6 +264,10 @@ protected:
     /// orphaned.
     UASTsx* _uas_tsx;
 
+    /// PJSIP group lock used to protect all PJSIP UAS and UAC transactions
+    /// involved in this proxied request.
+    pj_grp_lock_t* _lock;
+
     /// Index of this UACTsx object within the parent.  Always zero
     /// for non-forked transactions.
     int _index;

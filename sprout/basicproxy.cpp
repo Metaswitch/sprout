@@ -612,6 +612,9 @@ BasicProxy::UASTsx::~UASTsx()
     _targets.pop_front();                                               //LCOV_EXCL_LINE
   }
 
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
+
   LOG_DEBUG("BasicProxy::UASTsx destructor completed");
 }
 
@@ -654,10 +657,10 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata,
   _proxy->bind_transaction(this, _tsx);
 
   // Enter the transaction's context, and then release our copy of the
-  // group lock.
+  // group lock, but don't decrement the reference count as we need to leave
+  // a reference corresponding to this UASTsx structure.
   enter_context();
   pj_grp_lock_release(_lock);
-  pj_grp_lock_dec_ref(_lock);
 
   // Set the trail identifier for the transaction using the trail ID on
   // the original message.
@@ -828,8 +831,8 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
       {
         UACTsx* uac_tsx = new_tsx.front();
         new_tsx.pop_front();
-       
-        // Push this onto the array before sending the request (as the request could 
+
+        // Push this onto the array before sending the request (as the request could
         // fail and try to delete the transaction from the array)
         _uac_tsx.push_back(uac_tsx);
         uac_tsx->send_request();
@@ -1278,6 +1281,8 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
 {
   // Don't put any initialization that can fail here, implement in init()
   // instead.
+  _lock = _uas_tsx->_lock;
+  pj_grp_lock_add_ref(_lock);
 }
 
 
@@ -1311,6 +1316,9 @@ BasicProxy::UACTsx::~UACTsx()
   }
 
   _tsx = NULL;
+
+  pj_grp_lock_release(_lock);
+  pj_grp_lock_dec_ref(_lock);
 }
 
 
@@ -1323,7 +1331,7 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 
   status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
                                  tdata,
-                                 _uas_tsx->_lock,
+                                 _lock,
                                  &_tsx);
   if (status != PJ_SUCCESS)
   {
@@ -1530,6 +1538,9 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 // exit_context must be called before the end of the method.
 void BasicProxy::UACTsx::enter_context()
 {
+  // Take the group lock.
+  pj_grp_lock_acquire(_lock);
+
   // If the transaction is pending destroy, the context count must be greater
   // than 0.  Otherwise, the transaction should have already been destroyed (so
   // entering its context again is unsafe).
@@ -1552,6 +1563,11 @@ void BasicProxy::UACTsx::exit_context()
   if ((_context_count == 0) && (_pending_destroy))
   {
     delete this;
+  }
+  else
+  {
+    // Release the group lock.
+    pj_grp_lock_release(_lock);
   }
 }
 
