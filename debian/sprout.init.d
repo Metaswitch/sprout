@@ -83,6 +83,9 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
+        icscf=5054
+        scscf=5052
+        sprout_port=5054
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.
