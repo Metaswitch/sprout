@@ -115,6 +115,7 @@ IfcHandler::~IfcHandler()
 // @throw ifc_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                       bool is_registered,               //< The registration state
+                      bool is_initial_registration,
                       pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt)                  //< The Service Point Trigger node
 {
@@ -175,13 +176,13 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
           switch (reg_type)
           {
           case INITIAL_REGISTRATION:
-            ret = !is_registered && (expiry > 0);
+            ret = (is_initial_registration && (expiry > 0));
             break;
           case REREGISTRATION:
-            ret = is_registered && (expiry > 0);
+            ret = (!is_initial_registration && (expiry > 0));
             break;
           case DEREGISTRATION:
-            ret = is_registered && (expiry == 0);
+            ret = (expiry == 0);
             break;
           default:
           // LCOV_EXCL_START Unreachable
@@ -390,7 +391,10 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg* msg) const
+bool Ifc::filter_matches(const SessionCase& session_case,
+                         bool is_registered,
+                         bool is_initial_registration,
+                         pjsip_msg* msg) const
 {
   try
   {
@@ -444,7 +448,7 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     {
       xml_node<>* neg_node = spt->first_node("ConditionNegated");
       bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
-      bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
+      bool val = spt_matches(session_case, is_registered, is_initial_registration, msg, spt) != neg;
 
       for (xml_node<>* group_node = spt->first_node("Group");
            group_node;
@@ -636,6 +640,7 @@ Ifcs::~Ifcs()
 // Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      bool is_registered,               //< Whether the served user is registered
+                     bool is_initial_registration,
                      pjsip_msg* msg,                   //< The message starting the dialog
                      std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
 {
@@ -644,7 +649,7 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
        it != _ifcs.end();
        ++it)
   {
-    if (it->filter_matches(session_case, is_registered, msg))
+    if (it->filter_matches(session_case, is_registered, is_initial_registration, msg))
     {
       application_servers.push_back(it->as_invocation());
     }
