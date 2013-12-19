@@ -123,8 +123,12 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/usr/include
+            -I${ROOT}/usr/include \
+						-I${ROOT}/modules/cpp-common/include
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
+
+# Add cpp-common/src as VPATH so build will find modules there.
+VPATH = ${ROOT}/modules/cpp-common/src
 
 # Production build:
 #

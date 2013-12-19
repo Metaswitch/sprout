@@ -43,3 +43,6 @@
 [submodule "modules/sas-client"]
 	path = modules/sas-client
 	url = git@github.com:Metaswitch/sas-client.git
+[submodule "modules/cpp-common"]
+	path = modules/cpp-common
+	url = git@github.com:Metaswitch/cpp-common.git
