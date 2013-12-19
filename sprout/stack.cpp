@@ -776,7 +776,7 @@ void sas_write(SAS::log_level_t sas_level, const char *module, int line_number, 
     }
 
   va_start(args, fmt);
-  _write(level, module, line_number, fmt, args);
+  Log::_write(level, module, line_number, fmt, args);
   va_end(args);
 }
 // LCOV_EXCL_STOP
