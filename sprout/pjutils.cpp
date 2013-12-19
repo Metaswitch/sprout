@@ -46,10 +46,10 @@ extern "C" {
 #include <pjlib.h>
 }
 
-#include <boost/algorithm/string.hpp>
 #include "stack.h"
 #include "log.h"
 #include "constants.h"
+#include "custom_headers.h"
 
 
 /// Utility to determine if this URI belongs to the home domain.
@@ -274,6 +274,60 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   return id;
 }
 
+
+/// Determine the served user for originating requests.
+pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
+{
+  // The served user for originating requests is determined from the
+  // P-Served-User or P-Asserted-Identity headers.  For extra compatibility,
+  // we will also look at the From header if neither of the IMS headers is
+  // present.
+  pjsip_uri* uri = NULL;
+  pjsip_routing_hdr* served_user = (pjsip_routing_hdr*)
+                     pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+
+  if (served_user != NULL)
+  {
+    uri = (pjsip_uri*)pjsip_uri_get_uri(&served_user->name_addr);
+    LOG_DEBUG("Served user from P-Served-User header");
+  }
+
+  if (uri == NULL)
+  {
+    // No P-Served-User header present, so check for P-Asserted-Identity
+    // header.
+    pjsip_routing_hdr* asserted_id = (pjsip_routing_hdr*)
+               pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
+
+    if (asserted_id != NULL)
+    {
+      uri = (pjsip_uri*)pjsip_uri_get_uri(&asserted_id->name_addr);
+      LOG_DEBUG("Served user from P-Asserted-Identity header");
+    }
+  }
+
+  if (uri == NULL)
+  {
+    // Neither IMS header is present, so use the From header.  This isn't
+    // strictly speaking IMS compliant.
+    LOG_DEBUG("From header %p", PJSIP_MSG_FROM_HDR(msg));
+    uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_FROM_HDR(msg)->uri);
+    LOG_DEBUG("Served user from From header (%p)", uri);
+  }
+
+  return uri;
+}
+
+
+/// Determine the served user for terminating requests.
+pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
+{
+  // The served user for terminating requests is always determined from the
+  // Request URI.
+  return msg->line.req.uri;
+}
+
+
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
@@ -335,32 +389,12 @@ void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid
 {
   LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
   pjsip_routing_hdr* p_asserted_id =
-    identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
+                     identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
 
   pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, tdata->pool, true);
   memcpy(&p_asserted_id->name_addr, temp, sizeof(pjsip_name_addr));
 
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_asserted_id);
-}
-
-
-extern pjsip_hdr_vptr identity_hdr_vptr;
-
-/// Creates an identity header (so either P-Associated-URI, P-Asserted-Identity
-/// or P-Preferred-Identity)
-pjsip_routing_hdr* PJUtils::identity_hdr_create(pj_pool_t* pool, const pj_str_t& name)
-{
-  pjsip_routing_hdr* hdr = (pjsip_routing_hdr*)pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
-
-  pj_list_init(hdr);
-  hdr->vptr = &identity_hdr_vptr;
-  hdr->type = PJSIP_H_OTHER;
-  hdr->name = name;
-  hdr->sname = pj_str("");
-  pjsip_name_addr_init(&hdr->name_addr);
-  pj_list_init(&hdr->other_param);
-
-  return hdr;
 }
 
 
@@ -449,22 +483,14 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
 }
 
 
-/// Delete all existing copies of a header.  The header to delete must
+/// Remove all existing copies of a header.  The header to delete must
 /// not be one that has an abbreviation.
-void PJUtils::delete_header(pjsip_msg* msg,
-                            const pj_str_t* name)
+void PJUtils::remove_hdr(pjsip_msg* msg,
+                         const pj_str_t* name)
 {
-  while (1)
+  while (pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL))
   {
-    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, name, NULL);
-    if (hdr)
-    {
-      pj_list_erase(hdr);
-    }
-    else
-    {
-      break;
-    }
+    pj_list_erase(hdr);
   }
 }
 
@@ -475,7 +501,7 @@ void PJUtils::set_generic_header(pjsip_tx_data* tdata,
                                  const pj_str_t* name,
                                  const pj_str_t* value)
 {
-  delete_header(tdata->msg, name);
+  remove_hdr(tdata->msg, name);
   pjsip_generic_string_hdr* new_hdr = pjsip_generic_string_hdr_create(tdata->pool, name, value);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)new_hdr);
 }

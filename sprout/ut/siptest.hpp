@@ -77,16 +77,25 @@ public:
 
 protected:
 
+
+  /// Class containing transport factories for the various ports.
+  class TransportFactory
+  {
+  public:
+    TransportFactory();
+    ~TransportFactory();
+
+  };
+
   /// Abstraction of a transport flow used for injecting or receiving SIP
   /// messages.
   class TransportFlow
   {
   public:
-    typedef enum {TCP, UDP, WS} Protocol;
-    typedef enum {TRUSTED, UNTRUSTED} Trust;
+    typedef enum {TCP, UDP} Protocol;
 
     TransportFlow(Protocol protocol,
-                  Trust trust,
+                  int local_port,
                   const char* addr,
                   int port);
     ~TransportFlow();
@@ -97,6 +106,9 @@ protected:
     /// Returns the local port of the transport.
     int local_port();
 
+    /// Returns the transport itself.
+    pjsip_transport* transport();
+
     /// Returns a string rendering of the flow, with or without the
     /// transport name.
     std::string to_string(bool transport);
@@ -105,13 +117,18 @@ protected:
     void expect_target(const pjsip_tx_data* tdata,
                        bool strict = true);  //< Exact same transport (true) or just same address (false)
 
+    static void reset();
+
+    static pjsip_transport* udp_transport(int port);
+    static pjsip_tpfactory* tcp_factory(int port);
+
   private:
+    static std::map<int, pjsip_transport*> _udp_transports;
+    static std::map<int, pjsip_tpfactory*> _tcp_factories;
+
     pjsip_transport* _transport;
     pj_sockaddr _rem_addr;
   };
-
-  /// Initialise the UDP and TCP transports for the specified port.
-  static void init_port(int port, pjsip_transport** udp_tp, pjsip_tpfactory** tcp_factory);
 
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);

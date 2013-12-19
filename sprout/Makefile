@@ -50,8 +50,10 @@ TARGET_SOURCES := logger.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
                   counter.cpp \
-                  signalhandler.cpp \
-                  scscfselector.cpp
+                  basicproxy.cpp \
+									icscfproxy.cpp \
+                  scscfselector.cpp	\
+                  signalhandler.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -92,6 +94,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
+											 icscfproxy_test.cpp \
+											 basicproxy_test.cpp \
                        scscfselector_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
@@ -259,10 +263,10 @@ vg: build_test | $(TEST_OUT_DIR)
 	-valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
-# Check whether there were any errors from valgrind. Output to screen any errors found, 
-# and details of where to find the full logs. 
+# Check whether there were any errors from valgrind. Output to screen any errors found,
+# and details of where to find the full logs.
 # The output file will contain <error><kind>ERROR</kind></error>, or 'XPath set is empty'
-# if there are no errors. 
+# if there are no errors.
 .PHONY: vg-check
 vg-check: vg
 	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \
