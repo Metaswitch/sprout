@@ -94,12 +94,14 @@ std::string public_id_from_uri(const pjsip_uri* uri);
 
 std::string default_private_id_from_uri(const pjsip_uri* uri);
 
+pjsip_uri* orig_served_user(pjsip_msg* msg);
+
+pjsip_uri* term_served_user(pjsip_msg* msg);
+
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
 
 void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
-
-pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t& name);
 
 pjsip_uri* next_hop(pjsip_msg* msg);
 
@@ -117,8 +119,8 @@ inline pj_bool_t is_top_route_local(const pjsip_msg* msg, pjsip_route_hdr** hdr)
 
 void add_record_route(pjsip_tx_data* tdata, const char* transport, int port, const char* user, const pj_str_t& host);
 
-void delete_header(pjsip_msg* msg,
-                   const pj_str_t* name);
+void remove_hdr(pjsip_msg* msg,
+                const pj_str_t* name);
 
 void set_generic_header(pjsip_tx_data* tdata,
                         const pj_str_t* name,

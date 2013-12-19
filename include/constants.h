@@ -67,6 +67,7 @@ const pj_str_t STR_ORIG = pj_str("orig");
 const pj_str_t STR_NO_FORK = pj_str("no-fork");
 const pj_str_t STR_P_C_V = pj_str("P-Charging-Vector");
 const pj_str_t STR_P_C_F_A = pj_str("P-Charging-Function-Addresses");
+const pj_str_t STR_P_PROFILE_KEY = pj_str("P-Profile-Key");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");

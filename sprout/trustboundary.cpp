@@ -54,9 +54,9 @@ static void proxy_strip_trusted(pjsip_tx_data *tdata)
 {
   LOG_DEBUG("Strip trusted headers");
 
-  PJUtils::delete_header(tdata->msg, &STR_P_A_N_I);
-  PJUtils::delete_header(tdata->msg, &STR_P_V_N_I); 
-  PJUtils::delete_header(tdata->msg, &STR_P_SERVED_USER);
+  PJUtils::remove_hdr(tdata->msg, &STR_P_A_N_I);
+  PJUtils::remove_hdr(tdata->msg, &STR_P_V_N_I);
+  PJUtils::remove_hdr(tdata->msg, &STR_P_SERVED_USER);
 }
 
 TrustBoundary::TrustBoundary(std::string description, pj_bool_t strip_request, pj_bool_t strip_response) :

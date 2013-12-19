@@ -85,9 +85,11 @@ pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx* ctx);
 // Preferred/Asserted Identity
 pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx* ctx);
 pjsip_hdr* parse_hdr_p_preferred_identity(pjsip_parse_ctx* ctx);
-int identity_hdr_print(pjsip_routing_hdr *hdr, char *buf, pj_size_t size);
-pjsip_routing_hdr* identity_hdr_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
-pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t *pool, const pjsip_routing_hdr *rhs);
+pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name);
+pjsip_routing_hdr* identity_hdr_init(pj_pool_t* pool, void* mem, const pj_str_t name);
+pjsip_routing_hdr* identity_hdr_clone(pj_pool_t* pool, const pjsip_routing_hdr* rhs);
+pjsip_routing_hdr* identity_hdr_shallow_clone(pj_pool_t* pool, const pjsip_routing_hdr* rhs);
+int identity_hdr_print(pjsip_routing_hdr* hdr, char* buf, pj_size_t size);
 
 // Charging Vector
 pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx);

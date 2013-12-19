@@ -46,7 +46,7 @@
 class SCSCFSelector
 {
 public:
-  SCSCFSelector(std::string configuration = "./scscf.json");
+  SCSCFSelector(std::string configuration = "./s-cscf.json");
   ~SCSCFSelector();
   
   // Updates the scscf configuration

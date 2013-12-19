@@ -178,7 +178,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
                             optional_cap.begin(), optional_cap.end(),
                             std::back_inserter(intersection));
 
-      if (intersection.size() > max_size)
+      if (intersection.size() > max_size ||
+          matches.size() == 0)
       {
         matches.clear();
         matches.push_back(*it);

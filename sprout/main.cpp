@@ -80,31 +80,37 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
+#include "scscfselector.h"
+#include "icscfproxy.h"
 
 struct options
 {
-  std::string            system_name;
-  int                    trusted_port;
-  int                    untrusted_port;
-  int                    record_routing_model;
+  bool                   pcscf_enabled;
+  int                    pcscf_untrusted_port;
+  int                    pcscf_trusted_port;
   int                    webrtc_port;
-  std::string            local_host;
-  std::string            public_host;
-  std::string            home_domain;
-  std::string            sprout_domain;
-  std::string            alias_hosts;
-  pj_bool_t              access_proxy;
   std::string            upstream_proxy;
   int                    upstream_proxy_port;
   int                    upstream_proxy_connections;
   int                    upstream_proxy_recycle;
   pj_bool_t              ibcf;
+  bool                   scscf_enabled;
+  int                    scscf_port;
+  bool                   icscf_enabled;
+  int                    icscf_port;
+  std::string            external_icscf_uri;
+  int                    record_routing_model;
+  std::string            local_host;
+  std::string            public_host;
+  std::string            home_domain;
+  std::string            sprout_domain;
+  std::string            alias_hosts;
   std::string            trusted_hosts;
-  std::string            icscf_uri_str;
   pj_bool_t              auth_enabled;
   std::string            auth_realm;
   std::string            auth_config;
   std::string            sas_server;
+  std::string            sas_system_name;
   std::string            hss_server;
   std::string            xdm_server;
   std::string            store_servers;
@@ -143,14 +149,16 @@ static void usage(void)
 {
   puts("Options:\n"
        "\n"
-       " -s, --system <name>        System name for SAS logging (defaults to local host name)\n"
-       " -t, --trusted-port N       Set local trusted listener port to N\n"
-       " -u, --untrusted-port N     Set local untrusted listener port to N\n"
-       "                            If not specified SIP outbound support will be disabled\n"
+       " -p, --pcscf <untrusted port>:<trusted port>\n"
+       "                            Enable P-CSCF function with the specified ports\n"
+       " -i, --icscf <port>         Enable I-CSCF function on the specified port\n"
+       " -s, --scscf <port>         Enable S-CSCF function on the specified port\n"
        " -w, --webrtc-port N        Set local WebRTC listener port to N\n"
        "                            If not specified WebRTC support will be disabled\n"
-       " -l, --localhost <name>     Override the local host name\n"
-       " -p, --public-host <name>   Override the public host name\n"
+       " -l, --localhost [<hostname>|<private hostname>:<public hostname>]\n"
+       "                            Override the local host name with the specified\n"
+       "                            hostname(s) or IP address(es).  If one name/address\n"
+       "                            is specified it is used as both private and public names.\n"
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
@@ -163,7 +171,8 @@ static void usage(void)
        "                            recycled).\n"
        " -I, --ibcf <IP addresses>  Operate as an IBCF accepting SIP flows from\n"
        "                            the pre-configured list of IP addresses\n"
-       " -j, --icscf <I-CSCF URI>   Route calls to specific I-CSCF\n"
+       " -j, --external-icscf <I-CSCF URI>\n"
+       "                            Route calls to specified external I-CSCF\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
        " -M, --memstore <config_file>"
@@ -174,8 +183,10 @@ static void usage(void)
        "                            Enabled remote memcached store for geo-redundant storage\n"
        "                            of registration state, and specifies configuration file\n"
        "                            (otherwise uses no remote memcached store)\n"
-       " -S, --sas <ipv4>           Use specified host as software assurance\n"
-       "                            server.  Otherwise uses localhost\n"
+       " -S, --sas <ipv4>:<system name>\n"
+       "                            Use specified host as Service Assurance Server and specified\n"
+       "                            system name to identify this system to SAS.  If this option isn't\n"
+       "                            specified SAS is disabled\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
@@ -201,45 +212,42 @@ static void usage(void)
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
        " -d, --daemon               Run as daemon\n"
-       " -i, --interactive          Run in foreground with interactive menu\n"
+       " -t, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
     );
 }
 
 
-// Parse a string representing a port, retunring whether it parsed successfully.
-bool parse_port(char* port_str, int& port)
+/// Parse a string representing a port.
+/// @returns The port number as an int, or zero if the port is invalid.
+int parse_port(const std::string& port_str)
 {
-  int _port = atoi(port_str);
+  int port = atoi(port_str.c_str());
 
-  if ((_port > 0) && (_port <= 0xFFFF))
-  {
-    port = _port;
-    return true;
-  }
-  else
+  if ((port < 0) || (port > 0xFFFF))
   {
     port = 0;
-    return false;
   }
+
+  return port;
 }
 
 
 static pj_status_t init_options(int argc, char *argv[], struct options *options)
 {
-  struct pj_getopt_option long_opt[] = {
-    { "system",            required_argument, 0, 's'},
-    { "trusted-port",      required_argument, 0, 't'},
-    { "untrusted-port",    required_argument, 0, 'u'},
+  struct pj_getopt_option long_opt[] =
+  {
+    { "pcscf",             required_argument, 0, 'p'},
+    { "scscf",             required_argument, 0, 's'},
+    { "icscf",             required_argument, 0, 'i'},
     { "webrtc-port",       required_argument, 0, 'w'},
     { "localhost",         required_argument, 0, 'l'},
-    { "public-host",       required_argument, 0, 'p'},
     { "domain",            required_argument, 0, 'D'},
     { "sprout-domain",     required_argument, 0, 'c'},
     { "alias",             required_argument, 0, 'n'},
     { "routing-proxy",     required_argument, 0, 'r'},
     { "ibcf",              required_argument, 0, 'I'},
-    { "icscf",             required_argument, 0, 'j'},
+    { "external-icscf",    required_argument, 0, 'j'},
     { "auth",              required_argument, 0, 'A'},
     { "realm",             required_argument, 0, 'R'},
     { "memstore",          required_argument, 0, 'M'},
@@ -259,7 +267,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "log-file",          required_argument, 0, 'F'},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
-    { "interactive",       no_argument,       0, 'i'},
+    { "interactive",       no_argument,       0, 't'},
     { "help",              no_argument,       0, 'h'},
     { NULL,                0, 0, 0}
   };
@@ -268,33 +276,87 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while((c=pj_getopt_long(argc, argv, "s:t:u:l:D:c:C:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dih", long_opt, &opt_ind))!=-1) {
-    switch (c) {
-    case 's':
-      options->system_name = std::string(pj_optarg);
-      fprintf(stdout, "System name is set to %s\n", pj_optarg);
+  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dth", long_opt, &opt_ind)) != -1)
+  {
+    switch (c)
+    {
+    case 'p':
+      {
+        std::vector<std::string> pcscf_options;
+        Utils::split_string(std::string(pj_optarg), ':', pcscf_options, 0, false);
+        if (pcscf_options.size() == 2)
+        {
+          options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
+          options->pcscf_trusted_port = parse_port(pcscf_options[1]);
+        }
+
+        if ((options->pcscf_untrusted_port != 0) &&
+            (options->pcscf_trusted_port != 0))
+        {
+          fprintf(stdout, "P-CSCF enabled on ports %d (untrusted) and %d (trusted)\n",
+                  options->pcscf_untrusted_port, options->pcscf_trusted_port);
+          options->pcscf_enabled = true;
+        }
+        else
+        {
+          fprintf(stdout, "P-CSCF ports %s invalid\n", pj_optarg);
+          return -1;
+        }
+      }
       break;
 
-    case 't':
-      if (parse_port(pj_optarg, options->trusted_port))
+    case 's':
+      options->scscf_port = parse_port(std::string(pj_optarg));
+      if (options->scscf_port != 0)
       {
-        fprintf(stdout, "Trusted Port is set to %d\n", options->trusted_port);
+        fprintf(stdout, "S-CSCF enabled on port %d\n", options->scscf_port);
+        options->scscf_enabled = true;
       }
       else
       {
-        fprintf(stdout, "Trusted Port %s is invalid\n", pj_optarg);
+        fprintf(stdout, "S-CSCF port %s is invalid\n", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case 'i':
+      options->icscf_port = parse_port(std::string(pj_optarg));
+      if (options->icscf_port != 0)
+      {
+        fprintf(stdout, "I-CSCF enabled on port %d\n", options->icscf_port);
+        options->icscf_enabled = true;
+      }
+      else
+      {
+        fprintf(stdout, "I-CSCF port %s is invalid\n", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case 'w':
+      options->webrtc_port = parse_port(std::string(pj_optarg));
+      if (options->webrtc_port != 0)
+      {
+        fprintf(stdout, "WebRTC port is set to %d\n", options->webrtc_port);
+      }
+      else
+      {
+        fprintf(stdout, "WebRTC port %s is invalid\n", pj_optarg);
         return -1;
       }
       break;
 
     case 'C':
-      if (strcmp(pj_optarg, "pcscf") == 0) {
+      if (strcmp(pj_optarg, "pcscf") == 0)
+      {
         options->record_routing_model = 1;
       }
-      else if (strcmp(pj_optarg, "pcscf,icscf") == 0) {
+      else if (strcmp(pj_optarg, "pcscf,icscf") == 0)
+      {
         options->record_routing_model = 2;
       }
-      else if (strcmp(pj_optarg, "pcscf,icscf,as") == 0) {
+      else if (strcmp(pj_optarg, "pcscf,icscf,as") == 0)
+      {
         options->record_routing_model = 3;
       }
       else
@@ -305,38 +367,31 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Record-Routing model is set to %d\n", options->record_routing_model);
       break;
 
-    case 'u':
-      if (parse_port(pj_optarg, options->untrusted_port))
-      {
-        fprintf(stdout, "Untrusted Port is set to %d\n", options->untrusted_port);
-      }
-      else
-      {
-        fprintf(stdout, "Untrusted Port %s is invalid\n", pj_optarg);
-        return -1;
-      }
-      break;
-
-    case 'w':
-      if (parse_port(pj_optarg, options->webrtc_port))
-      {
-        fprintf(stdout, "WebRTC Port is set to %d\n", options->webrtc_port);
-      }
-      else
-      {
-        fprintf(stdout, "WebRTC Port %s is invalid\n", pj_optarg);
-        return -1;
-      }
-      break;
-
     case 'l':
-      options->local_host = std::string(pj_optarg);
-      fprintf(stdout, "Override local host name set to %s\n", pj_optarg);
-      break;
-
-    case 'p':
-      options->public_host = std::string(pj_optarg);
-      fprintf(stdout, "Override public host name set to %s\n", pj_optarg);
+      {
+        std::vector<std::string> localhost_options;
+        Utils::split_string(std::string(pj_optarg), ':', localhost_options, 0, false);
+        if (localhost_options.size() == 1)
+        {
+          options->local_host = localhost_options[0];
+          options->public_host = localhost_options[0];
+          fprintf(stdout, "Override private and public local host names %s\n",
+                  options->local_host.c_str());
+        }
+        else if (localhost_options.size() == 2)
+        {
+          options->local_host = localhost_options[0];
+          options->public_host = localhost_options[1];
+          fprintf(stdout, "Override private local host name to %s\n",
+                  options->local_host.c_str());
+          fprintf(stdout, "Override public local host name to %s\n",
+                  options->public_host.c_str());
+        }
+        else
+        {
+          fprintf(stdout, "Invalid --local-host option, ignored\n");
+        }
+      }
       break;
 
     case 'D':
@@ -382,9 +437,6 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         fprintf(stdout, "\n");
         fprintf(stdout, "  connections = %d\n", options->upstream_proxy_connections);
         fprintf(stdout, "  recycle time = %d seconds\n", options->upstream_proxy_recycle);
-
-        // If a routing proxy is specified this node must be an access proxy.
-        options->access_proxy = PJ_TRUE;
       }
       break;
 
@@ -395,8 +447,8 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'j':
-      options->icscf_uri_str = std::string(pj_optarg);
-      fprintf(stdout, "I-CSCF enabled, URI = %s\n", pj_optarg);
+      options->external_icscf_uri = std::string(pj_optarg);
+      fprintf(stdout, "External I-CSCF URI = %s\n", pj_optarg);
       break;
 
     case 'R':
@@ -415,8 +467,21 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'S':
-      options->sas_server = std::string(pj_optarg);
-      fprintf(stdout, "SAS set to %s\n", pj_optarg);
+      {
+        std::vector<std::string> sas_options;
+        Utils::split_string(std::string(pj_optarg), ':', sas_options, 0, false);
+        if (sas_options.size() == 2)
+        {
+          options->sas_server = sas_options[0];
+          options->sas_system_name = sas_options[1];
+          fprintf(stdout, "SAS set to %s\n", options->sas_server.c_str());
+          fprintf(stdout, "System name is set to %s\n", options->sas_system_name.c_str());
+        }
+        else
+        {
+          fprintf(stdout, "Invalid --sas option, SAS disabled\n");
+        }
+      }
       break;
 
     case 'H':
@@ -499,7 +564,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->daemon = PJ_TRUE;
       break;
 
-    case 'i':
+    case 't':
       options->interactive = PJ_TRUE;
       break;
 
@@ -518,7 +583,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   // the upstream proxy.
   if (options->upstream_proxy_port == 0)
   {
-    options->upstream_proxy_port = options->trusted_port;
+    options->upstream_proxy_port = options->pcscf_trusted_port;
   }
 
   return PJ_SUCCESS;
@@ -681,6 +746,11 @@ int main(int argc, char *argv[])
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
   LoadMonitor* load_monitor = NULL;
+  SCSCFSelector* scscf_selector = NULL;
+  ICSCFProxy* icscf_proxy = NULL;
+  RegData::Store* registrar_store = NULL;
+  RegData::Store* remote_reg_store = NULL;
+  pj_bool_t websockets_enabled = PJ_FALSE;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -706,17 +776,21 @@ int main(int argc, char *argv[])
   quiescing_mgr = new QuiescingManager();
   quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
-  opt.access_proxy = PJ_FALSE;
+  opt.pcscf_enabled = false;
+  opt.pcscf_trusted_port = 0;
+  opt.pcscf_untrusted_port = 0;
   opt.upstream_proxy_port = 0;
-  opt.ibcf = PJ_FALSE;
-  opt.icscf_uri_str = "";
-  opt.trusted_port = 0;
-  opt.untrusted_port = 0;
   opt.webrtc_port = 0;
+  opt.ibcf = PJ_FALSE;
+  opt.scscf_enabled = false;
+  opt.scscf_port = 0;
+  opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
-  opt.sas_server = "127.0.0.1";
   opt.enum_suffix = ".e164.arpa";
   opt.reg_max_expires = 300;
+  opt.icscf_enabled = false;
+  opt.icscf_port = 0;
+  opt.sas_server = "0.0.0.0";
   opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
   opt.worker_threads = 1;
@@ -741,25 +815,64 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  if (opt.trusted_port == 0)
+  if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
   {
-    LOG_ERROR("Must specify a trusted port");
+    LOG_ERROR("Must enable P-CSCF, S-CSCF or I-CSCF");
     return 1;
   }
 
-  if (opt.auth_enabled)
+  if ((opt.pcscf_enabled) && ((opt.scscf_enabled) || (opt.icscf_enabled)))
   {
-    if (opt.hss_server == "")
-    {
-      LOG_ERROR("Authentication enable, but no HSS server specified");
-      return 1;
-    }
+    LOG_ERROR("Cannot enable both P-CSCF and S/I-CSCF");
+    return 1;
+  }
+
+  if ((opt.pcscf_enabled) &&
+      (opt.upstream_proxy == ""))
+  {
+    LOG_ERROR("Cannot enable P-CSCF without specifying --routing-proxy");
+    return 1;
+  }
+
+  if ((opt.ibcf) && (!opt.pcscf_enabled))
+  {
+    LOG_ERROR("Cannot enable IBCF without also enabling P-CSCF");
+    return 1;
+  }
+
+  if ((opt.webrtc_port != 0 ) && (!opt.pcscf_enabled))
+  {
+    LOG_ERROR("Cannot enable WebRTC without also enabling P-CSCF");
+    return 1;
+  }
+
+  if (((opt.scscf_enabled) || (opt.icscf_enabled)) &&
+      (opt.hss_server == ""))
+  {
+    LOG_ERROR("S/I-CSCF enabled with no Homestead server");
+    return 1;
+  }
+
+  if ((opt.auth_enabled) && (opt.hss_server == ""))
+  {
+    LOG_ERROR("Authentication enable, but no Homestead server specified");
+    return 1;
   }
 
   if ((opt.xdm_server != "") && (opt.hss_server == ""))
   {
-    LOG_ERROR("XDM server configured for services, but no HSS server specified");
+    LOG_ERROR("XDM server configured for services, but no Homestead server specified");
     return 1;
+  }
+
+  if ((opt.pcscf_enabled) && (opt.hss_server != ""))
+  {
+    LOG_WARNING("Homestead server configured on P-CSCF, ignoring");
+  }
+
+  if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
+  {
+    LOG_WARNING("XDM server configured on P-CSCF, ignoring");
   }
 
   if ((opt.store_servers != "") &&
@@ -779,9 +892,21 @@ int main(int argc, char *argv[])
     }
   }
 
-  if (opt.access_proxy && (opt.reg_max_expires != 0))
+  if ((opt.pcscf_enabled) && (opt.reg_max_expires != 0))
   {
-    LOG_WARNING("A registration expiry period should not be specified for an access proxy");
+    LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
+  }
+
+  if (opt.icscf_enabled)
+  {
+    // Create the SCSCFSelector.
+    scscf_selector = new SCSCFSelector();
+
+    if (scscf_selector == NULL)
+    {
+      LOG_ERROR("Failed to load S-CSCF capabilities configuration for I-CSCF");
+      return 1;
+    }
   }
 
   if ((!opt.enum_server.empty()) &&
@@ -819,11 +944,12 @@ int main(int argc, char *argv[])
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
   // Initialize the PJSIP stack and associated subsystems.
-  status = init_stack(opt.access_proxy,
-                      opt.system_name,
+  status = init_stack(opt.sas_system_name,
                       opt.sas_server,
-                      opt.trusted_port,
-                      opt.untrusted_port,
+                      opt.pcscf_trusted_port,
+                      opt.pcscf_untrusted_port,
+                      opt.scscf_port,
+                      opt.icscf_port,
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
@@ -841,33 +967,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  RegData::Store* registrar_store = NULL;
-  if (opt.store_servers != "")
-  {
-    // Use memcached store.
-    LOG_STATUS("Using memcached compatible store with ASCII protocol");
-    registrar_store = RegData::create_memcached_store(false, opt.store_servers);
-  }
-  else
-  {
-    // Use local store.
-    LOG_STATUS("Using local store");
-    registrar_store = RegData::create_local_store();
-  }
-
-  if (registrar_store == NULL)
-  {
-    LOG_ERROR("Failed to connect to data store");
-    exit(0);
-  }
-
-  RegData::Store* remote_reg_store = NULL;
-  if (opt.remote_store_servers != "")
-  {
-    // Use remote memcached store too.
-    LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-    remote_reg_store = RegData::create_memcached_store(false, opt.remote_store_servers);
-  }
+  // Initialise the OPTIONS handling module.
+  status = init_options();
 
   if (opt.hss_server != "")
   {
@@ -876,36 +977,60 @@ int main(int argc, char *argv[])
     hss_connection = new HSSConnection(opt.hss_server, load_monitor);
   }
 
-  if (opt.xdm_server != "")
+  if (opt.scscf_enabled)
   {
-    // Create a connection to the XDMS.
-    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
-  }
+    if (opt.store_servers != "")
+    {
+      // Use memcached store.
+      LOG_STATUS("Using memcached compatible store with ASCII protocol");
+      registrar_store = RegData::create_memcached_store(false, opt.store_servers);
+    }
+    else
+    {
+      // Use local store.
+      LOG_STATUS("Using local store");
+      registrar_store = RegData::create_local_store();
+    }
 
-  if (xdm_connection != NULL)
-  {
-    LOG_STATUS("Creating call services handler");
-    call_services = new CallServices(xdm_connection);
-  }
+    if (registrar_store == NULL)
+    {
+      LOG_ERROR("Failed to connect to data store");
+      return 1;
+    }
 
-  if (hss_connection != NULL)
-  {
-    LOG_STATUS("Initializing iFC handler");
-    ifc_handler = new IfcHandler();
-  }
+    if (opt.remote_store_servers != "")
+    {
+      // Use remote memcached store too.
+      LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+      remote_reg_store = RegData::create_memcached_store(false, opt.remote_store_servers);
+    }
 
-  // Initialise the OPTIONS handling module.
-  status = init_options();
+    if (opt.xdm_server != "")
+    {
+      // Create a connection to the XDMS.
+      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+      xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
+    }
 
-  if (opt.auth_enabled)
-  {
-    status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
-  }
+    if (xdm_connection != NULL)
+    {
+      LOG_STATUS("Creating call services handler");
+      call_services = new CallServices(xdm_connection);
+    }
 
-  if (!opt.access_proxy)
-  {
-    // Create Enum and BGCF services required for SIP router.
+    if (hss_connection != NULL)
+    {
+      LOG_STATUS("Initializing iFC handler");
+      ifc_handler = new IfcHandler();
+    }
+
+    if (opt.auth_enabled)
+    {
+      LOG_STATUS("Initialise S-CSCF authentication module");
+      status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+    }
+
+    // Create Enum and BGCF services required for S-CSCF.
     if (!opt.enum_server.empty())
     {
       enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
@@ -915,60 +1040,106 @@ int main(int argc, char *argv[])
       enum_service = new JSONEnumService(opt.enum_file);
     }
     bgcf_service = new BgcfService();
-  }
 
-  status = init_stateful_proxy(registrar_store,
-                               remote_reg_store,
-                               call_services,
-                               ifc_handler,
-                               opt.access_proxy,
-                               opt.upstream_proxy,
-                               opt.upstream_proxy_port,
-                               opt.upstream_proxy_connections,
-                               opt.upstream_proxy_recycle,
-                               opt.ibcf,
-                               opt.trusted_hosts,
-                               analytics_logger,
-                               enum_service,
-                               bgcf_service,
-                               hss_connection,
-                               opt.icscf_uri_str,
-                               quiescing_mgr);
-  if (status != PJ_SUCCESS)
-  {
-    LOG_ERROR("Error initializing stateful proxy, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return 1;
-  }
-
-  // A access proxy doesn't handle registrations, it passes them through.
-  pj_bool_t registrar_enabled = !opt.access_proxy;
-  if (registrar_enabled)
-  {
+    // Launch the registrar.
     status = init_registrar(registrar_store,
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
                             ifc_handler,
                             opt.reg_max_expires);
+
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error initializing registrar, %s",
-                PJUtils::pj_status_to_string(status).c_str());
+      LOG_ERROR("Failed to enable S-CSCF registrar");
+      return 1;
+    }
 
+    // Launch stateful proxy as S-CSCF.
+    status = init_stateful_proxy(registrar_store,
+                                 remote_reg_store,
+                                 call_services,
+                                 ifc_handler,
+                                 false,
+                                 "",
+                                 0,
+                                 0,
+                                 0,
+                                 false,
+                                 "",
+                                 analytics_logger,
+                                 enum_service,
+                                 bgcf_service,
+                                 hss_connection,
+                                 opt.external_icscf_uri,
+                                 quiescing_mgr,
+                                 scscf_selector,
+                                 opt.icscf_enabled,
+                                 opt.scscf_enabled);
+
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to enable S-CSCF proxy");
       return 1;
     }
   }
 
-  pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
-  if (websockets_enabled)
+  if (opt.pcscf_enabled)
   {
-    status = init_websockets((unsigned short)opt.webrtc_port);
+    // Launch stateful proxy as P-CSCF.
+    status = init_stateful_proxy(NULL,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 true,
+                                 opt.upstream_proxy,
+                                 opt.upstream_proxy_port,
+                                 opt.upstream_proxy_connections,
+                                 opt.upstream_proxy_recycle,
+                                 opt.ibcf,
+                                 opt.trusted_hosts,
+                                 analytics_logger,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 "",
+                                 quiescing_mgr,
+                                 NULL,
+                                 opt.icscf_enabled,
+                                 opt.scscf_enabled);
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error initializing websockets, %s",
-                PJUtils::pj_status_to_string(status).c_str());
+      LOG_ERROR("Failed to enable P-CSCF edge proxy");
+      return 1;
+    }
 
+    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
+    if (websockets_enabled)
+    {
+      status = init_websockets((unsigned short)opt.webrtc_port);
+      if (status != PJ_SUCCESS)
+      {
+        LOG_ERROR("Error initializing websockets, %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+
+        return 1;
+      }
+    }
+
+  }
+
+  if (opt.icscf_enabled)
+  {
+    // Launch I-CSCF proxy.
+    icscf_proxy = new ICSCFProxy(stack_data.endpt,
+                                 stack_data.icscf_port,
+                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                 hss_connection,
+                                 scscf_selector);
+
+    if (icscf_proxy == NULL)
+    {
+      LOG_ERROR("Failed to enable I-CSCF proxy");
       return 1;
     }
   }
@@ -988,44 +1159,54 @@ int main(int argc, char *argv[])
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
   unregister_stack_modules();
-  if (registrar_enabled)
+
+  if (opt.scscf_enabled)
   {
     destroy_registrar();
+    if (opt.auth_enabled)
+    {
+      destroy_authentication();
+    }
+    destroy_stateful_proxy();
+    delete ifc_handler;
+    delete call_services;
+    delete hss_connection;
+    delete xdm_connection;
+    delete enum_service;
+    delete bgcf_service;
+    if (opt.store_servers != "")
+    {
+      RegData::destroy_memcached_store(registrar_store);
+    }
+    else
+    {
+      RegData::destroy_local_store(registrar_store);
+    }
+
+    if (remote_reg_store != NULL)
+    {
+      RegData::destroy_memcached_store(remote_reg_store);
+    }
+
   }
-  if (websockets_enabled)
+  if (opt.pcscf_enabled)
   {
-    destroy_websockets();
+    if (websockets_enabled)
+    {
+      destroy_websockets();
+    }
+    destroy_stateful_proxy();
   }
-  destroy_stateful_proxy();
-  if (opt.auth_enabled)
+  if (opt.icscf_enabled)
   {
-    destroy_authentication();
+    delete icscf_proxy;
+    delete scscf_selector;
   }
   destroy_options();
   destroy_stack();
 
-  delete ifc_handler;
-  delete call_services;
-  delete hss_connection;
-  delete xdm_connection;
-  delete enum_service;
-  delete bgcf_service;
   delete quiescing_mgr;
   delete load_monitor;
-
-  if (opt.store_servers != "")
-  {
-    RegData::destroy_memcached_store(registrar_store);
-  }
-  else
-  {
-    RegData::destroy_local_store(registrar_store);
-  }
-
-  if (remote_reg_store != NULL)
-  {
-    RegData::destroy_memcached_store(remote_reg_store);
-  }
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

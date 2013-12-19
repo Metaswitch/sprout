@@ -69,7 +69,7 @@ static pj_bool_t authenticate_rx_request(pjsip_rx_data *rdata);
 pjsip_module mod_auth =
 {
   NULL, NULL,                         // prev, next
-  pj_str("mod-auth"),                  // Name
+  pj_str("mod-auth"),                 // Name
   -1,                                 // Id
   PJSIP_MOD_PRIORITY_TSX_LAYER-1,     // Priority
   NULL,                               // load()
@@ -151,6 +151,12 @@ pj_status_t user_lookup(pj_pool_t *pool,
 pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
+
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
+  {
+    // Request not received on S-CSCF port, so don't authenticate it.
+    return PJ_FALSE;
+  }
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_REGISTER_METHOD)
   {

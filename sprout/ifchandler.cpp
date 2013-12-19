@@ -662,15 +662,10 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(
-  const SessionCase& session_case,
-  pjsip_msg* msg,
-  pj_pool_t* pool)
+std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
+                                             pjsip_msg* msg,
+                                             pj_pool_t* pool)
 {
-  pjsip_uri* uri = NULL;
-  std::string user;
-  std::string uri_string;
-
   // For originating:
   //
   // We determine the served user as described in 3GPP TS 24.229 s5.4.3.2,
@@ -702,93 +697,25 @@ std::string IfcHandler::served_user_from_msg(
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
+  pjsip_uri* uri;
+  std::string user;
 
   if (session_case.is_originating())  // (includes orig-cdiv)
   {
-    // Inspect P-Served-User header. Format is name-addr or addr-spec
-    // (containing a URI), followed by optional parameters.
-    pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
-
-    if (served_user_hdr != NULL)
-    {
-      LOG_DEBUG("Found URI in P-Served-User header");
-      // Remove parameters before parsing the URI.  If there are URI parameters,
-      // the URI must be enclosed in angle brackets, so we can either remove
-      // everything after the first closing angle bracket (but not the
-      // bracket itself), or the first semi-colon and everything after it.
-      char* end = pj_strchr(&served_user_hdr->hvalue, '>');
-      if (end == NULL)
-      {
-        end = pj_strchr(&served_user_hdr->hvalue, ';');
-        if (end != NULL)
-        {
-          end = end - 1;   // Remove the semicolon too
-        }
-      }
-      if (end != NULL)
-      {
-        served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
-      }
-
-      // Extract the field to a null terminated string
-      // first since we can't guarantee it is null terminated in the message,
-      // and pjsip_parse_uri requires a null terminated string.
-      pj_str_t hvalue;
-      pj_strdup_with_null(pool, &hvalue, &served_user_hdr->hvalue);
-
-      uri = pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
-
-      if (uri == NULL)
-      {
-        LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
-      }
-    }
-
-    if (uri == NULL)
-    {
-      // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
-      // header.
-      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
-                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
-
-      if (asserted_id_hdr != NULL)
-      {
-        LOG_DEBUG("Found URI in P-Asserted-Identity header");
-        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
-      }
-    }
+    uri = PJUtils::orig_served_user(msg);
   }
-
-  if (uri == NULL)
+  else
   {
-    if (session_case.is_originating())
-    {
-      // For originating services, the user is parsed from the from
-      // header.
-      LOG_DEBUG("Parsing served user from From header");
-      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
-    }
-    else
-    {
-      // For terminating services, the user is parsed from the request
-      // URI.
-      LOG_DEBUG("Parsing served user from request URI");
-      uri = msg->line.req.uri;
-    }
+    uri = PJUtils::term_served_user(msg);
   }
-
-  uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
-  LOG_DEBUG("URI retrieved is %s", uri_string.c_str());
-  // Get the URI if it was encoded within a name-addr.
-  uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  } else {
+  }
+  else
+  {
     LOG_DEBUG("URI is not locally hosted");
   }
 
