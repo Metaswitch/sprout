@@ -433,6 +433,7 @@ void init_pjsip_logging(int log_level,
   pj_log_set_log_func(&pjsip_log_handler);
 }
 
+
 pj_status_t fill_transport_details(int port,
                                    pj_sockaddr *addr,
                                    pj_str_t& host,
@@ -744,6 +745,43 @@ pj_status_t init_pjsip()
 }
 
 
+// LCOV_EXCL_START
+void sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
+{
+  int level;
+  va_list args;
+
+  switch (sas_level) {
+    case SAS::LOG_LEVEL_DEBUG:
+      level = Log::DEBUG_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_VERBOSE:
+      level = Log::VERBOSE_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_INFO:
+      level = Log::INFO_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_STATUS:
+      level = Log::STATUS_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_WARNING:
+      level = Log::WARNING_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_ERROR:
+      level = Log::ERROR_LEVEL;
+      break;
+    default:
+      LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
+      level = Log::ERROR_LEVEL;
+    }
+
+  va_start(args, fmt);
+  Log::_write(level, module, line_number, fmt, args);
+  va_end(args);
+}
+// LCOV_EXCL_STOP
+
+
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -834,7 +872,7 @@ pj_status_t init_stack(const std::string& system_name,
             system_type_sas,
             SASEvent::CURRENT_RESOURCE_BUNDLE,
             sas_address,
-            Log::sas_write);
+            sas_write);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();
