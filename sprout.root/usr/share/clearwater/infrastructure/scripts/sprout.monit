@@ -45,8 +45,8 @@ set daemon 10
 check process sprout pidfile /var/run/sprout.pid
   start program = "/etc/init.d/sprout start"
   stop program = "/etc/init.d/sprout stop"
-  if failed host $local_ip port $sprout_port type tcp
-     protocol sip and target "monit@$local_ip:$sprout_port" and maxforward 2
+  if failed host $local_ip port 5054 type tcp
+     protocol sip and target "monit@$local_ip:5054" and maxforward 2
      with timeout 12 seconds for 2 cycles
      then exec "/etc/init.d/sprout abort-restart"
   if memory is greater than 80% for 3 cycles
