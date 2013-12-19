@@ -694,7 +694,8 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
 TEST_F(RegistrarTest, AppServersInitialRegistration)
 {
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -713,9 +714,9 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+                                "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
 
   SCOPED_TRACE("REGISTER (1)");
@@ -765,7 +766,8 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
 
 TEST_F(RegistrarTest, AppServersReRegistration)
 {
-  fakecurl_responses["http://localhost/impu/sip%3A6505550231%40homedomain"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -784,9 +786,9 @@ TEST_F(RegistrarTest, AppServersReRegistration)
                                 "    <DefaultHandling>0</DefaultHandling>\n"
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>";
+                                "</ServiceProfile></IMSSubscription>");
 
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, TransportFlow::Trust::TRUSTED, "1.2.3.4", 56789);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
 
   SCOPED_TRACE("REGISTER (1)");
