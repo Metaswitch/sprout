@@ -83,9 +83,8 @@ get_settings()
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
-        icscf=5054
-        scscf=5052
-        sprout_port=5054
+        scscf=5054
+        alias_list=""
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.
@@ -127,9 +126,8 @@ get_settings()
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
         [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
-        [ -z "$scscf" ] || scscf_port_arg="--scscf $scscf"
-        [ -z "$icscf" ] || icscf_port_arg="--icscf $icscf"
-}
+
+} 
 
 #
 # Function that starts the daemon/service
@@ -155,9 +153,7 @@ do_start()
                      --domain $home_domain
                      --localhost $local_ip
                      --sprout-domain $sprout_hostname
-                     --alias $sprout_hostname
-                     $scscf_port_arg
-                     $icscf_port_arg
+                     --alias $sprout_hostname,$alias_list
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
@@ -179,6 +175,17 @@ do_start()
         if [ ! -z $reg_max_expires ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
+        fi
+     
+        # Only add the icscf and scscf arguments if they're not 0 
+        if [ ! -z $scscf ] && [ ! $scscf = 0 ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --scscf $scscf"
+        fi
+
+        if [ ! -z $icscf ] && [ ! $icscf = 0 ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --icscf $icscf"
         fi
 
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
