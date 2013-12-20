@@ -82,6 +82,7 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
+        upstream_hostname=$sprout_hostname:5054
         . /etc/clearwater/config
 
         # Set up defaults for user settings then pull in any overrides.
@@ -136,7 +137,7 @@ do_start()
                      --alias $public_ip
                      --pcscf 5060:5058
                      --webrtc-port 5062
-                     --routing-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
+                     --routing-proxy $upstream_hostname:$upstream_connections:$upstream_recycle_connections
                      --sas $sas_server:$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
