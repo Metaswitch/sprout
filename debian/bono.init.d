@@ -82,8 +82,15 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
-        upstream_hostname=$sprout_hostname:5054
         . /etc/clearwater/config
+
+        # Set the upsteam hostname to the sprout hostname only if it hasn't
+        # already been set (we have to do this after dotting in the config
+        # as the sprout_hostname value comes from the config file)
+        if [ -z "$upstream_hostname" ]
+        then
+          upstream_hostname=$sprout_hostname:5054
+        fi
 
         # Set up defaults for user settings then pull in any overrides.
         # Bono doesn't need multi-threading, so set the number of threads to
