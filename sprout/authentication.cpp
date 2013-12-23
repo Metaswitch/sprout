@@ -398,11 +398,15 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  if (status == PJSIP_EAUTHNOAUTH)
+  if ((status == PJSIP_EAUTHNOAUTH) ||
+      (status == PJSIP_EAUTHACCNOTFOUND))
   {
-    // No authorization information in request, or stale, so must issue challenge
-    LOG_DEBUG("No authentication information in request, so reject with challenge");
+    // No authorization information in request, or no authentication vector
+    // found in the store (so request is likely stale), so must issue
+    // challenge.
+    LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
     pjsip_tx_data* tdata;
+    sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
     if (status != PJ_SUCCESS)
     {
