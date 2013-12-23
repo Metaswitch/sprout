@@ -104,6 +104,7 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
 Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_identity,
                                             const std::string& public_user_identity,
+                                            const std::string& auth_type,
                                             const std::string& autn,
                                             SAS::TrailId trail)
 {
@@ -113,6 +114,12 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
                      "/av";
+
+  if (!auth_type.empty())
+  {
+    path += "/" + auth_type;
+  }
+
   if (!public_user_identity.empty())
   {
     path += "?impu=" + Utils::url_escape(public_user_identity);

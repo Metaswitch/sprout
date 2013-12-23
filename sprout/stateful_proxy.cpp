@@ -947,17 +947,12 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     src_flow->touch();
 
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
-    if (src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).length() > 0)
+    if (!src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).empty())
     {
       // The message was received on a client flow that has already been
       // authenticated, so add an integrity-protected indication.
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::YES);
-    }
-    else
-    {
-      // The client flow hasn't yet been authenticated, so add an integrity-protected
-      // indicator so Sprout will challenge and/or authenticate. it
-      PJUtils::add_integrity_protected_indication(tdata, PJUtils::Integrity::NO);
+      PJUtils::add_integrity_protected_indication(tdata,
+                                                  PJUtils::Integrity::IP_ASSOC_YES);
     }
 
     // Add a path header so we get included in the egress call flow.  If we're not

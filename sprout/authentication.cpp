@@ -187,8 +187,31 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
   }
 
+  // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
+  // only support AKA and SIP Digest, so only implement the subset of steps
+  // required to distinguish between the two.
+  std::string auth_type;
+  if (auth_hdr != NULL)
+  {
+    pjsip_param* integrity =
+           pjsip_param_find(&auth_hdr->credential.digest.other_param,
+                            &STR_INTEGRITY_PROTECTED);
+
+    if ((integrity != NULL) &&
+        ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
+         (pj_stricmp(&integrity->value, &STR_NO) == 0)))
+    {
+      // Authentication scheme is AKA.
+      auth_type = "aka";
+    }
+  }
+
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = hss->get_auth_vector(impi, impu, resync, get_trail(rdata));
+  Json::Value* av = hss->get_auth_vector(impi,
+                                         impu,
+                                         auth_type,
+                                         resync,
+                                         get_trail(rdata));
 
   if (av != NULL)
   {
@@ -282,13 +305,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
-  if (auth_hdr != NULL)
+  if ((auth_hdr != NULL) &&
+      (auth_hdr->credential.digest.response.slen == 0))
   {
-    LOG_DEBUG("Authorization header in request");
+    // There is an authorization header with no challenge response, so check
+    // for the integrity-protected indication.
+    LOG_DEBUG("Authorization header in request with no challenge response");
     pjsip_param* integrity =
            pjsip_param_find(&auth_hdr->credential.digest.other_param,
                             &STR_INTEGRITY_PROTECTED);
 
+    // Request has an integrity protected indication, so let it through if
+    // it is set to a "yes" value.
     if ((integrity != NULL) &&
         ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
          (pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||

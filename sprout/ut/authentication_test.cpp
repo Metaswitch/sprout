@@ -227,7 +227,6 @@ std::string AuthenticationMessage::hash2str(md5_byte_t* hash)
 
 void AuthenticationMessage::calculate_digest_response()
 {
-  LOG_DEBUG("Calculating response");
   md5_state_t md5;
   md5_byte_t resp[16];
 
@@ -278,7 +277,6 @@ void AuthenticationMessage::calculate_digest_response()
   md5_append(&md5, (md5_byte_t*)ha2.data(), ha2.length());
   md5_finish(&md5, resp);
   _response = hash2str(resp);
-  LOG_DEBUG("Digest = %s", _response.c_str());
 }
 
 
@@ -355,7 +353,9 @@ TEST_F(AuthenticationTest, IntegrityProtected)
 {
   // Test that the authentication module lets through REGISTER requests
   // with authorization headers indicating the request has been integrity
-  // protected at the P-CSCF.
+  // protected at the P-CSCF.  Note that these requests must not have a
+  // response field in the authorization header, otherwise this will be
+  // checked.
   pj_bool_t ret;
 
   AuthenticationMessage msg1("REGISTER");
@@ -435,10 +435,9 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // Digest authentication.
+  // Send in a REGISTER request with an authentication header, but with no
+  // integrity protected parameter.  This triggers Digest authentication.
   AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -572,16 +571,16 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"response\":\"12345678123456781234567812345678\","
                                         "\"cryptkey\":\"0123456789abcdef\","
                                         "\"integritykey\":\"fedcba9876543210\"}}");
 
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // authentication.
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
+  msg1._integ_prot = "no";
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -610,12 +609,13 @@ TEST_F(AuthenticationTest, AKAAuthSuccess)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
+  msg2._integ_prot = "yes";
   inject_msg(msg2.get());
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
 
@@ -628,16 +628,16 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"response\":\"12345678123456781234567812345678\","
                                         "\"cryptkey\":\"0123456789abcdef\","
                                         "\"integritykey\":\"fedcba9876543210\"}}");
 
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // authentication.
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
+  msg1._integ_prot = "no";
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -667,6 +667,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._response = "00000000000000000000000000000000";
+  msg2._integ_prot = "yes";
   inject_msg(msg2.get());
 
   // Check 403 forbidden response.
@@ -675,7 +676,7 @@ TEST_F(AuthenticationTest, AKAAuthFailBadResponse)
   RespMatcher(403).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
 
@@ -689,16 +690,16 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"response\":\"12345678123456781234567812345678\","
                                         "\"cryptkey\":\"0123456789abcdef\","
                                         "\"integritykey\":\"fedcba9876543210\"}}");
 
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // authentication.
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
+  msg1._integ_prot = "no";
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -719,7 +720,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
 
   // Set up a second HSS response for the resync query from the authentication
   // module.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132",
                               "{\"aka\":{\"challenge\":\"12345678123456781234567812345678\","
                                         "\"response\":\"87654321876543218765432187654321\","
                                         "\"cryptkey\":\"fedcba9876543210\","
@@ -737,7 +738,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._auts = "32132132132132";
-  LOG_VERBOSE("Injecting REGISTER with auts\n%s", msg2.get().c_str());
+  msg2._integ_prot = "yes";
   inject_msg(msg2.get());
 
   // Expect another 401 Not Authorized response with a new challenge.
@@ -766,13 +767,14 @@ TEST_F(AuthenticationTest, AKAAuthResyncSuccess)
   msg3._nc = "00000001";
   msg3._cnonce = "8765432187654321";
   msg3._qop = "auth";
+  msg3._integ_prot = "yes";
   inject_msg(msg3.get());
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain&autn=876543218765432132132132132132");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
 
@@ -787,16 +789,16 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   // The keys in this test case are not consistent, but that won't matter for
   // the purposes of the test as Clearwater never itself runs the MILENAGE
   // algorithms to generate or extract keys.
-  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
                               "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
                                         "\"response\":\"12345678123456781234567812345678\","
                                         "\"cryptkey\":\"0123456789abcdef\","
                                         "\"integritykey\":\"fedcba9876543210\"}}");
 
-  // Send in a REGISTER request with no authentication header.  This triggers
-  // authentication.
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
   AuthenticationMessage msg1("REGISTER");
-  msg1._auth_hdr = false;
+  msg1._integ_prot = "no";
   inject_msg(msg1.get());
 
   // Expect a 401 Not Authorized response.
@@ -827,7 +829,6 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
   msg2._auts = "321321321321";    // Too short
-  LOG_VERBOSE("Injecting REGISTER with auts\n%s", msg2.get().c_str());
   inject_msg(msg2.get());
 
   // Expect a 403 Forbidden response.
@@ -836,7 +837,7 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   RespMatcher(403).matches(tdata->msg);
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
 }
 
 
