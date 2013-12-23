@@ -671,7 +671,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
-  RegData::AoR* aor_data;
+  RegStore::AoR* aor_data;
   aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());

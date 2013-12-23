@@ -472,7 +472,6 @@ void process_register_request(pjsip_rx_data* rdata)
       int tmp_expiry = 0;
       bool ignored;
       RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
-      RegData::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
       delete remote_aor_data;
     }
   }
