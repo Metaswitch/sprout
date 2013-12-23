@@ -128,11 +128,12 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
   strcpy(dns, ent->h_name);
 
   // Now do test
-  pj_status_t rc = init_stack(false,                        // access_proxy
-                              "plural@zalpha.example.com",  // system name
+  pj_status_t rc = init_stack("plural@zalpha.example.com",  // system name
                               "192.168.0.3",                // SAS address
-                              9408,                         // trusted port
-                              9409,                         // untrusted port
+                              9408,                         // P-CSCF trusted port
+                              9409,                         // P-CSCF untrusted port
+                              9410,                         // S-CSCF port
+                              9411,                         // I-CSCF port
                               dns,                          // local host
                               dns,                          // public host
                               "woot.example.com",           // home domain

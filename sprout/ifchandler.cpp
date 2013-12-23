@@ -115,6 +115,7 @@ IfcHandler::~IfcHandler()
 // @throw ifc_error if there is a problem evaluating the trigger.
 bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                       bool is_registered,               //< The registration state
+                      bool is_initial_registration,
                       pjsip_msg* msg,                   //< The message being matched
                       xml_node<>* spt)                  //< The Service Point Trigger node
 {
@@ -175,13 +176,13 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
           switch (reg_type)
           {
           case INITIAL_REGISTRATION:
-            ret = !is_registered && (expiry > 0);
+            ret = (is_initial_registration && (expiry > 0));
             break;
           case REREGISTRATION:
-            ret = is_registered && (expiry > 0);
+            ret = (!is_initial_registration && (expiry > 0));
             break;
           case DEREGISTRATION:
-            ret = is_registered && (expiry == 0);
+            ret = (expiry == 0);
             break;
           default:
           // LCOV_EXCL_START Unreachable
@@ -390,7 +391,10 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 // B, C, and F in that document for details.
 //
 // @return true if the message matches, false if not.
-bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pjsip_msg* msg) const
+bool Ifc::filter_matches(const SessionCase& session_case,
+                         bool is_registered,
+                         bool is_initial_registration,
+                         pjsip_msg* msg) const
 {
   try
   {
@@ -444,7 +448,7 @@ bool Ifc::filter_matches(const SessionCase& session_case, bool is_registered, pj
     {
       xml_node<>* neg_node = spt->first_node("ConditionNegated");
       bool neg = neg_node && parse_bool(neg_node, "ConditionNegated");
-      bool val = spt_matches(session_case, is_registered, msg, spt) != neg;
+      bool val = spt_matches(session_case, is_registered, is_initial_registration, msg, spt) != neg;
 
       for (xml_node<>* group_node = spt->first_node("Group");
            group_node;
@@ -636,6 +640,7 @@ Ifcs::~Ifcs()
 // Sprout.  See 3GPP TS 23.218, especially s5.2 and s6.
 void Ifcs::interpret(const SessionCase& session_case,  //< The session case
                      bool is_registered,               //< Whether the served user is registered
+                     bool is_initial_registration,
                      pjsip_msg* msg,                   //< The message starting the dialog
                      std::vector<AsInvocation>& application_servers) const  //< OUT: the list of application servers
 {
@@ -644,7 +649,7 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
        it != _ifcs.end();
        ++it)
   {
-    if (it->filter_matches(session_case, is_registered, msg))
+    if (it->filter_matches(session_case, is_registered, is_initial_registration, msg))
     {
       application_servers.push_back(it->as_invocation());
     }
@@ -657,15 +662,10 @@ void Ifcs::interpret(const SessionCase& session_case,  //< The session case
 //
 // @returns The username, ready to look up in HSS, or empty if no
 // local served user.
-std::string IfcHandler::served_user_from_msg(
-  const SessionCase& session_case,
-  pjsip_msg* msg,
-  pj_pool_t* pool)
+std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
+                                             pjsip_msg* msg,
+                                             pj_pool_t* pool)
 {
-  pjsip_uri* uri = NULL;
-  std::string user;
-  std::string uri_string;
-
   // For originating:
   //
   // We determine the served user as described in 3GPP TS 24.229 s5.4.3.2,
@@ -697,93 +697,25 @@ std::string IfcHandler::served_user_from_msg(
   // header. However, the History-Info mechanism has fundamental
   // problems as outlined in RFC5502 appendix A, and we do not
   // implement it.
+  pjsip_uri* uri;
+  std::string user;
 
   if (session_case.is_originating())  // (includes orig-cdiv)
   {
-    // Inspect P-Served-User header. Format is name-addr or addr-spec
-    // (containing a URI), followed by optional parameters.
-    pjsip_generic_string_hdr* served_user_hdr = (pjsip_generic_string_hdr*)
-        pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
-
-    if (served_user_hdr != NULL)
-    {
-      LOG_DEBUG("Found URI in P-Served-User header");
-      // Remove parameters before parsing the URI.  If there are URI parameters,
-      // the URI must be enclosed in angle brackets, so we can either remove
-      // everything after the first closing angle bracket (but not the
-      // bracket itself), or the first semi-colon and everything after it.
-      char* end = pj_strchr(&served_user_hdr->hvalue, '>');
-      if (end == NULL)
-      {
-        end = pj_strchr(&served_user_hdr->hvalue, ';');
-        if (end != NULL)
-        {
-          end = end - 1;   // Remove the semicolon too
-        }
-      }
-      if (end != NULL)
-      {
-        served_user_hdr->hvalue.slen = end - served_user_hdr->hvalue.ptr + 1;
-      }
-
-      // Extract the field to a null terminated string
-      // first since we can't guarantee it is null terminated in the message,
-      // and pjsip_parse_uri requires a null terminated string.
-      pj_str_t hvalue;
-      pj_strdup_with_null(pool, &hvalue, &served_user_hdr->hvalue);
-
-      uri = pjsip_parse_uri(pool, hvalue.ptr, hvalue.slen, 0);
-
-      if (uri == NULL)
-      {
-        LOG_WARNING("Unable to parse P-Served-User header: %.*s",
-                    served_user_hdr->hvalue.slen, served_user_hdr->hvalue.ptr);
-      }
-    }
-
-    if (uri == NULL)
-    {
-      // No luck with P-Served-User header.  Now inspect P-Asserted-Identity
-      // header.
-      pjsip_routing_hdr* asserted_id_hdr = (pjsip_routing_hdr*)
-                                           pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
-
-      if (asserted_id_hdr != NULL)
-      {
-        LOG_DEBUG("Found URI in P-Asserted-Identity header");
-        uri = (pjsip_uri*)&asserted_id_hdr->name_addr;
-      }
-    }
+    uri = PJUtils::orig_served_user(msg);
   }
-
-  if (uri == NULL)
+  else
   {
-    if (session_case.is_originating())
-    {
-      // For originating services, the user is parsed from the from
-      // header.
-      LOG_DEBUG("Parsing served user from From header");
-      uri = PJSIP_MSG_FROM_HDR(msg)->uri;
-    }
-    else
-    {
-      // For terminating services, the user is parsed from the request
-      // URI.
-      LOG_DEBUG("Parsing served user from request URI");
-      uri = msg->line.req.uri;
-    }
+    uri = PJUtils::term_served_user(msg);
   }
-
-  uri_string = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
-  LOG_DEBUG("URI retrieved is %s", uri_string.c_str());
-  // Get the URI if it was encoded within a name-addr.
-  uri = (pjsip_uri*)pjsip_uri_get_uri(uri);
 
   if ((PJUtils::is_home_domain(uri)) ||
       (PJUtils::is_uri_local(uri)))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
-  } else {
+  }
+  else
+  {
     LOG_DEBUG("URI is not locally hosted");
   }
 

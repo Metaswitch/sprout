@@ -61,6 +61,7 @@ class UACTransaction;
 #include "hssconnection.h"
 #include "aschain.h"
 #include "quiescing_manager.h"
+#include "scscfselector.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -207,6 +208,7 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
+  std::string get_scscf_name(Json::Value* location);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
@@ -303,7 +305,10 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 const std::string& icscf_uri_str,
-                                QuiescingManager* quiescing_manager);
+                                QuiescingManager* quiescing_manager,
+                                SCSCFSelector *scscfSelector,
+                                bool icscf_enabled,
+                                bool scscf_enabled);
 
 void destroy_stateful_proxy();
 

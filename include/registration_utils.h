@@ -57,6 +57,7 @@ void register_with_application_servers(Ifcs& ifcs,
                                        pjsip_rx_data* received_register,
                                        pjsip_tx_data* ok_response,
                                        int expires,
+                                       bool is_initial_registration,
                                        const std::string& served_user,
                                        SAS::TrailId trail);
 }

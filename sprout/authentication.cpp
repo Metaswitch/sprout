@@ -294,6 +294,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pj_status_t status;
   std::string resync;
 
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
+  {
+    // Request not received on S-CSCF port, so don't authenticate it.
+    return PJ_FALSE;
+  }
+
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_REGISTER_METHOD)
   {
     // Non-REGISTER request, so don't do authentication as it must have come

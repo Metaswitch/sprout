@@ -188,6 +188,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
   const Ifc& ifc = (_as_chain->_ifcs)[_index];
   if (!ifc.filter_matches(_as_chain->session_case(),
                           _as_chain->_is_registered,
+                          false,
                           tdata->msg))
   {
     LOG_DEBUG("No match for %s", to_string().c_str());
@@ -276,7 +277,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
     pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
     pj_strdup2(tdata->pool, &self_uri->user, odi_value.c_str());
     self_uri->host = stack_data.local_host;
-    self_uri->port = stack_data.trusted_port;
+    self_uri->port = stack_data.scscf_port;
     self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 

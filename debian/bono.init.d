@@ -84,6 +84,14 @@ get_settings()
         sas_server=0.0.0.0
         . /etc/clearwater/config
 
+        # Set the upsteam hostname to the sprout hostname only if it hasn't
+        # already been set (we have to do this after dotting in the config
+        # as the sprout_hostname value comes from the config file)
+        if [ -z "$upstream_hostname" ]
+        then
+          upstream_hostname=$sprout_hostname:5054
+        fi
+
         # Set up defaults for user settings then pull in any overrides.
         # Bono doesn't need multi-threading, so set the number of threads to
         # the number of cores.  The number of PJSIP threads must be 1, as its
@@ -96,7 +104,6 @@ get_settings()
         [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
 
         # Work out which features are enabled.
-        EDGE_PROXY_ENABLED=Y
         IBCF_ENABLED=Y
         if [ -d /etc/clearwater/features.d ]
         then
@@ -104,12 +111,6 @@ get_settings()
           do
             [ -r $file ] && . $file
           done
-        fi
-
-        if [ $EDGE_PROXY_ENABLED = Y ]
-        then
-          untrusted_port_arg="--untrusted-port 5060"
-          webrtc_port_arg="--webrtc-port 5062"
         fi
 
         if [ $IBCF_ENABLED = Y ]
@@ -138,16 +139,13 @@ do_start()
         # enable gdb to dump a parent bono process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="--system $NAME@$public_hostname
-                     --domain $home_domain
-                     --localhost $local_ip
-                     --public-host $public_hostname
+        DAEMON_ARGS="--domain $home_domain
+                     --localhost $local_ip:$public_hostname
                      --alias $public_ip
-                     --trusted-port 5058
-                     $untrusted_port_arg
-                     $webrtc_port_arg
-                     --routing-proxy $sprout_hostname:5054:$upstream_connections:$upstream_recycle_connections
-                     --sas $sas_server
+                     --pcscf 5060:5058
+                     --webrtc-port 5062
+                     --routing-proxy $upstream_hostname:$upstream_connections:$upstream_recycle_connections
+                     --sas $sas_server:$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory

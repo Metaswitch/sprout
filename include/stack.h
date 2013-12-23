@@ -64,12 +64,17 @@ struct stack_data_struct
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
-  pjsip_tpfactory     *trusted_tcp_factory;
-  pjsip_tpfactory     *untrusted_tcp_factory;
+  int                  pcscf_untrusted_port;
+  pjsip_tpfactory     *pcscf_untrusted_tcp_factory;
+  int                  pcscf_trusted_port;
+  pjsip_tpfactory     *pcscf_trusted_tcp_factory;
+  int                  scscf_port;
+  pjsip_tpfactory     *scscf_tcp_factory;
+  int                  icscf_port;
+  pjsip_tpfactory     *icscf_tcp_factory;
+
   int                  module_id;
 
-  int                  trusted_port;
-  int                  untrusted_port;
   pj_str_t             local_host;
   pj_str_t             public_host;
   pj_str_t             home_domain;
@@ -124,11 +129,12 @@ extern void init_pjsip_logging(int log_level,
                                pj_bool_t log_to_file,
                                const std::string& directory);
 
-extern pj_status_t init_stack(bool access_proxy,
-                              const std::string& system_name,
+extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& sas_address,
-                              int trusted_port,
-                              int untrusted_port,
+                              int pcscf_trusted_port,
+                              int pcscf_untrusted_port,
+                              int scscf_port,
+                              int icscf_port,
                               const std::string& local_host,
                               const std::string& public_host,
                               const std::string& home_domain,

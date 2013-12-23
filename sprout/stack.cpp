@@ -433,33 +433,91 @@ void init_pjsip_logging(int log_level,
   pj_log_set_log_func(&pjsip_log_handler);
 }
 
-void fill_transport_details(int port,
-                            pj_sockaddr_in *addr,
-                            pj_str_t& host,
-                            pjsip_host_port *published_name)
+
+pj_status_t fill_transport_details(int port,
+                                   pj_sockaddr *addr,
+                                   pj_str_t& host,
+                                   pjsip_host_port *published_name)
 {
-  addr->sin_family = pj_AF_INET();
-  addr->sin_addr.s_addr = 0;
-  addr->sin_port = pj_htons((pj_uint16_t)port);
+  pj_status_t status;
+  unsigned count = 1;
+  pj_addrinfo addr_info[count];
+  int af = pj_AF_UNSPEC();
+
+  // Use pj_getaddrinfo() to convert the host string into an IPv4 or IPv6 address in
+  // a pj_sockaddr structure.  The host string could be an IP address in string format
+  // or a hostname that needs to be resolved.  The host string should only contain a
+  // single address or hostname.
+  status = pj_getaddrinfo(af, &host, &count, addr_info);
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Failed to decode IP address %ac (%s)",
+              host.slen,
+              host.ptr,
+              PJUtils::pj_status_to_string(status).c_str());
+    return status;
+  }
+
+  pj_memcpy(addr, &addr_info[0].ai_addr, sizeof(pj_sockaddr));
+
+  // Set up the port in the appropriate part of the structure.
+  if (addr->addr.sa_family == PJ_AF_INET)
+  {
+    addr->ipv4.sin_port = pj_htons((pj_uint16_t)port);
+  }
+  else if (addr->addr.sa_family == PJ_AF_INET6)
+  {
+    addr->ipv6.sin6_port =  pj_htons((pj_uint16_t)port);
+  }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+  }
 
   published_name->host = host;
   published_name->port = port;
+
+  return status;
 }
 
 
 pj_status_t create_udp_transport(int port, pj_str_t& host)
 {
   pj_status_t status;
-  pj_sockaddr_in addr;
+  pj_sockaddr addr;
   pjsip_host_port published_name;
 
-  fill_transport_details(port, &addr, host, &published_name);
-  status = pjsip_udp_transport_start(stack_data.endpt,
-                                     &addr,
-                                     &published_name,
-                                     50,
-                                     NULL);
-  if (status != PJ_SUCCESS) {
+  status = fill_transport_details(port, &addr, host, &published_name);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  // The UDP function call depends on the address type, which should be IPv4
+  // or IPv6, otherwise something has gone wrong so don't try to start transport.
+  if (addr.addr.sa_family == PJ_AF_INET)
+  {
+    status = pjsip_udp_transport_start(stack_data.endpt,
+                                       &addr.ipv4,
+                                       &published_name,
+                                       50,
+                                       NULL);
+  }
+  else if (addr.addr.sa_family == PJ_AF_INET6)
+  {
+    status = pjsip_udp_transport_start6(stack_data.endpt,
+                                        &addr.ipv6,
+                                        &published_name,
+                                        50,
+                                        NULL);
+  }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+  }
+
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Failed to start UDP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
   }
 
@@ -470,17 +528,49 @@ pj_status_t create_udp_transport(int port, pj_str_t& host)
 pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfactory **tcp_factory)
 {
   pj_status_t status;
-  pj_sockaddr_in addr;
+  pj_sockaddr addr;
   pjsip_host_port published_name;
+  pjsip_tcp_transport_cfg cfg;
 
-  fill_transport_details(port, &addr, host, &published_name);
-  status = pjsip_tcp_transport_start2(stack_data.endpt,
-                                      &addr,
-                                      &published_name,
-                                      50,
-                                      tcp_factory);
-  if (status != PJ_SUCCESS) {
-    LOG_ERROR("Failed to start TCP transport for port %d (%s)", port, PJUtils::pj_status_to_string(status).c_str());
+  status = fill_transport_details(port, &addr, host, &published_name);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  // pjsip_tcp_transport_start2() builds up a configuration structure then calls
+  // through to pjsip_tcp_transport_start3().  However it only supports IPv4.
+  // Therefore setup the config structure and use pjsip_tcp_transport_start3()
+  // instead.
+
+  if (addr.addr.sa_family == PJ_AF_INET)
+  {
+    pjsip_tcp_transport_cfg_default(&cfg, pj_AF_INET());
+  }
+  else if (addr.addr.sa_family == PJ_AF_INET6)
+  {
+    pjsip_tcp_transport_cfg_default(&cfg, pj_AF_INET6());
+  }
+  else
+  {
+    status = PJ_EAFNOTSUP;
+    LOG_ERROR("Failed to start TCP transport for port %d (%s)",
+              port,
+              PJUtils::pj_status_to_string(status).c_str());
+    return status;
+  }
+
+  pj_sockaddr_cp(&cfg.bind_addr, &addr);
+  pj_memcpy(&cfg.addr_name, &published_name, sizeof(published_name));
+  cfg.async_cnt = 50;
+
+  status = pjsip_tcp_transport_start3(stack_data.endpt, &cfg, tcp_factory);
+
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Failed to start TCP transport for port %d (%s)",
+              port,
+              PJUtils::pj_status_to_string(status).c_str());
   }
 
   return status;
@@ -531,35 +621,67 @@ public:
   //
   void close_untrusted_port()
   {
-    if (stack_data.untrusted_tcp_factory != NULL) {
-      destroy_tcp_listener_transport(stack_data.untrusted_port,
-                                     stack_data.untrusted_tcp_factory);
+    // This can only apply to the untrusted P-CSCF port.
+    if (stack_data.pcscf_untrusted_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.pcscf_untrusted_port,
+                                     stack_data.pcscf_untrusted_tcp_factory);
     }
   }
 
   void close_trusted_port()
   {
-    if (stack_data.trusted_tcp_factory != NULL) {
-      destroy_tcp_listener_transport(stack_data.trusted_port,
-                                     stack_data.trusted_tcp_factory);
+    // This applies to all trusted ports, so the P-CSCF trusted port, or the
+    // S-CSCF and I-CSCF ports.
+    if (stack_data.pcscf_trusted_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.pcscf_trusted_port,
+                                     stack_data.pcscf_trusted_tcp_factory);
+    }
+    if (stack_data.scscf_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.scscf_port,
+                                     stack_data.scscf_tcp_factory);
+    }
+    if (stack_data.icscf_tcp_factory != NULL)
+    {
+      destroy_tcp_listener_transport(stack_data.icscf_port,
+                                     stack_data.icscf_tcp_factory);
     }
   }
 
   void open_trusted_port()
   {
-    if (stack_data.trusted_port != 0) {
-      create_tcp_listener_transport(stack_data.trusted_port,
+    // This applies to all trusted ports, so the P-CSCF trusted port, or the
+    // S-CSCF and I-CSCF ports.
+    if (stack_data.pcscf_trusted_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.pcscf_trusted_port,
                                     stack_data.local_host,
-                                    &stack_data.trusted_tcp_factory);
+                                    &stack_data.pcscf_trusted_tcp_factory);
+    }
+    if (stack_data.scscf_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.scscf_port,
+                                    stack_data.local_host,
+                                    &stack_data.scscf_tcp_factory);
+    }
+    if (stack_data.icscf_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.icscf_port,
+                                    stack_data.local_host,
+                                    &stack_data.icscf_tcp_factory);
     }
   }
 
   void open_untrusted_port()
   {
-    if (stack_data.untrusted_port != 0) {
-      create_tcp_listener_transport(stack_data.untrusted_port,
+    // This can only apply to the untrusted P-CSCF port.
+    if (stack_data.pcscf_untrusted_port != 0)
+    {
+      create_tcp_listener_transport(stack_data.pcscf_untrusted_port,
                                     stack_data.public_host,
-                                    &stack_data.untrusted_tcp_factory);
+                                    &stack_data.pcscf_untrusted_tcp_factory);
     }
   }
 
@@ -623,11 +745,49 @@ pj_status_t init_pjsip()
 }
 
 
-pj_status_t init_stack(bool access_proxy,
-                       const std::string& system_name,
+// LCOV_EXCL_START
+void sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
+{
+  int level;
+  va_list args;
+
+  switch (sas_level) {
+    case SAS::LOG_LEVEL_DEBUG:
+      level = Log::DEBUG_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_VERBOSE:
+      level = Log::VERBOSE_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_INFO:
+      level = Log::INFO_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_STATUS:
+      level = Log::STATUS_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_WARNING:
+      level = Log::WARNING_LEVEL;
+      break;
+    case SAS::LOG_LEVEL_ERROR:
+      level = Log::ERROR_LEVEL;
+      break;
+    default:
+      LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
+      level = Log::ERROR_LEVEL;
+    }
+
+  va_start(args, fmt);
+  Log::_write(level, module, line_number, fmt, args);
+  va_end(args);
+}
+// LCOV_EXCL_STOP
+
+
+pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
-                       int trusted_port,
-                       int untrusted_port,
+                       int pcscf_trusted_port,
+                       int pcscf_untrusted_port,
+                       int scscf_port,
+                       int icscf_port,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
@@ -657,8 +817,14 @@ pj_status_t init_stack(bool access_proxy,
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
-  stack_data.trusted_port = trusted_port;
-  stack_data.untrusted_port = untrusted_port;
+
+  // Copy port numbers to stack data.
+  stack_data.pcscf_trusted_port = pcscf_trusted_port;
+  stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
+  stack_data.scscf_port = scscf_port;
+  stack_data.icscf_port = icscf_port;
+
+  // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
@@ -671,9 +837,10 @@ pj_status_t init_stack(bool access_proxy,
   stack_data.record_route_on_completion_of_terminating = false;
   stack_data.record_route_on_diversion = false;
 
-  if (!access_proxy)
+  if (scscf_port != 0)
   {
-    switch (record_routing_model) {
+    switch (record_routing_model)
+    {
     case 1:
         stack_data.record_route_on_initiation_of_originating = true;
         stack_data.record_route_on_completion_of_terminating = true;
@@ -695,7 +862,7 @@ pj_status_t init_stack(bool access_proxy,
   }
 
   std::string system_name_sas = system_name;
-  std::string system_type_sas = access_proxy ? "bono" : "sprout";
+  std::string system_type_sas = (pcscf_trusted_port != 0) ? "bono" : "sprout";
   // Initialize SAS logging.
   if (system_name_sas == "")
   {
@@ -705,7 +872,7 @@ pj_status_t init_stack(bool access_proxy,
             system_type_sas,
             SASEvent::CURRENT_RESOURCE_BUNDLE,
             sas_address,
-            Log::sas_write);
+            sas_write);
 
   // Initialise PJSIP and all the associated resources.
   status = init_pjsip();
@@ -714,22 +881,40 @@ pj_status_t init_stack(bool access_proxy,
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
 
-  // Create listening transports for trusted and untrusted ports.
-  stack_data.trusted_tcp_factory = NULL;
-  if (stack_data.trusted_port != 0)
+  // Create listening transports for the ports whichtrusted and untrusted ports.
+  stack_data.pcscf_trusted_tcp_factory = NULL;
+  if (stack_data.pcscf_trusted_port != 0)
   {
-    status = start_transports(stack_data.trusted_port,
+    status = start_transports(stack_data.pcscf_trusted_port,
                               stack_data.local_host,
-                              &stack_data.trusted_tcp_factory);
+                              &stack_data.pcscf_trusted_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
-  stack_data.untrusted_tcp_factory = NULL;
-  if (stack_data.untrusted_port != 0)
+  stack_data.pcscf_untrusted_tcp_factory = NULL;
+  if (stack_data.pcscf_untrusted_port != 0)
   {
-    status = start_transports(stack_data.untrusted_port,
+    status = start_transports(stack_data.pcscf_untrusted_port,
                               stack_data.public_host,
-                              &stack_data.untrusted_tcp_factory);
+                              &stack_data.pcscf_untrusted_tcp_factory);
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  }
+
+  stack_data.scscf_tcp_factory = NULL;
+  if (stack_data.scscf_port != 0)
+  {
+    status = start_transports(stack_data.scscf_port,
+                              stack_data.public_host,
+                              &stack_data.scscf_tcp_factory);
+    PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  }
+
+  stack_data.icscf_tcp_factory = NULL;
+  if (stack_data.icscf_port != 0)
+  {
+    status = start_transports(stack_data.icscf_port,
+                              stack_data.public_host,
+                              &stack_data.icscf_tcp_factory);
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
 
@@ -750,8 +935,9 @@ pj_status_t init_stack(bool access_proxy,
     stack_data.name_cnt++;
   }
 
-  if (!access_proxy)
+  if ((scscf_port != 0) || (icscf_port != 0))
   {
+    // S/I-CSCF enabled, so add sprout cluster domain name to hostnames.
     stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
     stack_data.name_cnt++;
   }

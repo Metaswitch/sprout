@@ -34,23 +34,22 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-
 #include <cstdio>
 #include "fakehssconnection.hpp"
-#include "ifchandler.h"
 #include <json/reader.h>
 #include "gtest/gtest.h"
 
-using namespace std;
 
 FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL)
 {
 }
 
+
 FakeHSSConnection::~FakeHSSConnection()
 {
   flush_all();
 }
+
 
 void FakeHSSConnection::flush_all()
 {

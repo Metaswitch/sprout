@@ -87,7 +87,7 @@ pjsip_module mod_registrar =
   NULL, NULL,                         // prev, next
   pj_str("mod-registrar"),            // Name
   -1,                                 // Id
-  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,  // Priority
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,// Priority
   NULL,                               // load()
   NULL,                               // start()
   NULL,                               // stop()
@@ -190,6 +190,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               pjsip_rx_data* rdata,          ///<received message to read headers from
                               int now,                       ///<time now
                               int& expiry,                   ///<[out] longest expiry time
+                              bool& out_is_initial_registration,
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store)        ///<backup store to read from if no entry in store and no backup data
 {
@@ -206,6 +207,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   // reading, updating and writing the AoR until the write is successful.
   RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
+  bool is_initial_registration = true;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -248,6 +250,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         }
       }
     }
+
+    is_initial_registration = is_initial_registration && aor_data->bindings().empty();
 
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
@@ -355,6 +359,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     delete backup_aor;
   }
 
+  out_is_initial_registration = is_initial_registration;
   return aor_data;
 }
 
@@ -451,9 +456,10 @@ void process_register_request(pjsip_rx_data* rdata)
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
   int expiry = 0;
+  bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, NULL, remote_store);
+  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -464,7 +470,9 @@ void process_register_request(pjsip_rx_data* rdata)
     if (remote_store != NULL)
     {
       int tmp_expiry = 0;
-      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, aor_data, NULL);
+      bool ignored;
+      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
+      RegData::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
       delete remote_aor_data;
     }
   }
@@ -594,7 +602,7 @@ void process_register_request(pjsip_rx_data* rdata)
   pj_strdup(tdata->pool,
             &service_route_uri->host,
             &stack_data.sprout_cluster_domain);
-  service_route_uri->port = stack_data.trusted_port;
+  service_route_uri->port = stack_data.scscf_port;
   service_route_uri->transport_param = pj_str("TCP");
   service_route_uri->lr_param = 1;
 
@@ -636,7 +644,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, is_initial_registration, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -649,7 +657,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
-  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
+  if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
+      (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
       ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
        (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))))
   {
@@ -661,10 +670,12 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
-void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event) {
+void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
+{
   if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
-      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600)))) {
+      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
+  {
     // Can't create an AS response in UT
     // LCOV_EXCL_START
     LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);

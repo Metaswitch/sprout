@@ -74,6 +74,7 @@ const pj_str_t STR_AUTH = pj_str("auth");
 const pj_str_t STR_AUTS = pj_str("auts");
 const pj_str_t STR_CK = pj_str("ck");
 const pj_str_t STR_IK = pj_str("ik");
+const pj_str_t STR_P_PROFILE_KEY = pj_str("P-Profile-Key");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");

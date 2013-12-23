@@ -52,8 +52,10 @@ TARGET_SOURCES := logger.cpp \
                   dialog_tracker.cpp \
                   load_monitor.cpp \
                   counter.cpp \
-                  signalhandler.cpp \
-                  scscfselector.cpp
+                  basicproxy.cpp \
+									icscfproxy.cpp \
+                  scscfselector.cpp	\
+                  signalhandler.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -95,6 +97,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
+											 icscfproxy_test.cpp \
+											 basicproxy_test.cpp \
                        scscfselector_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
@@ -123,8 +127,12 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/usr/include
+            -I${ROOT}/usr/include \
+						-I${ROOT}/modules/cpp-common/include
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
+
+# Add cpp-common/src as VPATH so build will find modules there.
+VPATH = ${ROOT}/modules/cpp-common/src
 
 # Production build:
 #

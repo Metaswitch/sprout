@@ -70,16 +70,17 @@ void deregister_with_application_servers(Ifcs& ifcs,
                                          const std::string& served_user,
                                          SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifcs, store, NULL, NULL, 0, served_user, trail);
+  RegistrationUtils::register_with_application_servers(ifcs, store, NULL, NULL, 0, false, served_user, trail);
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
-                                       RegStore* store,
-                                       pjsip_rx_data *received_register,
-                                       pjsip_tx_data *ok_response, // Can only be NULL if received_register is
-                                       int expires,
-                                       const std::string& served_user,
-                                       SAS::TrailId trail)
+                                                          RegStore* store,
+                                                          pjsip_rx_data *received_register,
+                                                          pjsip_tx_data *ok_response, // Can only be NULL if received_register is
+                                                          int expires,
+                                                          bool is_initial_registration,
+                                                          const std::string& served_user,
+                                                          SAS::TrailId trail)
 {
   // Function preconditions
   if (received_register == NULL) {
@@ -124,12 +125,12 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     assert(status == PJ_SUCCESS);
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-    ifcs.interpret(SessionCase::Originating, true, tdata->msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list);
 
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    ifcs.interpret(SessionCase::Originating, true, received_register->msg_info.msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 
@@ -153,7 +154,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
 
   pj_str_t user_uri = pj_str(const_cast<char *>(served_user.c_str()));
-  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.trusted_port) + ">";
+  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.scscf_port) + ">";
   pj_str_t scscf_uri = pj_str(const_cast<char *>(scscf_uri_string.c_str()));
   pj_str_t as_uri = pj_str(const_cast<char *>(as.server_name.c_str()));
 
