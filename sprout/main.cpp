@@ -1056,7 +1056,7 @@ int main(int argc, char *argv[])
     }
 
     // Launch stateful proxy as S-CSCF.
-    status = init_stateful_proxy(registrar_store,
+    status = init_stateful_proxy(local_reg_store,
                                  remote_reg_store,
                                  call_services,
                                  ifc_handler,

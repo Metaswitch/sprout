@@ -459,7 +459,7 @@ void process_register_request(pjsip_rx_data* rdata)
   bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, remote_store);
+  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
