@@ -45,6 +45,7 @@ extern "C" {
 
 #include "siptest.hpp"
 #include "utils.h"
+#include "stack.h"
 #include "analyticslogger.h"
 #include "localstore.h"
 #include "avstore.h"
@@ -335,6 +336,23 @@ string AuthenticationMessage::get()
   string ret(buf, n);
   //cout << ret <<endl;
   return ret;
+}
+
+
+TEST_F(AuthenticationTest, NoAuthorizationPort)
+{
+  // Test that the authentication module lets through all requests on ports
+  // other than S-CSCF port.
+  TransportFlow tp(TransportFlow::Protocol::TCP,
+                   stack_data.icscf_port,
+                   "10.83.18.37",
+                   36531);
+  AuthenticationMessage msg("INVITE");
+  msg._auth_hdr = false;
+  inject_msg(msg.get(), &tp);
+
+  // Expect no response as Authentication module lets request through.
+  ASSERT_EQ(0, txdata_count());
 }
 
 
@@ -838,6 +856,73 @@ TEST_F(AuthenticationTest, AKAAuthResyncFail)
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, AuthCorruptAV)
+{
+  // Test a handling of corrupt Authentication Vectors from Homestead.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user
+  // identity, with no aka or digest body.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{}");
+
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._integ_prot = "no";
+  inject_msg(msg1.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+
+  // Set up the HSS response for the AV query using a default private user
+  // identity, with a malformed aka body.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain",
+                              "{\"aka\":{\"challenge\":\"87654321876543218765432187654321\","
+                                        "\"cryptkey\":\"0123456789abcdef\","
+                                        "\"integritykey\":\"fedcba9876543210\"}}");
+
+  // Send in a REGISTER request with an authentication header with
+  // integrity-protected=no.  This triggers aka authentication.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._integ_prot = "no";
+  inject_msg(msg2.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av/aka?impu=sip%3A6505550001%40homedomain");
+
+  // Set up the HSS response for the AV query the default private user identity,
+  // with a malformed digest body.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\","
+                                           "\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg3("REGISTER");
+  msg3._auth_hdr = false;
+  inject_msg(msg3.get());
+
+  // Expect a 403 Forbidden response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(403).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
 
