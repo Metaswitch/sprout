@@ -37,27 +37,51 @@
 #ifndef AVSTORE_H_
 #define AVSTORE_H_
 
-#include <json/reader.h>
+#include <json/json.h>
 
 #include "store.h"
 
+/// Class implementing store of authentication vectors.  This is a wrapper
+/// around an underlying Store class which implements a simple KV store API
+/// with atomic write and record expiry semantics.  The underlying store
+/// can be any implementation that implements the Store API.
 class AvStore
 {
 public:
+  /// Constructor.
+  /// @param data_store    A pointer to the underlying data store.
   AvStore(Store* data_store);
+
+  /// Destructor.
   ~AvStore();
 
+  /// Store the specified Authentication Vector in the store, indexed by the
+  /// private user identity and nonce.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
+  /// @param av        A pointer to a JSONCPP Json::Value object encoding
+  ///                  the Authentication Vector.
   void set_av(const std::string& impi,
               const std::string& nonce,
               const Json::Value* av);
 
+  /// Retrieves the Authentication Vector for the specified private user identity
+  /// and nonce.
+  /// @returns         A pointer to a JSONCPP Json::Value object encoding the
+  ///                  Authentication Vector, or NULL if no vector found or if
+  ///                  the vector is malformed.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
   Json::Value* get_av(const std::string& impi,
                       const std::string& nonce);
 
 private:
+  /// A pointer to the underlying data store.
   Store* _data_store;
 
-  // Expire AV record after 30 seconds.
+  /// Expire AV record after 30 seconds.  This should always be long enough for
+  /// the UE to respond to the authentication challenge, while limiting the
+  /// scope for replay attacks.
   static const int AV_EXPIRY = 30;
 };
 

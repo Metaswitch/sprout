@@ -950,11 +950,13 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     // for the REGISTER response from upstream.
     src_flow->touch();
 
+    // Add an integrity-protected indicator if the message was received on a
+    // client flow that has already been authenticated.  We don't add
+    // integrity-protected=no otherwise as this would be interpreted by the
+    // S-CSCF as a request to use AKA authentication.
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (!src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).empty())
     {
-      // The message was received on a client flow that has already been
-      // authenticated, so add an integrity-protected indication.
       PJUtils::add_integrity_protected_indication(tdata,
                                                   PJUtils::Integrity::IP_ASSOC_YES);
     }
@@ -2124,9 +2126,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
         else
         {
-          // The S-CSCF is different, so route the call there. 
+          // The S-CSCF is different, so route the call there.
            _as_chain_link.release();
- 
+
           delete target;
           target = new Target;
 
@@ -3840,7 +3842,7 @@ void destroy_stateful_proxy()
   ibcf = false;
   icscf = false;
   scscf = false;
-  
+
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_tu);
 }
@@ -4056,7 +4058,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   return ret;
 }
 
-// Return S-CSCF (either from HSS or scscf_selector), or an 
+// Return S-CSCF (either from HSS or scscf_selector), or an
 // empty string if no S-CSCFs are configured
 std::string UASTransaction::get_scscf_name(Json::Value* location)
 {

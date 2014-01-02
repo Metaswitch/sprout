@@ -103,6 +103,54 @@ static AnalyticsLogger* analytics;
 pjsip_auth_srv auth_srv;
 
 
+/// Verifies that the supplied authentication vector is valid.
+bool verify_auth_vector(Json::Value* av, const std::string& impi)
+{
+  bool rc = true;
+
+  // Check the AV is well formed.
+  if (av->isMember("aka"))
+  {
+    // AKA is specified, check all the expected parameters are present.
+    LOG_DEBUG("AKA specified");
+    Json::Value& aka = (*av)["aka"];
+    if ((!aka["challenge"].isString()) ||
+        (!aka["response"].isString()) ||
+        (!aka["cryptkey"].isString()) ||
+        (!aka["integritykey"].isString()))
+    {
+      // Malformed AKA entry
+      LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
+                impi.c_str(), av->toStyledString().c_str());
+      rc = false;
+    }
+  }
+  else if (av->isMember("digest"))
+  {
+    // Digest is specified, check all the expected parameters are present.
+    LOG_DEBUG("Digest specified");
+    Json::Value& digest = (*av)["digest"];
+    if ((!digest["realm"].isString()) ||
+        (!digest["qop"].isString()) ||
+        (!digest["ha1"].isString()))
+    {
+      // Malformed digest entry
+      LOG_ERROR("Badly formed Digest authentication vector for %s\n%s",
+                impi.c_str(), av->toStyledString().c_str());
+      rc = false;
+    }
+  }
+  else
+  {
+    // Neither AKA nor Digest information present.
+    LOG_ERROR("No AKA or Digest object in authentication vector for %s\n%s",
+              impi.c_str(), av->toStyledString().c_str());
+    rc = false;
+  }
+
+  return rc;
+}
+
 
 pj_status_t user_lookup(pj_pool_t *pool,
                         const pjsip_auth_lookup_cred_param *param,
@@ -124,15 +172,23 @@ pj_status_t user_lookup(pj_pool_t *pool,
   // Get the Authentication Vector from the store.
   Json::Value* av = av_store->get_av(impi, nonce);
 
+  if ((av != NULL) &&
+      (!verify_auth_vector(av, impi)))
+  {
+    // Authentication vector is badly formed.
+    delete av;                                                 // LCOV_EXCL_LINE
+    av = NULL;                                                 // LCOV_EXCL_LINE
+  }
+
   if (av != NULL)
   {
-    pj_strdup(pool, &cred_info->realm, realm);
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
     if (av->isMember("aka"))
     {
-      // AKA authentication, so response is plain-text password.  Must convert
-      // the text into binary as this is what seems to be expected.
+      // AKA authentication.  The response in the AV must be used as a
+      // plain-text password for the MD5 Digest computation.  Convert the text
+      // into binary as this is what PJSIP is expecting.
       std::string response = (*av)["aka"]["response"].asString();
       std::string xres;
       for (size_t ii = 0; ii < response.length(); ii += 2)
@@ -143,6 +199,9 @@ pj_status_t user_lookup(pj_pool_t *pool,
       cred_info->data_type = PJSIP_CRED_DATA_PLAIN_PASSWD;
       pj_strdup2(pool, &cred_info->data, xres.c_str());
       LOG_DEBUG("Found AKA XRES = %.*s", cred_info->data.slen, cred_info->data.ptr);
+
+      // Use default realm as it isn't specified in the AV.
+      pj_strdup(pool, &cred_info->realm, realm);
       status = PJ_SUCCESS;
     }
     else if (av->isMember("digest"))
@@ -151,6 +210,9 @@ pj_status_t user_lookup(pj_pool_t *pool,
       cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
       pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
       LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
+
+      // Use realm from AV.
+      pj_strdup2(pool, &cred_info->realm, (*av)["digest"]["realm"].asCString());
       status = PJ_SUCCESS;
     }
     delete av;
@@ -213,6 +275,14 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
                                          resync,
                                          get_trail(rdata));
 
+  if ((av != NULL) &&
+      (!verify_auth_vector(av, impi)))
+  {
+    // Authentication Vector is badly formed.
+    delete av;
+    av = NULL;
+  }
+
   if (av != NULL)
   {
     // Retrieved a valid authentication vector, so generate the challenge.
@@ -225,16 +295,20 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Create WWW-Authenticate header");
     pjsip_www_authenticate_hdr* hdr = pjsip_www_authenticate_hdr_create(tdata->pool);
 
+    // Set up common fields for Digest and AKA cases (both are considered
+    // Digest authentication).
     hdr->scheme = STR_DIGEST;
-    pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &auth_srv.realm);
 
     if (av->isMember("aka"))
     {
       // AKA authentication.
       LOG_DEBUG("Add AKA information");
-      Json::Value* aka = &(*av)["aka"];
+      Json::Value& aka = (*av)["aka"];
+
+      // Use default realm for AKA as not specified in the AV.
+      pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &auth_srv.realm);
       hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
-      nonce = (*aka)["challenge"].asString();
+      nonce = aka["challenge"].asString();
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
@@ -244,14 +318,14 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      std::string ck = "\"" + (*aka)["cryptkey"].asString() + "\"";
+      std::string ck = "\"" + aka["cryptkey"].asString() + "\"";
       pj_strdup2(tdata->pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
 
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      std::string ik = "\"" + (*aka)["integritykey"].asString() + "\"";
+      std::string ik = "\"" + aka["integritykey"].asString() + "\"";
       pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
     }
@@ -259,14 +333,15 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     {
       // Digest authentication.
       LOG_DEBUG("Add Digest information");
-      Json::Value* digest = &(*av)["digest"];
+      Json::Value& digest = (*av)["digest"];
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, digest["realm"].asCString());
       hdr->challenge.digest.algorithm = STR_MD5;
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.nonce, &random);
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
-      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, (*digest)["qop"].asCString());
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, digest["qop"].asCString());
       hdr->challenge.digest.stale = PJ_FALSE;
     }
 
@@ -284,8 +359,6 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Failed to get Authentication vector");
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
   }
-
-  return;
 }
 
 
@@ -363,7 +436,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
           // Found AUTS parameter, so UE is requesting a resync.  We need to
           // redo the authentication, passing an auts parameter to the HSS
           // comprising the first 16 octets of the nonce (RAND) and the 14
-          // octets of the auts parameter for the
+          // octets of the auts parameter.  (See TS 33.203 and table 6.3.3 of
+          // TS 29.228 for details.)
           LOG_DEBUG("AKA SQN resync request from UE");
           std::string auts = PJUtils::pj_str_to_string(&p->value);
           std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);

@@ -140,52 +140,7 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
     _digest_latency_stat.accumulate(latency_us);
   }
 
-  if (av != NULL)
-  {
-    // Check the AV is well formed.
-    if (av->isMember("aka"))
-    {
-      // AKA is specified, check all the expected parameters are present.
-      LOG_DEBUG("AKA specified");
-      Json::Value& aka = (*av)["aka"];
-      if ((!aka["challenge"].isString()) ||
-          (!aka["response"].isString()) ||
-          (!aka["cryptkey"].isString()) ||
-          (!aka["integritykey"].isString()))
-      {
-        // Malformed AKA entry
-        LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
-                  private_user_identity.c_str(), av->toStyledString().c_str());
-        delete av;
-        av = NULL;
-      }
-    }
-    else if (av->isMember("digest"))
-    {
-      // Digest is specified, check all the expected parameters are present.
-      LOG_DEBUG("Digest specified");
-      Json::Value& digest = (*av)["digest"];
-      if ((!digest["realm"].isString()) ||
-          (!digest["qop"].isString()) ||
-          (!digest["ha1"].isString()))
-      {
-        // Malformed digest entry
-        LOG_ERROR("Badly formed Digest authentication vector for %s\n%s",
-                  private_user_identity.c_str(), av->toStyledString().c_str());
-        delete av;
-        av = NULL;
-      }
-    }
-    else
-    {
-      // Neither AKA nor Digest information present.
-      LOG_ERROR("No AKA or Digest object in authentication vector for %s\n%s",
-                private_user_identity.c_str(), av->toStyledString().c_str());
-      delete av;
-      av = NULL;
-    }
-  }
-  else
+  if (av == NULL)
   {
     LOG_ERROR("Failed to get Authentication Vector for %s",
               private_user_identity.c_str());

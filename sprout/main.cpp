@@ -973,6 +973,13 @@ int main(int argc, char *argv[])
   // Initialise the OPTIONS handling module.
   status = init_options();
 
+  if (opt.hss_server != "")
+  {
+    // Create a connection to the HSS.
+    LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
+    hss_connection = new HSSConnection(opt.hss_server, load_monitor);
+  }
+
   if (opt.scscf_enabled)
   {
     if (opt.store_servers != "")
@@ -1025,6 +1032,10 @@ int main(int argc, char *argv[])
 
     if (opt.auth_enabled)
     {
+      // Create an AV store using the local store and initialise the authentication
+      // module.  We don't create a AV store using the remote data store as
+      // Authentication Vectors are only stored for a short period after the
+      // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
       status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);

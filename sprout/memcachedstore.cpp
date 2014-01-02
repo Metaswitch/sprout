@@ -383,7 +383,7 @@ Store::Status MemcachedStore::set_data(const std::string& table,
                          data.data(),
                          data.length(),
                          (time_t)expiry,
-                         (uint32_t)exptime);
+                         exptime);
     }
     else
     {
@@ -395,7 +395,7 @@ Store::Status MemcachedStore::set_data(const std::string& table,
                          data.data(),
                          data.length(),
                          (time_t)expiry,
-                         (uint32_t)exptime,
+                         exptime,
                          cas);
     }
 
