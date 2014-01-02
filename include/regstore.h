@@ -1,5 +1,5 @@
 /**
- * @file regdata.h Definitions of interfaces for the registration data store.
+ * @file regstore.h Definitions of interfaces for the registration data store.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,11 +34,9 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
 
-#ifndef REGDATA_H__
-#define REGDATA_H__
+#ifndef REGSTORE_H__
+#define REGSTORE_H__
 
 #include <string>
 #include <list>
@@ -46,15 +44,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-namespace RegData
+#include "store.h"
+#include "regstore.h"
+
+class RegStore
 {
-  /// @class RegData::AoR
+public:
+  /// @class RegStore::AoR
   ///
   /// Addresses that are registered for this address of record.
   class AoR
   {
   public:
-    /// @class RegData::AoR::Binding
+    /// @class Regstore::AoR::Binding
     ///
     /// A single registered address.
     class Binding
@@ -90,16 +92,11 @@ namespace RegData
       std::list<std::pair<std::string, std::string> > _params;
     };
 
-    /// Constructor: the store is initially empty.
-    AoR() :
-      _bindings()
-    {
-    }
+    /// Default Constructor.
+    AoR();
 
-    virtual ~AoR()
-    {
-      clear();
-    }
+    /// Destructor.
+    ~AoR();
 
     /// Make sure copy is deep!
     AoR(const AoR& other);
@@ -123,50 +120,46 @@ namespace RegData
     typedef std::map<std::string, Binding*> Bindings;
 
     /// Retrieve all the bindings.
-    inline const Bindings& bindings()
-    {
-      return _bindings;
-    }
+    inline const Bindings& bindings() { return _bindings; }
 
   private:
     /// Map holding the bindings for a particular AoR indexed by binding ID.
     Bindings _bindings;
 
+    /// CAS value for this AoR record.  Used when updating an existing record.
+    /// Zero for a new record that has not yet been written to a store.
+    uint64_t _cas;
+
     /// Store code is allowed to manipulate bindings directly.
-    friend class Store;
+    friend class RegStore;
   };
 
-  /// @class RegData::Store
-  ///
-  /// Abstract base class for the registration data store.  This holds a map
-  /// from registered SIP URI (aor_id) to AoR object.
-  class Store
-  {
-  public:
-    /// Must define a destructor, even though it does nothing, to ensure there
-    /// is an entry for it in the vtable.
-    virtual ~Store()
-    {
-    }
+  /// Constructor.
+  RegStore(Store* data_store);
 
-    /// Wipe all data from the store.
-    virtual void flush_all() = 0;
+  /// Destructor.
+  ~RegStore();
 
-    /// Get the data for a particular address of record (registered SIP URI,
-    /// in format "sip:2125551212@example.com"), creating creating it if
-    /// necessary.  May return NULL in case of error.  Result is owned
-    /// by caller and must be freed with delete.
-    virtual AoR* get_aor_data(const std::string& aor_id) = 0;
+  /// Get the data for a particular address of record (registered SIP URI,
+  /// in format "sip:2125551212@example.com"), creating creating it if
+  /// necessary.  May return NULL in case of error.  Result is owned
+  /// by caller and must be freed with delete.
+  AoR* get_aor_data(const std::string& aor_id);
 
-    /// Update the data for a particular address of record.  Writes the data
-    /// atomically.  If the underlying data has changed since it was last
-    /// read, the update is rejected and this returns false; if the update
-    /// succeeds, this returns true.
-    virtual bool set_aor_data(const std::string& aor_id, AoR* data) = 0;
+  /// Update the data for a particular address of record.  Writes the data
+  /// atomically.  If the underlying data has changed since it was last
+  /// read, the update is rejected and this returns false; if the update
+  /// succeeds, this returns true.
+  bool set_aor_data(const std::string& aor_id, AoR* data);
 
-    virtual int expire_bindings(AoR* aor_data, int now);
-  };
+  int expire_bindings(AoR* aor_data, int now);
 
-}; // namespace RegData
+  std::string serialize_aor(AoR* aor_data);
+
+  AoR* deserialize_aor(const std::string& s);
+
+private:
+  Store* _data_store;
+};
 
 #endif

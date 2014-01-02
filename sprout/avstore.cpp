@@ -1,5 +1,5 @@
 /**
- * @file memcachedstorefactory.h Factory function for creating instances of the MemcachedStore class.
+ * @file avstore.cpp Implementation of store for Authentication Vectors
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,17 +34,65 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef MEMCACHEDSTOREFACTORY_H__
-#define MEMCACHEDSTOREFACTORY_H__
+#include <map>
+#include <pthread.h>
 
-#include "regdata.h"
+#include "log.h"
+#include "store.h"
+#include "avstore.h"
 
-namespace RegData
+
+AvStore::AvStore(Store* data_store) :
+  _data_store(data_store)
 {
-  RegData::Store* create_memcached_store(bool binary, const std::string& config_file);
+}
 
-  void destroy_memcached_store(RegData::Store* store);
 
-} // namespace RegData
+AvStore::~AvStore()
+{
+}
 
-#endif
+
+void AvStore::set_av(const std::string& impi,
+                     const std::string& nonce,
+                     const Json::Value* av)
+{
+  std::string key = impi + '\\' + nonce;
+  Json::FastWriter writer;
+  std::string data = writer.write(*av);
+  LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
+  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY);
+  if (status != Store::Status::OK)
+  {
+    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());   // LCOV_EXCL_LINE
+  }
+}
+
+
+Json::Value* AvStore::get_av(const std::string& impi,
+                             const std::string& nonce)
+{
+  Json::Value* av = NULL;
+  std::string key = impi + '\\' + nonce;
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data("av", key, data, cas);
+
+  if (status == Store::Status::OK)
+  {
+    LOG_DEBUG("Retrieved AV for %s\n%s", key.c_str(), data.c_str());
+    av = new Json::Value;
+    Json::Reader reader;
+    bool parsingSuccessful = reader.parse(data, *av);
+    if (!parsingSuccessful)
+    {
+      LOG_DEBUG("Failed to parse AV\n%s",
+                reader.getFormattedErrorMessages().c_str());
+      delete av;
+      av = NULL;
+    }
+  }
+
+  return av;
+}
+

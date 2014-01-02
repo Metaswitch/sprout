@@ -38,9 +38,14 @@
 #ifndef AUTHENTICATION_H__
 #define AUTHENTICATION_H__
 
+#include "avstore.h"
+#include "hssconnection.h"
+#include "analyticslogger.h"
+
 extern pjsip_module mod_auth;
 
 pj_status_t init_authentication(const std::string& realm_name,
+                                AvStore* avstore,
                                 HSSConnection* hss_connection,
                                 AnalyticsLogger* analytics_logger);
 

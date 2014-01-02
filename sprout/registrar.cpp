@@ -63,8 +63,8 @@ extern "C" {
 #include "log.h"
 
 
-static RegData::Store* store;
-static RegData::Store* remote_store;
+static RegStore* store;
+static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
@@ -100,14 +100,14 @@ pjsip_module mod_registrar =
 };
 
 
-void log_bindings(const std::string& aor_name, RegData::AoR* aor_data)
+void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
 {
   LOG_DEBUG("Bindings for %s", aor_name.c_str());
-  for (RegData::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+  for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
-    RegData::AoR::Binding* binding = i->second;
+    RegStore::AoR::Binding* binding = i->second;
     LOG_DEBUG("  %s URI=%s expires=%d q=%d from %s cseq %d",
               i->first.c_str(),
               binding->_uri.c_str(),
@@ -185,17 +185,14 @@ bool get_private_id(pjsip_rx_data* rdata, std::string& id)
 }
 
 /// Write to the registration store.
-RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write to
-                             std::string aor,               ///<address of record to write to
-                             pjsip_rx_data* rdata,          ///<received message to read headers from
-                             int now,                       ///<time now
-                             int& expiry,                   ///<[out]
-                                                            ///longest
-                                                            ///expiry
-                                                            ///time
-                             bool& out_is_initial_registration,
-                             RegData::AoR* backup_aor,      ///<backup data if no entry in store
-                             RegData::Store* backup_store)  ///<backup store to read from if no entry in store and no backup data
+RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write to
+                              std::string aor,               ///<address of record to write to
+                              pjsip_rx_data* rdata,          ///<received message to read headers from
+                              int now,                       ///<time now
+                              int& expiry,                   ///<[out] longest expiry time
+                              bool& out_is_initial_registration,
+                              RegStore::AoR* backup_aor,     ///<backup data if no entry in store
+                              RegStore* backup_store)        ///<backup store to read from if no entry in store and no backup data
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -208,7 +205,7 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
   // The registration service uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
-  RegData::AoR* aor_data = NULL;
+  RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   do
@@ -243,12 +240,12 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
       if ((backup_aor != NULL) &&
           (!backup_aor->bindings().empty()))
       {
-        for (RegData::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
+        for (RegStore::AoR::Bindings::const_iterator i = backup_aor->bindings().begin();
              i != backup_aor->bindings().end();
              ++i)
         {
-          RegData::AoR::Binding* src = i->second;
-          RegData::AoR::Binding* dst = aor_data->get_binding(i->first);
+          RegStore::AoR::Binding* src = i->second;
+          RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
           *dst = *src;
         }
       }
@@ -288,7 +285,7 @@ RegData::AoR* write_to_store(RegData::Store* primary_store, ///<store to write t
         LOG_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
-        RegData::AoR::Binding* binding = aor_data->get_binding(binding_id);
+        RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
@@ -462,7 +459,7 @@ void process_register_request(pjsip_rx_data* rdata)
   bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegData::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store);
+  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -474,7 +471,7 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       int tmp_expiry = 0;
       bool ignored;
-      RegData::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
+      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
       delete remote_aor_data;
     }
   }
@@ -534,11 +531,11 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)gen_hdr);
 
   // Add contact headers for all active bindings.
-  for (RegData::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+  for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
-    RegData::AoR::Binding* binding = i->second;
+    RegStore::AoR::Binding* binding = i->second;
     if (binding->_expires > now)
     {
       // The binding hasn't expired.
@@ -697,8 +694,8 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
   }
 }
 
-pj_status_t init_registrar(RegData::Store* registrar_store,
-                           RegData::Store* remote_reg_store,
+pj_status_t init_registrar(RegStore* registrar_store,
+                           RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            IfcHandler* ifchandler_ref,

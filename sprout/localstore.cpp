@@ -1,5 +1,5 @@
 /**
- * @file localstore.cpp Local memory implementation of the registration data store.
+ * @file localstore.cpp Local memory implementation of the Sprout data store.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,105 +34,150 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 // Common STL includes.
 #include <cassert>
-#include <vector>
 #include <map>
-#include <set>
 #include <list>
-#include <queue>
 #include <string>
-#include <iostream>
-#include <sstream>
-#include <fstream>
-#include <iomanip>
-#include <algorithm>
 
 #include <time.h>
 #include <stdint.h>
 
-#include "localstorefactory.h"
+#include "log.h"
 #include "localstore.h"
 
-namespace RegData {
+
+LocalStore::LocalStore() :
+  _db_lock(PTHREAD_MUTEX_INITIALIZER),
+  _db()
+{
+  LOG_DEBUG("Created local store");
+}
 
 
-  RegData::Store* create_local_store()
+LocalStore::~LocalStore()
+{
+  flush_all();
+  pthread_mutex_destroy(&_db_lock);
+}
+
+
+void LocalStore::flush_all()
+{
+  pthread_mutex_lock(&_db_lock);
+  LOG_DEBUG("Flushing local store");
+  _db.clear();
+  pthread_mutex_unlock(&_db_lock);
+}
+
+
+Store::Status LocalStore::get_data(const std::string& table,
+                                   const std::string& key,
+                                   std::string& data,
+                                   uint64_t& cas)
+{
+  LOG_DEBUG("get_data table=%s key=%s", table.c_str(), key.c_str());
+
+  Store::Status status = Store::Status::NOT_FOUND;
+
+  // Calculate the fully qualified key.
+  std::string fqkey = table + "\\\\" + key;
+
+  pthread_mutex_lock(&_db_lock);
+
+  uint32_t now = time(NULL);
+
+  LOG_DEBUG("Search store for key %s", fqkey.c_str());
+
+  std::map<std::string, Record>::iterator i = _db.find(fqkey);
+  if (i != _db.end())
   {
-    return new LocalStore();
-  }
-
-
-  void destroy_local_store(RegData::Store* store)
-  {
-    delete (RegData::LocalStore*)store;
-  }
-
-
-  LocalStore::LocalStore() :
-    _db()
-  {
-  }
-
-
-  LocalStore::~LocalStore()
-  {
-    flush_all();
-  }
-
-
-  void LocalStore::flush_all()
-  {
-    _db.clear();
-  }
-
-
-  AoR* LocalStore::get_aor_data(const std::string& aor_id)
-  {
-    LocalAoR* aor_data = new LocalAoR;
-    std::map<std::string, LocalAoR>::iterator i = _db.find(aor_id);
-    if (i != _db.end())
+    // Found an existing record, so check the expiry.
+    Record& r = i->second;
+    LOG_DEBUG("Found record, expiry = %ld (now = %ld)", r.expiry, now);
+    if (r.expiry < now)
     {
-      // AoR is already in database, so expire the bindings then copy
-      // the data.
-      expire_bindings(&i->second, time(NULL));
-      *aor_data = i->second;
+      // Record has expired, so remove it from the map and return not found.
+      LOG_DEBUG("Record has expired, remove it from store");
+      _db.erase(i);
     }
     else
     {
-      // AoR is not already in the database, so insert it.
-      _db.insert(std::make_pair(aor_id, *aor_data));
+      // Record has not expired, so return the data and the cas value.
+      LOG_DEBUG("Record has not expired, return %d bytes of data with CAS = %ld",
+                r.data.length(), r.cas);
+      data = r.data;
+      cas = r.cas;
+      status = Store::Status::OK;
     }
-
-    return (AoR*)aor_data;
   }
 
+  pthread_mutex_unlock(&_db_lock);
 
-  bool LocalStore::set_aor_data(const std::string& aor_id, AoR* data)
+  LOG_DEBUG("get_data status = %d", status);
+
+  return status;
+}
+
+
+Store::Status LocalStore::set_data(const std::string& table,
+                                   const std::string& key,
+                                   const std::string& data,
+                                   uint64_t cas,
+                                   int expiry)
+{
+  LOG_DEBUG("set_data table=%s key=%s CAS=%ld expiry=%d",
+            table.c_str(), key.c_str(), cas, expiry);
+
+  Store::Status status = Store::Status::DATA_CONTENTION;
+
+  // Calculate the fully qualified key.
+  std::string fqkey = table + "\\\\" + key;
+
+  pthread_mutex_lock(&_db_lock);
+
+  uint32_t now = time(NULL);
+
+  LOG_DEBUG("Search store for key %s", fqkey.c_str());
+
+  std::map<std::string, Record>::iterator i = _db.find(fqkey);
+
+  if (i != _db.end())
   {
-    bool rc = false;
-    LocalAoR* aor_data = (LocalAoR*)(data);
-    if (aor_data != NULL)
+    // Found an existing record, so check the expiry and CAS value.
+    Record& r = i->second;
+    LOG_DEBUG("Found existing record, CAS = %ld, expiry = %ld (now = %ld)",
+              r.cas, r.expiry, now);
+
+    if (((r.expiry >= now) && (cas == r.cas)) ||
+        ((r.expiry < now) && (cas == 0)))
     {
-      std::map<std::string, LocalAoR>::iterator i = _db.find(aor_id);
-
-      if (i != _db.end())
-      {
-        if (aor_data->get_cas() == i->second.get_cas())
-        {
-          // CAS is unchanged, so increment the CAS and update the data.
-          aor_data->set_cas(aor_data->get_cas() + 1);
-          i->second = *aor_data;
-          rc = true;
-        }
-      }
+      // Supplied CAS is consistent (either because record hasn't expired and
+      // CAS matches, or record has expired and CAS is zero) so update the
+      // record.
+      r.data = data;
+      r.cas = ++cas;
+      r.expiry = (uint32_t)expiry + now;
+      status = Store::Status::OK;
+      LOG_DEBUG("CAS is consistent, updated record, CAS = %ld, expiry = %ld (now = %ld)",
+                r.cas, r.expiry, now);
     }
-
-    return rc;
+  }
+  else if (cas == 0)
+  {
+    // No existing record and supplied CAS is zero, so add a new record.
+    Record& r = _db[fqkey];
+    r.data = data;
+    r.cas = 1;
+    r.expiry = expiry + now;
+    status = Store::Status::OK;
+    LOG_DEBUG("No existing record so inserted new record, CAS = %ld, expiry = %ld (now = %ld)",
+              r.cas, r.expiry, now);
   }
 
-} // namespace RegData
+  pthread_mutex_unlock(&_db_lock);
+
+  return status;
+}
+
 

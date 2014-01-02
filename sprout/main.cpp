@@ -61,7 +61,7 @@ extern "C" {
 #include "logger.h"
 #include "utils.h"
 #include "analyticslogger.h"
-#include "regdata.h"
+#include "regstore.h"
 #include "stack.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
@@ -71,8 +71,6 @@ extern "C" {
 #include "registrar.h"
 #include "authentication.h"
 #include "options.h"
-#include "memcachedstorefactory.h"
-#include "localstorefactory.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "pjutils.h"
@@ -80,6 +78,8 @@ extern "C" {
 #include "zmq_lvc.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
+#include "memcachedstore.h"
+#include "localstore.h"
 #include "scscfselector.h"
 #include "icscfproxy.h"
 
@@ -746,10 +746,13 @@ int main(int argc, char *argv[])
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
   LoadMonitor* load_monitor = NULL;
+  Store* local_data_store = NULL;
+  Store* remote_data_store = NULL;
+  RegStore* local_reg_store = NULL;
+  RegStore* remote_reg_store = NULL;
+  AvStore* av_store = NULL;
   SCSCFSelector* scscf_selector = NULL;
   ICSCFProxy* icscf_proxy = NULL;
-  RegData::Store* registrar_store = NULL;
-  RegData::Store* remote_reg_store = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
 
   // Set up our exception signal handler for asserts and segfaults.
@@ -983,27 +986,30 @@ int main(int argc, char *argv[])
     {
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
-      registrar_store = RegData::create_memcached_store(false, opt.store_servers);
+      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+      if (opt.remote_store_servers != "")
+      {
+        // Use remote memcached store too.
+        LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+      }
     }
     else
     {
       // Use local store.
       LOG_STATUS("Using local store");
-      registrar_store = RegData::create_local_store();
+      local_data_store = (Store*)new LocalStore();
     }
 
-    if (registrar_store == NULL)
+    if (local_data_store == NULL)
     {
       LOG_ERROR("Failed to connect to data store");
-      return 1;
+      exit(0);
     }
 
-    if (opt.remote_store_servers != "")
-    {
-      // Use remote memcached store too.
-      LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-      remote_reg_store = RegData::create_memcached_store(false, opt.remote_store_servers);
-    }
+    // Create local and optionally remote registration data stores.
+    local_reg_store = new RegStore(local_data_store);
+    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store) : NULL;
 
     if (opt.xdm_server != "")
     {
@@ -1026,8 +1032,13 @@ int main(int argc, char *argv[])
 
     if (opt.auth_enabled)
     {
+      // Create an AV store using the local store and initialise the authentication
+      // module.  We don't create a AV store using the remote data store as
+      // Authentication Vectors are only stored for a short period after the
+      // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
-      status = init_authentication(opt.auth_realm, hss_connection, analytics_logger);
+      av_store = new AvStore(local_data_store);
+      status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);
     }
 
     // Create Enum and BGCF services required for S-CSCF.
@@ -1042,7 +1053,7 @@ int main(int argc, char *argv[])
     bgcf_service = new BgcfService();
 
     // Launch the registrar.
-    status = init_registrar(registrar_store,
+    status = init_registrar(local_reg_store,
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
@@ -1056,7 +1067,7 @@ int main(int argc, char *argv[])
     }
 
     // Launch stateful proxy as S-CSCF.
-    status = init_stateful_proxy(registrar_store,
+    status = init_stateful_proxy(local_reg_store,
                                  remote_reg_store,
                                  call_services,
                                  ifc_handler,
@@ -1125,7 +1136,6 @@ int main(int argc, char *argv[])
         return 1;
       }
     }
-
   }
 
   if (opt.icscf_enabled)
@@ -1174,20 +1184,6 @@ int main(int argc, char *argv[])
     delete xdm_connection;
     delete enum_service;
     delete bgcf_service;
-    if (opt.store_servers != "")
-    {
-      RegData::destroy_memcached_store(registrar_store);
-    }
-    else
-    {
-      RegData::destroy_local_store(registrar_store);
-    }
-
-    if (remote_reg_store != NULL)
-    {
-      RegData::destroy_memcached_store(remote_reg_store);
-    }
-
   }
   if (opt.pcscf_enabled)
   {
@@ -1207,6 +1203,11 @@ int main(int argc, char *argv[])
 
   delete quiescing_mgr;
   delete load_monitor;
+  delete local_reg_store;
+  delete remote_reg_store;
+  delete av_store;
+  delete local_data_store;
+  delete remote_data_store;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

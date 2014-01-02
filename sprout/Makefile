@@ -7,6 +7,7 @@ MK_DIR := ${ROOT}/mk
 
 GTEST_DIR := $(ROOT)/modules/gmock/gtest
 GMOCK_DIR := $(ROOT)/modules/gmock
+SIPP_DIR := $(ROOT)/modules/sipp
 
 TARGET := sprout
 TARGET_TEST := sprout_test
@@ -25,10 +26,11 @@ TARGET_SOURCES := logger.cpp \
                   httpconnection.cpp \
                   hssconnection.cpp \
                   websockets.cpp \
-                  store.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
+									avstore.cpp \
+									regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
@@ -74,7 +76,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        hssconnection_test.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
-                       memcachedstore_test.cpp \
+                       regstore_test.cpp \
+											 avstore_test.cpp \
                        registrar_test.cpp \
                        stateful_proxy_test.cpp \
                        bgcfservice_test.cpp \
@@ -101,6 +104,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
 	                  gtest-all.o \
+										md5.o \
 	                  test_interposer.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
@@ -146,7 +150,7 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
                   -fprofile-arcs -ftest-coverage \
                   -O0 \
                   -fno-access-control \
-                  -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include
+                  -I$(GTEST_DIR)/include -I$(GMOCK_DIR)/include -I$(SIPP_DIR)
 
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
@@ -182,6 +186,8 @@ GMOCK_HEADERS := $(GMOCK_DIR)/include/gmock/*.h \
 GTEST_SRCS_ := $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
 GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 # End of boilerplate
+
+#
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) \
                 --root=$(shell pwd) --exclude=^ut/ \
@@ -299,6 +305,10 @@ $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)
 $(OBJ_DIR_TEST)/gmock-all.o : $(GMOCK_SRCS_)
 	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) -I$(GTEST_DIR)/include -I$(GMOCK_DIR) -I$(GMOCK_DIR)/include \
             -c $(GMOCK_DIR)/src/gmock-all.cc -o $@
+
+# Build rules for SIPp cryptographic modules.
+$(OBJ_DIR_TEST)/md5.o : $(SIPP_DIR)/md5.c
+	$(CXX) $(CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 
 # Build rule for our interposer.
 $(OBJ_DIR_TEST)/test_interposer.so: ut/test_interposer.cpp ut/test_interposer.hpp

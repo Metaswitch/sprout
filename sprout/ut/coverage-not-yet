@@ -8,7 +8,6 @@ stateful_proxy.cpp
 connection_pool.cpp
 pjutils.cpp
 analyticslogger.cpp
-authentication.cpp
 callservices.cpp
 stack.cpp
 websockets.cpp
@@ -17,3 +16,4 @@ flowtable.cpp
 zmq_lvc.cpp
 custom_headers.cpp
 memcachedstoreview.cpp
+memcachedstore.cpp

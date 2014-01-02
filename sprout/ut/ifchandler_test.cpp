@@ -34,7 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-
 #include <string>
 #include "gtest/gtest.h"
 #include <boost/algorithm/string/replace.hpp>
@@ -44,7 +43,6 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
-#include "localstorefactory.h"
 #include "fakelogger.hpp"
 
 #include "ifchandler.h"
@@ -57,7 +55,8 @@ class IfcHandlerTest : public SipTest
 public:
   FakeLogger _log;
   static FakeHSSConnection* _hss_connection;
-  static RegData::Store* _store;
+  static LocalStore* _local_data_store;
+  static RegStore* _store;
   static IfcHandler* _ifc_handler;
   pjsip_msg* TEST_MSG;
 
@@ -66,13 +65,15 @@ public:
     SipTest::SetUpTestCase();
 
     _hss_connection = new FakeHSSConnection();
-    _store = RegData::create_local_store();
+    _local_data_store = new LocalStore();
+    _store = new RegStore((Store*)_local_data_store);
     _ifc_handler = new IfcHandler();
   }
 
   static void TearDownTestCase()
   {
-    RegData::destroy_local_store(_store);
+    delete _store;
+    delete _local_data_store;
     delete _ifc_handler;
     _ifc_handler = NULL;
     delete _hss_connection;
@@ -83,7 +84,7 @@ public:
 
   IfcHandlerTest() : SipTest(NULL)
   {
-    _store->flush_all();  // start from a clean slate on each test
+    _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {
       _hss_connection->flush_all();
@@ -149,7 +150,8 @@ public:
 };
 
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
-RegData::Store* IfcHandlerTest::_store;
+LocalStore* IfcHandlerTest::_local_data_store;
+RegStore* IfcHandlerTest::_store;
 IfcHandler* IfcHandlerTest::_ifc_handler;
 
 TEST_F(IfcHandlerTest, ServedUser)
@@ -220,7 +222,7 @@ void IfcHandlerTest::doBaseTest(string description,
 {
   SCOPED_TRACE(description);
   std::vector<AsInvocation> application_servers;
-  _store->flush_all();  // start from a clean slate on each test
+  _local_data_store->flush_all();  // start from a clean slate on each test
   std::shared_ptr<rapidxml::xml_document<> > root (new rapidxml::xml_document<>);
   char* cstr_ifc = strdup(ifc.c_str());
   root->parse<0>(cstr_ifc);

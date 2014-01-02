@@ -40,7 +40,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "localstorefactory.h"
 #include "analyticslogger.h"
 #include "stack.h"
 #include "registrar.h"
@@ -62,8 +61,10 @@ public:
   {
     SipTest::SetUpTestCase();
 
-    _store = RegData::create_local_store();
-    _remote_store = RegData::create_local_store();
+    _local_data_store = new LocalStore();
+    _remote_data_store = new LocalStore();
+    _store = new RegStore((Store*)_local_data_store);
+    _remote_store = new RegStore((Store*)_remote_data_store);
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
@@ -88,16 +89,18 @@ public:
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
-    RegData::destroy_local_store(_remote_store); _remote_store = NULL;
-    RegData::destroy_local_store(_store); _store = NULL;
+    delete _remote_store; _remote_store = NULL;
+    delete _store; _store = NULL;
+    delete _remote_data_store; _remote_data_store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
     SipTest::TearDownTestCase();
   }
 
   RegistrarTest() : SipTest(&mod_registrar)
   {
     _analytics->_logger = &_log;
-    _store->flush_all();  // start from a clean slate on each test
-    _remote_store->flush_all();
+    _local_data_store->flush_all();  // start from a clean slate on each test
+    _remote_data_store->flush_all();
   }
 
   ~RegistrarTest()
@@ -106,15 +109,19 @@ public:
   }
 
 protected:
-  static RegData::Store* _store;
-  static RegData::Store* _remote_store;
+  static LocalStore* _local_data_store;
+  static LocalStore* _remote_data_store;
+  static RegStore* _store;
+  static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static FakeHSSConnection* _hss_connection;
 };
 
-RegData::Store* RegistrarTest::_store;
-RegData::Store* RegistrarTest::_remote_store;
+LocalStore* RegistrarTest::_local_data_store;
+LocalStore* RegistrarTest::_remote_data_store;
+RegStore* RegistrarTest::_store;
+RegStore* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 FakeHSSConnection* RegistrarTest::_hss_connection;
@@ -664,7 +671,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
-  RegData::AoR* aor_data;
+  RegStore::AoR* aor_data;
   aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
@@ -790,7 +797,6 @@ TEST_F(RegistrarTest, AppServersReRegistration)
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
-
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
   msg._expires = "Expires: 800";
@@ -899,7 +905,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
-  RegData::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain");
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain");
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;

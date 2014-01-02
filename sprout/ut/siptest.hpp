@@ -46,7 +46,8 @@ extern "C" {
 }
 
 #include "utils.h"
-#include "regdata.h"
+#include "localstore.h"
+#include "regstore.h"
 #include "fakehssconnection.hpp"
 
 using std::string;
@@ -164,7 +165,7 @@ protected:
   static SipTest* _current_instance;
 
   /// Register the specified URI.
-  void register_uri(RegData::Store* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600);
+  void register_uri(RegStore* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600);
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default);

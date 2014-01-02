@@ -44,7 +44,7 @@ extern "C" {
 
 #include <string>
 #include <cassert>
-#include "regdata.h"
+#include "regstore.h"
 #include "constants.h"
 #include "ifchandler.h"
 #include "pjutils.h"
@@ -63,10 +63,10 @@ void send_register_to_as(pjsip_rx_data* received_register,
     const std::string&,
     SAS::TrailId);
 
-void deregister_with_application_servers(Ifcs&, RegData::Store* store, const std::string&, SAS::TrailId trail);
+void deregister_with_application_servers(Ifcs&, RegStore* store, const std::string&, SAS::TrailId trail);
 
 void deregister_with_application_servers(Ifcs& ifcs,
-                                         RegData::Store* store,
+                                         RegStore* store,
                                          const std::string& served_user,
                                          SAS::TrailId trail)
 {
@@ -74,7 +74,7 @@ void deregister_with_application_servers(Ifcs& ifcs,
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
-                                                          RegData::Store* store,
+                                                          RegStore* store,
                                                           pjsip_rx_data *received_register,
                                                           pjsip_tx_data *ok_response, // Can only be NULL if received_register is
                                                           int expires,
@@ -264,12 +264,12 @@ void notify_application_servers() {
   // TODO: implement as part of reg events package
 }
 
-static void expire_bindings(RegData::Store *store, const std::string& aor, const std::string& binding_id)
+static void expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id)
 {
   //We need the retry loop to handle the store's compare-and-swap.
   for (;;)  // LCOV_EXCL_LINE No UT for retry loop.
   {
-    RegData::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor);
     if (aor_data == NULL)
     {
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
@@ -295,7 +295,11 @@ static void expire_bindings(RegData::Store *store, const std::string& aor, const
   }
 };
 
-void RegistrationUtils::network_initiated_deregistration(RegData::Store *store, Ifcs& ifcs, const std::string& served_user, const std::string& binding_id, SAS::TrailId trail)
+void RegistrationUtils::network_initiated_deregistration(RegStore *store,
+                                                         Ifcs& ifcs,
+                                                         const std::string& served_user,
+                                                         const std::string& binding_id,
+                                                         SAS::TrailId trail)
 {
   expire_bindings(store, served_user, binding_id);
 

@@ -53,7 +53,7 @@ class UACTransaction;
 #include "bgcfservice.h"
 #include "analyticslogger.h"
 #include "callservices.h"
-#include "regdata.h"
+#include "regstore.h"
 #include "stack.h"
 #include "trustboundary.h"
 #include "sessioncase.h"
@@ -289,8 +289,8 @@ private:
   static const int LIVENESS_TIMER = 1;
 };
 
-pj_status_t init_stateful_proxy(RegData::Store* registrar_store,
-                                RegData::Store* remote_reg_store,
+pj_status_t init_stateful_proxy(RegStore* registrar_store,
+                                RegStore* remote_reg_store,
                                 CallServices* call_services,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_access_proxy,

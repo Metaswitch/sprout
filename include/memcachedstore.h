@@ -34,11 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-/// MemcachedStore implements Store interface for storing registration data,
-/// using a memcached cluster for storage.
-///
-///
 
 #ifndef MEMCACHEDSTORE_H__
 #define MEMCACHEDSTORE_H__
@@ -53,57 +48,11 @@ extern "C" {
 #include <libmemcached/util.h>
 }
 
-#include "regdata.h"
+#include "store.h"
 #include "memcachedstoreview.h"
 #include "updater.h"
 
-namespace RegData {
-
-/// @class RegData::MemcachedAoR
-///
-/// A memcached-based implementation of the Address of Record class.
-class MemcachedAoR : public AoR
-{
-public:
-  MemcachedAoR() :
-    AoR(),
-    _cas(0)
-  {
-  }
-
-  inline void set_cas(uint64_t cas) { _cas = cas; };
-
-  inline uint64_t get_cas() { return _cas; };
-
-  // Override copy constructor and operator= to ensure cas gets copied
-  // across also.
-  MemcachedAoR(const MemcachedAoR& to_copy) :
-    AoR(to_copy)
-  {
-    if (&to_copy != this)
-    {
-      _cas = to_copy._cas;
-    }
-  }
-
-  void operator=(const MemcachedAoR& to_copy)
-  {
-    if (&to_copy != this)
-    {
-      AoR::operator=((AoR&)to_copy);
-      _cas = to_copy._cas;
-    }
-  }
-
-private:
-  /// Stored CAS sequence number. This tracks the version of the data
-  /// supplied by memcached, so we can detect concurrent modifications and
-  /// avoid lost updates.
-  uint64_t _cas;
-};
-
-
-/// @class RegData::MemcachedStore
+/// @class MemcachedStore
 ///
 /// A memcached-based implementation of the Store class.
 class MemcachedStore : public Store
@@ -118,21 +67,23 @@ public:
   void new_view(const std::vector<std::string>& servers,
                 const std::vector<std::string>& new_servers);
 
-  /// Flushes the store.  This is only supported for test purposes - it should
-  /// never be called on a live system.
-  void flush_all();
+  /// Gets the data for the specified table and key.
+  Store::Status get_data(const std::string& table,
+                         const std::string& key,
+                         std::string& data,
+                         uint64_t& cas);
 
-  /// Gets the data for the specified Address-of-Record
-  AoR* get_aor_data(const std::string& aor_id);
+  /// Sets the data for the specified table and key.
+  Store::Status set_data(const std::string& table,
+                         const std::string& key,
+                         const std::string& data,
+                         uint64_t cas,
+                         int expiry);
 
-  /// Sets the data for the specified Address-of-Record
-  bool set_aor_data(const std::string& aor_id, AoR* aor_data);
- 
   /// Updates the cluster settings
   void update_view();
-  
-private:
 
+private:
   // A copy of this structure is maintained for each worker thread, as
   // thread local data.
   typedef struct connection
@@ -156,9 +107,6 @@ private:
   /// Gets the set of connections to use for a read or write operation.
   typedef enum {READ, WRITE} Op;
   const std::vector<memcached_st*>& get_replicas(const std::string& key, Op operation);
-
-  static std::string serialize_aor(MemcachedAoR* aor_data);
-  static MemcachedAoR* deserialize_aor(const std::string& s);
 
   // Called by the thread-local-storage clean-up functions when a thread ends.
   static void cleanup_connection(void* p);
@@ -198,7 +146,5 @@ private:
   std::vector<std::vector<int> > _read_replicas;
   std::vector<std::vector<int> > _write_replicas;
 };
-
-} // namespace RegData
 
 #endif

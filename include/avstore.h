@@ -1,5 +1,5 @@
 /**
- * @file localstore.h Definitions for the LocalStore class
+ * @file avstore.h  Definition of class for storing Authentication Vectors
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,43 +34,55 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef LOCALSTORE_H__
-#define LOCALSTORE_H__
+#ifndef AVSTORE_H_
+#define AVSTORE_H_
 
-#include <map>
-#include <pthread.h>
+#include <json/json.h>
 
 #include "store.h"
 
-class LocalStore : public Store
+/// Class implementing store of authentication vectors.  This is a wrapper
+/// around an underlying Store class which implements a simple KV store API
+/// with atomic write and record expiry semantics.  The underlying store
+/// can be any implementation that implements the Store API.
+class AvStore
 {
 public:
-  LocalStore();
-  virtual ~LocalStore();
+  /// Constructor.
+  /// @param data_store    A pointer to the underlying data store.
+  AvStore(Store* data_store);
 
-  void flush_all();
+  /// Destructor.
+  ~AvStore();
 
-  Store::Status get_data(const std::string& table,
-                         const std::string& key,
-                         std::string& data,
-                         uint64_t& cas);
-  Store::Status set_data(const std::string& table,
-                         const std::string& key,
-                         const std::string& data,
-                         uint64_t cas,
-                         int expiry);
+  /// Store the specified Authentication Vector in the store, indexed by the
+  /// private user identity and nonce.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
+  /// @param av        A pointer to a JSONCPP Json::Value object encoding
+  ///                  the Authentication Vector.
+  void set_av(const std::string& impi,
+              const std::string& nonce,
+              const Json::Value* av);
+
+  /// Retrieves the Authentication Vector for the specified private user identity
+  /// and nonce.
+  /// @returns         A pointer to a JSONCPP Json::Value object encoding the
+  ///                  Authentication Vector, or NULL if no vector found or if
+  ///                  the vector is malformed.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
+  Json::Value* get_av(const std::string& impi,
+                      const std::string& nonce);
 
 private:
-  typedef struct record
-  {
-    std::string data;
-    uint32_t expiry;
-    uint64_t cas;
-  } Record;
+  /// A pointer to the underlying data store.
+  Store* _data_store;
 
-  pthread_mutex_t _db_lock;
-  std::map<std::string, Record> _db;
+  /// Expire AV record after 30 seconds.  This should always be long enough for
+  /// the UE to respond to the authentication challenge, while limiting the
+  /// scope for replay attacks.
+  static const int AV_EXPIRY = 30;
 };
-
 
 #endif

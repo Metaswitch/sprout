@@ -40,7 +40,6 @@
 
 #include "siptest.hpp"
 #include "utils.h"
-#include "localstorefactory.h"
 #include "analyticslogger.h"
 #include "options.h"
 #include "fakelogger.hpp"

@@ -65,6 +65,11 @@ public:
   Json::Value* get_digest_data(const std::string& private_user_id,
                                const std::string& public_user_id,
                                SAS::TrailId trail);
+  Json::Value* get_auth_vector(const std::string& private_user_id,
+                               const std::string& public_user_id,
+                               const std::string& auth_type,
+                               const std::string& autn,
+                               SAS::TrailId trail);
   Json::Value* get_user_auth_status(const std::string& private_user_identity,
                                     const std::string& public_user_identity,
                                     const std::string& visited_network,

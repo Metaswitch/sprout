@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #pragma once
 
 extern "C" {
@@ -50,8 +47,6 @@ extern "C" {
 #include <memory>
 
 #include "rapidxml/rapidxml.hpp"
-
-#include "regdata.h"
 #include "sessioncase.h"
 
 

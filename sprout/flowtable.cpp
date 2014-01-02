@@ -481,7 +481,7 @@ void Flow::expiry_timer()
   int min_expires = 0;
   for (auth_id_map::const_iterator i = _authorized_ids.begin();
        i != _authorized_ids.end();
-       ++i)
+       )
   {
     if (i->second.expires <= now)
     {
@@ -496,7 +496,7 @@ void Flow::expiry_timer()
         // This was our default ID, so remove it.
         _default_id = "";
       }
-      _authorized_ids.erase(i);
+      _authorized_ids.erase(i++);
     }
     else
     {
@@ -506,6 +506,7 @@ void Flow::expiry_timer()
       {
         min_expires = i->second.expires;
       }
+      ++i;
     }
   }
 
