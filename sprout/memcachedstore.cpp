@@ -189,14 +189,55 @@ const std::vector<memcached_st*>& MemcachedStore::get_replicas(const std::string
 
     for (size_t ii = 0; ii < _servers.size(); ++ii)
     {
-      // Create a new memcached_st for this server.
-      std::string options = _options + " --SERVER=" + _servers[ii];
-      LOG_DEBUG("Setting up server %d for connection %p (%s)", ii, conn, options.c_str());
-      conn->st[ii] = memcached(options.c_str(), options.length());
+      // Create a new memcached_st for this server.  Do not specify the server
+      // at this point as memcached() does not support IPv6 addresses.
+      LOG_DEBUG("Setting up server %d for connection %p (%s)", ii, conn, _options.c_str());
+      conn->st[ii] = memcached(_options.c_str(), _options.length());
       LOG_DEBUG("Set up connection %p to server %s", conn->st[ii], _servers[ii].c_str());
 
       // Switch to a longer connect timeout from here on.
       memcached_behavior_set(conn->st[ii], MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT, 50);
+
+      // Connect to the server.  The address is specified as either <IPv4 address>:<port>
+      // or [<IPv6 address>]:<port>.  Look for square brackets to determine whether
+      // this is an IPv6 address.
+      std::vector<std::string> contact_details;
+      size_t close_bracket = server_contact.find(']');
+
+      if (close_bracket == string::npos)
+      {
+        // IPv4 connection.  Split the string on the colon.
+        Utils::split_string(_servers[ii], ':', contact_details);
+        if (contact_details.size() != 2)
+        {
+          LOG_ERROR("Malformed contact details %s", _servers[ii].c_str());
+          break;
+        }
+      }
+      else
+      {
+        // IPv6 connection.  Split the string on ']', which removes any white
+        // space from the start and the end, then remove the '[' from the
+        // start of the IP addreess string and the start of the ';' from the start
+        // of the port string.
+        Utils::split_string(_servers[ii], ']', contact_details);
+        if ((contact_details.size() != 2) ||
+            (contact_details[0].c_str()[0] != '[') ||
+            (contact_details[1].c_str()[0] != ':'))
+        {
+          LOG_ERROR("Malformed contact details %s", _servers[ii].c_str());
+          break;
+        }
+
+        contact_details[0].erase(contact_details[0].begin());
+        contact_details[0].erase(contact_details[1].begin());
+      }
+
+      LOG_DEBUG("Setting server to IP address %s port %s",
+                contact_details[0].c_str(),
+                contact_details[1].c_str());
+      int port = atoi(contact_details[1].c_str());
+      memcached_server_add(conn->st[ii], contact_details[0].c_str(),
     }
 
     conn->read_replicas.resize(_vbuckets);
