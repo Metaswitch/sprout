@@ -202,9 +202,9 @@ const std::vector<memcached_st*>& MemcachedStore::get_replicas(const std::string
       // or [<IPv6 address>]:<port>.  Look for square brackets to determine whether
       // this is an IPv6 address.
       std::vector<std::string> contact_details;
-      size_t close_bracket = server_contact.find(']');
+      size_t close_bracket = _servers[ii].find(']');
 
-      if (close_bracket == string::npos)
+      if (close_bracket == _servers[ii].npos)
       {
         // IPv4 connection.  Split the string on the colon.
         Utils::split_string(_servers[ii], ':', contact_details);
@@ -230,14 +230,14 @@ const std::vector<memcached_st*>& MemcachedStore::get_replicas(const std::string
         }
 
         contact_details[0].erase(contact_details[0].begin());
-        contact_details[0].erase(contact_details[1].begin());
+        contact_details[1].erase(contact_details[1].begin());
       }
 
       LOG_DEBUG("Setting server to IP address %s port %s",
                 contact_details[0].c_str(),
                 contact_details[1].c_str());
       int port = atoi(contact_details[1].c_str());
-      memcached_server_add(conn->st[ii], contact_details[0].c_str(),
+      memcached_server_add(conn->st[ii], contact_details[0].c_str(), port);
     }
 
     conn->read_replicas.resize(_vbuckets);
