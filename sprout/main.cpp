@@ -69,6 +69,7 @@ extern "C" {
 #include "websockets.h"
 #include "callservices.h"
 #include "registrar.h"
+#include "subscription.h"
 #include "authentication.h"
 #include "options.h"
 #include "enumservice.h"
@@ -1055,6 +1056,20 @@ int main(int argc, char *argv[])
       return 1;
     }
 
+    // Launch the subscription module.
+    status = init_subscription(local_reg_store,
+                               remote_reg_store,
+                               hss_connection,
+                               analytics_logger,
+                               ifc_handler,
+                               opt.reg_max_expires);
+
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to enable subscription module");
+      return 1;
+    }
+
     // Launch stateful proxy as S-CSCF.
     status = init_stateful_proxy(local_reg_store,
                                  remote_reg_store,
@@ -1161,6 +1176,7 @@ int main(int argc, char *argv[])
 
   if (opt.scscf_enabled)
   {
+    destroy_subscription();
     destroy_registrar();
     if (opt.auth_enabled)
     {
