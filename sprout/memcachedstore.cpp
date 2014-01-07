@@ -222,8 +222,8 @@ const std::vector<memcached_st*>& MemcachedStore::get_replicas(const std::string
         // of the port string.
         Utils::split_string(_servers[ii], ']', contact_details);
         if ((contact_details.size() != 2) ||
-            (contact_details[0].c_str()[0] != '[') ||
-            (contact_details[1].c_str()[0] != ':'))
+            (contact_details[0][0] != '[') ||
+            (contact_details[1][0] != ':'))
         {
           LOG_ERROR("Malformed contact details %s", _servers[ii].c_str());
           break;
