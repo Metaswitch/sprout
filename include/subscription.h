@@ -53,8 +53,7 @@ extern pj_status_t init_subscription(RegStore* registrar_store,
                                      RegStore* remote_reg_store,
                                      HSSConnection* hss_connection,
                                      AnalyticsLogger* analytics_logger,
-                                     IfcHandler* ifchandler_ref,
-                                     int cfg_max_expires);
+                                     IfcHandler* ifchandler_ref);
 
 extern void destroy_subscription();
 

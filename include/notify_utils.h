@@ -42,6 +42,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include <pjsip/sip_msg.h>
 }
 
 #include <string>
@@ -55,10 +56,9 @@ namespace NotifyUtils
   enum DocState { FULL, PARTIAL };
   enum RegState { INIT, ACTIVE, TERMINATED };
 
-  pj_status_t create_request_from_subscription(pjsip_tx_data* tdata, RegStore::AoR::Subscription* subscription, pj_str_t* body);
+  pj_status_t create_request_from_subscription(pjsip_tx_data* tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body);
   pj_str_t create_contact(pj_str_t aor, std::string id, pj_str_t state, std::string uri, std::string display_name, std::string unknown_param);
-  //pj_str_t create_body(bool full);
-  pjsip_msg_body* notify_create_body(pj_pool_t* pool, std::string& aor, RegStore::AoR::Subscription* subscription, const RegStore::AoR::Bindings& bindings, DocState doc_state, RegState reg_state);
+  void notify_create_body(pjsip_msg_body* body, pj_pool_t* pool, std::string& aor, RegStore::AoR::Subscription* subscription, const RegStore::AoR::Bindings& bindings, DocState doc_state, RegState reg_state);
 };
 
 #endif

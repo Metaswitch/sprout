@@ -58,8 +58,6 @@ extern "C" {
 #define MAX_SIP_MSG_SIZE 65535
 
 /* MIME */
-// TODO Change these to be what we need: reginfo+xml?
-// look at pjsip-simple/presence.c for more examples
 static const pj_str_t STR_MIME_TYPE    = { "application", 11 };
 static const pj_str_t STR_MIME_SUBTYPE = { "reginfo+xml", 11 };
 
@@ -105,7 +103,7 @@ static const pj_str_t STR_REGINFO        = { "reginfo", 7 };
 static const pj_str_t STR_XMLNS_NAME     = { "xmlns", 5 };
 static const pj_str_t STR_XMLNS_VAL      = { "urn:ietf:params:xml:ns:reginfo", 30 };
 static const pj_str_t STR_VERSION        = { "version", 7 };
-static const pj_str_t STR_VERSION_VAL    = { "0", 1 }; //TODO set version
+static const pj_str_t STR_VERSION_VAL    = { "0", 1 }; 
 static const pj_str_t STR_XMLNS_XSI_NAME = { "xmlns:xsi", 9 };
 static const pj_str_t STR_XMLNS_XSI_VAL  = { "http://www.w3.org/2001/XMLSchema-instance", 41 };
 
@@ -240,34 +238,28 @@ pj_xml_node* notify_create_xml( pj_pool_t *pool,
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
 
-  //TODO decide whether to provide location:
-  //attr = pj_xml_attr_new(pool, &STR_XSI_SLOC_NAME, &STR_XSI_SLOC_VAL);
-  //pj_xml_add_attr(doc, attr);
-
-
   // registration node
+  pj_str_t reg_aor;
+  pj_str_t reg_id;
+  pj_str_t reg_state_str;
 
-  pj_str_t *reg_aor;
-  pj_str_t *reg_id;
-  pj_str_t *reg_state_str;
-
-  *reg_aor = pj_str(const_cast<char *>(aor.c_str()));
-  *reg_id = pj_str(const_cast<char *>(subscription->_to_tag.c_str()));
+  reg_aor = pj_str(const_cast<char *>(aor.c_str()));
+  reg_id = pj_str(const_cast<char *>(subscription->_to_tag.c_str()));
 
   switch (reg_state)
   {
     case NotifyUtils::INIT:
-      *reg_state_str = STR_INIT;
+      reg_state_str = STR_INIT;
       break;  
     case NotifyUtils::ACTIVE:
-      *reg_state_str = STR_ACTIVE;
+      reg_state_str = STR_ACTIVE;
       break;  
     case NotifyUtils::TERMINATED:
-      *reg_state_str = STR_TERMINATED;
+      reg_state_str = STR_TERMINATED;
       break;  
   }
 
-  reg_node = create_reg_node(pool, reg_aor, reg_id, reg_state_str); 
+  reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str); 
 
   // contacts
 
@@ -285,8 +277,8 @@ pj_xml_node* notify_create_xml( pj_pool_t *pool,
     *c_id =  pj_str(const_cast<char *>(i->first.c_str()));
 
     // TODO state and event need correct handling
-    *c_state = STR_ACTIVE; // need to capture this somehow
-    *c_event = STR_CREATED; // same here
+    *c_state = STR_ACTIVE; 
+    *c_event = STR_CREATED; 
 
     // optional attributes:
     pj_str_t *c_duration = NULL; // don't have any way to know this
@@ -358,68 +350,56 @@ static void* xml_clone_data(pj_pool_t *pool, const void *data, unsigned len)
 
 
 
-pjsip_msg_body* NotifyUtils::notify_create_body( pj_pool_t *pool,
-                                            std::string& aor,
-                                            RegStore::AoR::Subscription* subscription,
-                                            const RegStore::AoR::Bindings& bindings,
-                                            NotifyUtils::DocState doc_state,
-                                            NotifyUtils::RegState reg_state)
+void NotifyUtils::notify_create_body(pjsip_msg_body* body,
+                                     pj_pool_t *pool,
+                                     std::string& aor,
+                                     RegStore::AoR::Subscription* subscription,
+                                     const RegStore::AoR::Bindings& bindings,
+                                     NotifyUtils::DocState doc_state,
+                                     NotifyUtils::RegState reg_state)
 {
-    pj_xml_node *doc;
-    pjsip_msg_body *body;
+  pj_xml_node *doc;
 
-    doc = notify_create_xml(pool, aor, subscription, bindings, doc_state, reg_state);
-    if (doc == NULL)
-        return NULL;
+  doc = notify_create_xml(pool, aor, subscription, bindings, doc_state, reg_state);
 
-    body = PJ_POOL_ZALLOC_T(pool, pjsip_msg_body);
-    body->content_type.type = STR_MIME_TYPE;
-    body->content_type.subtype = STR_MIME_SUBTYPE;
+  body->content_type.type = STR_MIME_TYPE;
+  body->content_type.subtype = STR_MIME_SUBTYPE;
 
-    body->data = doc;
-    body->len = 0;
+  body->data = doc;
+  body->len = 0;
 
-    body->print_body = &xml_print_body;
-    body->clone_data = &xml_clone_data;
-
-    return body;
+  body->print_body = &xml_print_body;
+  body->clone_data = &xml_clone_data;
 }
-
-//pj_str_t NotifyUtils::create_body(bool full)
-//{
-//  return {NULL, 0};
-//}
 
 pj_str_t NotifyUtils::create_contact(pj_str_t aor, std::string id, pj_str_t state, std::string uri, std::string display_name, std::string unknown_param)
 {
   return {NULL, 0};
 }
 
-pj_status_t NotifyUtils::create_request_from_subscription(pjsip_tx_data* tdata, RegStore::AoR::Subscription* subscription, pj_str_t* body)
+pj_status_t NotifyUtils::create_request_from_subscription(pjsip_tx_data* tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body)
 {
   pj_str_t tmp;
   pjsip_from_hdr* from = pjsip_from_hdr_create(tdata->pool);
   from->uri = PJUtils::uri_from_string(subscription->_from_uri, tdata->pool, false);
   pjsip_to_hdr* to = pjsip_to_hdr_create(tdata->pool);
   to->uri = PJUtils::uri_from_string(subscription->_to_uri, tdata->pool, false);
-//TODO work out how to get the tags in
-//  pj_str_t tmp2 = pj_str_t{subscription->_from_tag.c_str(), subscription->_from_tag.length()};
-//  from->tag = pj_str_t{subscription->_from_tag.c_str(), subscription->_from_tag.length()};
-
-// TODO work out how to convert string to pj_str_t
+  from->tag = pj_str(const_cast<char *>(subscription->_from_tag.c_str()));
+  to->tag = pj_str(const_cast<char *>(subscription->_to_tag.c_str()));
+  pjsip_contact_hdr* contact = pjsip_contact_hdr_create(tdata->pool);
+  contact->uri = PJUtils::uri_from_string(subscription->_req_uri, tdata->pool, false);
   pjsip_cid_hdr *call_id;
   call_id = pjsip_cid_hdr_create(tdata->pool);
-  //pj_strdup(tdata->pool, &call_id->id, subscription->_cid)
 
+  // TODO - currently removed the route headers
   return pjsip_endpt_create_request_from_hdr(stack_data.endpt,
                                              pjsip_get_notify_method(),
-                                             //pjsip_uri_get_uri(PJUtils::uri_from_string(subscription->_req_uri, tdata->pool, false)),
                                              PJUtils::uri_from_string(subscription->_req_uri, tdata->pool, false),
                                              from,
                                              to,
-                                             NULL,//(pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL),
-                                             NULL,//call_id,
-                                             1,//aor_data->_notify_cseq,
+                                             contact,
+                                             call_id,
+                                             cseq,
                                              body,
                                              &tdata);
 }

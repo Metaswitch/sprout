@@ -37,16 +37,11 @@
 extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include "pjsip-simple/evsub.h"
 }
 
-//TODO decide on includes
-// Common STL includes.
-#include <cassert>
-#include <vector>
 #include <map>
-#include <set>
 #include <list>
-#include <queue>
 #include <string>
 
 #include "utils.h"
@@ -59,7 +54,6 @@ extern "C" {
 #include "subscription.h"
 #include "constants.h"
 #include "log.h"
-#include "pjsip-simple/evsub.h"
 #include "notify_utils.h"
 
 static RegStore* store;
@@ -67,20 +61,14 @@ static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
-
 static IfcHandler* ifchandler;
-
 static AnalyticsLogger* analytics;
-
-static int max_expires;
 
 //
 // mod_subscription is the module to receive SIP SUBSCRIBE requests.  This
 // must get invoked before the proxy UA module.
 //
 static pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata);
-//TODO decide if this is needed
-//static void subscription_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event);
 
 pjsip_module mod_subscription =
 {
@@ -96,9 +84,8 @@ pjsip_module mod_subscription =
   NULL,                                // on_rx_response()
   NULL,                                // on_tx_request()
   NULL,                                // on_tx_response()
-  NULL,//&subscription_on_tsx_state,          // on_tsx_state()
+  NULL,                                // on_tsx_state()
 };
-//TODO decide if this is needed
 
 void log_subscriptions(const std::string& aor_name, RegStore::AoR* aor_data)
 {
@@ -109,7 +96,6 @@ void log_subscriptions(const std::string& aor_name, RegStore::AoR* aor_data)
   {
     RegStore::AoR::Subscription* subscription = i->second;
     
-    // TODO log out the route headers?
     LOG_DEBUG("%s URI=%s expires=%d from_uri=%s from_tag %s to_uri %s to_tag %s call_id %s",
               i->first.c_str(),
               subscription->_req_uri.c_str(),
@@ -127,27 +113,23 @@ RegStore::AoR* write_subscriptions_to_store(RegStore* primary_store,           /
                                             std::string aor,                   ///<address of record to write to
                                             pjsip_rx_data* rdata,              ///<received message to read headers from
                                             int now,                           ///<time now
-                                            int& expiry,                       ///<[out] longest expiry time
-                                            bool& out_is_initial_subscription,
                                             RegStore::AoR* backup_aor,         ///<backup data if no entry in store
                                             RegStore* backup_store)            ///<backup store to read from if no entry in store and no backup data
 {
-  // Get the call identifier and the cseq number from the respective headers.
+  // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
-
-  // Find the expire headers in the message.
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   pjsip_fromto_hdr* from = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_FROM, NULL);
   pjsip_fromto_hdr* to = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_TO, NULL);
-  pjsip_cid_hdr* cidh = (pjsip_cid_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CALL_ID, NULL);
 
   // The registration store uses optimistic locking to avoid concurrent
   // updates to the same AoR conflicting.  This means we have to loop
   // reading, updating and writing the AoR until the write is successful.
   RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
-  bool is_initial_subscription = true;
+  int expiry = 0;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -191,124 +173,99 @@ RegStore::AoR* write_subscriptions_to_store(RegStore* primary_store,           /
       }
     }
 
-    is_initial_subscription = is_initial_subscription && aor_data->subscriptions().empty();
-
-    // Now loop through all the contacts.  If there are multiple contacts in
-    // the contact header in the SIP message, pjsip parses them to separate
-    // contact header structures.
+    // Now get the contact header. 
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
-    bool continued = true;
-    std::list<std::string> contact_uris;
 
-    while (contact != NULL)
+    if (contact != NULL)
     {
       if (contact->star)
       {
-        // Wildcard contact, which can only be used to clear all subscriptions for
-        // the AoR.
-        // TODO decide what should happen here - maybe just reject the subscribe
+        // Wildcard contact, which can only be used to clear all subscriptions 
+        // and binding for the AoR.
         aor_data->clear();
-        contact_uris.clear();
-        continued = false;
-        break;
       }
+      else
+      {       
+        std::string contact_uri; 
+        pjsip_uri* uri = (contact->uri != NULL) ?
+                         (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
+                         NULL;
 
-      pjsip_uri* uri = (contact->uri != NULL) ?
-                       (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
-                       NULL;
-
-      if ((uri != NULL) &&
-          (PJSIP_URI_SCHEME_IS_SIP(uri)))
-      {
-        // Add the contact uri to the list
-        std::string contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
-        contact_uris.push_back(contact_uri);
-      }
-      
-      contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
-    }  
-
-    if (continued)
-    {
-      std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
-      if (subscription_id == "")
-      {
-        subscription_id = "testtest";
-      }
-      LOG_DEBUG(". subscription identifier = %s", subscription_id.c_str());
-
-      // Find the appropriate subscription in the subscription list for this AoR.
-      RegStore::AoR::Subscription* subscription = aor_data->get_subscription(subscription_id);
-
-      if (cid != subscription->_cid)
-      {
-        // Either this is a new subscription or it's an update to an existing subscription.
-        subscription->_req_uri = contact_uris.front();
-
-        subscription->_route_uris.clear();
-        pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
-        while (route_hdr)
+        if ((uri != NULL) &&
+            (PJSIP_URI_SCHEME_IS_SIP(uri)))
         {
-          std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, route_hdr->name_addr.uri);
-          LOG_DEBUG("Route header %s", route.c_str());
+          // The binding identifier is based on the +sip.instance parameter if
+          // it is present. If not the contact URI is used instead.
+          contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
+        } 
 
-          // Add the route.
-          subscription->_route_uris.push_back(route);
+        std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
 
-          // Look for the next header.
-          route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, route_hdr->next);
-        }
-
-        subscription->_cid = cid;
-        subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
-        subscription->_from_tag = subscription_id;//PJUtils::pj_str_to_string(&from->tag);
-        subscription->_to_uri =  PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to->uri);
-        subscription->_to_tag = PJUtils::pj_str_to_string(&to->tag);
-
-
-        // TODO not right here  
-        // Calculate the expiry period for the subscription.
-        expiry = 3761;//(contact->expires != -1) ? contact->expires :
-               //  (expires != NULL) ? expires->ivalue :
-               //  3761;
-
-        subscription->_expires = now + expiry;
-
-        pjsip_tx_data* tdata;
-        //pj_str_t body = NotifyUtils::create_body(true);       
-
-        // first create the request with a null body string, then add the body
-        pj_status_t status = NotifyUtils::create_request_from_subscription(tdata, subscription, NULL);
-
-        // each notify will have a single subscription and some (or none) bindings to form the body
-        const RegStore::AoR::Bindings& bindings = aor_data->bindings();
-        // TODO set the correct doc_state and reg_state
-        tdata->msg->body = NotifyUtils::notify_create_body(tdata->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE );
-
-        // TODO include the bindings - or split into seperate function that returns text. Always will be a full subscription
-         // on the first subscribe
-
-//  pjsip_tx_data_add_ref(tdata2);
-       /* 
-        status = pjsip_endpt_create_request_from_hdr(stack_data.endpt, 
-                                                                  pjsip_get_notify_method(), 
-                                                                  to->uri,
-                                                                  from,
-                                                                  to, 
-                                                                  (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL),
-                                                                  cidh,
-                                                                  1,//aor_data->_notify_cseq, 
-                                                                  NULL, 
-                                                                  &tdata);
-	*/
-//  pjsip_tx_data_dec_ref(tdata2);
-
-        if (analytics != NULL)
+        if (subscription_id == "")
         {
-          // Generate an analytics log for this subscription update.
-          analytics->subscription(aor, subscription_id, contact_uris.front(), expiry);
+          subscription_id = "testtest";
         }
-      }
+        LOG_DEBUG("Subscription identifier = %s", subscription_id.c_str());
+
+        // Find the appropriate subscription in the subscription list for this AoR.
+        RegStore::AoR::Subscription* subscription = aor_data->get_subscription(subscription_id);
+
+        if (cid != subscription->_cid)
+        {
+          // Either this is a new subscription or it's an update to an existing subscription.
+          subscription->_req_uri = contact_uri;
+
+          subscription->_route_uris.clear();
+          pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
+
+          while (route_hdr)
+          {
+            std::string route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, route_hdr->name_addr.uri);
+            LOG_DEBUG("Route header %s", route.c_str());
+
+            // Add the route.
+            subscription->_route_uris.push_back(route);
+
+            // Look for the next header.
+            route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, route_hdr->next);
+          }
+
+          subscription->_cid = cid;
+          subscription->_from_uri = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, from->uri);
+          subscription->_from_tag = subscription_id;
+          subscription->_to_uri =  PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to->uri);
+          subscription->_to_tag = PJUtils::pj_str_to_string(&to->tag);
+
+          // Calculate the expiry period for the subscription.
+          expiry = (expires != NULL) ? expires->ivalue : 3761;
+          subscription->_expires = now + expiry;
+
+          pjsip_tx_data* tdata;
+          pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+
+          // first create the request with a null body string, then add the body
+          NotifyUtils::create_request_from_subscription(tdata, subscription, aor_data->_notify_cseq, NULL);
+
+          // each notify will have a single subscription and some (or none) bindings to form the body
+          const RegStore::AoR::Bindings& bindings = aor_data->bindings();
+        
+          // TODO Add body and send NOTIFY - getting segfaults
+          pjsip_msg_body *body2;
+          body2 = PJ_POOL_ZALLOC_T(tdata->pool, pjsip_msg_body);
+          NotifyUtils::notify_create_body(body2, tdata->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE );
+          //tdata->msg->body = body2;
+
+          //pjsip_tx_data_add_ref(tdata);
+          //pjsip_endpt_send_request_stateless(stack_data.endpt, tdata, NULL, NULL);
+          //pjsip_tx_data_dec_ref(tdata);
+
+          if (analytics != NULL)
+          {
+            // Generate an analytics log for this subscription update.
+            analytics->subscription(aor, subscription_id, contact_uri, expiry);
+          }
+        }
+      }  
     }
   }
   while (!primary_store->set_aor_data(aor, aor_data));
@@ -319,7 +276,6 @@ RegStore::AoR* write_subscriptions_to_store(RegStore* primary_store,           /
     delete backup_aor;
   }
 
-  out_is_initial_subscription = is_initial_subscription;
   return aor_data;
 }
 
@@ -354,7 +310,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Get the call identifier from the headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
-  //pjsip_msg *msg = rdata->msg_info.msg;
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
@@ -395,15 +350,14 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Determine the AOR from the first entry in the uris array.
   std::string aor = uris.front();
+  LOG_DEBUG("aor = %s", aor.c_str());
   LOG_DEBUG("SUBSCRIBE for public ID %s uses AOR %s", public_id.c_str(), aor.c_str());
 
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
-  int expiry = 0;
-  bool is_initial_subscription;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_subscriptions_to_store(store, aor, rdata, now, expiry, is_initial_subscription, NULL, remote_store);
+  RegStore::AoR* aor_data = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store);
   if (aor_data != NULL)
   {
     // Log the subscriptions.
@@ -413,9 +367,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // about failures in this case.
     if (remote_store != NULL)
     {
-      int tmp_expiry = 0;
-      bool ignored;
-      RegStore::AoR* remote_aor_data = write_subscriptions_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL);
+      RegStore::AoR* remote_aor_data = write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL);
       delete remote_aor_data;
     }
   }
@@ -466,11 +418,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-//  pjsip_tx_data* tdata2;
-//  pjsip_tx_data_add_ref(tdata2);
-//  status = pjsip_endpt_create_request(stack_data.endpt, pjsip_get_notify_method(), aor_dataaor_data->notify_csq, NULL, &tdata2);
-//  pjsip_tx_data_dec_ref(tdata2);
-
   delete aor_data;
 }
 
@@ -492,38 +439,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
-/*void subscription_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
-{
-  printf("heee");
-  if (((bool)tsx->mod_data[mod_subscription.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
-      (event->type == PJSIP_EVENT_RX_MSG) &&
-      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
-  {
-    // Can't create an AS response in UT
-    // LCOV_EXCL_START
-    LOG_INFO("SUBSCRIBE transaction failed with code %d", tsx->status_code);
-    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
-    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
-
-    if (http_code == HTTP_OK)
-    {
-  //    RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
-    }
-    // LCOV_EXCL_STOP
-  }
-}*/
-
 pj_status_t init_subscription(RegStore* registrar_store,
                               RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
                               AnalyticsLogger* analytics_logger,
-                              IfcHandler* ifchandler_ref,
-                              int cfg_max_expires)
+                              IfcHandler* ifchandler_ref)
 {
   pj_status_t status;
 
@@ -532,7 +452,6 @@ pj_status_t init_subscription(RegStore* registrar_store,
   hss = hss_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
-  max_expires = cfg_max_expires;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_subscription);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

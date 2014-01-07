@@ -1061,8 +1061,7 @@ int main(int argc, char *argv[])
                                remote_reg_store,
                                hss_connection,
                                analytics_logger,
-                               ifc_handler,
-                               opt.reg_max_expires);
+                               ifc_handler);
 
     if (status != PJ_SUCCESS)
     {

@@ -69,7 +69,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
+    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _analytics, _ifc_handler);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -227,27 +227,6 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-/// Simple correct example with Authorization header
-TEST_F(SubscriptionTest, SimpleMainlineAuthHeader)
-{
-  // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-
-  SubscribeMessage msg;
-  msg._expires = "Expires: 300";
-  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
-  msg._contact_params = ";+sip.ice;reg-id=1";
-  inject_msg(msg.get());
-  check_standard_OK();
-  check_subscriptions("sip:6505550231@homedomain", 1u);
-}
-
 /// Simple correct example with Expires header
 TEST_F(SubscriptionTest, SimpleMainlineExpiresHeader)
 {
@@ -255,15 +234,6 @@ TEST_F(SubscriptionTest, SimpleMainlineExpiresHeader)
 
   SubscribeMessage msg;
   msg._expires = "Expires: 300";
-  inject_msg(msg.get());
-  check_standard_OK();
-  check_subscriptions("sip:6505550231@homedomain", 1u);
-}
-
-/// Simple correct example with Expires parameter
-TEST_F(SubscriptionTest, SimpleMainlineExpiresParameter)
-{
-  SubscribeMessage msg;
   inject_msg(msg.get());
   check_standard_OK();
   check_subscriptions("sip:6505550231@homedomain", 1u);
@@ -281,80 +251,6 @@ TEST_F(SubscriptionTest, SimpleMainlineContactStar)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-
-/// Simple correct example with Expires parameter set to 0
-TEST_F(SubscriptionTest, SimpleMainlineDeregister)
-{
-  SubscribeMessage msg;
-  msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
-  inject_msg(msg.get());
-  check_standard_OK();
-  check_subscriptions("sip:6505550231@homedomain", 1u);
-}
-
-/// Simple correct example with no expiry header or parameter.
-TEST_F(SubscriptionTest, SimpleMainlineNoExpiresHeaderParameter)
-{
-  SubscribeMessage msg;
-  msg._contact_params = ";+sip.ice;reg-id=1";
-  inject_msg(msg.get());
-  check_standard_OK();
-  check_subscriptions("sip:6505550231@homedomain", 1u);
-}
-
-TEST_F(SubscriptionTest, MultipleRegistrations)
-{
-  // First registration OK.
-  SubscribeMessage msg;
-  inject_msg(msg.get());
-  check_standard_OK();
-
-  // Second registration also OK.  Bindings are ordered by binding ID.
-  SubscribeMessage msg0;
-  msg = msg0;
-  msg._contact = "sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob";
-  msg._contact_instance = ";+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"";
-  msg._route = "Path: sip:XxxxxxxXXXXXXAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-119.compute-1.amazonaws.com:5060;lr;ob";
-  inject_msg(msg.get());
-  check_standard_OK();
-
-  // Reregistration of first binding is OK but doesn't add a new one.
-  msg = msg0;
-  inject_msg(msg.get());
-  check_standard_OK();
-
-  // Registering the first binding again but without the binding ID counts as a separate binding (named by the contact itself).  Bindings are ordered by binding ID.
-  msg = msg0;
-  msg._contact_instance = "";
-  inject_msg(msg.get());
-  check_standard_OK();
-
-  // Reregistering that yields no change.
-  inject_msg(msg.get());
-  check_standard_OK();
-
-  // Registration of star clears all bindings.
-  msg = msg0;
-  msg._contact = "*";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  inject_msg(msg.get());
-  //EXPECT_EQ("", get_headers(out, "Contact"));
-  //EXPECT_EQ("", get_headers(out, "Require")); // even though we have route, we have no bindings
-  check_standard_OK();
-  free_txdata();
-  check_subscriptions("sip:6505550231@homedomain", 0u);
-}
-
-TEST_F(SubscriptionTest, NoPath)
-{
-  SubscribeMessage msg;
-  msg._route = "";
-  inject_msg(msg.get());
-  check_standard_OK();
-  check_subscriptions("sip:6505550231@homedomain", 1u);
-}
-
 /// Homestead fails associated URI request
 TEST_F(SubscriptionTest, ErrorAssociatedUris)
 {
@@ -368,7 +264,6 @@ TEST_F(SubscriptionTest, ErrorAssociatedUris)
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
-
 
 /// Register with non-primary P-Associated-URI
 TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)

@@ -912,3 +912,42 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   }
   return std::string(buf2, len);
 }
+
+// Note - this has been copied from bb - it needs correcting and moving to cpp-common
+std::string PJUtils::generate_random_id()
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  uint32_t deployment_id = 0;
+  uint32_t instance_id = 0;
+
+  static const uint32_t instance_id_bits = 5;
+  static const uint32_t deployment_id_bits = 5;
+  static const uint32_t sequence_bits = 12;
+
+  static const uint32_t instance_id_shift = sequence_bits;
+  static const uint32_t deployment_id_shift = instance_id_shift + instance_id_bits;
+  static const uint32_t timestamp_shift = deployment_id_shift + deployment_id_bits;
+
+  static const uint32_t sequence_mask = 0xFFFFFFFF ^ (0xFFFFFFFF << sequence_bits);
+  static uint32_t sequence_number = 0;
+  static uint32_t last_timestamp = 0;
+
+  uint32_t timestamp = (ts.tv_sec * 1000) + (ts.tv_nsec / 1000000);
+  if (timestamp == last_timestamp)
+  {
+    sequence_number++;
+  }
+  else
+  {
+    sequence_number = 0;
+    last_timestamp = timestamp;
+  }
+  
+  uint32_t rc = (timestamp << timestamp_shift) | 
+                (deployment_id << deployment_id_shift) |
+                (instance_id << instance_id_shift) |
+                (sequence_number & sequence_mask);
+  return std::to_string(rc);
+}
+

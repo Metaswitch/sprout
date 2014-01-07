@@ -61,7 +61,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "constants.h"
 #include "log.h"
-
+#include "notify_utils.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -357,6 +357,37 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (backup_aor_alloced)
   {
     delete backup_aor;
+  }
+
+  // Finally, send out SIP NOTIFYs for any subscriptions
+  for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    // LCOV_EXCL_START
+    RegStore::AoR::Subscription* subscription = i->second;
+    if (subscription->_expires > now)
+    {
+      pjsip_tx_data* tdata;
+      pj_status_t status = pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+
+      // first create the request with a null body string, then add the body
+      status = NotifyUtils::create_request_from_subscription(tdata, subscription, aor_data->_notify_cseq, NULL);
+
+      // Each notify will have a single subscription and some (or none) bindings to form the body
+      const RegStore::AoR::Bindings& bindings = aor_data->bindings();
+
+      // TODO Add body and send NOTIFY - getting segfaults
+      pjsip_msg_body *body2;
+      body2 = PJ_POOL_ZALLOC_T(tdata->pool, pjsip_msg_body);
+      NotifyUtils::notify_create_body(body2, tdata->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE );
+      //tdata->msg->body = body2;
+
+      //pjsip_tx_data_add_ref(tdata);
+      //pjsip_endpt_send_request_stateless(stack_data.endpt, tdata, NULL, NULL);
+      //pjsip_tx_data_dec_ref(tdata);
+    }
+    // LCOV_EXCL_STOP
   }
 
   out_is_initial_registration = is_initial_registration;

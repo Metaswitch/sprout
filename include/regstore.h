@@ -167,14 +167,6 @@ public:
     /// Retrieve all the subscriptions.
     inline const Subscriptions& subscriptions() { return _subscriptions; }
 
-  private:
-    /// Map holding the bindings for a particular AoR indexed by binding ID.
-    Bindings _bindings;
-
-    /// Map holding the subscriptions for this AoR, indexed by the To tag
-    /// generated when the subscription dialog was established.
-    Subscriptions _subscriptions;
-
     /// CSeq value for event notifications for this AoR.  This is initialised
     /// to one when the AoR record is first set up and incremented every time
     /// the record is updated while there are active subscriptions.  (It is
@@ -183,6 +175,14 @@ public:
     /// CSeq=1, and once a subscription dialog is established it should
     /// receive every NOTIFY for the AoR.)
     int _notify_cseq;
+
+  private:
+    /// Map holding the bindings for a particular AoR indexed by binding ID.
+    Bindings _bindings;
+
+    /// Map holding the subscriptions for this AoR, indexed by the To tag
+    /// generated when the subscription dialog was established.
+    Subscriptions _subscriptions;
 
     /// CAS value for this AoR record.  Used when updating an existing record.
     /// Zero for a new record that has not yet been written to a store.
