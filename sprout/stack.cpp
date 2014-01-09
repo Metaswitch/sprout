@@ -444,16 +444,16 @@ pj_status_t fill_transport_details(int port,
   pj_addrinfo addr_info[count];
   int af = pj_AF_UNSPEC();
 
-  // Use pj_getaddrinfo() to convert the host string into an IPv4 or IPv6 address in
-  // a pj_sockaddr structure.  The host string could be an IP address in string format
-  // or a hostname that needs to be resolved.  The host string should only contain a
+  // Use pj_getaddrinfo() to convert the localhost string into an IPv4 or IPv6 address in
+  // a pj_sockaddr structure.  The localhost string could be an IP address in string format
+  // or a hostname that needs to be resolved.  The localhost string should only contain a
   // single address or hostname.
-  status = pj_getaddrinfo(af, &host, &count, addr_info);
+  status = pj_getaddrinfo(af, &stack_data.local_host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to decode IP address %ac (%s)",
-              host.slen,
-              host.ptr,
+              stack_data.local_host.slen,
+              stack_data.local_host.ptr,
               PJUtils::pj_status_to_string(status).c_str());
     return status;
   }
