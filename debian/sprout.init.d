@@ -112,10 +112,10 @@ get_settings()
           done
         fi
 
+        [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
+        [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
         if [ $ENUM_FILE_ENABLED = Y ]
         then
-          [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
-          [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
           [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
         fi
 
@@ -127,7 +127,7 @@ get_settings()
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
         [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
 
-} 
+}
 
 #
 # Function that starts the daemon/service
@@ -176,8 +176,8 @@ do_start()
         then
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
         fi
-     
-        # Only add the icscf and scscf arguments if they're not 0 
+
+        # Only add the icscf and scscf arguments if they're not 0
         if [ ! -z $scscf ] && [ ! $scscf = 0 ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --scscf $scscf"
