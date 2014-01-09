@@ -448,6 +448,8 @@ pj_status_t fill_transport_details(int port,
   // a pj_sockaddr structure.  The localhost string could be an IP address in string format
   // or a hostname that needs to be resolved.  The localhost string should only contain a
   // single address or hostname.
+  // Bono/Sprout needs to bind to the local host, but use the host passed into this 
+  // function in the route header (which can be the local or public host)
   status = pj_getaddrinfo(af, &stack_data.local_host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
