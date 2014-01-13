@@ -2615,7 +2615,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
     ASSERT_EQ(1, txdata_count());
 
     // Is the right kind and method.
-    RespMatcher r2(430);
+    RespMatcher r2(430, "", "Flow failed");
     r2.matches(current_txdata()->msg);
 
     // Goes to the right place: to sprout, not the client.
@@ -2634,7 +2634,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
   ASSERT_EQ(1, txdata_count());
 
   // Is the right kind and method.
-  RespMatcher r2(430);
+  RespMatcher r2(430, "", "Flow failed");
   r2.matches(current_txdata()->msg);
 
   // Goes to the right place: to sprout, not the client.

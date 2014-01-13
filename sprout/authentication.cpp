@@ -358,6 +358,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   {
     LOG_DEBUG("Failed to get Authentication vector");
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
+    tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
   }
 }
 

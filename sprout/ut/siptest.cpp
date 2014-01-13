@@ -727,7 +727,7 @@ std::ostream& operator<<(std::ostream& os, const PjMsg& msg)
 
 void MsgMatcher::matches(pjsip_msg* msg)
 {
-  if (_match_body)
+  if (_expected_body != "")
   {
     char buf[16384];
     int n = msg->body->print_body(msg->body, buf, sizeof(buf));
@@ -748,5 +748,8 @@ void RespMatcher::matches(pjsip_msg* msg)
 {
   ASSERT_EQ(PJSIP_RESPONSE_MSG, msg->type);
   EXPECT_EQ(_status, msg->line.status.code);
+  std::string reason(msg->line.status.reason.ptr, msg->line.status.reason.slen);
+  EXPECT_EQ(_reason, reason);
+
   MsgMatcher::matches(msg);
 }
