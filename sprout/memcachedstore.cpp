@@ -259,31 +259,53 @@ Store::Status MemcachedStore::get_data(const std::string& table,
   bool active_not_found = false;
   size_t failed_replicas = 0;
   size_t ii;
-  for (ii = 0; ii < replicas.size(); ++ii)
+  // If we only have one replica, we should try it twice -
+  // libmemcached won't notice a dropped TCP connection until it tries
+  // to make a request on it, and will fail the request then
+  // reconnect, so the second attempt could still work.
+  size_t attempts = (replicas.size() == 1) ? 2 : replicas.size();
+
+  for (ii = 0; ii < attempts; ++ii)
   {
+    size_t replica_idx;
+    if ((replicas.size() == 1) && (ii == 1))
+    {
+      if (rc != MEMCACHED_CONNECTION_FAILURE)
+      {
+        // This is a legitimate error, not a server failure, so we
+        // shouldn't retry.
+        break;
+      }
+      replica_idx = 0;
+      LOG_WARNING("Failed to read from sole memcached replica: retrying once");
+    }
+    else
+    {
+      replica_idx = ii;
+    }
     // We must use memcached_mget because memcached_get does not retrieve CAS
     // values.
-    LOG_DEBUG("Attempt to read from replica %d (connection %p)", ii, replicas[ii]);
-    rc = memcached_mget(replicas[ii], &key_ptr, &key_len, 1);
+    LOG_DEBUG("Attempt to read from replica %d (connection %p)", replica_idx, replicas[replica_idx]);
+    rc = memcached_mget(replicas[replica_idx], &key_ptr, &key_len, 1);
 
     if (memcached_success(rc))
     {
       // memcached_mget command was successful, so retrieve the result.
       LOG_DEBUG("Fetch result");
-      memcached_result_create(replicas[ii], &result);
-      memcached_fetch_result(replicas[ii], &result, &rc);
+      memcached_result_create(replicas[replica_idx], &result);
+      memcached_fetch_result(replicas[replica_idx], &result, &rc);
 
       if (memcached_success(rc))
       {
         // Found a record, so exit the read loop.
-        LOG_DEBUG("Found record on replica %d", ii);
+        LOG_DEBUG("Found record on replica %d", replica_idx);
         break;
       }
-      else
-      {
-        // Free the result.
-        memcached_result_free(&result);
-      }
+    }
+    else
+    {
+      // Free the result.
+      memcached_result_free(&result);
     }
 
     if (rc == MEMCACHED_NOTFOUND)
@@ -291,14 +313,14 @@ Store::Status MemcachedStore::get_data(const std::string& table,
       // Failed to find a record on an active replica.  Flag this so if we do
       // find data on a later replica we can reset the cas value returned to
       // zero to ensure a subsequent write will succeed.
-      LOG_DEBUG("Read for %s on replica %d returned NOTFOUND", fqkey.c_str(), ii);
+      LOG_DEBUG("Read for %s on replica %d returned NOTFOUND", fqkey.c_str(), replica_idx);
       active_not_found = true;
     }
     else
     {
       // Error from this node, so consider it inactive.
       LOG_DEBUG("Read for %s on replica %d returned error %d (%s)",
-                fqkey.c_str(), ii, rc, memcached_strerror(replicas[ii], rc));
+                fqkey.c_str(), replica_idx, rc, memcached_strerror(replicas[replica_idx], rc));
       ++failed_replicas;
     }
   }
@@ -366,18 +388,40 @@ Store::Status MemcachedStore::set_data(const std::string& table,
   // server.
   memcached_return_t rc = MEMCACHED_ERROR;
   size_t ii;
-  for (ii = 0; ii < replicas.size(); ++ii)
+  size_t replica_idx;
+  // If we only have one replica, we should try it twice -
+  // libmemcached won't notice a dropped TCP connection until it tries
+  // to make a request on it, and will fail the request then
+  // reconnect, so the second attempt could still work.
+  size_t attempts = (replicas.size() == 1) ? 2: replicas.size();
+
+  for (ii = 0; ii < attempts; ++ii)
   {
+    if ((replicas.size() == 1) && (ii == 1)) {
+      if (rc != MEMCACHED_CONNECTION_FAILURE)
+      {
+        // This is a legitimate error, not a transient server failure, so we
+        // shouldn't retry.
+        break;
+      }
+      replica_idx = 0;
+      LOG_WARNING("Failed to write to sole memcached replica: retrying once");
+    }
+    else
+    {
+      replica_idx = ii;
+    }
+
     LOG_DEBUG("Attempt conditional write to replica %d (connection %p), CAS = %ld",
-              ii,
-              replicas[ii],
+              replica_idx,
+              replicas[replica_idx],
               cas);
 
     if (cas == 0)
     {
       // New record, so attempt to add.  This will fail if someone else
       // gets there first.
-      rc = memcached_add(replicas[ii],
+      rc = memcached_add(replicas[replica_idx],
                          key_ptr,
                          key_len,
                          data.data(),
@@ -389,7 +433,7 @@ Store::Status MemcachedStore::set_data(const std::string& table,
     {
       // This is an update to an existing record, so use memcached_cas
       // to make sure it is atomic.
-      rc = memcached_cas(replicas[ii],
+      rc = memcached_cas(replicas[replica_idx],
                          key_ptr,
                          key_len,
                          data.data(),
@@ -397,11 +441,12 @@ Store::Status MemcachedStore::set_data(const std::string& table,
                          (time_t)expiry,
                          exptime,
                          cas);
+
     }
 
     if (memcached_success(rc))
     {
-      LOG_DEBUG("Conditional write succeeded to replica %d", ii);
+      LOG_DEBUG("Conditional write succeeded to replica %d", replica_idx);
       break;
     }
     else
@@ -409,11 +454,11 @@ Store::Status MemcachedStore::set_data(const std::string& table,
       LOG_DEBUG("memcached_%s command for %s failed on replica %d, rc = %d (%s), expiry = %d\n%s",
                 (cas == 0) ? "add" : "cas",
                 fqkey.c_str(),
-                ii,
+                replica_idx,
                 rc,
-                memcached_strerror(replicas[ii], rc),
+                memcached_strerror(replicas[replica_idx], rc),
                 expiry,
-                memcached_last_error_message(replicas[ii]));
+                memcached_last_error_message(replicas[replica_idx]));
 
       if ((rc == MEMCACHED_NOTSTORED) ||
           (rc == MEMCACHED_DATA_EXISTS))
@@ -429,11 +474,11 @@ Store::Status MemcachedStore::set_data(const std::string& table,
   }
 
   if ((rc == MEMCACHED_SUCCESS) &&
-      (ii < replicas.size()))
+      (replica_idx < replicas.size()))
   {
     // Write has succeeded, so write unconditionally (and asynchronously)
     // to the replicas.
-    for (size_t jj = ii + 1; jj < replicas.size(); ++jj)
+    for (size_t jj = replica_idx + 1; jj < replicas.size(); ++jj)
     {
       LOG_DEBUG("Attempt unconditional write to replica %d", jj);
       memcached_behavior_set(replicas[jj], MEMCACHED_BEHAVIOR_NOREPLY, 1);
