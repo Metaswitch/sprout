@@ -157,39 +157,41 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     {
       ret = true;
       node = node->next_sibling();
-      name = node->name();
-
-      if (strcmp(name, "Extension") == 0)
+      if (node)
       {
-        xml_node<>* reg_type_node = node->first_node("RegistrationType");
-
-        if (reg_type_node)
+        name = node->name();
+        if (strcmp(name, "Extension") == 0)
         {
-          name = reg_type_node->name();
-          int reg_type = parse_integer(reg_type_node, "registration type", 0, 2);
+          xml_node<>* reg_type_node = node->first_node("RegistrationType");
 
-          // Find expiry value from SIP message if it is present to determine
-          // whether we have a de-registration.  Set an arbitrary default value of
-          // an hour.
-          int expiry = PJUtils::max_expires(msg, 3600);
-
-          switch (reg_type)
+          if (reg_type_node)
           {
-          case INITIAL_REGISTRATION:
-            ret = (is_initial_registration && (expiry > 0));
-            break;
-          case REREGISTRATION:
-            ret = (!is_initial_registration && (expiry > 0));
-            break;
-          case DEREGISTRATION:
-            ret = (expiry == 0);
-            break;
-          default:
-          // LCOV_EXCL_START Unreachable
-            LOG_WARNING("Impossible case %d", reg_type);
-            ret = false;
-            break;
-          // LCOV_EXCL_STOP
+            name = reg_type_node->name();
+            int reg_type = parse_integer(reg_type_node, "registration type", 0, 2);
+
+            // Find expiry value from SIP message if it is present to determine
+            // whether we have a de-registration.  Set an arbitrary default value of
+            // an hour.
+            int expiry = PJUtils::max_expires(msg, 3600);
+
+            switch (reg_type)
+            {
+            case INITIAL_REGISTRATION:
+              ret = (is_initial_registration && (expiry > 0));
+              break;
+            case REREGISTRATION:
+              ret = (!is_initial_registration && (expiry > 0));
+              break;
+            case DEREGISTRATION:
+              ret = (expiry == 0);
+              break;
+            default:
+            // LCOV_EXCL_START Unreachable
+              LOG_WARNING("Impossible case %d", reg_type);
+              ret = false;
+              break;
+            // LCOV_EXCL_STOP
+            }
           }
         }
       }
