@@ -93,7 +93,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv->icid_gen_addr, "edge.proxy.net");
-  EXPECT_EQ(1, pj_list_size(&pcv->other_param));
+  EXPECT_EQ(1u, pj_list_size(&pcv->other_param));
 
   // Test the VPTR functions (clone, shallow clone and print on).
   pjsip_p_c_v_hdr* pcv_clone = (pjsip_p_c_v_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
@@ -102,7 +102,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv_clone->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv_clone->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv_clone->icid_gen_addr, "edge.proxy.net");
-  EXPECT_EQ(1, pj_list_size(&pcv_clone->other_param));
+  EXPECT_EQ(1u, pj_list_size(&pcv_clone->other_param));
 
   pjsip_p_c_v_hdr* pcv_sclone = (pjsip_p_c_v_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
 
@@ -110,7 +110,7 @@ TEST_F(CustomHeadersTest, PChargingVector)
   EXPECT_PJEQ(pcv_sclone->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv_sclone->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv_sclone->icid_gen_addr, "edge.proxy.net");
-  EXPECT_EQ(1, pj_list_size(&pcv_sclone->other_param));
+  EXPECT_EQ(1u, pj_list_size(&pcv_sclone->other_param));
 
   char buf[1024];
   hdr = (pjsip_hdr*)pcv_clone;
@@ -150,22 +150,22 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   // We have a P-CFA header, check it was filled out correctly.
   pjsip_p_c_f_a_hdr* pcfa = (pjsip_p_c_f_a_hdr*)hdr;
 
-  EXPECT_EQ(2, pj_list_size(&pcfa->ccf));
-  EXPECT_EQ(2, pj_list_size(&pcfa->ecf));
-  EXPECT_EQ(1, pj_list_size(&pcfa->other_param));
+  EXPECT_EQ(2u, pj_list_size(&pcfa->ccf));
+  EXPECT_EQ(2u, pj_list_size(&pcfa->ecf));
+  EXPECT_EQ(1u, pj_list_size(&pcfa->other_param));
 
   // Test the VPTR functions (clone, shallow clone and print on).
   pjsip_p_c_f_a_hdr* pcfa_clone = (pjsip_p_c_f_a_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
 
-  EXPECT_EQ(2, pj_list_size(&pcfa_clone->ccf));
-  EXPECT_EQ(2, pj_list_size(&pcfa_clone->ecf));
-  EXPECT_EQ(1, pj_list_size(&pcfa_clone->other_param));
+  EXPECT_EQ(2u, pj_list_size(&pcfa_clone->ccf));
+  EXPECT_EQ(2u, pj_list_size(&pcfa_clone->ecf));
+  EXPECT_EQ(1u, pj_list_size(&pcfa_clone->other_param));
 
   pjsip_p_c_f_a_hdr* pcfa_sclone = (pjsip_p_c_f_a_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
 
-  EXPECT_EQ(2, pj_list_size(&pcfa_sclone->ccf));
-  EXPECT_EQ(2, pj_list_size(&pcfa_sclone->ecf));
-  EXPECT_EQ(1, pj_list_size(&pcfa_sclone->other_param));
+  EXPECT_EQ(2u, pj_list_size(&pcfa_sclone->ccf));
+  EXPECT_EQ(2u, pj_list_size(&pcfa_sclone->ecf));
+  EXPECT_EQ(1u, pj_list_size(&pcfa_sclone->other_param));
 
   char buf[1024];
   hdr = (pjsip_hdr*)pcfa_clone;

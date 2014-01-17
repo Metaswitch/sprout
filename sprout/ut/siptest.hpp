@@ -265,13 +265,7 @@ private:
 class MsgMatcher
 {
 public:
-  MsgMatcher() :
-    _match_body(false)
-  {
-  }
-
-  MsgMatcher(string expected_body) :
-    _match_body(true),
+  MsgMatcher(string expected_body="") :
     _expected_body(expected_body)
   {
   }
@@ -279,7 +273,6 @@ public:
   void matches(pjsip_msg* msg);
 
 private:
-  bool _match_body;
   string _expected_body;
 };
 
@@ -316,23 +309,24 @@ private:
 
 class RespMatcher : public MsgMatcher
 {
-  RespMatcher(int status) :
-    MsgMatcher(),
-    _status(status)
-  {
-  }
-
-  RespMatcher(int status,
-              string body) :
+  RespMatcher(int status, string body="", string reason="") :
     MsgMatcher(body),
-    _status(status)
+    _status(status),
+    _reason(reason)
   {
+    if (_reason == "")
+    {
+      // No reason specified, so use the default from PJSIP.
+      const pj_str_t* reason = pjsip_get_status_text(status);
+      _reason.assign(reason->ptr, reason->slen);
+    }
   }
 
   void matches(pjsip_msg* msg);
 
 private:
   int _status;
+  std::string _reason;
 };
 
 /// Convert a PJ string to a C++ string.
