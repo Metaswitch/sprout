@@ -971,3 +971,49 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
 
   free_txdata();
 }
+
+/// Test for issue 358 - IFCs match on SDP but REGISTER doesn't have any - should be no match
+TEST_F(RegistrarTest, AppServersWithSDPIFCs)
+{
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>2</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <Group>1</Group>\n"
+                              "        <SessionDescription>\n"
+                              "          <Line>m</Line>\n"
+                              "          <Content>audio</Content>\n"
+                              "        </SessionDescription>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>0</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(1, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  free_txdata();
+}

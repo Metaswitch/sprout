@@ -312,8 +312,6 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     boost::regex line_regex;
     boost::regex content_regex;
     char newline = '\n';
-    std::stringstream sdp((char *)msg->body->data);
-    std::string sdp_line;
 
     if (!spt_line)
     {
@@ -334,6 +332,8 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
       if (msg->body->data != NULL)
       {
         // Split the message body into each SDP line.
+        std::stringstream sdp((char *)msg->body->data);
+        std::string sdp_line;
         while((std::getline(sdp, sdp_line, newline)) && (ret == false))
         {
           // Match the line regex on the first character of the SDP line.
