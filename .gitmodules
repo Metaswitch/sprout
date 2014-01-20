@@ -46,6 +46,3 @@
 [submodule "modules/libevhtp"]
 	path = modules/libevhtp
 	url = https://github.com/Metaswitch/libevhtp
-[submodule "modules/thrift"]
-        path = modules/thrift
-        url = https://github.com/apache/thrift.git

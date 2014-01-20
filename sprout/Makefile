@@ -167,7 +167,6 @@ LDFLAGS += -lmemcached \
            -lcares \
            -lzmq \
            -lsas \
-           -lthrift \
            -levhtp
 
 # Test build fakes out cURL
