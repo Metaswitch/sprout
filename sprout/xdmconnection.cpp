@@ -49,21 +49,24 @@
 #include "accumulator.h"
 
 /// Main constructor.
-XDMConnection::XDMConnection(const std::string& server, LoadMonitor *load_monitor) :
+XDMConnection::XDMConnection(const std::string& server,
+                             LoadMonitor *load_monitor,
+                             LastValueCache* lvc) :
   _http(new HttpConnection(server,
                            true,
                            SASEvent::TX_XDM_GET_BASE,
                            "connected_homers",
-                           load_monitor)),
-  _latency_stat("xdm_latency_us")
+                           load_monitor,
+                           lvc)),
+  _latency_stat("xdm_latency_us", lvc)
 {
 }
 
 /// Constructor supplying own connection. For UT use. Ownership passes
 /// to this object.
-XDMConnection::XDMConnection(HttpConnection* http) :
+XDMConnection::XDMConnection(HttpConnection* http, LastValueCache* lvc) :
   _http(http),
-  _latency_stat("xdm_latency_us")
+  _latency_stat("xdm_latency_us", lvc)
 {
 }
 
@@ -84,8 +87,8 @@ bool XDMConnection::get_simservs(const std::string& user,
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
   HTTPCode http_code = _http->get(url, xml_data, user, trail);
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
   }

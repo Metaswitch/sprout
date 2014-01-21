@@ -45,7 +45,7 @@
 using namespace std;
 
 FakeXDMConnection::FakeXDMConnection() :
-  XDMConnection(new FakeHttpConnection()),
+  XDMConnection(new FakeHttpConnection(), NULL),
   _fakehttp((FakeHttpConnection*)_http)
 {
 }

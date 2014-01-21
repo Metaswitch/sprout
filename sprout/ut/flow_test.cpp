@@ -62,7 +62,7 @@ public:
   {
     SipTest::SetUpTestCase();
     qm = NULL;
-    ft = new FlowTable(qm);
+    ft = new FlowTable(qm, stack_data.stats_aggregator);
     addr.addr.sa_family = PJ_AF_INET;
   }
 

@@ -58,7 +58,8 @@ public:
                  int recycle_period,
                  pj_pool_t* pool,
                  pjsip_endpoint* endpt,
-                 pjsip_tpfactory* tp_factory);
+                 pjsip_tpfactory* tp_factory,
+                 LastValueCache* lvc);
   ~ConnectionPool();
 
   void init();
