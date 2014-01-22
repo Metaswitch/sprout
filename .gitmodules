@@ -45,4 +45,4 @@
 	url = git@github.com:Metaswitch/cpp-common.git
 [submodule "modules/libevhtp"]
 	path = modules/libevhtp
-	url = https://github.com/Metaswitch/libevhtp
+	url = git@github.com:Metaswitch/libevhtp.git
