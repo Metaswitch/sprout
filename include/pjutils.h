@@ -179,6 +179,7 @@ void create_random_token(size_t length, std::string& token);
 
 std::string get_header_value(pjsip_hdr*);
 
+std::string generate_random_id();
 } // namespace PJUtils
 
 #endif

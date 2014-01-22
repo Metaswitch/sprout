@@ -79,6 +79,20 @@ void AnalyticsLogger::registration(const std::string& aor,
   _logger->write(buf);
 }
 
+void AnalyticsLogger::subscription(const std::string& aor,
+                                   const std::string& subscription_id,
+                                   const std::string& contact,
+                                   int expires)
+{
+  char buf[BUFFER_SIZE];
+  snprintf(buf, sizeof(buf),
+           "SUBSCRIPTION: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           aor.c_str(),
+           subscription_id.c_str(),
+           contact.c_str(),
+           expires);
+  _logger->write(buf);
+}
 
 void AnalyticsLogger::auth_failure(const std::string& auth,
                                    const std::string& to)

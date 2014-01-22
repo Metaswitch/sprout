@@ -55,6 +55,11 @@ public:
                     const std::string& contact,
                     int expires);
 
+  void subscription(const std::string& aor,
+                    const std::string& subscription_id,
+                    const std::string& contact,
+                    int expires);
+
   void auth_failure(const std::string& auth,
                     const std::string& to);
 
