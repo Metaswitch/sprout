@@ -1,8 +1,6 @@
 # included mk file for the libmemcached module
 
-ifndef LIBEVENT_DIR
-  include ${MK_DIR}/libevent.mk
-endif
+include ${MK_DIR}/libevhtp.mk
 
 LIBMEM_DIR := ${MODULE_DIR}/libmemcached
 LIBMEM_CONFIGURE := ${LIBMEM_DIR}/configure
@@ -17,11 +15,11 @@ ${LIBMEM_MAKEFILE}: ${LIBMEM_CONFIGURE}
 		CFLAGS="-I${INSTALL_DIR}/include" \
 		LDFLAGS="-L${INSTALL_DIR}/lib"
 
-libmemcached: libevent ${LIBMEM_MAKEFILE}
+libmemcached: libevhtp ${LIBMEM_MAKEFILE}
 	make -C ${LIBMEM_DIR}
 	make -C ${LIBMEM_DIR} install
 
-libmemcached_test: libevent ${LIBMEM_MAKEFILE}
+libmemcached_test: libevhtp ${LIBMEM_MAKEFILE}
 	make -C ${LIBMEM_DIR} test
 
 libmemcached_clean: ${LIBMEM_MAKEFILE}

@@ -166,7 +166,8 @@ LDFLAGS += -lmemcached \
            -lboost_date_time \
            -lcares \
            -lzmq \
-           -lsas
+           -lsas \
+           -levhtp
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl

@@ -16,9 +16,6 @@
 [submodule "modules/jsoncpp"]
 	path = modules/jsoncpp
 	url = git@github.com:Metaswitch/jsoncpp-upstream.git
-[submodule "modules/libevent"]
-	path = modules/libevent
-	url = git@github.com:libevent/libevent.git
 [submodule "modules/libmemcached"]
 	path = modules/libmemcached
 	url = git@github.com:Metaswitch/libmemcached-upstream.git
@@ -46,3 +43,6 @@
 [submodule "modules/cpp-common"]
 	path = modules/cpp-common
 	url = git@github.com:Metaswitch/cpp-common.git
+[submodule "modules/libevhtp"]
+	path = modules/libevhtp
+	url = git@github.com:Metaswitch/libevhtp.git
