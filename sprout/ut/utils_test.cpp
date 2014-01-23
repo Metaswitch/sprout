@@ -39,12 +39,20 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
+#include <time.h>
+#include <dlfcn.h>
 
 #include "utils.h"
 #include "sas.h"
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
+
+using ::testing::Matcher;
+using ::testing::AllOf;
+using ::testing::Gt;
+using ::testing::Lt;
 
 /// Fixture for UtilsTest.
 class UtilsTest : public ::testing::Test
@@ -267,4 +275,71 @@ TEST_F(UtilsTest, BinomialDistribution)
     double observed = (double)c[i] / (double)10000;
     EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.05), testing::Le(expected + 0.05)));
   }
+}
+
+class StopWatchTest : public ::testing::Test
+{
+public:
+  StopWatchTest()
+  {}
+
+  virtual ~StopWatchTest()
+  {
+    cwtest_reset_time();
+  }
+
+  static int _tolerance_us;
+  Utils::StopWatch _sw;
+};
+
+// The tolerance to allow when testing elapsed times returned by the stopwatch.
+// This is required because the clock_gettime interposer drifts over the course
+// of the test.
+//
+// Allow a 50ms tolerance - this is large but necessary because of volgrind.
+int StopWatchTest::_tolerance_us = 50 * 1000;
+
+Matcher<unsigned long>EqualToWithin(int expected, int tolerance)
+{
+  return AllOf(Gt((unsigned long)(expected - tolerance)),
+               Lt((unsigned long)(expected + tolerance)));
+}
+
+TEST_F(StopWatchTest, Mainline)
+{
+  EXPECT_TRUE(_sw.start());
+  cwtest_advance_time_ms(10 * 1000);
+  EXPECT_TRUE(_sw.stop());
+
+  unsigned long elapsed_us;
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+}
+
+TEST_F(StopWatchTest, StopIsIdempotent)
+{
+  EXPECT_TRUE(_sw.start());
+  cwtest_advance_time_ms(10 * 1000);
+  EXPECT_TRUE(_sw.stop());
+  cwtest_advance_time_ms(10 * 1000);
+  EXPECT_TRUE(_sw.stop());
+
+  unsigned long elapsed_us;
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+}
+
+TEST_F(StopWatchTest, ReadGetsLatestValueWhenNotStopped)
+{
+  EXPECT_TRUE(_sw.start());
+
+  unsigned long elapsed_us;
+  cwtest_advance_time_ms(10000);
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+
+  cwtest_advance_time_ms(10000);
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  // The returned value is greater on the second read.
+  EXPECT_THAT(elapsed_us, EqualToWithin(20 * 1000 * 1000, _tolerance_us));
 }
