@@ -59,6 +59,9 @@ static struct hostent* (*real_gethostbyname)(const char*);
 static int (*real_clock_gettime)(clockid_t, struct timespec *);
 static time_t (*real_time)(time_t*);
 
+// Whether time is completely controlled by the test script.
+bool completely_control_time = false;
+
 /// Helper: add two timespecs. Arbitrary aliasing is fine.
 static inline void ts_add(struct timespec& a, struct timespec& b, struct timespec& res)
 {
@@ -95,6 +98,22 @@ void cwtest_reset_time()
   time_offset.tv_sec = 0;
   time_offset.tv_nsec = 0;
   pthread_mutex_unlock(&time_offset_lock);
+}
+
+void cwtest_completely_control_time(bool control)
+{
+  pthread_mutex_lock(&time_offset_lock);
+  completely_control_time = control;
+  pthread_mutex_unlock(&time_offset_lock);
+}
+
+bool cwtest_completely_controlling_time()
+{
+  bool control;
+  pthread_mutex_lock(&time_offset_lock);
+  control = completely_control_time;
+  pthread_mutex_unlock(&time_offset_lock);
+  return control;
 }
 
 /// Lookup helper.  If there is a mapping of this host in host_mapping
@@ -141,12 +160,22 @@ struct hostent* gethostbyname(const char *name)
 /// Replacement clock_gettime.
 int clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
+  int rc = 0;
+
   if (!real_clock_gettime)
   {
     real_clock_gettime = (int (*)(clockid_t, struct timespec *))dlsym(RTLD_NEXT, "clock_gettime");
   }
 
-  int rc = real_clock_gettime(clk_id, tp);
+  if (cwtest_completely_controlling_time())
+  {
+    tp->tv_sec = 0;
+    tp->tv_nsec = 0;
+  }
+  else
+  {
+    rc = real_clock_gettime(clk_id, tp);
+  }
 
   if (!rc)
   {
@@ -162,13 +191,22 @@ int clock_gettime(clockid_t clk_id, struct timespec *tp)
 /// Replacement time().
 time_t time(time_t* v)
 {
+  time_t rt = 0;
+
   if (!real_time)
   {
     real_time = (time_t (*)(time_t*))dlsym(RTLD_NEXT, "time");
   }
 
-  // Get the real time in seconds since the epoch.
-  time_t rt = real_time(NULL);
+  if (cwtest_completely_controlling_time())
+  {
+    rt = 0;
+  }
+  else
+  {
+    // Get the real time in seconds since the epoch.
+    rt = real_time(NULL);
+  }
 
   // Add the seconds portion of the time offset.
   pthread_mutex_lock(&time_offset_lock);
