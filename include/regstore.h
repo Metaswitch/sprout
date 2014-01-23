@@ -56,7 +56,7 @@ public:
   class AoR
   {
   public:
-    /// @class Regstore::AoR::Binding
+    /// @class RegStore::AoR::Binding
     ///
     /// A single registered address.
     class Binding
@@ -92,6 +92,38 @@ public:
       std::list<std::pair<std::string, std::string> > _params;
     };
 
+    /// @class RegStore::AoR::Subscription
+    ///
+    /// Represents a subscription to registration events for the AoR.
+    class Subscription
+    {
+    public:
+      /// The Request URI for the subscription dialog.
+      std::string _req_uri;
+
+      /// The From URI for the subscription dialog.
+      std::string _from_uri;
+
+      /// The From tag for the subscription dialog.
+      std::string _from_tag;
+
+      /// The To URI for the subscription dialog.
+      std::string _to_uri;
+
+      /// The To tag for the subscription dialog.
+      std::string _to_tag;
+
+      /// The call ID for the subscription dialog.
+      std::string _cid;
+
+      /// The list of Route URIs for the subscription dialog.
+      std::list<std::string> _route_uris;
+
+      /// The time (in seconds since the epoch) at which this subscription
+      /// should expire.
+      int _expires;
+    };
+
     /// Default Constructor.
     AoR();
 
@@ -104,10 +136,10 @@ public:
     // Make sure assignment is deep!
     AoR& operator= (AoR const& other);
 
-    /// Clear all the bindings from this object.
+    /// Clear all the bindings and subscriptions from this object.
     void clear();
 
-    /// Retrieve a binding by Contact URI, creating an empty one if necessary.
+    /// Retrieve a binding by Binding ID, creating an empty one if necessary.
     /// The created binding is completely empty, even the Contact URI field.
     Binding* get_binding(const std::string& binding_id);
 
@@ -115,22 +147,48 @@ public:
     /// does nothing.
     void remove_binding(const std::string& binding_id);
 
+    /// Retrieve a subscription by To tag, creating an empty one if necessary.
+    Subscription* get_subscription(const std::string& to_tag);
+
+    /// Remove a subscription for the specified To tag.  If there is no
+    /// corresponding subscription does nothing.
+    void remove_subscription(const std::string& to_tag);
+
     /// Binding ID -> Binding.  First is sometimes the contact URI, but not always.
     /// Second is a pointer to an object owned by this object.
     typedef std::map<std::string, Binding*> Bindings;
 
+    /// To tag -> Subscription.
+    typedef std::map<std::string, Subscription*> Subscriptions;
+
     /// Retrieve all the bindings.
     inline const Bindings& bindings() { return _bindings; }
+
+    /// Retrieve all the subscriptions.
+    inline const Subscriptions& subscriptions() { return _subscriptions; }
+
+    /// CSeq value for event notifications for this AoR.  This is initialised
+    /// to one when the AoR record is first set up and incremented every time
+    /// the record is updated while there are active subscriptions.  (It is
+    /// sufficient to use the same CSeq for each NOTIFY sent on each active
+    /// because there is no requirement that the first NOTIFY in a dialog has
+    /// CSeq=1, and once a subscription dialog is established it should
+    /// receive every NOTIFY for the AoR.)
+    int _notify_cseq;
 
   private:
     /// Map holding the bindings for a particular AoR indexed by binding ID.
     Bindings _bindings;
 
+    /// Map holding the subscriptions for this AoR, indexed by the To tag
+    /// generated when the subscription dialog was established.
+    Subscriptions _subscriptions;
+
     /// CAS value for this AoR record.  Used when updating an existing record.
     /// Zero for a new record that has not yet been written to a store.
     uint64_t _cas;
 
-    /// Store code is allowed to manipulate bindings directly.
+    /// Store code is allowed to manipulate bindings and subscriptions directly.
     friend class RegStore;
   };
 
@@ -152,13 +210,14 @@ public:
   /// succeeds, this returns true.
   bool set_aor_data(const std::string& aor_id, AoR* data);
 
+private:
   int expire_bindings(AoR* aor_data, int now);
+  void expire_subscriptions(AoR* aor_data, int now);
 
   std::string serialize_aor(AoR* aor_data);
 
   AoR* deserialize_aor(const std::string& s);
 
-private:
   Store* _data_store;
 };
 

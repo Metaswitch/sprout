@@ -84,7 +84,9 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
     // Retrieved the data, so deserialize it.
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
-    expire_bindings(aor_data, time(NULL));
+    int now = time(NULL);
+    expire_bindings(aor_data, now);
+    expire_subscriptions(aor_data, now);
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
   }
   else if (status == Store::Status::NOT_FOUND)
@@ -108,13 +110,19 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data)
 {
-  // Expire any old bindings before writing to the server.  In theory,
-  // if there are no bindings left we could delete the entry, but this
-  // may cause concurrency problems because memcached does not support
+  // Expire any old bindings before writing to the server.  In theory, if
+  // there are no bindings left we could delete the entry, but this may
+  // cause concurrency problems because memcached does not support
   // cas on delete operations.  In this case we do a memcached_cas with
   // an effectively immediate expiry time.
   int now = time(NULL);
   int max_expires = expire_bindings(aor_data, now);
+
+  // Expire any old subscriptions as well.  This doesn't get factored in to
+  // the expiry time on the store record because, according to 5.4.2.1.2 /
+  // TS 24.229, all subscriptions automatically expire when the last binding
+  // expires.
+  expire_subscriptions(aor_data, now);
 
   LOG_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
             aor_id.c_str(), aor_data->_cas, max_expires);
@@ -166,18 +174,46 @@ int RegStore::expire_bindings(AoR* aor_data,
 }
 
 
+/// Expire any old subscriptions.
+///
+/// @param aor_data      The registration data record.
+/// @param now           The current time in seconds since the epoch.
+void RegStore::expire_subscriptions(AoR* aor_data,
+                                   int now)
+{
+  for (AoR::Subscriptions::iterator i = aor_data->_subscriptions.begin();
+       i != aor_data->_subscriptions.end();
+      )
+  {
+    AoR::Subscription* s = i->second;
+    if (s->_expires <= now)
+    {
+      // The subscription has expired, so remove it.
+      delete i->second;
+      aor_data->_subscriptions.erase(i++);
+    }
+    else
+    {
+      ++i;
+    }
+  }
+}
+
+
 /// Serialize the contents of an AoR.
 std::string RegStore::serialize_aor(AoR* aor_data)
 {
   std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
 
   int num_bindings = aor_data->bindings().size();
+  LOG_DEBUG("Serialize %d bindings", num_bindings);
   oss.write((const char *)&num_bindings, sizeof(int));
 
   for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
        i != aor_data->bindings().end();
        ++i)
   {
+    LOG_DEBUG("  Binding %s", i->first.c_str());
     oss << i->first << '\0';
 
     AoR::Binding* b = i->second;
@@ -204,6 +240,38 @@ std::string RegStore::serialize_aor(AoR* aor_data)
     }
   }
 
+  int num_subscriptions = aor_data->subscriptions().size();
+  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
+  oss.write((const char *)&num_subscriptions, sizeof(int));
+
+  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    LOG_DEBUG("  Subscription %s", i->first.c_str());
+    oss << i->first << '\0';
+
+    AoR::Subscription* s = i->second;
+    oss << s->_req_uri << '\0';
+    oss << s->_from_uri << '\0';
+    oss << s->_from_tag << '\0';
+    oss << s->_to_uri << '\0';
+    oss << s->_to_tag << '\0';
+    oss << s->_cid << '\0';
+    int num_routes = s->_route_uris.size();
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    oss.write((const char *)&num_routes, sizeof(int));
+    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      oss << *i << '\0';
+    }
+    oss.write((const char *)&s->_expires, sizeof(int));
+  }
+
+  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
+
   return oss.str();
 }
 
@@ -214,14 +282,17 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
 
   AoR* aor_data = new AoR();
+
   int num_bindings;
   iss.read((char *)&num_bindings, sizeof(int));
+  LOG_DEBUG("Deserialize %d bindings", num_bindings);
 
   for (int ii = 0; ii < num_bindings; ++ii)
   {
     // Extract the binding identifier into a string.
     std::string binding_id;
     getline(iss, binding_id, '\0');
+    LOG_DEBUG("  Binding %s", binding_id.c_str());
 
     AoR::Binding* b = aor_data->get_binding(binding_id);
 
@@ -254,6 +325,43 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
     }
   }
 
+  int num_subscriptions;
+  iss.read((char *)&num_subscriptions, sizeof(int));
+  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
+
+  for (int ii = 0; ii < num_subscriptions; ++ii)
+  {
+    // Extract the to tag index into a string.
+    std::string to_tag;
+    getline(iss, to_tag, '\0');
+    LOG_DEBUG("  Subscription %s", to_tag.c_str());
+
+    AoR::Subscription* s = aor_data->get_subscription(to_tag);
+
+    // Now extract the various fixed subscription parameters.
+    getline(iss, s->_req_uri, '\0');
+    getline(iss, s->_from_uri, '\0');
+    getline(iss, s->_from_tag, '\0');
+    getline(iss, s->_to_uri, '\0');
+    getline(iss, s->_to_tag, '\0');
+    getline(iss, s->_cid, '\0');
+
+    int num_routes = 0;
+    iss.read((char *)&num_routes, sizeof(int));
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    s->_route_uris.resize(num_routes);
+    for (std::list<std::string>::iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      getline(iss, *i, '\0');
+    }
+
+    iss.read((char *)&s->_expires, sizeof(int));
+  }
+
+  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
+
   return aor_data;
 }
 
@@ -282,6 +390,14 @@ RegStore::AoR::AoR(const AoR& other)
     Binding* bb = new Binding(*i->second);
     _bindings.insert(std::make_pair(i->first, bb));
   }
+  for (Subscriptions::const_iterator i = other._subscriptions.begin();
+       i != other._subscriptions.end();
+       ++i)
+  {
+    Subscription* ss = new Subscription(*i->second);
+    _subscriptions.insert(std::make_pair(i->first, ss));
+  }
+  _notify_cseq = other._notify_cseq;
   _cas = other._cas;
 }
 
@@ -300,6 +416,14 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
       Binding* bb = new Binding(*i->second);
       _bindings.insert(std::make_pair(i->first, bb));
     }
+    for (Subscriptions::const_iterator i = other._subscriptions.begin();
+         i != other._subscriptions.end();
+         ++i)
+    {
+      Subscription* ss = new Subscription(*i->second);
+      _subscriptions.insert(std::make_pair(i->first, ss));
+    }
+    _notify_cseq = other._notify_cseq;
     _cas = other._cas;
   }
 
@@ -307,7 +431,7 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
 }
 
 
-/// Clear all the bindings from this object.
+/// Clear all the bindings and subscriptions from this object.
 void RegStore::AoR::clear()
 {
   for (Bindings::iterator i = _bindings.begin();
@@ -317,6 +441,13 @@ void RegStore::AoR::clear()
     delete i->second;
   }
   _bindings.clear();
+  for (Subscriptions::iterator i = _subscriptions.begin();
+       i != _subscriptions.end();
+       ++i)
+  {
+    delete i->second;
+  }
+  _subscriptions.clear();
 }
 
 
@@ -350,6 +481,38 @@ void RegStore::AoR::remove_binding(const std::string& binding_id)
   {
     delete i->second;
     _bindings.erase(i);
+  }
+}
+
+/// Retrieve a subscription by To tag, creating an empty subscription if
+/// necessary.
+RegStore::AoR::Subscription* RegStore::AoR::get_subscription(const std::string& to_tag)
+{
+  AoR::Subscription* s;
+  AoR::Subscriptions::const_iterator i = _subscriptions.find(to_tag);
+  if (i != _subscriptions.end())
+  {
+    s = i->second;
+  }
+  else
+  {
+    // No existing subscription with this tag, so create a new one.
+    s = new Subscription;
+    _subscriptions.insert(std::make_pair(to_tag, s));
+  }
+  return s;
+}
+
+
+/// Removes the subscription with the specified tag.  If there is no such
+/// subscription, does nothing.
+void RegStore::AoR::remove_subscription(const std::string& to_tag)
+{
+  AoR::Subscriptions::iterator i = _subscriptions.find(to_tag);
+  if (i != _subscriptions.end())
+  {
+    delete i->second;
+    _subscriptions.erase(i);
   }
 }
 

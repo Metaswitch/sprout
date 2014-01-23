@@ -61,7 +61,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "constants.h"
 #include "log.h"
-
+#include "notify_utils.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -87,7 +87,7 @@ pjsip_module mod_registrar =
   NULL, NULL,                         // prev, next
   pj_str("mod-registrar"),            // Name
   -1,                                 // Id
-  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,// Priority
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+2,// Priority
   NULL,                               // load()
   NULL,                               // start()
   NULL,                               // stop()
@@ -357,6 +357,37 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (backup_aor_alloced)
   {
     delete backup_aor;
+  }
+
+  // Finally, send out SIP NOTIFYs for any subscriptions
+  for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    // LCOV_EXCL_START
+    RegStore::AoR::Subscription* subscription = i->second;
+    if (subscription->_expires > now)
+    {
+      pjsip_tx_data* tdata;
+//      pj_status_t status = pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+
+      // first create the request with a null body string, then add the body
+      //NotifyUtils::create_request_from_subscription(&tdata, subscription, aor_data->_notify_cseq, NULL);
+
+      // Each notify will have a single subscription and some (or none) bindings to form the body
+//      const RegStore::AoR::Bindings& bindings = aor_data->bindings();
+
+      // TODO Add body and send NOTIFY - getting segfaults
+  //    pjsip_msg_body *body2;
+    //  body2 = PJ_POOL_ZALLOC_T(tdata->pool, pjsip_msg_body);
+//      NotifyUtils::notify_create_body(tdata->msg->body, tdata->pool, aor, subscription, aor_data->bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE );
+      //tdata->msg->body = body2;
+
+      //pjsip_tx_data_add_ref(tdata);
+      //pjsip_endpt_send_request_stateless(stack_data.endpt, tdata, NULL, NULL);
+      //pjsip_tx_data_dec_ref(tdata);
+    }
+    // LCOV_EXCL_STOP
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -644,6 +675,49 @@ void process_register_request(pjsip_rx_data* rdata)
   // nodes) and we should loop through that.
 
   RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, is_initial_registration, public_id, trail);
+
+  // Finally, send out SIP NOTIFYs for any subscriptions
+  /*for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    RegStore::AoR::Subscription* subscription = i->second;
+    if (subscription->_expires > now)
+    {
+      // The binding hasn't expired.
+      pjsip_uri* uri = PJUtils::uri_from_string(subscription->_req_uri, tdata->pool);
+      if (uri != NULL)
+      {
+        // Contact URI is well formed, so include this in the response.
+        pjsip_contact_hdr* contact = pjsip_contact_hdr_create(tdata->pool);
+        contact->star = 0;
+        contact->uri = uri;
+    //    contact->q1000 = subscription->_priority;
+        contact->expires = subscription->_expires - now;
+        pj_list_init(&contact->other_param);
+        for (std::list<std::pair<std::string, std::string> >::iterator j = subscription->_params.begin();
+             j != subscription->_params.end();
+             ++j)
+        {
+          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+          pj_strdup2(tdata->pool, &new_param->name, j->first.c_str());
+          pj_strdup2(tdata->pool, &new_param->value, j->second.c_str());
+          pj_list_insert_before(&contact->other_param, new_param);
+        }
+        pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
+      }
+      else
+      {
+        // Contact URI is malformed.  Log an error, but otherwise don't try and
+        // fix it.
+        // LCOV_EXCL_START hard to hit - needs bad data in the store
+        //LOG_WARNING("Badly formed contact URI %s for address of record %s",
+          //          subscription->_uri.c_str(), aor.c_str());
+        // LCOV_EXCL_STOP
+      }
+    }
+  }*/
+
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);

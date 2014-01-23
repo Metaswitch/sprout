@@ -55,7 +55,9 @@ TARGET_SOURCES := logger.cpp \
                   basicproxy.cpp \
 									icscfproxy.cpp \
                   scscfselector.cpp	\
-                  signalhandler.cpp
+                  signalhandler.cpp \
+                  subscription.cpp \
+                  notify_utils.cpp  
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -99,7 +101,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        counter_test.cpp \
 											 icscfproxy_test.cpp \
 											 basicproxy_test.cpp \
-                       scscfselector_test.cpp
+                       scscfselector_test.cpp \
+                       subscription_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

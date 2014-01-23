@@ -1,5 +1,5 @@
 /**
- * @file analyticslogger.h Declaration of AnalyticsLogger class.
+ * @file notify_utils.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,52 +34,31 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
+#ifndef NOTIFY_UTILS_H__
+#define NOTIFY_UTILS_H__
 
-#ifndef ANALYTICSLOGGER_H__
-#define ANALYTICSLOGGER_H__
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include <stdint.h>
+#include <pjsip/sip_msg.h>
+}
 
-#include <sstream>
+#include <string>
+#include "regstore.h"
+#include "ifchandler.h"
+#include "hssconnection.h"
+#include "pjsip-simple/evsub.h"
 
-#include "logger.h"
-
-class AnalyticsLogger
+namespace NotifyUtils
 {
-public:
-  AnalyticsLogger(const std::string& directory);
-  ~AnalyticsLogger();
+  enum DocState { FULL, PARTIAL };
+  enum RegState { INIT, ACTIVE, TERMINATED };
 
-  void registration(const std::string& aor,
-                    const std::string& binding_id,
-                    const std::string& contact,
-                    int expires);
-
-  void subscription(const std::string& aor,
-                    const std::string& subscription_id,
-                    const std::string& contact,
-                    int expires);
-
-  void auth_failure(const std::string& auth,
-                    const std::string& to);
-
-  void call_connected(const std::string& from,
-                      const std::string& to,
-                      const std::string& call_id);
-
-  void call_not_connected(const std::string& from,
-                          const std::string& to,
-                          const std::string& call_id,
-                          int reason);
-
-  void call_disconnected(const std::string& call_id,
-                         int reason);
-
-private:
-  static const int BUFFER_SIZE = 1000;
-
-  Logger* _logger;
+  pj_status_t create_request_from_subscription(pjsip_tx_data** tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body);
+  pj_str_t create_contact(pj_str_t aor, std::string id, pj_str_t state, std::string uri, std::string display_name, std::string unknown_param);
+  void notify_create_body(pjsip_msg_body* body, pj_pool_t* pool, std::string& aor, RegStore::AoR::Subscription* subscription, const RegStore::AoR::Bindings& bindings, DocState doc_state, RegState reg_state);
 };
 
 #endif
-
