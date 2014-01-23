@@ -281,52 +281,42 @@ class StopWatchTest : public ::testing::Test
 {
 public:
   StopWatchTest()
-  {}
+  {
+    cwtest_completely_control_time(true);
+  }
 
   virtual ~StopWatchTest()
   {
     cwtest_reset_time();
   }
 
-  static int _tolerance_us;
+  unsigned long ms_to_us(int ms) { return (unsigned long)(ms * 1000); }
+
   Utils::StopWatch _sw;
 };
-
-// The tolerance to allow when testing elapsed times returned by the stopwatch.
-// This is required because the clock_gettime interposer drifts over the course
-// of the test.
-//
-// Allow a 50ms tolerance - this is large but necessary because of volgrind.
-int StopWatchTest::_tolerance_us = 50 * 1000;
-
-Matcher<unsigned long>EqualToWithin(int expected, int tolerance)
-{
-  return AllOf(Gt((unsigned long)(expected - tolerance)),
-               Lt((unsigned long)(expected + tolerance)));
-}
 
 TEST_F(StopWatchTest, Mainline)
 {
   EXPECT_TRUE(_sw.start());
-  cwtest_advance_time_ms(10 * 1000);
+  cwtest_advance_time_ms(11);
   EXPECT_TRUE(_sw.stop());
 
   unsigned long elapsed_us;
   EXPECT_TRUE(_sw.read(elapsed_us));
-  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
 }
 
 TEST_F(StopWatchTest, StopIsIdempotent)
 {
   EXPECT_TRUE(_sw.start());
-  cwtest_advance_time_ms(10 * 1000);
+  cwtest_advance_time_ms(11);
   EXPECT_TRUE(_sw.stop());
-  cwtest_advance_time_ms(10 * 1000);
+  cwtest_advance_time_ms(11);
   EXPECT_TRUE(_sw.stop());
 
   unsigned long elapsed_us;
   EXPECT_TRUE(_sw.read(elapsed_us));
-  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
 }
 
 TEST_F(StopWatchTest, ReadGetsLatestValueWhenNotStopped)
@@ -334,12 +324,12 @@ TEST_F(StopWatchTest, ReadGetsLatestValueWhenNotStopped)
   EXPECT_TRUE(_sw.start());
 
   unsigned long elapsed_us;
-  cwtest_advance_time_ms(10000);
+  cwtest_advance_time_ms(11);
   EXPECT_TRUE(_sw.read(elapsed_us));
-  EXPECT_THAT(elapsed_us, EqualToWithin(10 * 1000 * 1000, _tolerance_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
 
-  cwtest_advance_time_ms(10000);
+  cwtest_advance_time_ms(11);
   EXPECT_TRUE(_sw.read(elapsed_us));
   // The returned value is greater on the second read.
-  EXPECT_THAT(elapsed_us, EqualToWithin(20 * 1000 * 1000, _tolerance_us));
+  EXPECT_EQ(ms_to_us(22), elapsed_us);
 }

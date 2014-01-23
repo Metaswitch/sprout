@@ -97,6 +97,7 @@ void cwtest_reset_time()
   pthread_mutex_lock(&time_offset_lock);
   time_offset.tv_sec = 0;
   time_offset.tv_nsec = 0;
+  completely_control_time = false;
   pthread_mutex_unlock(&time_offset_lock);
 }
 
