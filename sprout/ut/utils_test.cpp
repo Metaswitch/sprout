@@ -282,7 +282,7 @@ class StopWatchTest : public ::testing::Test
 public:
   StopWatchTest()
   {
-    cwtest_completely_control_time(true);
+    cwtest_completely_control_time();
   }
 
   virtual ~StopWatchTest()
