@@ -79,6 +79,24 @@ public:
                                 "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+
+    // Get an initial empty AoR record and add a binding.
+    int now = time(NULL);
+    RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+    RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+    b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+    b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+    b1->_cseq = 17038;
+    b1->_expires = now + 300;
+    b1->_priority = 0;
+    b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+    b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
+    b1->_params.push_back(std::make_pair("reg-id", "1"));
+    b1->_params.push_back(std::make_pair("+sip.ice", ""));
+
+    // Add the AoR record to the store.
+    pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+    delete aor_data1;
   }
 
   static void TearDownTestCase()
@@ -148,7 +166,6 @@ public:
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
     _event("Event: Reg"),
     _accepts("Accept: application/reginfo+xml"),
-//    _accepts(""),
     _expires(""),
     _route(""),
     _auth("")
@@ -227,75 +244,111 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-/// Simple correct example with Expires header
-TEST_F(SubscriptionTest, ExpiresHeader)
+/// Simple correct example 
+TEST_F(SubscriptionTest, SimpleMainline)
 {
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
+  b1->_params.push_back(std::make_pair("reg-id", "1"));
+  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+
+  // Add the AoR record to the store.
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  delete aor_data1;
+
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
   SubscribeMessage msg;
-  msg._expires = "Expires: 300";
   inject_msg(msg.get());
   check_standard_OK();
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
 // Test the Event Header
-TEST_F(SubscriptionTest, EventHeader)
+// Missing Event header should be rejected
+TEST_F(SubscriptionTest, MissingEventHeader)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
-  // Missing Event header should be rejected
   SubscribeMessage msg;
   msg._event = "";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(406, out->line.status.code);
+  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
   check_subscriptions("sip:6505550231@homedomain", 0u);
-
-  // Event that isn't Reg should be rejected
-  //SubscribeMessage msg2;
-  //msg2._event = "Event: Not Reg";
-  //pj_bool_t ret2 = inject_msg_direct(msg2.get());
-  //EXPECT_EQ(PJ_FALSE, ret2);
-  //check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-// Test the Accept Header
-TEST_F(SubscriptionTest, AcceptsHeader)
+// Test the Event Header
+// Event that isn't Reg should be rejected
+TEST_F(SubscriptionTest, IncorrectEventHeader)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
-  // A message with an accept header, but where it doesn't contain
-  // application/reginfo+xml shouldn't be accepted
   SubscribeMessage msg;
-  msg._accepts = "Accept: application/reginfo+xml";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
-  // THIs should be a 406 error.
+  msg._event = "Event: Not Reg";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(406, out->line.status.code);
+  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
   check_subscriptions("sip:6505550231@homedomain", 0u);
-
-  // A message with an accept header, which contains
-  // application/reginfo+xml and others should be accepted
-  //msg._accepts = "Accept: application/reginfo+xml";
-  //ret = inject_msg_direct(msg.get());
-  //EXPECT_EQ(PJ_FALSE, ret);
-  //check_subscriptions("sip:6505550231@homedomain", 0u);
-
-  // A message with no accepts header should be accepted
-  //msg._accepts = "";
-  //inject_msg(msg.get());
-  //check_standard_OK();
-  //check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-
-/// Simple correct example with Expires parameter
-TEST_F(SubscriptionTest, SimpleMainlineContactStar)
+// Test Accept Header. A message with no accepts header should be accepted
+TEST_F(SubscriptionTest, EmptyAcceptsHeader)
 {
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
   SubscribeMessage msg;
-  msg._contact = "*";
+  msg._accepts = "";
   inject_msg(msg.get());
   check_standard_OK();
+
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
+// Test Accept Header.
+// A message with an accept header, but where it doesn't contain
+// application/reginfo+xml shouldn't be accepted
+TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
+{
   check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg;
+  msg._accepts = "Accept: notappdata";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(406, out->line.status.code);
+  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
+ 
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+// Test Accept Header.
+// A message with an accept header, which contains
+// application/reginfo+xml and others should be accepted
+TEST_F(SubscriptionTest, CorrectAcceptsHeader)
+{
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg;
+  msg._accepts = "Accept: otherstuff,application/reginfo+xml";
+  inject_msg(msg.get());
+  check_standard_OK();
+ 
+  check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
 /// Homestead fails associated URI request
@@ -342,11 +395,17 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 
 void SubscriptionTest::check_standard_OK()
 {
-
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+//  EXPECT_EQ(6, out->line.status.code);
+//  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  out = pop_txdata()->msg;
+//  EXPECT_EQ(200, out->line.status.code);
+//  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ(6, out->line.status.code);
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   free_txdata();
 }
 

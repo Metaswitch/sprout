@@ -38,49 +38,33 @@ extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
-#include <stdint.h>
 }
 
-
 #include <string>
-#include <algorithm>
-#include <cassert>
-#include "regstore.h"
-#include "constants.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "registrar.h"
 #include "notify_utils.h"
 #include "log.h"
-#include <boost/lexical_cast.hpp>
-
-#define MAX_SIP_MSG_SIZE 65535
 
 /* MIME */
-static const pj_str_t STR_MIME_TYPE    = { "application", 11 };
-static const pj_str_t STR_MIME_SUBTYPE = { "reginfo+xml", 11 };
+static const pj_str_t STR_MIME_TYPE      = { "application", 11 };
+static const pj_str_t STR_MIME_SUBTYPE   = { "reginfo+xml", 11 };
 
 /* XML node name constants */
-static const pj_str_t STR_REGISTRATION  = { "registration", 12 };
-static const pj_str_t STR_CONTACT       = { "contact", 7 };
-static const pj_str_t STR_URI           = { "uri", 3 };
+static const pj_str_t STR_REGISTRATION   = { "registration", 12 };
+static const pj_str_t STR_CONTACT        = { "contact", 7 };
+static const pj_str_t STR_URI            = { "uri", 3 };
 
 /* XML node attribute constants */
-static const pj_str_t STR_STATE         = { "state", 5 };
-static const pj_str_t STR_AOR           = { "aor", 3 };
-static const pj_str_t STR_ID            = { "id", 2 };
-static const pj_str_t STR_EVENT         = { "event", 5 };
-static const pj_str_t STR_DURATION      = { "duration-registered", 19 };
-static const pj_str_t STR_EXPIRES       = { "expires", 7 };
-static const pj_str_t STR_RETRY         = { "retry-after", 11 };
-static const pj_str_t STR_Q             = { "q", 1 };
-static const pj_str_t STR_CALLID        = { "callid", 6 };
-static const pj_str_t STR_CSEQ          = { "cseq", 4 };
+static const pj_str_t STR_STATE          = { "state", 5 };
+static const pj_str_t STR_AOR            = { "aor", 3 };
+static const pj_str_t STR_ID             = { "id", 2 };
+static const pj_str_t STR_EVENT          = { "event", 5 };
 
 /* XML node registration STATE attribute enum constants. */
-static const pj_str_t STR_INIT        = { "init", 4 };
-static const pj_str_t STR_ACTIVE      = { "active", 6 };
-static const pj_str_t STR_TERMINATED  = { "terminated", 10 };
+static const pj_str_t STR_INIT           = { "init", 4 };
+static const pj_str_t STR_ACTIVE         = { "active", 6 };
+static const pj_str_t STR_TERMINATED     = { "terminated", 10 };
 
 /* XML node doc STATE attribute enum constants. */
 static const pj_str_t STR_FULL           = { "full", 4 };
@@ -90,12 +74,9 @@ static const pj_str_t STR_PARTIAL        = { "partial", 7 };
 static const pj_str_t STR_REGISTERED     = { "registered", 10 };
 static const pj_str_t STR_CREATED        = { "created", 7 };
 static const pj_str_t STR_REFRESHED      = { "refreshed", 9 };
-static const pj_str_t STR_SHORTENED      = { "shortened", 9 };
 static const pj_str_t STR_EXPIRED        = { "expired", 7 };
 static const pj_str_t STR_DEACTIVATED    = { "deactivated", 11 };
-static const pj_str_t STR_PROBATION      = { "probation", 9 };
 static const pj_str_t STR_UNREGISTERED   = { "unregistered", 12 };
-static const pj_str_t STR_REJECTED       = { "rejected", 8 };
 
 /* XML attributes constants */
 static const pj_str_t STR_REGINFO        = { "reginfo", 7 };
@@ -107,163 +88,102 @@ static const pj_str_t STR_XMLNS_XSI_NAME = { "xmlns:xsi", 9 };
 static const pj_str_t STR_XMLNS_XSI_VAL  = { "http://www.w3.org/2001/XMLSchema-instance", 41 };
 
 // XML schema location
-static const pj_str_t STR_XSI_SLOC_NAME = { "xsi:schemaLocation", 18 };
-static const pj_str_t STR_XSI_SLOC_VAL  = { "http://www.w3.org/2001/03/xml.xsd", 33 };
+static const pj_str_t STR_XSI_SLOC_NAME  = { "xsi:schemaLocation", 18 };
+static const pj_str_t STR_XSI_SLOC_VAL   = { "http://www.w3.org/2001/03/xml.xsd", 33 };
 
-// return a xml registration node with the attributes populated
+// Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
                              pj_str_t *aor,
                              pj_str_t *id,
                              pj_str_t *state)
 {
+  LOG_DEBUG("Create registration node");
+
   pj_xml_node *reg_node;
   pj_xml_attr *attr;
 
   reg_node = pj_xml_node_new(pool, &STR_REGISTRATION);
 
-  // aor - required
+  // Registration node requires a aor, id and state
   attr = pj_xml_attr_new(pool, &STR_AOR, aor); 
   pj_xml_add_attr(reg_node, attr);
-  // id - required
   attr = pj_xml_attr_new(pool, &STR_ID, id); 
   pj_xml_add_attr(reg_node, attr);
-  // state - required
   attr = pj_xml_attr_new(pool, &STR_STATE, state); 
   pj_xml_add_attr(reg_node, attr);
 
   return reg_node;
 }
 
-// return a xml contact node with the attributes populated
+// Return a XML contact node with the attributes populated
 pj_xml_node* create_contact_node(pj_pool_t *pool,
                                  pj_str_t *id,
                                  pj_str_t *state,
-                                 pj_str_t *event,
-                                 pj_str_t *duration,
-                                 pj_str_t *expires,
-                                 pj_str_t *retry,
-                                 pj_str_t *q,
-                                 pj_str_t *callid,
-                                 pj_str_t *cseq)
+                                 pj_str_t *event)
 {
+  LOG_DEBUG("Create contact node");
+
   pj_xml_node *contact_node;
   pj_xml_attr *attr;
 
   contact_node = pj_xml_node_new(pool, &STR_CONTACT);
 
-  // id - required
+  // Contact node requires an id, state and event
   attr = pj_xml_attr_new(pool, &STR_ID, id); 
   pj_xml_add_attr(contact_node, attr);
-  // state - required
   attr = pj_xml_attr_new(pool, &STR_STATE, state); 
   pj_xml_add_attr(contact_node, attr);     
-  // event - required
   attr = pj_xml_attr_new(pool, &STR_EVENT, event); 
   pj_xml_add_attr(contact_node, attr);
-
-  // duration
-  if (duration)
-  {
-    attr = pj_xml_attr_new(pool, &STR_DURATION, duration); 
-    pj_xml_add_attr(contact_node, attr);
-  }
-  // expired 
-  if (expires)
-  {
-    attr = pj_xml_attr_new(pool, &STR_EXPIRES, expires); 
-    pj_xml_add_attr(contact_node, attr);
-  }
-  // retry-after 
-  if (retry)
-  { 
-    attr = pj_xml_attr_new(pool, &STR_RETRY, retry); 
-    pj_xml_add_attr(contact_node, attr);
-  }
-  // q 
-  if (q)
-  {
-    attr = pj_xml_attr_new(pool, &STR_Q, q); 
-    pj_xml_add_attr(contact_node, attr);
-  }
-  // callid
-  if (callid)
-  { 
-    attr = pj_xml_attr_new(pool, &STR_CALLID, callid); 
-    pj_xml_add_attr(contact_node, attr);
-  }
-  // cseq 
-  if (cseq)
-  {
-    attr = pj_xml_attr_new(pool, &STR_CSEQ, cseq); 
-    pj_xml_add_attr(contact_node, attr);
-  }
 
   return contact_node;
 }
 
-// refer to RFC3680 for schema
-// function to create complete xml body for a NOTIFY
+// Create complete XML body for a NOTIFY
 pj_xml_node* notify_create_xml(pj_pool_t *pool,
                                std::string& aor,
                                RegStore::AoR::Subscription* subscription, 
                                const RegStore::AoR::Bindings& bindings,
                                NotifyUtils::DocState doc_state,
-                               NotifyUtils::RegState reg_state)
+                               NotifyUtils::RegContactState reg_state, 
+                               NotifyUtils::RegContactState contact_state, 
+                               NotifyUtils::ContactEvent contact_event)
 {
+  LOG_DEBUG("Create the XML body for a SIP NOTIFY");
+  
   pj_xml_node *doc, *reg_node, *contact_node, *uri_node;
   pj_xml_attr *attr;
 
-  if (!subscription)
-  {
-    return NULL;
-  }
-
-  /* Root document. refinfo */
+  // Create the root document
   doc = pj_xml_node_new(pool, &STR_REGINFO);
 
-  /* Add attributes to Root */
-  // XMLNS
+  // Add attributes to the doc
   attr = pj_xml_attr_new(pool, &STR_XMLNS_NAME, &STR_XMLNS_VAL);
   pj_xml_add_attr(doc, attr);
-  // XMLNS XSI
   attr = pj_xml_attr_new(pool, &STR_XMLNS_XSI_NAME, &STR_XMLNS_XSI_VAL);
   pj_xml_add_attr(doc, attr);
-  // version - required
   attr = pj_xml_attr_new(pool, &STR_VERSION, &STR_VERSION_VAL);
   pj_xml_add_attr(doc, attr);
-  // state - required
+
+  // Add the state - this will be partial except on an initial subscription
   const pj_str_t* state_str = (doc_state == NotifyUtils::FULL) ? &STR_FULL : &STR_PARTIAL;
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
 
-  // registration node
+  // Create the registration node
   pj_str_t reg_aor;
   pj_str_t reg_id;
   pj_str_t reg_state_str;
 
-  reg_aor = pj_str(const_cast<char *>(aor.c_str()));
-  reg_id = pj_str(const_cast<char *>(subscription->_to_tag.c_str()));
-
-  switch (reg_state)
-  {
-    case NotifyUtils::INIT:
-      reg_state_str = STR_INIT;
-      break;  
-    case NotifyUtils::ACTIVE:
-      reg_state_str = STR_ACTIVE;
-      break;  
-    case NotifyUtils::TERMINATED:
-      reg_state_str = STR_TERMINATED;
-      break;  
-  }
-
+  pj_cstr(&reg_aor, aor.c_str());
+  pj_cstr(&reg_id, subscription->_to_tag.c_str());
+  reg_state_str = (reg_state == NotifyUtils::ACTIVE) ? STR_ACTIVE : STR_TERMINATED;
   reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str); 
 
-  // contacts
-
+  // Create the contact nodes
   int now = time(NULL);
 
-  // for each binding, add a contact node to the registration node
+  // For each binding, add a contact node to the registration node
   for (RegStore::AoR::Bindings::const_iterator i = bindings.begin();
        i != bindings.end();
        ++i)
@@ -272,104 +192,94 @@ pj_xml_node* notify_create_xml(pj_pool_t *pool,
     pj_str_t c_id;
     pj_str_t c_state;
     pj_str_t c_event;
+
     pj_cstr(&c_id, i->first.c_str());
-//    *c_id =  pj_str(const_cast<char *>(i->first.c_str()));
+    c_state = (contact_state == NotifyUtils::ACTIVE) ? STR_ACTIVE : STR_TERMINATED;
 
-    // TODO state and event need correct handling
-    c_state = STR_ACTIVE; 
-    c_event = STR_CREATED; 
-
-    // optional attributes:
-    pj_str_t c_duration; // don't have any way to know this
-    pj_str_t c_expires;  //required for 'shortened' event
-    pj_str_t c_retry; // required for 'probation' event
-    pj_str_t c_q;
-    pj_str_t c_callid;
-    pj_str_t c_cseq;
-    pj_str_t c_uri;
-
-    int expires = std::max(0, i->second->_expires - now); // min value of 0
-    pj_cstr(&c_expires, std::to_string(expires).c_str());
-//    *c_expires = pj_str(const_cast<char *>(std::to_string(expires).c_str()));
-
-    float q = (i->second->_priority / 1000);
-    pj_cstr(&c_q, std::to_string(q).c_str());//*c_q = pj_str(const_cast<char *>(std::to_string(q).c_str()));
-
-    if (i->second->_cid.size() > 0)
+    switch (contact_event)
     {
-pj_cstr(&c_callid, i->second->_cid.c_str());//      *c_callid = pj_str(const_cast<char *>(i->second->_cid.c_str()));
-    }
-
-pj_cstr(&c_cseq, std::to_string(i->second->_cseq).c_str());//    *c_cseq = pj_str(const_cast<char *>(std::to_string(i->second->_cseq).c_str()));
-
-    if (i->second->_uri.size() > 0)
-    {
-pj_cstr(&c_uri, i->second->_uri.c_str());//      *c_uri = pj_str(const_cast<char *>(i->second->_uri.c_str()));
+      case NotifyUtils::REGISTERED:
+        c_event = STR_REGISTERED;
+        break;
+      case NotifyUtils::CREATED:
+        c_event = STR_CREATED;
+        break;
+      case NotifyUtils::REFRESHED:
+        c_event = STR_REFRESHED;
+        break;
+      case NotifyUtils::EXPIRED:
+        c_event = STR_EXPIRED;
+        break;
+      case NotifyUtils::DEACTIVATED:
+        c_event = STR_DEACTIVATED;
+        break;
+      case NotifyUtils::UNREGISTERED:
+        c_event = STR_UNREGISTERED;
+        break;
     }
 
     contact_node = create_contact_node(pool, 
                                        &c_id, 
                                        &c_state, 
-                                       &c_event, 
-                                       &c_duration,
-                                       &c_expires, 
-                                       &c_retry, 
-                                       &c_q, 
-                                       &c_callid, 
-                                       &c_cseq);
+                                       &c_event);
 
-    // create and add uri element
+    // Create and add URI element
+    pj_str_t c_uri;
+
+    if (i->second->_uri.size() > 0)
+    {
+      pj_cstr(&c_uri, i->second->_uri.c_str());
+    }
+
     uri_node = pj_xml_node_new(pool, &STR_URI);
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
 
-    // we don't add a display-name, but do it here if we do 
-   
+    // Add the contact node to the registration node
     pj_xml_add_node(reg_node, contact_node);
   }
 
   pj_xml_add_node(doc, reg_node);
-    
-  /* Done! */
 
   return doc;
 }
 
-
-/*
-* Function to print XML message body.
-*/
+// Print XML message body.
 static int xml_print_body( struct pjsip_msg_body *msg_body,
                          char *buf, pj_size_t size)
 {
-    return pj_xml_print((const pj_xml_node*)msg_body->data, buf, size,
-                            PJ_TRUE);
+  return pj_xml_print((const pj_xml_node*)msg_body->data, buf, size,
+                       PJ_TRUE);
 }
 
-
-/*
-* Function to clone XML document.
-*/
+// Clone XML document.
 static void* xml_clone_data(pj_pool_t *pool, const void *data, unsigned len)
 {
-    PJ_UNUSED_ARG(len);
-    return pj_xml_clone( pool, (const pj_xml_node*)data);
+  PJ_UNUSED_ARG(len);
+  return pj_xml_clone( pool, (const pj_xml_node*)data);
 }
 
-
-
-
-void NotifyUtils::notify_create_body(pjsip_msg_body* body,
-                                     pj_pool_t *pool,
-                                     std::string& aor,
-                                     RegStore::AoR::Subscription* subscription,
-                                     const RegStore::AoR::Bindings& bindings,
-                                     NotifyUtils::DocState doc_state,
-                                     NotifyUtils::RegState reg_state)
+// Create the body of a SIP NOTIFY
+pj_status_t NotifyUtils::notify_create_body(pjsip_msg_body* body,
+                                            pj_pool_t *pool,
+                                            std::string& aor,
+                                            RegStore::AoR::Subscription* subscription,
+                                            const RegStore::AoR::Bindings& bindings,
+                                            NotifyUtils::DocState doc_state,
+                                            NotifyUtils::RegContactState reg_state,
+                                            NotifyUtils::RegContactState contact_state,
+                                            NotifyUtils::ContactEvent contact_event)
 {
-  pj_xml_node *doc;
+  LOG_DEBUG("Create body of a SIP NOTIFY");
 
-  doc = notify_create_xml(pool, aor, subscription, bindings, doc_state, reg_state);
+  pj_xml_node *doc;
+  doc = notify_create_xml(pool, aor, subscription, bindings, doc_state, reg_state, contact_state, contact_event);
+
+  if (doc == NULL)
+  {
+    LOG_DEBUG("Failed to create body"); 
+    return PJ_FALSE;
+  }
 
   body->content_type.type = STR_MIME_TYPE;
   body->content_type.subtype = STR_MIME_SUBTYPE;
@@ -379,16 +289,11 @@ void NotifyUtils::notify_create_body(pjsip_msg_body* body,
 
   body->print_body = &xml_print_body;
   body->clone_data = &xml_clone_data;
-}
-
-pj_str_t NotifyUtils::create_contact(pj_str_t aor, std::string id, pj_str_t state, std::string uri, std::string display_name, std::string unknown_param)
-{
-  return {NULL, 0};
+  return PJ_SUCCESS;
 }
 
 pj_status_t NotifyUtils::create_request_from_subscription(pjsip_tx_data** p_tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body)
 {
-  // TODO no route headers yet. 
   pj_str_t from;
   pj_str_t to;
   pj_str_t uri;
@@ -398,14 +303,70 @@ pj_status_t NotifyUtils::create_request_from_subscription(pjsip_tx_data** p_tdat
   pj_cstr(&uri, subscription->_req_uri.c_str());
   pj_cstr(&cid, subscription->_cid.c_str());
 
-  return pjsip_endpt_create_request(stack_data.endpt,
-                                    pjsip_get_notify_method(),
-                                    &uri,
-                                    &from,
-                                    &to,
-                                    &uri,
-                                    &cid,
-                                    cseq,
-                                    body,
-                                    p_tdata);
+  LOG_DEBUG("Create NOTIFY request");
+  pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
+                                                  pjsip_get_notify_method(),
+                                                  &uri,
+                                                  &from,
+                                                  &to,
+                                                  &uri,
+                                                  &cid,
+                                                  cseq,
+                                                  body,
+                                                  p_tdata);
+  return status;
+}
+
+// Create the request with to and from headers and a null body string, then add the body.
+pj_status_t NotifyUtils::create_notify(pjsip_tx_data** tdata_notify,
+                                       RegStore::AoR::Subscription* subscription,
+                                       std::string aor, 
+                                       int cseq,
+                                       const RegStore::AoR::Bindings& bindings,
+                                       NotifyUtils::DocState doc_state,
+                                       NotifyUtils::RegContactState reg_state,
+                                       NotifyUtils::RegContactState contact_state,
+                                       NotifyUtils::ContactEvent contact_event)
+{
+  pj_status_t status = NotifyUtils::create_request_from_subscription(tdata_notify, subscription, cseq, NULL);
+  if (status == PJ_SUCCESS)
+  {
+    // populate to header
+    pjsip_to_hdr* to_hdr;
+    to_hdr = pjsip_to_hdr_create((*tdata_notify)->pool);
+    pj_cstr(&to_hdr->tag, subscription->_to_tag.c_str());
+    to_hdr->uri = PJUtils::uri_from_string(subscription->_to_uri, (*tdata_notify)->pool);
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, to_hdr);
+ 
+    // populate from header
+    pjsip_from_hdr* from_hdr;
+    from_hdr = pjsip_from_hdr_create((*tdata_notify)->pool);
+    pj_cstr(&from_hdr->tag, subscription->_from_tag.c_str());
+    from_hdr->uri = PJUtils::uri_from_string(subscription->_from_uri, (*tdata_notify)->pool);
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, from_hdr);
+
+    // populate route headers
+/*    for (std::list<std::string>::const_iterator i = subscription->_route_uris.begin();
+         i != subscription->_route_uris.end();
+         ++i)
+    {
+      pjsip_route_hdr* route_hdr;
+      route_hdr = pjsip_route_hdr_create((*tdata_notify)->pool);
+      route_hdr->name_addr.uri = PJUtils::uri_from_string(*i, (*tdata_notify)->pool);    
+      pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
+    }
+  */  // complete body
+    pjsip_msg_body *body2;
+    body2 = PJ_POOL_ZALLOC_T((*tdata_notify)->pool, pjsip_msg_body);
+    status = NotifyUtils::notify_create_body(body2, (*tdata_notify)->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
+    (*tdata_notify)->msg->body = body2;
+  }
+  else
+  {
+   // LCOV_EXCL_START
+    status = PJ_FALSE;
+   // LCOV_EXCL_STOP
+  }
+
+  return status;
 }

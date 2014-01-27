@@ -208,6 +208,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
+  RegStore::AoR::Bindings bindings;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -340,6 +341,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_expires = now + expiry;
+          bindings[binding_id] = binding;
 
           if (analytics != NULL)
           {
@@ -364,30 +366,21 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
        i != aor_data->subscriptions().end();
        ++i)
   {
-    // LCOV_EXCL_START
     RegStore::AoR::Subscription* subscription = i->second;
     if (subscription->_expires > now)
     {
-      pjsip_tx_data* tdata;
-//      pj_status_t status = pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+      pjsip_tx_data* tdata_notify;
 
-      // first create the request with a null body string, then add the body
-      //NotifyUtils::create_request_from_subscription(&tdata, subscription, aor_data->_notify_cseq, NULL);
-
-      // Each notify will have a single subscription and some (or none) bindings to form the body
-//      const RegStore::AoR::Bindings& bindings = aor_data->bindings();
-
-      // TODO Add body and send NOTIFY - getting segfaults
-  //    pjsip_msg_body *body2;
-    //  body2 = PJ_POOL_ZALLOC_T(tdata->pool, pjsip_msg_body);
-//      NotifyUtils::notify_create_body(tdata->msg->body, tdata->pool, aor, subscription, aor_data->bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE );
-      //tdata->msg->body = body2;
-
-      //pjsip_tx_data_add_ref(tdata);
-      //pjsip_endpt_send_request_stateless(stack_data.endpt, tdata, NULL, NULL);
-      //pjsip_tx_data_dec_ref(tdata);
+      RegStore::AoR::Bindings& bs = bindings;
+      pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, "", aor_data->_notify_cseq, bs,
+                                NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
+      if (status == PJ_SUCCESS)
+      {
+        pjsip_tx_data_add_ref(tdata_notify);
+        status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
+        pjsip_tx_data_dec_ref(tdata_notify);
+      }
     }
-    // LCOV_EXCL_STOP
   }
 
   out_is_initial_registration = is_initial_registration;

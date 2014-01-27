@@ -34,6 +34,11 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+extern "C" {
+#include <pjlib-util.h>
+#include <pjlib.h>
+#include "pjsip-simple/evsub.h"
+}
 
 // Common STL includes.
 #include <cassert>
@@ -53,7 +58,8 @@
 #include "log.h"
 #include "utils.h"
 #include "regstore.h"
-
+#include "notify_utils.h"
+#include "stack.h"
 
 RegStore::RegStore(Store* data_store) :
   _data_store(data_store)
@@ -155,9 +161,32 @@ int RegStore::expire_bindings(AoR* aor_data,
       )
   {
     AoR::Binding* b = i->second;
+    std::string b_id = i->first;
     if (b->_expires <= now)
     {
-      // The binding has expired, so remove it.
+      // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
+      // if there are any subscriptions
+      for (AoR::Subscriptions::iterator j = aor_data->_subscriptions.begin();
+           j != aor_data->_subscriptions.end();
+          )
+      {
+        AoR::Subscription* s = j->second;
+        pjsip_tx_data* tdata_notify = NULL;
+
+        AoR::Bindings bindings;
+        bindings[b_id] = b;
+        AoR::Bindings& bs = bindings;
+        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "", aor_data->_notify_cseq, bs,
+                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::TERMINATED, NotifyUtils::EXPIRED);
+        if (status == PJ_SUCCESS)
+        {
+          pjsip_tx_data_add_ref(tdata_notify);
+          status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
+          pjsip_tx_data_dec_ref(tdata_notify);
+        }
+        ++j;
+      }    
+
       delete i->second;
       aor_data->_bindings.erase(i++);
     }
