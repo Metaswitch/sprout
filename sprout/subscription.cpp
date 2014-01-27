@@ -459,12 +459,10 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
        (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))))
   {
     // SUBSCRIBE request targeted at the home domain or specifically at this node.
-    LOG_INFO("In");
     process_subscription_request(rdata);
     return PJ_TRUE;
   }
 
-  LOG_INFO("NA");
   return PJ_FALSE;
 }
 
