@@ -61,10 +61,6 @@ static RegStore* remote_store;
 static HSSConnection* hss;
 static AnalyticsLogger* analytics;
 
-// IDs 
-//static uint32_t deployment_id;
-//static uint32_t instance_id;
-
 //
 // mod_subscription is the module to receive SIP SUBSCRIBE requests.  This
 // must get invoked before the proxy UA module.
@@ -117,12 +113,11 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          RegStore::AoR* backup_aor,    ///<backup data if no entry in store
                                          RegStore* backup_store,       ///<backup store to read from if no entry in store and no backup data
                                          pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
-                                         RegStore::AoR** aor_data)      ///<tdata to construct a SIP NOTIFY from
+                                         RegStore::AoR** aor_data)     ///<aor_data to write to
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
   pjsip_msg *msg = rdata->msg_info.msg;
-  // If this isn't present, then the default is 3761. 
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   pjsip_fromto_hdr* from = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_FROM, NULL);
   pjsip_fromto_hdr* to = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_TO, NULL);
@@ -177,7 +172,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
 
-    // Now get the contact header. 
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
     if (contact != NULL)
     {
@@ -189,8 +183,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       if ((uri != NULL) &&
           (PJSIP_URI_SCHEME_IS_SIP(uri)))
       {
-        // The binding identifier is based on the +sip.instance parameter if
-        // it is present. If not the contact URI is used instead.
         contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
       } 
 
@@ -199,7 +191,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       if (subscription_id == "")
       {
         // If there's no to tag, generate an unique one
-        // TODO Nothing updates the deployment/instance ID
         subscription_id = std::to_string(Utils::generate_unique_integer(deployment_id, instance_id));
       }
 
@@ -210,7 +201,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       RegStore::AoR::Subscription* subscription = (*aor_data)->get_subscription(subscription_id);
       if (cid != subscription->_cid)
       {
-        // WHy no other cases?
         // Either this is a new subscription or it's an update to an existing subscription.
         subscription->_req_uri = contact_uri;
         subscription->_route_uris.clear();
@@ -283,8 +273,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
     // LCOV_EXCL_STOP
   }
-
-  // TODO Update subscription to reject invalid attempts
 
   // A valid subscription must have the Event header set to "Reg"
   pj_str_t event_name = pj_str("Event");
@@ -443,7 +431,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
   }
 
   // Send the response.
-  // TODO set expires header field in the 200OK to the same value as expires header field in the subscribe
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   pjsip_tx_data_dec_ref(tdata);
@@ -451,12 +438,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Send the Notify 
   if (notify_status == PJ_SUCCESS)
   {
- printf("hhhhhhhhhhhhhh");
     pjsip_tx_data_add_ref(tdata_notify);
     status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
     pjsip_tx_data_dec_ref(tdata_notify);
- printf("aaaaaaaaaaaaaa");
-
   }
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);

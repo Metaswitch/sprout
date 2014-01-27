@@ -57,18 +57,6 @@ namespace NotifyUtils
   enum RegContactState { ACTIVE, TERMINATED };
   enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED, UNREGISTERED };
 
-  pj_status_t create_request_from_subscription(pjsip_tx_data** tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body);
-//  pj_str_t create_contact(pj_str_t aor, std::string id, pj_str_t state, std::string uri, std::string display_name, std::string unknown_param);
-  pj_status_t notify_create_body(pjsip_msg_body* body, 
-                                 pj_pool_t* pool, 
-                                 std::string& aor, 
-                                 RegStore::AoR::Subscription* subscription, 
-                                 const RegStore::AoR::Bindings& bindings, 
-                                 DocState doc_state,
-                                 RegContactState reg_state,
-                                 RegContactState contact_state, 
-                                 ContactEvent contact_event);
-
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             RegStore::AoR::Subscription* subscription,
                             std::string aor, 

@@ -231,7 +231,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
                               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                             "  <InitialFilterCriteria>\n"
+                              "  <InitialFilterCriteria>\n"
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
@@ -239,6 +239,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   int now = time(NULL);
   RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
 
+  // Add a subscription
   s1 = aor_data1->get_subscription("1234");
   s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
   s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");

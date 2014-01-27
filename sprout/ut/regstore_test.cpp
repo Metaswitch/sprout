@@ -310,8 +310,7 @@ TEST_F(RegStoreTest, CopyTests)
   delete datastore;
 }
 
-// TODO Not currently running, as difficulties with init
-/* TEST_F(RegStoreTest, ExpiryTests)
+TEST_F(RegStoreTest, ExpiryTests)
 {
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
@@ -410,6 +409,6 @@ TEST_F(RegStoreTest, CopyTests)
 
   delete store;
   delete datastore;
-}*/
+}
 
 

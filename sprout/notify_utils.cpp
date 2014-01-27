@@ -181,8 +181,6 @@ pj_xml_node* notify_create_xml(pj_pool_t *pool,
   reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str); 
 
   // Create the contact nodes
-  int now = time(NULL);
-
   // For each binding, add a contact node to the registration node
   for (RegStore::AoR::Bindings::const_iterator i = bindings.begin();
        i != bindings.end();
@@ -260,15 +258,15 @@ static void* xml_clone_data(pj_pool_t *pool, const void *data, unsigned len)
 }
 
 // Create the body of a SIP NOTIFY
-pj_status_t NotifyUtils::notify_create_body(pjsip_msg_body* body,
-                                            pj_pool_t *pool,
-                                            std::string& aor,
-                                            RegStore::AoR::Subscription* subscription,
-                                            const RegStore::AoR::Bindings& bindings,
-                                            NotifyUtils::DocState doc_state,
-                                            NotifyUtils::RegContactState reg_state,
-                                            NotifyUtils::RegContactState contact_state,
-                                            NotifyUtils::ContactEvent contact_event)
+pj_status_t notify_create_body(pjsip_msg_body* body,
+                               pj_pool_t *pool,
+                               std::string& aor,
+                               RegStore::AoR::Subscription* subscription,
+                               const RegStore::AoR::Bindings& bindings,
+                               NotifyUtils::DocState doc_state,
+                               NotifyUtils::RegContactState reg_state,
+                               NotifyUtils::RegContactState contact_state,
+                               NotifyUtils::ContactEvent contact_event)
 {
   LOG_DEBUG("Create body of a SIP NOTIFY");
 
@@ -292,7 +290,7 @@ pj_status_t NotifyUtils::notify_create_body(pjsip_msg_body* body,
   return PJ_SUCCESS;
 }
 
-pj_status_t NotifyUtils::create_request_from_subscription(pjsip_tx_data** p_tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body)
+pj_status_t create_request_from_subscription(pjsip_tx_data** p_tdata, RegStore::AoR::Subscription* subscription, int cseq, pj_str_t* body)
 {
   pj_str_t from;
   pj_str_t to;
@@ -328,7 +326,7 @@ pj_status_t NotifyUtils::create_notify(pjsip_tx_data** tdata_notify,
                                        NotifyUtils::RegContactState contact_state,
                                        NotifyUtils::ContactEvent contact_event)
 {
-  pj_status_t status = NotifyUtils::create_request_from_subscription(tdata_notify, subscription, cseq, NULL);
+  pj_status_t status = create_request_from_subscription(tdata_notify, subscription, cseq, NULL);
   if (status == PJ_SUCCESS)
   {
     // populate to header
@@ -346,7 +344,7 @@ pj_status_t NotifyUtils::create_notify(pjsip_tx_data** tdata_notify,
     pj_list_push_back( &(*tdata_notify)->msg->hdr, from_hdr);
 
     // populate route headers
-/*    for (std::list<std::string>::const_iterator i = subscription->_route_uris.begin();
+    for (std::list<std::string>::const_iterator i = subscription->_route_uris.begin();
          i != subscription->_route_uris.end();
          ++i)
     {
@@ -355,10 +353,11 @@ pj_status_t NotifyUtils::create_notify(pjsip_tx_data** tdata_notify,
       route_hdr->name_addr.uri = PJUtils::uri_from_string(*i, (*tdata_notify)->pool);    
       pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
     }
-  */  // complete body
+  
+    // complete body
     pjsip_msg_body *body2;
     body2 = PJ_POOL_ZALLOC_T((*tdata_notify)->pool, pjsip_msg_body);
-    status = NotifyUtils::notify_create_body(body2, (*tdata_notify)->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
+    status = notify_create_body(body2, (*tdata_notify)->pool, aor, subscription, bindings, NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
     (*tdata_notify)->msg->body = body2;
   }
   else
