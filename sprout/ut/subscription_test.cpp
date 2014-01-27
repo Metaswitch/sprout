@@ -45,6 +45,7 @@
 #include "subscription.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -59,6 +60,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
+    cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
