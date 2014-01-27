@@ -87,8 +87,11 @@ get_settings()
         alias_list=""
         . /etc/clearwater/config
 
-        # Set up a default cluster_settings file if it does not exist.
-        [ -f /etc/clearwater/cluster_settings ] || echo "servers=$local_ip:11211" > /etc/clearwater/cluster_settings
+        # Set up a default cluster_settings file if it does not exist.  The local
+        # IP address needs to be surrounded by square brackets if it is IPv6.
+        cluster_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+
+        [ -f /etc/clearwater/cluster_settings ] || echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
 
         # If the remote cluster settings file exists then start sprout with geo-redundancy enabled
         [ -f /etc/clearwater/remote_cluster_settings ] && remote_memstore_arg="--remote-memstore /etc/clearwater/remote_cluster_settings"
