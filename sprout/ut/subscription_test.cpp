@@ -243,7 +243,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
 
   // Add the AoR record to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
   delete aor_data1;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);

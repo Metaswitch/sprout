@@ -312,6 +312,10 @@ TEST_F(RegStoreTest, CopyTests)
 
 TEST_F(RegStoreTest, ExpiryTests)
 {
+  // The expiry tests regquire pjsip, so initialise for this test
+  init_pjsip_logging(99, false, "");
+  init_pjsip();
+
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
   RegStore::AoR::Binding* b2;
@@ -409,6 +413,7 @@ TEST_F(RegStoreTest, ExpiryTests)
 
   delete store;
   delete datastore;
+  term_pjsip();
 }
 
 
