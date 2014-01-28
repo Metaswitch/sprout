@@ -58,10 +58,12 @@ using namespace std;
 class HttpConnectionTest : public BaseTest
 {
   LoadMonitor _lm;
+  LastValueCache _lvc;
   HttpConnection _http;
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
-    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", &_lm)
+    _lvc(num_known_stats, known_statnames, 10), // Short timeout to avoid shutdown delays.
+    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", &_lm, &_lvc)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";

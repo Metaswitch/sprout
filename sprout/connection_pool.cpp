@@ -56,7 +56,8 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                int recycle_period,
                                pj_pool_t* pool,
                                pjsip_endpoint* endpt,
-                               pjsip_tpfactory* tp_factory) :
+                               pjsip_tpfactory* tp_factory,
+                               LastValueCache* lvc) :
   _target(*target),
   _num_connections(num_connections),
   _recycle_period(recycle_period),
@@ -67,7 +68,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
-  _statistic("connected_sprouts")
+  _statistic("connected_sprouts", lvc)
 {
   LOG_STATUS("Creating connection pool to %.*s:%d", _target.host.slen, _target.host.ptr, _target.port);
   LOG_STATUS("  connections = %d, recycle time = %d +/- %d seconds", _num_connections, _recycle_period, _recycle_margin);

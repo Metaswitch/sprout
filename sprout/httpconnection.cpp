@@ -77,11 +77,12 @@ HttpConnection::HttpConnection(const std::string& server,      //< Server to sen
                                bool assert_user,               //< Assert user in header?
                                int sas_event_base,             //< SAS events: sas_event_base - will have  SASEvent::HTTP_REQ / RSP / ERR added to it.
                                const std::string& stat_name,   //< Name of statistic to report connection info to.
-                               LoadMonitor* load_monitor) :    //< Load Monitor.
+                               LoadMonitor* load_monitor,      //< Load Monitor.
+                               LastValueCache* lvc) :          //< Statistics last value cache.
   _server(server),
   _assert_user(assert_user),
   _sas_event_base(sas_event_base),
-  _statistic(stat_name)
+  _statistic(stat_name, lvc)
 {
   pthread_key_create(&_thread_local, cleanup_curl);
   pthread_mutex_init(&_lock, NULL);
@@ -218,7 +219,7 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
   unsigned long now_ms = tp.tv_sec * 1000 + (tp.tv_nsec / 1000000);
   bool recycle_conn = entry->is_connection_expired(now_ms);
   bool first_error_503 = false;
-  
+
   // Try to get a decent connection. We may need to retry, but only
   // once - cURL itself does most of the retrying for us.
   for (int attempt = 0; attempt < 2; attempt++)
@@ -293,8 +294,8 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : retrying",
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
         recycle_conn = true;
-        
-        // Record that the first error was a 503 error. 
+
+        // Record that the first error was a 503 error.
         if (error_is_503)
         {
           first_error_503 = true;
@@ -306,8 +307,8 @@ HTTPCode HttpConnection::get(const std::string& path,       //< Absolute path to
         LOG_ERROR("GET %s failed at server %s : %s (%d %d) : fatal",
                   url.c_str(), remote_ip, curl_easy_strerror(rc), rc, http_rc);
 
-        // Check whether both attempts returned 503 errors, or the error was 
-        // a 502 (where the HSS is overloaded)  and raise a penalty if so. 
+        // Check whether both attempts returned 503 errors, or the error was
+        // a 502 (where the HSS is overloaded)  and raise a penalty if so.
         if ((error_is_503 && first_error_503) ||
             ((rc == CURLE_HTTP_RETURNED_ERROR) && (http_rc == 502)))
         {

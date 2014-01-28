@@ -60,7 +60,7 @@ class XdmConnectionTest : public BaseTest
   XDMConnection _xdm;
 
   XdmConnectionTest() :
-    _xdm("cyrus", NULL)
+    _xdm("cyrus", NULL, NULL)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";

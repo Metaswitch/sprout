@@ -43,6 +43,7 @@
 #include "gtest/gtest.h"
 
 #include "fakelogger.hpp"
+#include "stack.h"
 
 /// Fixture for test.
 class BaseTest : public ::testing::Test
