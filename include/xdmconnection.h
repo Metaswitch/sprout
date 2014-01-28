@@ -52,8 +52,8 @@ class XDMConnection
 public:
   XDMConnection(const std::string& server,
                 LoadMonitor *load_monitor,
-                LastValueCache* lvc);
-  XDMConnection(HttpConnection* http, LastValueCache* lvc);
+                LastValueCache* stats_aggregator);
+  XDMConnection(HttpConnection* http, LastValueCache* stats_aggregator);
   virtual ~XDMConnection();
 
   bool get_simservs(const std::string& user, std::string& xml_data, const std::string& password, SAS::TrailId trail);

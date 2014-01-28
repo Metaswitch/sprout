@@ -52,17 +52,18 @@
 
 HSSConnection::HSSConnection(const std::string& server,
                              LoadMonitor *load_monitor,
-                             LastValueCache *lvc) :
+                             LastValueCache *stats_aggregator) :
   _http(new HttpConnection(server,
                            false,
                            SASEvent::TX_HSS_BASE,
                            "connected_homesteads",
-                           load_monitor, lvc)),
-  _latency_stat("hss_latency_us", lvc),
-  _digest_latency_stat("hss_digest_latency_us", lvc),
-  _subscription_latency_stat("hss_subscription_latency_us", lvc),
-  _user_auth_latency_stat("hss_user_auth_latency_us", lvc),
-  _location_latency_stat("hss_location_latency_us", lvc)
+                           load_monitor,
+                           stats_aggregator)),
+  _latency_stat("hss_latency_us", stats_aggregator),
+  _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
+  _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
+  _user_auth_latency_stat("hss_user_auth_latency_us", stats_aggregator),
+  _location_latency_stat("hss_location_latency_us", stats_aggregator)
 {
 }
 
