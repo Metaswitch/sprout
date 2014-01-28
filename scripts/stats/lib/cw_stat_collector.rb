@@ -96,7 +96,7 @@ class CWStatCollector
   # does not return OK), the block is not evaluated / nothing is
   # written to STDOUT.
   def run &blk
-    begin
+    begin 
       Timeout::timeout(5) do
         get_stat &blk
       end
@@ -248,7 +248,7 @@ hwm:#{msg[4]}
   end
 end
 
-# Register the sprout/bono stats.
+# Register the statistics we currently expose
 CWStatCollector.register_renderer("client_count", SimpleStatRenderer)
 CWStatCollector.register_renderer("connected_homesteads", ConnectedIpsRenderer)
 CWStatCollector.register_renderer("connected_homers", ConnectedIpsRenderer)
@@ -265,18 +265,13 @@ CWStatCollector.register_renderer("incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_renderer("rejected_overload", SimpleStatRenderer)
 CWStatCollector.register_renderer("queue_size", LatencyStatsRenderer)
 
-# Register for homestead stats.
-CWStatCollector.register_renderer("H_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_digest_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_subscription_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_cache_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_incoming_requests", SimpleStatRenderer)
-CWStatCollector.register_renderer("H_rejected_overload", SimpleStatRenderer)
-
-# Listen for the homer/homestead-prov stats. This currently only listens for
-# stats for the first process
-CWStatCollector.register_renderer("P_latency_us_0", LatencyCountStatsRenderer)
-CWStatCollector.register_renderer("P_incoming_requests_0", SimpleStatRenderer)
-CWStatCollector.register_renderer("P_rejected_overload_0", SimpleStatRenderer)
-CWStatCollector.register_renderer("P_queue_size_0", LatencyCountStatsRenderer)
+# Listen for the homer/homestead stats. This currently only listens for stats
+# for the first process
+CWStatCollector.register_renderer("H_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_incoming_requests_0", SimpleStatRenderer)
+CWStatCollector.register_renderer("H_rejected_overload_0", SimpleStatRenderer)
+CWStatCollector.register_renderer("H_queue_size_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_cache_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_digest_latency_us_0", LatencyCountStatsRenderer)
+CWStatCollector.register_renderer("H_hss_subscription_latency_us_0", LatencyCountStatsRenderer)
