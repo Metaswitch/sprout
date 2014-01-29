@@ -40,7 +40,6 @@
 // Compile: g++ -o cw_stat cw_stat.cpp -lzmq
 
 #include <string>
-#include <sstream>
 #include <vector>
 #include <string.h>
 #include <stdint.h>
@@ -51,85 +50,76 @@
 // Return true on success, false on failure.
 bool get_msgs(char* host, char* stat, std::vector<std::string>& msgs)
 {
-  int zmq_ports[] = {6666, 6667};
-
-  for (int i = 0; i < (sizeof(zmq_ports) / sizeof(zmq_ports[0])); ++i)
+  // Create the context.
+  void* ctx = zmq_ctx_new();
+  if (ctx == NULL)
   {
-    int port = zmq_ports[i];
-
-    // Create the context.
-    void* ctx = zmq_ctx_new();
-    if (ctx == NULL)
-    {
-      perror("zmq_ctx_new");
-      return false;
-    }
-
-    // Create the socket and connect it to the host.
-    void* sck = zmq_socket(ctx, ZMQ_SUB);
-    if (sck == NULL)
-    {
-      perror("zmq_socket");
-      return false;
-    }
-
-    std::ostringstream oss;
-    oss << "tcp://" << host << ":" << port;
-    if (zmq_connect(sck, oss.str().c_str()) != 0)
-    {
-      perror("zmq_connect");
-      return false;
-    }
-
-    // Subscribe to the specified statistic.
-    if (zmq_setsockopt(sck, ZMQ_SUBSCRIBE, stat, strlen(stat)) != 0)
-    {
-      perror("zmq_setsockopt");
-      return false;
-    }
-
-    // Spin round until we've got all the messages in this block.
-    int64_t more = 0;
-    size_t more_sz = sizeof(more);
-    do
-    {
-      zmq_msg_t msg;
-      if (zmq_msg_init(&msg) != 0)
-      {
-        perror("zmq_msg_init");
-        return false;
-      }
-      if (zmq_msg_recv(&msg, sck, 0) == -1)
-      {
-        perror("zmq_msg_recv");
-        return false;
-      }
-      msgs.push_back(std::string((char*)zmq_msg_data(&msg), zmq_msg_size(&msg)));
-      if (zmq_getsockopt(sck, ZMQ_RCVMORE, &more, &more_sz) != 0)
-      {
-        perror("zmq_getsockopt");
-        return false;
-      }
-      zmq_msg_close(&msg);
-    }
-    while (more);
-
-    // Close the socket.
-    if (zmq_close(sck) != 0)
-    {
-      perror("zmq_close");
-      return false;
-    }
-    sck = NULL;
-
-    // Destroy the context.
-    if (zmq_ctx_destroy(ctx) != 0)
-    {
-      perror("zmq_ctx_destroy");
-      return false;
-    }
-    ctx = NULL;
+    perror("zmq_ctx_new");
+    return false;
   }
+
+  // Create the socket and connect it to the host.
+  void* sck = zmq_socket(ctx, ZMQ_SUB);
+  if (sck == NULL)
+  {
+    perror("zmq_socket");
+    return false;
+  }
+  std::string ep = std::string("tcp://") + host + ":6666";
+  if (zmq_connect(sck, ep.c_str()) != 0)
+  {
+    perror("zmq_connect");
+    return false;
+  }
+
+  // Subscribe to the specified statistic.
+  if (zmq_setsockopt(sck, ZMQ_SUBSCRIBE, stat, strlen(stat)) != 0)
+  {
+    perror("zmq_setsockopt");
+    return false;
+  }
+
+  // Spin round until we've got all the messages in this block.
+  int64_t more = 0;
+  size_t more_sz = sizeof(more);
+  do
+  {
+    zmq_msg_t msg;
+    if (zmq_msg_init(&msg) != 0)
+    {
+      perror("zmq_msg_init");
+      return false;
+    }
+    if (zmq_msg_recv(&msg, sck, 0) == -1)
+    {
+      perror("zmq_msg_recv");
+      return false;
+    }
+    msgs.push_back(std::string((char*)zmq_msg_data(&msg), zmq_msg_size(&msg)));
+    if (zmq_getsockopt(sck, ZMQ_RCVMORE, &more, &more_sz) != 0)
+    {
+      perror("zmq_getsockopt");
+      return false;
+    }
+    zmq_msg_close(&msg);
+  }
+  while (more);
+
+  // Close the socket.
+  if (zmq_close(sck) != 0)
+  {
+    perror("zmq_close");
+    return false;
+  }
+  sck = NULL;
+
+  // Destroy the context.
+  if (zmq_ctx_destroy(ctx) != 0)
+  {
+    perror("zmq_ctx_destroy");
+    return false;
+  }
+  ctx = NULL;
 
   return true;
 }
