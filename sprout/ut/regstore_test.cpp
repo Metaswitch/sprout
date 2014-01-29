@@ -96,7 +96,7 @@ TEST_F(RegStoreTest, BindingTests)
   // Add the AoR record to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
@@ -113,7 +113,8 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_cseq = 17039;
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
+
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
@@ -128,7 +129,8 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_cseq = 17040;
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
+
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(1u, aor_data1->bindings().size());
   b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
@@ -137,7 +139,7 @@ TEST_F(RegStoreTest, BindingTests)
   EXPECT_EQ(17040, b1->_cseq);
   EXPECT_EQ(now + 300, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Remove a binding.
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
@@ -146,13 +148,14 @@ TEST_F(RegStoreTest, BindingTests)
   EXPECT_EQ(0u, aor_data1->bindings().size());
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
+  
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
-  delete aor_data1;
 
-  delete store;
-  delete datastore;
+  delete aor_data1; aor_data1 = NULL;
+  delete store; store = NULL;
+  delete datastore; datastore = NULL;
 }
 
 
@@ -187,7 +190,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   // Add the AoR record to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
@@ -217,7 +220,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   // Write the record back to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Read the record back in and check the subscription is still in place.
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
@@ -239,10 +242,9 @@ TEST_F(RegStoreTest, SubscriptionTests)
   aor_data1->remove_subscription(std::string("1234"));
   EXPECT_EQ(0u, aor_data1->subscriptions().size());
 
-  delete aor_data1;
-
-  delete store;
-  delete datastore;
+  delete aor_data1; aor_data1 = NULL;
+  delete store; store = NULL;
+  delete datastore; datastore = NULL;
 }
 
 
@@ -296,23 +298,23 @@ TEST_F(RegStoreTest, CopyTests)
   RegStore::AoR* copy = new RegStore::AoR(*aor_data1);
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
-  delete copy;
+  delete copy; copy = NULL;
 
   // Test AoR assignment.
   copy = new RegStore::AoR();
   *copy = *aor_data1;
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());
-  delete copy;
-  delete aor_data1;
+  delete copy; copy = NULL;
+  delete aor_data1; aor_data1 = NULL;
 
-  delete store;
-  delete datastore;
+  delete store; store = NULL;
+  delete datastore; datastore = NULL;
 }
 
 TEST_F(RegStoreTest, ExpiryTests)
 {
-  // The expiry tests regquire pjsip, so initialise for this test
+  // The expiry tests require pjsip, so initialise for this test
   init_pjsip_logging(99, false, "");
   init_pjsip();
 
@@ -383,7 +385,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   // Write the record to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
   EXPECT_TRUE(rc);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by 101 seconds and read the record back from the store.
   // The first binding should have expired.
@@ -391,7 +393,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(2u, aor_data1->subscriptions().size());
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by another 50 seconds and read the record back from the
   // store.  The first subscription should have expired.
@@ -399,7 +401,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(1u, aor_data1->subscriptions().size());
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by another 100 seconds and read the record back.
   // The whole record should now be empty - even though the second subscription
@@ -409,10 +411,10 @@ TEST_F(RegStoreTest, ExpiryTests)
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
   EXPECT_EQ(0u, aor_data1->subscriptions().size());
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
-  delete store;
-  delete datastore;
+  delete store; store = NULL;
+  delete datastore; datastore = NULL;
   term_pjsip();
 }
 

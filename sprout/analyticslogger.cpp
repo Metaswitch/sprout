@@ -86,7 +86,7 @@ void AnalyticsLogger::subscription(const std::string& aor,
 {
   char buf[BUFFER_SIZE];
   snprintf(buf, sizeof(buf),
-           "SUBSCRIPTION: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
+           "Subscription: USER_URI=%s SUBSCRIPTION_ID=%s CONTACT_URI=%s EXPIRES=%d\n",
            aor.c_str(),
            subscription_id.c_str(),
            contact.c_str(),

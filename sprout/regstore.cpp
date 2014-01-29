@@ -164,27 +164,14 @@ int RegStore::expire_bindings(AoR* aor_data,
     std::string b_id = i->first;
     if (b->_expires <= now)
     {
+      aor_data->_notify_cseq++;
       // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
       // if there are any subscriptions
       for (AoR::Subscriptions::iterator j = aor_data->_subscriptions.begin();
            j != aor_data->_subscriptions.end();
-          )
-      {
-        AoR::Subscription* s = j->second;
-        pjsip_tx_data* tdata_notify = NULL;
-
-        AoR::Bindings bindings;
-        bindings[b_id] = b;
-        AoR::Bindings& bs = bindings;
-        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "", aor_data->_notify_cseq, bs,
-                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::TERMINATED, NotifyUtils::EXPIRED);
-        if (status == PJ_SUCCESS)
-        {
-          pjsip_tx_data_add_ref(tdata_notify);
-          status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
-          pjsip_tx_data_dec_ref(tdata_notify);
-        }
-        ++j;
+          ++j)
+      {  
+        send_notify(j->second, aor_data->_notify_cseq, b, b_id);
       }    
 
       delete i->second;
@@ -396,7 +383,9 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
 
 /// Default constructor.
 RegStore::AoR::AoR() :
+  _notify_cseq(1),
   _bindings(),
+  _subscriptions(),
   _cas(0)
 {
 }
@@ -412,24 +401,8 @@ RegStore::AoR::~AoR()
 /// Copy constructor.
 RegStore::AoR::AoR(const AoR& other)
 {
-  for (Bindings::const_iterator i = other._bindings.begin();
-       i != other._bindings.end();
-       ++i)
-  {
-    Binding* bb = new Binding(*i->second);
-    _bindings.insert(std::make_pair(i->first, bb));
-  }
-  for (Subscriptions::const_iterator i = other._subscriptions.begin();
-       i != other._subscriptions.end();
-       ++i)
-  {
-    Subscription* ss = new Subscription(*i->second);
-    _subscriptions.insert(std::make_pair(i->first, ss));
-  }
-  _notify_cseq = other._notify_cseq;
-  _cas = other._cas;
+  common_constructor(other);
 }
-
 
 // Make sure assignment is deep!
 RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
@@ -437,26 +410,32 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
   if (this != &other)
   {
     clear();
-
-    for (Bindings::const_iterator i = other._bindings.begin();
-         i != other._bindings.end();
-         ++i)
-    {
-      Binding* bb = new Binding(*i->second);
-      _bindings.insert(std::make_pair(i->first, bb));
-    }
-    for (Subscriptions::const_iterator i = other._subscriptions.begin();
-         i != other._subscriptions.end();
-         ++i)
-    {
-      Subscription* ss = new Subscription(*i->second);
-      _subscriptions.insert(std::make_pair(i->first, ss));
-    }
-    _notify_cseq = other._notify_cseq;
-    _cas = other._cas;
+    common_constructor(other);
   }
 
   return *this;
+}
+
+void RegStore::AoR::common_constructor(const AoR& other)
+{
+  for (Bindings::const_iterator i = other._bindings.begin();
+       i != other._bindings.end();
+       ++i)
+  {
+    Binding* bb = new Binding(*i->second);
+    _bindings.insert(std::make_pair(i->first, bb));
+  }
+
+  for (Subscriptions::const_iterator i = other._subscriptions.begin();
+       i != other._subscriptions.end();
+       ++i)
+  {
+    Subscription* ss = new Subscription(*i->second);
+    _subscriptions.insert(std::make_pair(i->first, ss));
+  }
+
+  _notify_cseq = other._notify_cseq;
+  _cas = other._cas;
 }
 
 
@@ -470,6 +449,7 @@ void RegStore::AoR::clear()
     delete i->second;
   }
   _bindings.clear();
+
   for (Subscriptions::iterator i = _subscriptions.begin();
        i != _subscriptions.end();
        ++i)
@@ -545,3 +525,22 @@ void RegStore::AoR::remove_subscription(const std::string& to_tag)
   }
 }
 
+void RegStore::send_notify(AoR::Subscription* s, int cseq, 
+                                AoR::Binding* b, std::string b_id)
+{
+  pjsip_tx_data* tdata_notify = NULL;
+  AoR::Bindings bindings;
+  bindings[b_id] = b;
+  AoR::Bindings& bs = bindings;
+  pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "", cseq, bs,
+                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, 
+                                  NotifyUtils::TERMINATED, NotifyUtils::EXPIRED);
+
+  if (status == PJ_SUCCESS)
+  {
+    pjsip_tx_data_add_ref(tdata_notify);
+    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, 
+                                                                    NULL, NULL);
+    pjsip_tx_data_dec_ref(tdata_notify);
+  }
+}

@@ -136,6 +136,9 @@ public:
     // Make sure assignment is deep!
     AoR& operator= (AoR const& other);
 
+    // Common code between copy and assignment
+    void common_constructor(const AoR& other);
+
     /// Clear all the bindings and subscriptions from this object.
     void clear();
 
@@ -217,6 +220,9 @@ private:
   std::string serialize_aor(AoR* aor_data);
 
   AoR* deserialize_aor(const std::string& s);
+
+  // Send a SIP NOTIFY
+  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
 
   Store* _data_store;
 };

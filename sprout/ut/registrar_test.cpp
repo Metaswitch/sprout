@@ -235,36 +235,13 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
                               "  </InitialFilterCriteria>\n"
                               "</ServiceProfile></IMSSubscription>");
 
-  RegStore::AoR::Subscription* s1;
-  int now = time(NULL);
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
-
-  // Add a subscription
-  s1 = aor_data1->get_subscription("1234");
-  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
-  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_from_tag = std::string("4321");
-  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
-  s1->_to_tag = std::string("1234");
-  s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  s1->_expires = now + 300;
-
-  // Set the NOTIFY CSeq value to 1.
-  aor_data1->_notify_cseq = 1;
-
-  // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
-  EXPECT_TRUE(rc);
-  delete aor_data1;
-
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
   msg._contact_params = ";+sip.ice;reg-id=1";
   inject_msg(msg.get());
-  ASSERT_EQ(2, txdata_count());
-  pjsip_msg* out = pop_txdata()->msg;
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
   out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
@@ -1041,3 +1018,59 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   free_txdata();
 }
+
+/// Simple correct example with a subscription
+TEST_F(RegistrarTest, RegistrationWithSubscription)
+{
+  // We have a private ID in this test, so set up the expect response to the query.
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  RegStore::AoR::Subscription* s1;
+  int now = time(NULL);
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+
+  // Add a subscription
+  s1 = aor_data1->get_subscription("1234");
+  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Set the NOTIFY CSeq value to 1.
+  aor_data1->_notify_cseq = 1;
+
+  // Write the record back to the store.
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+

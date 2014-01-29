@@ -57,7 +57,8 @@ TARGET_SOURCES := logger.cpp \
                   scscfselector.cpp	\
                   signalhandler.cpp \
                   subscription.cpp \
-                  notify_utils.cpp  
+                  notify_utils.cpp \
+                  unique.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 

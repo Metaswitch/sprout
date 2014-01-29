@@ -87,7 +87,7 @@ pjsip_module mod_registrar =
   NULL, NULL,                         // prev, next
   pj_str("mod-registrar"),            // Name
   -1,                                 // Id
-  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+2,// Priority
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,// Priority
   NULL,                               // load()
   NULL,                               // start()
   NULL,                               // stop()
@@ -198,6 +198,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
   int cseq = rdata->msg_info.cseq->cseq;
 
+  NotifyUtils::ContactEvent contact_event;
+
   // Find the expire headers in the message.
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
@@ -213,6 +215,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   {
     // delete NULL is safe, so we can do this on every iteration.
     delete aor_data;
+
+    contact_event = NotifyUtils::CREATED;
 
     // Find the current bindings for the AoR.
     aor_data = primary_store->get_aor_data(aor);
@@ -253,6 +257,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     }
 
     is_initial_registration = is_initial_registration && aor_data->bindings().empty();
+    if (!is_initial_registration)
+    {
+      contact_event = NotifyUtils::REFRESHED;
+    }
 
     // Now loop through all the contacts.  If there are multiple contacts in
     // the contact header in the SIP message, pjsip parses them to separate
@@ -262,9 +270,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     {
       if (contact->star)
       {
+        //TODO
         // Wildcard contact, which can only be used to clear all bindings for
         // the AoR.
         aor_data->clear();
+        contact_event = NotifyUtils::DEACTIVATED;
         break;
       }
 
@@ -370,11 +380,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     if (subscription->_expires > now)
     {
       pjsip_tx_data* tdata_notify;
-
       RegStore::AoR::Bindings& bs = bindings;
-      // TODO Pass in an array of events to match up with bindings
+      
       pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, "", aor_data->_notify_cseq, bs,
-                                NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
+                                NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
       if (status == PJ_SUCCESS)
       {
         pjsip_tx_data_add_ref(tdata_notify);

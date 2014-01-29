@@ -87,7 +87,7 @@ public:
   {
     destroy_subscription();
     delete _hss_connection; _hss_connection = NULL;
-    delete _analytics;
+    delete _analytics; _analytics = NULL;
     delete _remote_store; _remote_store = NULL;
     delete _store; _store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
@@ -244,7 +244,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
 
   // Add the AoR record to the store.
   _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
-  delete aor_data1;
+  delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 
@@ -381,7 +381,6 @@ void SubscriptionTest::check_standard_OK()
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   out = pop_txdata()->msg;
-  EXPECT_EQ(6, out->line.status.code);
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   free_txdata();
 }
