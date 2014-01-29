@@ -40,6 +40,7 @@
 // Compile: g++ -o cw_stat cw_stat.cpp -lzmq
 
 #include <string>
+#include <sstream>
 #include <vector>
 #include <string.h>
 #include <stdint.h>
@@ -48,7 +49,7 @@
 // Gets a block of messages from the specified host, for the specified
 // statistic.
 // Return true on success, false on failure.
-bool get_msgs(char* host, char* stat, std::vector<std::string>& msgs)
+bool get_msgs(char* host, int port, char* stat, std::vector<std::string>& msgs)
 {
   // Create the context.
   void* ctx = zmq_ctx_new();
@@ -65,8 +66,10 @@ bool get_msgs(char* host, char* stat, std::vector<std::string>& msgs)
     perror("zmq_socket");
     return false;
   }
-  std::string ep = std::string("tcp://") + host + ":6666";
-  if (zmq_connect(sck, ep.c_str()) != 0)
+
+  std::ostringstream oss;
+  oss << "tcp://" << host << ":" << port;
+  if (zmq_connect(sck, oss.str().c_str()) != 0)
   {
     perror("zmq_connect");
     return false;
@@ -211,9 +214,22 @@ int main(int argc, char** argv)
     return 1;
   }
 
+  // Work out the port from the stat name (homestead-prov/homer stats use port
+  // 6667 to avoid port clashes when homestead-prov is co-located with
+  // homestead).
+  int port;
+  if (strncmp(argv[2], "P_", 2) == 0)
+  {
+    port = 6667;
+  }
+  else
+  {
+    port = 6666;
+  }
+
   // Get messages from the server.
   std::vector<std::string> msgs;
-  if (!get_msgs(argv[1], argv[2], msgs))
+  if (!get_msgs(argv[1], port, argv[2], msgs))
   {
     return 2;
   }
@@ -260,11 +276,14 @@ int main(int argc, char** argv)
              (msgs[0] == "H_cache_latency_us") ||
              (msgs[0] == "H_hss_latency_us") ||
              (msgs[0] == "H_hss_digest_latency_us") ||
-             (msgs[0] == "H_hss_subscription_latency_us") ||
-             (msgs[0] == "P_queue_size_0") ||
-             (msgs[0] == "P_latency_us_0"))
+             (msgs[0] == "H_hss_subscription_latency_us"))
     {
       render_latency_us(msgs);
+    }
+    else if ((msgs[0] == "P_queue_size_0") ||
+             (msgs[0] == "P_latency_us_0"))
+    {
+      render_count_latency_us(msgs);
     }
     else
     {
