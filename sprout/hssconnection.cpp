@@ -50,17 +50,20 @@
 #include "accumulator.h"
 
 
-HSSConnection::HSSConnection(const std::string& server, LoadMonitor *load_monitor) :
+HSSConnection::HSSConnection(const std::string& server,
+                             LoadMonitor *load_monitor,
+                             LastValueCache *stats_aggregator) :
   _http(new HttpConnection(server,
                            false,
                            SASEvent::TX_HSS_BASE,
                            "connected_homesteads",
-                           load_monitor)),
-  _latency_stat("hss_latency_us"),
-  _digest_latency_stat("hss_digest_latency_us"),
-  _subscription_latency_stat("hss_subscription_latency_us"),
-  _user_auth_latency_stat("hss_user_auth_latency_us"),
-  _location_latency_stat("hss_location_latency_us")
+                           load_monitor,
+                           stats_aggregator)),
+  _latency_stat("hss_latency_us", stats_aggregator),
+  _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
+  _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
+  _user_auth_latency_stat("hss_user_auth_latency_us", stats_aggregator),
+  _location_latency_stat("hss_location_latency_us", stats_aggregator)
 {
 }
 
@@ -90,8 +93,8 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 
   Json::Value* rc = get_json_object(path, trail);
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _digest_latency_stat.accumulate(latency_us);
@@ -133,8 +136,8 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
 
   Json::Value* av = get_json_object(path, trail);
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _digest_latency_stat.accumulate(latency_us);
@@ -235,8 +238,8 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   rapidxml::xml_node<>* sp = NULL;
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _subscription_latency_stat.accumulate(latency_us);
@@ -315,8 +318,8 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
 
   Json::Value* rc = get_json_object(path, trail);
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _user_auth_latency_stat.accumulate(latency_us);
@@ -350,8 +353,8 @@ Json::Value* HSSConnection::get_location_data(const std::string& public_user_ide
 
   Json::Value* rc = get_json_object(path, trail);
 
-  unsigned long latency_us;
-  if (stopWatch.stop(latency_us))
+  unsigned long latency_us = 0;
+  if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _location_latency_stat.accumulate(latency_us);

@@ -977,7 +977,9 @@ int main(int argc, char *argv[])
   {
     // Create a connection to the HSS.
     LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
-    hss_connection = new HSSConnection(opt.hss_server, load_monitor);
+    hss_connection = new HSSConnection(opt.hss_server,
+                                       load_monitor,
+                                       stack_data.stats_aggregator);
   }
 
   if (opt.scscf_enabled)
@@ -1015,7 +1017,9 @@ int main(int argc, char *argv[])
     {
       // Create a connection to the XDMS.
       LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-      xdm_connection = new XDMConnection(opt.xdm_server, load_monitor);
+      xdm_connection = new XDMConnection(opt.xdm_server,
+                                         load_monitor,
+                                         stack_data.stats_aggregator);
     }
 
     if (xdm_connection != NULL)

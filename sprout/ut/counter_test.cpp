@@ -51,7 +51,9 @@ class StatisticCounterTest : public BaseTest
   StatisticCounter _counter;
 
   StatisticCounterTest() :
-    _counter("incoming_requests", 999999999999) // make the period large to avoid intermittent failures due to timing
+    _counter("incoming_requests",
+             stack_data.stats_aggregator,
+             999999999999) // make the period large to avoid intermittent failures due to timing
   {
   }
 

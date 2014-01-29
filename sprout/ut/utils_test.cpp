@@ -39,12 +39,20 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
+#include <time.h>
+#include <dlfcn.h>
 
 #include "utils.h"
 #include "sas.h"
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
+
+using ::testing::Matcher;
+using ::testing::AllOf;
+using ::testing::Gt;
+using ::testing::Lt;
 
 /// Fixture for UtilsTest.
 class UtilsTest : public ::testing::Test
@@ -267,4 +275,61 @@ TEST_F(UtilsTest, BinomialDistribution)
     double observed = (double)c[i] / (double)10000;
     EXPECT_THAT(observed, testing::AllOf(testing::Ge(expected - 0.05), testing::Le(expected + 0.05)));
   }
+}
+
+class StopWatchTest : public ::testing::Test
+{
+public:
+  StopWatchTest()
+  {
+    cwtest_completely_control_time();
+  }
+
+  virtual ~StopWatchTest()
+  {
+    cwtest_reset_time();
+  }
+
+  unsigned long ms_to_us(int ms) { return (unsigned long)(ms * 1000); }
+
+  Utils::StopWatch _sw;
+};
+
+TEST_F(StopWatchTest, Mainline)
+{
+  EXPECT_TRUE(_sw.start());
+  cwtest_advance_time_ms(11);
+  EXPECT_TRUE(_sw.stop());
+
+  unsigned long elapsed_us;
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
+}
+
+TEST_F(StopWatchTest, StopIsIdempotent)
+{
+  EXPECT_TRUE(_sw.start());
+  cwtest_advance_time_ms(11);
+  EXPECT_TRUE(_sw.stop());
+  cwtest_advance_time_ms(11);
+  EXPECT_TRUE(_sw.stop());
+
+  unsigned long elapsed_us;
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
+}
+
+TEST_F(StopWatchTest, ReadGetsLatestValueWhenNotStopped)
+{
+  EXPECT_TRUE(_sw.start());
+
+  unsigned long elapsed_us;
+  cwtest_advance_time_ms(11);
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  EXPECT_EQ(ms_to_us(11), elapsed_us);
+
+  cwtest_advance_time_ms(11);
+  EXPECT_TRUE(_sw.read(elapsed_us));
+  // The returned value is greater on the second read.
+  EXPECT_EQ(ms_to_us(22), elapsed_us);
 }
