@@ -49,8 +49,9 @@ class CWStatCollector
   # Registers a renderer to use for a given statistic.  If a rendered is not specified, the statistic cannot be queried
   #
   # For most cases, SimpleStatRenderer will be sufficient.
-  def self.register_renderer(statname, klass)
-    @@stat_renderers[statname] = klass
+  def self.register_renderer(statname, klass, options={})
+    port = options[:port] || 6666
+    @@stat_renderers[statname] = [klass, port]
   end
 
   # Create a collector for each known statistic.
@@ -59,8 +60,8 @@ class CWStatCollector
   #   - :verbose to add more logging
   #   - :subscribe to use repeated mode
   def self.all_collectors(hostname, options)
-    @@stat_renderers.keys.map do |statname|
-      CWStatCollector.new(hostname, statname, options)
+    @@stat_renderers.keys.map do |statname, port|
+      CWStatCollector.new(hostname, port, statname, options)
     end
   end
 
@@ -69,7 +70,7 @@ class CWStatCollector
   # @param options Two options are supported:
   #   - :verbose to add more logging
   #   - :subscribe to use repeated mode
-  def initialize(hostname, statname, options)
+  def initialize(hostname, port, statname, options)
     fail "Statistic \"#{statname}\" not recognised" if not @@stat_renderers.include? statname
     @verbose = options[:verbose]
     @subscribe = options[:subscribe]
@@ -79,7 +80,7 @@ class CWStatCollector
     log "Stats will be rendered using #{@stat_renderer.class}"
     @context = ZMQ::Context.new
     @socket = @context.socket(ZMQ::SUB)
-    @socket.connect("tcp://#{hostname}")
+    @socket.connect("tcp://#{hostname}:#{port}")
     @socket.setsockopt(ZMQ::SUBSCRIBE, statname)
     @latest_status = {}
     @latest_stats = {}
@@ -274,9 +275,11 @@ CWStatCollector.register_renderer("H_cache_latency_us", LatencyStatsRenderer)
 CWStatCollector.register_renderer("H_incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_renderer("H_rejected_overload", SimpleStatRenderer)
 
-# Listen for the homer/homestead-prov stats. This currently only listens for
-# stats for the first process
-CWStatCollector.register_renderer("P_latency_us_0", LatencyCountStatsRenderer)
-CWStatCollector.register_renderer("P_incoming_requests_0", SimpleStatRenderer)
-CWStatCollector.register_renderer("P_rejected_overload_0", SimpleStatRenderer)
-CWStatCollector.register_renderer("P_queue_size_0", LatencyCountStatsRenderer)
+# Listen for the homer/homestead-prov stats. These are served on port 6667 (to
+# allow homestead-prov to publish stats when colocated with homestead).
+#
+# This currently only listens for stats for the first process.
+CWStatCollector.register_renderer("P_latency_us_0", LatencyCountStatsRenderer, port: 6667)
+CWStatCollector.register_renderer("P_incoming_requests_0", SimpleStatRenderer, port: 6667)
+CWStatCollector.register_renderer("P_rejected_overload_0", SimpleStatRenderer, port: 6667)
+CWStatCollector.register_renderer("P_queue_size_0", LatencyCountStatsRenderer, port: 6667)
