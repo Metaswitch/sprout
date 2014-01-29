@@ -51,8 +51,8 @@ using namespace std;
 
 BaseTest::BaseTest()
 {
-  stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
-                                                   Statistic::known_stats(),
+  stack_data.stats_aggregator = new LastValueCache(num_known_stats,
+                                                   known_statnames,
                                                    10);  // Short period to reduce shutdown delays.
 }
 

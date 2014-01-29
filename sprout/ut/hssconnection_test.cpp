@@ -56,7 +56,7 @@ class HssConnectionTest : public BaseTest
   HSSConnection _hss;
 
   HssConnectionTest() :
-    _hss("narcissus", NULL)
+    _hss("narcissus", NULL, NULL)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://narcissus/impi/privid69/digest"] = "{\"digest\": \"myhashhere\"}";

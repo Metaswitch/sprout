@@ -52,10 +52,10 @@ extern "C" {
 #include "flowtable.h"
 
 
-FlowTable::FlowTable(QuiescingManager* qm) :
+FlowTable::FlowTable(QuiescingManager* qm, LastValueCache* lvc) :
   _tp2flow_map(),
   _tk2flow_map(),
-  _statistic("client_count"),
+  _statistic("client_count", lvc),
   _quiescing(false),
   _qm(qm)
 {

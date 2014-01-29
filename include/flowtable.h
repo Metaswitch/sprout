@@ -162,7 +162,7 @@ private:
 class FlowTable : public QuiesceFlowsInterface
 {
 public:
-  FlowTable(QuiescingManager* qm);
+  FlowTable(QuiescingManager* qm, LastValueCache *lvc);
   ~FlowTable();
 
   /// Create a flow corresponding to the specified received message.

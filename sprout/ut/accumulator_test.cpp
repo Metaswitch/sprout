@@ -51,7 +51,9 @@ class StatisticAccumulatorTest : public BaseTest
   StatisticAccumulator _accumulator;
 
   StatisticAccumulatorTest() :
-    _accumulator("latency_us", 999999999999) // make the period large to avoid intermittent failures due to timing
+    _accumulator("latency_us",
+                 stack_data.stats_aggregator,
+                 999999999999) // make the period large to avoid intermittent failures due to timing
   {
   }
 

@@ -58,10 +58,18 @@ typedef long HTTPCode;
 class HttpConnection
 {
 public:
-  HttpConnection(const std::string& server, bool assert_user, int sas_event_base, const std::string& stat_name, LoadMonitor* load_monitor);
+  HttpConnection(const std::string& server,
+                 bool assert_user,
+                 int sas_event_base,
+                 const std::string& stat_name,
+                 LoadMonitor* load_monitor,
+                 LastValueCache* lvc);
   virtual ~HttpConnection();
 
-  virtual long get(const std::string& path, std::string& doc, const std::string& username, SAS::TrailId trail);
+  virtual long get(const std::string& path,
+                   std::string& doc,
+                   const std::string& username,
+                   SAS::TrailId trail);
 
   static size_t string_store(void* ptr, size_t size, size_t nmemb, void* stream);
   static void cleanup_curl(void* curlptr);

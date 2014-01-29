@@ -3741,7 +3741,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
     // Create a flow table object to manage the client flow records
     // and handle access proxy quiescing.
-    flow_table = new FlowTable(quiescing_manager);
+    flow_table = new FlowTable(quiescing_manager, stack_data.stats_aggregator);
     quiescing_manager->register_flows_handler(flow_table);
 
     // Create a dialog tracker to count dialogs on each flow
@@ -3756,7 +3756,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                             upstream_proxy_recycle,
                                             stack_data.pool,
                                             stack_data.endpt,
-                                            stack_data.pcscf_trusted_tcp_factory);
+                                            stack_data.pcscf_trusted_tcp_factory,
+                                            stack_data.stats_aggregator);
     upstream_conn_pool->init();
 
     ibcf = enable_ibcf;

@@ -75,6 +75,7 @@
 #include <string>
 
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 void test_main_handle_signal(int xiSigNum);
 

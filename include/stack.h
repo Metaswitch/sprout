@@ -152,4 +152,7 @@ extern void destroy_stack();
 extern pj_status_t init_pjsip();
 extern void term_pjsip();
 
+extern const std::string* known_statnames;
+extern const int num_known_stats;
+
 #endif

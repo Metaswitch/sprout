@@ -120,6 +120,26 @@ static pjsip_module mod_stack =
   NULL,                                 /* on_tsx_state()       */
 };
 
+const static std::string _known_statnames[] = {
+  "client_count",
+  "connected_homers",
+  "connected_homesteads",
+  "connected_sprouts",
+  "latency_us",
+  "hss_latency_us",
+  "hss_digest_latency_us",
+  "hss_subscription_latency_us",
+  "xdm_latency_us",
+  "incoming_requests",
+  "rejected_overload",
+  "queue_size",
+  "hss_user_auth_latency_us",
+  "hss_location_latency_us",
+};
+
+const std::string* known_statnames = _known_statnames;
+const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
+
 /// PJSIP threads are donated to PJSIP to handle receiving at transport level
 /// and timers.
 static int pjsip_thread(void *p)
@@ -166,7 +186,7 @@ static int worker_thread(void* p)
       pjsip_rx_data_free_cloned(rdata);
 
       unsigned long latency_us;
-      if (qe.stop_watch.stop(latency_us))
+      if (qe.stop_watch.read(latency_us))
       {
         LOG_DEBUG("Request latency = %ldus", latency_us);
         latency_accumulator->accumulate(latency_us);
@@ -448,7 +468,7 @@ pj_status_t fill_transport_details(int port,
   // a pj_sockaddr structure.  The localhost string could be an IP address in string format
   // or a hostname that needs to be resolved.  The localhost string should only contain a
   // single address or hostname.
-  // Bono/Sprout needs to bind to the local host, but use the host passed into this 
+  // Bono/Sprout needs to bind to the local host, but use the host passed into this
   // function in the route header (which can be the local or public host)
   status = pj_getaddrinfo(af, &stack_data.local_host, &count, addr_info);
   if (status != PJ_SUCCESS)
@@ -990,13 +1010,17 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
-  stack_data.stats_aggregator = new LastValueCache(Statistic::known_stats_count(),
-                                                   Statistic::known_stats());
+  stack_data.stats_aggregator = new LastValueCache(num_known_stats,
+                                                   known_statnames);
 
-  latency_accumulator = new StatisticAccumulator("latency_us");
-  queue_size_accumulator = new StatisticAccumulator("queue_size");
-  requests_counter = new StatisticCounter("incoming_requests");
-  overload_counter = new StatisticCounter("rejected_overload");
+  latency_accumulator = new StatisticAccumulator("latency_us",
+                                                 stack_data.stats_aggregator);
+  queue_size_accumulator = new StatisticAccumulator("queue_size",
+                                                    stack_data.stats_aggregator);
+  requests_counter = new StatisticCounter("incoming_requests",
+                                          stack_data.stats_aggregator);
+  overload_counter = new StatisticCounter("rejected_overload",
+                                          stack_data.stats_aggregator);
 
   if (load_monitor_arg != NULL)
   {
@@ -1141,4 +1165,3 @@ void destroy_stack(void)
   // Terminate PJSIP.
   term_pjsip();
 }
-

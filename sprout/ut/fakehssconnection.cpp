@@ -40,7 +40,7 @@
 #include "gtest/gtest.h"
 
 
-FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL)
+FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL, NULL)
 {
 }
 

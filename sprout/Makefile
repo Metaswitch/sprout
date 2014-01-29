@@ -29,8 +29,8 @@ TARGET_SOURCES := logger.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
-									avstore.cpp \
-									regstore.cpp \
+                  avstore.cpp \
+                  regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
@@ -53,12 +53,12 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
-									icscfproxy.cpp \
-                  scscfselector.cpp	\
+                  icscfproxy.cpp \
+                  scscfselector.cpp \
                   signalhandler.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
-                  unique.cpp 
+                  unique.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -80,7 +80,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        regstore_test.cpp \
-											 avstore_test.cpp \
+                       avstore_test.cpp \
                        registrar_test.cpp \
                        stateful_proxy_test.cpp \
                        bgcfservice_test.cpp \
@@ -100,8 +100,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
-											 icscfproxy_test.cpp \
-											 basicproxy_test.cpp \
+                       icscfproxy_test.cpp \
+                       basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        subscription_test.cpp
 
@@ -132,11 +132,13 @@ CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/usr/include \
-						-I${ROOT}/modules/cpp-common/include
+            -I${ROOT}/modules/cpp-common/include \
+            -I${ROOT}/modules/cpp-common/test_utils
+
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils
 
 # Production build:
 #
@@ -316,5 +318,5 @@ $(OBJ_DIR_TEST)/md5.o : $(SIPP_DIR)/md5.c
 	$(CXX) $(CPPFLAGS) -I$(SIPP_DIR) -c $(SIPP_DIR)/md5.c -o $@
 
 # Build rule for our interposer.
-$(OBJ_DIR_TEST)/test_interposer.so: ut/test_interposer.cpp ut/test_interposer.hpp
+$(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_interposer.cpp ${ROOT}/modules/cpp-common/test_utils/test_interposer.hpp
 	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@
