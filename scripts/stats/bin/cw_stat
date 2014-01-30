@@ -17,8 +17,11 @@ require 'cw_stat_collector'
 # * Creating the appropriate CWStatCollector objects
 # * Kicking off the stat collection
 def main
-  options = { verbose: false,
-              subscribe: false }
+  options = {
+    verbose: false,
+    subscribe: false,
+    ports: [6666],
+  }
 
   opts = OptionParser.new do |o|
     o.banner = "Usage: cw_stat [options] <hostname> [statname]"
@@ -28,6 +31,15 @@ def main
 
     o.on("-s", "--[no-]subscribe", "Stay subscribed to changes in the statistic") do |s|
       options[:subscribe] = s
+    end
+
+    o.on("-p", "--ports PORTLIST",
+         "When collecting multiple stats, the ports to pull stats from as a ",
+         "comma separated list (e.g. 6666,6667).  Defaults to 6666") do |p|
+      options[:ports] = p.split(",").map(&:to_i)
+
+      # to_i returns 0 if the string is not an integer.
+      fail "Invalid port option specified" if options[:ports].include? 0
     end
 
     o.on("-h", "--help", "Show this help") do |h|

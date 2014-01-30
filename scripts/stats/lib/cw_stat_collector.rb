@@ -59,8 +59,12 @@ class CWStatCollector
   # @param options Two options are supported:
   #   - :verbose to add more logging
   #   - :subscribe to use repeated mode
+  #   - :ports only return collectors for the specifed ports (passed as a comma
+  #     separated list).
   def self.all_collectors(hostname, options)
-    @@known_stats.keys.map do |statname|
+    @@known_stats.select do |statname, statconf|
+      options[:ports].nil? || options[:ports].include?(statconf[:port])
+    end.keys.map do |statname|
       CWStatCollector.new(hostname, statname, options)
     end
   end
@@ -105,7 +109,7 @@ class CWStatCollector
         get_stat &blk
       end
     rescue Timeout::Error => e
-      puts "Error: No response from host, ensure <hostname> is correct"
+      puts "Error: No response from host, ensure hostname and port(s) are correct"
       throw e
     rescue Exception => e
       puts "Error: Unexpected exception occurred: #{e}"
@@ -283,6 +287,6 @@ CWStatCollector.register_stat("H_rejected_overload", SimpleStatRenderer)
 #
 # This currently only listens for stats for the first process.
 CWStatCollector.register_stat("P_latency_us_0", LatencyCountStatsRenderer, port: 6667)
+CWStatCollector.register_stat("P_queue_size_0", LatencyCountStatsRenderer, port: 6667)
 CWStatCollector.register_stat("P_incoming_requests_0", SimpleStatRenderer, port: 6667)
 CWStatCollector.register_stat("P_rejected_overload_0", SimpleStatRenderer, port: 6667)
-CWStatCollector.register_stat("P_queue_size_0", LatencyCountStatsRenderer, port: 6667)
