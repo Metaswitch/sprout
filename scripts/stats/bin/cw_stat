@@ -47,9 +47,9 @@ def main
   begin
     if ARGV[1].nil?
       fail "Subscription is only supported for single stats" if options[:subscribe]
-      stat_collectors = CWStatCollector.all_collectors("#{ARGV[0]}:6666", options)
+      stat_collectors = CWStatCollector.all_collectors(ARGV[0], options)
     else
-      stat_collectors = [CWStatCollector.new("#{ARGV[0]}:6666", ARGV[1], options)]
+      stat_collectors = [CWStatCollector.new(ARGV[0], ARGV[1], options)]
     end
   rescue Exception => e
     puts "Error: #{e.message}"

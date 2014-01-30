@@ -44,14 +44,14 @@ require 'timeout'
 #
 # The subscription can be created in single-shot mode, where the value of the statistic will be polled once only or in repeated mode, where the collector will loop, reporting changes to the statistic when they happen.
 class CWStatCollector
-  @@stat_renderers = {}
+  @@known_stats = {}
 
   # Registers a renderer to use for a given statistic.  If a rendered is not specified, the statistic cannot be queried
   #
   # For most cases, SimpleStatRenderer will be sufficient.
-  def self.register_renderer(statname, klass, options={})
+  def self.register_stat(statname, renderer, options={})
     port = options[:port] || 6666
-    @@stat_renderers[statname] = [klass, port]
+    @@known_stats[statname] = {renderer: renderer, port: port}
   end
 
   # Create a collector for each known statistic.
@@ -60,8 +60,8 @@ class CWStatCollector
   #   - :verbose to add more logging
   #   - :subscribe to use repeated mode
   def self.all_collectors(hostname, options)
-    @@stat_renderers.keys.map do |statname, port|
-      CWStatCollector.new(hostname, port, statname, options)
+    @@known_stats.keys.map do |statname|
+      CWStatCollector.new(hostname, statname, options)
     end
   end
 
@@ -70,12 +70,15 @@ class CWStatCollector
   # @param options Two options are supported:
   #   - :verbose to add more logging
   #   - :subscribe to use repeated mode
-  def initialize(hostname, port, statname, options)
-    fail "Statistic \"#{statname}\" not recognised" if not @@stat_renderers.include? statname
+  def initialize(hostname, statname, options)
+    fail "Statistic \"#{statname}\" not recognised" if not @@known_stats.include? statname
+    renderer = @@known_stats[statname][:renderer]
+    port = @@known_stats[statname][:port]
+
     @verbose = options[:verbose]
     @subscribe = options[:subscribe]
     @statname = statname
-    @stat_renderer = @@stat_renderers[statname].new
+    @stat_renderer = renderer.new
     log "Creating subscription for #{statname} from #{hostname}"
     log "Stats will be rendered using #{@stat_renderer.class}"
     @context = ZMQ::Context.new
@@ -250,36 +253,36 @@ hwm:#{msg[4]}
 end
 
 # Register the sprout/bono stats.
-CWStatCollector.register_renderer("client_count", SimpleStatRenderer)
-CWStatCollector.register_renderer("connected_homesteads", ConnectedIpsRenderer)
-CWStatCollector.register_renderer("connected_homers", ConnectedIpsRenderer)
-CWStatCollector.register_renderer("connected_sprouts", ConnectedIpsRenderer)
-CWStatCollector.register_renderer("call_stats", CallStatsRenderer)
-CWStatCollector.register_renderer("latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("hss_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("hss_digest_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("hss_subscription_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("hss_user_auth_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("hss_location_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("xdm_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("incoming_requests", SimpleStatRenderer)
-CWStatCollector.register_renderer("rejected_overload", SimpleStatRenderer)
-CWStatCollector.register_renderer("queue_size", LatencyStatsRenderer)
+CWStatCollector.register_stat("client_count", SimpleStatRenderer)
+CWStatCollector.register_stat("connected_homesteads", ConnectedIpsRenderer)
+CWStatCollector.register_stat("connected_homers", ConnectedIpsRenderer)
+CWStatCollector.register_stat("connected_sprouts", ConnectedIpsRenderer)
+CWStatCollector.register_stat("call_stats", CallStatsRenderer)
+CWStatCollector.register_stat("latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("hss_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("hss_digest_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("hss_subscription_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("hss_user_auth_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("hss_location_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("xdm_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("incoming_requests", SimpleStatRenderer)
+CWStatCollector.register_stat("rejected_overload", SimpleStatRenderer)
+CWStatCollector.register_stat("queue_size", LatencyStatsRenderer)
 
 # Register for homestead stats.
-CWStatCollector.register_renderer("H_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_digest_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_hss_subscription_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_cache_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_renderer("H_incoming_requests", SimpleStatRenderer)
-CWStatCollector.register_renderer("H_rejected_overload", SimpleStatRenderer)
+CWStatCollector.register_stat("H_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("H_hss_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("H_hss_digest_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("H_hss_subscription_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("H_cache_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("H_incoming_requests", SimpleStatRenderer)
+CWStatCollector.register_stat("H_rejected_overload", SimpleStatRenderer)
 
 # Listen for the homer/homestead-prov stats. These are served on port 6667 (to
 # allow homestead-prov to publish stats when colocated with homestead).
 #
 # This currently only listens for stats for the first process.
-CWStatCollector.register_renderer("P_latency_us_0", LatencyCountStatsRenderer, port: 6667)
-CWStatCollector.register_renderer("P_incoming_requests_0", SimpleStatRenderer, port: 6667)
-CWStatCollector.register_renderer("P_rejected_overload_0", SimpleStatRenderer, port: 6667)
-CWStatCollector.register_renderer("P_queue_size_0", LatencyCountStatsRenderer, port: 6667)
+CWStatCollector.register_stat("P_latency_us_0", LatencyCountStatsRenderer, port: 6667)
+CWStatCollector.register_stat("P_incoming_requests_0", SimpleStatRenderer, port: 6667)
+CWStatCollector.register_stat("P_rejected_overload_0", SimpleStatRenderer, port: 6667)
+CWStatCollector.register_stat("P_queue_size_0", LatencyCountStatsRenderer, port: 6667)
