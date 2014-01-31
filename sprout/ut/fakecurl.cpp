@@ -239,6 +239,14 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
     }
   }
   break;
+  case CURLOPT_HTTPGET:
+  {
+    if (va_arg(args, long))
+    {
+      curl->_method = "GET";
+    }
+  }
+  break;
   case CURLOPT_READDATA:
   {
     curl->_readdata = va_arg(args, void*);
