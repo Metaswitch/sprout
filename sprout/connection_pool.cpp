@@ -163,7 +163,7 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host, pj_sockaddr* addr
 {
   pj_addrinfo ai[PJ_MAX_HOSTNAME];
   unsigned count;
-  int af = pj_AF_INET();
+  int af = pj_AF_UNSPEC();
 
   // Use pj_getaddrinfo to resolve the upstream proxy host name to a set of
   // IP addresses.  Note that PJ_MAX_HOSTNAME is the maximum number of entried
@@ -208,9 +208,11 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
   tp_sel.type = PJSIP_TPSELECTOR_LISTENER;
   tp_sel.u.listener = _tpfactory;
   status = pjsip_tpmgr_acquire_transport(pjsip_endpt_get_tpmgr(_endpt),
-                                         PJSIP_TRANSPORT_TCP,
+                                         (remote_addr.addr.sa_family == pj_AF_INET6()) ?
+                                           PJSIP_TRANSPORT_TCP6 : PJSIP_TRANSPORT_TCP,
                                          &remote_addr,
-                                         sizeof(pj_sockaddr_in),
+                                         (remote_addr.addr.sa_family == pj_AF_INET6()) ?
+                                           sizeof(pj_sockaddr_in6) : sizeof(pj_sockaddr_in), 
                                          &tp_sel,
                                          &tp);
 

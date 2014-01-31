@@ -140,7 +140,7 @@ do_start()
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
         DAEMON_ARGS="--domain $home_domain
-                     --localhost $local_ip:$public_hostname
+                     --localhost $local_ip,$public_hostname
                      --alias $public_ip
                      --pcscf 5060:5058
                      --webrtc-port 5062

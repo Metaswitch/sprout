@@ -156,7 +156,7 @@ static void usage(void)
        " -s, --scscf <port>         Enable S-CSCF function on the specified port\n"
        " -w, --webrtc-port N        Set local WebRTC listener port to N\n"
        "                            If not specified WebRTC support will be disabled\n"
-       " -l, --localhost [<hostname>|<private hostname>:<public hostname>]\n"
+       " -l, --localhost [<hostname>|<private hostname>,<public hostname>]\n"
        "                            Override the local host name with the specified\n"
        "                            hostname(s) or IP address(es).  If one name/address\n"
        "                            is specified it is used as both private and public names.\n"
@@ -371,7 +371,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'l':
       {
         std::vector<std::string> localhost_options;
-        Utils::split_string(std::string(pj_optarg), ':', localhost_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', localhost_options, 0, false);
         if (localhost_options.size() == 1)
         {
           options->local_host = localhost_options[0];
