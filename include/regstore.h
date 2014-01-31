@@ -98,10 +98,12 @@ public:
     class Subscription
     {
     public:
-      /// The Request URI for the subscription dialog.
+      /// The Request URI for the subscription dialog (used in the contact 
+      /// header of the NOTIFY)
       std::string _req_uri;
 
-      /// The From URI for the subscription dialog.
+      /// The From URI for the subscription dialog (used in the to header of 
+      /// the NOTIFY)
       std::string _from_uri;
 
       /// The From tag for the subscription dialog.
@@ -116,7 +118,7 @@ public:
       /// The call ID for the subscription dialog.
       std::string _cid;
 
-      /// The list of Route URIs for the subscription dialog.
+      /// The list of Record Route URIs from the subscription dialog. 
       std::list<std::string> _route_uris;
 
       /// The time (in seconds since the epoch) at which this subscription

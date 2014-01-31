@@ -45,6 +45,7 @@ extern "C" {
 #include "stack.h"
 #include "notify_utils.h"
 #include "log.h"
+#include "constants.h"
 
 #define CONST_PJSTR(NAME, VALUE) static const pj_str_t NAME = {VALUE, sizeof(VALUE) - 1};
 
@@ -146,7 +147,7 @@ pj_xml_node* notify_create_reg_state_xml(
                          pj_pool_t *pool,
                          std::string& aor,
                          RegStore::AoR::Subscription* subscription, 
-                         const RegStore::AoR::Bindings& bindings,
+                         std::map<std::string, RegStore::AoR::Binding> bindings,
                          NotifyUtils::DocState doc_state,
                          NotifyUtils::RegContactState reg_state, 
                          NotifyUtils::RegContactState contact_state, 
@@ -187,7 +188,7 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Create the contact nodes
   // For each binding, add a contact node to the registration node
-  for (RegStore::AoR::Bindings::const_iterator binding = bindings.begin();
+  for (std::map<std::string, RegStore::AoR::Binding>::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
   {
@@ -208,17 +209,16 @@ pj_xml_node* notify_create_reg_state_xml(
       case NotifyUtils::CREATED:
         c_event = STR_CREATED;
         break;
+      // LCOV_EXCL_START
       case NotifyUtils::DEACTIVATED:
         c_event = STR_DEACTIVATED;
         break;
+      // LCOV_EXCL_STOP
       case NotifyUtils::REFRESHED:
         c_event = STR_REFRESHED;
         break;
       case NotifyUtils::EXPIRED:
         c_event = STR_EXPIRED;
-        break;
-      case NotifyUtils::UNREGISTERED:
-        c_event = STR_UNREGISTERED;
         break;
     }
 
@@ -230,9 +230,9 @@ pj_xml_node* notify_create_reg_state_xml(
     // Create and add URI element
     pj_str_t c_uri;
 
-    if (binding->second->_uri.size() > 0)
+    if (binding->second._uri.size() > 0)
     {
-      pj_cstr(&c_uri, binding->second->_uri.c_str());
+      pj_cstr(&c_uri, binding->second._uri.c_str());
     }
 
     uri_node = pj_xml_node_new(pool, &STR_URI);
@@ -261,7 +261,7 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                pj_pool_t *pool,
                                std::string& aor,
                                RegStore::AoR::Subscription* subscription,
-                               const RegStore::AoR::Bindings& bindings,
+                               std::map<std::string, RegStore::AoR::Binding> bindings,
                                NotifyUtils::DocState doc_state,
                                NotifyUtils::RegContactState reg_state,
                                NotifyUtils::RegContactState contact_state,
@@ -308,10 +308,14 @@ pj_status_t create_request_from_subscription(
   pj_str_t to;
   pj_str_t uri;
   pj_str_t cid;
-  pj_cstr(&from, subscription->_from_uri.c_str());
-  pj_cstr(&to, subscription->_to_uri.c_str());
+  pj_cstr(&from, subscription->_to_uri.c_str());
+  pj_cstr(&to, subscription->_from_uri.c_str());
   pj_cstr(&uri, subscription->_req_uri.c_str());
   pj_cstr(&cid, subscription->_cid.c_str());
+
+  std::string sprout_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.sprout_cluster_domain),
+                                                        pj_strlen(&stack_data.sprout_cluster_domain))+">";
+  const pj_str_t sprout_uri = pj_str(const_cast<char *>(sprout_uri_string.c_str()));
 
   LOG_DEBUG("Create NOTIFY request");
   pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
@@ -319,7 +323,7 @@ pj_status_t create_request_from_subscription(
                                                   &uri,
                                                   &from,
                                                   &to,
-                                                  &uri,
+                                                  &sprout_uri,
                                                   &cid,
                                                   cseq,
                                                   body,
@@ -333,7 +337,7 @@ pj_status_t NotifyUtils::create_notify(
                                     RegStore::AoR::Subscription* subscription,
                                     std::string aor, 
                                     int cseq,
-                                    const RegStore::AoR::Bindings& bindings,
+                                    std::map<std::string, RegStore::AoR::Binding> bindings,
                                     NotifyUtils::DocState doc_state,
                                     NotifyUtils::RegContactState reg_state,
                                     NotifyUtils::RegContactState contact_state,
@@ -352,7 +356,7 @@ pj_status_t NotifyUtils::create_notify(
                                             PJSIP_H_TO, 
                                             NULL);
     pj_str_t to_tag;
-    pj_cstr(&to_tag, subscription->_to_tag.c_str());
+    pj_cstr(&to_tag, subscription->_from_tag.c_str());
     pj_strdup((*tdata_notify)->pool, &to->tag, &to_tag);
 
     pjsip_to_hdr *from;
@@ -360,7 +364,7 @@ pj_status_t NotifyUtils::create_notify(
                                                 PJSIP_H_FROM, 
                                                 NULL);
     pj_str_t from_tag;
-    pj_cstr(&from_tag, subscription->_from_tag.c_str());
+    pj_cstr(&from_tag, subscription->_to_tag.c_str());
     pj_strdup((*tdata_notify)->pool, &from->tag, &from_tag);
 
 

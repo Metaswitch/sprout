@@ -140,6 +140,8 @@ public:
   string _expires;
   string _route;
   string _auth;
+  string _record_route;
+
 
   SubscribeMessage() :
     _method("SUBSCRIBE"),
@@ -150,7 +152,8 @@ public:
     _accepts("Accept: application/reginfo+xml"),
     _expires(""),
     _route(""),
-    _auth("")
+    _auth(""),
+    _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>")
   {
   }
 
@@ -181,6 +184,7 @@ string SubscribeMessage::get()
                    "%10$s"
                    "%11$s"
                    "%12$s"
+                   "%13$s"
                    "%4$s"
                    "Content-Length:  %5$d\r\n"
                    "\r\n"
@@ -197,7 +201,8 @@ string SubscribeMessage::get()
                    /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                    /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 11 */ _event.empty() ? "" : string(_event).append("\r\n").c_str(),
-                   /* 12 */ _accepts.empty() ? "" : string(_accepts).append("\r\n").c_str()
+                   /* 12 */ _accepts.empty() ? "" : string(_accepts).append("\r\n").c_str(),
+                   /* 13 */ _record_route.empty() ? "" : string(_record_route).append("\r\n").c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -262,11 +267,8 @@ TEST_F(SubscriptionTest, MissingEventHeader)
 
   SubscribeMessage msg;
   msg._event = "";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(406, out->line.status.code);
-  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -278,11 +280,8 @@ TEST_F(SubscriptionTest, IncorrectEventHeader)
 
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(406, out->line.status.code);
-  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
@@ -308,12 +307,8 @@ TEST_F(SubscriptionTest, IncorrectAcceptsHeader)
 
   SubscribeMessage msg;
   msg._accepts = "Accept: notappdata";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(406, out->line.status.code);
-  EXPECT_EQ("Not Acceptable", str_pj(out->line.status.reason));
- 
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 

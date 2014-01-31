@@ -54,7 +54,5 @@ extern pj_status_t init_subscription(RegStore* registrar_store,
                                      AnalyticsLogger* analytics_logger);
 
 extern void destroy_subscription();
-static uint32_t deployment_id;
-static uint32_t instance_id;
 
 #endif

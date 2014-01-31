@@ -164,7 +164,9 @@ int RegStore::expire_bindings(AoR* aor_data,
     std::string b_id = i->first;
     if (b->_expires <= now)
     {
+      // Update the cseq
       aor_data->_notify_cseq++;
+
       // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
       // if there are any subscriptions
       for (AoR::Subscriptions::iterator j = aor_data->_subscriptions.begin();
@@ -529,10 +531,9 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
                                 AoR::Binding* b, std::string b_id)
 {
   pjsip_tx_data* tdata_notify = NULL;
-  AoR::Bindings bindings;
-  bindings[b_id] = b;
-  AoR::Bindings& bs = bindings;
-  pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "", cseq, bs,
+  std::map<std::string, AoR::Binding> bindings;
+  bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(b_id, *b));
+  pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, 
                                   NotifyUtils::TERMINATED, NotifyUtils::EXPIRED);
 

@@ -61,7 +61,7 @@ namespace NotifyUtils
                             RegStore::AoR::Subscription* subscription,
                             std::string aor, 
                             int cseq,
-                            const RegStore::AoR::Bindings& bindings,
+                            std::map<std::string, RegStore::AoR::Binding> bindings,
                             NotifyUtils::DocState doc_state,
                             NotifyUtils::RegContactState reg_state,
                             NotifyUtils::RegContactState contact_state,
