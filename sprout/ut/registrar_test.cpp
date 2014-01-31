@@ -140,6 +140,7 @@ public:
   string _expires;
   string _path;
   string _auth;
+  string _cseq;
 
   Message() :
     _method("REGISTER"),
@@ -150,7 +151,8 @@ public:
     _contact_params(";expires=3600;+sip.ice;reg-id=1"),
     _expires(""),
     _path("Path: sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob"),
-    _auth("")
+    _auth(""),
+    _cseq("16567")
   {
   }
 
@@ -171,7 +173,7 @@ string Message::get()
                    "To: <sip:%2$s@%3$s>\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
-                   "CSeq: 16567 %1$s\r\n"
+                   "CSeq: %13$s %1$s\r\n"
                    "User-Agent: Accession 2.0.0.0\r\n"
                    "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
                    "%11$s"
@@ -195,7 +197,8 @@ string Message::get()
                    /*  9 */ _contact_instance.c_str(),
                    /* 10 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
                    /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
-                   /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str()
+                   /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
+                   /* 13 */ _cseq.c_str()
 
     );
 
@@ -242,6 +245,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
@@ -400,6 +404,24 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   free_txdata();
 
   // Reregistering that yields no change.
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // Reregistering again with an updated cseq triggers an update of the binding.
+  msg._cseq = "16568";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
@@ -1017,3 +1039,76 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   free_txdata();
 }
+
+/// Simple correct example with a subscription
+TEST_F(RegistrarTest, RegistrationWithSubscription)
+{
+  // We have a private ID in this test, so set up the expect response to the query.
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  RegStore::AoR::Subscription* s1;
+  int now = time(NULL);
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+
+  // Add a subscription
+  s1 = aor_data1->get_subscription("1234");
+  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+
+  // Set the NOTIFY CSeq value to 1.
+  aor_data1->_notify_cseq = 1;
+
+  // Write the record back to the store.
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // Register again with an updated cseq
+  msg._cseq = "16568";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+

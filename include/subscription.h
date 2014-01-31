@@ -1,5 +1,5 @@
 /**
- * @file analyticslogger.h Declaration of AnalyticsLogger class.
+ * @file subscription.h 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,52 +34,25 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
 
-#ifndef ANALYTICSLOGGER_H__
-#define ANALYTICSLOGGER_H__
+#ifndef SUBSCRIPTION_H__
+#define SUBSCRIPTION_H__
 
-#include <sstream>
+extern "C" {
+#include <pjsip.h>
+}
 
-#include "logger.h"
+#include "regstore.h"
+#include "hssconnection.h"
+#include "analyticslogger.h"
 
-class AnalyticsLogger
-{
-public:
-  AnalyticsLogger(const std::string& directory);
-  ~AnalyticsLogger();
+extern pjsip_module mod_subscription;
 
-  void registration(const std::string& aor,
-                    const std::string& binding_id,
-                    const std::string& contact,
-                    int expires);
+extern pj_status_t init_subscription(RegStore* registrar_store,
+                                     RegStore* remote_reg_store,
+                                     HSSConnection* hss_connection,
+                                     AnalyticsLogger* analytics_logger);
 
-  void subscription(const std::string& aor,
-                    const std::string& subscription_id,
-                    const std::string& contact,
-                    int expires);
-
-  void auth_failure(const std::string& auth,
-                    const std::string& to);
-
-  void call_connected(const std::string& from,
-                      const std::string& to,
-                      const std::string& call_id);
-
-  void call_not_connected(const std::string& from,
-                          const std::string& to,
-                          const std::string& call_id,
-                          int reason);
-
-  void call_disconnected(const std::string& call_id,
-                         int reason);
-
-private:
-  static const int BUFFER_SIZE = 1000;
-
-  Logger* _logger;
-};
+extern void destroy_subscription();
 
 #endif
-

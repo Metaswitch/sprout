@@ -744,7 +744,6 @@ pj_status_t init_pjsip()
 
   // Must create a pool factory before we can allocate any memory.
   pj_caching_pool_init(&stack_data.cp, &pj_pool_factory_default_policy, 0);
-
   // Create the endpoint.
   status = pjsip_endpt_create(&stack_data.cp.factory, NULL, &stack_data.endpt);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
