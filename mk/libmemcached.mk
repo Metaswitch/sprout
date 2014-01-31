@@ -1,7 +1,5 @@
 # included mk file for the libmemcached module
 
-include ${MK_DIR}/libevhtp.mk
-
 LIBMEM_DIR := ${MODULE_DIR}/libmemcached
 LIBMEM_CONFIGURE := ${LIBMEM_DIR}/configure
 LIBMEM_MAKEFILE := ${LIBMEM_DIR}/Makefile
