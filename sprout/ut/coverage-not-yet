@@ -4,16 +4,19 @@
 # code and new files should have 100% code coverage (by lines); it may
 # be acceptable to use exclusion markers to achieve this.
 
-stateful_proxy.cpp
-connection_pool.cpp
-pjutils.cpp
-analyticslogger.cpp
-callservices.cpp
-stack.cpp
-websockets.cpp
-dnsresolver.cpp
-flowtable.cpp
-zmq_lvc.cpp
-custom_headers.cpp
-memcachedstoreview.cpp
-memcachedstore.cpp
+modules/cpp-common/src/httpconnection.cpp
+modules/cpp-common/src/localstore.cpp
+modules/cpp-common/src/memcachedstore.cpp
+modules/cpp-common/src/memcachedstoreview.cpp
+modules/cpp-common/src/statistic.cpp
+modules/cpp-common/src/zmq_lvc.cpp
+
+sprout/stateful_proxy.cpp
+sprout/connection_pool.cpp
+sprout/pjutils.cpp
+sprout/callservices.cpp
+sprout/stack.cpp
+sprout/websockets.cpp
+sprout/dnsresolver.cpp
+sprout/flowtable.cpp
+sprout/custom_headers.cpp
