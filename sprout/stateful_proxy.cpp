@@ -3459,6 +3459,14 @@ void UACTransaction::set_target(const struct Target& target)
     tp_selector.u.transport = target.transport;
     pjsip_tx_data_set_transport(_tdata, &tp_selector);
 
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    _tdata->dest_info.addr.entry[0].addr_len =
+         (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+         sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+    _tdata->dest_info.cur_addr = 0;
+
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target.transport);
   }
