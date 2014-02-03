@@ -912,3 +912,42 @@ std::string PJUtils::get_header_value(pjsip_hdr* header)
   }
   return std::string(buf2, len);
 }
+
+/// Add SAS markers for the specified call ID and branch IDs on the message (either may be omitted).
+void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg)
+{
+  // If we have a call ID, log it.
+  if (cid_hdr != NULL)
+  {
+    SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
+    cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
+    SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
+  }
+
+  // If we have a message, look for branch IDs too.
+  if (msg != NULL)
+  {
+    // First find the top Via header.  This was added by us.
+    pjsip_via_hdr* top_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, NULL);
+    
+    // If we found the top header (and we really should have done), log its branch ID.
+    if (top_via != NULL)
+    {
+      {
+        SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
+        via_marker.add_var_param(top_via->branch_param.slen, top_via->branch_param.ptr);
+        SAS::report_marker(via_marker, SAS::Marker::Scope::Branch);
+      }
+  
+      // Now see if we can find the next Via header and log it if so.  This will have been added by
+      // the previous server.  This means we'll be able to correlate with its trail.
+      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via);
+      if (second_via != NULL)
+      {
+        SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);
+        via_marker.add_var_param(second_via->branch_param.slen, second_via->branch_param.ptr);
+        SAS::report_marker(via_marker, SAS::Marker::Scope::Branch);
+      }
+    }
+  }
+}
