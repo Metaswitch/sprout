@@ -936,7 +936,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
         via_marker.add_var_param(top_via->branch_param.slen, top_via->branch_param.ptr);
-        SAS::report_marker(via_marker, SAS::Marker::Scope::Branch);
+        SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
       }
   
       // Now see if we can find the next Via header and log it if so.  This will have been added by
@@ -946,7 +946,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);
         via_marker.add_var_param(second_via->branch_param.slen, second_via->branch_param.ptr);
-        SAS::report_marker(via_marker, SAS::Marker::Scope::Branch);
+        SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
       }
     }
   }
