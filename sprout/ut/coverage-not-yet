@@ -8,7 +8,6 @@ modules/cpp-common/src/httpconnection.cpp
 modules/cpp-common/src/localstore.cpp
 modules/cpp-common/src/memcachedstore.cpp
 modules/cpp-common/src/memcachedstoreview.cpp
-modules/cpp-common/src/statistic.cpp
 modules/cpp-common/src/zmq_lvc.cpp
 
 sprout/stateful_proxy.cpp
