@@ -74,8 +74,11 @@ class HttpConnectionTest : public BaseTest
     fakecurl_responses["http://cyrus/down/down/down"] = "<message>WHOOOOSH!!</message>";
     fakecurl_responses["http://cyrus/down/down/up"] = CURLE_RECV_ERROR;
     fakecurl_responses["http://cyrus/down/around"] = Response(CURLE_SEND_ERROR, "<message>Gotcha!</message>");
+    fakecurl_responses["http://cyrus/delete_id"] = CURLE_OK;
+    fakecurl_responses["http://cyrus/put_id"] = CURLE_OK;
+    fakecurl_responses["http://cyrus/post_id"] = Response({"Location: test"});
   }
-
+ 
   virtual ~HttpConnectionTest()
   {
     fakecurl_responses.clear();
@@ -154,4 +157,23 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   // Should be a single connection to the hardcoded fakecurl IP.
   EXPECT_EQ(1u, _http._server_count.size());
   EXPECT_EQ(1, _http._server_count["10.42.42.42"]);
+}
+
+TEST_F(HttpConnectionTest, SimplePost)
+{
+  std::map<std::string, std::string> head;
+  long ret = _http.send_post("/post_id", "", head, 0);
+  EXPECT_EQ(200, ret);
+}
+
+TEST_F(HttpConnectionTest, SimplePut)
+{
+  long ret = _http.send_put("/put_id", "", 0);
+  EXPECT_EQ(200, ret);
+}
+
+TEST_F(HttpConnectionTest, SimpleDelete)
+{
+  long ret = _http.send_delete("/delete_id", 0);
+  EXPECT_EQ(200, ret);
 }

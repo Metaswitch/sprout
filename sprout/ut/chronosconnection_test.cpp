@@ -1,5 +1,5 @@
 /**
- * @file fakecurl.hpp Fake cURL library header for testing.
+ * @file chronosconnection_test.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,80 +34,68 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+///
+///----------------------------------------------------------------------------
+
 #include <string>
-#include <list>
-#include <map>
+#include "gtest/gtest.h"
+#include <json/reader.h>
 
-#include <curl/curl.h>
+#include "utils.h"
+#include "sas.h"
+#include "chronosconnection.h"
+#include "basetest.hpp"
+#include "fakecurl.hpp"
+#include "fakelogger.hpp"
 
-/// The content of a request.
-class Request
+using namespace std;
+
+/// Fixture for ChronosConnectionTest.
+class ChronosConnectionTest : public BaseTest
 {
-public:
-  std::string _method;
-  std::list<std::string> _headers;
-  std::string _body;
-  long _httpauth; //^ OR of CURLAUTH_ constants
-  std::string _username;
-  std::string _password;
-  bool _fresh;
-};
+  ChronosConnection _chronos;
 
-/// The content of a response.
-class Response
-{
-public:
-  CURLcode _code_once;  //< If not CURLE_OK, issue this code first then the other.
-  CURLcode _code;  //< cURL easy doesn't accept HTTP status codes
-  std::string _body;
-  std::list<std::string> _headers;
-
-  Response() :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body("")
+  ChronosConnectionTest() :
+    _chronos("narcissus")
   {
+    fakecurl_responses.clear();
   }
 
-  Response(const std::string& body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code_once, const std::string& body) :
-    _code_once(code_once),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(std::list<std::string> headers) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(""),
-    _headers(headers)
-  {
-  }
-
-  Response(const char* body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code) :
-    _code_once(CURLE_OK),
-    _code(code),
-    _body("")
+  virtual ~ChronosConnectionTest()
   {
   }
 };
 
-/// Responses to give, by URL.
-extern std::map<std::string,Response> fakecurl_responses;
+TEST_F(ChronosConnectionTest, SendDelete)
+{
+  fakecurl_responses["http://narcissus/timers/delete_id"] = CURLE_OK;
+  HTTPCode status = _chronos.send_delete("delete_id",  0);
+  EXPECT_EQ(status, 200);
+}
 
-/// Requests received, by URL.
-extern std::map<std::string,Request> fakecurl_requests;
+TEST_F(ChronosConnectionTest, SendInvalidDelete)
+{
+  HTTPCode status = _chronos.send_delete("",  0);
+  EXPECT_EQ(status, 405);
+}
+
+TEST_F(ChronosConnectionTest, SendPost)
+{
+  std::list<std::string> headers = {"Location: http://localhost:7253/timers/abcd"};
+  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::string post_identity = "";
+  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  EXPECT_EQ(status, 200);
+  EXPECT_EQ(post_identity, "abcd");
+}
+
+TEST_F(ChronosConnectionTest, SendPut)
+{
+  fakecurl_responses["http://narcissus/timers/abcd"] = CURLE_OK;
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::string put_identity = "abcd";
+  HTTPCode status = _chronos.send_put("abcd", 300, "localhost:9888/timers", opaque,  0);
+  EXPECT_EQ(status, 200);
+}
