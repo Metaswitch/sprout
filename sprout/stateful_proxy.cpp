@@ -134,6 +134,8 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
+static SIPResolver* sipresolver;
+
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
 
@@ -3290,6 +3292,8 @@ UACTransaction::UACTransaction(UASTransaction* uas_data,
   _from_store(false),
   _aor(),
   _binding_id(),
+  _transport(NULL),
+  _resolved(false),
   _pending_destroy(false),
   _context_count(0)
 {
@@ -3410,10 +3414,13 @@ void UACTransaction::set_target(const struct Target& target)
        pit != target.paths.end();
        ++pit)
   {
-    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s",
+    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
               ((pjsip_sip_uri*)*pit)->user.slen, ((pjsip_sip_uri*)*pit)->user.ptr,
               (((pjsip_sip_uri*)*pit)->user.slen != 0) ? "@" : "",
-              ((pjsip_sip_uri*)*pit)->host.slen, ((pjsip_sip_uri*)*pit)->host.ptr);
+              ((pjsip_sip_uri*)*pit)->host.slen, ((pjsip_sip_uri*)*pit)->host.ptr,
+              ((pjsip_sip_uri*)*pit)->port,
+              ((pjsip_sip_uri*)*pit)->transport_param.slen,
+              ((pjsip_sip_uri*)*pit)->transport_param.ptr);
     pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
     route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, *pit);
     pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
@@ -3456,6 +3463,8 @@ void UACTransaction::set_target(const struct Target& target)
 // Sends the initial request on this UAC transaction.
 void UACTransaction::send_request()
 {
+  pj_status_t status = PJ_SUCCESS;
+
   enter_context();
 
   if (_tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
@@ -3467,29 +3476,124 @@ void UACTransaction::send_request()
               _tdata->tp_sel.u.transport->info);
     pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
   }
-  LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
-  pj_status_t status = pjsip_tsx_send_msg(_tsx, _tdata);
-  if (status != PJ_SUCCESS)
+  else if (sipresolver != NULL)
   {
-    // Failed to send the request.
-    pjsip_tx_data_dec_ref(_tdata);
+    // Resolve the next hop destination for this request to an IP address.
+    LOG_DEBUG("Resolve next hop destination");
+    status = resolve_next_hop();
+  }
 
-    // The UAC transaction will have been destroyed when it failed to send
-    // the request, so there's no need to destroy it.
-  }
-  else
+  if (status == PJ_SUCCESS)
   {
-    // Sent the request successfully.
-    if (_liveness_timeout != 0)
+    LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
+    status = pjsip_tsx_send_msg(_tsx, _tdata);
+    if (status != PJ_SUCCESS)
     {
-      _liveness_timer.id = LIVENESS_TIMER;
-      pj_time_val delay = {_liveness_timeout, 0};
-      pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
+      // Failed to send the request.
+      pjsip_tx_data_dec_ref(_tdata);
+
+      // The UAC transaction will have been destroyed when it failed to send
+      // the request, so there's no need to destroy it.
     }
+    else
+    {
+      // Sent the request successfully.
+      if (_liveness_timeout != 0)
+      {
+        _liveness_timer.id = LIVENESS_TIMER;
+        pj_time_val delay = {_liveness_timeout, 0};
+        pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
+      }
+    }
+    _tdata = NULL;
   }
-  _tdata = NULL;
 
   exit_context();
+}
+
+
+/// Resolves the next hop target of the SIP message and fills in the dest_info
+/// structure on the message.
+pj_status_t UACTransaction::resolve_next_hop()
+{
+  pj_status_t status = PJ_ENOTFOUND;
+
+  // Get the next hop URI from the message and parse out the destination, port
+  // and transport.
+  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(_tdata->msg);
+  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
+  int port = next_hop->port;
+  int transport = -1;
+  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
+  {
+    transport = IPPROTO_TCP;
+  }
+  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
+  {
+    transport = IPPROTO_UDP;
+  }
+
+  if (sipresolver->resolve(target, port, transport, AF_INET, _ai))
+  {
+    // Resolved the target successfully, so fill in dest_info on the tdata.
+    status = PJ_SUCCESS;
+    _tdata->dest_info.cur_addr = 0;
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].priority = 0;
+    _tdata->dest_info.addr.entry[0].weight = 0;
+
+    if (_ai.transport == IPPROTO_TCP)
+    {
+      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+    }
+    else if (_ai.transport == IPPROTO_UDP)
+    {
+      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+    }
+    else
+    {
+      // Unknown transport returned from resolver.
+      LOG_ERROR("Unknown transport %d returned by resolver", _ai.transport);
+      status = PJ_ENOTSUP;
+    }
+
+    if (_ai.address.af == AF_INET)
+    {
+      // IPv4 address.
+      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
+      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
+      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
+    }
+    else if (_ai.address.af == AF_INET6)
+    {
+      // IPv6 address.
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
+      memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
+             (char*)&_ai.address.addr.ipv6,
+             sizeof(pj_in6_addr));
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
+      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
+    }
+    else
+    {
+      status = PJ_EAFNOTSUP;
+    }
+    pj_sockaddr_set_port(&_tdata->dest_info.addr.entry[0].addr, _ai.port);
+  }
+
+  // Set the resolved flag if the resolution was successful.
+  _resolved = (status == PJ_SUCCESS);
+  if (status == PJ_SUCCESS)
+  {
+    char buf[100];
+    LOG_DEBUG("Resolved to %s using transport %s",
+              pj_sockaddr_print(&_tdata->dest_info.addr.entry[0].addr,
+                                buf, sizeof(buf), 1),
+              pjsip_transport_get_type_name(_tdata->dest_info.addr.entry[0].type));
+  }
+
+  return status;
 }
 
 // Cancels the pending transaction, using the specified status code in the
@@ -3590,6 +3694,13 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
         (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
+      if (_resolved)
+      {
+        // Blacklist the destination address/port/transport selected for this
+        // transaction so we don't repeatedly attempt to use it.
+        LOG_DEBUG("Blacklisting failed/uncontactable destination");
+        sipresolver->blacklist(_ai, 30);
+      }
       _uas_data->on_client_not_responding(this);
     }
     else
@@ -3695,6 +3806,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
+                                SIPResolver* resolver,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
@@ -3709,6 +3821,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   analytics_logger = analytics;
   store = registrar_store;
   remote_store = remote_reg_store;
+
+  sipresolver = resolver;
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
@@ -3731,6 +3845,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     flow_table = new FlowTable(quiescing_manager, stack_data.stats_aggregator);
     quiescing_manager->register_flows_handler(flow_table);
 
+
     // Create a dialog tracker to count dialogs on each flow
     dialog_tracker = new DialogTracker(flow_table);
 
@@ -3744,6 +3859,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                             stack_data.pool,
                                             stack_data.endpt,
                                             stack_data.pcscf_trusted_tcp_factory,
+                                            sipresolver,
                                             stack_data.stats_aggregator);
     upstream_conn_pool->init();
 

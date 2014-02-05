@@ -9,6 +9,9 @@ modules/cpp-common/src/localstore.cpp
 modules/cpp-common/src/memcachedstore.cpp
 modules/cpp-common/src/memcachedstoreview.cpp
 modules/cpp-common/src/zmq_lvc.cpp
+modules/cpp-common/src/dnscachedresolver.cpp
+modules/cpp-common/src/dnsparser.cpp
+modules/cpp-common/src/baseresolver.cpp
 
 sprout/stateful_proxy.cpp
 sprout/connection_pool.cpp
@@ -19,3 +22,4 @@ sprout/websockets.cpp
 sprout/dnsresolver.cpp
 sprout/flowtable.cpp
 sprout/custom_headers.cpp
+sprout/sipresolver.cpp
