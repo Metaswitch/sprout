@@ -317,9 +317,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
   SAS::report_marker(calling_dn);
 
-  SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
-  cid_marker.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-  SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
+  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;

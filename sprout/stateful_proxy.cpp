@@ -312,14 +312,9 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
     res_addr.dst_host.addr.port = hvia->sent_by.port;
   }
 
-  // Report a SIP call ID marker on the trail to make sure it gets
+  // Report SIP call and branch ID markers on the trail to make sure it gets
   // associated with the INVITE transaction at SAS.
-  if (rdata->msg_info.cid != NULL)
-  {
-    SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 3u);
-    cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
-  }
+  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 
   // We don't know the transaction, so be pessimistic and strip
   // everything.
@@ -500,13 +495,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
     target = NULL;
 
     // Report a SIP call ID marker on the trail to make sure it gets
-    // associated with the INVITE transaction at SAS.
-    if (rdata->msg_info.cid != NULL)
-    {
-      SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 2u);
-      cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Scope::Trace);
-    }
+    // associated with the INVITE transaction at SAS.  There's no need to
+    // report the branch IDs as they won't be used for correlation.
+    LOG_DEBUG("Statelessly forwarding ACK");
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
     status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
@@ -2930,12 +2922,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  if (_analytics.cid)
-  {
-    SAS::Marker cid(trail(), MARKER_ID_SIP_CALL_ID, 1u);
-    cid.add_var_param(_analytics.cid->id.slen, _analytics.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Trace);
-  }
+  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), _analytics.cid, rdata->msg_info.msg);
 }
 
 // Generate analytics logs relating to a transaction completing.
