@@ -57,6 +57,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                pj_pool_t* pool,
                                pjsip_endpoint* endpt,
                                pjsip_tpfactory* tp_factory,
+                               SIPResolver* sipresolver,
                                LastValueCache* lvc) :
   _target(*target),
   _num_connections(num_connections),
@@ -65,6 +66,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _pool(pool),
   _endpt(endpt),
   _tpfactory(tp_factory),
+  _sipresolver(sipresolver),
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
@@ -159,30 +161,47 @@ pjsip_transport* ConnectionPool::get_connection()
 }
 
 
-pj_status_t ConnectionPool::resolve_host(const pj_str_t* host, pj_sockaddr* addr)
+pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
+                                         int port,
+                                         pj_sockaddr* addr)
 {
-  pj_addrinfo ai[PJ_MAX_HOSTNAME];
-  unsigned count;
-  int af = pj_AF_UNSPEC();
+  pj_status_t status = PJ_ENOTFOUND;
 
-  // Use pj_getaddrinfo to resolve the upstream proxy host name to a set of
-  // IP addresses.  Note that PJ_MAX_HOSTNAME is the maximum number of entried
-  // PJSIP can return - if we decide we need more we will need to change this
-  // in the PJSIP code.  Note also that there may be theoretical limits in
-  // DNS anyway.
-  count = PJ_MAX_HOSTNAME;
-  pj_status_t status = pj_getaddrinfo(af, host, &count, ai);
-  if (status != PJ_SUCCESS)
+  if (_sipresolver != NULL)
   {
-    return status;
+    // Use the SIPResolver to select a server for this connection.
+    AddrInfo ai;
+    if (_sipresolver->resolve(std::string(host->ptr, host->slen), port, IPPROTO_TCP, AF_INET, ai))
+    {
+      addr->ipv4.sin_family = AF_INET;
+      addr->ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
+      pj_sockaddr_set_port(addr, ai.port);
+      status = PJ_SUCCESS;
+    }
+  }
+  else
+  {
+    pj_addrinfo ai[PJ_MAX_HOSTNAME];
+    unsigned count;
+    int af = pj_AF_UNSPEC();
+
+    // Use pj_getaddrinfo to resolve the upstream proxy host name to a set of
+    // IP addresses.  Note that PJ_MAX_HOSTNAME is the maximum number of entried
+    // PJSIP can return - if we decide we need more we will need to change this
+    // in the PJSIP code.  Note also that there may be theoretical limits in
+    // DNS anyway.
+    count = PJ_MAX_HOSTNAME;
+    status = pj_getaddrinfo(af, host, &count, ai);
+    if (status == PJ_SUCCESS)
+    {
+      // Select an A record at random.
+      int selection = rand() % count;
+      pj_memcpy(addr, &ai[selection].ai_addr, sizeof(pj_sockaddr));
+      pj_sockaddr_set_port(addr, port);
+    }
   }
 
-  // Select an A record at random.
-  int selection = rand() % count;
-
-  pj_memcpy(addr, &ai[selection].ai_addr, sizeof(pj_sockaddr));
-
-  return PJ_SUCCESS;
+  return status;
 }
 
 
@@ -190,7 +209,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
 {
   // Resolve the target host to an IP address.
   pj_sockaddr remote_addr;
-  pj_status_t status = resolve_host(&_target.host, &remote_addr);
+  pj_status_t status = resolve_host(&_target.host, _target.port, &remote_addr);
 
   if (status != PJ_SUCCESS)
   {
@@ -199,8 +218,6 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
               PJUtils::pj_status_to_string(status).c_str());
     return status;
   }
-
-  pj_sockaddr_set_port(&remote_addr, _target.port);
 
   // Call TPMGR to create a new transport connection.
   pjsip_transport* tp;
@@ -212,7 +229,7 @@ pj_status_t ConnectionPool::create_connection(int hash_slot)
                                            PJSIP_TRANSPORT_TCP6 : PJSIP_TRANSPORT_TCP,
                                          &remote_addr,
                                          (remote_addr.addr.sa_family == pj_AF_INET6()) ?
-                                           sizeof(pj_sockaddr_in6) : sizeof(pj_sockaddr_in), 
+                                           sizeof(pj_sockaddr_in6) : sizeof(pj_sockaddr_in),
                                          &tp_sel,
                                          &tp);
 
@@ -344,6 +361,14 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
         --_active_connections;
         decrement_connection_count(tp);
       }
+
+      // Blacklist the selected destination so we steer clear of it for a while
+      AddrInfo ai;
+      ai.transport = IPPROTO_TCP;
+      ai.port = pj_sockaddr_get_port(&tp->key.rem_addr);
+      ai.address.af = tp->key.rem_addr.addr.sa_family;
+      ai.address.addr.ipv4.s_addr = tp->key.rem_addr.ipv4.sin_addr.s_addr;
+      _sipresolver->blacklist(ai, 30);
 
       // Don't listen for any more state changes on this connection (but note
       // it's illegal to call any methods on the transport once it's entered the

@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #ifndef CONNECTION_POOL_H__
 #define CONNECTION_POOL_H__
 
@@ -49,6 +47,7 @@ extern "C" {
 #include <random>
 
 #include "statistic.h"
+#include "sipresolver.h"
 
 class ConnectionPool
 {
@@ -59,6 +58,7 @@ public:
                  pj_pool_t* pool,
                  pjsip_endpoint* endpt,
                  pjsip_tpfactory* tp_factory,
+                 SIPResolver* sipresolver,
                  LastValueCache* lvc);
   ~ConnectionPool();
 
@@ -75,7 +75,7 @@ public:
   static int recycle_thread(void* p);
 
 private:
-  pj_status_t resolve_host(const pj_str_t* host, pj_sockaddr* addr);
+  pj_status_t resolve_host(const pj_str_t* host, int port, pj_sockaddr* addr);
   pj_status_t create_connection(int hash_slot);
   void quiesce_connection(int hash_slot);
   void quiesce_connections();
@@ -98,6 +98,10 @@ private:
   pj_pool_t* _pool;
   pjsip_endpoint* _endpt;
   pjsip_tpfactory* _tpfactory;
+
+  /// A pointer to the SIP resolver object used to select destination IP
+  /// addresses.
+  SIPResolver* _sipresolver;
 
   pj_thread_t* _recycler;
   volatile bool _terminated;

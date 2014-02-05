@@ -747,6 +747,8 @@ int main(int argc, char *argv[])
   BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
   LoadMonitor* load_monitor = NULL;
+  DnsCachedResolver* dns_resolver = NULL;
+  SIPResolver* sip_resolver = NULL;
   Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
   RegStore* local_reg_store = NULL;
@@ -971,6 +973,10 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  // Create a DNS resolver and a SIP specific resolver.
+  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  sip_resolver = new SIPResolver(dns_resolver);
+
   // Initialise the OPTIONS handling module.
   status = init_options();
 
@@ -1096,6 +1102,7 @@ int main(int argc, char *argv[])
                                  false,
                                  "",
                                  analytics_logger,
+                                 sip_resolver,
                                  enum_service,
                                  bgcf_service,
                                  hss_connection,
@@ -1127,6 +1134,7 @@ int main(int argc, char *argv[])
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  analytics_logger,
+                                 sip_resolver,
                                  NULL,
                                  NULL,
                                  NULL,
@@ -1160,6 +1168,7 @@ int main(int argc, char *argv[])
     // Launch I-CSCF proxy.
     icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                  stack_data.icscf_port,
+                                 sip_resolver,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
                                  scscf_selector);
@@ -1226,6 +1235,9 @@ int main(int argc, char *argv[])
   delete av_store;
   delete local_data_store;
   delete remote_data_store;
+
+  delete sip_resolver;
+  delete dns_resolver;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
