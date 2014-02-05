@@ -55,7 +55,7 @@ namespace NotifyUtils
 {
   enum DocState { FULL, PARTIAL };
   enum RegContactState { ACTIVE, TERMINATED };
-  enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, UNREGISTERED, DEACTIVATED };
+  enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             RegStore::AoR::Subscription* subscription,

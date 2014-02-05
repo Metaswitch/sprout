@@ -199,7 +199,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
   int cseq = rdata->msg_info.cseq->cseq;
 
-  NotifyUtils::ContactEvent contact_event;
+  NotifyUtils::ContactEvent contact_event = NotifyUtils::CREATED;
 
   // Find the expire headers in the message.
   pjsip_msg *msg = rdata->msg_info.msg;
