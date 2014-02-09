@@ -48,6 +48,7 @@
 #include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 
@@ -74,8 +75,9 @@ TEST_F(RegStoreTest, BindingTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -156,6 +158,7 @@ TEST_F(RegStoreTest, BindingTests)
   delete aor_data1; aor_data1 = NULL;
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 
@@ -168,8 +171,9 @@ TEST_F(RegStoreTest, SubscriptionTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -245,6 +249,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   delete aor_data1; aor_data1 = NULL;
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 
@@ -256,8 +261,9 @@ TEST_F(RegStoreTest, CopyTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record.
   now = time(NULL);
@@ -310,6 +316,7 @@ TEST_F(RegStoreTest, CopyTests)
 
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 TEST_F(RegStoreTest, ExpiryTests)
@@ -327,8 +334,9 @@ TEST_F(RegStoreTest, ExpiryTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Create an empty AoR record.
   now = time(NULL);
@@ -415,6 +423,7 @@ TEST_F(RegStoreTest, ExpiryTests)
 
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
   term_pjsip();
 }
 

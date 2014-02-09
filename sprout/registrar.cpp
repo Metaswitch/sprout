@@ -62,13 +62,14 @@ extern "C" {
 #include "constants.h"
 #include "log.h"
 #include "notify_utils.h"
+#include "chronosconnection.h"
 
 static RegStore* store;
 static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
-
+static ChronosConnection* chronos;
 static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
@@ -108,11 +109,12 @@ void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
        ++i)
   {
     RegStore::AoR::Binding* binding = i->second;
-    LOG_DEBUG("  %s URI=%s expires=%d q=%d from %s cseq %d",
+    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
-              binding->_cid.c_str(), binding->_cseq);
+              binding->_cid.c_str(), binding->_cseq,
+              binding->_timer_id.c_str());
   }
 }
 
@@ -199,7 +201,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
   int cseq = rdata->msg_info.cseq->cseq;
 
-  NotifyUtils::ContactEvent contact_event;
+  NotifyUtils::ContactEvent contact_event = NotifyUtils::CREATED;
 
   // Find the expire headers in the message.
   pjsip_msg *msg = rdata->msg_info.msg;
@@ -356,8 +358,40 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_expires = now + expiry;
-          bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
 
+          // If this is a de-registration, don't update the timers or send NOTIFYs, as this 
+          // is all covered in expire_bindings which is called when the aor_data is saved.
+          if (expiry != 0)
+          {
+            bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
+
+            // Update the Chronos timer for this binding
+            HTTPCode status;
+            std::string timer_id = "";
+            std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding_id +"\",}"; 
+  
+            // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST. 
+            if (binding->_timer_id == "")
+            { 
+              status = chronos->send_post(timer_id, expiry, "localhost:9888/timers", opaque, NULL);
+            }  
+            else
+            {
+              timer_id = binding->_timer_id;
+              status = chronos->send_put(timer_id, expiry, "localhost:9888/timers", opaque, NULL);
+            }
+            
+            // Update the timer id. If the put/post to Chronos failed, set the timer_id to "". 
+            if (status == HTTP_OK)
+            {
+              binding->_timer_id = timer_id;
+            }
+            else
+            {
+              binding->_timer_id = "";
+            }
+          }
+   
           if (analytics != NULL)
           {
             // Generate an analytics log for this binding update.
@@ -741,6 +775,7 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
+                           ChronosConnection* chronos_connection,
                            AnalyticsLogger* analytics_logger,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
@@ -750,6 +785,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
   store = registrar_store;
   remote_store = remote_reg_store;
   hss = hss_connection;
+  chronos = chronos_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;

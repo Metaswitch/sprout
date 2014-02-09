@@ -46,6 +46,7 @@
 
 #include "store.h"
 #include "regstore.h"
+#include "chronosconnection.h"
 
 class RegStore
 {
@@ -90,6 +91,10 @@ public:
       /// Any other parameters found in the Contact: header, stored as key ->
       /// value in order of appearance.  E.g., "+sip.ice" -> "".
       std::list<std::pair<std::string, std::string> > _params;
+
+      /// The timer ID provided by Chronos.
+      std::string _timer_id;
+
     };
 
     /// @class RegStore::AoR::Subscription
@@ -198,7 +203,7 @@ public:
   };
 
   /// Constructor.
-  RegStore(Store* data_store);
+  RegStore(Store* data_store, ChronosConnection* chronos_connection);
 
   /// Destructor.
   ~RegStore();
@@ -227,6 +232,7 @@ private:
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
 
   Store* _data_store;
+  ChronosConnection* _chronos;
 };
 
 #endif

@@ -44,6 +44,7 @@ extern "C" {
 
 #include "regstore.h"
 #include "hssconnection.h"
+#include "chronosconnection.h"
 #include "analyticslogger.h"
 #include "ifchandler.h"
 
@@ -52,6 +53,7 @@ extern pjsip_module mod_registrar;
 extern pj_status_t init_registrar(RegStore* registrar_store,
                                   RegStore* remote_reg_store,
                                   HSSConnection* hss_connection,
+                                  ChronosConnection* chronos_connection,
                                   AnalyticsLogger* analytics_logger,
                                   IfcHandler* ifchandler_ref,
                                   int cfg_max_expires);
