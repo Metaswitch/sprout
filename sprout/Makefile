@@ -16,6 +16,10 @@ TARGET_SOURCES := logger.cpp \
                   utils.cpp \
                   analyticslogger.cpp \
                   stack.cpp \
+                  dnsparser.cpp \
+                  dnscachedresolver.cpp \
+                  baseresolver.cpp \
+                  sipresolver.cpp \
                   stateful_proxy.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
@@ -54,8 +58,8 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   icscfproxy.cpp \
-                  scscfselector.cpp \
-                  signalhandler.cpp \
+                  scscfselector.cpp	\
+                  signalhandler.cpp	\
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \
@@ -109,7 +113,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        subscription_test.cpp \
-                       chronosconnection_test.cpp \
+                       chronosconnection_test.cpp 
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

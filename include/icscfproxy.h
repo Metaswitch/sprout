@@ -52,6 +52,7 @@ public:
   /// Constructor.
   ICSCFProxy(pjsip_endpoint* endpt,
              int port,
+             SIPResolver* sipresolver,
              int priority,
              HSSConnection* hss,
              SCSCFSelector* scscf_selector);

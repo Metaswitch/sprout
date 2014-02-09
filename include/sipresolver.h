@@ -1,5 +1,5 @@
 /**
- * @file notify_utils.h
+ * @file sipresolver.h  Declaration of SIP DNS resolver class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,38 +34,23 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef NOTIFY_UTILS_H__
-#define NOTIFY_UTILS_H__
+#ifndef SIPRESOLVER_H__
+#define SIPRESOLVER_H__
 
-extern "C" {
-#include <pjsip.h>
-#include <pjlib-util.h>
-#include <pjlib.h>
-#include <stdint.h>
-#include <pjsip/sip_msg.h>
-}
+#include "baseresolver.h"
 
-#include <string>
-#include "regstore.h"
-#include "ifchandler.h"
-#include "hssconnection.h"
-#include "pjsip-simple/evsub.h"
-
-namespace NotifyUtils
+class SIPResolver : public BaseResolver
 {
-  enum DocState { FULL, PARTIAL };
-  enum RegContactState { ACTIVE, TERMINATED };
-  enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
+public:
+  SIPResolver(DnsCachedResolver* dns_client);
+  ~SIPResolver();
 
-  pj_status_t create_notify(pjsip_tx_data** tdata_notify,
-                            RegStore::AoR::Subscription* subscription,
-                            std::string aor, 
-                            int cseq,
-                            std::map<std::string, RegStore::AoR::Binding> bindings,
-                            NotifyUtils::DocState doc_state,
-                            NotifyUtils::RegContactState reg_state,
-                            NotifyUtils::RegContactState contact_state,
-                            NotifyUtils::ContactEvent contact_event);
+  bool resolve(const std::string& target,
+               int port,
+               int transport,
+               int af,
+               AddrInfo& ai);
+
 };
 
 #endif

@@ -76,6 +76,7 @@ public:
 
     _icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                   stack_data.icscf_port,
+                                  NULL,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
                                   _scscf_selector);

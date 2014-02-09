@@ -473,7 +473,7 @@ pj_status_t fill_transport_details(int port,
   status = pj_getaddrinfo(af, &stack_data.local_host, &count, addr_info);
   if (status != PJ_SUCCESS)
   {
-    LOG_ERROR("Failed to decode IP address %ac (%s)",
+    LOG_ERROR("Failed to decode IP address %.*s (%s)",
               stack_data.local_host.slen,
               stack_data.local_host.ptr,
               PJUtils::pj_status_to_string(status).c_str());

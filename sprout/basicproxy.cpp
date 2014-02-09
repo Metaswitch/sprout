@@ -61,10 +61,12 @@ extern "C" {
 
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
+                       SIPResolver* sipresolver,
                        int priority,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
+  _sipresolver(sipresolver),
   _delay_trying(delay_trying)
 {
 }
@@ -157,14 +159,9 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
     res_addr.dst_host.addr.port = hvia->sent_by.port;
   }
 
-  // Report a SIP call ID marker on the trail to make sure it gets
+  // Report SIP call and branch ID markers on the trail to make sure it gets
   // associated with the INVITE transaction at SAS.
-  if (rdata->msg_info.cid != NULL)
-  {
-    SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 3u);
-    cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
-  }
+  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 
   // Forward response
   status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
@@ -292,14 +289,10 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
     // Report a SIP call ID marker on the trail to make sure it gets
-    // associated with the INVITE transaction at SAS.
+    // associated with the INVITE transaction at SAS.  There's no need to
+    // report the branch IDs as they won't be used for correlation.
     LOG_DEBUG("Statelessly forwarding ACK");
-    if (rdata->msg_info.cid != NULL)
-    {
-      SAS::Marker cid(get_trail(rdata), MARKER_ID_SIP_CALL_ID, 1u);
-      cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-      SAS::report_marker(cid, SAS::Marker::Trace);
-    }
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
                                                 NULL, NULL);
@@ -1095,12 +1088,7 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  if (rdata->msg_info.cid != NULL)
-  {
-    SAS::Marker cid(trail_id, MARKER_ID_SIP_CALL_ID, 1u);
-    cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Trace);
-  }
+  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 }
 
 
@@ -1276,6 +1264,8 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _uas_tsx(uas_tsx),
   _index(index),
   _tdata(NULL),
+  _transport(NULL),
+  _resolved(false),
   _pending_destroy(false),
   _context_count(0)
 {
@@ -1388,20 +1378,21 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
   {
     // The target includes a selected transport, so set the transport on
     // the transaction.
+    _transport = target->transport;
     LOG_DEBUG("Force request to use selected transport %.*s:%d to %.*s:%d",
-              target->transport->local_name.host.slen,
-              target->transport->local_name.host.ptr,
-              target->transport->local_name.port,
-              target->transport->remote_name.host.slen,
-              target->transport->remote_name.host.ptr,
-              target->transport->remote_name.port);
+              _transport->local_name.host.slen,
+              _transport->local_name.host.ptr,
+              _transport->local_name.port,
+              _transport->remote_name.host.slen,
+              _transport->remote_name.host.ptr,
+              _transport->remote_name.port);
     pjsip_tpselector tp_selector;
     tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-    tp_selector.u.transport = target->transport;
+    tp_selector.u.transport = _transport;
     pjsip_tsx_set_transport(_tsx, &tp_selector);
 
     // Remove the reference to the transport added when it was chosen.
-    pjsip_transport_dec_ref(target->transport);
+    pjsip_transport_dec_ref(_transport);
   }
 
   exit_context();
@@ -1413,13 +1404,30 @@ void BasicProxy::UACTsx::send_request()
 {
   enter_context();
 
+  pj_status_t status = PJ_SUCCESS;
+
   LOG_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
 
-  pj_status_t status = pjsip_tsx_send_msg(_tsx, _tdata);
+  if ((_transport == NULL) &&
+      (_proxy->_sipresolver != NULL))
+  {
+// LCOV_EXCL_START
+    // Resolve the next hop destination for this request to an IP address.
+    LOG_DEBUG("Resolve next hop destination");
+    status = resolve_next_hop();
+// LCOV_EXCL_STOP
+  }
+
+  if (status == PJ_SUCCESS)
+  {
+    status = pjsip_tsx_send_msg(_tsx, _tdata);
+  }
+
   if (status != PJ_SUCCESS)
   {
     // Failed to send the request.
+    LOG_DEBUG("Failed to send request");
     pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
@@ -1430,6 +1438,92 @@ void BasicProxy::UACTsx::send_request()
   exit_context();
 }
 
+
+// LCOV_EXCL_START
+/// Resolves the next hop target of the SIP message and fills in the dest_info
+/// structure on the message.
+pj_status_t BasicProxy::UACTsx::resolve_next_hop()
+{
+  pj_status_t status = PJ_ENOTFOUND;
+
+  // Get the next hop URI from the message and parse out the destination, port
+  // and transport.
+  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(_tdata->msg);
+  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
+  int port = next_hop->port;
+  int transport = -1;
+  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
+  {
+    transport = IPPROTO_TCP;
+  }
+  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
+  {
+    transport = IPPROTO_UDP;
+  }
+
+  if (_proxy->_sipresolver->resolve(target, port, transport, AF_INET, _ai))
+  {
+    // Resolved the target successfully, so fill in dest_info on the tdata.
+    status = PJ_SUCCESS;
+    _tdata->dest_info.cur_addr = 0;
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].priority = 0;
+    _tdata->dest_info.addr.entry[0].weight = 0;
+
+    if (_ai.transport == IPPROTO_TCP)
+    {
+      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+    }
+    else if (_ai.transport == IPPROTO_UDP)
+    {
+      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+    }
+    else
+    {
+      // Unknown transport returned from resolver.
+      LOG_ERROR("Unknown transport %d returned by resolver", _ai.transport);
+      status = PJ_ENOTSUP;
+    }
+
+    if (_ai.address.af == AF_INET)
+    {
+      // IPv4 address.
+      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
+      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
+      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
+    }
+    else if (_ai.address.af == AF_INET6)
+    {
+      // IPv6 address.
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
+      memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
+             (char*)&_ai.address.addr.ipv6,
+             sizeof(pj_in6_addr));
+      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
+      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
+    }
+    else
+    {
+      status = PJ_EAFNOTSUP;
+    }
+    pj_sockaddr_set_port(&_tdata->dest_info.addr.entry[0].addr, _ai.port);
+  }
+
+  // Set the resolved flag if the resolution was successful.
+  _resolved = (status == PJ_SUCCESS);
+  if (status == PJ_SUCCESS)
+  {
+    char buf[100];
+    LOG_DEBUG("Resolved to %s using transport %s",
+              pj_sockaddr_print(&_tdata->dest_info.addr.entry[0].addr,
+                                buf, sizeof(buf), 1),
+              pjsip_transport_get_type_name(_tdata->dest_info.addr.entry[0].type));
+  }
+
+  return status;
+}
+// LCOV_EXCL_STOP
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
@@ -1517,6 +1611,10 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
       LOG_DEBUG("Timeout or transport error");
+      if (_resolved)
+      {
+        _proxy->_sipresolver->blacklist(_ai, 30);
+      }
       _uas_tsx->on_client_not_responding(this);
     }
   }

@@ -496,12 +496,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  if (rdata->msg_info.cid)
-  {
-    SAS::Marker cid(trail, MARKER_ID_SIP_CALL_ID, 1u);
-    cid.add_var_param(rdata->msg_info.cid->id.slen, rdata->msg_info.cid->id.ptr);
-    SAS::report_marker(cid, SAS::Marker::Scope::Trace);
-  }
+  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
 
   // Add a SAS end marker
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);

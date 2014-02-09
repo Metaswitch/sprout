@@ -360,6 +360,7 @@ public:
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
+                                          NULL,
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
