@@ -51,6 +51,7 @@
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -322,8 +323,9 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
+    _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
@@ -379,6 +381,7 @@ public:
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
     delete _store; _store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _call_services; _call_services = NULL;
@@ -445,6 +448,7 @@ public:
 
 protected:
   static LocalStore* _local_data_store;
+  static FakeChronosConnection* _chronos_connection;
   static RegStore* _store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
@@ -474,6 +478,7 @@ protected:
 };
 
 LocalStore* StatefulProxyTestBase::_local_data_store;
+FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
 RegStore* StatefulProxyTestBase::_store;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
