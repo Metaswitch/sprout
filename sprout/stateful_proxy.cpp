@@ -2105,9 +2105,31 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
 
-        // Check whether the returned S-CSCF is this S-CSCF
-        if (PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain).find(server_name) != std::string::npos)
+        printf("Server name %s", server_name.c_str());
+        printf("Cluster %s", PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain).c_str());
+
+        pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+
+        // This should always be s SIP URI
+        if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
         {
+          // Got a SIP URI - force loose-routing.
+          ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
+        }
+        else
+        {
+          LOG_DEBUG("No valid S-CSCFs found");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
+        }
+
+        pj_str_t host_from_uri = ((pjsip_sip_uri*)scscf_uri)->host;   
+
+        // Check whether the returned S-CSCF is this S-CSCF
+        if (pj_stricmp(&host_from_uri, &stack_data.sprout_cluster_domain)==0)
+        {
+          printf("11111111111");
           // The S-CSCFs are the same, so continue
           bool success = move_to_terminating_chain();
           if (!success)
@@ -2120,18 +2142,12 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
         else
         {
+          printf("22222222");
           // The S-CSCF is different, so route the call there.
            _as_chain_link.release();
 
           delete target;
           target = new Target;
-
-          pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
-          if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
-          {
-            // Got a SIP URI - force loose-routing.
-            ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
-          }
 
           target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
 
