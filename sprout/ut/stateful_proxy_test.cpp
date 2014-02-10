@@ -5780,7 +5780,7 @@ TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
   Message msg;
   msg._route = "Route: <sip:homedomain;orig>";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 TEST_F(InternalIcscfTest, TestHSSHasNoSCSCF)
