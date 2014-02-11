@@ -38,7 +38,7 @@
 # Usage: poll-sip <port>
 
 # Grab the command-line argument.
-[ $# = 1 ] || { echo "Usage: poll-sip <port>" ; exit 2 ; }
+[ $# = 1 ] || { echo "Usage: poll-sip <port>" >&2 ; exit 2 ; }
 port=$1
 
 # Grab our configuration - we just use the local IP address.

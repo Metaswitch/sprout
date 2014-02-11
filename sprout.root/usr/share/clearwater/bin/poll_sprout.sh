@@ -42,7 +42,7 @@ sleep 5
 
 # Read the config, defaulting appropriately.
 scscf=5054
-ifcsf=0
+icscf=0
 . /etc/clearwater/config
 
 # If we have S-CSCF configured, check it.
