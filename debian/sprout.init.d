@@ -350,6 +350,10 @@ case "$1" in
                 ;;
         esac
         ;;
+  abort)
+        log_daemon_msg "Aborting $DESC" "$NAME"
+        do_abort
+        ;;
   abort-restart)
         log_daemon_msg "Abort-Restarting $DESC" "$NAME"
         do_abort

@@ -1984,6 +1984,25 @@ TEST_F(StatefulProxyTest, TestSIPMessageSupport)
   free_txdata();
 }
 
+// Test that a multipart message can be parsed successfully
+TEST_F(StatefulProxyTest, TestSimpleMultipart)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._content_type = "multipart/mixed;boundary=\"boundary1\"";
+  msg._body = "\r\n--boundary1\r\nContent-Type: application/sdp\r\nContent-Length: 343\r\n\r\nv=0\r\no=- 3600506724 3600506724 IN IP4 888.888.888.888\r\n" \
+              "s=-\r\nc=IN IP4 888.888.888.888\r\nt=0 0\r\nm=message 9 TCP/MSRP *\r\na=path:msrp://888.888.888.888:7777/1391517924073;tcp\r\n" \
+              "a=setup:active\r\na=accept-types:message/cpim application/im-iscomposing+xml\r\na=accept-wrapped-types:text/plain message/imdn+xml " \
+              "application/rcspushlocation+xml\r\na=sendrecv\r\n\r\n--boundary1\r\nContent-Type: message/cpim\r\nContent-Length: 300\r\n\r\nFrom: " \
+              "<sip:anonymous@anonymous.invalid>\r\nTo: <sip:anonymous@anonymous.invalid>\r\nNS: imdn <urn:ietf:params:imdn>\r\nimdn.Message-ID: " \
+              "Msg6rn78PUQzC\r\nDateTime: 2014-02-04T12:45:24.000Z\r\nimdn.Disposition-Notification: positive-delivery, display\r\n\r\nContent-type: " \
+              "text/plain; charset=utf-8\r\n\r\nsubject\r\n\r\n--boundary1--";
+
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+}
+
 /// Register a client with the edge proxy, returning the flow token.
 void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport to register on
                                            string& xoToken, //^ out: token (parsed from Path)
@@ -5785,7 +5804,7 @@ TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
   Message msg;
   msg._route = "Route: <sip:homedomain;orig>";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 TEST_F(InternalIcscfTest, TestHSSHasNoSCSCF)
