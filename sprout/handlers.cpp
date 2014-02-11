@@ -92,10 +92,7 @@ void ChronosHandler::handle_response(const std::string aor, const std::string bi
     
     if (bind->_cid != "")
     { 
-      // Chronos timer has failed for some reason. 
-      std::string timer_id;
-      HTTPCode status;
-      std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding +"\"}";
+      // Existing binding 
       int now = time(NULL);
       int expiry = bind->_expires - now; 
 
@@ -117,6 +114,10 @@ void ChronosHandler::handle_response(const std::string aor, const std::string bi
       else
       {
         LOG_DEBUG("The timer wasn't due to expire, update the Chronos timer");
+
+        std::string timer_id;
+        HTTPCode status;
+        std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding +"\"}";
 
         if (bind->_timer_id == "")
         {
@@ -143,6 +144,7 @@ void ChronosHandler::handle_response(const std::string aor, const std::string bi
     else
     {
       LOG_DEBUG("This is a new binding, so the old binding has expired");
+      break;
     }
   }
   while (!_cfg->store->set_aor_data(aor, aor_data));
@@ -164,8 +166,8 @@ int ChronosHandler::parse_response(std::string body, std::string *aor, std::stri
     return 400;
   }
 
-  if ((json_body.isMember("aor")) &&
-      ((json_body)["aor"].isString()))
+  if ((json_body.isMember("aor_id")) &&
+      ((json_body)["aor_id"].isString()))
   {
     *aor = json_body.get("aor", "").asString();
   }
@@ -175,8 +177,8 @@ int ChronosHandler::parse_response(std::string body, std::string *aor, std::stri
     return 400;
   }
 
-  if ((json_body.isMember("binding")) &&
-      ((json_body)["binding"].isString()))
+  if ((json_body.isMember("binding_id")) &&
+      ((json_body)["binding_id"].isString()))
   {
     *binding = json_body.get("binding", "").asString();
   }

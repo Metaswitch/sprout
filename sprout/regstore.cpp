@@ -186,7 +186,7 @@ int RegStore::expire_bindings(AoR* aor_data,
 
       // If a timer id is present, then delete it. If the timer id is empty (because a 
       // previous post/put failed) then don't.
-      if (b->timer_id != "")
+      if (b->_timer_id != "")
       {
         _chronos->send_delete(b->_timer_id, 0);
       } 

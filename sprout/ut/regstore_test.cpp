@@ -89,6 +89,7 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -185,6 +186,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -279,6 +281,7 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -352,6 +355,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 100;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
@@ -362,6 +366,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 200;
+  b2->_timer_id = "00000000000";
   b2->_priority = 0;
   b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b2->_params.push_back(std::make_pair("reg-id", "2"));
