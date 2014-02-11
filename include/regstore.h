@@ -220,6 +220,9 @@ public:
   /// succeeds, this returns true.
   bool set_aor_data(const std::string& aor_id, AoR* data);
 
+  // Send a SIP NOTIFY
+  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
+
 private:
   int expire_bindings(AoR* aor_data, int now);
   void expire_subscriptions(AoR* aor_data, int now);
@@ -227,9 +230,6 @@ private:
   std::string serialize_aor(AoR* aor_data);
 
   AoR* deserialize_aor(const std::string& s);
-
-  // Send a SIP NOTIFY
-  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
 
   Store* _data_store;
   ChronosConnection* _chronos;

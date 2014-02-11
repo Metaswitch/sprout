@@ -368,17 +368,17 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
             // Update the Chronos timer for this binding
             HTTPCode status;
             std::string timer_id = "";
-            std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding_id +"\",}"; 
+            std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding_id +"\"}"; 
   
             // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST. 
             if (binding->_timer_id == "")
             { 
-              status = chronos->send_post(timer_id, expiry, "localhost:9888/timers", opaque, NULL);
+              status = chronos->send_post(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
             }  
             else
             {
               timer_id = binding->_timer_id;
-              status = chronos->send_put(timer_id, expiry, "localhost:9888/timers", opaque, NULL);
+              status = chronos->send_put(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
             }
             
             // Update the timer id. If the put/post to Chronos failed, set the timer_id to "". 

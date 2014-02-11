@@ -1249,7 +1249,7 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  HttpStack* http_stack;
+  HttpStack* http_stack = NULL;
 
   if (opt.scscf_enabled)
   {
@@ -1261,7 +1261,7 @@ int main(int argc, char *argv[])
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
-      http_stack->register_handler("^/timers/[^/]*$",
+      http_stack->register_handler("^/timers$",
                                    &chronos_handler_factory);
       http_stack->start();
     }

@@ -60,9 +60,12 @@ extern "C" {
 #include "regstore.h"
 #include "notify_utils.h"
 #include "stack.h"
+#include "chronosconnection.h"
 
-RegStore::RegStore(Store* data_store) :
-  _data_store(data_store)
+RegStore::RegStore(Store* data_store, 
+                   ChronosConnection* chronos_connection) :
+  _data_store(data_store),
+  _chronos(chronos_connection)
 {
 }
 
@@ -122,7 +125,12 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   // cas on delete operations.  In this case we do a memcached_cas with
   // an effectively immediate expiry time.
   int now = time(NULL);
-  int max_expires = expire_bindings(aor_data, now);
+
+  // Set the max expires to be greater than the longest binding expiry time.
+  // This prevents a window condition where Chronos can return a binding to 
+  // expire, but memcached has already deleted the aor data (meaning that
+  // no NOTIFYs could be sent)
+  int max_expires = expire_bindings(aor_data, now) + 10;
 
   // Expire any old subscriptions as well.  This doesn't get factored in to
   // the expiry time on the store record because, according to 5.4.2.1.2 /
@@ -175,6 +183,13 @@ int RegStore::expire_bindings(AoR* aor_data,
       {  
         send_notify(j->second, aor_data->_notify_cseq, b, b_id);
       }    
+
+      // If a timer id is present, then delete it. If the timer id is empty (because a 
+      // previous post/put failed) then don't.
+      if (b->timer_id != "")
+      {
+        _chronos->send_delete(b->_timer_id, 0);
+      } 
 
       delete i->second;
       aor_data->_bindings.erase(i++);
@@ -256,6 +271,7 @@ std::string RegStore::serialize_aor(AoR* aor_data)
     {
       oss << *i << '\0';
     }
+    oss << b->_timer_id << '\0';
   }
 
   int num_subscriptions = aor_data->subscriptions().size();
@@ -341,6 +357,7 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
     {
       getline(iss, *i, '\0');
     }
+    getline(iss, b->_timer_id, '\0');
   }
 
   int num_subscriptions;
@@ -528,7 +545,7 @@ void RegStore::AoR::remove_subscription(const std::string& to_tag)
 }
 
 void RegStore::send_notify(AoR::Subscription* s, int cseq, 
-                                AoR::Binding* b, std::string b_id)
+                           AoR::Binding* b, std::string b_id)
 {
   pjsip_tx_data* tdata_notify = NULL;
   std::map<std::string, AoR::Binding> bindings;

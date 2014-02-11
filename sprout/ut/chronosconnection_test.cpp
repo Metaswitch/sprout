@@ -91,6 +91,30 @@ TEST_F(ChronosConnectionTest, SendPost)
   EXPECT_EQ(post_identity, "abcd");
 }
 
+TEST_F(ChronosConnectionTest, SendPostWithNoLocationHeader)
+{
+  std::list<std::string> headers = {"Header: header"};
+  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::string post_identity = "";
+  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  EXPECT_EQ(status, 400);
+  EXPECT_EQ(post_identity, "");
+}
+
+TEST_F(ChronosConnectionTest, SendPostWithNoHeaders)
+{
+  std::list<std::string> headers = {""};
+  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+
+  std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
+  std::string post_identity = "";
+  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  EXPECT_EQ(status, 400);
+  EXPECT_EQ(post_identity, "");
+}
+
 TEST_F(ChronosConnectionTest, SendPut)
 {
   fakecurl_responses["http://narcissus/timers/abcd"] = CURLE_OK;

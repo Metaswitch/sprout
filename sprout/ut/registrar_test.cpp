@@ -46,6 +46,7 @@
 #include "registration_utils.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -61,16 +62,17 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
-    _remote_store = new RegStore((Store*)_remote_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _chronos_connection, _analytics, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -81,6 +83,7 @@ public:
                                 "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+    _chronos_connection->set_result("", HTTP_OK);
   }
 
   static void TearDownTestCase()
@@ -93,6 +96,7 @@ public:
     delete _store; _store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -116,6 +120,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static FakeHSSConnection* _hss_connection;
+  static FakeChronosConnection* _chronos_connection;
 };
 
 LocalStore* RegistrarTest::_local_data_store;
@@ -125,6 +130,7 @@ RegStore* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 FakeHSSConnection* RegistrarTest::_hss_connection;
+FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 class Message
 {
@@ -336,6 +342,9 @@ TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
 
 TEST_F(RegistrarTest, MultipleRegistrations)
 {
+  _chronos_connection->set_result("", HTTP_OK);
+  _chronos_connection->set_result("1234", HTTP_OK);
+
   // First registration OK.
   Message msg;
   inject_msg(msg.get());
@@ -422,6 +431,25 @@ TEST_F(RegistrarTest, MultipleRegistrations)
 
   // Reregistering again with an updated cseq triggers an update of the binding.
   msg._cseq = "16568";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // Update the binding, but have the chronos put fail. The registration still succeeds.
+  _chronos_connection->set_result("1234", HTTP_SERVER_UNAVAILABLE);
+  msg._cseq = "16569";
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   out = current_txdata()->msg;
