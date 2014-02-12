@@ -77,6 +77,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        fakednsresolver.cpp \
                        basetest.cpp \
                        siptest.cpp \
+                       sipresolver_test.cpp \
                        authentication_test.cpp \
                        simservs_test.cpp \
                        httpconnection_test.cpp \
