@@ -106,6 +106,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        counter_test.cpp \
 											 icscfproxy_test.cpp \
 											 basicproxy_test.cpp \
+                       subscription_test.cpp \
                        scscfselector_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
