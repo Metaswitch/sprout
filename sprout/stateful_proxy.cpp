@@ -3470,7 +3470,7 @@ void UACTransaction::set_target(const struct Target& target)
          (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
          sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
     _tdata->dest_info.cur_addr = 0;
-
+ 
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target.transport);
   }
@@ -3551,7 +3551,7 @@ pj_status_t UACTransaction::resolve_next_hop()
     transport = IPPROTO_UDP;
   }
 
-  if (sipresolver->resolve(target, port, transport, AF_INET, _ai))
+  if (sipresolver->resolve(target, port, transport, stack_data.addr_family, _ai))
   {
     // Resolved the target successfully, so fill in dest_info on the tdata.
     status = PJ_SUCCESS;
@@ -3878,6 +3878,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                             stack_data.endpt,
                                             stack_data.pcscf_trusted_tcp_factory,
                                             sipresolver,
+                                            stack_data.addr_family,
                                             stack_data.stats_aggregator);
     upstream_conn_pool->init();
 

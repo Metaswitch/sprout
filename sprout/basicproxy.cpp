@@ -1461,7 +1461,7 @@ pj_status_t BasicProxy::UACTsx::resolve_next_hop()
     transport = IPPROTO_UDP;
   }
 
-  if (_proxy->_sipresolver->resolve(target, port, transport, AF_INET, _ai))
+  if (_proxy->_sipresolver->resolve(target, port, transport, stack_data.addr_family, _ai))
   {
     // Resolved the target successfully, so fill in dest_info on the tdata.
     status = PJ_SUCCESS;
