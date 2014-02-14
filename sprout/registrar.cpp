@@ -294,11 +294,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
         {
-           
+
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
-          
+
           if (cid != binding->_cid)
           {
             // New binding, set contact event to created
@@ -308,7 +308,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             // Updated binding, set contact event to refreshed
             contact_event = NotifyUtils::REFRESHED;
-          } 
+          }
 
           // TODO Examine Via header to see if we're the first hop
           // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
@@ -367,7 +367,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
-    
+
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
@@ -390,7 +390,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       if (subscription->_expires > now)
       {
         pjsip_tx_data* tdata_notify;
-        
+
         pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor, aor_data->_notify_cseq, bindings,
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
@@ -475,7 +475,46 @@ void process_register_request(pjsip_rx_data* rdata)
     private_id = "";
   }
 
-  HTTPCode http_code = hss->get_subscription_data(public_id, private_id, ifc_map, uris, trail);
+  // Find the expire headers in the message.
+  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
+
+  bool dereg = true;
+
+  // Now loop through all the contacts.  If there are multiple contacts in
+  // the contact header in the SIP message, pjsip parses them to separate
+  // contact header structures.
+  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+  while (contact != NULL)
+  {
+    if (contact->star)
+    {
+      // Wildcard contact, which can only be used to clear all bindings for
+      // the AoR.
+      dereg = true;
+      break;
+    }
+
+    pjsip_uri* uri = (contact->uri != NULL) ?
+      (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
+      NULL;
+
+    if ((uri != NULL) &&
+        (PJSIP_URI_SCHEME_IS_SIP(uri)))
+    {
+      // Calculate the expiry period for the binding.
+      int expiry = (contact->expires != -1) ? contact->expires :
+        (expires != NULL) ? expires->ivalue :
+        max_expires;
+      if (expiry > 0)
+      {
+        dereg = false;
+      }
+    }
+    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
+  }
+
+  std::string unused;
+  HTTPCode http_code = hss->registration_update(public_id, private_id, dereg? "dereg" : "reg", unused, ifc_map, uris, trail);
   if (http_code != HTTP_OK)
   {
     // We failed to get the list of associated URIs.  This indicates that the
@@ -726,7 +765,8 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
     // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+    std::string unused;
+    HTTPCode http_code = hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, get_trail(tsx));
 
     if (http_code == HTTP_OK)
     {

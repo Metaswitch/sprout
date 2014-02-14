@@ -80,11 +80,13 @@ public:
                                  const bool& originating,
                                  const std::string& auth_type,
                                  SAS::TrailId trail);
-  long get_subscription_data(const std::string& public_user_identity,
-                             const std::string& private_user_identity,
-                             std::map<std::string, Ifcs >& service_profiles,
-                             std::vector<std::string>& associated_uris,
-                             SAS::TrailId trail);
+  HTTPCode registration_update(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               std::string& regstate,
+                               std::map<std::string, Ifcs >& service_profiles,
+                               std::vector<std::string>& associated_uris,
+                               SAS::TrailId trail);
 private:
   virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);

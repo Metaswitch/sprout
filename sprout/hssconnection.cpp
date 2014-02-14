@@ -214,19 +214,21 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_identity,
-                                              const std::string& private_user_identity,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
-                                              SAS::TrailId trail)
+HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
+                                            std::string& regstate,
+                                            std::map<std::string, Ifcs >& ifcs_map,
+                                            std::vector<std::string>& associated_uris,
+                                            SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity);
+  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "?type=" + Utils::url_escape(type);
   if (!private_user_identity.empty())
   {
-    path += "?private_id=" + Utils::url_escape(private_user_identity);
+    path += "&private_id=" + Utils::url_escape(private_user_identity);
   }
 
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
@@ -260,6 +262,16 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
     LOG_ERROR("Malformed HSS XML - document couldn't be parsed");
     return HTTP_SERVER_ERROR;
   }
+
+  rapidxml::xml_node<>* reg = root->first_node("RegistrationState");
+
+  if (!reg)
+  {
+    LOG_ERROR("Malformed Homestead XML - no RegistrationState element");
+    return HTTP_SERVER_ERROR;
+  }
+
+  regstate = reg->value();
 
   rapidxml::xml_node<>* imss = root->first_node("IMSSubscription");
 

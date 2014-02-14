@@ -218,6 +218,14 @@ pj_status_t user_lookup(pj_pool_t *pool,
     delete av;
   }
 
+  if (status != PJ_SUCCESS)
+  {
+    std::string unused;
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->registration_update(impu, impi, "auth-failed-dereg", unused, ifc_map, uris, 0);
+  }
+
   return status;
 }
 

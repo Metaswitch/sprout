@@ -1409,7 +1409,8 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
   {
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
+    std::string regstate;
+    long http_code = hss->registration_update(public_id, "", "call", regstate, ifc_map, uris, trail);
     info = {ifc_map[public_id], uris};
     if (http_code == 200)
     {
@@ -3673,7 +3674,8 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
       std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
-      hss->get_subscription_data(aor, "", ifc_map, uris, trail());
+      std::string unused;
+      hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, trail());
 
       if (!uris.empty())
       {
