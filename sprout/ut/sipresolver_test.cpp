@@ -377,9 +377,9 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
 {
   // Test NAPTR selection according to order - select TCP as first in order.
   std::list<DnsRRecord*> records;
-  records.push_back(naptr("sprout.cw-ngv.com", 3600, 1, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
-  records.push_back(naptr("sprout.cw-ngv.com", 3600, 2, 0, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
-  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
+  records.push_back(naptr("sprout-1.cw-ngv.com", 3600, 1, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
+  records.push_back(naptr("sprout-1.cw-ngv.com", 3600, 2, 0, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_naptr, records);
 
   records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 0, 5054, "sprout-1.cw-ngv.com"));
   _dnsresolver.add_to_cache("_sip._tcp.sprout.cw-ngv.com", ns_t_srv, records);
@@ -393,17 +393,17 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
   LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout-1.cw-ngv.com").resolve());
 
   // Test NAPTR selection according to preference - select UDP as first in preference.
-  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 2, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
-  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 1, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
-  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
+  records.push_back(naptr("sprout-2.cw-ngv.com", 3600, 0, 2, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
+  records.push_back(naptr("sprout-2.cw-ngv.com", 3600, 0, 1, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("sprout-2.cw-ngv.com", ns_t_naptr, records);
 
   LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
 
   EXPECT_EQ("3.0.0.1:5054;transport=UDP",
-            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+            RT(_sipresolver, "sprout-2.cw-ngv.com").resolve());
 }
 
 TEST_F(SIPResolverTest, SRVPriority)

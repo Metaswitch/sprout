@@ -1412,11 +1412,9 @@ void BasicProxy::UACTsx::send_request()
   if ((_transport == NULL) &&
       (_proxy->_sipresolver != NULL))
   {
-// LCOV_EXCL_START
     // Resolve the next hop destination for this request to an IP address.
-    LOG_DEBUG("Resolve next hop destination");
-    status = resolve_next_hop();
-// LCOV_EXCL_STOP
+    LOG_DEBUG("Resolve next hop destination");                          //LCOV_EXCL_LINE
+    status = resolve_next_hop();                                        //LCOV_EXCL_LINE
   }
 
   if (status == PJ_SUCCESS)
@@ -1427,7 +1425,7 @@ void BasicProxy::UACTsx::send_request()
   if (status != PJ_SUCCESS)
   {
     // Failed to send the request.
-    LOG_DEBUG("Failed to send request");
+    LOG_DEBUG("Failed to send request");                                //LCOV_EXCL_LINE
     pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
@@ -1625,7 +1623,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       LOG_DEBUG("Timeout or transport error");
       if (_resolved)
       {
-        _proxy->_sipresolver->blacklist(_ai, 30);
+        _proxy->_sipresolver->blacklist(_ai, 30);                       //LCOV_EXCL_LINE
       }
       _uas_tsx->on_client_not_responding(this);
     }
