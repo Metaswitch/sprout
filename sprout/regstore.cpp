@@ -180,9 +180,9 @@ int RegStore::expire_bindings(AoR* aor_data,
       for (AoR::Subscriptions::iterator j = aor_data->_subscriptions.begin();
            j != aor_data->_subscriptions.end();
           ++j)
-      {  
+      {
         send_notify(j->second, aor_data->_notify_cseq, b, b_id);
-      }    
+      }
 
       // If a timer id is present, then delete it. If the timer id is empty (because a 
       // previous post/put failed) then don't.
@@ -351,11 +351,13 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
     int num_paths = 0;
     iss.read((char *)&num_paths, sizeof(int));
     b->_path_headers.resize(num_paths);
+    LOG_DEBUG("Deserialize %d path headers", num_paths);
     for (std::list<std::string>::iterator i = b->_path_headers.begin();
          i != b->_path_headers.end();
          ++i)
     {
       getline(iss, *i, '\0');
+      LOG_DEBUG("  Deserialized path header %s", i->c_str());
     }
     getline(iss, b->_timer_id, '\0');
   }
@@ -551,13 +553,13 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   std::map<std::string, AoR::Binding> bindings;
   bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(b_id, *b));
   pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
-                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, 
+                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
                                   NotifyUtils::TERMINATED, NotifyUtils::EXPIRED);
 
   if (status == PJ_SUCCESS)
   {
     pjsip_tx_data_add_ref(tdata_notify);
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, 
+    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify,
                                                                     NULL, NULL);
     pjsip_tx_data_dec_ref(tdata_notify);
   }
