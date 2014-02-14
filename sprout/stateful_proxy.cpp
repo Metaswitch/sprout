@@ -3424,25 +3424,21 @@ void UACTransaction::set_target(const struct Target& target)
        pit != target.paths.end();
        ++pit)
   {
-    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
-              ((pjsip_sip_uri*)*pit)->user.slen, ((pjsip_sip_uri*)*pit)->user.ptr,
-              (((pjsip_sip_uri*)*pit)->user.slen != 0) ? "@" : "",
-              ((pjsip_sip_uri*)*pit)->host.slen, ((pjsip_sip_uri*)*pit)->host.ptr,
-              ((pjsip_sip_uri*)*pit)->port,
-              ((pjsip_sip_uri*)*pit)->transport_param.slen,
-              ((pjsip_sip_uri*)*pit)->transport_param.ptr);
-    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
-    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, *pit);
-    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
+    // We may have a nameaddr here rather than a URI - if so,
+    // pjsip_uri_get_uri will return the internal URI. Otherwise, it
+    // will just return the URI.
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*pit);
 
-    // We no longer set the transport in the route header as it has no effect
-    // and the transport should already be set in the path URI.
-    //LOG_DEBUG("Explictly setting transport to TCP in Route header");
-    //pj_list_init(&route_hdr->other_param);
-    //pjsip_param *transport_param = PJ_POOL_ALLOC_T(_tdata->pool, pjsip_param);
-    //pj_strdup2(_tdata->pool, &transport_param->name, "transport");
-    //pj_strdup2(_tdata->pool, &transport_param->value, "tcp");
-    //pj_list_insert_before(&route_hdr->other_param, transport_param);
+    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
+              uri->user.slen, uri->user.ptr,
+              (uri->user.slen != 0) ? "@" : "",
+              uri->host.slen, uri->host.ptr,
+              uri->port,
+              uri->transport_param.slen,
+              uri->transport_param.ptr);
+    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
+    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, uri);
+    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
   }
 
   if (target.from_store)
