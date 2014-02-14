@@ -3505,26 +3505,34 @@ void UACTransaction::send_request()
   {
     LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
     status = pjsip_tsx_send_msg(_tsx, _tdata);
-    if (status != PJ_SUCCESS)
-    {
-      // Failed to send the request.
-      pjsip_tx_data_dec_ref(_tdata);
-
-      // The UAC transaction will have been destroyed when it failed to send
-      // the request, so there's no need to destroy it.
-    }
-    else
-    {
-      // Sent the request successfully.
-      if (_liveness_timeout != 0)
-      {
-        _liveness_timer.id = LIVENESS_TIMER;
-        pj_time_val delay = {_liveness_timeout, 0};
-        pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
-      }
-    }
-    _tdata = NULL;
   }
+
+  if (status != PJ_SUCCESS)
+  {
+    // Failed to send the request.
+    pjsip_tx_data_dec_ref(_tdata);
+
+    // The UAC transaction will have been destroyed when it failed to send
+    // the request, so there's no need to destroy it.  However, we do need to
+    // the request, so there's no need to destroy it.  However, we do need to
+    // tell the UAS transaction, and we should blacklist the address.
+    _uas_data->on_client_not_responding(this);
+    if (_resolved)
+    {
+      sipresolver->blacklist(_ai, 30);
+    }
+  }
+  else
+  {
+    // Sent the request successfully.
+    if (_liveness_timeout != 0)
+    {
+      _liveness_timer.id = LIVENESS_TIMER;
+      pj_time_val delay = {_liveness_timeout, 0};
+      pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
+    }
+  }
+  _tdata = NULL;
 
   exit_context();
 }
@@ -3560,13 +3568,17 @@ pj_status_t UACTransaction::resolve_next_hop()
     _tdata->dest_info.addr.entry[0].priority = 0;
     _tdata->dest_info.addr.entry[0].weight = 0;
 
+    pjsip_transport_type_e ipv4_transport = PJSIP_TRANSPORT_UNSPECIFIED;
+    pjsip_transport_type_e ipv6_transport = PJSIP_TRANSPORT_UNSPECIFIED;
     if (_ai.transport == IPPROTO_TCP)
     {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+      ipv4_transport = PJSIP_TRANSPORT_TCP;
+      ipv6_transport = PJSIP_TRANSPORT_TCP6;
     }
     else if (_ai.transport == IPPROTO_UDP)
     {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+      ipv4_transport = PJSIP_TRANSPORT_UDP;
+      ipv6_transport = PJSIP_TRANSPORT_UDP6;
     }
     else
     {
@@ -3578,6 +3590,7 @@ pj_status_t UACTransaction::resolve_next_hop()
     if (_ai.address.af == AF_INET)
     {
       // IPv4 address.
+      _tdata->dest_info.addr.entry[0].type = ipv4_transport;
       _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
       _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
       _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
@@ -3585,6 +3598,7 @@ pj_status_t UACTransaction::resolve_next_hop()
     else if (_ai.address.af == AF_INET6)
     {
       // IPv6 address.
+      _tdata->dest_info.addr.entry[0].type = ipv6_transport;
       _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
       _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
       memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
