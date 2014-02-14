@@ -45,10 +45,12 @@ extern "C" {
 #include "regstore.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
+#include "sipresolver.h"
 
 namespace RegistrationUtils {
 void network_initiated_deregistration(RegStore* store,
                                       Ifcs& ifcs,
+                                      SIPResolver* sipresolver,
                                       const std::string& served_user,
                                       const std::string& binding_id,
                                       SAS::TrailId trail);

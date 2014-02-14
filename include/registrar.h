@@ -46,6 +46,7 @@ extern "C" {
 #include "hssconnection.h"
 #include "analyticslogger.h"
 #include "ifchandler.h"
+#include "sipresolver.h"
 
 extern pjsip_module mod_registrar;
 
@@ -57,5 +58,13 @@ extern pj_status_t init_registrar(RegStore* registrar_store,
                                   int cfg_max_expires);
 
 extern void destroy_registrar();
+
+struct RegTsx
+{
+  bool resolved;
+  AddrInfo ai;
+  SIPResolver* sipresolver;
+  bool default_handling;
+};
 
 #endif

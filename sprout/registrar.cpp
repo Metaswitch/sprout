@@ -294,11 +294,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
         {
-           
+
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
-          
+
           if (cid != binding->_cid)
           {
             // New binding, set contact event to created
@@ -308,7 +308,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             // Updated binding, set contact event to refreshed
             contact_event = NotifyUtils::REFRESHED;
-          } 
+          }
 
           // TODO Examine Via header to see if we're the first hop
           // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
@@ -367,7 +367,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
-    
+
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
@@ -390,7 +390,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       if (subscription->_expires > now)
       {
         pjsip_tx_data* tdata_notify;
-        
+
         pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor, aor_data->_notify_cseq, bindings,
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
@@ -713,12 +713,28 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+  RegTsx* tsxdata = (RegTsx*)tsx->mod_data[mod_registrar.id];
+
+  // Can't create an AS response in UT
+  // LCOV_EXCL_START
+  if (tsxdata != NULL)
+  {
+  if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+      (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+  {
+    if (tsxdata->resolved)
+    {
+      // Blacklist the destination address/port/transport selected for this
+      // transaction so we don't repeatedly attempt to use it.
+      LOG_DEBUG("Blacklisting failed/uncontactable destination");
+      tsxdata->sipresolver->blacklist(tsxdata->ai, 30);
+    }
+  }
+
+  if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
       (event->type == PJSIP_EVENT_RX_MSG) &&
       ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
   {
-    // Can't create an AS response in UT
-    // LCOV_EXCL_START
     LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
     std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
 
@@ -733,6 +749,14 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
       RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
     }
     // LCOV_EXCL_STOP
+  }
+
+  if (tsx->state == PJSIP_TSX_STATE_DESTROYED)
+  {
+    LOG_DEBUG("Register transaction ended, freeing module data");
+    delete tsxdata;
+    tsx->mod_data[mod_registrar.id] = NULL;
+  }
   }
 }
 

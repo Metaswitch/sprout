@@ -929,7 +929,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
   {
     // First find the top Via header.  This was added by us.
     pjsip_via_hdr* top_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, NULL);
-    
+
     // If we found the top header (and we really should have done), log its branch ID.
     if (top_via != NULL)
     {
@@ -938,7 +938,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
         via_marker.add_var_param(top_via->branch_param.slen, top_via->branch_param.ptr);
         SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
       }
-  
+
       // Now see if we can find the next Via header and log it if so.  This will have been added by
       // the previous server.  This means we'll be able to correlate with its trail.
       pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via);
@@ -951,3 +951,87 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
     }
   }
 }
+
+/// Resolves the next hop target of the SIP message and fills in the dest_info
+/// structure on the message.
+pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* tdata, AddrInfo& ai)
+{
+  pj_status_t status = PJ_ENOTFOUND;
+
+  // Get the next hop URI from the message and parse out the destination, port
+  // and transport.
+  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
+  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
+  int port = next_hop->port;
+  int transport = -1;
+  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
+  {
+    transport = IPPROTO_TCP;
+  }
+  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
+  {
+    transport = IPPROTO_UDP;
+  }
+
+  if (sipresolver->resolve(target, port, transport, AF_INET, ai))
+  {
+    // Resolved the target successfully, so fill in dest_info on the tdata.
+    status = PJ_SUCCESS;
+    tdata->dest_info.cur_addr = 0;
+    tdata->dest_info.addr.count = 1;
+    tdata->dest_info.addr.entry[0].priority = 0;
+    tdata->dest_info.addr.entry[0].weight = 0;
+
+    if (ai.transport == IPPROTO_TCP)
+    {
+      tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+    }
+    else if (ai.transport == IPPROTO_UDP)
+    {
+      tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+    }
+    else
+    {
+      // Unknown transport returned from resolver.
+      LOG_ERROR("Unknown transport %d returned by resolver", ai.transport);
+      status = PJ_ENOTSUP;
+    }
+
+    if (ai.address.af == AF_INET)
+    {
+      // IPv4 address.
+      tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
+      tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
+      tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
+    }
+    else if (ai.address.af == AF_INET6)
+    {
+      // IPv6 address.
+      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
+      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
+      memcpy((char*)&tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
+             (char*)&ai.address.addr.ipv6,
+             sizeof(pj_in6_addr));
+      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
+      tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
+    }
+    else
+    {
+      status = PJ_EAFNOTSUP;
+    }
+    pj_sockaddr_set_port(&tdata->dest_info.addr.entry[0].addr, ai.port);
+  }
+
+  // Set the resolved flag if the resolution was successful.
+  if (status == PJ_SUCCESS)
+  {
+    char buf[100];
+    LOG_DEBUG("Resolved to %s using transport %s",
+              pj_sockaddr_print(&tdata->dest_info.addr.entry[0].addr,
+                                buf, sizeof(buf), 1),
+              pjsip_transport_get_type_name(tdata->dest_info.addr.entry[0].type));
+  }
+
+  return status;
+}
+

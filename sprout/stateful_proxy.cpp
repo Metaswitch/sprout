@@ -3480,7 +3480,9 @@ void UACTransaction::send_request()
   {
     // Resolve the next hop destination for this request to an IP address.
     LOG_DEBUG("Resolve next hop destination");
-    status = resolve_next_hop();
+    status = PJUtils::resolve_next_hop(sipresolver, _tdata, _ai);
+    // Set the resolved flag if the resolution was successful.
+    _resolved = (status == PJ_SUCCESS);
   }
 
   if (status == PJ_SUCCESS)
@@ -3511,90 +3513,6 @@ void UACTransaction::send_request()
   exit_context();
 }
 
-
-/// Resolves the next hop target of the SIP message and fills in the dest_info
-/// structure on the message.
-pj_status_t UACTransaction::resolve_next_hop()
-{
-  pj_status_t status = PJ_ENOTFOUND;
-
-  // Get the next hop URI from the message and parse out the destination, port
-  // and transport.
-  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(_tdata->msg);
-  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
-  int port = next_hop->port;
-  int transport = -1;
-  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
-  {
-    transport = IPPROTO_TCP;
-  }
-  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
-  {
-    transport = IPPROTO_UDP;
-  }
-
-  if (sipresolver->resolve(target, port, transport, AF_INET, _ai))
-  {
-    // Resolved the target successfully, so fill in dest_info on the tdata.
-    status = PJ_SUCCESS;
-    _tdata->dest_info.cur_addr = 0;
-    _tdata->dest_info.addr.count = 1;
-    _tdata->dest_info.addr.entry[0].priority = 0;
-    _tdata->dest_info.addr.entry[0].weight = 0;
-
-    if (_ai.transport == IPPROTO_TCP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
-    }
-    else if (_ai.transport == IPPROTO_UDP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
-    }
-    else
-    {
-      // Unknown transport returned from resolver.
-      LOG_ERROR("Unknown transport %d returned by resolver", _ai.transport);
-      status = PJ_ENOTSUP;
-    }
-
-    if (_ai.address.af == AF_INET)
-    {
-      // IPv4 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
-    }
-    else if (_ai.address.af == AF_INET6)
-    {
-      // IPv6 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
-      memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
-             (char*)&_ai.address.addr.ipv6,
-             sizeof(pj_in6_addr));
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
-    }
-    else
-    {
-      status = PJ_EAFNOTSUP;
-    }
-    pj_sockaddr_set_port(&_tdata->dest_info.addr.entry[0].addr, _ai.port);
-  }
-
-  // Set the resolved flag if the resolution was successful.
-  _resolved = (status == PJ_SUCCESS);
-  if (status == PJ_SUCCESS)
-  {
-    char buf[100];
-    LOG_DEBUG("Resolved to %s using transport %s",
-              pj_sockaddr_print(&_tdata->dest_info.addr.entry[0].addr,
-                                buf, sizeof(buf), 1),
-              pjsip_transport_get_type_name(_tdata->dest_info.addr.entry[0].type));
-  }
-
-  return status;
-}
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
