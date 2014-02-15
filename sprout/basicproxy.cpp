@@ -1431,10 +1431,10 @@ void BasicProxy::UACTsx::send_request()
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
     // tell the UAS transaction, and we should blacklist the address.
-    _uas_tsx->on_client_not_responding(this);
-    if (_resolved)
+    _uas_tsx->on_client_not_responding(this);                           //LCOV_EXCL_LINE
+    if (_resolved)                                                      //LCOV_EXCL_LINE
     {
-      _proxy->_sipresolver->blacklist(_ai, 30);
+      _proxy->_sipresolver->blacklist(_ai, 30);                         //LCOV_EXCL_LINE
     }
   }
   _tdata = NULL;
