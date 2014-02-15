@@ -44,6 +44,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 }
+#include <arpa/inet.h>
 
 // Common STL includes.
 #include <cassert>
@@ -850,6 +851,15 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
+
+  // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
+  stack_data.addr_family = AF_INET;
+  struct in6_addr dummy_addr;
+  if (inet_pton(AF_INET6, local_host_cstr, &dummy_addr) == 1)
+  {
+    LOG_DEBUG("Local host is an IPv6 address - enabling IPv6 mode");
+    stack_data.addr_family = AF_INET6;
+  }
 
   stack_data.record_route_on_every_hop = false;
   stack_data.record_route_on_initiation_of_originating = false;

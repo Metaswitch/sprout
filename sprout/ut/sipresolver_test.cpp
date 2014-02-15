@@ -217,19 +217,19 @@ TEST_F(SIPResolverTest, IPv6AddressResolution)
 {
   // Test defaulting of port and transport when target is IP address
   EXPECT_EQ("[3::1]:5060;transport=UDP",
-            RT(_sipresolver, "[3::1]").set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::1").set_af(AF_INET6).resolve());
 
   // Test defaulting of port when target is IP address
   EXPECT_EQ("[3::2]:5060;transport=TCP",
-            RT(_sipresolver, "[3::2]").set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::2").set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
 
   // Test defaulting of transport when target is IP address
   EXPECT_EQ("[3::3]:5054;transport=UDP",
-            RT(_sipresolver, "[3::3]").set_port(5054).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::3").set_port(5054).set_af(AF_INET6).resolve());
 
   // Test specifying both port and transport when target is IP address
   EXPECT_EQ("[3::4]:5052;transport=TCP",
-            RT(_sipresolver, "[3::4]").set_port(5052).set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
+            RT(_sipresolver, "3::4").set_port(5052).set_transport(IPPROTO_TCP).set_af(AF_INET6).resolve());
 }
 
 TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)

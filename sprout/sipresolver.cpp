@@ -74,7 +74,8 @@ bool SIPResolver::resolve(const std::string& target,
   // 4.1.
   bool rc = false;
 
-  LOG_DEBUG("SIPResolver::resolve for target %s, port %d, transport %d", target.c_str(), port, transport);
+  LOG_DEBUG("SIPResolver::resolve for target %s, port %d, transport %d, family %d",
+            target.c_str(), port, transport, af);
 
   if (parse_ip_target(target, ai.address))
   {
