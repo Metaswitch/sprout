@@ -3510,7 +3510,6 @@ void UACTransaction::send_request()
 
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
-    // the request, so there's no need to destroy it.  However, we do need to
     // tell the UAS transaction, and we should blacklist the address.
     _uas_data->on_client_not_responding(this);
     if (_resolved)
