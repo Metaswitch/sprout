@@ -85,6 +85,7 @@ get_settings()
         sprout_rr_level="pcscf"
         scscf=5054
         alias_list=""
+        chronos_hostname="localhost:7253"
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.  The local
