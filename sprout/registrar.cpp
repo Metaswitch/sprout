@@ -730,7 +730,7 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  RegTsx* tsxdata = (RegTsx*)  tsx->mod_data[tsx->tsx_user->id];
+  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
 
   if ((tsxdata != NULL) && (tsx->state == PJSIP_TSX_STATE_COMPLETED))
   {
@@ -765,8 +765,20 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
         RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
       }
     }
+  }
 
-    LOG_DEBUG("Register transaction ended, freeing module data");
+  // Deletion of the ThirdPartyRegData should be done in
+  // TERMINATED state, not just COMPLETED - otherwise we risk leaking
+  // memory if e.g. a send fails.
+
+  // However, we may be in TERMINATED state because we're shutting
+  // down, in which case our module ID is -1 - in this case, just do
+  // nothing, as we're terminating anyway.
+
+  if ((tsxdata != NULL) &&
+      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)) &&
+      (tsx->tsx_user->id > -1))
+  {
     delete tsxdata;
     tsxdata = NULL;
     tsx->mod_data[tsx->tsx_user->id] = NULL;

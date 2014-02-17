@@ -61,12 +61,13 @@ extern pj_status_t init_registrar(RegStore* registrar_store,
 
 extern void destroy_registrar();
 
-struct RegTsx
+struct ThirdPartyRegData
 {
-  bool resolved;
-  AddrInfo ai;
+ThirdPartyRegData(SIPResolver* resolver, bool handling): sipresolver(resolver), default_handling(handling), resolved(false) {};
   SIPResolver* sipresolver;
   bool default_handling;
+  bool resolved;
+  AddrInfo ai;
 };
 
 #endif

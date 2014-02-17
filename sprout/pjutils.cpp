@@ -981,14 +981,18 @@ pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* t
     tdata->dest_info.addr.count = 1;
     tdata->dest_info.addr.entry[0].priority = 0;
     tdata->dest_info.addr.entry[0].weight = 0;
+    pjsip_transport_type_e ipv4_transport = PJSIP_TRANSPORT_UNSPECIFIED;
+    pjsip_transport_type_e ipv6_transport = PJSIP_TRANSPORT_UNSPECIFIED;
 
     if (ai.transport == IPPROTO_TCP)
     {
-      tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+      ipv4_transport = PJSIP_TRANSPORT_TCP;
+      ipv6_transport = PJSIP_TRANSPORT_TCP6;
     }
     else if (ai.transport == IPPROTO_UDP)
     {
-      tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+      ipv4_transport = PJSIP_TRANSPORT_UDP;
+      ipv6_transport = PJSIP_TRANSPORT_UDP6;
     }
     else
     {
@@ -1000,6 +1004,7 @@ pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* t
     if (ai.address.af == AF_INET)
     {
       // IPv4 address.
+      tdata->dest_info.addr.entry[0].type = ipv4_transport;
       tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
       tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
       tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
@@ -1007,6 +1012,7 @@ pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* t
     else if (ai.address.af == AF_INET6)
     {
       // IPv6 address.
+      tdata->dest_info.addr.entry[0].type = ipv6_transport;
       tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
       tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
       memcpy((char*)&tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,

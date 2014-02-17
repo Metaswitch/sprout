@@ -258,9 +258,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
   // if it fails
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
-  RegTsx* regtsx = new RegTsx();
-  regtsx->default_handling = as.default_handling;
-  regtsx->sipresolver = sipresolver;
+  ThirdPartyRegData* regtsx = new ThirdPartyRegData(sipresolver, as.default_handling);
   pj_status_t resolv_status = PJUtils::resolve_next_hop(sipresolver, tdata, regtsx->ai);
   if (resolv_status == PJ_SUCCESS)
   {
