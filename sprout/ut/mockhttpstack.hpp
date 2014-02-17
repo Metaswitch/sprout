@@ -1,5 +1,5 @@
 /**
- * @file handlers.cpp 
+ * @file mockhttpstack.h Mock HTTP stack.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,38 +34,55 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef HANDLERS_H__
-#define HANDLERS_H__
+#ifndef MOCKHTTPSTACK_H__
+#define MOCKHTTPSTACK_H__
 
+#include "gmock/gmock.h"
 #include "httpstack.h"
-#include "chronosconnection.h"
-#include "regstore.h"
 
-class ChronosHandler : public HttpStack::Handler
+class MockHttpStack : public HttpStack
 {
 public:
-  struct Config
+  class Request : public HttpStack::Request
   {
-    Config(RegStore* store, RegStore* remote_store) : 
-              _store(store), _remote_store(remote_store) {}
-    RegStore* _store;
-    RegStore* _remote_store;
+  public:
+    Request(HttpStack* stack, std::string path, std::string file, std::string query = "") : HttpStack::Request(stack, evhtp_request(path, file, query)) {}
+    ~Request()
+    {
+      evhtp_connection_t* conn = _req->conn;
+      evhtp_request_free(_req);
+      free(conn);
+    }
+    std::string content()
+    {
+      size_t len = evbuffer_get_length(_req->buffer_out);
+      return std::string((char*)evbuffer_pullup(_req->buffer_out, len), len);
+    }
+
+  private:
+    static evhtp_request_t* evhtp_request(std::string path, std::string file, std::string query = "")
+    {
+      evhtp_request_t* req = evhtp_request_new(NULL, NULL);
+      req->conn = (evhtp_connection_t*)calloc(sizeof(evhtp_connection_t), 1);
+      req->uri = (evhtp_uri_t*)calloc(sizeof(evhtp_uri_t), 1);
+      req->uri->path = (evhtp_path_t*)calloc(sizeof(evhtp_path_t), 1);
+      req->uri->path->full = strdup((path + file).c_str());
+      req->uri->path->file = strdup(file.c_str());
+      req->uri->path->path = strdup(path.c_str());
+      req->uri->path->match_start = (char*)calloc(1, 1);
+      req->uri->path->match_end = (char*)calloc(1, 1);
+      req->uri->query = evhtp_parse_query(query.c_str(), query.length());
+      return req;
+    }
   };
 
-  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
-  void run();
-  void handle_response();
-  int parse_response(std::string body);
-  RegStore::AoR* set_aor_data(RegStore* current_store, 
-                              std::string aor_id, 
-                              RegStore::AoR* previous_aor_data, 
-                              RegStore* remote_store, 
-                              bool update_chronos);
-
-protected:
-  const Config* _cfg;
-  std::string _aor_id;
-  std::string _binding_id;
+  MOCK_METHOD0(initialize, void());
+  MOCK_METHOD4(configure, void(const std::string&, unsigned short, int, AccessLogger*));
+  MOCK_METHOD2(register_handler, void(char*, BaseHandlerFactory*));
+  MOCK_METHOD0(start, void());
+  MOCK_METHOD0(stop, void());
+  MOCK_METHOD0(wait_stopped, void());
+  MOCK_METHOD2(send_reply, void(HttpStack::Request&, int));
 };
 
 #endif

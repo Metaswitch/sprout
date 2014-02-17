@@ -40,41 +40,65 @@
 #include "log.h"
 #include "regstore.h"
 
+//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
     _req.send_reply(405);
+    delete this;
     return;
   }
 
-  std::string aor = "";
-  std::string binding = "";
-
-  int rc = parse_response(_req.body(), &aor, &binding);
+  int rc = parse_response(_req.body());
   if (rc != 200)
   {
     LOG_DEBUG("Unable to parse response from Chronos");
     _req.send_reply(rc);
+    delete this;
     return;
   }
 
   _req.send_reply(200);
-  handle_response(aor, binding);
+  handle_response();
   delete this;
 }
+//LCOV_EXCL_STOP
 
-void ChronosHandler::handle_response(const std::string aor, const std::string binding)
+void ChronosHandler::handle_response()
+{
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true);
+
+  if (aor_data != NULL)
+  {
+    // If we have a remote store, try to store this there too.  We don't worry
+    // about failures in this case.
+    if (_cfg->_remote_store != NULL)
+    {
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false);
+      delete remote_aor_data;
+    }
+  }
+
+  delete aor_data;
+}
+
+RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
+                                            std::string aor_id,
+                                            RegStore::AoR* previous_aor_data,
+                                            RegStore* remote_store,
+                                            bool update_chronos)
 {
   RegStore::AoR* aor_data = NULL;
-    
+  bool previous_aor_data_alloced = false;
+   
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
     delete aor_data;
 
     // Find the current bindings for the AoR.
-    aor_data = _cfg->store->get_aor_data(aor);
+    aor_data = current_store->get_aor_data(aor_id);
     LOG_DEBUG("Retrieved AoR data %p", aor_data);
 
     if (aor_data == NULL)
@@ -82,77 +106,59 @@ void ChronosHandler::handle_response(const std::string aor, const std::string bi
       // Failed to get data for the AoR because there is no connection
       // to the store.
       // LCOV_EXCL_START - local store (used in testing) never fails
-      LOG_ERROR("Failed to get AoR binding for %s from store", aor.c_str());
+      LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
       break;
       // LCOV_EXCL_STOP
     }
 
-    // Get the binding 
-    RegStore::AoR::Binding* bind = aor_data->get_binding(binding);
-    
-    if (bind->_cid != "")
-    { 
-      // Existing binding 
-      int now = time(NULL);
-      int expiry = bind->_expires - now; 
-
-      if (expiry <= 1)
+    // If we don't have any bindings, try the backup AoR and/or store.
+    if (aor_data->bindings().empty())
+    {
+      if ((previous_aor_data == NULL) &&
+          (remote_store != NULL))
       {
-        // Update the cseq
-        aor_data->_notify_cseq++;
-       
-        // Send a SIP NOTIFY for this binding if there are any subscriptions
-        for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
-             i != aor_data->subscriptions().end();
+        previous_aor_data = remote_store->get_aor_data(aor_id);
+        previous_aor_data_alloced = true;
+      }
+
+      if ((previous_aor_data != NULL) &&
+          (!previous_aor_data->bindings().empty()))
+      {
+        //LCOV_EXCL_START
+        for (RegStore::AoR::Bindings::const_iterator i = previous_aor_data->bindings().begin();
+             i != previous_aor_data->bindings().end();
              ++i)
         {
-          _cfg->store->send_notify(i->second, aor_data->_notify_cseq, bind, binding);  
-        }
- 
-        aor_data->remove_binding(binding);
-      } 
-      else
-      {
-        LOG_DEBUG("The timer wasn't due to expire, update the Chronos timer");
-
-        std::string timer_id;
-        HTTPCode status;
-        std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding +"\"}";
-
-        if (bind->_timer_id == "")
-        {
-          timer_id = "";
-          status = _cfg->chronos->send_post(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
-        }
-        else
-        {
-          timer_id = bind->_timer_id;
-          status = _cfg->chronos->send_put(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
+          RegStore::AoR::Binding* src = i->second;
+          RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
+          *dst = *src;
         }
 
-        // Update the timer id. If the put/post to Chronos failed, set the timer_id to ""
-        if (status == HTTP_OK)
+        for (RegStore::AoR::Subscriptions::const_iterator i = previous_aor_data->subscriptions().begin();
+             i != previous_aor_data->subscriptions().end();
+             ++i)
         {
-          bind->_timer_id = timer_id;
+          RegStore::AoR::Subscription* src = i->second;
+          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
+          *dst = *src;
         }
-        else
-        {
-          bind->_timer_id = "";
-        }
+        //LCOV_EXCL_STOP
       }
     }
-    else
-    {
-      LOG_DEBUG("This is a new binding, so the old binding has expired");
-      break;
-    }
   }
-  while (!_cfg->store->set_aor_data(aor, aor_data));
-  delete aor_data;
+  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos));
+
+  // If we allocated the AoR, tidy up.
+  if (previous_aor_data_alloced)
+  {
+    delete previous_aor_data;
+  }
+
+  return aor_data;
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body, std::string *aor, std::string *binding)
+int ChronosHandler::parse_response(std::string body) 
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -169,7 +175,7 @@ int ChronosHandler::parse_response(std::string body, std::string *aor, std::stri
   if ((json_body.isMember("aor_id")) &&
       ((json_body)["aor_id"].isString()))
   {
-    *aor = json_body.get("aor", "").asString();
+    _aor_id = json_body.get("aor_id", "").asString();
   }
   else
   {
@@ -180,7 +186,7 @@ int ChronosHandler::parse_response(std::string body, std::string *aor, std::stri
   if ((json_body.isMember("binding_id")) &&
       ((json_body)["binding_id"].isString()))
   {
-    *binding = json_body.get("binding", "").asString();
+    _binding_id = json_body.get("binding_id", "").asString();
   }
   else
   {

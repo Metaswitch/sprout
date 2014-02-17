@@ -117,7 +117,8 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
 /// @param aor_id     The SIP Address of Record for the registration
 /// @param aor_data   The registration data record.
 bool RegStore::set_aor_data(const std::string& aor_id,
-                            AoR* aor_data)
+                            AoR* aor_data,
+                            bool set_chronos)
 {
   // Expire any old bindings before writing to the server.  In theory, if
   // there are no bindings left we could delete the entry, but this may
@@ -140,6 +141,43 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 
   LOG_DEBUG("Set AoR data for %s, CAS=%ld, expiry = %d",
             aor_id.c_str(), aor_data->_cas, max_expires);
+
+  // Set the chronos timers
+  if (set_chronos)
+  { 
+    for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
+         i != aor_data->_bindings.end();
+         ++i)
+    {
+      AoR::Binding* b = i->second;
+      std::string b_id = i->first;
+    
+      HTTPCode status;
+      std::string timer_id = "";
+      std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"" + b_id +"\"}";
+      std::string callback_uri = "http://localhost:9888/timers";
+      
+      int now = time(NULL);
+      int expiry = b->_expires - now;
+  
+      // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
+      if (b->_timer_id == "")
+      {
+        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, 0);
+      }
+      else
+      {
+        timer_id = b->_timer_id;
+        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, 0);
+      }
+     
+      // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register.
+      if (status == HTTP_OK)
+      {
+        b->_timer_id = timer_id;
+      }
+    }
+  }
 
   std::string data = serialize_aor(aor_data);
 

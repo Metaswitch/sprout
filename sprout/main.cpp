@@ -1128,7 +1128,6 @@ int main(int argc, char *argv[])
     status = init_registrar(local_reg_store,
                             remote_reg_store,
                             hss_connection,
-                            chronos_connection,
                             analytics_logger,
                             ifc_handler,
                             opt.reg_max_expires);
@@ -1250,11 +1249,10 @@ int main(int argc, char *argv[])
   }
 
   HttpStack* http_stack = NULL;
-
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
-    ChronosHandler::Config chronos_config(chronos_connection, local_reg_store);
+    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store);
     HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
 
     try

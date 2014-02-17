@@ -62,14 +62,12 @@ extern "C" {
 #include "constants.h"
 #include "log.h"
 #include "notify_utils.h"
-#include "chronosconnection.h"
 
 static RegStore* store;
 static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
-static ChronosConnection* chronos;
 static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
@@ -195,7 +193,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               bool& out_is_initial_registration,
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
-                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store
+                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -252,6 +250,15 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           RegStore::AoR::Binding* src = i->second;
           RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
+          *dst = *src;
+        }
+
+        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
+             i != backup_aor->subscriptions().end();
+             ++i)
+        {
+          RegStore::AoR::Subscription* src = i->second;
+          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
           *dst = *src;
         }
       }
@@ -359,37 +366,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           binding->_expires = now + expiry;
 
-          // If this is a de-registration, don't update the timers or send NOTIFYs, as this 
-          // is all covered in expire_bindings which is called when the aor_data is saved.
+          // If this is a de-registration, don't send NOTIFYs, as this is covered in 
+          // expire_bindings which is called when the aor_data is saved.
           if (expiry != 0)
           {
             bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
-
-            // Update the Chronos timer for this binding
-            HTTPCode status;
-            std::string timer_id = "";
-            std::string opaque = "{\"aor_id\": \"" + aor + "\", \"binding_id\": \"" + binding_id +"\"}"; 
-  
-            // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST. 
-            if (binding->_timer_id == "")
-            { 
-              status = chronos->send_post(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
-            }  
-            else
-            {
-              timer_id = binding->_timer_id;
-              status = chronos->send_put(timer_id, expiry, "http://localhost:9888/timers", opaque, 0);
-            }
-            
-            // Update the timer id. If the put/post to Chronos failed, set the timer_id to "". 
-            if (status == HTTP_OK)
-            {
-              binding->_timer_id = timer_id;
-            }
-            else
-            {
-              binding->_timer_id = "";
-            }
           }
    
           if (analytics != NULL)
@@ -405,7 +386,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -773,7 +754,6 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
-                           ChronosConnection* chronos_connection,
                            AnalyticsLogger* analytics_logger,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
@@ -783,7 +763,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   store = registrar_store;
   remote_store = remote_reg_store;
   hss = hss_connection;
-  chronos = chronos_connection;
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;

@@ -218,7 +218,7 @@ public:
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-  bool set_aor_data(const std::string& aor_id, AoR* data);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers);
 
   // Send a SIP NOTIFY
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);

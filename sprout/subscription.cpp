@@ -258,7 +258,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data)));
+  while (!primary_store->set_aor_data(aor, (*aor_data), false));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
