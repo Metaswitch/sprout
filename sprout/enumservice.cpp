@@ -246,10 +246,19 @@ DNSEnumService::DNSEnumService(const std::string& dns_server,
   ares_library_init(ARES_LIB_INIT_ALL);
 
   // Parse the DNS server's IP address.
-  if (!inet_aton(dns_server.c_str(), &_dns_server))
+  if (inet_pton(AF_INET, dns_server.c_str(), &_dns_server.addr.ipv4))
+  {
+    _dns_server.af = AF_INET;
+  }
+  else if (inet_pton(AF_INET6, dns_server.c_str(), &_dns_server.addr.ipv6))
+  {
+    _dns_server.af = AF_INET6;
+  }
+  else
   {
     LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", dns_server.c_str());
-    (void)inet_aton("127.0.0.1", &_dns_server);
+    _dns_server.af = AF_INET;
+    (void)inet_aton("127.0.0.1", &_dns_server.addr.ipv4);
   }
 
   // We store a DNSResolver in thread-local data, so create the thread-local
@@ -411,7 +420,7 @@ DNSResolver* DNSEnumService::get_resolver() const
   DNSResolver* resolver = (DNSResolver*)pthread_getspecific(_thread_local);
   if (resolver == NULL)
   {
-    resolver = _resolver_factory->new_resolver(&_dns_server);
+    resolver = _resolver_factory->new_resolver(_dns_server);
     pthread_setspecific(_thread_local, resolver);
   }
   return resolver;

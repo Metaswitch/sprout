@@ -48,7 +48,7 @@
 int FakeDNSResolver::_num_calls = 0;
 std::map<std::string,struct ares_naptr_reply*> FakeDNSResolver::_database = std::map<std::string,struct ares_naptr_reply*>();
 // By default, expect requests for 127.0.0.1.
-struct in_addr FakeDNSResolverFactory::_expected_server = {htonl(0x7f000001)};
+struct IP46Address FakeDNSResolverFactory::_expected_server = {AF_INET, {{htonl(0x7f000001)}}};
 
 
 int FakeDNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
@@ -74,9 +74,9 @@ void FakeDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) con
 }
 
 
-DNSResolver* FakeDNSResolverFactory::new_resolver(const struct in_addr* server) const
+DNSResolver* FakeDNSResolverFactory::new_resolver(const struct IP46Address& server) const
 {
   // Check the server is as expected and then construct a FakeDNSResolver.
-  EXPECT_TRUE(memcmp(server, &_expected_server, sizeof(struct in_addr)) == 0);
+  EXPECT_TRUE(server.compare(_expected_server) == 0);
   return new FakeDNSResolver(server);
 }

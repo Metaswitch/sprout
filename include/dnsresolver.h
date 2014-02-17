@@ -44,6 +44,7 @@
 #include <netinet/in.h>
 #include <ares.h>
 #include "sas.h"
+#include "baseresolver.h"
 
 /// @class DNSResolver
 ///
@@ -54,7 +55,7 @@
 class DNSResolver
 {
 public:
-  DNSResolver(const struct in_addr* server);
+  DNSResolver(const struct IP46Address& server);
   ~DNSResolver();
   // Helper function wrapping the destructor for use as thread-local callbacks.
   static void destroy(DNSResolver* resolver);
@@ -110,7 +111,7 @@ class DNSResolverFactory
 public:
   inline DNSResolverFactory() {};
   // Create a new resolver.
-  virtual DNSResolver* new_resolver(const struct in_addr* server) const;
+  virtual DNSResolver* new_resolver(const struct IP46Address& server) const;
 
 };
 
