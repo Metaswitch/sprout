@@ -37,10 +37,9 @@
 # This script uses a SIP message to poll a process and check whether it is
 # healthy.
 
-. /etc/clearwater/config
+# In case bono has only just restarted, give it a few seconds to come up
+sleep 5
 
-PORT=5058
-
-# Not currently implemented, just return success.
-
-exit 0
+# Just call into the poll-sip script, specifying our port.
+/usr/share/clearwater/bin/poll-sip 5058
+exit $?

@@ -1,5 +1,5 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file handlers.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,39 +34,38 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef HANDLERS_H__
+#define HANDLERS_H__
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
-
-extern "C" {
-#include <pjsip.h>
-}
-
-#include "regstore.h"
-#include "hssconnection.h"
+#include "httpstack.h"
 #include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "ifchandler.h"
-#include "sipresolver.h"
+#include "regstore.h"
 
-extern pjsip_module mod_registrar;
-
-extern pj_status_t init_registrar(RegStore* registrar_store,
-                                  RegStore* remote_reg_store,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  SIPResolver* resolver,
-                                  IfcHandler* ifchandler_ref,
-                                  int cfg_max_expires);
-
-extern void destroy_registrar();
-
-struct RegTsx
+class ChronosHandler : public HttpStack::Handler
 {
-  bool resolved;
-  AddrInfo ai;
-  SIPResolver* sipresolver;
-  bool default_handling;
+public:
+  struct Config
+  {
+    Config(RegStore* store, RegStore* remote_store) : 
+              _store(store), _remote_store(remote_store) {}
+    RegStore* _store;
+    RegStore* _remote_store;
+  };
+
+  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+  void handle_response();
+  int parse_response(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store, 
+                              std::string aor_id, 
+                              RegStore::AoR* previous_aor_data, 
+                              RegStore* remote_store, 
+                              bool update_chronos);
+
+protected:
+  const Config* _cfg;
+  std::string _aor_id;
+  std::string _binding_id;
 };
 
 #endif

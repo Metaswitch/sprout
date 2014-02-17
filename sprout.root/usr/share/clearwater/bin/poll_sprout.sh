@@ -37,10 +37,25 @@
 # This script uses a SIP message to poll a process and check whether it is
 # healthy.
 
+# In case sprout has only just restarted, give it a few seconds to come up
+sleep 5
+
+# Read the config, defaulting appropriately.
+scscf=5054
+icscf=0
 . /etc/clearwater/config
 
-PORT=5054
+# If we have S-CSCF configured, check it.
+rc=0
+if [ "$scscf" != "0" ] ; then
+  /usr/share/clearwater/bin/poll-sip $scscf
+  rc=$?
+fi
 
-# Not currently implemented, just return success.
+# If that succeeded and we have I-CSCF configured, check it.
+if [ $rc = 0 ] && [ "$icscf" != "0" ] ; then
+  /usr/share/clearwater/bin/poll-sip $icscf
+  rc=$?
+fi
 
-exit 0
+exit $rc

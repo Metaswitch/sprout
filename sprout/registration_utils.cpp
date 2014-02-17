@@ -300,7 +300,7 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    bool ok = store->set_aor_data(aor, aor_data);
+    bool ok = store->set_aor_data(aor, aor_data, false);
     delete aor_data;
     if (ok)
     {

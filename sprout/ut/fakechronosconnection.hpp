@@ -1,5 +1,5 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file fakehssconnection.hpp Header file for fake HSS connection (for testing).
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,39 +34,37 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#pragma once
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
-
-extern "C" {
-#include <pjsip.h>
-}
-
-#include "regstore.h"
-#include "hssconnection.h"
+#include <string>
+#include "log.h"
+#include "sas.h"
 #include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "ifchandler.h"
-#include "sipresolver.h"
 
-extern pjsip_module mod_registrar;
-
-extern pj_status_t init_registrar(RegStore* registrar_store,
-                                  RegStore* remote_reg_store,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  SIPResolver* resolver,
-                                  IfcHandler* ifchandler_ref,
-                                  int cfg_max_expires);
-
-extern void destroy_registrar();
-
-struct RegTsx
+/// ChronosConnection that writes to/reads from a local map rather than the HSS.
+class FakeChronosConnection : public ChronosConnection
 {
-  bool resolved;
-  AddrInfo ai;
-  SIPResolver* sipresolver;
-  bool default_handling;
-};
+public:
+  FakeChronosConnection();
+  ~FakeChronosConnection();
 
-#endif
+  void flush_all();
+  void set_result(const std::string& url, const HTTPCode& result);
+  void delete_result(const std::string& url);
+
+private:
+  std::map<std::string, HTTPCode> _results;
+  HTTPCode send_delete(const std::string& delete_identity,
+                       SAS::TrailId trail);
+  HTTPCode send_post(std::string& post_identity,
+                     uint32_t timer_interval,
+                     const std::string& callback_uri,
+                     const std::string& opaque_data,
+                     SAS::TrailId trail);
+  HTTPCode send_put(const std::string& put_identity,
+                    uint32_t timer_interval,
+                    const std::string& callback_uri,
+                    const std::string& opaque_data,
+                    SAS::TrailId trail);
+  HTTPCode get_result(std::string identity);
+};

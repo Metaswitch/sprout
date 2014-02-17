@@ -44,6 +44,7 @@
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
 #include "fakelogger.hpp"
+#include "fakechronosconnection.hpp"
 
 #include "ifchandler.h"
 
@@ -54,6 +55,7 @@ class IfcHandlerTest : public SipTest
 {
 public:
   FakeLogger _log;
+  static FakeChronosConnection* _chronos_connection;
   static FakeHSSConnection* _hss_connection;
   static LocalStore* _local_data_store;
   static RegStore* _store;
@@ -64,9 +66,10 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    _chronos_connection = new FakeChronosConnection();
     _hss_connection = new FakeHSSConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _ifc_handler = new IfcHandler();
   }
 
@@ -78,6 +81,8 @@ public:
     _ifc_handler = NULL;
     delete _hss_connection;
     _hss_connection = NULL;
+    delete _chronos_connection;
+    _chronos_connection = NULL;
 
     SipTest::TearDownTestCase();
   }
@@ -149,6 +154,7 @@ public:
                  bool initial_registration=false);
 };
 
+FakeChronosConnection* IfcHandlerTest::_chronos_connection;
 FakeHSSConnection* IfcHandlerTest::_hss_connection;
 LocalStore* IfcHandlerTest::_local_data_store;
 RegStore* IfcHandlerTest::_store;

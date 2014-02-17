@@ -1412,11 +1412,9 @@ void BasicProxy::UACTsx::send_request()
   if ((_transport == NULL) &&
       (_proxy->_sipresolver != NULL))
   {
-// LCOV_EXCL_START
     // Resolve the next hop destination for this request to an IP address.
-    LOG_DEBUG("Resolve next hop destination");
-    status = resolve_next_hop();
-// LCOV_EXCL_STOP
+    LOG_DEBUG("Resolve next hop destination");                          //LCOV_EXCL_LINE
+    status = resolve_next_hop();                                        //LCOV_EXCL_LINE
   }
 
   if (status == PJ_SUCCESS)
@@ -1427,11 +1425,17 @@ void BasicProxy::UACTsx::send_request()
   if (status != PJ_SUCCESS)
   {
     // Failed to send the request.
-    LOG_DEBUG("Failed to send request");
+    LOG_DEBUG("Failed to send request");                                //LCOV_EXCL_LINE
     pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
-    // the request, so there's no need to destroy it.
+    // the request, so there's no need to destroy it.  However, we do need to
+    // tell the UAS transaction, and we should blacklist the address.
+    _uas_tsx->on_client_not_responding(this);                           //LCOV_EXCL_LINE
+    if (_resolved)                                                      //LCOV_EXCL_LINE
+    {
+      _proxy->_sipresolver->blacklist(_ai, 30);                         //LCOV_EXCL_LINE
+    }
   }
   _tdata = NULL;
 
@@ -1461,7 +1465,7 @@ pj_status_t BasicProxy::UACTsx::resolve_next_hop()
     transport = IPPROTO_UDP;
   }
 
-  if (_proxy->_sipresolver->resolve(target, port, transport, AF_INET, _ai))
+  if (_proxy->_sipresolver->resolve(target, port, transport, stack_data.addr_family, _ai))
   {
     // Resolved the target successfully, so fill in dest_info on the tdata.
     status = PJ_SUCCESS;
@@ -1470,13 +1474,17 @@ pj_status_t BasicProxy::UACTsx::resolve_next_hop()
     _tdata->dest_info.addr.entry[0].priority = 0;
     _tdata->dest_info.addr.entry[0].weight = 0;
 
+    pjsip_transport_type_e ipv4_transport = PJSIP_TRANSPORT_UNSPECIFIED;
+    pjsip_transport_type_e ipv6_transport = PJSIP_TRANSPORT_UNSPECIFIED;
     if (_ai.transport == IPPROTO_TCP)
     {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
+      ipv4_transport = PJSIP_TRANSPORT_TCP;
+      ipv6_transport = PJSIP_TRANSPORT_TCP6;
     }
     else if (_ai.transport == IPPROTO_UDP)
     {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
+      ipv4_transport = PJSIP_TRANSPORT_UDP;
+      ipv6_transport = PJSIP_TRANSPORT_UDP6;
     }
     else
     {
@@ -1488,6 +1496,7 @@ pj_status_t BasicProxy::UACTsx::resolve_next_hop()
     if (_ai.address.af == AF_INET)
     {
       // IPv4 address.
+      _tdata->dest_info.addr.entry[0].type = ipv4_transport;
       _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
       _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
       _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
@@ -1495,6 +1504,7 @@ pj_status_t BasicProxy::UACTsx::resolve_next_hop()
     else if (_ai.address.af == AF_INET6)
     {
       // IPv6 address.
+      _tdata->dest_info.addr.entry[0].type = ipv6_transport;
       _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
       _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
       memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
@@ -1613,7 +1623,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       LOG_DEBUG("Timeout or transport error");
       if (_resolved)
       {
-        _proxy->_sipresolver->blacklist(_ai, 30);
+        _proxy->_sipresolver->blacklist(_ai, 30);                       //LCOV_EXCL_LINE
       }
       _uas_tsx->on_client_not_responding(this);
     }

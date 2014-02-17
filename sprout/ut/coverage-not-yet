@@ -4,7 +4,8 @@
 # code and new files should have 100% code coverage (by lines); it may
 # be acceptable to use exclusion markers to achieve this.
 
-modules/cpp-common/src/httpconnection.cpp
+modules/cpp-common/src/accesslogger.cpp
+modules/cpp-common/src/httpstack.cpp
 modules/cpp-common/src/localstore.cpp
 modules/cpp-common/src/memcachedstore.cpp
 modules/cpp-common/src/memcachedstoreview.cpp

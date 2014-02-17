@@ -46,6 +46,7 @@
 #include "registration_utils.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -61,10 +62,11 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
-    _remote_store = new RegStore((Store*)_remote_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
@@ -81,6 +83,10 @@ public:
                                 "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
+
+
   }
 
   static void TearDownTestCase()
@@ -93,6 +99,7 @@ public:
     delete _store; _store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -116,6 +123,7 @@ protected:
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
   static FakeHSSConnection* _hss_connection;
+  static FakeChronosConnection* _chronos_connection;
 };
 
 LocalStore* RegistrarTest::_local_data_store;
@@ -125,6 +133,7 @@ RegStore* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
 FakeHSSConnection* RegistrarTest::_hss_connection;
+FakeChronosConnection* RegistrarTest::_chronos_connection;
 
 class Message
 {
@@ -1071,7 +1080,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

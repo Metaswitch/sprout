@@ -16,10 +16,10 @@ TARGET_SOURCES := logger.cpp \
                   utils.cpp \
                   analyticslogger.cpp \
                   stack.cpp \
-									dnsparser.cpp \
-									dnscachedresolver.cpp \
-									baseresolver.cpp \
-									sipresolver.cpp \
+                  dnsparser.cpp \
+                  dnscachedresolver.cpp \
+                  baseresolver.cpp \
+                  sipresolver.cpp \
                   stateful_proxy.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
@@ -33,8 +33,8 @@ TARGET_SOURCES := logger.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
-									avstore.cpp \
-									regstore.cpp \
+                  avstore.cpp \
+                  regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
@@ -57,12 +57,16 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
-									icscfproxy.cpp \
+                  icscfproxy.cpp \
                   scscfselector.cpp	\
                   signalhandler.cpp	\
                   subscription.cpp \
                   notify_utils.cpp \
-                  unique.cpp
+                  unique.cpp \
+                  chronosconnection.cpp \
+                  accesslogger.cpp \
+                  httpstack.cpp \
+                  handlers.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -75,8 +79,10 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        faketransport_udp.cpp \
                        faketransport_tcp.cpp \
                        fakednsresolver.cpp \
+                       fakechronosconnection.cpp \
                        basetest.cpp \
                        siptest.cpp \
+                       sipresolver_test.cpp \
                        authentication_test.cpp \
                        simservs_test.cpp \
                        httpconnection_test.cpp \
@@ -84,7 +90,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        xdmconnection_test.cpp \
                        enumservice_test.cpp \
                        regstore_test.cpp \
-											 avstore_test.cpp \
+                       avstore_test.cpp \
                        registrar_test.cpp \
                        stateful_proxy_test.cpp \
                        bgcfservice_test.cpp \
@@ -104,14 +110,17 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
-											 icscfproxy_test.cpp \
-											 basicproxy_test.cpp \
-                       scscfselector_test.cpp
+                       icscfproxy_test.cpp \
+                       basicproxy_test.cpp \
+                       scscfselector_test.cpp \
+                       subscription_test.cpp \
+                       chronosconnection_test.cpp \
+                       handlers_test.cpp 
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
 	                  gtest-all.o \
-										md5.o \
+                          md5.o \
 	                  test_interposer.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
@@ -135,8 +144,8 @@ CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/usr/include \
-						-I${ROOT}/modules/cpp-common/include \
-						-I${ROOT}/modules/cpp-common/test_utils
+            -I${ROOT}/modules/cpp-common/include \
+            -I${ROOT}/modules/cpp-common/test_utils
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
@@ -175,7 +184,10 @@ LDFLAGS += -lmemcached \
            -lboost_date_time \
            -lcares \
            -lzmq \
-           -lsas
+           -lsas \
+           -levhtp \
+           -levent \
+           -levent_pthreads 
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl
