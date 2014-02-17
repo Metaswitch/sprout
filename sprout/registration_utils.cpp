@@ -257,7 +257,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
   // if it fails
-  printf("RKD creating new tsx\n");
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
   RegTsx* regtsx = new RegTsx();
   regtsx->default_handling = as.default_handling;

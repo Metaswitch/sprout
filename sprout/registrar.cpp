@@ -368,13 +368,13 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           binding->_expires = now + expiry;
 
-          // If this is a de-registration, don't send NOTIFYs, as this is covered in 
+          // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
           if (expiry != 0)
           {
             bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
           }
-   
+
           if (analytics != NULL)
           {
             // Generate an analytics log for this binding update.
@@ -730,51 +730,46 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  printf("%d\n", event->type);
-  printf("%d %d\n", tsx->state, PJSIP_TSX_STATE_CALLING);
-
   RegTsx* tsxdata = (RegTsx*)  tsx->mod_data[tsx->tsx_user->id];
 
-  // Can't create an AS response in UT
-  // LCOV_EXCL_START
-  if (tsxdata != NULL)
+  if ((tsxdata != NULL) && (tsx->state == PJSIP_TSX_STATE_COMPLETED))
   {
-  if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-      (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
-  {
-    if (tsxdata->resolved)
+    if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
-      // Blacklist the destination address/port/transport selected for this
-      // transaction so we don't repeatedly attempt to use it.
-      LOG_DEBUG("Blacklisting failed/uncontactable destination");
-      tsxdata->sipresolver->blacklist(tsxdata->ai, 30);
+      // LCOV_EXCL_START - no SIP resolver in UT
+      if (tsxdata->resolved)
+      {
+        // Blacklist the destination address/port/transport selected for this
+        // transaction so we don't repeatedly attempt to use it.
+        LOG_DEBUG("Blacklisting failed/uncontactable destination");
+        tsxdata->sipresolver->blacklist(tsxdata->ai, 30);
+      }
+      // LCOV_EXCL_STOP
     }
-  }
 
-  if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
-      (event->type == PJSIP_EVENT_RX_MSG) &&
-      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
-  {
-    LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
-    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
-    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
-
-    if (http_code == HTTP_OK)
+    if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+        ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
     {
-      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
-    }
-    // LCOV_EXCL_STOP
-  }
+      LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
+      std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
 
-  LOG_DEBUG("Register transaction ended, freeing module data");
-  delete tsxdata;
-  tsxdata = NULL;
-  tsx->mod_data[tsx->tsx_user->id] = NULL;
+      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
+      // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+
+      if (http_code == HTTP_OK)
+      {
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
+      }
+    }
+
+    LOG_DEBUG("Register transaction ended, freeing module data");
+    delete tsxdata;
+    tsxdata = NULL;
+    tsx->mod_data[tsx->tsx_user->id] = NULL;
   }
 }
 
