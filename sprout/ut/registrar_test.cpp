@@ -70,7 +70,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -702,7 +702,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::vector<std::string> uris;
   _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], NULL, user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration

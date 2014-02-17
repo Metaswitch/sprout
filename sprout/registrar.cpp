@@ -66,6 +66,8 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
+static SIPResolver* sipresolver;
+
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
 
@@ -685,7 +687,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, is_initial_registration, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, sipresolver, rdata, tdata, expiry, is_initial_registration, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -713,7 +715,10 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  RegTsx* tsxdata = (RegTsx*)tsx->mod_data[mod_registrar.id];
+  printf("%d\n", event->type);
+  printf("%d %d\n", tsx->state, PJSIP_TSX_STATE_CALLING);
+
+  RegTsx* tsxdata = (RegTsx*)  tsx->mod_data[tsx->tsx_user->id];
 
   // Can't create an AS response in UT
   // LCOV_EXCL_START
@@ -746,17 +751,15 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 
     if (http_code == HTTP_OK)
     {
-      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
+      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
     }
     // LCOV_EXCL_STOP
   }
 
-  if (tsx->state == PJSIP_TSX_STATE_DESTROYED)
-  {
-    LOG_DEBUG("Register transaction ended, freeing module data");
-    delete tsxdata;
-    tsx->mod_data[mod_registrar.id] = NULL;
-  }
+  LOG_DEBUG("Register transaction ended, freeing module data");
+  delete tsxdata;
+  tsxdata = NULL;
+  tsx->mod_data[tsx->tsx_user->id] = NULL;
   }
 }
 
@@ -764,6 +767,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
+                           SIPResolver* resolver,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
@@ -775,6 +779,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
+  sipresolver = resolver;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

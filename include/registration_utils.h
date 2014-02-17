@@ -56,6 +56,7 @@ void network_initiated_deregistration(RegStore* store,
                                       SAS::TrailId trail);
 void register_with_application_servers(Ifcs& ifcs,
                                        RegStore* store,
+                                       SIPResolver* sipresolver,
                                        pjsip_rx_data* received_register,
                                        pjsip_tx_data* ok_response,
                                        int expires,

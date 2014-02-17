@@ -3591,7 +3591,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
       if (!uris.empty())
       {
-        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, binding_id, trail());
       }
     }
   }

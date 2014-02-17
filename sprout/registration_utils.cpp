@@ -57,11 +57,12 @@ extern "C" {
 #define MAX_SIP_MSG_SIZE 65535
 
 void send_register_to_as(pjsip_rx_data* received_register,
-    pjsip_tx_data* ok_response,
-    AsInvocation& as,
-    int expires,
-    const std::string&,
-    SAS::TrailId);
+                         pjsip_tx_data* ok_response,
+                         SIPResolver* sipresolver,
+                         AsInvocation& as,
+                         int expires,
+                         const std::string&,
+                         SAS::TrailId);
 
 void deregister_with_application_servers(Ifcs&, RegStore* store, SIPResolver* sipresolver, const std::string&, SAS::TrailId trail);
 
@@ -156,10 +157,13 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pjsip_method method;
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
 
-  pj_str_t user_uri = pj_str(const_cast<char *>(served_user.c_str()));
+  pj_str_t user_uri;
+  pj_cstr(&user_uri, served_user.c_str());
   std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.scscf_port) + ">";
-  pj_str_t scscf_uri = pj_str(const_cast<char *>(scscf_uri_string.c_str()));
-  pj_str_t as_uri = pj_str(const_cast<char *>(as.server_name.c_str()));
+  pj_str_t scscf_uri;
+  pj_cstr(&scscf_uri, scscf_uri_string.c_str());
+  pj_str_t as_uri;
+  pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
                              &method,      // Method
@@ -253,12 +257,13 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
   // if it fails
+  printf("RKD creating new tsx\n");
   status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
   RegTsx* regtsx = new RegTsx();
   regtsx->default_handling = as.default_handling;
   regtsx->sipresolver = sipresolver;
-  pj_status_t status = sipresolver->resolve(regtsx->ai);
-  if (status == PJ_SUCCESS)
+  pj_status_t resolv_status = PJUtils::resolve_next_hop(sipresolver, tdata, regtsx->ai);
+  if (resolv_status == PJ_SUCCESS)
   {
     regtsx->resolved = true;
   }
@@ -315,6 +320,6 @@ void RegistrationUtils::network_initiated_deregistration(RegStore *store,
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifcs, store, served_user, trail);
+  deregister_with_application_servers(ifcs, store, sipresolver, served_user, trail);
   notify_application_servers();
 };
