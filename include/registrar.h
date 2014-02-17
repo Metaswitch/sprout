@@ -44,6 +44,7 @@ extern "C" {
 
 #include "regstore.h"
 #include "hssconnection.h"
+#include "chronosconnection.h"
 #include "analyticslogger.h"
 #include "ifchandler.h"
 

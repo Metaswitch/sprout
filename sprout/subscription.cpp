@@ -258,7 +258,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data)));
+  while (!primary_store->set_aor_data(aor, (*aor_data), false));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -440,7 +440,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "Reg"))
     {
       // The Event header is missing or doesn't match "Reg"
-      LOG_ERROR("Rejecting subscription request with invalid event header");
+      LOG_DEBUG("Rejecting subscription request with invalid event header");
       return PJ_FALSE;
     }
 
@@ -461,7 +461,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
       if (!found)
       {
         // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-        LOG_ERROR("Rejecting subscription request with invalid accept header");
+        LOG_DEBUG("Rejecting subscription request with invalid accept header");
         return PJ_FALSE;
       }
     }

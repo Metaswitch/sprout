@@ -163,6 +163,7 @@ do_start()
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
                      --hss $hs_hostname
+                     --chronos $chronos_hostname
                      $xdms_hostname_arg
                      $enum_server_arg
                      $enum_suffix_arg

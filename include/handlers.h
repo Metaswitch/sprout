@@ -1,5 +1,5 @@
 /**
- * @file fakecurl.hpp Fake cURL library header for testing.
+ * @file handlers.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,80 +34,38 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <string>
-#include <list>
-#include <map>
+#ifndef HANDLERS_H__
+#define HANDLERS_H__
 
-#include <curl/curl.h>
+#include "httpstack.h"
+#include "chronosconnection.h"
+#include "regstore.h"
 
-/// The content of a request.
-class Request
+class ChronosHandler : public HttpStack::Handler
 {
 public:
-  std::string _method;
-  std::list<std::string> _headers;
-  std::string _body;
-  long _httpauth; //^ OR of CURLAUTH_ constants
-  std::string _username;
-  std::string _password;
-  bool _fresh;
+  struct Config
+  {
+    Config(RegStore* store, RegStore* remote_store) : 
+              _store(store), _remote_store(remote_store) {}
+    RegStore* _store;
+    RegStore* _remote_store;
+  };
+
+  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+  void handle_response();
+  int parse_response(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store, 
+                              std::string aor_id, 
+                              RegStore::AoR* previous_aor_data, 
+                              RegStore* remote_store, 
+                              bool update_chronos);
+
+protected:
+  const Config* _cfg;
+  std::string _aor_id;
+  std::string _binding_id;
 };
 
-/// The content of a response.
-class Response
-{
-public:
-  CURLcode _code_once;  //< If not CURLE_OK, issue this code first then the other.
-  CURLcode _code;  //< cURL easy doesn't accept HTTP status codes
-  std::string _body;
-  std::list<std::string> _headers;
-
-  Response() :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body("")
-  {
-  }
-
-  Response(const std::string& body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code_once, const std::string& body) :
-    _code_once(code_once),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(std::list<std::string> headers) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(""),
-    _headers(headers)
-  {
-  }
-
-  Response(const char* body) :
-    _code_once(CURLE_OK),
-    _code(CURLE_OK),
-    _body(body)
-  {
-  }
-
-  Response(CURLcode code) :
-    _code_once(CURLE_OK),
-    _code(code),
-    _body("")
-  {
-  }
-};
-
-/// Responses to give, by URL.
-extern std::map<std::string,Response> fakecurl_responses;
-
-/// Requests received, by URL.
-extern std::map<std::string,Request> fakecurl_requests;
+#endif

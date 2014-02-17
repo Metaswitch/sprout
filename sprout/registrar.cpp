@@ -68,7 +68,6 @@ static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
-
 static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
@@ -108,11 +107,12 @@ void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
        ++i)
   {
     RegStore::AoR::Binding* binding = i->second;
-    LOG_DEBUG("  %s URI=%s expires=%d q=%d from %s cseq %d",
+    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
-              binding->_cid.c_str(), binding->_cseq);
+              binding->_cid.c_str(), binding->_cseq,
+              binding->_timer_id.c_str());
   }
 }
 
@@ -193,7 +193,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               bool& out_is_initial_registration,
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
-                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store
+                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -250,6 +250,15 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           RegStore::AoR::Binding* src = i->second;
           RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
+          *dst = *src;
+        }
+
+        for (RegStore::AoR::Subscriptions::const_iterator i = backup_aor->subscriptions().begin();
+             i != backup_aor->subscriptions().end();
+             ++i)
+        {
+          RegStore::AoR::Subscription* src = i->second;
+          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
           *dst = *src;
         }
       }
@@ -356,8 +365,14 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_expires = now + expiry;
-          bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
 
+          // If this is a de-registration, don't send NOTIFYs, as this is covered in 
+          // expire_bindings which is called when the aor_data is saved.
+          if (expiry != 0)
+          {
+            bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
+          }
+   
           if (analytics != NULL)
           {
             // Generate an analytics log for this binding update.
@@ -371,7 +386,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
