@@ -239,9 +239,6 @@ protected:
     /// Sends the initial request on this UAC transaction.
     virtual void send_request();
 
-    /// Resolves the next hop of the request to a specific server.
-    virtual pj_status_t resolve_next_hop();
-
     /// Cancels the pending transaction, using the specified status code in the
     /// Reason header.
     virtual void cancel_pending_tsx(int st_code);

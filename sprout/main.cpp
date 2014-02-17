@@ -1129,6 +1129,7 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
+                            sip_resolver,
                             ifc_handler,
                             opt.reg_max_expires);
 

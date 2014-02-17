@@ -247,7 +247,6 @@ public:
 
   void set_target(const struct Target& target);
   void send_request();
-  pj_status_t resolve_next_hop();
   void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }

@@ -66,6 +66,8 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
+static SIPResolver* sipresolver;
+
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
 static IfcHandler* ifchandler;
@@ -303,11 +305,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
         {
-           
+
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
-          
+
           if (cid != binding->_cid)
           {
             // New binding, set contact event to created
@@ -317,7 +319,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             // Updated binding, set contact event to refreshed
             contact_event = NotifyUtils::REFRESHED;
-          } 
+          }
 
           // TODO Examine Via header to see if we're the first hop
           // TODO Only if we're not the first hop, check that the top path header has "ob" parameter
@@ -366,13 +368,13 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           binding->_expires = now + expiry;
 
-          // If this is a de-registration, don't send NOTIFYs, as this is covered in 
+          // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
           if (expiry != 0)
           {
             bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
           }
-   
+
           if (analytics != NULL)
           {
             // Generate an analytics log for this binding update.
@@ -382,7 +384,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       }
       contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
     }
-    
+
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
@@ -405,7 +407,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       if (subscription->_expires > now)
       {
         pjsip_tx_data* tdata_notify;
-        
+
         pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor, aor_data->_notify_cseq, bindings,
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
@@ -700,7 +702,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, rdata, tdata, expiry, is_initial_registration, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, sipresolver, rdata, tdata, expiry, is_initial_registration, public_id, trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -728,26 +730,58 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
-  if (((bool)tsx->mod_data[mod_registrar.id] == DEFAULT_HANDLING_SESSION_TERMINATED) &&
-      (event->type == PJSIP_EVENT_RX_MSG) &&
-      ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
+  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
+
+  if ((tsxdata != NULL) && (tsx->state == PJSIP_TSX_STATE_COMPLETED))
   {
-    // Can't create an AS response in UT
-    // LCOV_EXCL_START
-    LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
-    std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
-    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
-
-    if (http_code == HTTP_OK)
+    if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
-      RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, "*", get_trail(tsx));
+      // LCOV_EXCL_START - no SIP resolver in UT
+      if (tsxdata->resolved)
+      {
+        // Blacklist the destination address/port/transport selected for this
+        // transaction so we don't repeatedly attempt to use it.
+        LOG_DEBUG("Blacklisting failed/uncontactable destination");
+        tsxdata->sipresolver->blacklist(tsxdata->ai, 30);
+      }
+      // LCOV_EXCL_STOP
     }
-    // LCOV_EXCL_STOP
+
+    if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+        ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
+    {
+      LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
+      std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
+
+      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
+      // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+
+      if (http_code == HTTP_OK)
+      {
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
+      }
+    }
+  }
+
+  // Deletion of the ThirdPartyRegData should be done in
+  // TERMINATED state, not just COMPLETED - otherwise we risk leaking
+  // memory if e.g. a send fails.
+
+  // However, we may be in TERMINATED state because we're shutting
+  // down, in which case our module ID is -1 - in this case, just do
+  // nothing, as we're terminating anyway.
+
+  if ((tsxdata != NULL) &&
+      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)) &&
+      (tsx->tsx_user->id > -1))
+  {
+    delete tsxdata;
+    tsxdata = NULL;
+    tsx->mod_data[tsx->tsx_user->id] = NULL;
   }
 }
 
@@ -755,6 +789,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
+                           SIPResolver* resolver,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
@@ -766,6 +801,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
+  sipresolver = resolver;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

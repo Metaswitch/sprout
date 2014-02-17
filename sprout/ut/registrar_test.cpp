@@ -72,7 +72,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -548,6 +548,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   EXPECT_EQ(0, pj_strcmp(&mixed, &out->body->content_type.subtype));
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }
@@ -610,6 +611,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   EXPECT_EQ(0, pj_strcmp(&sip, &out->body->content_type.subtype));
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }
@@ -668,6 +670,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }
@@ -711,7 +714,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::vector<std::string> uris;
   _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], NULL, user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
@@ -721,6 +724,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
   // Check that we deleted the binding
@@ -779,6 +783,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
   free_txdata();
 
   SCOPED_TRACE("REGISTER (reregister)");
@@ -798,6 +803,83 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
   SCOPED_TRACE("REGISTER (forwarded)");
   // REGISTER not passed on to AS
   ASSERT_EQ(0, txdata_count());
+
+  free_txdata();
+}
+
+TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
+{
+  std::string user = "sip:6505550231@homedomain";
+
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>REGISTER</Method>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                                "    <DefaultHandling>1</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+
+  RegStore::AoR* aor_data;
+  aor_data = _store->get_aor_data(user);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  tpAS.expect_target(current_txdata(), false);
+  // Respond with a 500 - this should trigger a deregistration since
+  // DEFAULT_HANDLING is 1
+  inject_msg(respond_to_current_txdata(500));
+
+  // Check that we deleted the binding
+  aor_data = _store->get_aor_data(user);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(0u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
+
+  SCOPED_TRACE("deREGISTER");
+  // Check that we send a deREGISTER to the AS on network-initiated deregistration
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }
@@ -868,6 +950,7 @@ TEST_F(RegistrarTest, AppServersReRegistration)
   EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }
@@ -999,6 +1082,7 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   EXPECT_EQ(NULL, out->body);
 
   tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
 
   free_txdata();
 }

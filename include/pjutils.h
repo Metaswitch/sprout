@@ -52,6 +52,7 @@ extern "C" {
 #include <string>
 #include <map>
 #include "sas.h"
+#include "sipresolver.h"
 
 namespace PJUtils {
 
@@ -104,6 +105,7 @@ void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity
 void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
 
 pjsip_uri* next_hop(pjsip_msg* msg);
+pj_status_t resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* tdata, AddrInfo& ai);
 
 pj_bool_t is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr);
 
