@@ -700,7 +700,8 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   delete aor_data; aor_data = NULL;
   std::map<std::string, Ifcs> ifc_map;
   std::vector<std::string> uris;
-  _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
+  std::string regstate;
+  _hss_connection->registration_update(user, "", "reg", regstate, ifc_map, uris, 0);
 
   RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
 

@@ -65,6 +65,8 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=wrongpubid"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/impu/pubid42"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>REGISTERED</RegistrationState>"
       "<IMSSubscription>"
       "<ServiceProfile>"
       "<PublicIdentity>"
@@ -89,12 +91,15 @@ class HssConnectionTest : public BaseTest
           "</ApplicationServer>"
         "</InitialFilterCriteria>"
       "</ServiceProfile>"
-      "</IMSSubscription>";
+      "</IMSSubscription>"
+      "/<ClearwaterRegData>";
     fakecurl_responses["http://narcissus/impu/pubid42_malformed"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<Grou";
     fakecurl_responses["http://narcissus/impu/pubid43_malformed"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>REGISTERED</RegistrationState>"
       "<NonsenseWord>"
       "<ServiceProfile>"
       "<PublicIdentity>"
@@ -119,7 +124,8 @@ class HssConnectionTest : public BaseTest
           "</ApplicationServer>"
         "</InitialFilterCriteria>"
       "</ServiceProfile>"
-      "</NonsenseWord>";
+      "</NonsenseWord>"
+      "</ClearwaterRegData>";
     fakecurl_responses["http://narcissus/impu/pubid44"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
@@ -153,7 +159,9 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
+  std::string regstate;
+  _hss.registration_update("pubid42", "", "reg", regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("REGISTERED", regstate);
   EXPECT_EQ(2u, uris.size());
   EXPECT_EQ("sip:123@example.com", uris[0]);
   EXPECT_EQ("sip:456@example.com", uris[1]);
@@ -163,7 +171,8 @@ TEST_F(HssConnectionTest, SimpleIfc)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42", "", ifcs_map, uris, 0);
+  std::string regstate;
+  _hss.registration_update("pubid42", "", "reg", regstate, ifcs_map, uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
 }
 
@@ -171,7 +180,8 @@ TEST_F(HssConnectionTest, BadXML)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid42_malformed", "", ifcs_map, uris, 0);
+  std::string regstate;
+  _hss.registration_update("pubid42_malformed", "", "reg", regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
 }
@@ -181,7 +191,8 @@ TEST_F(HssConnectionTest, BadXML2)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid43_malformed", "", ifcs_map, uris, 0);
+  std::string regstate;
+  _hss.registration_update("pubid43_malformed", "", "reg", regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("Malformed HSS XML"));
 }
@@ -190,7 +201,9 @@ TEST_F(HssConnectionTest, ServerFailure)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
-  _hss.get_subscription_data("pubid44", "", ifcs_map, uris, 0);
+  std::string regstate;
+  _hss.registration_update("pubid44", "", "reg", regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("NOT_REGISTERED", regstate);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("http://narcissus/impu/pubid44 failed"));
 }
