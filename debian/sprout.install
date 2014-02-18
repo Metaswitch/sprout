@@ -1,4 +1,4 @@
 build/bin/sprout usr/share/clearwater/bin
 sprout.root/* /
 scripts/sprout-log-cleanup etc/cron.hourly
-scripts/poll-sip usr/share/clearwater/bin
+scripts/poll-sip usr/share/clearwater/bin/poll-sip-sprout

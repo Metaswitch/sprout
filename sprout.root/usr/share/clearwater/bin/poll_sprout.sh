@@ -48,13 +48,13 @@ icscf=0
 # If we have S-CSCF configured, check it.
 rc=0
 if [ "$scscf" != "0" ] ; then
-  /usr/share/clearwater/bin/poll-sip $scscf
+  /usr/share/clearwater/bin/poll-sip-sprout $scscf
   rc=$?
 fi
 
 # If that succeeded and we have I-CSCF configured, check it.
 if [ $rc = 0 ] && [ "$icscf" != "0" ] ; then
-  /usr/share/clearwater/bin/poll-sip $icscf
+  /usr/share/clearwater/bin/poll-sip-sprout $icscf
   rc=$?
 fi
 
