@@ -1,4 +1,4 @@
 build/bin/bono usr/share/clearwater/bin
 bono.root/* /
 scripts/bono-log-cleanup etc/cron.hourly
-scripts/poll-sip usr/share/clearwater/bin/poll-sip-bono
+scripts/poll-sip usr/share/clearwater/bin

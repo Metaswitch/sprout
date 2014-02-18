@@ -41,5 +41,5 @@
 sleep 5
 
 # Just call into the poll-sip script, specifying our port.
-/usr/share/clearwater/bin/poll-sip-bono 5058
+/usr/share/clearwater/bin/poll-sip 5058
 exit $?
