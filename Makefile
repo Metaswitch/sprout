@@ -12,7 +12,7 @@ MODULE_DIR := ${ROOT}/modules
 
 DEB_COMPONENT := sprout
 DEB_MAJOR_VERSION := 1.0
-DEB_NAMES := sprout-libs sprout sprout-dbg bono bono-dbg restund clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
+DEB_NAMES := sprout-libs sprout-libs-dbg sprout sprout-dbg bono bono-dbg restund clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
 
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
