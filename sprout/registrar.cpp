@@ -214,6 +214,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   std::map<std::string, RegStore::AoR::Binding> bindings;
+  bool is_dereg = false;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -388,7 +389,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data, send_notify));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify, is_dereg));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -418,6 +419,12 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         }
       }
     }
+  }
+
+  if (is_dereg) {
+    LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    std::string unused;
+    HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", unused, ifc_map, uris, trail);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -492,46 +499,8 @@ void process_register_request(pjsip_rx_data* rdata)
     private_id = "";
   }
 
-  // Find the expire headers in the message.
-  pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-
-  bool dereg = true;
-
-  // Now loop through all the contacts.  If there are multiple contacts in
-  // the contact header in the SIP message, pjsip parses them to separate
-  // contact header structures.
-  pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
-  while (contact != NULL)
-  {
-    if (contact->star)
-    {
-      // Wildcard contact, which can only be used to clear all bindings for
-      // the AoR.
-      dereg = true;
-      break;
-    }
-
-    pjsip_uri* uri = (contact->uri != NULL) ?
-      (pjsip_uri*)pjsip_uri_get_uri(contact->uri) :
-      NULL;
-
-    if ((uri != NULL) &&
-        (PJSIP_URI_SCHEME_IS_SIP(uri)))
-    {
-      // Calculate the expiry period for the binding.
-      int expiry = (contact->expires != -1) ? contact->expires :
-        (expires != NULL) ? expires->ivalue :
-        max_expires;
-      if (expiry > 0)
-      {
-        dereg = false;
-      }
-    }
-    contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact->next);
-  }
-
   std::string unused;
-  HTTPCode http_code = hss->registration_update(public_id, private_id, dereg? "dereg" : "reg", unused, ifc_map, uris, trail);
+  HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", unused, ifc_map, uris, trail);
   if (http_code != HTTP_OK)
   {
     // We failed to get the list of associated URIs.  This indicates that the
