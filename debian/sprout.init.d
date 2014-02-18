@@ -85,6 +85,7 @@ get_settings()
         sprout_rr_level="pcscf"
         scscf=5054
         alias_list=""
+        chronos_hostname="localhost:7253"
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.  The local
@@ -163,6 +164,7 @@ do_start()
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
                      --hss $hs_hostname
+                     --chronos $chronos_hostname
                      $xdms_hostname_arg
                      $enum_server_arg
                      $enum_suffix_arg
@@ -348,6 +350,10 @@ case "$1" in
                 log_end_msg 1
                 ;;
         esac
+        ;;
+  abort)
+        log_daemon_msg "Aborting $DESC" "$NAME"
+        do_abort
         ;;
   abort-restart)
         log_daemon_msg "Abort-Restarting $DESC" "$NAME"

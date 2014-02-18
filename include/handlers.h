@@ -1,5 +1,5 @@
 /**
- * @file fakednsresolver.cpp Fake DNS resolver (for testing).
+ * @file handlers.cpp 
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,49 +34,38 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#ifndef HANDLERS_H__
+#define HANDLERS_H__
 
-#include <iostream>
-#include <stdlib.h>
-#include <string.h>
-#include "gtest/gtest.h"
+#include "httpstack.h"
+#include "chronosconnection.h"
+#include "regstore.h"
 
-#include "fakednsresolver.hpp"
-
-
-int FakeDNSResolver::_num_calls = 0;
-std::map<std::string,struct ares_naptr_reply*> FakeDNSResolver::_database = std::map<std::string,struct ares_naptr_reply*>();
-// By default, expect requests for 127.0.0.1.
-struct IP46Address FakeDNSResolverFactory::_expected_server = {AF_INET, {{htonl(0x7f000001)}}};
-
-
-int FakeDNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
+class ChronosHandler : public HttpStack::Handler
 {
-  ++_num_calls;
-  // Look up the query domain and return the reply if found.
-  std::map<std::string,struct ares_naptr_reply*>::iterator i = _database.find(domain);
-  if (i != _database.end())
+public:
+  struct Config
   {
-    naptr_reply = i->second;
-    return ARES_SUCCESS;
-  }
-  else
-  {
-    naptr_reply = NULL;
-    return ARES_ENOTFOUND;
-  }
-}
+    Config(RegStore* store, RegStore* remote_store) : 
+              _store(store), _remote_store(remote_store) {}
+    RegStore* _store;
+    RegStore* _remote_store;
+  };
 
+  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+  void handle_response();
+  int parse_response(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store, 
+                              std::string aor_id, 
+                              RegStore::AoR* previous_aor_data, 
+                              RegStore* remote_store, 
+                              bool update_chronos);
 
-void FakeDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
-{
-}
+protected:
+  const Config* _cfg;
+  std::string _aor_id;
+  std::string _binding_id;
+};
 
-
-DNSResolver* FakeDNSResolverFactory::new_resolver(const struct IP46Address& server) const
-{
-  // Check the server is as expected and then construct a FakeDNSResolver.
-  EXPECT_TRUE(server.compare(_expected_server) == 0);
-  return new FakeDNSResolver(server);
-}
+#endif

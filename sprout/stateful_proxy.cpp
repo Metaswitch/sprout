@@ -2106,8 +2106,25 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
 
+        pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+
+        if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
+        {
+          // Got a SIP URI - force loose-routing.
+          ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
+        }
+        else
+        {
+          LOG_DEBUG("No valid S-CSCFs found");
+          send_response(PJSIP_SC_NOT_FOUND);
+          delete target;
+          return;
+        }
+
+        pj_str_t host_from_uri = ((pjsip_sip_uri*)scscf_uri)->host;
+
         // Check whether the returned S-CSCF is this S-CSCF
-        if (PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain).find(server_name) != std::string::npos)
+        if (pj_stricmp(&host_from_uri, &stack_data.sprout_cluster_domain)==0)
         {
           // The S-CSCFs are the same, so continue
           bool success = move_to_terminating_chain();
@@ -2126,13 +2143,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
           delete target;
           target = new Target;
-
-          pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
-          if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
-          {
-            // Got a SIP URI - force loose-routing.
-            ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
-          }
 
           target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
 
@@ -3415,25 +3425,21 @@ void UACTransaction::set_target(const struct Target& target)
        pit != target.paths.end();
        ++pit)
   {
-    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
-              ((pjsip_sip_uri*)*pit)->user.slen, ((pjsip_sip_uri*)*pit)->user.ptr,
-              (((pjsip_sip_uri*)*pit)->user.slen != 0) ? "@" : "",
-              ((pjsip_sip_uri*)*pit)->host.slen, ((pjsip_sip_uri*)*pit)->host.ptr,
-              ((pjsip_sip_uri*)*pit)->port,
-              ((pjsip_sip_uri*)*pit)->transport_param.slen,
-              ((pjsip_sip_uri*)*pit)->transport_param.ptr);
-    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
-    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, *pit);
-    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
+    // We may have a nameaddr here rather than a URI - if so,
+    // pjsip_uri_get_uri will return the internal URI. Otherwise, it
+    // will just return the URI.
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*pit);
 
-    // We no longer set the transport in the route header as it has no effect
-    // and the transport should already be set in the path URI.
-    //LOG_DEBUG("Explictly setting transport to TCP in Route header");
-    //pj_list_init(&route_hdr->other_param);
-    //pjsip_param *transport_param = PJ_POOL_ALLOC_T(_tdata->pool, pjsip_param);
-    //pj_strdup2(_tdata->pool, &transport_param->name, "transport");
-    //pj_strdup2(_tdata->pool, &transport_param->value, "tcp");
-    //pj_list_insert_before(&route_hdr->other_param, transport_param);
+    LOG_DEBUG("Adding a Route header to sip:%.*s%s%.*s:%d;transport=%.*s",
+              uri->user.slen, uri->user.ptr,
+              (uri->user.slen != 0) ? "@" : "",
+              uri->host.slen, uri->host.ptr,
+              uri->port,
+              uri->transport_param.slen,
+              uri->transport_param.ptr);
+    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
+    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, uri);
+    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
   }
 
   if (target.from_store)
@@ -3453,6 +3459,14 @@ void UACTransaction::set_target(const struct Target& target)
     tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
     tp_selector.u.transport = target.transport;
     pjsip_tx_data_set_transport(_tdata, &tp_selector);
+
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    _tdata->dest_info.addr.entry[0].addr_len =
+         (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+         sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+    _tdata->dest_info.cur_addr = 0;
 
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target.transport);
@@ -3481,120 +3495,44 @@ void UACTransaction::send_request()
   {
     // Resolve the next hop destination for this request to an IP address.
     LOG_DEBUG("Resolve next hop destination");
-    status = resolve_next_hop();
+    status = PJUtils::resolve_next_hop(sipresolver, _tdata, _ai);
+    // Set the resolved flag if the resolution was successful.
+    _resolved = (status == PJ_SUCCESS);
   }
 
   if (status == PJ_SUCCESS)
   {
     LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
     status = pjsip_tsx_send_msg(_tsx, _tdata);
-    if (status != PJ_SUCCESS)
-    {
-      // Failed to send the request.
-      pjsip_tx_data_dec_ref(_tdata);
-
-      // The UAC transaction will have been destroyed when it failed to send
-      // the request, so there's no need to destroy it.
-    }
-    else
-    {
-      // Sent the request successfully.
-      if (_liveness_timeout != 0)
-      {
-        _liveness_timer.id = LIVENESS_TIMER;
-        pj_time_val delay = {_liveness_timeout, 0};
-        pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
-      }
-    }
-    _tdata = NULL;
   }
+
+  if (status != PJ_SUCCESS)
+  {
+    // Failed to send the request.
+    pjsip_tx_data_dec_ref(_tdata);
+
+    // The UAC transaction will have been destroyed when it failed to send
+    // the request, so there's no need to destroy it.  However, we do need to
+    // tell the UAS transaction, and we should blacklist the address.
+    _uas_data->on_client_not_responding(this);
+    if (_resolved)
+    {
+      sipresolver->blacklist(_ai, 30);
+    }
+  }
+  else
+  {
+    // Sent the request successfully.
+    if (_liveness_timeout != 0)
+    {
+      _liveness_timer.id = LIVENESS_TIMER;
+      pj_time_val delay = {_liveness_timeout, 0};
+      pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
+    }
+  }
+  _tdata = NULL;
 
   exit_context();
-}
-
-
-/// Resolves the next hop target of the SIP message and fills in the dest_info
-/// structure on the message.
-pj_status_t UACTransaction::resolve_next_hop()
-{
-  pj_status_t status = PJ_ENOTFOUND;
-
-  // Get the next hop URI from the message and parse out the destination, port
-  // and transport.
-  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(_tdata->msg);
-  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
-  int port = next_hop->port;
-  int transport = -1;
-  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
-  {
-    transport = IPPROTO_TCP;
-  }
-  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
-  {
-    transport = IPPROTO_UDP;
-  }
-
-  if (sipresolver->resolve(target, port, transport, AF_INET, _ai))
-  {
-    // Resolved the target successfully, so fill in dest_info on the tdata.
-    status = PJ_SUCCESS;
-    _tdata->dest_info.cur_addr = 0;
-    _tdata->dest_info.addr.count = 1;
-    _tdata->dest_info.addr.entry[0].priority = 0;
-    _tdata->dest_info.addr.entry[0].weight = 0;
-
-    if (_ai.transport == IPPROTO_TCP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
-    }
-    else if (_ai.transport == IPPROTO_UDP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
-    }
-    else
-    {
-      // Unknown transport returned from resolver.
-      LOG_ERROR("Unknown transport %d returned by resolver", _ai.transport);
-      status = PJ_ENOTSUP;
-    }
-
-    if (_ai.address.af == AF_INET)
-    {
-      // IPv4 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
-    }
-    else if (_ai.address.af == AF_INET6)
-    {
-      // IPv6 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
-      memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
-             (char*)&_ai.address.addr.ipv6,
-             sizeof(pj_in6_addr));
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
-    }
-    else
-    {
-      status = PJ_EAFNOTSUP;
-    }
-    pj_sockaddr_set_port(&_tdata->dest_info.addr.entry[0].addr, _ai.port);
-  }
-
-  // Set the resolved flag if the resolution was successful.
-  _resolved = (status == PJ_SUCCESS);
-  if (status == PJ_SUCCESS)
-  {
-    char buf[100];
-    LOG_DEBUG("Resolved to %s using transport %s",
-              pj_sockaddr_print(&_tdata->dest_info.addr.entry[0].addr,
-                                buf, sizeof(buf), 1),
-              pjsip_transport_get_type_name(_tdata->dest_info.addr.entry[0].type));
-  }
-
-  return status;
 }
 
 // Cancels the pending transaction, using the specified status code in the
@@ -3679,7 +3617,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
       if (!uris.empty())
       {
-        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], aor, binding_id, trail());
+        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, binding_id, trail());
       }
     }
   }
@@ -3862,6 +3800,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                             stack_data.endpt,
                                             stack_data.pcscf_trusted_tcp_factory,
                                             sipresolver,
+                                            stack_data.addr_family,
                                             stack_data.stats_aggregator);
     upstream_conn_pool->init();
 

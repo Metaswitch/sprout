@@ -80,6 +80,8 @@ struct stack_data_struct
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
 
+  int                  addr_family;
+
   unsigned             name_cnt;
   pj_str_t             name[16];
   LastValueCache *     stats_aggregator;

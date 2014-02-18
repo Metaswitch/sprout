@@ -48,6 +48,7 @@
 #include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 
@@ -74,8 +75,9 @@ TEST_F(RegStoreTest, BindingTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -87,6 +89,7 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -94,7 +97,7 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
 
   // Add the AoR record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -111,7 +114,7 @@ TEST_F(RegStoreTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -127,7 +130,7 @@ TEST_F(RegStoreTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -146,7 +149,7 @@ TEST_F(RegStoreTest, BindingTests)
   EXPECT_EQ(1u, aor_data1->bindings().size());
   aor_data1->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
   
@@ -156,6 +159,7 @@ TEST_F(RegStoreTest, BindingTests)
   delete aor_data1; aor_data1 = NULL;
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 
@@ -168,8 +172,9 @@ TEST_F(RegStoreTest, SubscriptionTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
@@ -181,6 +186,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -188,7 +194,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
 
   // Add the AoR record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -218,7 +224,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -245,6 +251,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   delete aor_data1; aor_data1 = NULL;
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 
@@ -256,8 +263,9 @@ TEST_F(RegStoreTest, CopyTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Get an initial empty AoR record.
   now = time(NULL);
@@ -273,6 +281,7 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 300;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
@@ -310,6 +319,7 @@ TEST_F(RegStoreTest, CopyTests)
 
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
 }
 
 TEST_F(RegStoreTest, ExpiryTests)
@@ -327,8 +337,9 @@ TEST_F(RegStoreTest, ExpiryTests)
   int now;
 
   // Create a RegStore instance backed by a local data store.
+  ChronosConnection* chronos_connection = new FakeChronosConnection();
   LocalStore* datastore = new LocalStore();
-  RegStore* store = new RegStore(datastore);
+  RegStore* store = new RegStore(datastore, chronos_connection);
 
   // Create an empty AoR record.
   now = time(NULL);
@@ -344,6 +355,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
   b1->_expires = now + 100;
+  b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
@@ -354,6 +366,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b2->_cseq = 17038;
   b2->_expires = now + 200;
+  b2->_timer_id = "00000000000";
   b2->_priority = 0;
   b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b2->_params.push_back(std::make_pair("reg-id", "2"));
@@ -383,7 +396,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   s2->_expires = now + 300;
 
   // Write the record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
@@ -415,6 +428,7 @@ TEST_F(RegStoreTest, ExpiryTests)
 
   delete store; store = NULL;
   delete datastore; datastore = NULL;
+  delete chronos_connection; chronos_connection = NULL;
   term_pjsip();
 }
 

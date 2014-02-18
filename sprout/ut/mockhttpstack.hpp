@@ -1,5 +1,5 @@
 /**
- * @file fakednsresolver.cpp Fake DNS resolver (for testing).
+ * @file mockhttpstack.h Mock HTTP stack.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,49 +34,55 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#ifndef MOCKHTTPSTACK_H__
+#define MOCKHTTPSTACK_H__
 
-#include <iostream>
-#include <stdlib.h>
-#include <string.h>
-#include "gtest/gtest.h"
+#include "gmock/gmock.h"
+#include "httpstack.h"
 
-#include "fakednsresolver.hpp"
-
-
-int FakeDNSResolver::_num_calls = 0;
-std::map<std::string,struct ares_naptr_reply*> FakeDNSResolver::_database = std::map<std::string,struct ares_naptr_reply*>();
-// By default, expect requests for 127.0.0.1.
-struct IP46Address FakeDNSResolverFactory::_expected_server = {AF_INET, {{htonl(0x7f000001)}}};
-
-
-int FakeDNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
+class MockHttpStack : public HttpStack
 {
-  ++_num_calls;
-  // Look up the query domain and return the reply if found.
-  std::map<std::string,struct ares_naptr_reply*>::iterator i = _database.find(domain);
-  if (i != _database.end())
+public:
+  class Request : public HttpStack::Request
   {
-    naptr_reply = i->second;
-    return ARES_SUCCESS;
-  }
-  else
-  {
-    naptr_reply = NULL;
-    return ARES_ENOTFOUND;
-  }
-}
+  public:
+    Request(HttpStack* stack, std::string path, std::string file, std::string query = "") : HttpStack::Request(stack, evhtp_request(path, file, query)) {}
+    ~Request()
+    {
+      evhtp_connection_t* conn = _req->conn;
+      evhtp_request_free(_req);
+      free(conn);
+    }
+    std::string content()
+    {
+      size_t len = evbuffer_get_length(_req->buffer_out);
+      return std::string((char*)evbuffer_pullup(_req->buffer_out, len), len);
+    }
 
+  private:
+    static evhtp_request_t* evhtp_request(std::string path, std::string file, std::string query = "")
+    {
+      evhtp_request_t* req = evhtp_request_new(NULL, NULL);
+      req->conn = (evhtp_connection_t*)calloc(sizeof(evhtp_connection_t), 1);
+      req->uri = (evhtp_uri_t*)calloc(sizeof(evhtp_uri_t), 1);
+      req->uri->path = (evhtp_path_t*)calloc(sizeof(evhtp_path_t), 1);
+      req->uri->path->full = strdup((path + file).c_str());
+      req->uri->path->file = strdup(file.c_str());
+      req->uri->path->path = strdup(path.c_str());
+      req->uri->path->match_start = (char*)calloc(1, 1);
+      req->uri->path->match_end = (char*)calloc(1, 1);
+      req->uri->query = evhtp_parse_query(query.c_str(), query.length());
+      return req;
+    }
+  };
 
-void FakeDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
-{
-}
+  MOCK_METHOD0(initialize, void());
+  MOCK_METHOD4(configure, void(const std::string&, unsigned short, int, AccessLogger*));
+  MOCK_METHOD2(register_handler, void(char*, BaseHandlerFactory*));
+  MOCK_METHOD0(start, void());
+  MOCK_METHOD0(stop, void());
+  MOCK_METHOD0(wait_stopped, void());
+  MOCK_METHOD2(send_reply, void(HttpStack::Request&, int));
+};
 
-
-DNSResolver* FakeDNSResolverFactory::new_resolver(const struct IP46Address& server) const
-{
-  // Check the server is as expected and then construct a FakeDNSResolver.
-  EXPECT_TRUE(server.compare(_expected_server) == 0);
-  return new FakeDNSResolver(server);
-}
+#endif

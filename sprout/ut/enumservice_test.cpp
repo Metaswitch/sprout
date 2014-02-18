@@ -60,7 +60,8 @@ class EnumServiceTest : public ::testing::Test
   {
     Log::setLoggingLevel(99);
     FakeDNSResolver::reset();
-    FakeDNSResolverFactory::_expected_server.s_addr = htonl(0x7f000001);
+    FakeDNSResolverFactory::_expected_server.af = AF_INET;
+    FakeDNSResolverFactory::_expected_server.addr.ipv4.s_addr = htonl(0x7f000001);
   }
 
   virtual ~EnumServiceTest()
@@ -309,8 +310,18 @@ TEST_F(DNSEnumServiceTest, LoopingRuleTest)
 
 TEST_F(DNSEnumServiceTest, DifferentServerTest)
 {
-  FakeDNSResolverFactory::_expected_server.s_addr = htonl(0x01020304);
+  FakeDNSResolverFactory::_expected_server.addr.ipv4.s_addr = htonl(0x01020304);
   DNSEnumService enum_("1.2.3.4", ".e164.arpa", new FakeDNSResolverFactory());
+}
+
+TEST_F(DNSEnumServiceTest, IPv6ServerTest)
+{
+  FakeDNSResolverFactory::_expected_server.af = AF_INET6;
+  for (int i = 0; i < 16; i++)
+  {
+    FakeDNSResolverFactory::_expected_server.addr.ipv6.s6_addr[0] = i + 1;
+  }
+  DNSEnumService enum_("0102:0304:0506:0708:090a:0b0c:0d0e:0f10", ".e164.arpa", new FakeDNSResolverFactory());
 }
 
 TEST_F(DNSEnumServiceTest, InvalidServerTest)

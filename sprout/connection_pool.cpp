@@ -58,6 +58,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                pjsip_endpoint* endpt,
                                pjsip_tpfactory* tp_factory,
                                SIPResolver* sipresolver,
+                               int addr_family,
                                LastValueCache* lvc) :
   _target(*target),
   _num_connections(num_connections),
@@ -67,6 +68,7 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _endpt(endpt),
   _tpfactory(tp_factory),
   _sipresolver(sipresolver),
+  _addr_family(addr_family),
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
@@ -171,12 +173,30 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
   {
     // Use the SIPResolver to select a server for this connection.
     AddrInfo ai;
-    if (_sipresolver->resolve(std::string(host->ptr, host->slen), port, IPPROTO_TCP, AF_INET, ai))
+    if (_sipresolver->resolve(std::string(host->ptr, host->slen), port, IPPROTO_TCP, _addr_family, ai))
     {
-      addr->ipv4.sin_family = AF_INET;
-      addr->ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
-      pj_sockaddr_set_port(addr, ai.port);
-      status = PJ_SUCCESS;
+      if (ai.address.af == AF_INET)
+      {
+        LOG_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
+        addr->ipv4.sin_family = AF_INET;
+        addr->ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
+        pj_sockaddr_set_port(addr, ai.port);
+        status = PJ_SUCCESS;
+      }
+      else if (ai.address.af == AF_INET6)
+      {
+        LOG_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
+        addr->ipv6.sin6_family = AF_INET6;
+        memcpy((char*)&addr->ipv6.sin6_addr,
+               (char*)&ai.address.addr.ipv6,
+               sizeof(struct in6_addr));
+        pj_sockaddr_set_port(addr, ai.port);
+        status = PJ_SUCCESS;
+      }
+      else
+      {
+        LOG_ERROR("Resolved %.*s to address of unknown family %d - failing connection!", host->slen, host->ptr); //LCOV_EXCL_LINE
+      }
     }
   }
   else

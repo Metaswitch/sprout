@@ -1412,11 +1412,9 @@ void BasicProxy::UACTsx::send_request()
   if ((_transport == NULL) &&
       (_proxy->_sipresolver != NULL))
   {
-// LCOV_EXCL_START
     // Resolve the next hop destination for this request to an IP address.
-    LOG_DEBUG("Resolve next hop destination");
-    status = resolve_next_hop();
-// LCOV_EXCL_STOP
+    LOG_DEBUG("Resolve next hop destination");                          //LCOV_EXCL_LINE
+    status = PJUtils::resolve_next_hop(_proxy->_sipresolver, _tdata, _ai); // LCOV_EXCL_LINE
   }
 
   if (status == PJ_SUCCESS)
@@ -1427,11 +1425,17 @@ void BasicProxy::UACTsx::send_request()
   if (status != PJ_SUCCESS)
   {
     // Failed to send the request.
-    LOG_DEBUG("Failed to send request");
+    LOG_DEBUG("Failed to send request");                                //LCOV_EXCL_LINE
     pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
-    // the request, so there's no need to destroy it.
+    // the request, so there's no need to destroy it.  However, we do need to
+    // tell the UAS transaction, and we should blacklist the address.
+    _uas_tsx->on_client_not_responding(this);                           //LCOV_EXCL_LINE
+    if (_resolved)                                                      //LCOV_EXCL_LINE
+    {
+      _proxy->_sipresolver->blacklist(_ai, 30);                         //LCOV_EXCL_LINE
+    }
   }
   _tdata = NULL;
 
@@ -1439,91 +1443,6 @@ void BasicProxy::UACTsx::send_request()
 }
 
 
-// LCOV_EXCL_START
-/// Resolves the next hop target of the SIP message and fills in the dest_info
-/// structure on the message.
-pj_status_t BasicProxy::UACTsx::resolve_next_hop()
-{
-  pj_status_t status = PJ_ENOTFOUND;
-
-  // Get the next hop URI from the message and parse out the destination, port
-  // and transport.
-  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(_tdata->msg);
-  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
-  int port = next_hop->port;
-  int transport = -1;
-  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
-  {
-    transport = IPPROTO_TCP;
-  }
-  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
-  {
-    transport = IPPROTO_UDP;
-  }
-
-  if (_proxy->_sipresolver->resolve(target, port, transport, AF_INET, _ai))
-  {
-    // Resolved the target successfully, so fill in dest_info on the tdata.
-    status = PJ_SUCCESS;
-    _tdata->dest_info.cur_addr = 0;
-    _tdata->dest_info.addr.count = 1;
-    _tdata->dest_info.addr.entry[0].priority = 0;
-    _tdata->dest_info.addr.entry[0].weight = 0;
-
-    if (_ai.transport == IPPROTO_TCP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_TCP;
-    }
-    else if (_ai.transport == IPPROTO_UDP)
-    {
-      _tdata->dest_info.addr.entry[0].type = PJSIP_TRANSPORT_UDP;
-    }
-    else
-    {
-      // Unknown transport returned from resolver.
-      LOG_ERROR("Unknown transport %d returned by resolver", _ai.transport);
-      status = PJ_ENOTSUP;
-    }
-
-    if (_ai.address.af == AF_INET)
-    {
-      // IPv4 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
-      _tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = _ai.address.addr.ipv4.s_addr;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
-    }
-    else if (_ai.address.af == AF_INET6)
-    {
-      // IPv6 address.
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
-      memcpy((char*)&_tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
-             (char*)&_ai.address.addr.ipv6,
-             sizeof(pj_in6_addr));
-      _tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
-      _tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
-    }
-    else
-    {
-      status = PJ_EAFNOTSUP;
-    }
-    pj_sockaddr_set_port(&_tdata->dest_info.addr.entry[0].addr, _ai.port);
-  }
-
-  // Set the resolved flag if the resolution was successful.
-  _resolved = (status == PJ_SUCCESS);
-  if (status == PJ_SUCCESS)
-  {
-    char buf[100];
-    LOG_DEBUG("Resolved to %s using transport %s",
-              pj_sockaddr_print(&_tdata->dest_info.addr.entry[0].addr,
-                                buf, sizeof(buf), 1),
-              pjsip_transport_get_type_name(_tdata->dest_info.addr.entry[0].type));
-  }
-
-  return status;
-}
-// LCOV_EXCL_STOP
 
 // Cancels the pending transaction, using the specified status code in the
 // Reason header.
@@ -1613,7 +1532,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       LOG_DEBUG("Timeout or transport error");
       if (_resolved)
       {
-        _proxy->_sipresolver->blacklist(_ai, 30);
+        _proxy->_sipresolver->blacklist(_ai, 30);                       //LCOV_EXCL_LINE
       }
       _uas_tsx->on_client_not_responding(this);
     }

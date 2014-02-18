@@ -66,6 +66,9 @@ public:
   datafn_ty _writefn;
   void* _writedata; //^ user data; not owned by this object
 
+  datafn_ty _hdrfn;
+  void* _hdrdata; //^ user data; not owned by this object
+
   void* _private;
 
   FakeCurl() :
@@ -77,6 +80,8 @@ public:
     _readdata(NULL),
     _writefn(NULL),
     _writedata(NULL),
+    _hdrfn(NULL),
+    _hdrdata(NULL),
     _private(NULL)
   {
   }
@@ -151,6 +156,22 @@ CURLcode FakeCurl::easy_perform()
       if (handled != len)
       {
         throw runtime_error("Write function didn't handle everything");
+      }
+    }
+
+    if (_hdrfn != NULL)
+    {
+      for (std::list<string>::const_iterator it = resp._headers.begin();
+           it != resp._headers.end(); ++it)
+      {
+        int len = it->length();
+        char* ptr = const_cast<char*>(it->c_str());
+        int handled = _hdrfn(ptr, 1, len, _hdrdata);
+
+        if (handled != len)
+        {
+          throw runtime_error("Header function didn't handle everything");
+        }
       }
     }
   }
@@ -247,6 +268,14 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
     }
   }
   break;
+  case CURLOPT_POST:
+  {
+    if (va_arg(args, long))
+    {
+      curl->_method = "POST";
+    }
+  }
+  break;
   case CURLOPT_READDATA:
   {
     curl->_readdata = va_arg(args, void*);
@@ -267,12 +296,23 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
     curl->_fresh = !!va_arg(args, long);
   }
   break;
+  case CURLOPT_HEADERFUNCTION:
+  {
+    curl->_hdrfn = va_arg(args, datafn_ty);
+  }
+  break;
+  case CURLOPT_WRITEHEADER:
+  {
+    curl->_hdrdata = va_arg(args, void*);  
+  }
+  break;
   case CURLOPT_MAXCONNECTS:
   case CURLOPT_TIMEOUT_MS:
   case CURLOPT_CONNECTTIMEOUT_MS:
   case CURLOPT_DNS_CACHE_TIMEOUT:
   case CURLOPT_TCP_NODELAY:
   case CURLOPT_NOSIGNAL:
+  case CURLOPT_POSTFIELDS:
   {
     // ignore
   }

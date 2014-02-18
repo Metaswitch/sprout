@@ -46,6 +46,7 @@
 #include <netinet/in.h>
 #include <ares.h>
 #include "sas.h"
+#include "baseresolver.h"
 #include "dnsresolver.h"
 
 /// @class EnumService
@@ -165,7 +166,7 @@ private:
                                 std::vector<DNSEnumService::Rule>& rules);
 
   // The IP address of the DNS server to query.
-  struct in_addr _dns_server;
+  struct IP46Address _dns_server;
   // The suffix to apply to domain names used for ENUM lookups.
   const std::string _dns_suffix;
   // The thread-local store - used for storing DNSResolvers.

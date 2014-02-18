@@ -51,6 +51,7 @@
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 using testing::StrEq;
@@ -322,8 +323,9 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
+    _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
@@ -380,6 +382,7 @@ public:
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
     delete _store; _store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
     delete _call_services; _call_services = NULL;
@@ -446,6 +449,7 @@ public:
 
 protected:
   static LocalStore* _local_data_store;
+  static FakeChronosConnection* _chronos_connection;
   static RegStore* _store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
@@ -475,6 +479,7 @@ protected:
 };
 
 LocalStore* StatefulProxyTestBase::_local_data_store;
+FakeChronosConnection* StatefulProxyTestBase::_chronos_connection;
 RegStore* StatefulProxyTestBase::_store;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
@@ -1977,6 +1982,25 @@ TEST_F(StatefulProxyTest, TestSIPMessageSupport)
   _tp_default->expect_target(current_txdata(), true);
 
   free_txdata();
+}
+
+// Test that a multipart message can be parsed successfully
+TEST_F(StatefulProxyTest, TestSimpleMultipart)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._content_type = "multipart/mixed;boundary=\"boundary1\"";
+  msg._body = "\r\n--boundary1\r\nContent-Type: application/sdp\r\nContent-Length: 343\r\n\r\nv=0\r\no=- 3600506724 3600506724 IN IP4 888.888.888.888\r\n" \
+              "s=-\r\nc=IN IP4 888.888.888.888\r\nt=0 0\r\nm=message 9 TCP/MSRP *\r\na=path:msrp://888.888.888.888:7777/1391517924073;tcp\r\n" \
+              "a=setup:active\r\na=accept-types:message/cpim application/im-iscomposing+xml\r\na=accept-wrapped-types:text/plain message/imdn+xml " \
+              "application/rcspushlocation+xml\r\na=sendrecv\r\n\r\n--boundary1\r\nContent-Type: message/cpim\r\nContent-Length: 300\r\n\r\nFrom: " \
+              "<sip:anonymous@anonymous.invalid>\r\nTo: <sip:anonymous@anonymous.invalid>\r\nNS: imdn <urn:ietf:params:imdn>\r\nimdn.Message-ID: " \
+              "Msg6rn78PUQzC\r\nDateTime: 2014-02-04T12:45:24.000Z\r\nimdn.Disposition-Notification: positive-delivery, display\r\n\r\nContent-type: " \
+              "text/plain; charset=utf-8\r\n\r\nsubject\r\n\r\n--boundary1--";
+
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 /// Register a client with the edge proxy, returning the flow token.
@@ -5780,7 +5804,7 @@ TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
   Message msg;
   msg._route = "Route: <sip:homedomain;orig>";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex("sip:6505551234@homedomain"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
 TEST_F(InternalIcscfTest, TestHSSHasNoSCSCF)

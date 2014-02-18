@@ -1,5 +1,5 @@
 /**
- * @file fakednsresolver.cpp Fake DNS resolver (for testing).
+ * @file fakehssconnection.hpp Header file for fake HSS connection (for testing).
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,49 +34,37 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
+#pragma once
 
-#include <iostream>
-#include <stdlib.h>
-#include <string.h>
-#include "gtest/gtest.h"
+#include <string>
+#include "log.h"
+#include "sas.h"
+#include "chronosconnection.h"
 
-#include "fakednsresolver.hpp"
-
-
-int FakeDNSResolver::_num_calls = 0;
-std::map<std::string,struct ares_naptr_reply*> FakeDNSResolver::_database = std::map<std::string,struct ares_naptr_reply*>();
-// By default, expect requests for 127.0.0.1.
-struct IP46Address FakeDNSResolverFactory::_expected_server = {AF_INET, {{htonl(0x7f000001)}}};
-
-
-int FakeDNSResolver::perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail)
+/// ChronosConnection that writes to/reads from a local map rather than the HSS.
+class FakeChronosConnection : public ChronosConnection
 {
-  ++_num_calls;
-  // Look up the query domain and return the reply if found.
-  std::map<std::string,struct ares_naptr_reply*>::iterator i = _database.find(domain);
-  if (i != _database.end())
-  {
-    naptr_reply = i->second;
-    return ARES_SUCCESS;
-  }
-  else
-  {
-    naptr_reply = NULL;
-    return ARES_ENOTFOUND;
-  }
-}
+public:
+  FakeChronosConnection();
+  ~FakeChronosConnection();
 
+  void flush_all();
+  void set_result(const std::string& url, const HTTPCode& result);
+  void delete_result(const std::string& url);
 
-void FakeDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
-{
-}
-
-
-DNSResolver* FakeDNSResolverFactory::new_resolver(const struct IP46Address& server) const
-{
-  // Check the server is as expected and then construct a FakeDNSResolver.
-  EXPECT_TRUE(server.compare(_expected_server) == 0);
-  return new FakeDNSResolver(server);
-}
+private:
+  std::map<std::string, HTTPCode> _results;
+  HTTPCode send_delete(const std::string& delete_identity,
+                       SAS::TrailId trail);
+  HTTPCode send_post(std::string& post_identity,
+                     uint32_t timer_interval,
+                     const std::string& callback_uri,
+                     const std::string& opaque_data,
+                     SAS::TrailId trail);
+  HTTPCode send_put(const std::string& put_identity,
+                    uint32_t timer_interval,
+                    const std::string& callback_uri,
+                    const std::string& opaque_data,
+                    SAS::TrailId trail);
+  HTTPCode get_result(std::string identity);
+};

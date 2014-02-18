@@ -60,6 +60,7 @@ public:
   CURLcode _code_once;  //< If not CURLE_OK, issue this code first then the other.
   CURLcode _code;  //< cURL easy doesn't accept HTTP status codes
   std::string _body;
+  std::list<std::string> _headers;
 
   Response() :
     _code_once(CURLE_OK),
@@ -79,6 +80,14 @@ public:
     _code_once(code_once),
     _code(CURLE_OK),
     _body(body)
+  {
+  }
+
+  Response(std::list<std::string> headers) :
+    _code_once(CURLE_OK),
+    _code(CURLE_OK),
+    _body(""),
+    _headers(headers)
   {
   }
 

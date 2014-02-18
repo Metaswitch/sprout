@@ -46,6 +46,7 @@
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
+#include "fakechronosconnection.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -62,10 +63,11 @@ public:
     SipTest::SetUpTestCase();
     cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
 
+    _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
-    _store = new RegStore((Store*)_local_data_store);
-    _remote_store = new RegStore((Store*)_remote_data_store);
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     delete _analytics->_logger;
@@ -92,6 +94,7 @@ public:
     delete _store; _store = NULL;
     delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -114,6 +117,7 @@ protected:
   static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
+  static FakeChronosConnection* _chronos_connection;
 
   void check_subscriptions(std::string aor, uint32_t expected);
   void check_standard_OK();
@@ -125,6 +129,7 @@ RegStore* SubscriptionTest::_store;
 RegStore* SubscriptionTest::_remote_store;
 AnalyticsLogger* SubscriptionTest::_analytics;
 FakeHSSConnection* SubscriptionTest::_hss_connection;
+FakeChronosConnection* SubscriptionTest::_chronos_connection;
 
 class SubscribeMessage
 {
@@ -248,7 +253,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
 
   // Add the AoR record to the store.
-  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1);
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);

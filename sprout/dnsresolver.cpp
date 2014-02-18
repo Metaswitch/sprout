@@ -49,7 +49,7 @@
 #include "log.h"
 #include "sasevent.h"
 
-DNSResolver::DNSResolver(const struct in_addr* server) :
+DNSResolver::DNSResolver(const struct IP46Address& server) :
                          _req_pending(false),
                          _trail(0),
                          _domain(""),
@@ -63,9 +63,24 @@ DNSResolver::DNSResolver(const struct in_addr* server) :
   options.timeout = 1000;
   options.tries = 1;
   options.ndots = 0;
-  options.servers = (struct in_addr*)server;
-  options.nservers = 1;
+  options.servers = NULL;
+  options.nservers = 0;
   ares_init_options(&_channel, &options, ARES_OPT_FLAGS | ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_NDOTS | ARES_OPT_SERVERS);
+
+  // Point the DNS resolver at the desired server.  We must use
+  // ares_set_servers rather than setting it in the options for IPv6 support,
+  struct ares_addr_node addr;
+  addr.family = server.af;
+  if (server.af == AF_INET)
+  {
+    memcpy(&addr.addr.addr4, &server.addr.ipv4, sizeof(addr.addr.addr4));
+  }
+  else
+  {
+    memcpy(&addr.addr.addr6, &server.addr.ipv6, sizeof(addr.addr.addr6));
+  }
+  addr.next = NULL;
+  ares_set_servers(_channel, &addr);
 }
 
 
@@ -243,7 +258,7 @@ void DNSResolver::ares_callback(int status,
 }
 
 
-DNSResolver* DNSResolverFactory::new_resolver(const struct in_addr* server) const
+DNSResolver* DNSResolverFactory::new_resolver(const struct IP46Address& server) const
 {
   return new DNSResolver(server);
 }

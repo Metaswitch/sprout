@@ -83,6 +83,9 @@ extern "C" {
 #include "localstore.h"
 #include "scscfselector.h"
 #include "icscfproxy.h"
+#include "chronosconnection.h"
+#include "handlers.h"
+#include "httpstack.h"
 
 struct options
 {
@@ -114,6 +117,7 @@ struct options
   std::string            sas_system_name;
   std::string            hss_server;
   std::string            xdm_server;
+  std::string            chronos_service;
   std::string            store_servers;
   std::string            remote_store_servers;
   std::string            enum_server;
@@ -123,6 +127,9 @@ struct options
   std::string            analytics_directory;
   int                    reg_max_expires;
   int                    pjsip_threads;
+  std::string            http_address;
+  int                    http_port;
+  int                    http_threads;
   int                    worker_threads;
   pj_bool_t              log_to_file;
   std::string            log_directory;
@@ -189,6 +196,7 @@ static void usage(void)
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
        " -H, --hss <server>         Name/IP address of HSS server\n"
+       " -K, --chronos              Name/IP address of chronos service\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
        "                            originating processing and completion of terminating\n"
@@ -204,6 +212,10 @@ static void usage(void)
        "                            -E)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
+       " -T  --http_address <server>\n"
+       "                            Specify the HTTP bind address\n"
+       " -o  --http_port <port>     Specify the HTTP bind port\n"
+       " -q  --http_threads N       Number of HTTP threads (default: 1)\n"
        " -P, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
        " -W, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
@@ -257,6 +269,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "hss",               required_argument, 0, 'H'},
     { "record-routing-model",          required_argument, 0, 'C'},
     { "xdms",              required_argument, 0, 'X'},
+    { "chronos",           required_argument, 0, 'K'},
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
@@ -266,6 +279,9 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "analytics",         required_argument, 0, 'a'},
     { "authentication",    no_argument,       0, 'A'},
     { "log-file",          required_argument, 0, 'F'},
+    { "http_address",      required_argument, 0, 'T'},
+    { "http_port",         required_argument, 0, 'o'},
+    { "http_threads",      required_argument, 0, 'q'},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
     { "interactive",       no_argument,       0, 't'},
@@ -277,7 +293,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:X:E:x:f:r:p:w:a:F:L:dth", long_opt, &opt_ind)) != -1)
+  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:dth", long_opt, &opt_ind)) != -1)
   {
     switch (c)
     {
@@ -495,6 +511,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "XDM server set to %s\n", pj_optarg);
       break;
 
+    case 'K':
+      options->chronos_service = std::string(pj_optarg);
+      fprintf(stdout, "Chronos service set to %s\n", pj_optarg);
+      break;
+
     case 'E':
       options->enum_server = std::string(pj_optarg);
       fprintf(stdout, "ENUM server set to %s\n", pj_optarg);
@@ -548,6 +569,29 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'A':
       options->auth_enabled = PJ_TRUE;
       fprintf(stdout, "Authentication enabled\n");
+      break;
+
+    case 'T':
+      options->http_address = std::string(pj_optarg);
+      fprintf(stdout, "HTTP address set to %s\n", pj_optarg);
+      break;
+
+    case 'o':
+      options->http_port = parse_port(std::string(pj_optarg));
+      if (options->http_port != 0)
+      {
+        fprintf(stdout, "HTTP port set to %d\n", options->http_port);
+      }
+      else
+      {
+        fprintf(stdout, "HTTP port %s is invalid\n", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case 'q':
+      options->http_threads = atoi(pj_optarg);
+      fprintf(stdout, "Use %d HTTP threads\n", options->http_threads);
       break;
 
     case 'L':
@@ -756,6 +800,7 @@ int main(int argc, char *argv[])
   AvStore* av_store = NULL;
   SCSCFSelector* scscf_selector = NULL;
   ICSCFProxy* icscf_proxy = NULL;
+  ChronosConnection* chronos_connection = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
 
   // Set up our exception signal handler for asserts and segfaults.
@@ -801,6 +846,9 @@ int main(int argc, char *argv[])
   opt.record_routing_model = 1;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
+  opt.http_address = "0.0.0.0";
+  opt.http_port = 9888;
+  opt.http_threads = 1;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -879,6 +927,12 @@ int main(int argc, char *argv[])
   if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
   {
     LOG_WARNING("XDM server configured on P-CSCF, ignoring");
+  }
+
+  if (opt.scscf_enabled && (opt.chronos_service == ""))
+  {
+    LOG_ERROR("S-CSCF enabled with no Chronos service");
+    return 1;
   }
 
   if ((opt.store_servers != "") &&
@@ -989,6 +1043,13 @@ int main(int argc, char *argv[])
                                        stack_data.stats_aggregator);
   }
 
+  if (opt.chronos_service != "")
+  {
+    // Create a connection to Chronos.
+    LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
+    chronos_connection = new ChronosConnection(opt.chronos_service);
+  }
+
   if (opt.scscf_enabled)
   {
     if (opt.store_servers != "")
@@ -1017,8 +1078,8 @@ int main(int argc, char *argv[])
     }
 
     // Create local and optionally remote registration data stores.
-    local_reg_store = new RegStore(local_data_store);
-    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store) : NULL;
+    local_reg_store = new RegStore(local_data_store, chronos_connection);
+    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
 
     if (opt.xdm_server != "")
     {
@@ -1068,6 +1129,7 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
+                            sip_resolver,
                             ifc_handler,
                             opt.reg_max_expires);
 
@@ -1187,8 +1249,42 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  HttpStack* http_stack = NULL;
+  if (opt.scscf_enabled)
+  {
+    http_stack = HttpStack::get_instance();
+    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store);
+    HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
+
+    try
+    {
+      http_stack->initialize();
+      http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
+      http_stack->register_handler("^/timers$",
+                                   &chronos_handler_factory);
+      http_stack->start();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    }
+  }
+
   // Wait here until the quite semaphore is signaled.
   sem_wait(&term_sem);
+
+  if (opt.scscf_enabled)
+  {
+    try
+    {
+      http_stack->stop();
+      http_stack->wait_stopped();
+    }
+    catch (HttpStack::Exception& e)
+    {
+      LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+    }
+  }  
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -1211,6 +1307,7 @@ int main(int argc, char *argv[])
     delete xdm_connection;
     delete enum_service;
     delete bgcf_service;
+    delete chronos_connection;
   }
   if (opt.pcscf_enabled)
   {
