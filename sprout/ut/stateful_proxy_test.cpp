@@ -2597,7 +2597,16 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
   // A simple tampered token
   string tampered(token);
   fprintf(stderr, "%s\n", tampered.c_str());
-  tampered[6]++;
+  // 'Z'++ is '[', which PJSIP rejects as invalid when used in a From
+  // header, so use 'Z'-- instead.
+  if (tampered[6] != 'Z')
+  {
+    tampered[6]++;
+  }
+  else
+  {
+    tampered[6]--;
+  }
   fprintf(stderr, "%s\n", tampered.c_str());
   tokens.push_back(tampered);
 
@@ -2622,7 +2631,6 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
     SCOPED_TRACE(*iter);
 
     doInviteEdge(*iter);
-    printf("%s %s\n", token.c_str(), iter->c_str());
     ASSERT_EQ(1, txdata_count());
 
     // Is the right kind and method.
