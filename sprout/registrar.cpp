@@ -426,7 +426,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     std::string unused;
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    hss->registration_update(aor, "", "timeout-dereg", unused, ifc_map, uris, 0);
+    hss->registration_update(aor, "", "user-dereg", unused, ifc_map, uris, 0);
   }
 
   out_is_initial_registration = is_initial_registration;

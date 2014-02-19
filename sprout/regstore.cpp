@@ -143,7 +143,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   int orig_max_expires = expire_bindings(aor_data, now);
   int max_expires = orig_max_expires + 10;
 
-  if (max_expires == now)
+  if (orig_max_expires == now)
   {
     is_dereg = true;
   }

@@ -146,6 +146,25 @@ class HssConnectionTest : public BaseTest
       "<IMSSubscription>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
+    fakecurl_responses["http://narcissus/impu/missingelement1?type=reg"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<IMSSubscription>"
+      "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses["http://narcissus/impu/missingelement2?type=reg"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
+    fakecurl_responses["http://narcissus/impu/missingelement3?type=reg"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<C>"
+      "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "<IMSSubscription>"
+      "</IMSSubscription>"
+      "</C>";
+
 
  }
 
@@ -229,6 +248,37 @@ TEST_F(HssConnectionTest, BadXML2)
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(_log.contains("Malformed HSS XML"));
 }
+
+TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.registration_update("missingelement1", "", "reg", regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.registration_update("missingelement3", "", "reg", regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.registration_update("missingelement2", "", "reg", regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
+}
+
 
 TEST_F(HssConnectionTest, ServerFailure)
 {
