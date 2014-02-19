@@ -1,5 +1,5 @@
 /**
- * @file handlers.cpp 
+ * @file handlers.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -91,7 +91,8 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-   
+  bool unused;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -146,7 +147,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos));
+  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos, unused));
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -158,7 +159,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body) 
+int ChronosHandler::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;

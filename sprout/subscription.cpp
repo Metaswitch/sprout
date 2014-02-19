@@ -137,6 +137,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   int expiry = 0;
   pj_status_t status = PJ_FALSE;
   (*aor_data) = NULL;
+  bool unused;
 
   do
   {
@@ -258,7 +259,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data), false));
+  while (!primary_store->set_aor_data(aor, (*aor_data), false, unused));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)

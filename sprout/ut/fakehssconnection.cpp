@@ -56,10 +56,33 @@ void FakeHSSConnection::flush_all()
   _results.clear();
 }
 
-
 void FakeHSSConnection::set_result(const std::string& url,
                                    const std::string& result)
 {
+  _results[url] = result;
+}
+
+void FakeHSSConnection::set_impu_result(const std::string& impu,
+                                        const std::string& type,
+                                        const std::string& state,
+                                        std::string subxml,
+                                        std::string extra_params)
+{
+  std::string url = "/impu/" + Utils::url_escape(impu) + "?type=" + type + extra_params;
+
+  if (subxml.compare("") == 0)
+  {
+    subxml = ("<IMSSubscription><ServiceProfile>\n"
+              "<PublicIdentity><Identity>"+impu+"</Identity></PublicIdentity>"
+              "  <InitialFilterCriteria>\n"
+              "  </InitialFilterCriteria>\n"
+              "</ServiceProfile></IMSSubscription>");
+  }
+
+  std::string result = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
+                        + subxml + "</ClearwaterRegData>");
+
   _results[url] = result;
 }
 
@@ -114,6 +137,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   {
     http_code = HTTP_OK;
     root = new rapidxml::xml_document<>;
+    LOG_DEBUG(i->second.c_str());
     try
     {
       root->parse<0>(root->allocate_string(i->second.c_str()));

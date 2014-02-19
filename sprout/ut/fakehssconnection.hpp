@@ -51,6 +51,7 @@ public:
   void flush_all();
 
   void set_result(const std::string& url, const std::string& result);
+  void set_impu_result(const std::string&, const std::string&, const std::string&, std::string, std::string = "");
   void delete_result(const std::string& url);
 
 private:

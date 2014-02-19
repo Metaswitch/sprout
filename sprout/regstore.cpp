@@ -62,7 +62,7 @@ extern "C" {
 #include "stack.h"
 #include "chronosconnection.h"
 
-RegStore::RegStore(Store* data_store, 
+RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
   _data_store(data_store),
   _chronos(chronos_connection)
@@ -108,6 +108,14 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
   return aor_data;
 }
 
+bool RegStore::set_aor_data(const std::string& aor_id,
+                            AoR* aor_data,
+                            bool set_chronos)
+{
+  bool unused;
+  return set_aor_data(aor_id, aor_data, set_chronos, unused);
+}
+
 
 /// Update the data for a particular address of record.  Writes the data
 /// atomically.  If the underlying data has changed since it was last
@@ -118,7 +126,8 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
 /// @param aor_data   The registration data record.
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data,
-                            bool set_chronos)
+                            bool set_chronos,
+                            bool& is_dereg)
 {
   // Expire any old bindings before writing to the server.  In theory, if
   // there are no bindings left we could delete the entry, but this may
@@ -128,10 +137,16 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   int now = time(NULL);
 
   // Set the max expires to be greater than the longest binding expiry time.
-  // This prevents a window condition where Chronos can return a binding to 
+  // This prevents a window condition where Chronos can return a binding to
   // expire, but memcached has already deleted the aor data (meaning that
   // no NOTIFYs could be sent)
-  int max_expires = expire_bindings(aor_data, now) + 10;
+  int orig_max_expires = expire_bindings(aor_data, now);
+  int max_expires = orig_max_expires + 10;
+
+  if (max_expires == now)
+  {
+    is_dereg = true;
+  }
 
   // Expire any old subscriptions as well.  This doesn't get factored in to
   // the expiry time on the store record because, according to 5.4.2.1.2 /
@@ -144,22 +159,22 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 
   // Set the chronos timers
   if (set_chronos)
-  { 
+  {
     for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
          i != aor_data->_bindings.end();
          ++i)
     {
       AoR::Binding* b = i->second;
       std::string b_id = i->first;
-    
+
       HTTPCode status;
       std::string timer_id = "";
       std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"" + b_id +"\"}";
       std::string callback_uri = "http://localhost:9888/timers";
-      
+
       int now = time(NULL);
       int expiry = b->_expires - now;
-  
+
       // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
       if (b->_timer_id == "")
       {
@@ -170,7 +185,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
         timer_id = b->_timer_id;
         status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, 0);
       }
-     
+
       // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register.
       if (status == HTTP_OK)
       {
@@ -222,12 +237,12 @@ int RegStore::expire_bindings(AoR* aor_data,
         send_notify(j->second, aor_data->_notify_cseq, b, b_id);
       }
 
-      // If a timer id is present, then delete it. If the timer id is empty (because a 
+      // If a timer id is present, then delete it. If the timer id is empty (because a
       // previous post/put failed) then don't.
       if (b->_timer_id != "")
       {
         _chronos->send_delete(b->_timer_id, 0);
-      } 
+      }
 
       delete i->second;
       aor_data->_bindings.erase(i++);
@@ -584,7 +599,7 @@ void RegStore::AoR::remove_subscription(const std::string& to_tag)
   }
 }
 
-void RegStore::send_notify(AoR::Subscription* s, int cseq, 
+void RegStore::send_notify(AoR::Subscription* s, int cseq,
                            AoR::Binding* b, std::string b_id)
 {
   pjsip_tx_data* tdata_notify = NULL;

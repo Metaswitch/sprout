@@ -882,7 +882,6 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
   Flow* tgt_flow = NULL;
   SIPPeerType source_type = determine_source(rdata->tp_info.transport,
                                              rdata->pkt_info.src_addr);
-
   LOG_DEBUG("Perform access proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
 

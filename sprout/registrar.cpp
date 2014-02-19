@@ -424,7 +424,9 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (is_dereg) {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
     std::string unused;
-    HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", unused, ifc_map, uris, trail);
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->registration_update(aor, "", "timeout-dereg", unused, ifc_map, uris, 0);
   }
 
   out_is_initial_registration = is_initial_registration;

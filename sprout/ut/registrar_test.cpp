@@ -76,13 +76,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "");
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
 
@@ -238,14 +232,9 @@ TEST_F(RegistrarTest, NotOurs)
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
-  // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "&private_id=Alice");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -489,8 +478,7 @@ TEST_F(RegistrarTest, NoPath)
 // First case - REGISTER is generated with a multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -556,8 +544,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -619,8 +606,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
 /// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -683,8 +669,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -719,6 +704,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
+  ASSERT_TRUE(current_txdata() != NULL);
   pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -737,8 +723,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
 TEST_F(RegistrarTest, AppServersInitialRegistration)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -812,9 +797,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 {
   std::string user = "sip:6505550231@homedomain";
 
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
+  std::string xml =                                ("<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
@@ -832,6 +815,9 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "auth-dereg", "REGISTERED", xml);
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -887,8 +873,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 
 TEST_F(RegistrarTest, AppServersReRegistration)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -975,8 +960,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
 {
   Message msg;
   msg._user = "6505550233";
-  _hss_connection->set_result("/impu/sip%3A6505550233%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+
+  _hss_connection->set_impu_result("sip:6505550233@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
@@ -1000,8 +985,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
-  _hss_connection->set_result("/impu/sip%3A6505550234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
@@ -1033,8 +1017,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 /// Test for issue 356
 TEST_F(RegistrarTest, AppServersWithNoExtension)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1091,8 +1074,7 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
 /// Test for issue 358 - IFCs match on SDP but REGISTER doesn't have any - should be no match
 TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1138,13 +1120,7 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 TEST_F(RegistrarTest, RegistrationWithSubscription)
 {
   // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "&private_id=Alice");
 
   RegStore::AoR::Subscription* s1;
   int now = time(NULL);

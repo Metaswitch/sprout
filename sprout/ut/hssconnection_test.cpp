@@ -63,7 +63,7 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=pubid42"] = "{\"digest\": \"myhashhere\"}";
     fakecurl_responses["http://narcissus/impi/privid_corrupt/digest?public_id=pubid42"] = "{\"digest\"; \"myhashhere\"}";
     fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=wrongpubid"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://narcissus/impu/pubid42"] =
+    fakecurl_responses["http://narcissus/impu/pubid42?type=reg"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>REGISTERED</RegistrationState>"
@@ -92,11 +92,11 @@ class HssConnectionTest : public BaseTest
         "</InitialFilterCriteria>"
       "</ServiceProfile>"
       "</IMSSubscription>"
-      "/<ClearwaterRegData>";
-    fakecurl_responses["http://narcissus/impu/pubid42_malformed"] =
+      "</ClearwaterRegData>";
+    fakecurl_responses["http://narcissus/impu/pubid42_malformed?type=reg"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<Grou";
-    fakecurl_responses["http://narcissus/impu/pubid43_malformed"] =
+    fakecurl_responses["http://narcissus/impu/pubid43_malformed?type=reg"] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>REGISTERED</RegistrationState>"
@@ -126,12 +126,27 @@ class HssConnectionTest : public BaseTest
       "</ServiceProfile>"
       "</NonsenseWord>"
       "</ClearwaterRegData>";
-    fakecurl_responses["http://narcissus/impu/pubid44"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://narcissus/impu/pubid44?type=reg"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
     fakecurl_responses["http://narcissus/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
+    fakecurl_responses["http://narcissus/impu/pubid50?type=call"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>UNREGISTERED</RegistrationState>"
+      "<IMSSubscription>"
+      "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses["http://narcissus/impu/pubid50?type=auth-dereg"] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "<IMSSubscription>"
+      "</IMSSubscription>"
+      "</ClearwaterRegData>";
+
  }
 
   virtual ~HssConnectionTest()
@@ -162,9 +177,27 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
   std::string regstate;
   _hss.registration_update("pubid42", "", "reg", regstate, ifcs_map, uris, 0);
   EXPECT_EQ("REGISTERED", regstate);
-  EXPECT_EQ(2u, uris.size());
+  ASSERT_EQ(2u, uris.size());
   EXPECT_EQ("sip:123@example.com", uris[0]);
   EXPECT_EQ("sip:456@example.com", uris[1]);
+}
+
+TEST_F(HssConnectionTest, SimpleUnregistered)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.registration_update("pubid50", "", "call", regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("UNREGISTERED", regstate);
+}
+
+TEST_F(HssConnectionTest, SimpleNotRegistered)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.registration_update("pubid50", "", "auth-dereg", regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("NOT_REGISTERED", regstate);
 }
 
 TEST_F(HssConnectionTest, SimpleIfc)
@@ -203,9 +236,9 @@ TEST_F(HssConnectionTest, ServerFailure)
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.registration_update("pubid44", "", "reg", regstate, ifcs_map, uris, 0);
-  EXPECT_EQ("NOT_REGISTERED", regstate);
+  EXPECT_EQ("", regstate);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("http://narcissus/impu/pubid44 failed"));
+  EXPECT_TRUE(_log.contains("http://narcissus/impu/pubid44?type=reg failed"));
 }
 
 TEST_F(HssConnectionTest, SimpleUserAuth)

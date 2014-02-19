@@ -231,6 +231,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
     path += "&private_id=" + Utils::url_escape(private_user_identity);
   }
 
+  LOG_DEBUG("Making Homestead request for %s", path.c_str());
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
@@ -263,7 +264,15 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
     return HTTP_SERVER_ERROR;
   }
 
-  rapidxml::xml_node<>* reg = root->first_node("RegistrationState");
+  rapidxml::xml_node<>* cw = root->first_node("ClearwaterRegData");
+
+  if (!cw)
+  {
+    LOG_ERROR("Malformed Homestead XML - no ClearwaterRegData element");
+    return HTTP_SERVER_ERROR;
+  }
+
+  rapidxml::xml_node<>* reg = cw->first_node("RegistrationState");
 
   if (!reg)
   {
@@ -273,7 +282,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
 
   regstate = reg->value();
 
-  rapidxml::xml_node<>* imss = root->first_node("IMSSubscription");
+  rapidxml::xml_node<>* imss = cw->first_node("IMSSubscription");
 
   if (!imss)
   {
