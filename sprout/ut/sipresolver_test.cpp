@@ -510,7 +510,7 @@ TEST_F(SIPResolverTest, ARecordLoadBalancing)
   EXPECT_GT(250+5*14, counts["3.0.0.4:5060;transport=UDP"]);
 }
 
-TEST_F(SIPResolverTest, BlacklistSRVRecords)
+TEST_F(SIPResolverTest, DISABLED_BlacklistSRVRecords)
 {
   // Test blacklist of SRV selections.
   std::list<DnsRRecord*> records;
@@ -561,7 +561,7 @@ TEST_F(SIPResolverTest, BlacklistSRVRecords)
   EXPECT_GT(333+5*15, counts["3.0.0.3:5054;transport=TCP"]);
 }
 
-TEST_F(SIPResolverTest, BlacklistARecord)
+TEST_F(SIPResolverTest, DISABLED_BlacklistARecord)
 {
   // Test blacklisting of an A record.
   std::list<DnsRRecord*> records;

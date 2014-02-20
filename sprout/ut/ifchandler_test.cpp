@@ -495,6 +495,28 @@ TEST_F(IfcHandlerTest, NoTrigger)
   EXPECT_TRUE(_log.contains("has no trigger point"));
 }
 
+TEST_F(IfcHandlerTest, NoSPT)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         false);
+}
+
+TEST_F(IfcHandlerTest, NoSPTNeg)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
 TEST_F(IfcHandlerTest, NoClass1)
 {
   doTest("",
