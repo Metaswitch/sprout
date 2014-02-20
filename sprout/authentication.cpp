@@ -218,35 +218,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
     delete av;
   }
 
-  if (status != PJ_SUCCESS)
-  {
-  }
-
   return status;
-}
-
-void get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
-{
-  // Check to see if the request has already been integrity protected?
-  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
-           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
-
-  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
-  impu_out = PJUtils::public_id_from_uri(to_uri);
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.username.slen != 0))
-  {
-    // private user identity is supplied in the Authorization header so use it.
-    impi_out = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-    LOG_DEBUG("Private identity from authorization header = %s", impi_out.c_str());
-  }
-  else
-  {
-    // private user identity not supplied, so construct a default from the
-    // public user identity by stripping the sip: prefix.
-    impi_out = PJUtils::default_private_id_from_uri(to_uri);
-    LOG_DEBUG("Private identity defaulted from public identity = %s", impi_out.c_str());
-  }
 }
 
 void notify_hss(pjsip_rx_data* rdata)
@@ -255,7 +227,7 @@ void notify_hss(pjsip_rx_data* rdata)
   std::string impi;
   std::string impu;
 
-  get_impi_and_impu(rdata, impi, impu);
+  PJUtils::get_impi_and_impu(rdata, impi, impu);
 
   std::string unused;
   std::vector<std::string> uris;
@@ -273,7 +245,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impu;
   std::string nonce;
 
-  get_impi_and_impu(rdata, impi, impu);
+  PJUtils::get_impi_and_impu(rdata, impi, impu);
   // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
   // only support AKA and SIP Digest, so only implement the subset of steps
   // required to distinguish between the two.

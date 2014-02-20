@@ -137,7 +137,6 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   {
     http_code = HTTP_OK;
     root = new rapidxml::xml_document<>;
-    LOG_DEBUG(i->second.c_str());
     try
     {
       root->parse<0>(root->allocate_string(i->second.c_str()));

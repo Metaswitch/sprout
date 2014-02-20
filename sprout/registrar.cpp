@@ -763,12 +763,12 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
     {
       LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
       std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-    // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
-    // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    std::string unused;
-    HTTPCode http_code = hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, get_trail(tsx));
+      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
+      // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      std::string unused;
+      HTTPCode http_code = hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, get_trail(tsx));
 
       if (http_code == HTTP_OK)
       {
