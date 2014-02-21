@@ -3,6 +3,29 @@
 # Read the configuration in.
 . /etc/clearwater/config
 
+# Add square brackets around the address iff it is an IPv6 address
+bracketed_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+
+# Set up local_ipv*, defaulting the entry that is not applicable.
+# Note that is_address_ipv6.py is backwards in that it returns 0 for false - hence the '!'.
+if ! /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
+then
+  local_ipv4=127.0.0.1
+  local_ipv6=$local_ip
+else
+  local_ipv4=$local_ip
+  local_ipv6=::1
+fi
+
+# Set up public_ipv4 if we're using an IPv4 address, or default it if not.
+# Note that is_address_ipv6.py is backwards in that it returns 0 for false - hence the '!'.
+if ! /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
+then
+  public_ipv4=127.0.0.1
+else
+  public_ipv4=$public_ip
+fi
+
 # Build the restund configuration file.
 CONF=/etc/clearwater/restund.conf
 cat >$CONF <<EOF
@@ -12,9 +35,9 @@ daemon                  yes
 debug                   no
 realm                   $home_domain
 syncinterval            600
-udp_listen              $local_ip:3478
+udp_listen              $bracketed_ip:3478
 udp_sockbuf_size        524288
-tcp_listen              $local_ip:3478
+tcp_listen              $bracketed_ip:3478
 # modules
 module_path             /usr/share/clearwater/lib
 module                  stat.so
@@ -29,9 +52,9 @@ auth_nonce_expiry       3600
 # turn
 turn_max_allocations    512
 turn_max_lifetime       600
-turn_relay_addr         $local_ip
-turn_relay_snat_addr    $public_ip
-turn_relay_addr6        ::1
+turn_relay_addr         $local_ipv4
+turn_relay_snat_addr    $public_ipv4
+turn_relay_addr6        $local_ipv6
 # Cope with broken TURN clients
 turn_extended_channels  yes
 # httpdb
@@ -48,5 +71,22 @@ status_http_addr        127.0.0.1
 status_http_port        8080
 EOF
 
-# Build the restund monit configuration file.
-sed -e s/LOCAL_IP/$local_ip/g < /etc/clearwater/templates/restund.monit.tmpl > /etc/monit/conf.d/restund.monit
+# Set up the monit configuration for restund
+cat > /etc/monit/conf.d/restund.monit <<EOF
+# Poll every 10 seconds
+set daemon 10
+
+# Check the server's public interfaces.  We put this first so that we process
+# failed polls (and maybe kill the server) before we process the restart.
+check program poll_restund with path "/usr/share/clearwater/bin/poll_restund.sh"
+  if status != 0 for 2 cycles then exec "/etc/init.d/restund abort"
+
+# Monitor the server's PID.
+check process restund matching restund
+  start program = "/etc/init.d/restund start"
+  stop program = "/etc/init.d/restund stop"
+EOF
+chmod 0644 /etc/monit/conf.d/restund.monit
+
+# Force monit to reload its configuration
+service monit reload
