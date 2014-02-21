@@ -3602,23 +3602,6 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
     _uas_data->on_new_client_response(this, rdata);
 
-    if ((rdata->msg_info.msg->line.status.code == SIP_STATUS_FLOW_FAILED) &&
-        (_from_store))
-    {
-      // We're the auth proxy and the flow we used failed, delete the
-      // record of the flow.
-      std::string aor = PJUtils::pj_str_to_string(&_aor);
-      std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      std::vector<std::string> uris;
-      std::map<std::string, Ifcs> ifc_map;
-      std::string unused;
-      hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, trail());
-
-      if (!uris.empty())
-      {
-        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, binding_id, trail());
-      }
-    }
   }
 
   // If UAC transaction is terminated because of a timeout, treat this as

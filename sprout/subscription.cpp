@@ -326,8 +326,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Subscriber must have already registered to be making a subscribe
   std::string state;
-  HTTPCode http_code = hss->registration_update(public_id, "", "call", state, ifc_map, uris, trail);
-  if ((http_code != HTTP_OK) || (state == "UNREGISTERED"))
+  HTTPCode http_code = hss->get_registration_data(public_id, state, ifc_map, uris, trail);
+  if ((http_code != HTTP_OK) || (state != "REGISTERED"))
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public

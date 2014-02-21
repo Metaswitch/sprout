@@ -91,7 +91,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-  bool unused;
+  bool is_dereg = false;
 
   do
   {
@@ -147,7 +147,15 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos, unused));
+  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos, is_dereg));
+
+  if (update_chronos && is_dereg)
+  {
+    std::string unused;
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    hss->registration_update(aor_id, "", "dereg-timeout", unused, ifc_map, uris, 0);
+  }
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)

@@ -232,7 +232,7 @@ void notify_hss(pjsip_rx_data* rdata)
   std::string unused;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
-  hss->registration_update(impu, impi, "auth-failed-dereg", unused, ifc_map, uris, 0);
+  hss->registration_update(impu, impi, "dereg-auth-failed", unused, ifc_map, uris, 0);
 }
 
 void create_challenge(pjsip_authorization_hdr* auth_hdr,

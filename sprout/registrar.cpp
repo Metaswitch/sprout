@@ -423,10 +423,14 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
   if (is_dereg) {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    std::string impi;
+    std::string impu;
+    PJUtils::get_impi_and_impu(rdata, impi, impu);
+
     std::string unused;
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    hss->registration_update(aor, "", "user-dereg", unused, ifc_map, uris, 0);
+    hss->registration_update(impu, impi, "dereg-user", unused, ifc_map, uris, 0);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -768,7 +772,7 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
       std::string unused;
-      HTTPCode http_code = hss->registration_update(aor, "", "auth-dereg", unused, ifc_map, uris, get_trail(tsx));
+      HTTPCode http_code = hss->registration_update(aor, "", "dereg-admin", unused, ifc_map, uris, get_trail(tsx));
 
       if (http_code == HTTP_OK)
       {
