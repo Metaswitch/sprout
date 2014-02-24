@@ -38,12 +38,14 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
+#include <unistd.h>
 
 #include "utils.h"
 #include "dnscachedresolver.h"
 #include "sipresolver.h"
 #include "fakelogger.hpp"
 #include "test_utils.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 
@@ -345,6 +347,53 @@ TEST_F(SIPResolverTest, SimpleAResolution)
   // Test overriding port and transport.
   EXPECT_EQ("3.0.0.1:5054;transport=TCP",
             RT(_sipresolver, "sprout.cw-ngv.com").set_port(5054).set_transport(IPPROTO_TCP).resolve());
+}
+
+// This unit test doesn't assert anything - it tests for a bug where
+// DNS expiry triggered invalid memory accesses, which will show up in
+// the Valgrind output
+TEST_F(SIPResolverTest, Expiry)
+{
+  cwtest_completely_control_time();
+  std::list<DnsRRecord*> udp_records;
+  std::list<DnsRRecord*> tcp_records;
+  udp_records.push_back(a("sprout.cw-ngv.com", 5, "3.0.0.1"));
+  tcp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, udp_records);
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, tcp_records);
+  ASSERT_NE("", _dnsresolver.display_cache());
+
+  cwtest_advance_time_ms(1000);
+  _dnsresolver.expire_cache();
+  ASSERT_NE("", _dnsresolver.display_cache());
+
+  cwtest_advance_time_ms(2000);
+  _dnsresolver.expire_cache();
+  ASSERT_EQ("", _dnsresolver.display_cache());
+
+  cwtest_reset_time();
+}
+
+
+// This unit test doesn't assert anything - it tests for a bug where
+// DNS expiry triggered invalid memory accesses, which will show up in
+// the Valgrind output
+TEST_F(SIPResolverTest, ExpiryNoInvalidRead)
+{
+  cwtest_completely_control_time();
+  // Test resolution using A records only.
+  std::list<DnsRRecord*> udp_records;
+  std::list<DnsRRecord*> tcp_records;
+  udp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
+  tcp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, udp_records);
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, tcp_records);
+
+  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  cwtest_advance_time_ms(3000);
+  _dnsresolver.expire_cache();
+  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+  cwtest_reset_time();
 }
 
 TEST_F(SIPResolverTest, SimpleAAAAResolution)
