@@ -70,6 +70,19 @@ void FakeHSSConnection::delete_result(const std::string& url)
 }
 
 
+void FakeHSSConnection::set_rc(const std::string& url,
+                               long rc)
+{
+  _rcs[url] = rc;
+}
+
+
+void FakeHSSConnection::delete_rc(const std::string& url)
+{
+  _rcs.erase(url);
+}
+
+
 Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
                                                 SAS::TrailId trail)
 {
@@ -112,11 +125,11 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
 
   if (i != _results.end())
   {
-    http_code = HTTP_OK;
     root = new rapidxml::xml_document<>;
     try
     {
       root->parse<0>(root->allocate_string(i->second.c_str()));
+      http_code = HTTP_OK;
     }
     catch (rapidxml::parse_error& err)
     {
@@ -136,6 +149,12 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   else
   {
     LOG_DEBUG("Failed to find XML result for URL %s", path.c_str());
+  }
+
+  std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
+  if (i2 != _rcs.end())
+  {
+    http_code = i2->second;
   }
 
   return http_code;
