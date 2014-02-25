@@ -39,6 +39,7 @@
 #include "handlers.h"
 #include "log.h"
 #include "regstore.h"
+#include "ifchandler.h"
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosHandler::run()
@@ -154,7 +155,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
     std::string unused;
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    hss->registration_update(aor_id, "", "dereg-timeout", unused, ifc_map, uris, 0);
+    _cfg->_hss->registration_update(aor_id, "", "dereg-timeout", unused, ifc_map, uris, 0);
   }
 
   // If we allocated the AoR, tidy up.

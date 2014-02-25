@@ -1253,7 +1253,7 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
-    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store);
+    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
     HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
 
     try
@@ -1284,7 +1284,7 @@ int main(int argc, char *argv[])
     {
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
-  }  
+  }
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
