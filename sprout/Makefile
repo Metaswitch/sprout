@@ -59,6 +59,7 @@ TARGET_SOURCES := logger.cpp \
                   basicproxy.cpp \
                   icscfproxy.cpp \
                   scscfselector.cpp	\
+                  rftsx.cpp \
                   signalhandler.cpp	\
                   subscription.cpp \
                   notify_utils.cpp \

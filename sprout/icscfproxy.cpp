@@ -375,7 +375,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
               rsp_status);
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
-      if (!_hss_rsp._have_caps)
+      if (!_have_caps)
       {
         // We don't have capabilities from the HSS yet, so do another query
         LOG_DEBUG("Attempt retry for non-REGISTER request");
@@ -431,7 +431,7 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._have_caps)
+  if (!_have_caps)
   {
     LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
               impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
@@ -448,16 +448,16 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 
   if (status_code == PJSIP_SC_OK)
   {
-    if (!_hss_rsp._scscf.empty())
+    if (!_hss_rsp.scscf.empty())
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp._scscf;
+      scscf = _hss_rsp.scscf;
     }
-    else if (_hss_rsp._have_caps)
+    else if (_have_caps)
     {
       // Received capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
-                                         _hss_rsp._optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
+                                         _hss_rsp.optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -487,7 +487,7 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._have_caps)
+  if (!_have_caps)
   {
     LOG_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
               impu.c_str(),
@@ -505,16 +505,16 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 
   if (status_code == PJSIP_SC_OK)
   {
-    if (!_hss_rsp._scscf.empty())
+    if (!_hss_rsp.scscf.empty())
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp._scscf;
+      scscf = _hss_rsp.scscf;
     }
-    else if (_hss_rsp._have_caps)
+    else if (_have_caps)
     {
       // Received capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
-                                         _hss_rsp._optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
+                                         _hss_rsp.optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -536,10 +536,10 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
   int status_code = PJSIP_SC_OK;
 
   // Clear out any older response.
-  _hss_rsp._have_caps = false;
-  _hss_rsp._mandatory_caps.clear();
-  _hss_rsp._optional_caps.clear();
-  _hss_rsp._scscf = "";
+  _have_caps = false;
+  _hss_rsp.mandatory_caps.clear();
+  _hss_rsp.optional_caps.clear();
+  _hss_rsp.scscf = "";
 
   if ((!rsp.isMember("result-code")) ||
       ((rsp["result-code"].asString() != "2001") &&
@@ -558,7 +558,7 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
     {
       // Response specifies a S-CSCF, so select this as the target.
       LOG_DEBUG("HSS returned S-CSCF %s as target", rsp["scscf"].asCString());
-      _hss_rsp._scscf = rsp["scscf"].asString();
+      _hss_rsp.scscf = rsp["scscf"].asString();
     }
 
     if ((rsp.isMember("mandatory-capabilities")) &&
@@ -568,11 +568,11 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
     {
       // Response specifies capabilities.
       LOG_DEBUG("HSS returned capabilities");
-      if ((parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp._mandatory_caps)) &&
-          (parse_capabilities(rsp["optional-capabilities"], _hss_rsp._optional_caps)))
+      if ((parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp.mandatory_caps)) &&
+          (parse_capabilities(rsp["optional-capabilities"], _hss_rsp.optional_caps)))
       {
         // Parsed requested capabilities successfully
-        _hss_rsp._have_caps = true;
+        _have_caps = true;
       }
       else
       {

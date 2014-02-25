@@ -46,6 +46,20 @@
 #include "scscfselector.h"
 #include "basicproxy.h"
 
+/// Structure storing server capabilities as returned by the HSS
+struct ServerCapabilities
+{
+  /// The S-CSCF returned by the HSS.
+  std::string scscf;
+
+  /// The list of mandatory capabilities returned by the HSS.
+  std::vector<int> mandatory_caps;
+
+  /// The list of optional capabilities returned by the HSS.
+  std::vector<int> optional_caps;
+};
+
+
 class ICSCFProxy : public BasicProxy
 {
 public:
@@ -145,23 +159,12 @@ private:
     /// capabilities to select an alternate S-CSCF.
     std::string _auth_type;
 
+    /// Flag which indicates whether or not the HSS returned capabilities.
+    bool _have_caps;
+
     /// Structure storing the most recent response from the HSS for this
     /// transaction.
-    struct
-    {
-      /// The S-CSCF returned by the HSS.
-      std::string _scscf;
-
-      /// Flag which indicates whether or not the HSS returned capabilities.
-      bool _have_caps;
-
-      /// The list of mandatory capabilities returned by the HSS.
-      std::vector<int> _mandatory_caps;
-
-      /// The list of optional capabilities returned by the HSS.
-      std::vector<int> _optional_caps;
-
-    } _hss_rsp;
+    ServerCapabilities _hss_rsp;
 
     /// The list of S-CSCFs already attempted for this request.
     std::vector<std::string> _attempted_scscfs;
