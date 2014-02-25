@@ -35,6 +35,7 @@ override_dh_installinit:
 
 override_dh_shlibdeps:
 override_dh_strip:
+	dh_strip -psprout-libs --dbg-package=sprout-libs-dbg
 	dh_strip -psprout --dbg-package=sprout-dbg
 	dh_strip -pbono --dbg-package=bono-dbg
 	dh_strip -pclearwater-sip-stress --dbg-package=clearwater-sip-stress-dbg
