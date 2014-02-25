@@ -1642,6 +1642,7 @@ TEST_F(StatefulProxyTest, TestForkedFlow)
   pjsip_msg* out;
   Message msg;
   setupForkedFlow(msg);
+  ASSERT_EQ(3u, _tdata.size());
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183, "early"));
@@ -1710,6 +1711,7 @@ TEST_F(StatefulProxyTest, TestForkedFlow2)
   pjsip_msg* out;
   Message msg;
   setupForkedFlow(msg);
+  ASSERT_EQ(3u, _tdata.size());
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
@@ -1768,6 +1770,7 @@ TEST_F(StatefulProxyTest, TestForkedFlow3)
   pjsip_msg* out;
   Message msg;
   setupForkedFlow(msg);
+  ASSERT_EQ(3u, _tdata.size());
 
   // Send 183 back from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 183));
@@ -1816,6 +1819,7 @@ TEST_F(StatefulProxyTest, TestForkedFlow4)
   SCOPED_TRACE("");
   Message msg;
   setupForkedFlow(msg);
+  ASSERT_EQ(3u, _tdata.size());
 
   // Send final error from one of them
   inject_msg(respond_to_txdata(_tdata[_uris[0]], 503));
@@ -2596,7 +2600,6 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 
   // A simple tampered token
   string tampered(token);
-  fprintf(stderr, "%s\n", tampered.c_str());
   // 'Z'++ is '[', which PJSIP rejects as invalid when used in a From
   // header, so use 'Z'-- instead.
   if (tampered[6] != 'Z')
@@ -2607,7 +2610,6 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
   {
     tampered[6]--;
   }
-  fprintf(stderr, "%s\n", tampered.c_str());
   tokens.push_back(tampered);
 
   // Not base 64 (this actually gets decoded as if it is, so doesn't
@@ -3181,7 +3183,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfUntrusted)
 TEST_F(IscTest, SimpleMainline)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -4740,7 +4742,7 @@ TEST_F(IscTest, MmtelCdiv)
 TEST_F(IscTest, MmtelDoubleCdiv)
 {
   register_uri(_store, _hss_connection, "6505559012", "homedomain", "sip:andunnuvvawun@10.114.61.214:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
@@ -4785,7 +4787,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-  _hss_connection->set_impu_result("sip:6505555678@homedomain", "call", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505555678@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
@@ -5192,7 +5194,7 @@ TEST_F(IscTest, MmtelFlow)
 TEST_F(IscTest, MmtelThenExternal)
 {
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>

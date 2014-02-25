@@ -68,7 +68,11 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
                                         std::string subxml,
                                         std::string extra_params)
 {
-  std::string url = "/impu/" + Utils::url_escape(impu) + "?type=" + type + extra_params;
+  std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data";
+  if (type != "")
+  {
+    url += "?type=" + type + extra_params;
+  }
 
   if (subxml.compare("") == 0)
   {

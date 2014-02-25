@@ -817,7 +817,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "</ServiceProfile></IMSSubscription>");
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", xml);
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "auth-dereg", "REGISTERED", xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", "NOT_REGISTERED", xml);
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -856,7 +856,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   // Check that we deleted the binding
   aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  ASSERT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   SCOPED_TRACE("deREGISTER");

@@ -56,76 +56,66 @@ class HandlersTest : public BaseTest
   RegStore* store;
   HSSConnection* fake_hss;
 
-  HandlersTest()
+  MockHttpStack stack;
+  MockHttpStack::Request* req;
+  ChronosHandler::Config* chronos_config;
+
+  ChronosHandler* handler;
+
+  void SetUp()
   {
     chronos_connection = new ChronosConnection("localhost");
     local_data_store = new LocalStore();
-    store = new RegStore((Store*)local_data_store, chronos_connection);
+    store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
+    req = new MockHttpStack::Request(&stack, "/", "timers");
+    chronos_config = new ChronosHandler::Config(store, store, fake_hss);
+    handler = new ChronosHandler(*req, chronos_config);
   }
 
-  virtual ~HandlersTest()
+  void TearDown()
   {
+    delete handler;
+    delete chronos_config;
+    delete req;
     delete fake_hss;
     delete store; store = NULL;
     delete local_data_store; local_data_store = NULL;
     delete chronos_connection; chronos_connection = NULL;
   }
 
-  ChronosHandler* create_handler()
-  {
-  MockHttpStack stack;
-  MockHttpStack::Request req(&stack, "/", "timers");
-  ChronosHandler::Config chronos_config(HandlersTest::store,
-                                        HandlersTest::store,
-                                        fake_hss);
-  return new ChronosHandler(req, &chronos_config);
-
-
-  }
 };
 
 TEST_F(HandlersTest, MainlineTest)
 {
-  ChronosHandler* handler = create_handler();
   std::string body = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 200);
 
   handler->handle_response();
-  delete handler;
 }
 
 TEST_F(HandlersTest, InvalidJSONTest)
 {
-  ChronosHandler* handler = create_handler();
-
   std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 400);
-  delete handler;
 }
 
 TEST_F(HandlersTest, MissingAorJSONTest)
 {
-  ChronosHandler* handler = create_handler();
-
   std::string body = "{\"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 400);
-  delete handler;
 }
 
 TEST_F(HandlersTest, MissingBindingJSONTest)
 {
-  ChronosHandler* handler = create_handler();
-
   std::string body = "{\"aor_id\": \"aor_id\"}";
   int status = handler->parse_response(body);
 
   ASSERT_EQ(status, 400);
-  delete handler;
 }

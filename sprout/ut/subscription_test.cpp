@@ -76,7 +76,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "call", "REGISTERED", "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", "REGISTERED", "");
   }
 
   static void TearDownTestCase()
@@ -234,6 +234,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
+
   RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
   RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
@@ -345,7 +346,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 {
   SubscribeMessage msg;
   msg._user = "6505550234";
-  _hss_connection->set_impu_result("sip:6505550234@homedomain", "call", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "", "REGISTERED",
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
