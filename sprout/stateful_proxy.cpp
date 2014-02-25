@@ -1410,7 +1410,8 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::map<std::string, Ifcs> ifc_map;
     std::string regstate;
     long http_code = hss->registration_update(public_id, "", "call", regstate, ifc_map, uris, trail);
-    info = {ifc_map[public_id], uris};
+    bool registered = (regstate == "REGISTERED");
+    info = {registered, ifc_map[public_id], uris};
     if (http_code == 200)
     {
       cached_hss_data[public_id] = info;
@@ -1418,6 +1419,23 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     }
   }
   return rc;
+}
+
+// Look up the registration state for the given public ID, using the
+// per-transaction cache if possible (and caching them and the iFC otherwise).
+bool UASTransaction::is_user_registered(std::string public_id)
+{
+  HSSCallInformation data;
+  bool success = get_data_from_hss(public_id, data, trail());
+  if (success)
+  {
+    return data.registered;
+  }
+  else
+  {
+    LOG_ERROR("Connection to Homestead failed, treating user as unregistered");
+    return false;
+  }
 }
 
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
@@ -1527,11 +1545,15 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // described above, this implies that the element is responsible for the
   // domain in the Request-URI, and the element MAY use whatever mechanism
   // it desires to determine where to send the request.
-  if ((store) && (hss))
+  //
+  // is_user_registered() checks on Homestead to see whether the user
+  // is registered - if not, we don't need to use the memcached store
+  // to look up their bindings.
+  std::string public_id = PJUtils::aor_from_uri(req_uri);
+  if ((store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
-    std::string public_id = PJUtils::aor_from_uri(req_uri);
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris, trail);
 
@@ -1546,6 +1568,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may
       // fail, but we'll never misroute the call.
+      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
       aor = public_id;
     }
 
@@ -3998,37 +4021,6 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   pjsip_msg_insert_first_hdr(tdata->msg, path_hdr);
 
   return PJ_SUCCESS;
-}
-
-
-/// Determine if the given user is registered in the registration data
-/// store.
-bool is_user_registered(std::string served_user)
-{
-  bool is_registered = false;
-
-  if (store)
-  {
-    std::string aor = served_user;
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
-
-    // If we have a remote store and the local store suggests the subscriber is
-    // unregistered, double-check in the remote store.
-    if ((remote_store != NULL) &&
-        ((aor_data == NULL) ||
-         (aor_data->bindings().empty())))
-    {
-      delete aor_data;
-      aor_data = remote_store->get_aor_data(aor);
-    }
-
-    is_registered = (aor_data != NULL) &&
-                    (aor_data->bindings().size() != 0u);
-    delete aor_data; aor_data = NULL;
-    LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
-  }
-
-  return is_registered;
 }
 
 
