@@ -58,6 +58,21 @@ pj_status_t register_custom_headers();
   } while (0)
 
 /// Custom header structures.
+
+enum session_refresher_t
+{
+  SESSION_REFRESHER_UNKNOWN,
+  SESSION_REFRESHER_UAC,
+  SESSION_REFRESHER_UAS,
+};
+
+typedef struct pjsip_session_expires_hdr {
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_session_expires_hdr);
+  pj_int32_t expires;
+  session_refresher_t refresher;
+  pjsip_param other_param;
+} pjsip_session_expires_hdr;
+
 typedef struct pjsip_p_c_v_hdr {
   PJSIP_DECL_HDR_MEMBER(struct pjsip_p_c_v_hdr);
   pj_str_t icid;
@@ -81,6 +96,14 @@ pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx);
 
 // Assocciated URI
 pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx* ctx);
+
+// Session-Expires
+pjsip_hdr* parse_hdr_session_expires(pjsip_parse_ctx* ctx);
+pjsip_session_expires_hdr* pjsip_session_expires_hdr_create(pj_pool_t* pool);
+pjsip_session_expires_hdr* pjsip_session_expires_hdr_init(pj_pool_t* pool, void* mem);
+void* pjsip_session_expires_hdr_clone(pj_pool_t* pool, const void* o);
+void* pjsip_session_expires_hdr_shallow_clone(pj_pool_t* pool, const void* o);
+int pjsip_session_expires_hdr_print_on(void *hdr, char* buf, pj_size_t len);
 
 // Preferred/Asserted Identity
 pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx* ctx);
