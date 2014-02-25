@@ -221,20 +221,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
   return status;
 }
 
-void notify_hss(pjsip_rx_data* rdata)
-{
-  // Get the public and private identities from the request.
-  std::string impi;
-  std::string impu;
-
-  PJUtils::get_impi_and_impu(rdata, impi, impu);
-
-  std::string unused;
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  hss->registration_update(impu, impi, "dereg-auth-failed", unused, ifc_map, uris, 0);
-}
-
 void create_challenge(pjsip_authorization_hdr* auth_hdr,
                       std::string resync,
                       pjsip_rx_data* rdata,
@@ -356,7 +342,6 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     LOG_DEBUG("Failed to get Authentication vector");
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
     tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
-    notify_hss(rdata);
   }
 }
 
@@ -449,8 +434,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
                         auth_hdr->credential.digest.username.ptr);
             status = PJSIP_EAUTHINAKACRED;
             sc = PJSIP_SC_FORBIDDEN;
-
-            notify_hss(rdata);
           }
           else
           {
@@ -533,6 +516,22 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // Authentication failed.
     LOG_ERROR("Authentication failed, %s",
               PJUtils::pj_status_to_string(status).c_str());
+
+    if (sc != PJSIP_SC_UNAUTHORIZED)
+    {
+      // Notify Homestead and the HSS that this authentication attempt
+      // has definitively failed.
+      std::string impi;
+      std::string impu;
+
+      PJUtils::get_impi_and_impu(rdata, impi, impu);
+
+      std::string unused;
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      hss->registration_update(impu, impi, "dereg-auth-failed", unused, ifc_map, uris, 0);
+    }
+
     if (analytics != NULL)
     {
       analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
