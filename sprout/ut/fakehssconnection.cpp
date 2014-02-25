@@ -92,6 +92,13 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(url);
 }
 
+long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail)
+{
+  return FakeHSSConnection::get_xml_object(path,
+                                           root,
+                                           trail);
+}
+
 
 Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
                                                 SAS::TrailId trail)
@@ -158,7 +165,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   }
   else
   {
-    LOG_DEBUG("Failed to find XML result for URL %s", path.c_str());
+    LOG_ERROR("Failed to find XML result for URL %s", path.c_str());
   }
 
   return http_code;

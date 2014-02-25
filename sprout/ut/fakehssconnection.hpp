@@ -57,6 +57,7 @@ public:
 private:
   Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   std::map<std::string, std::string> _results;
 };

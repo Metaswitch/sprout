@@ -44,6 +44,8 @@
 #include "regstore.h"
 #include "chronosconnection.h"
 #include "localstore.h"
+#include "fakehssconnection.hpp"
+
 
 using namespace std;
 
@@ -52,30 +54,40 @@ class HandlersTest : public BaseTest
   ChronosConnection* chronos_connection;
   LocalStore* local_data_store;
   RegStore* store;
+  HSSConnection* fake_hss;
 
-  HandlersTest() 
+  HandlersTest()
   {
     chronos_connection = new ChronosConnection("localhost");
     local_data_store = new LocalStore();
     store = new RegStore((Store*)local_data_store, chronos_connection);
+    fake_hss = new FakeHSSConnection();
   }
 
   virtual ~HandlersTest()
   {
+    delete fake_hss;
     delete store; store = NULL;
     delete local_data_store; local_data_store = NULL;
     delete chronos_connection; chronos_connection = NULL;
+  }
+
+  ChronosHandler* create_handler()
+  {
+  MockHttpStack stack;
+  MockHttpStack::Request req(&stack, "/", "timers");
+  ChronosHandler::Config chronos_config(HandlersTest::store,
+                                        HandlersTest::store,
+                                        fake_hss);
+  return new ChronosHandler(req, &chronos_config);
+
+
   }
 };
 
 TEST_F(HandlersTest, MainlineTest)
 {
-  MockHttpStack stack;
-  MockHttpStack::Request req(&stack, "/", "timers");
-  ChronosHandler::Config chronos_config(HandlersTest::store,
-                                        HandlersTest::store);
-  ChronosHandler* handler = new ChronosHandler(req, &chronos_config);
-
+  ChronosHandler* handler = create_handler();
   std::string body = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
 
@@ -87,11 +99,7 @@ TEST_F(HandlersTest, MainlineTest)
 
 TEST_F(HandlersTest, InvalidJSONTest)
 {
-  MockHttpStack stack;
-  MockHttpStack::Request req(&stack, "/", "timers");
-  ChronosHandler::Config chronos_config(HandlersTest::store,
-                                        HandlersTest::store);
-  ChronosHandler* handler = new ChronosHandler(req, &chronos_config);
+  ChronosHandler* handler = create_handler();
 
   std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
@@ -102,11 +110,7 @@ TEST_F(HandlersTest, InvalidJSONTest)
 
 TEST_F(HandlersTest, MissingAorJSONTest)
 {
-  MockHttpStack stack;
-  MockHttpStack::Request req(&stack, "/", "timers");
-  ChronosHandler::Config chronos_config(HandlersTest::store,
-                                        HandlersTest::store);
-  ChronosHandler* handler = new ChronosHandler(req, &chronos_config);
+  ChronosHandler* handler = create_handler();
 
   std::string body = "{\"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
@@ -117,11 +121,7 @@ TEST_F(HandlersTest, MissingAorJSONTest)
 
 TEST_F(HandlersTest, MissingBindingJSONTest)
 {
-  MockHttpStack stack;
-  MockHttpStack::Request req(&stack, "/", "timers");
-  ChronosHandler::Config chronos_config(HandlersTest::store,
-                                        HandlersTest::store);
-  ChronosHandler* handler = new ChronosHandler(req, &chronos_config);
+  ChronosHandler* handler = create_handler();
 
   std::string body = "{\"aor_id\": \"aor_id\"}";
   int status = handler->parse_response(body);
