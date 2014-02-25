@@ -1221,8 +1221,20 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
              PJUtils::is_uri_local(tdata->msg->line.req.uri))
     {
-      // Route the request upstream to Sprout.
-      proxy_route_upstream(rdata, tdata, trust, target);
+      if (source_type != SIP_PEER_TRUSTED_PORT)
+      {
+        // Route the request upstream to Sprout.
+        proxy_route_upstream(rdata, tdata, trust, target);
+      }
+      else
+      {
+        LOG_WARNING("Rejecting request received from within the trust domain without Route headers");
+        PJUtils::respond_stateless(stack_data.endpt,
+                                   rdata,
+                                   PJSIP_SC_FORBIDDEN,
+                                   NULL, NULL, NULL);
+        return PJ_ENOTFOUND;
+      }
     }
 
     // Work out the next hop target for the message.  This will either be the

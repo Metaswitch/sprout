@@ -3106,9 +3106,9 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   delete tp;
 }
 
-// Check that ;orig on P-CSCF trunk is legal and gets passed through
-// on the upstream Route header.
-TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
+// Check that an INVITE without Route headers from within Bono's trust
+// domain' is forbidden.
+TEST_F(StatefulEdgeProxyTest, TestNoRouteForbidden)
 {
   SCOPED_TRACE("");
 
@@ -3116,7 +3116,7 @@ TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
   Message msg;
   msg._method = "INVITE";
   msg._to = "public_hostname";
-  msg._route = "Route: <sip:homedomain;orig>";
+  msg._route = "";
   msg._todomain = "homedomain";
   msg._requri = "sip:6505551000@homedomain";
   msg._from = "+12125551212";
@@ -3133,16 +3133,12 @@ TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
   msg._unique++;
   inject_msg(msg.get_request(), tp);
 
-  // Check it's the right kind and method, and goes to the right place.
+  // Check it is rejected with a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  ReqMatcher r1("INVITE");
+  RespMatcher r1(403);
   r1.matches(tdata->msg);
-
-  // Check that the orig parameter is copied onto the Route header
-  // Bono passes upstream.
-  actual = get_headers(tdata->msg, "Route");
-  EXPECT_THAT(actual, testing::MatchesRegex(".*;orig.*"));
+  tp->expect_target(tdata, true);  // to source
 
   free_txdata();
   delete tp;
