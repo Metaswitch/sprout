@@ -493,15 +493,25 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   HTTPCode http_code = hss->get_subscription_data(public_id, private_id, ifc_map, uris, trail);
+
   if (http_code != HTTP_OK)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.  Reject with 403.
+    // identity doesn't belong to the private identity. 
+
+    // If the client shouldn't retry (when the subscriber isn't present in the HSS) 
+    // reject with a 403, otherwise reject with a 503.
+    st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
+    if (http_code == HTTP_NOT_FOUND)
+    {
+      st_code = PJSIP_SC_FORBIDDEN;
+    }
+ 
     LOG_ERROR("Rejecting register request with invalid public/private identity");
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_FORBIDDEN,
+                               st_code,
                                NULL,
                                NULL,
                                NULL);

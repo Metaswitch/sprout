@@ -52,10 +52,13 @@ public:
 
   void set_result(const std::string& url, const std::string& result);
   void delete_result(const std::string& url);
+  void set_rc(const std::string& url, long rc);
+  void delete_rc(const std::string& url);
 
 private:
   Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
   long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   std::map<std::string, std::string> _results;
+  std::map<std::string, long> _rcs;
 };
