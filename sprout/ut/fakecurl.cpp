@@ -296,7 +296,7 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
   case CURLOPT_CUSTOMREQUEST:
   {
     char* method = va_arg(args, char*);
-    if (method)
+    if (method != NULL)
     {
       curl->_method = method;
     }
