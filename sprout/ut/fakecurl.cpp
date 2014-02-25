@@ -214,7 +214,14 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
   {
     struct curl_slist* headers = va_arg(args, struct curl_slist*);
     list<string>* truelist = (list<string>*)headers;
-    curl->_headers = *truelist;
+    if (truelist != NULL)
+    {
+      curl->_headers = *truelist;
+    }
+    else
+    {
+      curl->_headers.clear();
+    }
   }
   break;
   case CURLOPT_URL:
@@ -288,7 +295,15 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
   break;
   case CURLOPT_CUSTOMREQUEST:
   {
-    curl->_method = va_arg(args, char*);
+    char* method = va_arg(args, char*);
+    if (method)
+    {
+      curl->_method = method;
+    }
+    else
+    {
+      curl->_method = "GET";
+    }
   }
   break;
   case CURLOPT_FRESH_CONNECT:
@@ -303,7 +318,7 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
   break;
   case CURLOPT_WRITEHEADER:
   {
-    curl->_hdrdata = va_arg(args, void*);  
+    curl->_hdrdata = va_arg(args, void*);
   }
   break;
   case CURLOPT_MAXCONNECTS:
