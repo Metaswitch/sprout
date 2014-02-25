@@ -2484,6 +2484,19 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
     return;
   }
 
+  // Ensure that Session-Expires is added to the message to enable the session
+  // timer on the UEs.
+  pjsip_session_expires_hdr* session_expires =
+    (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(_req->msg,
+                                                           &STR_SESSION_EXPIRES,
+                                                           NULL);
+  if (!session_expires)
+  {
+    session_expires = pjsip_session_expires_hdr_create(_req->pool);
+    pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)session_expires);
+  }
+  session_expires->expires = stack_data.default_session_expires;
+  
   // Now set up the data structures and transactions required to
   // process the request.
   pj_status_t status = init_uac_transactions(targets);

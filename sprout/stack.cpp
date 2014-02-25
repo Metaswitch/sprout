@@ -818,6 +818,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int num_pjsip_threads,
                        int num_worker_threads,
                        int record_routing_model,
+                       const int default_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
                        LoadMonitor *load_monitor_arg)
 {
@@ -845,6 +846,9 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
   stack_data.scscf_port = scscf_port;
   stack_data.icscf_port = icscf_port;
+
+  // Copy other functional options to stack data.
+  stack_data.default_session_expires = default_session_expires;
 
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
