@@ -1821,4 +1821,5 @@ TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
   // Tidy up.
   free_txdata();
   _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  delete tp; tp = NULL;
 }
