@@ -87,10 +87,8 @@ get_settings()
         # Set the upsteam hostname to the sprout hostname only if it hasn't
         # already been set (we have to do this after dotting in the config
         # as the sprout_hostname value comes from the config file)
-        if [ -z "$upstream_hostname" ]
-        then
-          upstream_hostname=$sprout_hostname:5054
-        fi
+        [ -n "$upstream_hostname" ] || upstream_hostname=$sprout_hostname
+        [ -n "$upstream_port" ] || upstream_port=5054
 
         # Set up defaults for user settings then pull in any overrides.
         # Bono doesn't need multi-threading, so set the number of threads to
@@ -142,10 +140,10 @@ do_start()
         DAEMON_ARGS="--domain $home_domain
                      --localhost $local_ip,$public_hostname
                      --alias $public_ip
-                     --pcscf 5060:5058
+                     --pcscf 5060,5058
                      --webrtc-port 5062
-                     --routing-proxy $upstream_hostname:$upstream_connections:$upstream_recycle_connections
-                     --sas $sas_server:$NAME@$public_hostname
+                     --routing-proxy $upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
+                     --sas $sas_server,$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory

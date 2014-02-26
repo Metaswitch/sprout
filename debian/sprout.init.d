@@ -171,7 +171,7 @@ do_start()
                      $enum_suffix_arg
                      $enum_file_arg
                      $icscf_uri_arg
-                     --sas $sas_server:$NAME@$public_hostname
+                     --sas $sas_server,$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      --record-routing-model $sprout_rr_level
