@@ -108,6 +108,7 @@ public:
 
 /// Responses to give, by URL.
 extern std::map<std::string,Response> fakecurl_responses;
+extern std::map<std::pair<std::string, std::string>, Response> fakecurl_responses_with_body;
 
 /// Requests received, by URL.
 extern std::map<std::string,Request> fakecurl_requests;

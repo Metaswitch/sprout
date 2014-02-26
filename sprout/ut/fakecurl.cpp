@@ -63,6 +63,7 @@ public:
   datafn_ty _readfn;
   void* _readdata; //^ user data; not owned by this object
 
+  std::string _body;
   datafn_ty _writefn;
   void* _writedata; //^ user data; not owned by this object
 
@@ -96,6 +97,9 @@ public:
 /// Responses to give, by URL.
 map<string,Response> fakecurl_responses;
 
+// Responses to give, by URL and body text
+map<pair<string,string>,Response> fakecurl_responses_with_body;
+
 /// Requests received, by URL.
 map<string,Request> fakecurl_requests;
 
@@ -109,48 +113,42 @@ CURLcode FakeCurl::easy_perform()
   req._username = _username;
   req._password = _password;
   req._fresh = _fresh;
-  req._body = "";
-
-  if (_readfn != NULL)
-  {
-    char rbuf[1024];
-    int rlen;
-
-    while (0 != (rlen = _readfn(rbuf, sizeof(rbuf), 1, _readdata)))
-    {
-      req._body.append(rbuf, rlen);
-    }
-  }
+  req._body = _body;
 
   fakecurl_requests[_url] = req;
 
   // Check if there's a response ready.
-  map<string,Response>::iterator iter = fakecurl_responses.find(_url);
-  if (iter == fakecurl_responses.end())
+  auto iter = fakecurl_responses.find(_url);
+  auto iter2 = fakecurl_responses_with_body.find(pair<string, string>(_url, _body));
+  Response* resp;
+  if (iter != fakecurl_responses.end())
   {
+    resp = &iter->second;
+  } else if (iter2 != fakecurl_responses_with_body.end()) {
+    resp = &iter2->second;
+  } else {
     string msg("cURL URL ");
     msg.append(_url).append(" unknown to FakeCurl");
     throw runtime_error(msg);
   }
 
   // Send the response.
-  Response& resp = iter->second;
   CURLcode rc;
 
-  if (resp._code_once != CURLE_OK)
+  if (resp->_code_once != CURLE_OK)
   {
     // Return this code just once.
-    rc = resp._code_once;
-    resp._code_once = CURLE_OK;
+    rc = resp->_code_once;
+    resp->_code_once = CURLE_OK;
   }
   else
   {
-    rc = resp._code;
+    rc = resp->_code;
 
     if (_writefn != NULL)
     {
-      int len = resp._body.length();
-      char* ptr = const_cast<char*>(resp._body.c_str());
+      int len = resp->_body.length();
+      char* ptr = const_cast<char*>(resp->_body.c_str());
       int handled = _writefn(ptr, 1, len, _writedata);
 
       if (handled != len)
@@ -161,8 +159,8 @@ CURLcode FakeCurl::easy_perform()
 
     if (_hdrfn != NULL)
     {
-      for (std::list<string>::const_iterator it = resp._headers.begin();
-           it != resp._headers.end(); ++it)
+      for (std::list<string>::const_iterator it = resp->_headers.begin();
+           it != resp->_headers.end(); ++it)
       {
         int len = it->length();
         char* ptr = const_cast<char*>(it->c_str());
@@ -283,16 +281,6 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
     }
   }
   break;
-  case CURLOPT_READDATA:
-  {
-    curl->_readdata = va_arg(args, void*);
-  }
-  break;
-  case CURLOPT_READFUNCTION:
-  {
-    curl->_readfn = va_arg(args, datafn_ty);
-  }
-  break;
   case CURLOPT_CUSTOMREQUEST:
   {
     char* method = va_arg(args, char*);
@@ -321,13 +309,19 @@ CURLcode curl_easy_setopt(CURL* handle, CURLoption option, ...)
     curl->_hdrdata = va_arg(args, void*);
   }
   break;
+  case CURLOPT_POSTFIELDS:
+  {
+    char* body =  va_arg(args, char*);
+    curl->_body = (body == NULL) ? "" : body;
+  }
   case CURLOPT_MAXCONNECTS:
   case CURLOPT_TIMEOUT_MS:
   case CURLOPT_CONNECTTIMEOUT_MS:
   case CURLOPT_DNS_CACHE_TIMEOUT:
   case CURLOPT_TCP_NODELAY:
   case CURLOPT_NOSIGNAL:
-  case CURLOPT_POSTFIELDS:
+  case CURLOPT_READDATA:
+  case CURLOPT_READFUNCTION:
   {
     // ignore
   }

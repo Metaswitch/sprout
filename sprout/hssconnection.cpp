@@ -312,10 +312,10 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data?type=" + Utils::url_escape(type);
+  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
   if (!private_user_identity.empty())
   {
-    path += "&private_id=" + Utils::url_escape(private_user_identity);
+    path += "?private_id=" + Utils::url_escape(private_user_identity);
   }
 
   LOG_DEBUG("Making Homestead request for %s", path.c_str());
@@ -324,7 +324,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = put_for_xml_object(path, "", root_underlying_ptr, trail);
+  HTTPCode http_code = put_for_xml_object(path, type, root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 

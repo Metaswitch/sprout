@@ -234,7 +234,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "&private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "?private_id=Alice");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -1120,7 +1120,7 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 TEST_F(RegistrarTest, RegistrationWithSubscription)
 {
   // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "&private_id=Alice");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "", "?private_id=Alice");
 
   RegStore::AoR::Subscription* s1;
   int now = time(NULL);
