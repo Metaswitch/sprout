@@ -104,6 +104,8 @@ struct options
   int                    icscf_port;
   std::string            external_icscf_uri;
   int                    record_routing_model;
+#define OPT_DEFAULT_SESSION_EXPIRES (256+1)
+  int                    default_session_expires;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
@@ -212,6 +214,8 @@ static void usage(void)
        "                            -E)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
+       "     --default-session-expires <expiry>\n"
+       "                            The session expiry period to request (in seconds)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -268,6 +272,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
     { "record-routing-model",          required_argument, 0, 'C'},
+    { "default_session_expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
     { "enum",              required_argument, 0, 'E'},
@@ -613,6 +618,13 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       options->interactive = PJ_TRUE;
       break;
 
+    case OPT_DEFAULT_SESSION_EXPIRES:
+      options->default_session_expires = atoi(pj_optarg);
+      fprintf(stdout,
+              "Default session expiry set to %d\n",
+              options->default_session_expires);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -844,6 +856,7 @@ int main(int argc, char *argv[])
   opt.sas_server = "0.0.0.0";
   opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
+  opt.default_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "0.0.0.0";
@@ -1018,6 +1031,7 @@ int main(int argc, char *argv[])
                       opt.pjsip_threads,
                       opt.worker_threads,
                       opt.record_routing_model,
+                      opt.default_session_expires,
                       quiescing_mgr,
                       load_monitor);
 

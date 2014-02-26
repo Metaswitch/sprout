@@ -179,3 +179,52 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   EXPECT_EQ(written, 105);
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
 }
+
+TEST_F(CustomHeadersTest, SessionExpires)
+{
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Session-Expires: 600;other-param=10;refresher=uas;more-param=42\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("Session-Expires");
+  pjsip_session_expires_hdr* hdr =
+      (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                             &header_name,
+                                                             NULL);
+  EXPECT_NE(hdr, (pjsip_session_expires_hdr*)NULL);
+  EXPECT_EQ(600, hdr->expires);
+  EXPECT_EQ(SESSION_REFRESHER_UAS, hdr->refresher);
+  EXPECT_EQ(2u, pj_list_size(&hdr->other_param));
+
+  pjsip_session_expires_hdr* clone = (pjsip_session_expires_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
+  EXPECT_EQ(600, clone->expires);
+  EXPECT_EQ(SESSION_REFRESHER_UAS, clone->refresher);
+  EXPECT_EQ(2u, pj_list_size(&clone->other_param));
+
+  pjsip_session_expires_hdr* sclone = (pjsip_session_expires_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
+  EXPECT_EQ(600, sclone->expires);
+  EXPECT_EQ(SESSION_REFRESHER_UAS, sclone->refresher);
+  EXPECT_EQ(2u, pj_list_size(&sclone->other_param));
+
+  char buf[1024];
+  pjsip_hdr* generic_hdr = (pjsip_hdr*)clone;
+  int written = generic_hdr->vptr->print_on(hdr, buf, 0);
+  EXPECT_EQ(written, -1);
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = generic_hdr->vptr->print_on(hdr, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 63);
+  EXPECT_STREQ("Session-Expires: 600;refresher=uas;other-param=10;more-param=42", buf);
+}
