@@ -1767,3 +1767,59 @@ TEST_F(ICSCFProxyTest, WrongPort)
 }
 
 
+TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
+{
+  // Tests that routing a REGISTER 401 repsonse with an AKA challenge does not
+  // change the contents of the www-authenticate header (this was sprout
+  // issue 412).
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the user registration status query using
+  // a default private user identity.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // REGISTER request is forwarded on.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // Reject the REGISTER with a 401 response with a WWW-Authenticate header.
+  std::string www_auth = "WWW-Authenticate: Digest  realm=\"os1.richlab.datcon.co.uk\","
+                           "nonce=\"u1ZqEvWFsXIqYZ0TwbCQ8/sa60VVnTAw6epZzjfS+30\","
+                           "opaque=\"143fe4cd3f27d32b\","
+                           "algorithm=AKAv1-MD5,"
+                           "qop=\"auth\","
+                           "ck=\"d725a54a6097b9db17933e583c7fefb0\","
+                           "ik=\"c8d8c92790a214e3877aa9ab4c3fdaf6\"";
+  inject_msg(respond_to_current_txdata(401, "", www_auth));
+
+  // Check the response is forwarded back to the source with the same
+  // WWW-Authenticate header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  EXPECT_EQ(get_headers(tdata->msg, "WWW-Authenticate"), www_auth);
+
+  // Tidy up.
+  free_txdata();
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  delete tp; tp = NULL;
+}
