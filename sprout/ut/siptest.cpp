@@ -132,6 +132,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.name_cnt++;
   stack_data.record_route_on_initiation_of_originating = true;
   stack_data.record_route_on_completion_of_terminating = true;
+  stack_data.default_session_expires = 60 * 10;
 
   // Sort out logging.
   init_pjsip_logging(99, false, "");

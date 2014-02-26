@@ -1299,6 +1299,11 @@ void StatefulProxyTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
+  // All proxied messages should have Session-Expires headers
+  // attached.
+  std::string session_expires = get_headers(out, "Session-Expires");
+  EXPECT_EQ("Session-Expires: 600", session_expires);
+
   // Do checks on what gets passed through:
   EXPECT_THAT(req.uri(), uri_matcher);
   for (list<HeaderMatcher>::iterator iter = headers.begin(); iter != headers.end(); ++iter)

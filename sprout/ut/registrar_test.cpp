@@ -77,6 +77,7 @@ public:
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "");
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
 
@@ -943,16 +944,32 @@ TEST_F(RegistrarTest, AppServersReRegistration)
 
 
 /// Homestead fails associated URI request
-TEST_F(RegistrarTest, ErrorAssociatedUris)
+TEST_F(RegistrarTest, AssociatedUrisNotFound)
 {
   Message msg;
   msg._user = "6505550232";
-
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
+}
+
+/// Homestead fails associated URI request
+TEST_F(RegistrarTest, AssociatedUrisTimeOut)
+{
+  Message msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain",
+                          503);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(503, out->line.status.code);
+  EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain");
 }
 
 /// Multiple P-Associated-URIs

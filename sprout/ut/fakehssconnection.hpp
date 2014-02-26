@@ -53,6 +53,8 @@ public:
   void set_result(const std::string& url, const std::string& result);
   void set_impu_result(const std::string&, const std::string&, const std::string&, std::string, std::string = "");
   void delete_result(const std::string& url);
+  void set_rc(const std::string& url, long rc);
+  void delete_rc(const std::string& url);
 
 private:
   Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
@@ -63,4 +65,5 @@ private:
   // Map of URL/body pair to result
   typedef std::pair<std::string, std::string> UrlBody;
   std::map<UrlBody, std::string> _results;
+  std::map<std::string, long> _rcs;
 };
