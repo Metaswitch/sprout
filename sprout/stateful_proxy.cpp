@@ -2513,7 +2513,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
     (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(_req->msg,
                                                            &STR_SESSION_EXPIRES,
                                                            NULL);
-  if (session_expires != NULL)
+  if (session_expires == NULL)
   {
     session_expires = pjsip_session_expires_hdr_create(_req->pool);
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)session_expires);
