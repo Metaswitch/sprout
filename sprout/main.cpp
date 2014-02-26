@@ -159,7 +159,7 @@ static void usage(void)
 {
   puts("Options:\n"
        "\n"
-       " -p, --pcscf <untrusted port>:<trusted port>\n"
+       " -p, --pcscf <untrusted port>,<trusted port>\n"
        "                            Enable P-CSCF function with the specified ports\n"
        " -i, --icscf <port>         Enable I-CSCF function on the specified port\n"
        " -s, --scscf <port>         Enable S-CSCF function on the specified port\n"
@@ -172,7 +172,7 @@ static void usage(void)
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -r, --routing-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
+       " -r, --routing-proxy <name>[,<port>[,<connections>[:<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
        "                            the number of parallel connections to create, and how\n"
@@ -193,7 +193,7 @@ static void usage(void)
        "                            Enabled remote memcached store for geo-redundant storage\n"
        "                            of registration state, and specifies configuration file\n"
        "                            (otherwise uses no remote memcached store)\n"
-       " -S, --sas <ipv4>:<system name>\n"
+       " -S, --sas <ipv4>,<system name>\n"
        "                            Use specified host as Service Assurance Server and specified\n"
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
@@ -305,7 +305,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'p':
       {
         std::vector<std::string> pcscf_options;
-        Utils::split_string(std::string(pj_optarg), ':', pcscf_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
         if (pcscf_options.size() == 2)
         {
           options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
@@ -434,7 +434,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'r':
       {
         std::vector<std::string> upstream_proxy_options;
-        Utils::split_string(std::string(pj_optarg), ':', upstream_proxy_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
         options->upstream_proxy = upstream_proxy_options[0];
         options->upstream_proxy_port = 0;
         options->upstream_proxy_connections = 1;
@@ -491,7 +491,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'S':
       {
         std::vector<std::string> sas_options;
-        Utils::split_string(std::string(pj_optarg), ':', sas_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
         if (sas_options.size() == 2)
         {
           options->sas_server = sas_options[0];
