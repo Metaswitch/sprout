@@ -509,7 +509,7 @@ void process_register_request(pjsip_rx_data* rdata)
   HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", regstate, ifc_map, uris, trail);
   if ((http_code != HTTP_OK) || (regstate != "REGISTERED"))
   {
-    // We failed to register this sbscriber at the HSS.  This indicates that the
+    // We failed to register this subscriber at the HSS.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
     // identity doesn't belong to the private identity.
 

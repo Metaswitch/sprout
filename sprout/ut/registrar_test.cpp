@@ -77,7 +77,7 @@ public:
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", "REGISTERED", "");
-    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain", HTTP_OK);
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
 
@@ -960,7 +960,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {
   Message msg;
   msg._user = "6505550232";
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
                           503);
 
   inject_msg(msg.get());
@@ -969,7 +969,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
   EXPECT_EQ(503, out->line.status.code);
   EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
 
-  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain");
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
 /// Multiple P-Associated-URIs
