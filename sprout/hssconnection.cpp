@@ -197,9 +197,9 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data)
 
 /// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
 HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
-                                       std::string body,
-                                       rapidxml::xml_document<>*& root,
-                                       SAS::TrailId trail)
+                                           std::string body,
+                                           rapidxml::xml_document<>*& root,
+                                           SAS::TrailId trail)
 {
   std::string raw_data;
 

@@ -744,10 +744,18 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
+  LOG_DEBUG("In registrar_on_tsx_state");
+  if (tsx->tsx_user->id == -1) {
+    // If mod_registrar has already been destroyed, we must be
+    // shutting down, so just return - we have no guarantee that
+    // things like our connection to Homestead will still exist.
+    return;
+  }
   ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
 
-  if ((tsxdata != NULL) && (tsx->state == PJSIP_TSX_STATE_COMPLETED))
+  if ((tsxdata != NULL) && ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
   {
+    LOG_DEBUG("Completion of a third-party REGISTER transaction");
     if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
         (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
@@ -765,7 +773,7 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
     if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
         ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
     {
-      LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
+      LOG_INFO("Third-party REGISTER transaction failed with code %d", tsx->status_code);
       std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
       // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
       // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings

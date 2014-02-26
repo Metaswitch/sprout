@@ -145,6 +145,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 
   if (orig_max_expires == now)
   {
+    LOG_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
     is_dereg = true;
   }
 
