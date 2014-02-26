@@ -214,7 +214,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   std::map<std::string, RegStore::AoR::Binding> bindings;
-  bool is_dereg = false;
+  bool all_bindings_expired = false;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -389,7 +389,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data, send_notify, is_dereg));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify, all_bindings_expired));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -421,7 +421,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     }
   }
 
-  if (is_dereg) {
+  if (all_bindings_expired) {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
     std::string impi;
     std::string impu;
@@ -505,11 +505,11 @@ void process_register_request(pjsip_rx_data* rdata)
     private_id = "";
   }
 
-  std::string unused;
-  HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", unused, ifc_map, uris, trail);
-  if (http_code != HTTP_OK)
+  std::string regstate;
+  HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", regstate, ifc_map, uris, trail);
+  if ((http_code != HTTP_OK) || (regstate != "REGISTERED"))
   {
-    // We failed to get the list of associated URIs.  This indicates that the
+    // We failed to register this sbscriber at the HSS.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
     // identity doesn't belong to the private identity.  Reject with 403.
     LOG_ERROR("Rejecting register request with invalid public/private identity");

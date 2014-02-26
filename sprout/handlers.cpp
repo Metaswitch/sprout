@@ -88,11 +88,11 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
                                             std::string aor_id,
                                             RegStore::AoR* previous_aor_data,
                                             RegStore* remote_store,
-                                            bool update_chronos)
+                                            bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-  bool is_dereg = false;
+  bool all_bindings_expired = false;
 
   do
   {
@@ -148,9 +148,9 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos, is_dereg));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
 
-  if (update_chronos && is_dereg)
+  if (is_primary && all_bindings_expired)
   {
     std::string unused;
     std::vector<std::string> uris;

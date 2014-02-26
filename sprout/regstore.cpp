@@ -124,10 +124,15 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 ///
 /// @param aor_id     The SIP Address of Record for the registration
 /// @param aor_data   The registration data record.
+/// @param set_chronos   Determines whether a Chronos request should
+///                      be sent to keep track of binding expiry time.
+/// @param all_bindings_expired   Set to true to flag to the caller that
+///                               no bindings remain for this AoR.
+
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data,
                             bool set_chronos,
-                            bool& is_dereg)
+                            bool& all_bindings_expired)
 {
   // Expire any old bindings before writing to the server.  In theory, if
   // there are no bindings left we could delete the entry, but this may
@@ -146,7 +151,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   if (orig_max_expires == now)
   {
     LOG_DEBUG("All bindings have expired, so this is a deregistration for AOR %s", aor_id.c_str());
-    is_dereg = true;
+    all_bindings_expired = true;
   }
 
   // Expire any old subscriptions as well.  This doesn't get factored in to
