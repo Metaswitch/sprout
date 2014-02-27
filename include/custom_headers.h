@@ -74,6 +74,12 @@ typedef struct pjsip_p_c_f_a_hdr {
   pjsip_param other_param;
 } pjsip_p_c_f_a_hdr;
 
+typedef struct pjsip_session_expires_hdr
+{
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_session_expires_hdr);
+  int delta_seconds;
+} pjsip_session_expires_hdr;
+
 /// Utility functions (parse, create, init, clone, print_on)
 
 // Privacy

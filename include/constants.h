@@ -81,6 +81,7 @@ const pj_str_t STR_EVENT = pj_str("Event");
 const pj_str_t STR_X = pj_str("X");
 const pj_str_t STR_REASON = pj_str("Reason");
 const pj_str_t STR_TRANSIT_IOI = pj_str("transit-ioi");
+const pj_str_t STR_SESSION_EXPIRES = pj_str("Session-Expires");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");

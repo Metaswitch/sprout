@@ -52,6 +52,7 @@ RfTsx::RfTsx(HttpConnection* ralf,
   _first_req(true),
   _first_rsp(true),
   _origin_host(origin_host),
+  _interim_interval(0),
   _node_functionality(node_functionality),
   _status_code(0)
 {
@@ -133,7 +134,14 @@ void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
     }
     else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
     {
-      // Check for expires values in Contact headers???
+      // Check for expires values in Contact headers.  Set the default to
+      // -1, so if there are no expires values in the contact headers we
+      // won't include an Expires AVP.
+      _expires = PJUtils::max_expires(req, -1);
+    }
+    else
+    {
+      _expires = -1;
     }
 
     // Store the call ID.
@@ -164,7 +172,6 @@ void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
 
     // If the request is an INVITE, save the delta_seconds value from the
     // Session-Expires header if present.
-#if 0
     if (req->line.req.method.id == PJSIP_INVITE_METHOD)
     {
       pjsip_session_expires_hdr* sess_expires = (pjsip_session_expires_hdr*)
@@ -177,7 +184,6 @@ void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
         _interim_interval = sess_expires->delta_seconds;
       }
     }
-#endif
 
     // Store the contents of the top-most route header if present.
     pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
@@ -322,21 +328,35 @@ void RfTsx::tx_request(pjsip_msg* req, pj_time_val timestamp)
 /// response is first received from
 void RfTsx::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
-  if (_first_rsp)
+  if (rsp->line.status.code >= PJSIP_SC_OK)
   {
-    _first_rsp = false;
-
-    if (_node_role == NODE_ROLE_TERMINATING)
+    // This is a final response.
+    if (_first_rsp)
     {
-      // For terminating requests take the subscription identifiers from
-      // P-Asserted-Identity headers in the first response.
-      store_subscription_ids(rsp);
-    }
+      _first_rsp = false;
 
-    if (rsp->line.status.code == PJSIP_SC_OK)
-    {
-      // First 200 OK response, so store the called asserted identities.
-      store_called_asserted_ids(rsp);
+      // Store IOIs and ICID from P-Charging-Vector header if present.
+      store_charging_info(rsp);
+
+      if (_node_role == NODE_ROLE_TERMINATING)
+      {
+        // For terminating requests take the subscription identifiers from
+        // P-Asserted-Identity headers in the first response.
+        store_subscription_ids(rsp);
+
+        // For terminating requests store media from the first received final
+        // response.
+        store_media_description(rsp, _media);
+
+        // Store non-SDP message bodies if present.
+        store_message_bodies(rsp);
+      }
+
+      if (rsp->line.status.code >= PJSIP_SC_OK)
+      {
+        // First 200 OK response, so store the called asserted identities.
+        store_called_asserted_ids(rsp);
+      }
     }
   }
 
@@ -352,6 +372,15 @@ void RfTsx::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
   // response we transmit as this is guaranteed to have the correct
   // P-Charging-Function-Address header in all cases.
   store_charging_addresses(rsp);
+
+  if (_node_role == NODE_ROLE_ORIGINATING)
+  {
+    // For originating requests store media from the final transmitted response.
+    store_media_description(rsp, _media);
+
+    // Store non-SDP message bodies if present.
+    store_message_bodies(rsp);
+  }
 
   if ((_method == "REGISTER") &&
       (rsp->line.status.code == PJSIP_SC_OK))
@@ -375,7 +404,24 @@ void RfTsx::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 
 void RfTsx::send_message()
 {
-  // Build the JSON message body.
+  // Encode and send the request using the Ralf HTTP connection.
+  std::string path = "/call_id/" + _user_session_id;
+  std::map<std::string, std::string> headers;
+  long rc = _ralf->send_post(path,
+                             get_message(),
+                             headers,
+                             _trail);
+
+  if (rc != HTTP_OK)
+  {
+    LOG_ERROR("Ralf billing message failed, rc = %ld", rc);
+  }
+}
+
+std::string RfTsx::get_message()
+{
+  LOG_DEBUG("Building message");
+
   Json::Value v;
 
   // Add the peers section with charging function addresses if this is a
@@ -383,6 +429,7 @@ void RfTsx::send_message()
   if ((_record_type == START_RECORD) ||
       (_record_type == EVENT_RECORD))
   {
+    LOG_DEBUG("Adding peers meta-data, %d ccfs, %d ecfs", _ccfs.size(), _ecfs.size());
     Json::Value& p = v["peers"];
     for (std::list<std::string>::const_iterator i = _ccfs.begin();
          i != _ccfs.end();
@@ -399,35 +446,44 @@ void RfTsx::send_message()
   }
 
   // Build the event data.
+  LOG_DEBUG("Building event");
   Json::Value& e = v["event"];
 
   // Add top-level fields.
+  LOG_DEBUG("Adding top-level fields");
   e["Origin-Host"] = Json::Value(_origin_host);
   e["Accounting-Record-Type"] = Json::Value(_record_type);
   if (!_username.empty())
   {
     e["User-Name"] = Json::Value(_username);
   }
-  e["Acct-Interim-Interval"] = _interim_interval;
-  e["Event-Timestamp"] = avp_timestamp(time(NULL));
+  if (_interim_interval != 0)
+  {
+    e["Acct-Interim-Interval"] = Json::Value(_interim_interval);
+  }
+  e["Event-Timestamp"] = Json::Value((Json::UInt)time(NULL));
 
   // Add Service-Information AVP group.
+  LOG_DEBUG("Adding Service-Information AVP group");
   Json::Value& si = e["Service-Information"];
 
   // Add Subscription-Id AVPs.
+  LOG_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
   for (std::list<SubscriptionId>::const_iterator i = _subscription_ids.begin();
        i != _subscription_ids.end();
        ++i)
   {
-    Json::Value sub = si["Subscription-Id"].append(Json::Value());
+    Json::Value& sub = si["Subscription-Id"].append(Json::Value());
     sub["Subscription-Id-Type"] = Json::Value(i->type);
     sub["Subscription-Id-Data"] = Json::Value(i->id);
   }
 
   // Add IMS-Information AVP group.
+  LOG_DEBUG("Adding IMS-Information AVP group");
   Json::Value& ii = si["IMS-Information"];
 
   // Add Event-Type AVP group.
+  LOG_DEBUG("Adding Event-Type AVP group");
   Json::Value& event_type = ii["Event-Type"];
   event_type["SIP-Method"] = Json::Value(_method);
   if (!_event.empty())
@@ -444,6 +500,7 @@ void RfTsx::send_message()
   ii["User-Session-Id"] = Json::Value(_user_session_id);
 
   // Add the Calling-Party-Address AVPs.
+  LOG_DEBUG("Adding %d Calling-Party-Address AVPs", _calling_party_addresses.size());
   for (std::list<std::string>::const_iterator i = _calling_party_addresses.begin();
        i != _calling_party_addresses.end();
        ++i)
@@ -454,6 +511,7 @@ void RfTsx::send_message()
   // Add the Called-Party-Address AVP.
   if (!_called_party_address.empty())
   {
+    LOG_DEBUG("Adding Called-Party-Address AVP");
     ii["Called-Party-Address"] = Json::Value(_called_party_address);
   }
 
@@ -461,10 +519,12 @@ void RfTsx::send_message()
   // from the called party address.
   if (_requested_party_address != _called_party_address)
   {
+    LOG_DEBUG("Adding Requested-Party-Address AVP");
     ii["Requested-Party-Address"] = Json::Value(_requested_party_address);
   }
 
   // Add the Called-Asserted-Identity AVPs.
+  LOG_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
   for (std::list<std::string>::const_iterator i = _called_asserted_ids.begin();
        i != _called_asserted_ids.end();
        ++i)
@@ -473,6 +533,7 @@ void RfTsx::send_message()
   }
 
   // Add the Associated-URI AVPs.
+  LOG_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
   for (std::list<std::string>::const_iterator i = _associated_uris.begin();
        i != _associated_uris.end();
        ++i)
@@ -481,13 +542,15 @@ void RfTsx::send_message()
   }
 
   // Add the Time-Stamps AVP group.
+  LOG_DEBUG("Adding Time-Stamps AVP group");
   Json::Value& timestamps = ii["Time-Stamps"];
-  timestamps["SIP-Request-Timestamp"] = Json::Value(avp_timestamp(_req_timestamp.sec));
-  timestamps["SIP-Request-Timestamp-Fraction"] = Json::Value((Json::Int)_req_timestamp.msec);
-  timestamps["SIP-Response-Timestamp"] = Json::Value(avp_timestamp(_rsp_timestamp.sec));
-  timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::Int)_rsp_timestamp.msec);
+  timestamps["SIP-Request-Timestamp"] = Json::Value((Json::UInt)_req_timestamp.sec);
+  timestamps["SIP-Request-Timestamp-Fraction"] = Json::Value((Json::UInt)_req_timestamp.msec);
+  timestamps["SIP-Response-Timestamp"] = Json::Value((Json::UInt)_rsp_timestamp.sec);
+  timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::UInt)_rsp_timestamp.msec);
 
   // Add the Application-Server-Information AVPs.
+  LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
   for (std::list<ASInformation>::const_iterator i = _as_information.begin();
        i != _as_information.end();
        ++i)
@@ -507,6 +570,7 @@ void RfTsx::send_message()
   // header this seems inconsistent, so we only add a single IOI AVP group.
   if ((!_orig_ioi.empty()) || (!_term_ioi.empty()))
   {
+    LOG_DEBUG("Adding Inter-Operator-Identifier AVP group");
     Json::Value& ioi = ii["Inter-Operator-Identifier"].append(Json::Value());
     if (!_orig_ioi.empty())
     {
@@ -519,6 +583,7 @@ void RfTsx::send_message()
   }
 
   // Add Transit-IOI-List AVPs.
+  LOG_DEBUG("Adding %d Transit-IOI-List AVPs", _transit_iois.size());
   for (std::list<std::string>::const_iterator i = _transit_iois.begin();
        i != _transit_iois.end();
        ++i)
@@ -529,31 +594,27 @@ void RfTsx::send_message()
   ii["IMS-Charging-Identifier"] = Json::Value(_icid);
 
   // Add Early-Media-Description AVPs.
+  LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
   for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
        i != _early_media.end();
        ++i)
   {
     Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
-    em["SDP-Timestamps"]["SDP-Offer-Timestamp"] = avp_timestamp(i->offer_timestamp.sec);
-    em["SDP-Timestamps"]["SDP-Answer-Timestamp"] = avp_timestamp(i->answer_timestamp.sec);
+    em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
+                               Json::Value((Json::UInt)i->offer_timestamp.sec);
+    em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
+                              Json::Value((Json::UInt)i->answer_timestamp.sec);
     encode_sdp_description(em, i->media);
   }
 
   // Add SDP related AVPs to IMS-Information AVP.
+  LOG_DEBUG("Adding Media AVPs");
   encode_sdp_description(ii, _media);
-
-#if 0
-  // Add the Server-Party-IP-Address AVP if P-CSCF and we have the information.
-  if ((_node_functionality == PCSCF) &&
-      (_served_party_ip_address.sa_family != pf_AF_UNSPEC()))
-  {
-    ii["Served-Party-IP-Address"] = avp_address(_served_party_ip_address);
-  }
-#endif
 
   // Add the Server-Capabilities AVP if I-CSCF.
   if (_node_functionality == ICSCF)
   {
+    LOG_DEBUG("Adding Server-Capabilities AVP group");
     Json::Value& server_caps = ii["Server-Capabilities"];
     for (std::vector<int>::const_iterator i = _server_caps.mandatory_caps.begin();
          i != _server_caps.mandatory_caps.end();
@@ -574,6 +635,7 @@ void RfTsx::send_message()
   }
 
   // Add Message-Body AVPs.
+  LOG_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
   for (std::list<MessageBody>::const_iterator i = _msg_bodies.begin();
        i != _msg_bodies.end();
        ++i)
@@ -592,6 +654,7 @@ void RfTsx::send_message()
   if (_record_type == STOP_RECORD)
   {
     // Cause code is always zero for STOP requests.
+    LOG_DEBUG("Adding Cause-Code(0) AVP");
     ii["Cause_code"] = Json::Value(0);
   }
   else if (_record_type == EVENT_RECORD)
@@ -634,10 +697,12 @@ void RfTsx::send_message()
     // session setup (2) or Internal error (3) cause codes - in all of these
     // cases we have to send a SIP response with a valid 4xx/5xx/6xx status
     // code, so we use that status code.
+    LOG_DEBUG("Adding Cause-Code(%d) AVP", cause_code);
     ii["Cause-Code"] = Json::Value(cause_code);
   }
 
   // Add Reason-Header AVPs.
+  LOG_DEBUG("Adding %d Reason-Header AVPs", _reasons.size());
   for (std::list<std::string>::const_iterator i = _reasons.begin();
        i != _reasons.end();
        ++i)
@@ -646,6 +711,7 @@ void RfTsx::send_message()
   }
 
   // Add Access-Network-Information AVPs
+  LOG_DEBUG("Adding %d Access-Network-Information AVPs", _access_network_info.size());
   for (std::list<std::string>::const_iterator i = _access_network_info.begin();
        i != _access_network_info.end();
        ++i)
@@ -653,76 +719,75 @@ void RfTsx::send_message()
     ii["Access-Network-Information"].append(Json::Value(*i));
   }
 
-  // Add From address AVP.
+  // Add From-Address AVP.
+  LOG_DEBUG("Adding From-Address AVP");
   ii["From-Address"] = Json::Value(_from_address);
 
   // Add IMS-Visited-Network-Identifier AVP if set.
   if (!_visited_network_id.empty())
   {
+    LOG_DEBUG("Adding IMS-Visited-Network-Identifier AVP");
     ii["IMS-Visited-Network-Identifier"] = Json::Value(_visited_network_id);
   }
 
   // Add Route-Header-Received and Route-Header-Transmitted AVPs if set.
   if (!_route_hdr_received.empty())
   {
+    LOG_DEBUG("Adding Route-Header-Received AVP");
     ii["Route-Header-Received"] = Json::Value(_route_hdr_received);
   }
   if (!_route_hdr_transmitted.empty())
   {
+    LOG_DEBUG("Adding Route-Header-Transmitted AVP");
     ii["Route-Header-Transmitted"] = Json::Value(_route_hdr_transmitted);
   }
 
   // Add the Instance-Id AVP if set.
   if (!_instance_id.empty())
   {
+    LOG_DEBUG("Adding Instance-Id AVP");
     ii["Instance-Id"] = Json::Value(_instance_id);
   }
 
-  // Send the request using the Ralf HTTP connection.
-  Json::FastWriter writer;
-  std::string path = "/call_id/" + _user_session_id;
-  std::map<std::string, std::string> headers;
-  long rc = _ralf->send_post(path,
-                             writer.write(v),
-                             headers,
-                             _trail);
+  LOG_DEBUG("Built JSON message, rendering to string");
 
-  if (rc != HTTP_OK)
-  {
-    LOG_ERROR("Ralf billing message failed, rc = %ld", rc);
-  }
+  // Render the message to a string and return it.
+  Json::FastWriter writer;
+  return writer.write(v);
 }
 
 void RfTsx::encode_sdp_description(Json::Value& v, const MediaDescription& media)
 {
   // Split the offer and answer in to lines.
-  std::vector<std::string> offer_lines;
-  Utils::split_string(media.offer.sdp, '\n', offer_lines);
-  std::vector<std::string> answer_lines;
-  Utils::split_string(media.answer.sdp, '\n', answer_lines);
+  std::vector<std::string> offer;
+  split_sdp(media.offer.sdp, offer);
+  std::vector<std::string> answer;
+  split_sdp(media.answer.sdp, answer);
 
   // First add the SDP-Session-Description AVPs.  We take these from the
   // answer if there is one, and from the offer otherwise (rather than
   // repeating them).
-  std::vector<std::string>& session_lines =
-                           (answer_lines.empty()) ? offer_lines : answer_lines;
-  for (size_t ii = 0; ii < session_lines.size(); ++ii)
+  LOG_DEBUG("Adding SDP-Session-Description AVPs");
+  std::vector<std::string>& session_sdp = (answer.empty()) ? offer : answer;
+  for (size_t ii = 0; ii < session_sdp.size(); ++ii)
   {
-    if (session_lines[ii][0] == 'm')
+    if (session_sdp[ii][0] == 'm')
     {
       break;
     }
-    v["SDP-Session-Description"].append(Json::Value(session_lines[ii]));
+    v["SDP-Session-Description"].append(Json::Value(session_sdp[ii]));
   }
 
   // Now parse and encode the offer and answer media components.
+  LOG_DEBUG("Adding media AVPs for offer");
   encode_media_components(v,
-                          offer_lines,
+                          offer,
                           SDP_OFFER,
                           media.offer.initiator_flag,
                           media.offer.initiator_party);
+  LOG_DEBUG("Adding media AVPs for answer");
   encode_media_components(v,
-                          answer_lines,
+                          answer,
                           SDP_ANSWER,
                           media.answer.initiator_flag,
                           media.answer.initiator_party);
@@ -744,13 +809,13 @@ void RfTsx::encode_media_components(Json::Value& v,
       if (media_tokens.size() > 0)
       {
         // Generate an SDP-Media-Component AVP.
-        Json::Value mc = v["SDP-Media-Component"].append(Json::Value());
+        Json::Value& mc = v["SDP-Media-Component"].append(Json::Value());
 
         // Add the SDP-Media-Name AVP.
         mc["SDP-Media-Name"] = Json::Value(media_tokens[0]);
 
         // Add SDP-Media-Description AVPs.
-        for (; (ii < sdp.size()) && (sdp[ii][0] != 'm'); ++ii)
+        for (ii = ii + 1; (ii < sdp.size()) && (sdp[ii][0] != 'm'); ++ii)
         {
           mc["SDP-Media-Description"].append(Json::Value(sdp[ii]));
         }
@@ -785,25 +850,54 @@ void RfTsx::encode_media_components(Json::Value& v,
   }
 }
 
-std::string RfTsx::avp_timestamp(time_t ts)
+/// Splits a block of SDP in to individual lines, removing any carriage
+/// return characters at the end of the lines if present.
+void RfTsx::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 {
-  // AVP timestamps are formatted as an 4 octet string, encoded as the first
-  // 4 octets of the NTP format (as per RFC2030).  Note that this is in
-  // seconds since 1900, so we must convert from Unix time (time since 1970)
-  // to NTP time.  This conversion must take account of the extension
-  // mechanism defined in RFC2030 to handle the NTP time wrap in 2036.
-  // @TODO
-  return "";
+  //std::string s = sdp;
+
+  size_t start_pos = 0;
+  size_t end_pos;
+  size_t next_start_pos;
+
+  do
+  {
+    end_pos = sdp.find('\n', start_pos);
+    if (end_pos == std::string::npos)
+    {
+      // Reached the end of the string.
+      next_start_pos = std::string::npos;
+      end_pos = sdp.length();
+    }
+    else
+    {
+      // Found a line feed.
+      next_start_pos = end_pos + 1;
+    }
+
+    if (sdp[end_pos - 1] == '\r')
+    {
+      // Line ends in carriage return, so strip it.
+      end_pos = end_pos - 1;
+    }
+
+    // Add the line.
+    lines.push_back(sdp.substr(start_pos, end_pos - start_pos));
+
+    // Move to the start of the next line.
+    start_pos = next_start_pos;
+  }
+  while (start_pos != std::string::npos);
 }
 
 void RfTsx::store_charging_addresses(pjsip_msg* msg)
 {
-
   pjsip_p_c_f_a_hdr* p_cfa_hdr = (pjsip_p_c_f_a_hdr*)
                            pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
   if (p_cfa_hdr != NULL)
   {
     // Clear out any existing entries.
+    LOG_DEBUG("Found a P-Charging-Function-Address header");
     _ccfs.clear();
     _ecfs.clear();
 
@@ -822,6 +916,7 @@ void RfTsx::store_charging_addresses(pjsip_msg* msg)
     {
       _ecfs.push_back(PJUtils::pj_str_to_string(&p->value));
     }
+    LOG_DEBUG("%d ccfs and %d ecfs", _ccfs.size(), _ecfs.size());
   }
 }
 
@@ -836,6 +931,7 @@ void RfTsx::store_subscription_ids(pjsip_msg* msg)
     pa_id = (pjsip_routing_hdr*)
         pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, pa_id->next);
   }
+  LOG_DEBUG("Stored %d subscription identifiers", _subscription_ids.size());
 }
 
 RfTsx::SubscriptionId RfTsx::uri_to_subscription_id(pjsip_uri* uri)
@@ -846,12 +942,14 @@ RfTsx::SubscriptionId RfTsx::uri_to_subscription_id(pjsip_uri* uri)
     // SIP URI
     id.type = END_USER_SIP_URI;
     id.id = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
+    LOG_DEBUG("Found SIP URI subscription identifier %s", id.id.c_str());
   }
   else
   {
     // TEL URI
     id.type = END_USER_E164;
     id.id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
+    LOG_DEBUG("Found E.164 subscription identifier %s", id.id.c_str());
   }
   return id;
 }
@@ -910,6 +1008,7 @@ void RfTsx::store_charging_info(pjsip_msg* msg)
                              pjsip_msg_find_hdr_by_name(msg, &STR_P_C_V, NULL);
   if (pcv_hdr != NULL)
   {
+    LOG_DEBUG("Found P-Charging-Vector header, store information");
     _icid = PJUtils::pj_str_to_string(&pcv_hdr->icid);
     _orig_ioi = PJUtils::pj_str_to_string(&pcv_hdr->orig_ioi);
     _term_ioi = PJUtils::pj_str_to_string(&pcv_hdr->term_ioi);
@@ -1037,7 +1136,8 @@ std::string RfTsx::hdr_contents(pjsip_hdr* hdr)
 {
   // Print the header using PJSIP print_on function.
   char buf[1000];
-  pjsip_hdr_print_on(hdr, buf, sizeof(buf));
+  int len = pjsip_hdr_print_on(hdr, buf, sizeof(buf));
+  buf[len] = '\0';
 
   // Strip the header name plus the colon character and space that PJSIP
   // always renders.

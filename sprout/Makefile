@@ -67,7 +67,7 @@ TARGET_SOURCES := logger.cpp \
                   chronosconnection.cpp \
                   accesslogger.cpp \
                   httpstack.cpp \
-                  handlers.cpp 
+                  handlers.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -114,9 +114,10 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        icscfproxy_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
+                       rftsx_test.cpp \
                        subscription_test.cpp \
                        chronosconnection_test.cpp \
-                       handlers_test.cpp 
+                       handlers_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -188,7 +189,7 @@ LDFLAGS += -lmemcached \
            -lsas \
            -levhtp \
            -levent \
-           -levent_pthreads 
+           -levent_pthreads
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl

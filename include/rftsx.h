@@ -84,17 +84,23 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 class RfTsx
 {
 public:
+
+  /// Constructor.
   RfTsx(HttpConnection* ralf,
         SAS::TrailId trail,
         const std::string& origin_host,
         RfNode node_functionality,
         Initiator initiator);
+
+  /// Destructor.
   ~RfTsx();
 
   /// Called with all requests received by this node for this SIP transaction.
   /// When acting as an S-CSCF this includes both the original request and
   /// the request as subsequently forwarded by any ASs invoked in the service
   /// chain.
+  /// @param  msg        The SIP request message
+  /// @param  timestamp  The time the message was received.
   void rx_request(pjsip_msg* msg, pj_time_val timestamp);
 
   /// Called with the request as it is forwarded by this node.  When acting
@@ -112,19 +118,28 @@ public:
   /// chain.
   void tx_response(pjsip_msg* msg, pj_time_val timestamp);
 
-  /// Called when an AS has been invoked by an S-CSCF and has forwarded the
-  /// the request back via the AS.
-  void as_request(pjsip_msg* msg);
-
-  /// Called when an AS has been invoked by an S-CSCF and has returned a
-  /// response.
-  void as_response(pjsip_msg* msg);
+  /// Called when an AS has been invoked by an S-CSCF and the AS has sent a
+  /// final response.
+  /// @param   server_name    The URI used to invoke the AS (from iFC).
+  /// @param   redirect_uri   The RequestURI from the request forwarded by the
+  ///                         AS if different from the RequestURI on the
+  ///                         request sent to the URI, empty otherwise.
+  /// @param   status_code    The status code from the final response from the
+  ///                         AS.
+  void as_request(const std::string& server_name,
+                  const std::string& redirect_uri,
+                  int status_code);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
   void server_capabilities(ServerCapabilities& caps);
 
+  /// Called when the Rf message should be triggered.  In general this will
+  /// be when the relevant transaction or AS chain has ended.
   void send_message();
+
+  /// Returns the JSON encoded message in string form.
+  std::string get_message();
 
 private:
 
@@ -190,7 +205,7 @@ private:
                                Initiator initiator_flag,
                                const std::string& initiator_party);
 
-  std::string avp_timestamp(time_t ts);
+  void split_sdp(const std::string& sdp, std::vector<std::string>& lines);
 
   void store_charging_addresses(pjsip_msg* msg);
 
