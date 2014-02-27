@@ -86,6 +86,7 @@ get_settings()
         scscf=5054
         alias_list=""
         chronos_hostname="localhost:7253"
+        default_session_expires=600
         . /etc/clearwater/config
 
         # Set up a default cluster_settings file if it does not exist.  The local
@@ -170,10 +171,11 @@ do_start()
                      $enum_suffix_arg
                      $enum_file_arg
                      $icscf_uri_arg
-                     --sas $sas_server:$NAME@$public_hostname
+                     --sas $sas_server,$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      --record-routing-model $sprout_rr_level
+                     --default-session-expires $default_session_expires
                      $authentication_arg
                      -a $log_directory
                      -F $log_directory

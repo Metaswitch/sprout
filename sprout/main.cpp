@@ -104,6 +104,8 @@ struct options
   int                    icscf_port;
   std::string            external_icscf_uri;
   int                    record_routing_model;
+#define OPT_DEFAULT_SESSION_EXPIRES (256+1)
+  int                    default_session_expires;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
@@ -157,7 +159,7 @@ static void usage(void)
 {
   puts("Options:\n"
        "\n"
-       " -p, --pcscf <untrusted port>:<trusted port>\n"
+       " -p, --pcscf <untrusted port>,<trusted port>\n"
        "                            Enable P-CSCF function with the specified ports\n"
        " -i, --icscf <port>         Enable I-CSCF function on the specified port\n"
        " -s, --scscf <port>         Enable S-CSCF function on the specified port\n"
@@ -170,7 +172,7 @@ static void usage(void)
        " -D, --domain <name>        Override the home domain name\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -r, --routing-proxy <name>[:<port>[:<connections>[:<recycle time>]]]\n"
+       " -r, --routing-proxy <name>[,<port>[,<connections>[:<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
        "                            the number of parallel connections to create, and how\n"
@@ -191,7 +193,7 @@ static void usage(void)
        "                            Enabled remote memcached store for geo-redundant storage\n"
        "                            of registration state, and specifies configuration file\n"
        "                            (otherwise uses no remote memcached store)\n"
-       " -S, --sas <ipv4>:<system name>\n"
+       " -S, --sas <ipv4>,<system name>\n"
        "                            Use specified host as Service Assurance Server and specified\n"
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
@@ -212,6 +214,8 @@ static void usage(void)
        "                            -E)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
+       "     --default-session-expires <expiry>\n"
+       "                            The session expiry period to request (in seconds)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -268,6 +272,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
     { "record-routing-model",          required_argument, 0, 'C'},
+    { "default_session_expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
     { "enum",              required_argument, 0, 'E'},
@@ -300,7 +305,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'p':
       {
         std::vector<std::string> pcscf_options;
-        Utils::split_string(std::string(pj_optarg), ':', pcscf_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
         if (pcscf_options.size() == 2)
         {
           options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
@@ -429,7 +434,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'r':
       {
         std::vector<std::string> upstream_proxy_options;
-        Utils::split_string(std::string(pj_optarg), ':', upstream_proxy_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
         options->upstream_proxy = upstream_proxy_options[0];
         options->upstream_proxy_port = 0;
         options->upstream_proxy_connections = 1;
@@ -486,7 +491,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'S':
       {
         std::vector<std::string> sas_options;
-        Utils::split_string(std::string(pj_optarg), ':', sas_options, 0, false);
+        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
         if (sas_options.size() == 2)
         {
           options->sas_server = sas_options[0];
@@ -611,6 +616,13 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
 
     case 't':
       options->interactive = PJ_TRUE;
+      break;
+
+    case OPT_DEFAULT_SESSION_EXPIRES:
+      options->default_session_expires = atoi(pj_optarg);
+      fprintf(stdout,
+              "Default session expiry set to %d\n",
+              options->default_session_expires);
       break;
 
     case 'h':
@@ -844,6 +856,7 @@ int main(int argc, char *argv[])
   opt.sas_server = "0.0.0.0";
   opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
+  opt.default_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "0.0.0.0";
@@ -1018,6 +1031,7 @@ int main(int argc, char *argv[])
                       opt.pjsip_threads,
                       opt.worker_threads,
                       opt.record_routing_model,
+                      opt.default_session_expires,
                       quiescing_mgr,
                       load_monitor);
 

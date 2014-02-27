@@ -47,9 +47,12 @@ extern "C" {
 #include "custom_headers.h"
 
 
-/// Custom parser for Privacy header.  This is registered with PJSIP when
-/// we initialize the stack.
-pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
+/// Custom parser for Privacy header.  This is registered with PJSIP below
+/// in register_custom_headers().
+///
+/// The Privacy header is a simple comma-separated list of values so we use
+/// the built-in PJSIP parser code.
+pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx* ctx)
 {
   pjsip_generic_array_hdr *privacy = pjsip_generic_array_hdr_create(ctx->pool, &STR_PRIVACY);
   pjsip_parse_generic_array_hdr_imp(privacy, ctx->scanner);
@@ -58,6 +61,169 @@ pjsip_hdr* parse_hdr_privacy(pjsip_parse_ctx *ctx)
 
 typedef void* (*clone_fptr)(pj_pool_t *, const void*);
 typedef int   (*print_fptr)(void *hdr, char *buf, pj_size_t len);
+
+/*****************************************************************************/
+/* Session-Expires                                                           */
+/*****************************************************************************/
+pjsip_hdr_vptr session_expires_hdr_vptr =
+{
+  (clone_fptr) &pjsip_session_expires_hdr_clone,
+  (clone_fptr) &pjsip_session_expires_hdr_shallow_clone,
+  (print_fptr) &pjsip_session_expires_hdr_print_on,
+};
+
+pjsip_session_expires_hdr* pjsip_session_expires_hdr_create(pj_pool_t* pool)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_session_expires_hdr));
+  return pjsip_session_expires_hdr_init(pool, mem);
+}
+
+pjsip_session_expires_hdr* pjsip_session_expires_hdr_init(pj_pool_t* pool, void* mem)
+{
+  pjsip_session_expires_hdr* hdr = (pjsip_session_expires_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = STR_SESSION_EXPIRES;
+  hdr->sname = STR_SESSION_EXPIRES;
+  hdr->vptr = &session_expires_hdr_vptr;
+  pj_list_init(hdr);
+  hdr->expires = 0;
+  hdr->refresher = SESSION_REFRESHER_UNKNOWN;
+  pj_list_init(&hdr->other_param);
+  return hdr;
+}
+
+pjsip_hdr* parse_hdr_session_expires(pjsip_parse_ctx* ctx)
+{
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  pjsip_session_expires_hdr* hdr = pjsip_session_expires_hdr_create(pool);
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  
+  // Parse the expiry number
+  pj_str_t int_str;
+  pj_scan_get(scanner, &pc->pjsip_DIGIT_SPEC, &int_str);
+  hdr->expires = pj_strtoul(&int_str);
+  pj_scan_skip_whitespace(scanner);
+
+  // Parse the rest of the params, looking for the refresher param
+  while (*scanner->curptr == ';')
+  {
+    // Consume the ';'.
+    pj_scan_get_char(scanner);
+    pj_scan_skip_whitespace(scanner);
+
+    // Parse the param.
+    pj_str_t name;
+    pj_str_t value;
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+    if (!pj_stricmp2(&name, "refresher"))
+    {
+      if (!pj_stricmp2(&value, "uac"))
+      {
+        hdr->refresher = SESSION_REFRESHER_UAC;
+      }
+      else if (!pj_stricmp2(&value, "uas"))
+      {
+        hdr->refresher = SESSION_REFRESHER_UAS;
+      }
+      else
+      {
+        PJ_THROW(PJSIP_SYN_ERR_EXCEPTION); // LCOV_EXCL_LINE
+      }
+    }
+    else
+    {
+      pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = name;
+      param->value = value;
+      pj_list_insert_before(&hdr->other_param, param);
+    }
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
+void* pjsip_session_expires_hdr_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_session_expires_hdr* hdr = pjsip_session_expires_hdr_create(pool);
+  pjsip_session_expires_hdr* other = (pjsip_session_expires_hdr*)o;
+  hdr->expires = other->expires;
+  hdr->refresher = other->refresher;
+  pjsip_param_clone(pool, &hdr->other_param, &other->other_param);
+  return hdr;
+}
+
+void* pjsip_session_expires_hdr_shallow_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_session_expires_hdr* hdr = pjsip_session_expires_hdr_create(pool);
+  pjsip_session_expires_hdr* other = (pjsip_session_expires_hdr*)o;
+  hdr->expires = other->expires;
+  hdr->refresher = other->refresher;
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &other->other_param);
+  return hdr;
+}
+
+int pjsip_session_expires_hdr_print_on(void* h, char* buf, pj_size_t len)
+{
+  char* p = buf;
+  const pjsip_session_expires_hdr* hdr = (pjsip_session_expires_hdr*)h;
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+
+  // As per pjsip_generic_int_hdr_print, integers are fewer then 15 characters long.
+  if ((pj_ssize_t)len < hdr->name.slen + 15)
+  {
+    return -1;
+  }
+
+  pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
+  p += hdr->name.slen;
+  *p++ = ':';
+  *p++ = ' ';
+  p += pj_utoa(hdr->expires, p);
+
+  if (hdr->refresher != SESSION_REFRESHER_UNKNOWN)
+  {
+    // Check the refresher parameter will fit.
+    if (buf+len-p < 14)
+    {
+      return -1;
+    }
+    
+    // Fill it in
+    *p++ = ';';
+    pj_memcpy(p, "refresher=", 10);
+    p += 10;
+
+    if (hdr->refresher == SESSION_REFRESHER_UAC)
+    {
+      pj_memcpy(p, "uac", 3);
+    }
+    else
+    {
+      pj_memcpy(p, "uas", 3);
+    }
+    p += 3;
+  }
+
+  // Try to add the other params.
+  pj_ssize_t printed = pjsip_param_print_on(&hdr->other_param, p, buf+len-p,
+                                            &pc->pjsip_TOKEN_SPEC,
+                                            &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0)
+  {
+    return -1;
+  }
+  p += printed;
+  *p = '\0';
+
+  return p - buf;
+}
 
 pjsip_hdr_vptr identity_hdr_vptr =
 {
@@ -741,6 +907,9 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("P-Charging-Function-Addresses", NULL, &parse_hdr_p_charging_function_addresses);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("P-Served-User", NULL, &parse_hdr_p_served_user);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Session-Expires", NULL, &parse_hdr_session_expires);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   return PJ_SUCCESS;
 }

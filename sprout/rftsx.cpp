@@ -181,7 +181,7 @@ void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
                                                            NULL);
       if (sess_expires != NULL)
       {
-        _interim_interval = sess_expires->delta_seconds;
+        _interim_interval = sess_expires->expires;
       }
     }
 
