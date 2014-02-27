@@ -1,5 +1,5 @@
 /**
- * @file rftsx.cpp  The Rf Transaction class.
+ * @file rfacr.cpp  The Rf Transaction class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -39,9 +39,9 @@
 #include "pjutils.h"
 #include "constants.h"
 #include "custom_headers.h"
-#include "rftsx.h"
+#include "rfacr.h"
 
-RfTsx::RfTsx(HttpConnection* ralf,
+RfACR::RfACR(HttpConnection* ralf,
              SAS::TrailId trail,
              const std::string& origin_host,
              RfNode node_functionality,
@@ -58,11 +58,11 @@ RfTsx::RfTsx(HttpConnection* ralf,
 {
 }
 
-RfTsx::~RfTsx()
+RfACR::~RfACR()
 {
 }
 
-void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
+void RfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 {
   if (_first_req)
   {
@@ -294,7 +294,7 @@ void RfTsx::rx_request(pjsip_msg* req, pj_time_val timestamp)
 }
 
 /// Called with the request as it is forwarded by this node.
-void RfTsx::tx_request(pjsip_msg* req, pj_time_val timestamp)
+void RfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
 {
   // Store the contents of the top-most route header if present.
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
@@ -326,7 +326,7 @@ void RfTsx::tx_request(pjsip_msg* req, pj_time_val timestamp)
 /// Called with all non-100 responses as first received by the node.  As
 /// above, this does not include S-CSCF responses received from ASs, only when the
 /// response is first received from
-void RfTsx::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
+void RfACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
   if (rsp->line.status.code >= PJSIP_SC_OK)
   {
@@ -364,7 +364,7 @@ void RfTsx::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
   _status_code = rsp->line.status.code;
 }
 
-void RfTsx::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
+void RfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
   _rsp_timestamp = timestamp;
 
@@ -402,7 +402,7 @@ void RfTsx::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
   }
 }
 
-void RfTsx::send_message()
+void RfACR::send_message()
 {
   // Encode and send the request using the Ralf HTTP connection.
   std::string path = "/call_id/" + _user_session_id;
@@ -418,7 +418,7 @@ void RfTsx::send_message()
   }
 }
 
-std::string RfTsx::get_message()
+std::string RfACR::get_message()
 {
   LOG_DEBUG("Building message");
 
@@ -756,7 +756,7 @@ std::string RfTsx::get_message()
   return writer.write(v);
 }
 
-void RfTsx::encode_sdp_description(Json::Value& v, const MediaDescription& media)
+void RfACR::encode_sdp_description(Json::Value& v, const MediaDescription& media)
 {
   // Split the offer and answer in to lines.
   std::vector<std::string> offer;
@@ -793,7 +793,7 @@ void RfTsx::encode_sdp_description(Json::Value& v, const MediaDescription& media
                           media.answer.initiator_party);
 }
 
-void RfTsx::encode_media_components(Json::Value& v,
+void RfACR::encode_media_components(Json::Value& v,
                                     const std::vector<std::string>& sdp,
                                     SDPType sdp_type,
                                     Initiator initiator_flag,
@@ -852,7 +852,7 @@ void RfTsx::encode_media_components(Json::Value& v,
 
 /// Splits a block of SDP in to individual lines, removing any carriage
 /// return characters at the end of the lines if present.
-void RfTsx::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
+void RfACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 {
   //std::string s = sdp;
 
@@ -890,7 +890,7 @@ void RfTsx::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
   while (start_pos != std::string::npos);
 }
 
-void RfTsx::store_charging_addresses(pjsip_msg* msg)
+void RfACR::store_charging_addresses(pjsip_msg* msg)
 {
   pjsip_p_c_f_a_hdr* p_cfa_hdr = (pjsip_p_c_f_a_hdr*)
                            pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
@@ -920,7 +920,7 @@ void RfTsx::store_charging_addresses(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_subscription_ids(pjsip_msg* msg)
+void RfACR::store_subscription_ids(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -934,7 +934,7 @@ void RfTsx::store_subscription_ids(pjsip_msg* msg)
   LOG_DEBUG("Stored %d subscription identifiers", _subscription_ids.size());
 }
 
-RfTsx::SubscriptionId RfTsx::uri_to_subscription_id(pjsip_uri* uri)
+RfACR::SubscriptionId RfACR::uri_to_subscription_id(pjsip_uri* uri)
 {
   SubscriptionId id;
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
@@ -954,7 +954,7 @@ RfTsx::SubscriptionId RfTsx::uri_to_subscription_id(pjsip_uri* uri)
   return id;
 }
 
-void RfTsx::store_calling_party_addresses(pjsip_msg* msg)
+void RfACR::store_calling_party_addresses(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -968,13 +968,13 @@ void RfTsx::store_calling_party_addresses(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_called_party_address(pjsip_msg* msg)
+void RfACR::store_called_party_address(pjsip_msg* msg)
 {
   _called_party_address =
                PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
 }
 
-void RfTsx::store_called_asserted_ids(pjsip_msg* msg)
+void RfACR::store_called_asserted_ids(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -988,7 +988,7 @@ void RfTsx::store_called_asserted_ids(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_associated_uris(pjsip_msg* msg)
+void RfACR::store_associated_uris(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pau = (pjsip_routing_hdr*)
                   pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSOCIATED_URI, NULL);
@@ -1002,7 +1002,7 @@ void RfTsx::store_associated_uris(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_charging_info(pjsip_msg* msg)
+void RfACR::store_charging_info(pjsip_msg* msg)
 {
   pjsip_p_c_v_hdr* pcv_hdr = (pjsip_p_c_v_hdr*)
                              pjsip_msg_find_hdr_by_name(msg, &STR_P_C_V, NULL);
@@ -1025,7 +1025,7 @@ void RfTsx::store_charging_info(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_media_description(pjsip_msg* msg,
+void RfACR::store_media_description(pjsip_msg* msg,
                                     MediaDescription& description)
 {
   // If the message has an SDP body store it in the offer or answer slot.
@@ -1055,7 +1055,7 @@ void RfTsx::store_media_description(pjsip_msg* msg,
   }
 }
 
-void RfTsx::store_media_components(pjsip_msg* msg, MediaComponents& components)
+void RfACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
 {
   pjsip_msg_body* body = msg->body;
 
@@ -1096,7 +1096,7 @@ void RfTsx::store_media_components(pjsip_msg* msg, MediaComponents& components)
   }
 }
 
-void RfTsx::store_message_bodies(pjsip_msg* msg)
+void RfACR::store_message_bodies(pjsip_msg* msg)
 {
   pjsip_msg_body* body = msg->body;
 
@@ -1110,7 +1110,7 @@ void RfTsx::store_message_bodies(pjsip_msg* msg)
   }
 }
 
-void RfTsx::store_instance_id(pjsip_msg* msg)
+void RfACR::store_instance_id(pjsip_msg* msg)
 {
   pjsip_contact_hdr* contact_hdr =
             (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
@@ -1132,7 +1132,7 @@ void RfTsx::store_instance_id(pjsip_msg* msg)
   }
 }
 
-std::string RfTsx::hdr_contents(pjsip_hdr* hdr)
+std::string RfACR::hdr_contents(pjsip_hdr* hdr)
 {
   // Print the header using PJSIP print_on function.
   char buf[1000];

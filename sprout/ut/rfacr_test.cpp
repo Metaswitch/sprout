@@ -1,5 +1,5 @@
 /**
- * @file rftsx_test.cpp UT for RfTsx class.
+ * @file rfacr_test.cpp UT for RfACR class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -48,7 +48,7 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "rftsx.h"
+#include "rfacr.h"
 
 using namespace std;
 using testing::StrEq;
@@ -57,8 +57,8 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-/// Fixture for RfTsxTest.
-class RfTsxTest : public SipTest
+/// Fixture for RfACRTest.
+class RfACRTest : public SipTest
 {
 public:
   FakeLogger _log;
@@ -73,11 +73,11 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  RfTsxTest() : SipTest(NULL)
+  RfACRTest() : SipTest(NULL)
   {
   }
 
-  ~RfTsxTest()
+  ~RfACRTest()
   {
   }
 
@@ -86,7 +86,7 @@ protected:
   pjsip_msg* parse_msg(const std::string& msg)
   {
     pjsip_rx_data* rdata = build_rxdata(msg);
-    RfTsxTest::parse_rxdata(rdata);
+    RfACRTest::parse_rxdata(rdata);
     return rdata->msg_info.msg;
   }
 };
@@ -222,15 +222,14 @@ public:
 };
 
 
-
-TEST_F(RfTsxTest, SCSCF_Successful_Call)
+TEST_F(RfACRTest, SCSCF_Successful_Call)
 {
   // Tests mainline Rf message generation for a successful call through
   // a S-CSCF.
   pj_time_val ts;
 
-  // Create an RfTsx instance for the test.
-  RfTsx rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
+  // Create an RfACR instance for the test.
+  RfACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -316,12 +315,12 @@ TEST_F(RfTsxTest, SCSCF_Successful_Call)
 
   // Convert the message to a pjsip_rx_data and parse it.
 
-  // Pass the request to the RfTsx as a received request.
+  // Pass the request to the RfACR as a received request.
   ts.sec = 1;
   ts.msec = 0;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Build a 100 Trying response and pass it to the RfTsx as a transmitted
+  // Build a 100 Trying response and pass it to the RfACR as a transmitted
   // response.
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
@@ -331,11 +330,11 @@ TEST_F(RfTsxTest, SCSCF_Successful_Call)
   // the existing Route header with the usual two Route headers.
   invite._routes = "Route: <sip:as1.homedomain:5060;transport=TCP;lr>\r\nRoute: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
 
-  // Pass the request to the RfTsx as a transmitted request.
+  // Pass the request to the RfACR as a transmitted request.
   ts.msec = 10;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfTsx as a received response (from the AS).
+  // Pass the 100 Trying response to the RfACR as a received response (from the AS).
   ts.msec = 15;
   rf.rx_response(parse_msg(r100trying.get()), ts);
 
@@ -344,11 +343,11 @@ TEST_F(RfTsxTest, SCSCF_Successful_Call)
   invite._routes = "Route: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
   invite._requri = "sip:6505559999@homedomain";
 
-  // Pass the request to the RfTsx as a received request.
+  // Pass the request to the RfACR as a received request.
   ts.msec = 20;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfTsx again as a transmitted response,
+  // Pass the 100 Trying response to the RfACR again as a transmitted response,
   // this time to the target endpoint.
   ts.msec = 25;
   rf.tx_response(parse_msg(r100trying.get()), ts);
@@ -359,11 +358,11 @@ TEST_F(RfTsxTest, SCSCF_Successful_Call)
   invite._requri = "sip:6505559999@10.20.30.40:12345;transport=TCP";
   invite._routes = "Route: <sip:xf2367gh@pcscf-1.homedomain:5052;transport=TCP;lr>\r\n";
 
-  // Pass the request to the RfTsx as a finally transmitted request.
+  // Pass the request to the RfACR as a finally transmitted request.
   ts.msec = 30;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfTsx again as a received response,
+  // Pass the 100 Trying response to the RfACR again as a received response,
   // this time from the target endpoint.
   ts.msec = 35;
   rf.rx_response(parse_msg(r100trying.get()), ts);
@@ -448,7 +447,7 @@ TEST_F(RfTsxTest, SCSCF_Successful_Call)
 "a=ssrc:117659952 mslabel:kggfXRSBx2oJdICzWljVBW1yFkgxxI0apXai\r\n"
 "a=ssrc:117659952 label:e767ec36-3ed6-474b-9b6d-632eb1cb37c8\r\n";
 
-  // Pass the response to RfTsx as if it was making its way back through the
+  // Pass the response to RfACR as if it was making its way back through the
   // AS chain.
   ts.msec = 40;
   rf.rx_response(parse_msg(r200ok.get()), ts);

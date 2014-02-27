@@ -1,5 +1,5 @@
 /**
- * @file rftsx.h  Rf Transaction class declaration.
+ * @file rfacr.h  Rf Transaction class declaration.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,8 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef _RFTSX_H__
-#define _RFTSX_H__
+#ifndef _RFACR_H__
+#define _RFACR_H__
 
 extern "C" {
 #include <pjsip.h>
@@ -57,20 +57,20 @@ typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=6, AS=7, IBCF=8 } RfNode;
 
 typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 
-/// Class tracking state required for Rf billing/accounting messages.
-/// An instance of this class is created for each SIP transaction that requires
-/// accounting, and the class is passed messages and other data during processing
-/// of the transaction, and finally triggered to send the ACR message to Ralf.
+/// Class tracking state required for Rf ACR messages.  An instance of this
+/// class is created for each SIP transaction that requires accounting, and
+/// the class is passed messages and other data during processing of the
+/// transaction, and finally triggered to send the ACR message to Ralf.
 ///
 /// In general there is a one-to-one mapping between SIP transactions and
-/// RfTsx objects, with a few exceptions.
+/// RfACR objects, with a few exceptions.
 ///
 /// -   When an S-CSCF is invoking application servers for originating or
-///     terminating services, a single RfTsx object is associated with all
+///     terminating services, a single RfACR object is associated with all
 ///     the S-CSCF SIP transactions involved in the application server chain.
 ///
 /// -   When a single Sprout instance performs multiple IMS functions within a
-///     single SIP transaction, multiple RfTsx's may be associated with that
+///     single SIP transaction, multiple RfACR's may be associated with that
 ///     SIP transaction.  The specific cases here are
 ///     -   when a single Sprout handles both the originating and terminating
 ///         S-CSCF side of a call
@@ -81,19 +81,19 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 ///         on the same Sprout instance that performed originating S-CSCF
 ///         processing.
 
-class RfTsx
+class RfACR
 {
 public:
 
   /// Constructor.
-  RfTsx(HttpConnection* ralf,
+  RfACR(HttpConnection* ralf,
         SAS::TrailId trail,
         const std::string& origin_host,
         RfNode node_functionality,
         Initiator initiator);
 
   /// Destructor.
-  ~RfTsx();
+  ~RfACR();
 
   /// Called with all requests received by this node for this SIP transaction.
   /// When acting as an S-CSCF this includes both the original request and
