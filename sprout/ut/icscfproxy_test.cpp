@@ -1379,6 +1379,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
                                         "1.2.3.4",
                                         49152);
 
+  // Don't set up the HSS response - this will simulate a 404 response
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
@@ -1795,6 +1796,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
 
   delete tp;
 }
+
 
 TEST_F(ICSCFProxyTest, WrongPort)
 {
