@@ -269,12 +269,9 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
 
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = hss->get_auth_vector(impi,
-                                         impu,
-                                         auth_type,
-                                         resync,
-                                         get_trail(rdata));
-
+  Json::Value* av = NULL;
+  hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
+  
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
   {

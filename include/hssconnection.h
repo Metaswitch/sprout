@@ -63,30 +63,34 @@ public:
                 LastValueCache *stats_aggregator);
   ~HSSConnection();
 
-  Json::Value* get_digest_data(const std::string& private_user_id,
-                               const std::string& public_user_id,
-                               SAS::TrailId trail);
-  Json::Value* get_auth_vector(const std::string& private_user_id,
-                               const std::string& public_user_id,
-                               const std::string& auth_type,
-                               const std::string& autn,
-                               SAS::TrailId trail);
-  Json::Value* get_user_auth_status(const std::string& private_user_identity,
-                                    const std::string& public_user_identity,
-                                    const std::string& visited_network,
-                                    const std::string& auth_type,
-                                    SAS::TrailId trail);
-  Json::Value* get_location_data(const std::string& public_user_identity,
-                                 const bool& originating,
-                                 const std::string& auth_type,
-                                 SAS::TrailId trail);
+  long get_digest_data(const std::string& private_user_id,
+                       const std::string& public_user_id,
+                       Json::Value*& object,
+                       SAS::TrailId trail);
+  long get_auth_vector(const std::string& private_user_id,
+                       const std::string& public_user_id,
+                       const std::string& auth_type,
+                       const std::string& autn,
+                       Json::Value*& object,
+                       SAS::TrailId trail);
+  long get_user_auth_status(const std::string& private_user_identity,
+                            const std::string& public_user_identity,
+                            const std::string& visited_network,
+                            const std::string& auth_type,
+                            Json::Value*& object,
+                            SAS::TrailId trail);
+  long get_location_data(const std::string& public_user_identity,
+                         const bool& originating,
+                         const std::string& auth_type,
+                         Json::Value*& object,
+                         SAS::TrailId trail);
   long get_subscription_data(const std::string& public_user_identity,
                              const std::string& private_user_identity,
                              std::map<std::string, Ifcs >& service_profiles,
                              std::vector<std::string>& associated_uris,
                              SAS::TrailId trail);
 private:
-  virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
+  virtual long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;

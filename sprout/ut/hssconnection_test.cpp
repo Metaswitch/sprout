@@ -126,6 +126,7 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses["http://narcissus/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
+    fakecurl_responses["http://narcissus/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
  }
 
   virtual ~HssConnectionTest()
@@ -135,7 +136,8 @@ class HssConnectionTest : public BaseTest
 
 TEST_F(HssConnectionTest, SimpleDigest)
 {
-  Json::Value* actual = _hss.get_digest_data("privid69", "pubid42",  0);
+  Json::Value* actual;
+  _hss.get_digest_data("privid69", "pubid42", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("myhashhere", actual->get("digest", "").asString());
   delete actual;
@@ -143,7 +145,8 @@ TEST_F(HssConnectionTest, SimpleDigest)
 
 TEST_F(HssConnectionTest, CorruptDigest)
 {
-  Json::Value* actual = _hss.get_digest_data("privid_corrupt", "pubid42", 0);
+  Json::Value* actual;
+  _hss.get_digest_data("privid_corrupt", "pubid42", actual, 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
   delete actual;
@@ -197,7 +200,8 @@ TEST_F(HssConnectionTest, ServerFailure)
 
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
-  Json::Value* actual = _hss.get_user_auth_status("privid69", "pubid44", "", "", 0);
+  Json::Value* actual;
+  _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("server-name", actual->get("scscf", "").asString());
   delete actual;
@@ -205,7 +209,8 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
 
 TEST_F(HssConnectionTest, FullUserAuth)
 {
-  Json::Value* actual = _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", 0);
+  Json::Value* actual;
+  _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("2001", actual->get("result-code", "").asString());
   delete actual;
@@ -213,7 +218,8 @@ TEST_F(HssConnectionTest, FullUserAuth)
 
 TEST_F(HssConnectionTest, SimpleLocation)
 {
-  Json::Value* actual = _hss.get_location_data("pubid44", false, "", 0);
+  Json::Value* actual;
+  _hss.get_location_data("pubid44", false, "", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("server-name", actual->get("scscf", "").asString());
   delete actual;
@@ -221,7 +227,8 @@ TEST_F(HssConnectionTest, SimpleLocation)
 
 TEST_F(HssConnectionTest, LocationWithAuthType)
 {
-  Json::Value* actual = _hss.get_location_data("pubid44", false, "DEREG", 0);
+  Json::Value* actual;
+  _hss.get_location_data("pubid44", false, "DEREG", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("2001", actual->get("result-code", "").asString());
   delete actual;
@@ -229,8 +236,18 @@ TEST_F(HssConnectionTest, LocationWithAuthType)
 
 TEST_F(HssConnectionTest, FullLocation)
 {
-  Json::Value* actual = _hss.get_location_data("pubid44", true, "CAPAB", 0);
+  Json::Value* actual;
+  _hss.get_location_data("pubid44", true, "CAPAB", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, LocationNotFound)
+{
+  Json::Value* actual;
+  HTTPCode rc = _hss.get_location_data("pubid45", false, "", actual, 0);
+  ASSERT_TRUE(actual == NULL);
+  ASSERT_TRUE(rc == 404);
   delete actual;
 }

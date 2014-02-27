@@ -2081,7 +2081,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         LOG_INFO("Sprout has I-CSCF and S-CSCF function");
 
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
-        Json::Value* location = hss->get_location_data(public_id, false, "", trail());
+
+        Json::Value* location = NULL;
+        hss->get_location_data(public_id, false, "", location, trail());
 
         if (location == NULL ||
             !location->isMember("result-code") ||

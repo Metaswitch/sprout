@@ -435,14 +435,32 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
   {
     LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
               impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
-    Json::Value* rsp = _hss->get_user_auth_status(impi,
-                                                  impu,
-                                                  visited_network,
-                                                  auth_type,
-                                                  trail());
+    Json::Value* rsp = NULL;
+    HTTPCode rc =_hss->get_user_auth_status(impi, 
+                                            impu, 
+                                            visited_network, 
+                                            auth_type, 
+                                            rsp, 
+                                            trail());
 
-    status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
-                                  PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    // Return a 480 response if the lookup times out, or the HSS returns
+    // invalid information. If the HSS has returned a negative response,
+    // then return a 403.
+    if (rc != HTTP_OK)
+    {
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+
+      if (rc == HTTP_NOT_FOUND || rc == HTTP_FORBIDDEN)
+      {
+        status_code = PJSIP_SC_FORBIDDEN;
+      }
+    }
+    else
+    {
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
+                                    PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    }
+    
     delete rsp;
   }
 
@@ -493,13 +511,31 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
               impu.c_str(),
               (originating) ? "true" : "false",
               (auth_type != "") ? auth_type.c_str() : "None");
-    Json::Value* rsp = _hss->get_location_data(impu,
-                                               originating,
-                                               auth_type,
-                                               trail());
+    Json::Value* rsp = NULL;
+    HTTPCode rc =_hss->get_location_data(impu,
+                                         originating, 
+                                         auth_type, 
+                                         rsp, 
+                                         trail());
 
-    status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
-                                  PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    // Return a 480 response if the lookup times out, or the HSS returns 
+    // invalid information. If the subscriber doesn't exist then return 
+    // 404. 
+    if (rc != HTTP_OK)
+    {
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+      
+      if (rc == HTTP_NOT_FOUND)
+      {
+        status_code = PJSIP_SC_NOT_FOUND;
+      } 
+    }
+    else
+    {
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
+                                    PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    }
+
     delete rsp;
   }
 
