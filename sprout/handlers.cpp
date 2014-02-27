@@ -152,7 +152,8 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 
   if (is_primary && all_bindings_expired)
   {
-    _cfg->_hss->registration_update(aor_id, "", "dereg-timeout", 0);
+    LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+    _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
   }
 
   // If we allocated the AoR, tidy up.

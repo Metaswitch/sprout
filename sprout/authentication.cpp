@@ -526,7 +526,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       PJUtils::get_impi_and_impu(rdata, impi, impu);
 
-      hss->registration_update(impu, impi, "dereg-auth-failed", 0);
+      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, 0);
     }
 
     if (analytics != NULL)

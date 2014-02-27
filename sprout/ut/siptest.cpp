@@ -513,7 +513,7 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   uri.append(user).append("@").append(domain);
   if (hss)
   {
-    hss->set_impu_result(uri, "call", "REGISTERED", "");
+    hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
   }
   RegStore::AoR* aor = store->get_aor_data(uri);
   RegStore::AoR::Binding* binding = aor->get_binding(contact);

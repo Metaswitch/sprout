@@ -423,11 +423,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
   if (all_bindings_expired) {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    std::string impi;
-    std::string impu;
-    PJUtils::get_impi_and_impu(rdata, impi, impu);
-
-    hss->registration_update(impu, impi, "dereg-user", 0);
+    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, 0);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -503,8 +499,8 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   std::string regstate;
-  HTTPCode http_code = hss->registration_update(public_id, private_id, "reg", regstate, ifc_map, uris, trail);
-  if ((http_code != HTTP_OK) || (regstate != "REGISTERED"))
+  HTTPCode http_code = hss->update_registration_state(public_id, private_id, HSSConnection::REG, regstate, ifc_map, uris, trail);
+  if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
   {
     // We failed to register this subscriber at the HSS.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
@@ -779,8 +775,12 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
       // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
-      HTTPCode http_code = hss->registration_update(aor, "", "dereg-admin", ifc_map, uris, get_trail(tsx));
+      HTTPCode http_code = hss->update_registration_state(aor, "", HSSConnection::DEREG_ADMIN, ifc_map, uris, get_trail(tsx));
 
+      // If we try to deregister a subscriber who has already
+      // registered (e.g. because our third-party-registration
+      // announcing a deregistration fails) Homestead will return an
+      // error and we'll avoid sending these in a loop.
       if (http_code == HTTP_OK)
       {
         LOG_DEBUG("Initiating network-initiated deregistration");

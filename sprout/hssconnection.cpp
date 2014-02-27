@@ -49,6 +49,15 @@
 #include "hssconnection.h"
 #include "accumulator.h"
 
+const std::string HSSConnection::REG = "reg";
+const std::string HSSConnection::CALL = "call";
+const std::string HSSConnection::DEREG_USER = "dereg-user";
+const std::string HSSConnection::DEREG_ADMIN = "dereg-admin";
+const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
+const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
+const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failure";
+
+const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
 
 HSSConnection::HSSConnection(const std::string& server,
                              LoadMonitor *load_monitor,
@@ -195,7 +204,8 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
 }
 
 
-/// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
+/// Make a PUT to the server and store off the XML response. Caller is
+/// responsible for deleting the filled-in "root" pointer.
 HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            std::string body,
                                            rapidxml::xml_document<>*& root,
@@ -301,7 +311,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 // Returns the HTTP code from Homestead - callers should check that
 // this is HTTP_OK before relying on the output parameters.
 
-HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                             const std::string& private_user_identity,
                                             const std::string& type,
                                             std::map<std::string, Ifcs >& ifcs_map,
@@ -309,7 +319,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
                                             SAS::TrailId trail)
 {
   std::string unused;
-  return registration_update(public_user_identity,
+  return update_registration_state(public_user_identity,
                              private_user_identity,
                              type,
                              unused,
@@ -318,7 +328,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
                              trail);
 }
 
-HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                             const std::string& private_user_identity,
                                             const std::string& type,
                                             SAS::TrailId trail)
@@ -326,7 +336,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
   std::map<std::string, Ifcs > ifcs_map;
   std::vector<std::string> associated_uris;
   std::string unused;
-  return registration_update(public_user_identity,
+  return update_registration_state(public_user_identity,
                              private_user_identity,
                              type,
                              unused,
@@ -336,7 +346,7 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
 }
 
 
-HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                             const std::string& private_user_identity,
                                             const std::string& type,
                                             std::string& regstate,
@@ -363,6 +373,14 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 
+  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+    if (stopWatch.read(latency_us))
+    {
+      _latency_stat.accumulate(latency_us);
+      _subscription_latency_stat.accumulate(latency_us);
+    }
+  }
+
   if (http_code != HTTP_OK)
   {
     // If get_xml_object has returned a HTTP error code, we have either not found
@@ -370,12 +388,6 @@ HTTPCode HSSConnection::registration_update(const std::string& public_user_ident
     // the HSS successfully. In either case we should fail.
     LOG_ERROR("Could not get subscriber data from HSS");
     return http_code;
-  }
-
-  if (stopWatch.read(latency_us))
-  {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
   }
 
   return decode_homestead_xml(root, regstate, ifcs_map, associated_uris) ? HTTP_OK : HTTP_SERVER_ERROR;
@@ -403,6 +415,14 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 
+  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+    if (stopWatch.read(latency_us))
+    {
+      _latency_stat.accumulate(latency_us);
+      _subscription_latency_stat.accumulate(latency_us);
+    }
+  }
+
   if (http_code != HTTP_OK)
   {
     // If get_xml_object has returned a HTTP error code, we have either not found
@@ -411,13 +431,6 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
     LOG_ERROR("Could not get subscriber data from HSS");
     return http_code;
   }
-
-  if (stopWatch.read(latency_us))
-  {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
-  }
-
 
   return decode_homestead_xml(root, regstate, ifcs_map, associated_uris) ? HTTP_OK : HTTP_SERVER_ERROR;
 }

@@ -1409,8 +1409,8 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
     std::string regstate;
-    long http_code = hss->registration_update(public_id, "", "call", regstate, ifc_map, uris, trail);
-    bool registered = (regstate == "REGISTERED");
+    long http_code = hss->update_registration_state(public_id, "", HSSConnection::CALL, regstate, ifc_map, uris, trail);
+    bool registered = (regstate == HSSConnection::STATE_REGISTERED);
     info = {registered, ifc_map[public_id], uris};
     if (http_code == 200)
     {
@@ -2519,7 +2519,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)session_expires);
   }
   session_expires->expires = stack_data.default_session_expires;
-  
+
   // Now set up the data structures and transactions required to
   // process the request.
   pj_status_t status = init_uac_transactions(targets);
@@ -3603,6 +3603,13 @@ void UACTransaction::cancel_pending_tsx(int st_code)
 
       LOG_DEBUG("Sending CANCEL request");
       pj_status_t status = PJUtils::send_request(stack_data.endpt, cancel);
+
+      // We used to deregister the user here if we had
+      // SIP_STATUS_FLOW_FAILED, but this is inappropriate - only one
+      // of their bindings has failed, but they may be registered
+      // elsewhere. If this was the last binding, Chronos will
+      // eventually time it out and cause a deregistration.
+
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());

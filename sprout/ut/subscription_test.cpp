@@ -76,7 +76,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", "REGISTERED", "");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
   }
 
   static void TearDownTestCase()
@@ -346,7 +346,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 {
   SubscribeMessage msg;
   msg._user = "6505550234";
-  _hss_connection->set_impu_result("sip:6505550234@homedomain", "", "REGISTERED",
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
