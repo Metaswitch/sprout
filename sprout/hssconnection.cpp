@@ -177,7 +177,7 @@ Json::Value* HSSConnection::get_json_object(const std::string& path,
   return root;
 }
 
-rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data)
+rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const std::string& url = "")
 {
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   try
@@ -187,7 +187,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data)
   catch (rapidxml::parse_error& err)
   {
     // report to the user the failure and their locations in the document.
-    LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n", raw_data.c_str(), err.what());
+    LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
     delete root;
     root = NULL;
   }
@@ -207,7 +207,7 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
 
   if (http_code == HTTP_OK)
   {
-    root = parse_xml(raw_data);
+    root = parse_xml(raw_data, path);
   }
 
   return http_code;
@@ -225,7 +225,7 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 
   if (http_code == HTTP_OK)
   {
-    root = parse_xml(raw_data);
+    root = parse_xml(raw_data, path);
   }
 
   return http_code;
@@ -304,6 +304,41 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
                                             const std::string& private_user_identity,
                                             const std::string& type,
+                                            std::map<std::string, Ifcs >& ifcs_map,
+                                            std::vector<std::string>& associated_uris,
+                                            SAS::TrailId trail)
+{
+  std::string unused;
+  return registration_update(public_user_identity,
+                             private_user_identity,
+                             type,
+                             unused,
+                             ifcs_map,
+                             associated_uris,
+                             trail);
+}
+
+HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
+                                            SAS::TrailId trail)
+{
+  std::map<std::string, Ifcs > ifcs_map;
+  std::vector<std::string> associated_uris;
+  std::string unused;
+  return registration_update(public_user_identity,
+                             private_user_identity,
+                             type,
+                             unused,
+                             ifcs_map,
+                             associated_uris,
+                             trail);
+}
+
+
+HTTPCode HSSConnection::registration_update(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
                                             std::string& regstate,
                                             std::map<std::string, Ifcs >& ifcs_map,
                                             std::vector<std::string>& associated_uris,
@@ -358,12 +393,13 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
 
   LOG_DEBUG("Making Homestead request for %s", path.c_str());
+  rapidxml::xml_document<>* root_underlying_ptr = NULL;
+  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
+
+
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
-
-  rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 

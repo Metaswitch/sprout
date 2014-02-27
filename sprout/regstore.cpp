@@ -134,6 +134,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
                             bool set_chronos,
                             bool& all_bindings_expired)
 {
+  all_bindings_expired = false;
   // Expire any old bindings before writing to the server.  In theory, if
   // there are no bindings left we could delete the entry, but this may
   // cause concurrency problems because memcached does not support

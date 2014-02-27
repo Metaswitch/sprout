@@ -427,10 +427,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     std::string impu;
     PJUtils::get_impi_and_impu(rdata, impi, impu);
 
-    std::string unused;
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    hss->registration_update(impu, impi, "dereg-user", unused, ifc_map, uris, 0);
+    hss->registration_update(impu, impi, "dereg-user", 0);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -754,12 +751,6 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
   LOG_DEBUG("In registrar_on_tsx_state");
-  if (tsx->tsx_user->id == -1) {
-    // If mod_registrar has already been destroyed, we must be
-    // shutting down, so just return - we have no guarantee that
-    // things like our connection to Homestead will still exist.
-    return;
-  }
   ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
 
   if ((tsxdata != NULL) && ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
@@ -788,11 +779,11 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
       // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
-      std::string unused;
-      HTTPCode http_code = hss->registration_update(aor, "", "dereg-admin", unused, ifc_map, uris, get_trail(tsx));
+      HTTPCode http_code = hss->registration_update(aor, "", "dereg-admin", ifc_map, uris, get_trail(tsx));
 
       if (http_code == HTTP_OK)
       {
+        LOG_DEBUG("Initiating network-initiated deregistration");
         RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
       }
     }
@@ -807,12 +798,12 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
   // nothing, as we're terminating anyway.
 
   if ((tsxdata != NULL) &&
-      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)) &&
-      (tsx->tsx_user->id > -1))
+      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) ||
+       (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
   {
+    tsx->mod_data[tsx->tsx_user->id] = NULL;
     delete tsxdata;
     tsxdata = NULL;
-    tsx->mod_data[tsx->tsx_user->id] = NULL;
   }
 }
 

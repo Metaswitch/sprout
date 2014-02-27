@@ -526,10 +526,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       PJUtils::get_impi_and_impu(rdata, impi, impu);
 
-      std::string unused;
-      std::vector<std::string> uris;
-      std::map<std::string, Ifcs> ifc_map;
-      hss->registration_update(impu, impi, "dereg-auth-failed", unused, ifc_map, uris, 0);
+      hss->registration_update(impu, impi, "dereg-auth-failed", 0);
     }
 
     if (analytics != NULL)

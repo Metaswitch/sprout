@@ -87,12 +87,22 @@ public:
                                std::map<std::string, Ifcs >& service_profiles,
                                std::vector<std::string>& associated_uris,
                                SAS::TrailId trail);
+  HTTPCode registration_update(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               SAS::TrailId trail);
+  HTTPCode registration_update(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               std::map<std::string, Ifcs >& service_profiles,
+                               std::vector<std::string>& associated_uris,
+                               SAS::TrailId trail);
   HTTPCode get_registration_data(const std::string& public_user_identity,
                                  std::string& regstate,
                                  std::map<std::string, Ifcs >& service_profiles,
                                  std::vector<std::string>& associated_uris,
                                  SAS::TrailId trail);
-  rapidxml::xml_document<>* parse_xml(std::string raw);
+  rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
 private:
   virtual Json::Value* get_json_object(const std::string& path, SAS::TrailId trail);
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);

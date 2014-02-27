@@ -152,10 +152,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 
   if (is_primary && all_bindings_expired)
   {
-    std::string unused;
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    _cfg->_hss->registration_update(aor_id, "", "dereg-timeout", unused, ifc_map, uris, 0);
+    _cfg->_hss->registration_update(aor_id, "", "dereg-timeout", 0);
   }
 
   // If we allocated the AoR, tidy up.
