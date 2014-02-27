@@ -420,13 +420,13 @@ void RfACR::server_capabilities(ServerCapabilities& caps)
   _server_caps = caps;
 }
 
-void RfACR::send_message()
+void RfACR::send_message(pj_time_val timestamp)
 {
   // Encode and send the request using the Ralf HTTP connection.
   std::string path = "/call_id/" + _user_session_id;
   std::map<std::string, std::string> headers;
   long rc = _ralf->send_post(path,
-                             get_message(),
+                             get_message(timestamp),
                              headers,
                              _trail);
 
@@ -436,7 +436,7 @@ void RfACR::send_message()
   }
 }
 
-std::string RfACR::get_message()
+std::string RfACR::get_message(pj_time_val timestamp)
 {
   LOG_DEBUG("Building message");
 
@@ -479,7 +479,7 @@ std::string RfACR::get_message()
   {
     e["Acct-Interim-Interval"] = Json::Value(_interim_interval);
   }
-  e["Event-Timestamp"] = Json::Value((Json::UInt)time(NULL));
+  e["Event-Timestamp"] = Json::Value((Json::UInt)timestamp.sec);
 
   // Add Service-Information AVP group.
   LOG_DEBUG("Adding Service-Information AVP group");

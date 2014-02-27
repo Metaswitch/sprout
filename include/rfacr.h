@@ -98,24 +98,29 @@ public:
   /// When acting as an S-CSCF this includes both the original request and
   /// the request as subsequently forwarded by any ASs invoked in the service
   /// chain.
-  /// @param  msg        The SIP request message
-  /// @param  timestamp  The time the message was received.
-  void rx_request(pjsip_msg* msg, pj_time_val timestamp);
+  /// @param  req             A pointer to the parsed SIP request message.
+  /// @param  timestamp       Timestamp of the request receipt.
+  void rx_request(pjsip_msg* req, pj_time_val timestamp);
 
   /// Called with the request as it is forwarded by this node.  When acting
   /// as an S-CSCF this includes when the request is forwarded to any ASs
   /// in the service chain.
-  void tx_request(pjsip_msg* msg, pj_time_val timestamp);
+  /// @param  req             A pointer to the parsed SIP request message.
+  /// @param  timestamp       Timestamp of the request receipt.
+  void tx_request(pjsip_msg* req, pj_time_val timestamp);
 
-  /// Called with all non-100 responses as received by the node.  When acting
-  /// as an S-CSCF, this includes all forwarded responses received from ASs
+  /// Called with all responses as received by the node.  When acting as an
+  /// S-CSCF, this includes all forwarded responses received from ASs
   /// invoked in the service chain.
-  void rx_response(pjsip_msg* msg, pj_time_val timestamp);
+  /// @param   rsp            A pointer to the parsed SIP response message.
+  /// @param   timestamp      Timestamp of the response transmission.
+  void rx_response(pjsip_msg* rsp, pj_time_val timestamp);
 
-  /// Called with all non-100 responses transmitted by the node.  When acting
-  /// as an S-CSCF, this includes all responses sent to ASs in the service
-  /// chain.
-  void tx_response(pjsip_msg* msg, pj_time_val timestamp);
+  /// Called with all responses transmitted by the node.  When acting as an
+  /// S-CSCF, this includes all responses sent to ASs in the service chain.
+  /// @param   rsp            A pointer to the parsed SIP response message.
+  /// @param   timestamp      Timestamp of the response transmission.
+  void tx_response(pjsip_msg* rsp, pj_time_val timestamp);
 
   /// Called when an AS has been invoked by an S-CSCF and the AS has sent a
   /// final response.
@@ -131,14 +136,17 @@ public:
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
+  /// @param   caps           Capabiliies as received from I-CSCF.
   void server_capabilities(ServerCapabilities& caps);
 
   /// Called when the Rf message should be triggered.  In general this will
   /// be when the relevant transaction or AS chain has ended.
-  void send_message();
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  void send_message(pj_time_val timestamp);
 
   /// Returns the JSON encoded message in string form.
-  std::string get_message();
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  std::string get_message(pj_time_val timestamp);
 
 private:
 
