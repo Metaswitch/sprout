@@ -323,9 +323,7 @@ void RfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
   }
 }
 
-/// Called with all non-100 responses as first received by the node.  As
-/// above, this does not include S-CSCF responses received from ASs, only when the
-/// response is first received from
+/// Called with all non-100 responses as first received by the node.
 void RfACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
   if (rsp->line.status.code >= PJSIP_SC_OK)
@@ -400,6 +398,26 @@ void RfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
     // Failed to start the session, so convert to an EVENT record.
     _record_type = EVENT_RECORD;
   }
+}
+
+void RfACR::as_info(const std::string& uri,
+                    const std::string& redirect_uri,
+                    int status_code)
+{
+  // Add an entry to the _as_information list.
+  LOG_DEBUG("Storing AS information for AS %s", uri.c_str());
+  ASInformation as_info;
+  as_info.uri = uri;
+  as_info.redirect_uri = redirect_uri;
+  as_info.status_code = status_code;
+  _as_information.push_back(as_info);
+}
+
+void RfACR::server_capabilities(ServerCapabilities& caps)
+{
+  // Store the server capabilities.
+  LOG_DEBUG("Storing Server-Capabilities");
+  _server_caps = caps;
 }
 
 void RfACR::send_message()
@@ -557,9 +575,9 @@ std::string RfACR::get_message()
   {
     Json::Value& as = ii["Application-Server-Information"].append(Json::Value());
     as["Application-Server"] = Json::Value(i->uri);
-    if (!i->redirect.empty())
+    if (!i->redirect_uri.empty())
     {
-      as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect));
+      as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
     }
     as["Status-Code"] = Json::Value(i->status_code);
   }
@@ -803,44 +821,38 @@ void RfACR::encode_media_components(Json::Value& v,
   {
     if (sdp[ii][0] == 'm')
     {
-      // Found an m= line - check it looks basically valid.
-      std::vector<std::string> media_tokens;
-      Utils::split_string(sdp[ii], ' ', media_tokens);
-      if (media_tokens.size() > 0)
+      // Generate an SDP-Media-Component AVP.
+      Json::Value& mc = v["SDP-Media-Component"].append(Json::Value());
+
+      // Add the SDP-Media-Name AVP.
+      mc["SDP-Media-Name"] = Json::Value(sdp[ii]);
+
+      // Add SDP-Media-Description AVPs.
+      for (ii = ii + 1; (ii < sdp.size()) && (sdp[ii][0] != 'm'); ++ii)
       {
-        // Generate an SDP-Media-Component AVP.
-        Json::Value& mc = v["SDP-Media-Component"].append(Json::Value());
-
-        // Add the SDP-Media-Name AVP.
-        mc["SDP-Media-Name"] = Json::Value(media_tokens[0]);
-
-        // Add SDP-Media-Description AVPs.
-        for (ii = ii + 1; (ii < sdp.size()) && (sdp[ii][0] != 'm'); ++ii)
-        {
-          mc["SDP-Media-Description"].append(Json::Value(sdp[ii]));
-        }
-
-        // Add the Local-GW-Inserted-Indication AVP (alway 0 - Local GW not
-        // inserted).
-        mc["Local-GW-Inserted-Indication"] = Json::Value(0);
-
-        // Add the IP-Realm-Default-Indication AVP (always 1 - Default IP
-        // realm used).
-        mc["IP-Realm-Default-Indication"] = Json::Value(1);
-
-        // Add the Transcoder-Inserted-Indication AVP (always 0 - Transcode not
-        // inserted).
-        mc["Transcoder-Inserted-Indication"] = Json::Value(0);
-
-        // Add the Media-Initiator-Flag AVP.
-        mc["Media-Initiator-Flag"] = Json::Value(initiator_flag);
-
-        // Add the Media-Initiator-Party AVP.
-        mc["Media-Initiator-Party"] = Json::Value(initiator_party);
-
-        // Add the SDP-Type AVP.
-        mc["SDP-Type"] = Json::Value(sdp_type);
+        mc["SDP-Media-Description"].append(Json::Value(sdp[ii]));
       }
+
+      // Add the Local-GW-Inserted-Indication AVP (alway 0 - Local GW not
+      // inserted).
+      mc["Local-GW-Inserted-Indication"] = Json::Value(0);
+
+      // Add the IP-Realm-Default-Indication AVP (always 1 - Default IP
+      // realm used).
+      mc["IP-Realm-Default-Indication"] = Json::Value(1);
+
+      // Add the Transcoder-Inserted-Indication AVP (always 0 - Transcode not
+      // inserted).
+      mc["Transcoder-Inserted-Indication"] = Json::Value(0);
+
+      // Add the Media-Initiator-Flag AVP.
+      mc["Media-Initiator-Flag"] = Json::Value(initiator_flag);
+
+      // Add the Media-Initiator-Party AVP.
+      mc["Media-Initiator-Party"] = Json::Value(initiator_party);
+
+      // Add the SDP-Type AVP.
+      mc["SDP-Type"] = Json::Value(sdp_type);
     }
     else
     {
@@ -881,8 +893,11 @@ void RfACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
       end_pos = end_pos - 1;
     }
 
-    // Add the line.
-    lines.push_back(sdp.substr(start_pos, end_pos - start_pos));
+    if (end_pos > start_pos)
+    {
+      // None blank line, so add it to output.
+      lines.push_back(sdp.substr(start_pos, end_pos - start_pos));
+    }
 
     // Move to the start of the next line.
     start_pos = next_start_pos;
@@ -1146,3 +1161,24 @@ std::string RfACR::hdr_contents(pjsip_hdr* hdr)
   return std::string(p);
 }
 
+/// Constructor.
+RfACRFactory::RfACRFactory(HttpConnection* ralf,
+                           RfNode node_functionality,
+                           const std::string& origin_host) :
+  _ralf(ralf),
+  _node_functionality(node_functionality),
+  _origin_host(origin_host)
+{
+}
+
+/// Destructor.
+RfACRFactory::~RfACRFactory()
+{
+}
+
+/// Get an RfACR instance from the factory.
+RfACR* RfACRFactory::get_acr(SAS::TrailId trail,
+                             Initiator initiator)
+{
+  return new RfACR(_ralf, trail, _origin_host, _node_functionality, initiator);
+}

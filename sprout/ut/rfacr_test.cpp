@@ -236,6 +236,7 @@ TEST_F(RfACRTest, SCSCF_Successful_Call)
   invite._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;lr>\r\n";
   invite._to = "\"6505550001\" <sip:6505550001@homedomain>";   // Strip tag.
   invite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\">\r\n";
+  invite._extra_hdrs += "Session-Expires: 600\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
   invite._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
@@ -455,6 +456,9 @@ TEST_F(RfACRTest, SCSCF_Successful_Call)
   rf.tx_response(parse_msg(r200ok.get()), ts);
   ts.msec = 60;
   rf.rx_response(parse_msg(r200ok.get()), ts);
+  rf.as_info("sip:as1.homedomain:5060;transport=TCP",
+             "sip:6505559999@homedomain",
+             200);
   ts.msec = 70;
   rf.tx_response(parse_msg(r200ok.get()), ts);
 

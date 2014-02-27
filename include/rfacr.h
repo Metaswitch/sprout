@@ -84,7 +84,6 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 class RfACR
 {
 public:
-
   /// Constructor.
   RfACR(HttpConnection* ralf,
         SAS::TrailId trail,
@@ -120,15 +119,15 @@ public:
 
   /// Called when an AS has been invoked by an S-CSCF and the AS has sent a
   /// final response.
-  /// @param   server_name    The URI used to invoke the AS (from iFC).
+  /// @param   uri            The URI used to invoke the AS (from iFC).
   /// @param   redirect_uri   The RequestURI from the request forwarded by the
   ///                         AS if different from the RequestURI on the
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
-  void as_request(const std::string& server_name,
-                  const std::string& redirect_uri,
-                  int status_code);
+  void as_info(const std::string& uri,
+               const std::string& redirect_uri,
+               int status_code);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
@@ -165,7 +164,7 @@ private:
   struct ASInformation
   {
     std::string uri;
-    std::string redirect;
+    std::string redirect_uri;
     int status_code;
   };
 
@@ -316,6 +315,35 @@ private:
   std::string _route_hdr_transmitted;
 
   std::string _instance_id;
+};
+
+/// Factory class for creating RfACR instances with the appropriate settings.
+class RfACRFactory
+{
+public:
+  /// Constructor.
+  /// @param ralf                 HttpConnection class set up to connect to
+  ///                             Ralf cluster.
+  /// @param node_functionality   Node-Functionality value to set in ACRs.
+  /// @param origin_host          Origin-Host name to set in ACRs.
+  RfACRFactory(HttpConnection* ralf,
+               RfNode node_functionality,
+               const std::string& origin_host);
+
+  /// Destructor.
+  ~RfACRFactory();
+
+  /// Get an RfACR instance from the factory.
+  /// @param trail                SAS trail identifier to use for the ACR.
+  /// @param initiator            The initiator of the SIP transaction (calling
+  ///                             or called party).
+  RfACR* get_acr(SAS::TrailId trail,
+                 Initiator initiator);
+
+private:
+  HttpConnection* _ralf;
+  RfNode _node_functionality;
+  std::string _origin_host;
 };
 
 #endif
