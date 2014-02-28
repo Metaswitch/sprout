@@ -1,5 +1,5 @@
 /**
- * @file rfacr_test.cpp UT for RfACR class.
+ * @file acr_test.cpp UT for ACR class.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -53,7 +53,7 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "rfacr.h"
+#include "acr.h"
 
 using namespace std;
 using testing::StrEq;
@@ -62,8 +62,8 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-/// Fixture for RfACRTest.
-class RfACRTest : public SipTest
+/// Fixture for ACRTest.
+class ACRTest : public SipTest
 {
 public:
   FakeLogger _log;
@@ -78,11 +78,11 @@ public:
     SipTest::TearDownTestCase();
   }
 
-  RfACRTest() : SipTest(NULL)
+  ACRTest() : SipTest(NULL)
   {
   }
 
-  ~RfACRTest()
+  ~ACRTest()
   {
   }
 
@@ -91,7 +91,7 @@ protected:
   pjsip_msg* parse_msg(const std::string& msg)
   {
     pjsip_rx_data* rdata = build_rxdata(msg);
-    RfACRTest::parse_rxdata(rdata);
+    ACRTest::parse_rxdata(rdata);
     return rdata->msg_info.msg;
   }
 
@@ -261,14 +261,14 @@ public:
 };
 
 
-TEST_F(RfACRTest, SCSCFOrigCall)
+TEST_F(ACRTest, SCSCFOrigCall)
 {
   // Tests mainline Rf message generation for a successful originating call
   // through a S-CSCF.
   pj_time_val ts;
 
-  // Create an RfACR instance for the test.
-  RfACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
+  // Create an ACR instance for the test.
+  ACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -353,12 +353,12 @@ TEST_F(RfACRTest, SCSCFOrigCall)
 "a=ssrc:117659952 mslabel:kggfXRSBx2oJdICzWljVBW1yFkgxxI0apXai\r\n"
 "a=ssrc:117659952 label:e767ec36-3ed6-474b-9b6d-632eb1cb37c8\r\n";
 
-  // Pass the request to the RfACR as a received request.
+  // Pass the request to the ACR as a received request.
   ts.sec = 1;
   ts.msec = 0;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Build a 100 Trying response and pass it to the RfACR as a transmitted
+  // Build a 100 Trying response and pass it to the ACR as a transmitted
   // response.
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
@@ -368,11 +368,11 @@ TEST_F(RfACRTest, SCSCFOrigCall)
   // the existing Route header with the usual two Route headers.
   invite._routes = "Route: <sip:as1.homedomain:5060;transport=TCP;lr>\r\nRoute: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
 
-  // Pass the request to the RfACR as a transmitted request.
+  // Pass the request to the ACR as a transmitted request.
   ts.msec = 10;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR as a received response (from the AS).
+  // Pass the 100 Trying response to the ACR as a received response (from the AS).
   ts.msec = 15;
   rf.rx_response(parse_msg(r100trying.get()), ts);
 
@@ -381,11 +381,11 @@ TEST_F(RfACRTest, SCSCFOrigCall)
   invite._routes = "Route: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
   invite._requri = "sip:6505559999@homedomain";
 
-  // Pass the request to the RfACR as a received request.
+  // Pass the request to the ACR as a received request.
   ts.msec = 20;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR again as a transmitted response,
+  // Pass the 100 Trying response to the ACR again as a transmitted response,
   // this time to the target endpoint.
   ts.msec = 25;
   rf.tx_response(parse_msg(r100trying.get()), ts);
@@ -394,11 +394,11 @@ TEST_F(RfACRTest, SCSCFOrigCall)
   // a Route header routing the request to the I-CSCF.
   invite._routes = "Route: <sip:sprout.homedomain:5052;transport=TCP;lr>\r\n";
 
-  // Pass the request to the RfACR as a finally transmitted request.
+  // Pass the request to the ACR as a finally transmitted request.
   ts.msec = 30;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR again as a received response,
+  // Pass the 100 Trying response to the ACR again as a received response,
   // this time from the target endpoint.
   ts.msec = 35;
   rf.rx_response(parse_msg(r100trying.get()), ts);
@@ -483,7 +483,7 @@ TEST_F(RfACRTest, SCSCFOrigCall)
 "a=ssrc:117659952 mslabel:kggfXRSBx2oJdICzWljVBW1yFkgxxI0apXai\r\n"
 "a=ssrc:117659952 label:e767ec36-3ed6-474b-9b6d-632eb1cb37c8\r\n";
 
-  // Pass the response to RfACR as if it was making its way back through the
+  // Pass the response to ACR as if it was making its way back through the
   // AS chain.
   ts.msec = 40;
   rf.rx_response(parse_msg(r200ok.get()), ts);
@@ -499,17 +499,17 @@ TEST_F(RfACRTest, SCSCFOrigCall)
 
   // Build and checked the resulting Rf ACR message.
   string rf_acr = rf.get_message(ts);
-  EXPECT_TRUE(compare_acr(rf_acr, "rfacr_scscforigcall_1.json"));
+  EXPECT_TRUE(compare_acr(rf_acr, "acr_scscforigcall_1.json"));
 }
 
-TEST_F(RfACRTest, SCSCFTermCall)
+TEST_F(ACRTest, SCSCFTermCall)
 {
   // Tests mainline Rf message generation for a successful terminating call
   // through a S-CSCF.
   pj_time_val ts;
 
-  // Create an RfACR instance for the test.
-  RfACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
+  // Create an ACR instance for the test.
+  ACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -594,12 +594,12 @@ TEST_F(RfACRTest, SCSCFTermCall)
 "a=ssrc:117659952 mslabel:kggfXRSBx2oJdICzWljVBW1yFkgxxI0apXai\r\n"
 "a=ssrc:117659952 label:e767ec36-3ed6-474b-9b6d-632eb1cb37c8\r\n";
 
-  // Pass the request to the RfACR as a received request.
+  // Pass the request to the ACR as a received request.
   ts.sec = 1;
   ts.msec = 0;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Build a 100 Trying response and pass it to the RfACR as a transmitted
+  // Build a 100 Trying response and pass it to the ACR as a transmitted
   // response.
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
@@ -609,11 +609,11 @@ TEST_F(RfACRTest, SCSCFTermCall)
   // the existing Route header with the usual two Route headers.
   invite._routes = "Route: <sip:as1.homedomain:5060;transport=TCP;lr>\r\nRoute: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
 
-  // Pass the request to the RfACR as a transmitted request.
+  // Pass the request to the ACR as a transmitted request.
   ts.msec = 10;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR as a received response (from the AS).
+  // Pass the 100 Trying response to the ACR as a received response (from the AS).
   ts.msec = 15;
   rf.rx_response(parse_msg(r100trying.get()), ts);
 
@@ -622,11 +622,11 @@ TEST_F(RfACRTest, SCSCFTermCall)
   invite._routes = "Route: <sip:odi_12345678@sprout.homedomain:5054;transport=TCP;lr>\r\n";
   invite._requri = "sip:6505559999@homedomain";
 
-  // Pass the request to the RfACR as a received request.
+  // Pass the request to the ACR as a received request.
   ts.msec = 20;
   rf.rx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR again as a transmitted response,
+  // Pass the 100 Trying response to the ACR again as a transmitted response,
   // this time to the target endpoint.
   ts.msec = 25;
   rf.tx_response(parse_msg(r100trying.get()), ts);
@@ -637,11 +637,11 @@ TEST_F(RfACRTest, SCSCFTermCall)
   invite._routes = "Route: <sip:abcdefgh@pcscf1.homedomain:5058;transport=TCP;lr>\r\n";
   invite._requri = "sip:6505559999@10.83.18.50:5060;transport=TCP";
 
-  // Pass the request to the RfACR as a finally transmitted request.
+  // Pass the request to the ACR as a finally transmitted request.
   ts.msec = 30;
   rf.tx_request(parse_msg(invite.get()), ts);
 
-  // Pass the 100 Trying response to the RfACR again as a received response,
+  // Pass the 100 Trying response to the ACR again as a received response,
   // this time from the target endpoint.
   ts.msec = 35;
   rf.rx_response(parse_msg(r100trying.get()), ts);
@@ -726,7 +726,7 @@ TEST_F(RfACRTest, SCSCFTermCall)
 "a=ssrc:117659952 mslabel:kggfXRSBx2oJdICzWljVBW1yFkgxxI0apXai\r\n"
 "a=ssrc:117659952 label:e767ec36-3ed6-474b-9b6d-632eb1cb37c8\r\n";
 
-  // Pass the response to RfACR as if it was making its way back through the
+  // Pass the response to ACR as if it was making its way back through the
   // AS chain.
   ts.msec = 40;
   rf.rx_response(parse_msg(r200ok.get()), ts);
@@ -742,7 +742,7 @@ TEST_F(RfACRTest, SCSCFTermCall)
 
   // Build and checked the resulting Rf ACR message.
   string rf_acr = rf.get_message(ts);
-  EXPECT_TRUE(compare_acr(rf_acr, "rfacr_scscftermcall_1.json"));
+  EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_1.json"));
 }
 
 
