@@ -145,8 +145,8 @@ static EnumService *enum_service;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
-static RfACRFactory* cscf_acr_factory;
-static RfACRFactory* bgcf_acr_factory;
+static ACRFactory* cscf_acr_factory;
+static ACRFactory* bgcf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
@@ -3764,8 +3764,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
-                                RfACRFactory* cscf_rfacr_factory,
-                                RfACRFactory* bgcf_rfacr_factory,
+                                ACRFactory* cscf_rfacr_factory,
+                                ACRFactory* bgcf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,

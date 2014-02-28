@@ -45,14 +45,14 @@ extern "C" {
 #include "regstore.h"
 #include "hssconnection.h"
 #include "analyticslogger.h"
-#include "rfacr.h"
+#include "acr.h"
 
 extern pjsip_module mod_subscription;
 
 extern pj_status_t init_subscription(RegStore* registrar_store,
                                      RegStore* remote_reg_store,
                                      HSSConnection* hss_connection,
-                                     RfACRFactory* rfacr_factory,
+                                     ACRFactory* rfacr_factory,
                                      AnalyticsLogger* analytics_logger);
 
 extern void destroy_subscription();

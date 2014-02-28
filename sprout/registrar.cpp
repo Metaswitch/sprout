@@ -72,7 +72,7 @@ static SIPResolver* sipresolver;
 static HSSConnection* hss;
 
 // Factory for create ACR messages for Rf billing flows.
-static RfACRFactory* acr_factory;
+static ACRFactory* acr_factory;
 
 static IfcHandler* ifchandler;
 
@@ -804,7 +804,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            SIPResolver* resolver,
-                           RfACRFactory* rfacr_factory,
+                           ACRFactory* rfacr_factory,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {

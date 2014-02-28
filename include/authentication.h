@@ -40,7 +40,7 @@
 
 #include "avstore.h"
 #include "hssconnection.h"
-#include "rfacr.h"
+#include "acr.h"
 #include "analyticslogger.h"
 
 extern pjsip_module mod_auth;
@@ -48,7 +48,7 @@ extern pjsip_module mod_auth;
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
-                                RfACRFactory* rfacr_factory,
+                                ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger);
 
 void destroy_authentication();

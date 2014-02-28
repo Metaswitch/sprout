@@ -63,7 +63,7 @@ ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        SIPResolver* sipresolver,
                        int priority,
                        HSSConnection* hss,
-                       RfACRFactory* acr_factory,
+                       ACRFactory* acr_factory,
                        SCSCFSelector* scscf_selector) :
   BasicProxy(endpt, "mod-icscf", sipresolver, acr_factory, priority, false),
   _port(port),

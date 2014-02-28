@@ -62,7 +62,7 @@ static RegStore* remote_store;
 static HSSConnection* hss;
 
 /// Factory for generating ACR messages for Rf billing.
-static RfACRFactory* acr_factory;
+static ACRFactory* acr_factory;
 
 static AnalyticsLogger* analytics;
 
@@ -480,7 +480,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 pj_status_t init_subscription(RegStore* registrar_store,
                               RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
-                              RfACRFactory* rfacr_factory,
+                              ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;

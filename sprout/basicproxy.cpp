@@ -62,7 +62,7 @@ extern "C" {
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
                        SIPResolver* sipresolver,
-                       RfACRFactory* acr_factory,
+                       ACRFactory* acr_factory,
                        int priority,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),

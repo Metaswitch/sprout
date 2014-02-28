@@ -823,10 +823,10 @@ int main(int argc, char *argv[])
   ICSCFProxy* icscf_proxy = NULL;
   ChronosConnection* chronos_connection = NULL;
   HttpConnection* ralf_connection = NULL;
-  RfACRFactory* scscf_acr_factory = NULL;
-  RfACRFactory* bgcf_acr_factory = NULL;
-  RfACRFactory* icscf_acr_factory = NULL;
-  RfACRFactory* pcscf_acr_factory = NULL;
+  ACRFactory* scscf_acr_factory = NULL;
+  ACRFactory* bgcf_acr_factory = NULL;
+  ACRFactory* icscf_acr_factory = NULL;
+  ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
 
   // Set up our exception signal handler for asserts and segfaults.
@@ -1131,13 +1131,13 @@ int main(int argc, char *argv[])
 
     if (ralf_connection != NULL)
     {
-      // Create RfACRFactory instances for the S-CSCF and BGCF.
-      scscf_acr_factory = new RfACRFactory(ralf_connection,
-                                           SCSCF,
-                                           opt.sprout_domain);
-      bgcf_acr_factory = new RfACRFactory(ralf_connection,
-                                          BGCF,
-                                          opt.sprout_domain);
+      // Create ACRFactory instances for the S-CSCF and BGCF.
+      scscf_acr_factory = new ACRFactory(ralf_connection,
+                                         SCSCF,
+                                         opt.sprout_domain);
+      bgcf_acr_factory = new ACRFactory(ralf_connection,
+                                        BGCF,
+                                        opt.sprout_domain);
     }
 
     if (xdm_connection != NULL)

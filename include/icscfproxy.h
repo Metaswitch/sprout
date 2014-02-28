@@ -45,7 +45,7 @@
 #include "hssconnection.h"
 #include "scscfselector.h"
 #include "servercaps.h"
-#include "rfacr.h"
+#include "acr.h"
 #include "basicproxy.h"
 
 class ICSCFProxy : public BasicProxy
@@ -57,7 +57,7 @@ public:
              SIPResolver* sipresolver,
              int priority,
              HSSConnection* hss,
-             RfACRFactory* acr_factory,
+             ACRFactory* acr_factory,
              SCSCFSelector* scscf_selector);
 
   /// Destructor.

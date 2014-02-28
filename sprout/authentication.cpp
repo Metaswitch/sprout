@@ -91,7 +91,7 @@ static HSSConnection* hss;
 
 
 // Factory for creating ACR messages for Rf billing.
-static RfACRFactory* acr_factory;
+static ACRFactory* acr_factory;
 
 
 // AV store used to store Authentication Vectors while waiting for the
@@ -562,7 +562,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
-                                RfACRFactory* rfacr_factory,
+                                ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;

@@ -1,5 +1,5 @@
 /**
- * @file rfacr.h  Rf Transaction class declaration.
+ * @file acr.h  Rf Transaction class declaration.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,8 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef _RFACR_H__
-#define _RFACR_H__
+#ifndef _ACR_H__
+#define _ACR_H__
 
 extern "C" {
 #include <pjsip.h>
@@ -63,14 +63,14 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 /// transaction, and finally triggered to send the ACR message to Ralf.
 ///
 /// In general there is a one-to-one mapping between SIP transactions and
-/// RfACR objects, with a few exceptions.
+/// ACR objects, with a few exceptions.
 ///
 /// -   When an S-CSCF is invoking application servers for originating or
-///     terminating services, a single RfACR object is associated with all
+///     terminating services, a single ACR object is associated with all
 ///     the S-CSCF SIP transactions involved in the application server chain.
 ///
 /// -   When a single Sprout instance performs multiple IMS functions within a
-///     single SIP transaction, multiple RfACR's may be associated with that
+///     single SIP transaction, multiple ACR's may be associated with that
 ///     SIP transaction.  The specific cases here are
 ///     -   when a single Sprout handles both the originating and terminating
 ///         S-CSCF side of a call
@@ -81,18 +81,18 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 ///         on the same Sprout instance that performed originating S-CSCF
 ///         processing.
 
-class RfACR
+class ACR
 {
 public:
   /// Constructor.
-  RfACR(HttpConnection* ralf,
-        SAS::TrailId trail,
-        const std::string& origin_host,
-        RfNode node_functionality,
-        Initiator initiator);
+  ACR(HttpConnection* ralf,
+      SAS::TrailId trail,
+      const std::string& origin_host,
+      RfNode node_functionality,
+      Initiator initiator);
 
   /// Destructor.
-  ~RfACR();
+  ~ACR();
 
   /// Called with all requests received by this node for this SIP transaction.
   /// When acting as an S-CSCF this includes both the original request and
@@ -325,8 +325,8 @@ private:
   std::string _instance_id;
 };
 
-/// Factory class for creating RfACR instances with the appropriate settings.
-class RfACRFactory
+/// Factory class for creating ACR instances with the appropriate settings.
+class ACRFactory
 {
 public:
   /// Constructor.
@@ -334,19 +334,19 @@ public:
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
   /// @param origin_host          Origin-Host name to set in ACRs.
-  RfACRFactory(HttpConnection* ralf,
-               RfNode node_functionality,
-               const std::string& origin_host);
+  ACRFactory(HttpConnection* ralf,
+             RfNode node_functionality,
+             const std::string& origin_host);
 
   /// Destructor.
-  ~RfACRFactory();
+  ~ACRFactory();
 
-  /// Get an RfACR instance from the factory.
+  /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  RfACR* get_acr(SAS::TrailId trail,
-                 Initiator initiator);
+  ACR* get_acr(SAS::TrailId trail,
+               Initiator initiator);
 
 private:
   HttpConnection* _ralf;

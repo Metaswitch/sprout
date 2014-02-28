@@ -63,7 +63,7 @@ class UACTransaction;
 #include "quiescing_manager.h"
 #include "scscfselector.h"
 #include "sipresolver.h"
-#include "rfacr.h"
+#include "acr.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -315,8 +315,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
-                                RfACRFactory* cscf_rfacr_factory,
-                                RfACRFactory* bgcf_rfacr_factory,
+                                ACRFactory* cscf_rfacr_factory,
+                                ACRFactory* bgcf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,
