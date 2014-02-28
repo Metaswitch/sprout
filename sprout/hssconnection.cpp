@@ -369,7 +369,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // of scope.
 
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = put_for_xml_object(path, type, root_underlying_ptr, trail);
+  HTTPCode http_code = put_for_xml_object(path, "{\"reqtype\": \""+type+"\"}", root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 
