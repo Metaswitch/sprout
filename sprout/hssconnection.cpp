@@ -55,7 +55,7 @@ const std::string HSSConnection::DEREG_USER = "dereg-user";
 const std::string HSSConnection::DEREG_ADMIN = "dereg-admin";
 const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
 const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
-const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failure";
+const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
 
 const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
 
