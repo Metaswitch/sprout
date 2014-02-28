@@ -364,6 +364,8 @@ public:
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
+                                          NULL,
+                                          NULL,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
                                           _scscf_selector,

@@ -70,6 +70,10 @@ static SIPResolver* sipresolver;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
+
+// Factory for create ACR messages for Rf billing flows.
+static RfACRFactory* acr_factory;
+
 static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
@@ -498,16 +502,16 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity. 
+    // identity doesn't belong to the private identity.
 
-    // If the client shouldn't retry (when the subscriber isn't present in the HSS) 
+    // If the client shouldn't retry (when the subscriber isn't present in the HSS)
     // reject with a 403, otherwise reject with a 503.
     st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
     if (http_code == HTTP_NOT_FOUND)
     {
       st_code = PJSIP_SC_FORBIDDEN;
     }
- 
+
     LOG_ERROR("Rejecting register request with invalid public/private identity");
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
@@ -800,6 +804,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            SIPResolver* resolver,
+                           RfACRFactory* rfacr_factory,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
@@ -812,6 +817,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
   sipresolver = resolver;
+  acr_factory = rfacr_factory;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

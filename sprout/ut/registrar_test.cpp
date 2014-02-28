@@ -72,7 +72,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, NULL, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -83,11 +83,9 @@ public:
                                 "  <InitialFilterCriteria>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
-    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain", HTTP_OK);                                     
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
-
-
   }
 
   static void TearDownTestCase()

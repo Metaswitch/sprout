@@ -79,6 +79,7 @@ public:
                                   NULL,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
+                                  NULL,
                                   _scscf_selector);
 
     // Schedule timers.

@@ -63,8 +63,9 @@ ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        SIPResolver* sipresolver,
                        int priority,
                        HSSConnection* hss,
+                       RfACRFactory* acr_factory,
                        SCSCFSelector* scscf_selector) :
-  BasicProxy(endpt, "mod-icscf", sipresolver, priority, false),
+  BasicProxy(endpt, "mod-icscf", sipresolver, acr_factory, priority, false),
   _port(port),
   _hss(hss),
   _scscf_selector(scscf_selector)
@@ -116,6 +117,7 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
   BasicProxy::UASTsx(proxy),
   _hss(hss),
   _scscf_selector(scscf_selector),
+  _have_caps(false),
   _hss_rsp(),
   _attempted_scscfs()
 {

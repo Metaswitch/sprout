@@ -90,6 +90,10 @@ pjsip_module mod_auth =
 static HSSConnection* hss;
 
 
+// Factory for creating ACR messages for Rf billing.
+static RfACRFactory* acr_factory;
+
+
 // AV store used to store Authentication Vectors while waiting for the
 // client to respond to a challenge.
 static AvStore* av_store;
@@ -558,12 +562,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
+                                RfACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
 
   av_store = avstore;
   hss = hss_connection;
+  acr_factory = rfacr_factory;
   analytics = analytics_logger;
 
   // Register the authentication module.  This needs to be in the stack

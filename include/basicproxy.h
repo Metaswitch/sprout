@@ -57,6 +57,7 @@ extern "C" {
 #include "stack.h"
 #include "sipresolver.h"
 #include "pjmodule.h"
+#include "rfacr.h"
 
 
 /// Class implementing basic SIP proxy functionality.  Various methods in
@@ -67,6 +68,7 @@ public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
              SIPResolver* sipresolver,
+             RfACRFactory* acr_factory,
              int priority,
              bool delay_trying);
   virtual ~BasicProxy();
@@ -325,6 +327,9 @@ protected:
 
   /// A pointer to the SIP resolver used to resolve URI targets to servers.
   SIPResolver* _sipresolver;
+
+  /// Factory for generating Rf ACR messages.
+  RfACRFactory* _acr_factory;
 
   /// Indicates that 100 Trying response to INVITE requests should be delayed
   /// until at least one downstream node has sent a 100 Trying response.

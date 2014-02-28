@@ -44,21 +44,9 @@
 
 #include "hssconnection.h"
 #include "scscfselector.h"
+#include "servercaps.h"
+#include "rfacr.h"
 #include "basicproxy.h"
-
-/// Structure storing server capabilities as returned by the HSS
-struct ServerCapabilities
-{
-  /// The S-CSCF returned by the HSS.
-  std::string scscf;
-
-  /// The list of mandatory capabilities returned by the HSS.
-  std::vector<int> mandatory_caps;
-
-  /// The list of optional capabilities returned by the HSS.
-  std::vector<int> optional_caps;
-};
-
 
 class ICSCFProxy : public BasicProxy
 {
@@ -69,6 +57,7 @@ public:
              SIPResolver* sipresolver,
              int priority,
              HSSConnection* hss,
+             RfACRFactory* acr_factory,
              SCSCFSelector* scscf_selector);
 
   /// Destructor.

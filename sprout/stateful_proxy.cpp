@@ -145,6 +145,9 @@ static EnumService *enum_service;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
+static RfACRFactory* cscf_acr_factory;
+static RfACRFactory* bgcf_acr_factory;
+
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool;
@@ -2496,7 +2499,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
     pjsip_msg_add_hdr(_req->msg, (pjsip_hdr*)session_expires);
   }
   session_expires->expires = stack_data.default_session_expires;
-  
+
   // Now set up the data structures and transactions required to
   // process the request.
   pj_status_t status = init_uac_transactions(targets);
@@ -3761,6 +3764,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
+                                RfACRFactory* cscf_rfacr_factory,
+                                RfACRFactory* bgcf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,
@@ -3780,6 +3785,9 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   icscf = icscf_enabled;
   scscf = scscf_enabled;
+
+  cscf_acr_factory = cscf_rfacr_factory;
+  bgcf_acr_factory = bgcf_rfacr_factory;
 
   edge_proxy = enable_edge_proxy;
   if (edge_proxy)

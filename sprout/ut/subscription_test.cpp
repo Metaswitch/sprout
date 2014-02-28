@@ -1,5 +1,5 @@
 /**
- * @file subscription_test.cpp 
+ * @file subscription_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -72,7 +72,7 @@ public:
     _hss_connection = new FakeHSSConnection();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _analytics);
+    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, NULL, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -194,7 +194,7 @@ string SubscribeMessage::get()
                    "Content-Length:  %5$d\r\n"
                    "\r\n"
                    "%6$s",
-                
+
                    /*  1 */ _method.c_str(),
                    /*  2 */ _user.c_str(),
                    /*  3 */ _domain.c_str(),
@@ -235,7 +235,7 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-/// Simple correct example 
+/// Simple correct example
 TEST_F(SubscriptionTest, SimpleMainline)
 {
   // Get an initial empty AoR record and add a binding.
@@ -328,7 +328,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
   check_standard_OK();
- 
+
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 

@@ -413,7 +413,7 @@ void RfACR::as_info(const std::string& uri,
   _as_information.push_back(as_info);
 }
 
-void RfACR::server_capabilities(ServerCapabilities& caps)
+void RfACR::server_capabilities(const ServerCapabilities& caps)
 {
   // Store the server capabilities.
   LOG_DEBUG("Storing Server-Capabilities");

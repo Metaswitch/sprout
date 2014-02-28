@@ -51,7 +51,7 @@ extern "C" {
 
 #include "sas.h"
 #include "httpconnection.h"
-#include "icscfproxy.h"
+#include "servercaps.h"
 
 typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=6, AS=7, IBCF=8 } RfNode;
 
@@ -137,7 +137,7 @@ public:
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
   /// @param   caps           Capabiliies as received from I-CSCF.
-  void server_capabilities(ServerCapabilities& caps);
+  void server_capabilities(const ServerCapabilities& caps);
 
   /// Called when the Rf message should be triggered.  In general this will
   /// be when the relevant transaction or AS chain has ended.

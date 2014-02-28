@@ -123,7 +123,7 @@ public:
   };
 
   BasicProxyUT(pjsip_endpoint* endpt, int priority) :
-    BasicProxy(endpt, "UTProxy", NULL, priority, false)
+    BasicProxy(endpt, "UTProxy", NULL, NULL, priority, false)
   {
   }
 

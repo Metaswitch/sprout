@@ -46,6 +46,7 @@ namespace SASEvent {
   const int SIP_BASE = 0x010000;
   const int HTTP_BASE = 0x020000;
   const int DNS_BASE = 0x030000;
+  const int RALF_BASE = 0x040000;
 
   const int HTTP_REQ = 0;
   const int HTTP_RSP = 1;

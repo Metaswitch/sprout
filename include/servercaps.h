@@ -1,8 +1,13 @@
 /**
- * @file subscription.h
+ * @file servercaps.h  Server Capabilities as returned by HSS.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * Parts of this module were derived from GPL licensed PJSIP sample code
+ * with the following copyrights.
+ *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
+ *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,27 +39,23 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef __SERVERCAPS_H__
+#define __SERVERCAPS_H__
 
-#ifndef SUBSCRIPTION_H__
-#define SUBSCRIPTION_H__
+#include <string>
+#include <vector>
 
-extern "C" {
-#include <pjsip.h>
-}
+/// Structure storing server capabilities as returned by the HSS
+struct ServerCapabilities
+{
+  /// The S-CSCF returned by the HSS.
+  std::string scscf;
 
-#include "regstore.h"
-#include "hssconnection.h"
-#include "analyticslogger.h"
-#include "rfacr.h"
+  /// The list of mandatory capabilities returned by the HSS.
+  std::vector<int> mandatory_caps;
 
-extern pjsip_module mod_subscription;
-
-extern pj_status_t init_subscription(RegStore* registrar_store,
-                                     RegStore* remote_reg_store,
-                                     HSSConnection* hss_connection,
-                                     RfACRFactory* rfacr_factory,
-                                     AnalyticsLogger* analytics_logger);
-
-extern void destroy_subscription();
+  /// The list of optional capabilities returned by the HSS.
+  std::vector<int> optional_caps;
+};
 
 #endif
