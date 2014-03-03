@@ -272,7 +272,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
     { "record-routing-model",          required_argument, 0, 'C'},
-    { "default_session_expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+    { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
     { "enum",              required_argument, 0, 'E'},
