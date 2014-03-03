@@ -147,7 +147,7 @@ public:
     _user("6505550231"),
     _domain("homedomain"),
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
-    _event("Event: Reg"),
+    _event("Event: reg"),
     _accepts("Accept: application/reginfo+xml"),
     _expires(""),
     _route(""),
@@ -273,7 +273,7 @@ TEST_F(SubscriptionTest, MissingEventHeader)
 }
 
 // Test the Event Header
-// Event that isn't Reg should be rejected
+// Event that isn't reg should be rejected
 TEST_F(SubscriptionTest, IncorrectEventHeader)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -281,6 +281,12 @@ TEST_F(SubscriptionTest, IncorrectEventHeader)
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
   pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg2;
+  msg2._event = "Event: Reg";
+  ret = inject_msg_direct(msg2.get());
   EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
