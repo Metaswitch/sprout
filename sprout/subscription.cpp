@@ -433,11 +433,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     // whether it should be processed by this module or passed up to an AS. 
     pjsip_msg *msg = rdata->msg_info.msg;
 
-    // A valid subscription must have the Event header set to "Reg"
+    // A valid subscription must have the Event header set to "reg". This is case-sensitive
     pj_str_t event_name = pj_str("Event");
     pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
 
-    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "Reg"))
+    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
     {
       // The Event header is missing or doesn't match "Reg"
       LOG_DEBUG("Rejecting subscription request with invalid event header");
