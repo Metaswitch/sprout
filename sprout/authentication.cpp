@@ -221,7 +221,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
   return status;
 }
 
-
 void create_challenge(pjsip_authorization_hdr* auth_hdr,
                       std::string resync,
                       pjsip_rx_data* rdata,
@@ -232,23 +231,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impu;
   std::string nonce;
 
-  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
-  impu = PJUtils::public_id_from_uri(to_uri);
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.username.slen != 0))
-  {
-    // private user identity is supplied in the Authorization header so use it.
-    impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-    LOG_DEBUG("Private identity from authorization header = %s", impi.c_str());
-  }
-  else
-  {
-    // private user identity not supplied, so construct a default from the
-    // public user identity by stripping the sip: prefix.
-    impi = PJUtils::default_private_id_from_uri(to_uri);
-    LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
-  }
-
+  PJUtils::get_impi_and_impu(rdata, impi, impu);
   // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
   // only support AKA and SIP Digest, so only implement the subset of steps
   // required to distinguish between the two.
@@ -385,7 +368,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
-  if ((auth_hdr != NULL) &&
+ if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen == 0))
   {
     // There is an authorization header with no challenge response, so check
@@ -533,6 +516,19 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // Authentication failed.
     LOG_ERROR("Authentication failed, %s",
               PJUtils::pj_status_to_string(status).c_str());
+
+    if (sc != PJSIP_SC_UNAUTHORIZED)
+    {
+      // Notify Homestead and the HSS that this authentication attempt
+      // has definitively failed.
+      std::string impi;
+      std::string impu;
+
+      PJUtils::get_impi_and_impu(rdata, impi, impu);
+
+      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, 0);
+    }
+
     if (analytics != NULL)
     {
       analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),

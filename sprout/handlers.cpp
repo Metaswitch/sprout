@@ -1,5 +1,5 @@
 /**
- * @file handlers.cpp 
+ * @file handlers.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -39,6 +39,7 @@
 #include "handlers.h"
 #include "log.h"
 #include "regstore.h"
+#include "ifchandler.h"
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosHandler::run()
@@ -87,11 +88,12 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
                                             std::string aor_id,
                                             RegStore::AoR* previous_aor_data,
                                             RegStore* remote_store,
-                                            bool update_chronos)
+                                            bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-   
+  bool all_bindings_expired = false;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -146,7 +148,13 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+
+  if (is_primary && all_bindings_expired)
+  {
+    LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+    _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
+  }
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -158,7 +166,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body) 
+int ChronosHandler::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
