@@ -81,8 +81,9 @@ set daemon 10
 check program poll_restund with path "/usr/share/clearwater/bin/poll_restund.sh"
   if status != 0 for 2 cycles then exec "/etc/init.d/restund abort"
 
-# Monitor the server's PID.
-check process restund matching restund
+# Monitor the server's PID.  Include a / in the "matching" expression to ensure
+# that this doesn't pick up poll_restund.sh by accident.
+check process restund matching /restund
   start program = "/etc/init.d/restund start"
   stop program = "/etc/init.d/restund stop"
 EOF
