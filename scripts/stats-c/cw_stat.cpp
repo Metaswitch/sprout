@@ -170,23 +170,6 @@ void render_call_stats(std::vector<std::string>& msgs)
   }
 }
 
-// Render a set of latency statistics.  The names here match those in Ruby
-// cw_stat.
-void render_latency_us(std::vector<std::string>& msgs)
-{
-  if (msgs.size() >= 6 )
-  {
-    printf("mean:%s\n", msgs[2].c_str());
-    printf("variance:%s\n", msgs[3].c_str());
-    printf("lwm:%s\n", msgs[4].c_str());
-    printf("hwm:%s\n", msgs[5].c_str());
-  }
-  else
-  {
-    fprintf(stderr, "Too short call statistics - %d < 6", (int)msgs.size());
-  }
-}
-
 // Render a set of latency statistics with a total count. The names here
 // match those in Ruby cw_stat.
 void render_count_latency_us(std::vector<std::string>& msgs)
@@ -208,28 +191,15 @@ void render_count_latency_us(std::vector<std::string>& msgs)
 int main(int argc, char** argv)
 {
   // Check arguments.
-  if (argc != 3)
+  if (argc != 4)
   {
-    fprintf(stderr, "Usage: %s <hostname> <statname>\n", argv[0]);
+    fprintf(stderr, "Usage: %s <hostname> <statname> <port>\n", argv[0]);
     return 1;
-  }
-
-  // Work out the port from the stat name (homestead-prov/homer stats use port
-  // 6667 to avoid port clashes when homestead-prov is co-located with
-  // homestead).
-  int port;
-  if (strncmp(argv[2], "P_", 2) == 0)
-  {
-    port = 6667;
-  }
-  else
-  {
-    port = 6666;
   }
 
   // Get messages from the server.
   std::vector<std::string> msgs;
-  if (!get_msgs(argv[1], port, argv[2], msgs))
+  if (!get_msgs(argv[1], argv[3], argv[2], msgs))
   {
     return 2;
   }
@@ -276,11 +246,8 @@ int main(int argc, char** argv)
              (msgs[0] == "H_cache_latency_us") ||
              (msgs[0] == "H_hss_latency_us") ||
              (msgs[0] == "H_hss_digest_latency_us") ||
-             (msgs[0] == "H_hss_subscription_latency_us"))
-    {
-      render_latency_us(msgs);
-    }
-    else if ((msgs[0] == "P_queue_size_0") ||
+             (msgs[0] == "H_hss_subscription_latency_us") ||
+             (msgs[0] == "P_queue_size_0") ||
              (msgs[0] == "P_latency_us_0"))
     {
       render_count_latency_us(msgs);
@@ -300,4 +267,4 @@ int main(int argc, char** argv)
   }
 
   return 0;
-}
+
