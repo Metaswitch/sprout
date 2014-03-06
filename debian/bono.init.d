@@ -115,6 +115,8 @@ get_settings()
         then
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
         fi
+
+        [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
 }
 
 #
@@ -143,6 +145,7 @@ do_start()
                      --pcscf 5060,5058
                      --webrtc-port 5062
                      --routing-proxy $upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
+                     $ralf_arg
                      --sas $sas_server,$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
