@@ -85,9 +85,10 @@ HSSConnection::~HSSConnection()
 
 
 /// Retrieve user's digest data as JSON object. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_digest_data(const std::string& private_user_identity,
-                                            const std::string& public_user_identity,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_digest_data(const std::string& private_user_identity,
+                                        const std::string& public_user_identity,
+                                        Json::Value*& digest_data,
+                                        SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -100,7 +101,7 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
     path += "?public_id=" + Utils::url_escape(public_user_identity);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, digest_data, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -114,11 +115,12 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 
 
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_identity,
-                                            const std::string& public_user_identity,
-                                            const std::string& auth_type,
-                                            const std::string& autn,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity,
+                                        const std::string& public_user_identity,
+                                        const std::string& auth_type,
+                                        const std::string& autn,
+                                        Json::Value*& av,
+                                        SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -143,7 +145,7 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
     path += "autn=" + Utils::url_escape(autn);
   }
 
-  Json::Value* av = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, av, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -158,32 +160,37 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
               private_user_identity.c_str());
   }
 
-  return av;
+  return rc;
 }
 
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_json_object(const std::string& path,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_json_object(const std::string& path,
+                                        Json::Value*& json_object,
+                                        SAS::TrailId trail)
 {
   std::string json_data;
-  Json::Value* root = NULL;
 
-  if (_http->get(path, json_data, "", trail) == HTTP_OK)
+  HTTPCode rc = _http->get(path, json_data, "", trail);
+  if (rc == HTTP_OK)
   {
-    root = new Json::Value;
+    json_object = new Json::Value;
     Json::Reader reader;
-    bool parsingSuccessful = reader.parse(json_data, *root);
+    bool parsingSuccessful = reader.parse(json_data, *json_object);
     if (!parsingSuccessful)
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), json_data.c_str(), reader.getFormatedErrorMessages().c_str());
-      delete root;
-      root = NULL;
+      delete json_object;
+      json_object = NULL;
     }
   }
+  else
+  {
+    json_object = NULL;
+  }
 
-  return root;
+  return rc;
 }
 
 rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const std::string& url = "")
@@ -437,11 +444,12 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 
 
 // Makes a user authorization request, and returns the data as a JSON object.
-Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user_identity,
-                                                 const std::string& public_user_identity,
-                                                 const std::string& visited_network,
-                                                 const std::string& auth_type,
-                                                 SAS::TrailId trail)
+HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_identity,
+                                             const std::string& public_user_identity,
+                                             const std::string& visited_network,
+                                             const std::string& auth_type,
+                                             Json::Value*& user_auth_status,
+                                             SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -461,7 +469,7 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
     path += "&auth-type=" + Utils::url_escape(auth_type);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, user_auth_status, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -474,10 +482,11 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
 }
 
 /// Makes a location information request, and returns the data as a JSON object.
-Json::Value* HSSConnection::get_location_data(const std::string& public_user_identity,
-                                              const bool& originating,
-                                              const std::string& auth_type,
-                                              SAS::TrailId trail)
+HTTPCode HSSConnection::get_location_data(const std::string& public_user_identity,
+                                          const bool& originating,
+                                          const std::string& auth_type,
+                                          Json::Value*& location_data,
+                                          SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -496,7 +505,7 @@ Json::Value* HSSConnection::get_location_data(const std::string& public_user_ide
     path += prefix + "auth-type=" + Utils::url_escape(auth_type);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, location_data, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
