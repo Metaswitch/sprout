@@ -1,5 +1,5 @@
 /**
- * @file subscription_test.cpp 
+ * @file subscription_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -76,13 +76,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
   }
 
   static void TearDownTestCase()
@@ -153,7 +147,7 @@ public:
     _user("6505550231"),
     _domain("homedomain"),
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
-    _event("Event: Reg"),
+    _event("Event: reg"),
     _accepts("Accept: application/reginfo+xml"),
     _expires(""),
     _route(""),
@@ -194,7 +188,7 @@ string SubscribeMessage::get()
                    "Content-Length:  %5$d\r\n"
                    "\r\n"
                    "%6$s",
-                
+
                    /*  1 */ _method.c_str(),
                    /*  2 */ _user.c_str(),
                    /*  3 */ _domain.c_str(),
@@ -235,11 +229,12 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
-/// Simple correct example 
+/// Simple correct example
 TEST_F(SubscriptionTest, SimpleMainline)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
+
   RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
   RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
@@ -278,7 +273,7 @@ TEST_F(SubscriptionTest, MissingEventHeader)
 }
 
 // Test the Event Header
-// Event that isn't Reg should be rejected
+// Event that isn't reg should be rejected
 TEST_F(SubscriptionTest, IncorrectEventHeader)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -286,6 +281,12 @@ TEST_F(SubscriptionTest, IncorrectEventHeader)
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
   pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg2;
+  msg2._event = "Event: Reg";
+  ret = inject_msg_direct(msg2.get());
   EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -328,7 +329,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
   check_standard_OK();
- 
+
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
@@ -351,8 +352,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 {
   SubscribeMessage msg;
   msg._user = "6505550234";
-  _hss_connection->set_result("/impu/sip%3A6505550234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"

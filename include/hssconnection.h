@@ -84,14 +84,44 @@ public:
                          const std::string& auth_type,
                          Json::Value*& object,
                          SAS::TrailId trail);
-  long get_subscription_data(const std::string& public_user_identity,
-                             const std::string& private_user_identity,
-                             std::map<std::string, Ifcs >& service_profiles,
-                             std::vector<std::string>& associated_uris,
-                             SAS::TrailId trail);
+
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               std::string& regstate,
+                               std::map<std::string, Ifcs >& service_profiles,
+                               std::vector<std::string>& associated_uris,
+                               SAS::TrailId trail);
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               SAS::TrailId trail);
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                               const std::string& private_user_identity,
+                               const std::string& type,
+                               std::map<std::string, Ifcs >& service_profiles,
+                               std::vector<std::string>& associated_uris,
+                               SAS::TrailId trail);
+  HTTPCode get_registration_data(const std::string& public_user_identity,
+                                 std::string& regstate,
+                                 std::map<std::string, Ifcs >& service_profiles,
+                                 std::vector<std::string>& associated_uris,
+                                 SAS::TrailId trail);
+  rapidxml::xml_document<>* parse_xml(std::string raw, const std::string& url);
+
+  static const std::string REG;
+  static const std::string CALL;
+  static const std::string DEREG_USER;
+  static const std::string DEREG_ADMIN;
+  static const std::string DEREG_TIMEOUT;
+  static const std::string AUTH_TIMEOUT;
+  static const std::string AUTH_FAIL;
+
+  static const std::string STATE_REGISTERED;
 private:
   virtual long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  virtual long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 
   HttpConnection* _http;
   StatisticAccumulator _latency_stat;

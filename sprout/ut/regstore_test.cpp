@@ -152,7 +152,7 @@ TEST_F(RegStoreTest, BindingTests)
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
-  
+
   aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
 

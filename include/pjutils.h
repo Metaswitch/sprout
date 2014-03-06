@@ -104,6 +104,8 @@ void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity
 
 void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
 
+void get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out);
+
 pjsip_uri* next_hop(pjsip_msg* msg);
 pj_status_t resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* tdata, AddrInfo& ai);
 

@@ -128,6 +128,7 @@ private:
 
 struct HSSCallInformation
 {
+  bool registered;
   Ifcs ifcs;
   std::vector<std::string> uris;
 };
@@ -201,6 +202,7 @@ private:
   bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
   bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
+  bool is_user_registered(std::string public_id);
 
   void routing_proxy_record_route();
   void proxy_calculate_targets(pjsip_msg* msg,

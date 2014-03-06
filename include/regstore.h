@@ -103,11 +103,11 @@ public:
     class Subscription
     {
     public:
-      /// The Request URI for the subscription dialog (used in the contact 
+      /// The Request URI for the subscription dialog (used in the contact
       /// header of the NOTIFY)
       std::string _req_uri;
 
-      /// The From URI for the subscription dialog (used in the to header of 
+      /// The From URI for the subscription dialog (used in the to header of
       /// the NOTIFY)
       std::string _from_uri;
 
@@ -123,7 +123,7 @@ public:
       /// The call ID for the subscription dialog.
       std::string _cid;
 
-      /// The list of Record Route URIs from the subscription dialog. 
+      /// The list of Record Route URIs from the subscription dialog.
       std::list<std::string> _route_uris;
 
       /// The time (in seconds since the epoch) at which this subscription
@@ -219,6 +219,7 @@ public:
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
   bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired);
 
   // Send a SIP NOTIFY
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
