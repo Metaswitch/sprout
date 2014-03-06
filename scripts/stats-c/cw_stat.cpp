@@ -36,7 +36,7 @@
 
 // C++ re-implementation of Ruby cw_stat tool.
 // Runs significantly faster - useful on heavily-loaded cacti systems.
-// Usage: cw_stat <hostname> <statname>
+// Usage: cw_stat <hostname> <statname> <port>
 // Compile: g++ -o cw_stat cw_stat.cpp -lzmq
 
 #include <string>
@@ -49,7 +49,7 @@
 // Gets a block of messages from the specified host, for the specified
 // statistic.
 // Return true on success, false on failure.
-bool get_msgs(char* host, int port, char* stat, std::vector<std::string>& msgs)
+bool get_msgs(char* host, char* port, char* stat, std::vector<std::string>& msgs)
 {
   // Create the context.
   void* ctx = zmq_ctx_new();
@@ -267,4 +267,4 @@ int main(int argc, char** argv)
   }
 
   return 0;
-
+}
