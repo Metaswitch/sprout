@@ -940,7 +940,6 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSFail)
 TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 {
   // Tests various cases where the HSS response either fails or is malformed.
-
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -951,6 +950,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   // Don't set up a HSS response, so the query fail (this simulates an
   // HSS or Homestead timeout).
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_SERVER_UNAVAILABLE);
 
   // Inject a REGISTER request.
   Message msg1;
@@ -973,12 +974,11 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  // Set up HSS response for the user registration status query, with a
-  // malformed JSON response (missing the final brace).
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
-                              "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [654],"
-                              " \"optional-capabilities\": [123]");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+
+  // Return 403 on the request. The registration should fail
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_FORBIDDEN);
 
   // Inject a REGISTER request.
   Message msg2;
@@ -991,25 +991,25 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
                 ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg2.get_request(), tp);
 
-  // The user registration status query fails, so the REGISTER is rejected
-  // with a 480 Temporarily Unavailable response.
+  // The REGISTER is rejected with a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
-  RespMatcher r2(480);
+  RespMatcher r2(403);
   r2.matches(tdata->msg);
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
 
   // Set up HSS response for the user registration status query, with a
-  // well structured JSON response, but where the capabilities are not
-  // integers.
+  // malformed JSON response (missing the final brace).
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
-                              " \"optional-capabilities\": [123]}");
+                              " \"mandatory-capabilities\": [654],"
+                              " \"optional-capabilities\": [123]");
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_OK);
 
   // Inject a REGISTER request.
   Message msg3;
@@ -1022,8 +1022,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
                 ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg3.get_request(), tp);
 
-  // The user registration status query fails, so the REGISTER is rejected
-  // with a 480 Temporarily Unavailable response.
+  // The HSS response is malformed, so the REGISTER is rejected with a 480 Temporarily Unavailable response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
@@ -1033,6 +1032,41 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+
+  // Set up HSS response for the user registration status query, with a
+  // well structured JSON response, but where the capabilities are not
+  // integers.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
+                              " \"optional-capabilities\": [123]}");
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_OK);
+
+  // Inject a REGISTER request.
+  Message msg4;
+  msg4._method = "REGISTER";
+  msg4._requri = "sip:homedomain";
+  msg4._to = msg4._from;        // To header contains AoR in REGISTER requests.
+  msg4._via = tp->to_string(false);
+  msg4._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg4.get_request(), tp);
+
+  // The user registration status query fails, so the REGISTER is rejected
+  // with a 480 Temporarily Unavailable response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r4(480);
+  r4.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -1345,10 +1379,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
                                         "1.2.3.4",
                                         49152);
 
-  // Set up the HSS response for the originating location query.
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_ERROR_NOT_FOUND\"}");
-
+  // Don't set up the HSS response - this will simulate a 404 response
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
@@ -1360,6 +1391,37 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
   msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and final 404 responses.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the 404 Not Found.
+  tdata = current_txdata();
+  RespMatcher(404).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Set up the HSS response for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": \"DIAMETER_ERROR_NOT_FOUND\"}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg2;
+  msg2._method = "INVITE";
+  msg2._via = tp->to_string(false);
+  msg2._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg2._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg2._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg2.get_request(), tp);
 
   // Expecting 100 Trying and final 404 responses.
   ASSERT_EQ(2, txdata_count());
