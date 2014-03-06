@@ -382,6 +382,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   ServingState serving_state;
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
   Target *target = NULL;
+  ACR* acr = NULL;
 
   // Verify incoming request.
   status = proxy_verify_request(rdata);
@@ -447,6 +448,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
                    uri->user.slen, uri->user.ptr,
                    original_dialog.to_string().c_str());
           session_case = &original_dialog.session_case();
+          acr = original_dialog.acr();
         }
         else
         {
@@ -483,6 +485,19 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
+  if ((acr != NULL) && (cscf_acr_factory != NULL))
+  {
+    // We haven't found an existing ACR for this transaction, so create a new
+    // one.
+    acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  }
+
+  // Pass the received request to the ACR.
+  if (acr != NULL)
+  {
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  }
+
   // We now know various details of this transaction:
   LOG_DEBUG("Trust mode %s, serving state %s",
             trust->to_string().c_str(),
@@ -506,6 +521,12 @@ void process_tsx_request(pjsip_rx_data* rdata)
     PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
+    if (acr != NULL)
+    {
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      acr->tx_request(tdata->msg, ts);
+    }
     status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
                                                 NULL, NULL);
     if (status != PJ_SUCCESS)
@@ -513,13 +534,20 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error forwarding request, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
+    if (acr != NULL)
+    {
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      acr->send_message(ts);
+      delete acr;
+    }
 
     return;
   }
 
   // Create the transaction.  This implicitly enters its context, so we're
   // safe to operate on it (and have to exit its context below).
-  status = UASTransaction::create(rdata, tdata, trust, &uas_data);
+  status = UASTransaction::create(rdata, tdata, trust, acr, &uas_data);
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to create UAS transaction, %s",
@@ -1791,7 +1819,8 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
 UASTransaction::UASTransaction(pjsip_transaction* tsx,
                                pjsip_rx_data* rdata,
                                pjsip_tx_data* tdata,
-                               TrustBoundary* trust) :
+                               TrustBoundary* trust,
+                               ACR* acr) :
   _tsx(tsx),
   _num_targets(0),
   _pending_targets(0),
@@ -1803,7 +1832,9 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _pending_destroy(false),
   _context_count(0),
   _as_chain_link(),
-  _victims()
+  _victims(),
+  _upstream_acr(acr),
+  _downstream_acr(acr)
 {
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1863,6 +1894,26 @@ UASTransaction::~UASTransaction()
     }
   }
 
+  if ((!_as_chain_link.is_set()) && (_upstream_acr != NULL))
+  {
+    // This transaction isn't part of a larger AS chain (or chains) so
+    // send the ACR messages now.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+
+    if (_downstream_acr != _upstream_acr)
+    {
+      // The downstream ACR is not the same as the upstream one, so send the
+      // message and destroy the object.
+      _downstream_acr->send_message(ts);
+      delete _downstream_acr;
+    }
+
+    // Send the ACR for the upstream side.
+    _upstream_acr->send_message(ts);
+    delete _upstream_acr;
+  }
+
   if (_req != NULL)
   {
     LOG_DEBUG("Free original request");
@@ -1918,6 +1969,7 @@ UASTransaction::~UASTransaction()
 pj_status_t UASTransaction::create(pjsip_rx_data* rdata,
                                    pjsip_tx_data* tdata,
                                    TrustBoundary* trust,
+                                   ACR* acr,
                                    UASTransaction** uas_data_ptr)
 {
   // Create a group lock, and take it.  This avoids the transaction being
@@ -1945,7 +1997,7 @@ pj_status_t UASTransaction::create(pjsip_rx_data* rdata,
   }
 
   // Allocate UAS data to keep track of the transaction.
-  *uas_data_ptr = new UASTransaction(uas_tsx, rdata, tdata, trust);
+  *uas_data_ptr = new UASTransaction(uas_tsx, rdata, tdata, trust, acr);
 
   // Enter the transaction's context, and then release our copy of the
   // group lock.
@@ -2125,10 +2177,11 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
         pj_str_t host_from_uri = ((pjsip_sip_uri*)scscf_uri)->host;
 
-        // Check whether the returned S-CSCF is this S-CSCF
+        // Check whether the returned S-CSCF is this S-CSCF.
         if (pj_stricmp(&host_from_uri, &stack_data.sprout_cluster_domain)==0)
         {
-          // The S-CSCFs are the same, so continue
+          // The terminating user is on this S-CSCF, so continue processing
+          // locally by switching to the terminating AS chain.
           bool success = move_to_terminating_chain();
           if (!success)
           {
@@ -2375,9 +2428,13 @@ void UASTransaction::common_start_of_terminating_processing()
 /// Move from originating to terminating handling.
 bool UASTransaction::move_to_terminating_chain()
 {
-  // These headers name the originating user, so should not survive
-  // the changearound to the terminating chain.
-  PJUtils::remove_hdr(_req->msg, &STR_P_SERVED_USER);
+  if (_upstream_acr != NULL)
+  {
+    // Pass the request to the upstream ACR as if it is being transmitted.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _upstream_acr->tx_request(_req->msg, ts);
+  }
 
   // Create new terminating chain.
   _as_chain_link.release();
@@ -2385,6 +2442,7 @@ bool UASTransaction::move_to_terminating_chain()
 
   LOG_DEBUG("Looking up iFCs for served user %s", served_user.c_str());
   // If we got a served user, look it up.  We won't get a served user if we've recognized that they're remote.
+
   bool success = true;
   if (!served_user.empty())
   {
@@ -2393,6 +2451,26 @@ bool UASTransaction::move_to_terminating_chain()
 
     if (success)
     {
+      // Switch Rf context to the S-CSCF terminating side processing.
+      if (_upstream_acr != NULL)
+      {
+        // Pass the request to the upstream ACR as if it is being transmitted.
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        _upstream_acr->tx_request(_req->msg, ts);
+
+        // Create a new downstream ACR for the terminating side.
+        _downstream_acr = cscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+
+        // Pass the request to the downstream ACR as if it is being received.
+        _downstream_acr->rx_request(_req->msg, ts);
+      }
+
+      // These headers name the originating user, so should not survive
+      // the changearound to the terminating chain.
+      PJUtils::remove_hdr(_req->msg, &STR_P_SERVED_USER);
+
+      // Create the terminating chain.
       _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
       common_start_of_terminating_processing();
     }
@@ -2520,6 +2598,15 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
   {
     enter_context();
 
+    if (_downstream_acr != NULL)
+    {
+      // Pass the received response to the downstream ACR.
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _downstream_acr->rx_response(rdata->msg_info.msg, ts);
+
+    }
+
     pjsip_tx_data *tdata;
     pj_status_t status;
     int status_code = rdata->msg_info.msg->line.status.code;
@@ -2572,6 +2659,18 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       pjsip_tx_data_dec_ref(tdata);
       exit_context();
       return;
+    }
+
+    if (_downstream_acr != _upstream_acr)
+    {
+      // The downstream and upstream legs are in different Rf contexts, so
+      // pass the received response to the downstream ACR as a transmitted
+      // response, and the modified response (after trust boundary
+      // changes) to the upstream ACR as a received response.
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _downstream_acr->tx_response(rdata->msg_info.msg, ts);
+      _upstream_acr->rx_response(tdata->msg, ts);
     }
 
     if (_num_targets > 1)
@@ -2790,6 +2889,12 @@ pj_status_t UASTransaction::handle_final_response()
     else
     {
       // Send the best response back on the UAS transaction.
+      if (_upstream_acr != NULL)
+      {
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        _upstream_acr->tx_response(best_rsp->msg, ts);
+      }
       _best_rsp = NULL;
       set_trail(best_rsp, trail());
       rc = pjsip_tsx_send_msg(_tsx, best_rsp);
@@ -2840,6 +2945,12 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
     set_trail(prov_rsp, trail());
+    if (_upstream_acr != NULL)
+    {
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _upstream_acr->tx_response(prov_rsp->msg, ts);
+    }
     return pjsip_tsx_send_msg(_tsx, prov_rsp);
   }
   else
@@ -3518,6 +3629,12 @@ void UACTransaction::send_request()
   if (status == PJ_SUCCESS)
   {
     LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
+    if (_uas_data->_downstream_acr != NULL)
+    {
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _uas_data->_downstream_acr->tx_request(_tdata->msg, ts);
+    }
     status = pjsip_tsx_send_msg(_tsx, _tdata);
   }
 
@@ -4080,6 +4197,10 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   }
   bool is_registered = is_user_registered(served_user);
 
+  // Select the ACR to use for the AS Chain.  Use the upstream ACR for
+  // originating call and the downstream ACR for terminating call.
+  ACR* acr = (session_case.is_originating()) ? _upstream_acr : _downstream_acr;
+
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.
   //
@@ -4116,7 +4237,8 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                  served_user,
                                                  is_registered,
                                                  trail(),
-                                                 ifcs);
+                                                 ifcs,
+                                                 acr);
   _victims.push_back(ret.as_chain());
   LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
   return ret;

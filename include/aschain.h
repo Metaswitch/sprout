@@ -51,6 +51,7 @@ extern "C" {
 #include "log.h"
 #include "sessioncase.h"
 #include "ifchandler.h"
+#include "acr.h"
 
 
 // Forward declarations.
@@ -113,7 +114,8 @@ private:
           const std::string& served_user,
           bool is_registered,
           SAS::TrailId trail,
-          Ifcs& ifcs);
+          Ifcs& ifcs,
+          ACR* acr);
   ~AsChain();
 
   void inc_ref()
@@ -138,6 +140,7 @@ private:
   size_t size() const;
   bool matches_target(pjsip_tx_data* tdata) const;
   SAS::TrailId trail() const;
+  ACR* acr() const;
 
   AsChainTable* const _as_chain_table;
   std::atomic<int> _refs;
@@ -150,6 +153,9 @@ private:
   const bool _is_registered;
   const SAS::TrailId _trail;
   const Ifcs _ifcs;  //< List of iFCs. Owned by this object.
+
+  /// A pointer to the ACR for this chain if Rf billing is enabled.
+  ACR* _acr;
 };
 
 
@@ -219,6 +225,11 @@ public:
     return ((_as_chain == NULL) ? 0 : _as_chain->trail());
   }
 
+  ACR* acr() const
+  {
+    return ((_as_chain == NULL) ? NULL : _as_chain->acr());
+  }
+
   std::string to_string() const
   {
     return is_set() ? _as_chain->to_string(_index) : "None";
@@ -282,7 +293,8 @@ public:
                                      const std::string& served_user,
                                      bool is_registered,
                                      SAS::TrailId trail,
-                                     Ifcs& ifcs);
+                                     Ifcs& ifcs,
+                                     ACR* acr);
 
   Disposition on_initial_request(CallServices* call_services,
                                  UASTransaction* uas_data,

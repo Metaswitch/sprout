@@ -142,6 +142,7 @@ public:
   static pj_status_t create(pjsip_rx_data* rdata,
                             pjsip_tx_data* tdata,
                             TrustBoundary* trust,
+                            ACR* acr,
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
@@ -182,7 +183,8 @@ private:
   UASTransaction(pjsip_transaction* tsx,
                  pjsip_rx_data* rdata,
                  pjsip_tx_data* tdata,
-                 TrustBoundary* trust);
+                 TrustBoundary* trust,
+                 ACR* acr);
   void log_on_tsx_start(const pjsip_rx_data* rdata);
   void log_on_tsx_complete();
   pj_status_t init_uac_transactions(TargetList& targets);
@@ -235,6 +237,17 @@ private:
   AsChainLink          _as_chain_link;
   std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
   std::map<std::string, HSSCallInformation> cached_hss_data; // Maps public IDs to their associated URIs and IFC
+
+  /// Pointer to ACR used for the upstream side of the transaction.  NULL if
+  /// Rf not enabled.
+  ACR*                 _upstream_acr;
+
+  /// Pointer to ACR used for the downstream side of the transaction.  This
+  /// may be the same as the upstream ACR if both sides of the transaction are
+  /// happening in the same Rf context, but they may be different, for example
+  /// if upstream is originating side S-CSCF and downstream is terminating side
+  /// S-CSCF, or I-CSCF or BGCF.
+  ACR*                 _downstream_acr;
 };
 
 // This is the data that is attached to the UAC transaction

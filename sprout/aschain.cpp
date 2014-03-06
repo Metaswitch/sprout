@@ -56,7 +56,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  const std::string& served_user,
                  bool is_registered,
                  SAS::TrailId trail,
-                 Ifcs& ifcs) :
+                 Ifcs& ifcs,
+                 ACR* acr) :
   _as_chain_table(as_chain_table),
   _refs(2),  // one for the chain being returned,
              // and one for the reference in the table.
@@ -65,7 +66,8 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _served_user(served_user),
   _is_registered(is_registered),
   _trail(trail),
-  _ifcs(ifcs)
+  _ifcs(ifcs),
+  _acr(acr)
 {
   LOG_DEBUG("Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
@@ -75,6 +77,15 @@ AsChain::AsChain(AsChainTable* as_chain_table,
 AsChain::~AsChain()
 {
   LOG_DEBUG("Destroying AsChain %p", this);
+  if (_acr != NULL)
+  {
+    // Chain has an associated ACR, so send the message and destroy the ACR
+    // object.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _acr->send_message(ts);
+    delete _acr;
+  }
 }
 
 
@@ -106,6 +117,13 @@ const SessionCase& AsChain::session_case() const
 size_t AsChain::size() const
 {
   return _ifcs.size();
+}
+
+
+/// @returns a pointer to the ACR attached to the AS chain if Rf is enabled.
+ACR* AsChain::acr() const
+{
+  return _acr;
 }
 
 
@@ -152,14 +170,16 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
                                          const std::string& served_user,
                                          bool is_registered,
                                          SAS::TrailId trail,
-                                         Ifcs& ifcs)
+                                         Ifcs& ifcs,
+                                         ACR* acr)
 {
   AsChain* as_chain = new AsChain(as_chain_table,
                                   session_case,
                                   served_user,
                                   is_registered,
                                   trail,
-                                  ifcs);
+                                  ifcs,
+                                  acr);
   return AsChainLink(as_chain, 0u);
 }
 
