@@ -81,10 +81,12 @@ AsChain::~AsChain()
   {
     // Chain has an associated ACR, so send the message and destroy the ACR
     // object.
+// LCOV_EXCL_START
     pj_time_val ts;
     pj_gettimeofday(&ts);
     _acr->send_message(ts);
     delete _acr;
+// LCOV_EXCL_STOP
   }
 }
 
@@ -123,7 +125,9 @@ size_t AsChain::size() const
 /// @returns a pointer to the ACR attached to the AS chain if Rf is enabled.
 ACR* AsChain::acr() const
 {
+//LCOV_EXCL_START
   return _acr;
+//LCOV_EXCL_STOP
 }
 
 

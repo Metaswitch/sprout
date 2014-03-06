@@ -1913,7 +1913,7 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
 
   TargetList targets;
   UASTransaction* uastx = NULL;
-  UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, &uastx);
+  UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, NULL, &uastx);
   uastx->proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;
