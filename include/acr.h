@@ -87,7 +87,6 @@ public:
   /// Constructor.
   ACR(HttpConnection* ralf,
       SAS::TrailId trail,
-      const std::string& origin_host,
       RfNode node_functionality,
       Initiator initiator);
 
@@ -252,8 +251,6 @@ private:
   std::list<std::string> _ccfs;
   std::list<std::string> _ecfs;
 
-  std::string _origin_host;
-
   RecordType _record_type;
 
   std::string _username;
@@ -333,10 +330,8 @@ public:
   /// @param ralf                 HttpConnection class set up to connect to
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
-  /// @param origin_host          Origin-Host name to set in ACRs.
   ACRFactory(HttpConnection* ralf,
-             RfNode node_functionality,
-             const std::string& origin_host);
+             RfNode node_functionality);
 
   /// Destructor.
   ~ACRFactory();
@@ -354,7 +349,6 @@ public:
 private:
   HttpConnection* _ralf;
   RfNode _node_functionality;
-  std::string _origin_host;
 };
 
 #endif

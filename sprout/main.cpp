@@ -1082,6 +1082,27 @@ int main(int argc, char *argv[])
                                        stack_data.stats_aggregator);
   }
 
+  if (ralf_connection != NULL)
+  {
+    // Rf billing is enabled, so create ACR factories.
+    if (opt.scscf_enabled)
+    {
+      // Create ACRFactory instances for the S-CSCF and BGCF.
+      scscf_acr_factory = new ACRFactory(ralf_connection, SCSCF);
+      bgcf_acr_factory = new ACRFactory(ralf_connection, BGCF);
+    }
+    if (opt.icscf_enabled)
+    {
+      // Create ACRFactory instance for the I-CSCF.
+      icscf_acr_factory = new ACRFactory(ralf_connection, ICSCF);
+    }
+    if (opt.pcscf_enabled)
+    {
+      // Create ACRFactory instance for the P-CSCF.
+      pcscf_acr_factory = new ACRFactory(ralf_connection, PCSCF);
+    }
+  }
+
   if (opt.chronos_service != "")
   {
     // Create a connection to Chronos.
@@ -1127,17 +1148,6 @@ int main(int argc, char *argv[])
       xdm_connection = new XDMConnection(opt.xdm_server,
                                          load_monitor,
                                          stack_data.stats_aggregator);
-    }
-
-    if (ralf_connection != NULL)
-    {
-      // Create ACRFactory instances for the S-CSCF and BGCF.
-      scscf_acr_factory = new ACRFactory(ralf_connection,
-                                         SCSCF,
-                                         opt.sprout_domain);
-      bgcf_acr_factory = new ACRFactory(ralf_connection,
-                                        BGCF,
-                                        opt.sprout_domain);
     }
 
     if (xdm_connection != NULL)

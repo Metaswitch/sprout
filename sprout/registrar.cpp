@@ -60,6 +60,7 @@ extern "C" {
 #include "registrar.h"
 #include "registration_utils.h"
 #include "constants.h"
+#include "custom_headers.h"
 #include "log.h"
 #include "notify_utils.h"
 
@@ -432,6 +433,14 @@ void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
+  ACR* acr = NULL;
+
+  if (acr_factory != NULL)
+  {
+    // Allocate an ACR for this transaction and pass the request to it.
+    acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  }
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
@@ -693,22 +702,36 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
 
   // Add P-Associated-URI headers for all of the associated URIs.
-  static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
-  for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
+  for (std::vector<std::string>::iterator it = uris.begin();
+       it != uris.end();
+       it++)
   {
-    pj_str_t tmp_associated_uri;
-    const pj_str_t* associated_uri = pj_cstr(&tmp_associated_uri, it->c_str());
-    pjsip_hdr* associated_uri_hdr =
-      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
-                                                  &p_associated_uri_hdr_name,
-                                                  associated_uri);
-    pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
+    pjsip_routing_hdr* pau =
+                        identity_hdr_create(tdata->pool, STR_P_ASSOCIATED_URI);
+    pau->name_addr.uri = PJUtils::uri_from_string(*it, tdata->pool);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pau);
+  }
+
+  if (acr != NULL)
+  {
+    // Pass the response to the ACR.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->tx_response(tdata->msg, ts);
   }
 
   // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
   // ASes of the 200 OK response we sent.
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  if (acr != NULL)
+  {
+    // Send the ACR.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+  }
 
   // TODO in sto397: we should do third-party registration once per
   // service profile (i.e. once per iFC, using an arbitrary public

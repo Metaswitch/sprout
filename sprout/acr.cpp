@@ -43,7 +43,6 @@
 
 ACR::ACR(HttpConnection* ralf,
          SAS::TrailId trail,
-         const std::string& origin_host,
          RfNode node_functionality,
          Initiator initiator) :
   _ralf(ralf),
@@ -51,7 +50,6 @@ ACR::ACR(HttpConnection* ralf,
   _initiator(initiator),
   _first_req(true),
   _first_rsp(true),
-  _origin_host(origin_host),
   _interim_interval(0),
   _node_functionality(node_functionality),
   _status_code(0)
@@ -82,34 +80,51 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     if ((_node_functionality == PCSCF) ||
         (_node_functionality == SCSCF))
     {
+      LOG_DEBUG("Set record type for P/S-CSCF");
       pjsip_fromto_hdr* to_hdr = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_TO, NULL);
-      if ((to_hdr != NULL) && (to_hdr->tag.slen > 0))
+      if ((_method == "REGISTER") ||
+          (_method == "SUBSCRIBE") ||
+          (_method == "NOTIFY") ||
+          (_method == "PUBLISH") ||
+          (_method == "MESSAGE"))
+      {
+        // Non-dialog message.
+        LOG_DEBUG("Non-dialog message => EVENT_RECORD");
+        _record_type = EVENT_RECORD;
+      }
+      else if ((to_hdr != NULL) &&
+               (to_hdr->tag.slen > 0))
       {
         if (_method == "BYE")
         {
           // BYE requests with a valid To tag must be a STOP request.
+          LOG_DEBUG("BYE => STOP_RECORD");
           _record_type = STOP_RECORD;
         }
         else
         {
           // Any other requests with a To tag are INTERIMs.
+          LOG_DEBUG("In-dialog %s request => INTERIM_RECORD", _method.c_str());
           _record_type = INTERIM_RECORD;
         }
       }
       else if (_method == "INVITE")
       {
         // INVITE with no To tag is a START.
+        LOG_DEBUG("Dialog-initiating INVITE => START_RECORD");
         _record_type = START_RECORD;
       }
       else
       {
         // Anything else is an EVENT.
+        LOG_DEBUG("EVENT_RECORD");
         _record_type = EVENT_RECORD;
       }
     }
     else
     {
       // All other node types only generate EVENTs.
+      LOG_DEBUG("Set record type for I-CSCF, IBCF, AS to EVENT_RECORD");
       _record_type = EVENT_RECORD;
     }
 
@@ -396,6 +411,7 @@ void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
       (_status_code > 299))
   {
     // Failed to start the session, so convert to an EVENT record.
+    LOG_DEBUG("Failed to start session, change record type to EVENT_RECORD");
     _record_type = EVENT_RECORD;
   }
 }
@@ -469,8 +485,7 @@ std::string ACR::get_message(pj_time_val timestamp)
   Json::Value& e = v["event"];
 
   // Add top-level fields.
-  LOG_DEBUG("Adding top-level fields");
-  e["Origin-Host"] = Json::Value(_origin_host);
+  LOG_DEBUG("Adding Account-Record-Type AVP %d", _record_type);
   e["Accounting-Record-Type"] = Json::Value(_record_type);
   if (!_username.empty())
   {
@@ -1006,6 +1021,7 @@ void ACR::store_called_asserted_ids(pjsip_msg* msg)
 
 void ACR::store_associated_uris(pjsip_msg* msg)
 {
+  LOG_DEBUG("Store associated URIs");
   pjsip_routing_hdr* pau = (pjsip_routing_hdr*)
                   pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSOCIATED_URI, NULL);
   while (pau != NULL)
@@ -1163,11 +1179,9 @@ std::string ACR::hdr_contents(pjsip_hdr* hdr)
 
 /// ACRFactory Constructor.
 ACRFactory::ACRFactory(HttpConnection* ralf,
-                       RfNode node_functionality,
-                       const std::string& origin_host) :
+                       RfNode node_functionality) :
   _ralf(ralf),
-  _node_functionality(node_functionality),
-  _origin_host(origin_host)
+  _node_functionality(node_functionality)
 {
   LOG_DEBUG("Created ACR factory for node type %s",
             node_name(_node_functionality).c_str());
@@ -1184,7 +1198,7 @@ ACR* ACRFactory::get_acr(SAS::TrailId trail,
 {
   LOG_DEBUG("Create ACR for node type %s",
             node_name(_node_functionality).c_str());
-  return new ACR(_ralf, trail, _origin_host, _node_functionality, initiator);
+  return new ACR(_ralf, trail, _node_functionality, initiator);
 }
 
 std::string ACRFactory::node_name(RfNode node_functionality)
