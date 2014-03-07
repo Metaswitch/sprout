@@ -10,7 +10,7 @@ Bono and Sprout expose a [0MQ](http://www.zeromq.org/) subscription service that
   * `connected_sprouts` - The list of connected Sprout nodes
   * `client_count` - A count of client TCP connections
   * `latency_us` - SIP request latency (between receiving request and either replying or forwarding on) in microseconds
-  * `incoming_requests` - A count of the incoming requests 
+  * `incoming_requests` - A count of the incoming requests
   * `rejected_overload` - A count of the incoming requests rejected due to overload
   * `queue_size` - Average request queue size
  * Sprout:
@@ -67,13 +67,13 @@ _In the current implementation, this statistic is reported on every change to th
 
 A CLI script is supplied to query the current state of either of the two statistics of a given host, used as:
 
-    cw_stat <hostname> <statname>
+    cw_stat <hostname> <statname> [-p <port>]
 
 Where `<statname>` may be `client_count`, `connected_sprouts` or blank to query both at once.
 
 The CLI may alternatively be run in subscription mode with
 
-    cw_stat -s <hostname> <statname>
+    cw_stat -s <hostname> <statname> [-p port]
 
 which will stay connected to the specified host and will report changes until killed (with `Ctrl + C`).
 
@@ -83,7 +83,7 @@ The CLI client is made up of a ruby library and launcher script, found in the `l
 
 In this folder, run `bundle install` (if you're using a system-wide ruby, you'll need `sudo` on this line) to pull in the appropriate gems then run `bin/cw_stat` for usage instructions.  As an example, to query the current client count on `bono-1.cw-ngv.com`, run
 
-    bin/cw_stat bono-1.cw-ngv.com client_count
+    bin/cw_stat bono-1.cw-ngv.com client_count -p 6669
 
 If no statistics is specified, all known statistics will be queried.
 
