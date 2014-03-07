@@ -423,6 +423,7 @@ void ACR::server_capabilities(const ServerCapabilities& caps)
 void ACR::send_message(pj_time_val timestamp)
 {
   // Encode and send the request using the Ralf HTTP connection.
+  LOG_VERBOSE("Sending ACR");
   std::string path = "/call_id/" + _user_session_id;
   std::map<std::string, std::string> headers;
   long rc = _ralf->send_post(path,
@@ -1168,6 +1169,8 @@ ACRFactory::ACRFactory(HttpConnection* ralf,
   _node_functionality(node_functionality),
   _origin_host(origin_host)
 {
+  LOG_DEBUG("Created ACR factory for node type %s",
+            node_name(_node_functionality).c_str());
 }
 
 /// ACRFactory Destructor.
@@ -1179,5 +1182,34 @@ ACRFactory::~ACRFactory()
 ACR* ACRFactory::get_acr(SAS::TrailId trail,
                          Initiator initiator)
 {
+  LOG_DEBUG("Create ACR for node type %s",
+            node_name(_node_functionality).c_str());
   return new ACR(_ralf, trail, _origin_host, _node_functionality, initiator);
+}
+
+std::string ACRFactory::node_name(RfNode node_functionality)
+{
+  switch (node_functionality)
+  {
+    case SCSCF:
+      return "S-CSCF";
+
+    case PCSCF:
+      return "P-CSCF";
+
+    case ICSCF:
+      return "I-CSCF";
+
+    case BGCF:
+      return "BGCF";
+
+    case AS:
+      return "AS";
+
+    case IBCF:
+      return "IBCF";
+
+    default:
+      return "Unknown";
+  }
 }

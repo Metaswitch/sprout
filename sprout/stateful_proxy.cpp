@@ -449,6 +449,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
                    original_dialog.to_string().c_str());
           session_case = &original_dialog.session_case();
           acr = original_dialog.acr();
+          LOG_DEBUG("Retrieved ACR %p for existing AS chain", acr);
         }
         else
         {
@@ -485,10 +486,11 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
-  if ((acr != NULL) && (cscf_acr_factory != NULL))
+  if ((acr == NULL) && (cscf_acr_factory != NULL))
   {
     // We haven't found an existing ACR for this transaction, so create a new
     // one.
+    LOG_DEBUG("Create new ACR for this transaction");
     acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
   }
 

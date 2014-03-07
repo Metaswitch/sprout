@@ -275,7 +275,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
     { "record-routing-model",          required_argument, 0, 'C'},
-    { "default_session_expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+    { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
     { "ralf",              required_argument, 0, 'B'},
@@ -639,7 +639,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       return -1;
 
     default:
-      fprintf(stdout, "Unknown option. Run with --help for help.\n");
+      fprintf(stdout, "Unknown option -%c (%d). Run with --help for help.\n", (char)c, c);
       return -1;
     }
   }

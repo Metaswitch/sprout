@@ -348,6 +348,9 @@ public:
   ACR* get_acr(SAS::TrailId trail,
                Initiator initiator);
 
+  /// Convert the ENUM node functionality to a displayable string.
+  static std::string node_name(RfNode node_functionality);
+
 private:
   HttpConnection* _ralf;
   RfNode _node_functionality;
