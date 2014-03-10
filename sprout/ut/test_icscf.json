@@ -19,11 +19,6 @@
             "priority" : 0,
             "weight" : 100,
             "capabilities" : [654, 567]
-        },
-        {   "server" : "sip:scscf5.homedomain:5058;transport=TCP",
-            "priority" : 1,
-            "weight" : 100,
-            "capabilities" : [876]
         }
     ]
 }

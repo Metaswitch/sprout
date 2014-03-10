@@ -866,29 +866,6 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   ASSERT_EQ("", rr);
   ASSERT_EQ("", route);
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
-                              "{\"result-code\": 2001}");
-
-  // Send a 480 Temporarily Unavailable response.
-  inject_msg(respond_to_current_txdata(480));
-
-  // I-CSCF does another retry. scscf3 is selected as it is the only remaining scscf
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.3", 5058, tdata);
-  ReqMatcher r4("REGISTER");
-  r4.matches(tdata->msg);
-
-  // Check the RequestURI has been altered to direct the message appropriately.
-  ASSERT_EQ("sip:scscf3.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
-
-  // Check no Route or Record-Route headers have been added.
-  rr = get_headers(tdata->msg, "Record-Route");
-  route = get_headers(tdata->msg, "Route");
-  ASSERT_EQ("", rr);
-  ASSERT_EQ("", route);
-
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
 
@@ -907,12 +884,11 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSMultiple2)
+TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
-  // responds with a retryable error, and the second selected S-CSCF also
-  // responds with a retryable error.
-
+  // responds with a retryable error, and the CAPAB request to the HSS
+  // doesn't return any capabilities (should be treated as empty)
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -924,7 +900,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultiple2)
   // Set up the HSS responses for the user registration status query using
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
-  // auth_type=CAPAB) returns capabilities.
+  // auth_type=CAPAB) returns no capabilities.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
@@ -961,7 +937,9 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultiple2)
 
   // Send a 480 Temporarily Unavailable response.
   inject_msg(respond_to_current_txdata(480));
-  // I-CSCF does another retry. scscf3 is selected as it is the only remaining scscf
+
+  // I-CSCF does another retry. scscf4 is selected as it is the scscf with the highest
+  // priority (there are no mandatory capabilities)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.4", 5058, tdata);

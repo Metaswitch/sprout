@@ -339,8 +339,6 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         (rsp_status == PJSIP_SC_REQUEST_TIMEOUT) ||
         (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
     {
-      if (!_hss_rsp._queried_caps)
-      {
       // Can do a retry (we support service restoration, so integrity-protected
       // settings in Authorization header are immaterial).
       LOG_DEBUG("Attempt retry for REGISTER request");
@@ -367,7 +365,6 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         process_tsx_request();
 
         retry = true;
-      }
       }
     }
   }
@@ -536,8 +533,8 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
     }
     else
     {
-       status_code = (rsp != NULL) ? parse_hss_response(*rsp, auth_type == "CAPAB") :
-                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp, auth_type == "CAPAB") :
+                                    PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
 
     delete rsp;
