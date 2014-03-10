@@ -373,47 +373,45 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     // Check whether conditions are satisfied for retrying a Non-REGISTER.
     LOG_DEBUG("Check retry conditions for Non-REGISTER request, status code = %d",
               rsp_status);
+
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
-      if (!_hss_rsp._have_caps)
+      LOG_DEBUG("Attempt retry for non-REGISTER request");
+      _auth_type = "CAPAB";
+      std::string scscf;
+      int status_code = location_query(_impu,
+                                       (_case == SessionCase::ORIGINATING),
+                                       _auth_type,
+                                       scscf);
+
+      if (status_code == PJSIP_SC_OK)
       {
-        // We don't have capabilities from the HSS yet, so do another query
-        LOG_DEBUG("Attempt retry for non-REGISTER request");
-        _auth_type = "CAPAB";
-        std::string scscf;
-        int status_code = location_query(_impu,
-                                         (_case == SessionCase::ORIGINATING),
-                                         _auth_type,
-                                         scscf);
+        // We have another S-CSCF to try, so add it as a new target.
+        // Set the S-CSCF as a route header in the target.
+        LOG_DEBUG("Retry request to S-CSCF %s", scscf.c_str());
+        Target* target = new Target;
+        pjsip_sip_uri* route_uri =
+                (pjsip_sip_uri*)PJUtils::uri_from_string(scscf, _req->pool);
+        route_uri->lr_param = 1;
 
-        if (status_code == PJSIP_SC_OK)
+        if (_case == SessionCase::ORIGINATING)
         {
-          // We have another S-CSCF to try, so add it as a new target.
-          // Set the S-CSCF as a route header in the target.
-          LOG_DEBUG("Retry request to S-CSCF %s", scscf.c_str());
-          Target* target = new Target;
-          pjsip_sip_uri* route_uri =
-                  (pjsip_sip_uri*)PJUtils::uri_from_string(scscf, _req->pool);
-          route_uri->lr_param = 1;
-          if (_case == SessionCase::ORIGINATING)
-          {
-            // Add the "orig" parameter.
-            pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-            pj_strdup(_req->pool, &p->name, &STR_ORIG);
-            p->value.slen = 0;
-            pj_list_insert_after(&route_uri->other_param, p);
-          }
-          target->paths.push_back((pjsip_uri*)route_uri);
-          add_target(target);
-
-          // Add the S-CSCF to the list of attempted S-CSCFs.
-          _attempted_scscfs.push_back(scscf);
-
-          // Invoke the retry.
-          process_tsx_request();
-
-          retry = true;
+          // Add the "orig" parameter.
+          pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+          pj_strdup(_req->pool, &p->name, &STR_ORIG);
+          p->value.slen = 0;
+          pj_list_insert_after(&route_uri->other_param, p);
         }
+
+        target->paths.push_back((pjsip_uri*)route_uri);
+        add_target(target);
+
+        // Add the S-CSCF to the list of attempted S-CSCFs.
+        _attempted_scscfs.push_back(scscf);
+
+        // Invoke the retry.
+        process_tsx_request();
+        retry = true;
       }
     }
   }
@@ -431,18 +429,37 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._have_caps)
+  if (!_hss_rsp._queried_caps)
   {
     LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
               impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
-    Json::Value* rsp = _hss->get_user_auth_status(impi,
-                                                  impu,
-                                                  visited_network,
-                                                  auth_type,
-                                                  trail());
 
-    status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
-                                  PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    Json::Value* rsp = NULL;
+    HTTPCode rc =_hss->get_user_auth_status(impi,
+                                            impu,
+                                            visited_network,
+                                            auth_type,
+                                            rsp,
+                                            trail());
+
+    // Return a 480 response if the lookup times out, or the HSS returns
+    // invalid information. If the HSS has returned a negative response,
+    // then return a 403.
+    if (rc != HTTP_OK)
+    {
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+
+      if (rc == HTTP_NOT_FOUND || rc == HTTP_FORBIDDEN)
+      {
+        status_code = PJSIP_SC_FORBIDDEN;
+      }
+    }
+    else
+    {
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp, auth_type == "CAPAB") :
+                                    PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    }
+
     delete rsp;
   }
 
@@ -453,9 +470,9 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
       // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._have_caps)
+    else if (_hss_rsp._queried_caps)
     {
-      // Received capabilities from the HSS, so select a suitable S-CSCF.
+      // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
                                          _attempted_scscfs);
@@ -487,19 +504,37 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._have_caps)
+  if (!_hss_rsp._queried_caps)
   {
     LOG_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
               impu.c_str(),
               (originating) ? "true" : "false",
               (auth_type != "") ? auth_type.c_str() : "None");
-    Json::Value* rsp = _hss->get_location_data(impu,
-                                               originating,
-                                               auth_type,
-                                               trail());
+    Json::Value* rsp = NULL;
+    HTTPCode rc =_hss->get_location_data(impu,
+                                         originating,
+                                         auth_type,
+                                         rsp,
+                                         trail());
 
-    status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
-                                  PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    // Return a 480 response if the lookup times out, or the HSS returns
+    // invalid information. If the subscriber doesn't exist then return
+    // 404.
+    if (rc != HTTP_OK)
+    {
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+
+      if (rc == HTTP_NOT_FOUND)
+      {
+        status_code = PJSIP_SC_NOT_FOUND;
+      }
+    }
+    else
+    {
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp, auth_type == "CAPAB") :
+                                    PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    }
+
     delete rsp;
   }
 
@@ -510,9 +545,9 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._have_caps)
+    else if (_hss_rsp._queried_caps)
     {
-      // Received capabilities from the HSS, so select a suitable S-CSCF.
+      // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
                                          _attempted_scscfs);
@@ -531,12 +566,12 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 }
 
 
-int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
+int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
 {
   int status_code = PJSIP_SC_OK;
 
   // Clear out any older response.
-  _hss_rsp._have_caps = false;
+  _hss_rsp._queried_caps = false;
   _hss_rsp._mandatory_caps.clear();
   _hss_rsp._optional_caps.clear();
   _hss_rsp._scscf = "";
@@ -566,15 +601,12 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
         (rsp.isMember("optional-capabilities")) &&
         (rsp["optional-capabilities"].isArray()))
     {
-      // Response specifies capabilities.
+      // Response specifies capabilities - we might have explicitly queried capabilities
+      // or implicitly because there was no server assigned.
       LOG_DEBUG("HSS returned capabilities");
-      if ((parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp._mandatory_caps)) &&
-          (parse_capabilities(rsp["optional-capabilities"], _hss_rsp._optional_caps)))
-      {
-        // Parsed requested capabilities successfully
-        _hss_rsp._have_caps = true;
-      }
-      else
+      queried_caps = true;
+      if ((!parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp._mandatory_caps)) ||
+          (!parse_capabilities(rsp["optional-capabilities"], _hss_rsp._optional_caps)))
       {
         // Failed to parse capabilities, so reject with 480 response.
         LOG_WARNING("Malformed required capabilities returned by HSS for %s\n%s",
@@ -583,6 +615,7 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp)
       }
     }
   }
+  _hss_rsp._queried_caps = (status_code == PJSIP_SC_OK) ? queried_caps : false;
 
   return status_code;
 }
