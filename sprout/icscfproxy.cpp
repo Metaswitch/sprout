@@ -373,9 +373,9 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     // Check whether conditions are satisfied for retrying a Non-REGISTER.
     LOG_DEBUG("Check retry conditions for Non-REGISTER request, status code = %d",
               rsp_status);
+
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
-      // We don't have capabilities from the HSS yet, so do another query
       LOG_DEBUG("Attempt retry for non-REGISTER request");
       _auth_type = "CAPAB";
       std::string scscf;
@@ -405,11 +405,13 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
 
         target->paths.push_back((pjsip_uri*)route_uri);
         add_target(target);
-         // Add the S-CSCF to the list of attempted S-CSCFs.
+
+        // Add the S-CSCF to the list of attempted S-CSCFs.
         _attempted_scscfs.push_back(scscf);
-         // Invoke the retry.
+
+        // Invoke the retry.
         process_tsx_request();
-         retry = true;
+        retry = true;
       }
     }
   }
