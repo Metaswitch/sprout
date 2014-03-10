@@ -176,11 +176,11 @@ void render_count_latency_us(std::vector<std::string>& msgs)
 {
   if (msgs.size() >= 7 )
   {
-    printf("count:%s\n", msgs[2].c_str());
-    printf("mean:%s\n", msgs[3].c_str());
-    printf("variance:%s\n", msgs[4].c_str());
-    printf("lwm:%s\n", msgs[5].c_str());
-    printf("hwm:%s\n", msgs[6].c_str());
+    printf("mean:%s\n", msgs[2].c_str());
+    printf("variance:%s\n", msgs[3].c_str());
+    printf("lwm:%s\n", msgs[4].c_str());
+    printf("hwm:%s\n", msgs[5].c_str());
+    printf("count:%s\n", msgs[6].c_str());
   }
   else
   {
