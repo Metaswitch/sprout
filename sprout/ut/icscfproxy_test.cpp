@@ -1861,6 +1861,35 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
   rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
+  // Send a 408 Request Timeout response.
+  inject_msg(respond_to_current_txdata(408));
+  //poll();
+
+  // Expecting an ACK to the 408 and a retried INVITE
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.3", 5058, tdata);
+  ReqMatcher r4("ACK");
+  r4.matches(tdata->msg);
+  free_txdata();
+
+  // I-CSCF does another HSS location query for capabilities.  This time
+  // scscf3 is selected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+  ReqMatcher r5("INVITE");
+  r5.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf4.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
 
@@ -1868,8 +1897,8 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r4(200);
-  r4.matches(tdata->msg);
+  RespMatcher r6(200);
+  r6.matches(tdata->msg);
 
   free_txdata();
 

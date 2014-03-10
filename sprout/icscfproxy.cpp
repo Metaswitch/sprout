@@ -375,45 +375,41 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
               rsp_status);
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
-      if (!_hss_rsp._queried_caps)
+      // We don't have capabilities from the HSS yet, so do another query
+      LOG_DEBUG("Attempt retry for non-REGISTER request");
+      _auth_type = "CAPAB";
+      std::string scscf;
+      int status_code = location_query(_impu,
+                                       (_case == SessionCase::ORIGINATING),
+                                       _auth_type,
+                                       scscf);
+
+      if (status_code == PJSIP_SC_OK)
       {
-        // We don't have capabilities from the HSS yet, so do another query
-        LOG_DEBUG("Attempt retry for non-REGISTER request");
-        _auth_type = "CAPAB";
-        std::string scscf;
-        int status_code = location_query(_impu,
-                                         (_case == SessionCase::ORIGINATING),
-                                         _auth_type,
-                                         scscf);
+        // We have another S-CSCF to try, so add it as a new target.
+        // Set the S-CSCF as a route header in the target.
+        LOG_DEBUG("Retry request to S-CSCF %s", scscf.c_str());
+        Target* target = new Target;
+        pjsip_sip_uri* route_uri =
+                (pjsip_sip_uri*)PJUtils::uri_from_string(scscf, _req->pool);
+        route_uri->lr_param = 1;
 
-        if (status_code == PJSIP_SC_OK)
+        if (_case == SessionCase::ORIGINATING)
         {
-          // We have another S-CSCF to try, so add it as a new target.
-          // Set the S-CSCF as a route header in the target.
-          LOG_DEBUG("Retry request to S-CSCF %s", scscf.c_str());
-          Target* target = new Target;
-          pjsip_sip_uri* route_uri =
-                  (pjsip_sip_uri*)PJUtils::uri_from_string(scscf, _req->pool);
-          route_uri->lr_param = 1;
-          if (_case == SessionCase::ORIGINATING)
-          {
-            // Add the "orig" parameter.
-            pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-            pj_strdup(_req->pool, &p->name, &STR_ORIG);
-            p->value.slen = 0;
-            pj_list_insert_after(&route_uri->other_param, p);
-          }
-          target->paths.push_back((pjsip_uri*)route_uri);
-          add_target(target);
-
-          // Add the S-CSCF to the list of attempted S-CSCFs.
-          _attempted_scscfs.push_back(scscf);
-
-          // Invoke the retry.
-          process_tsx_request();
-
-          retry = true;
+          // Add the "orig" parameter.
+          pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+          pj_strdup(_req->pool, &p->name, &STR_ORIG);
+          p->value.slen = 0;
+          pj_list_insert_after(&route_uri->other_param, p);
         }
+
+        target->paths.push_back((pjsip_uri*)route_uri);
+        add_target(target);
+         // Add the S-CSCF to the list of attempted S-CSCFs.
+        _attempted_scscfs.push_back(scscf);
+         // Invoke the retry.
+        process_tsx_request();
+         retry = true;
       }
     }
   }
