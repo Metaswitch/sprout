@@ -88,25 +88,22 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
           (_method == "PUBLISH") ||
           (_method == "MESSAGE"))
       {
-        // Non-dialog message.
+        // Non-dialog message, must be an EVENT record.
         LOG_DEBUG("Non-dialog message => EVENT_RECORD");
         _record_type = EVENT_RECORD;
+      }
+      else if (_method == "BYE")
+      {
+        // BYE request must be a STOP record.
+        LOG_DEBUG("BYE => STOP_RECORD");
+        _record_type = STOP_RECORD;
       }
       else if ((to_hdr != NULL) &&
                (to_hdr->tag.slen > 0))
       {
-        if (_method == "BYE")
-        {
-          // BYE requests with a valid To tag must be a STOP request.
-          LOG_DEBUG("BYE => STOP_RECORD");
-          _record_type = STOP_RECORD;
-        }
-        else
-        {
-          // Any other requests with a To tag are INTERIMs.
-          LOG_DEBUG("In-dialog %s request => INTERIM_RECORD", _method.c_str());
-          _record_type = INTERIM_RECORD;
-        }
+        // Any other requests with a To tag are INTERIMs.
+        LOG_DEBUG("In-dialog %s request => INTERIM_RECORD", _method.c_str());
+        _record_type = INTERIM_RECORD;
       }
       else if (_method == "INVITE")
       {

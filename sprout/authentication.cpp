@@ -506,6 +506,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
+  // Also create an ACR for the message for ACR generation is enabled.
+  ACR* acr = NULL;
+  if (acr_factory != NULL)
+  {
+    acr_factory->get_acr(trail, CALLING_PARTY);
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  }
+
   if ((status == PJSIP_EAUTHNOAUTH) ||
       (status == PJSIP_EAUTHACCNOTFOUND))
   {
@@ -530,6 +538,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
 
     create_challenge(auth_hdr, resync, rdata, tdata);
+
+    if (acr != NULL)
+    {
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      acr->tx_response(tdata->msg, ts);
+    }
+
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
   else
