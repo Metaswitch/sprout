@@ -984,7 +984,7 @@ pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* t
   // Get the next hop URI from the message and parse out the destination, port
   // and transport.
   pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
-  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
+  std::string name = std::string(next_hop->host.ptr, next_hop->host.slen);
   int port = next_hop->port;
   int transport = -1;
   if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
@@ -996,10 +996,15 @@ pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* t
     transport = IPPROTO_UDP;
   }
 
-  if (sipresolver->resolve(target, port, transport, AF_INET, ai))
+  std::vector<AddrInfo> targets;
+
+  sipresolver->resolve(name, stack_data.addr_family, port, transport, 1, targets);
+
+  if (!targets.empty())
   {
     // Resolved the target successfully, so fill in dest_info on the tdata.
     status = PJ_SUCCESS;
+    ai = targets[0];
     tdata->dest_info.cur_addr = 0;
     tdata->dest_info.addr.count = 1;
     tdata->dest_info.addr.entry[0].priority = 0;

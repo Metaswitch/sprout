@@ -64,60 +64,61 @@ SIPResolver::~SIPResolver()
   destroy_naptr_cache();
 }
 
-bool SIPResolver::resolve(const std::string& target,
+void SIPResolver::resolve(const std::string& name,
+                          int af,
                           int port,
                           int transport,
-                          int af,
-                          AddrInfo& ai)
+                          int retries,
+                          std::vector<AddrInfo>& targets)
 {
   // First determine the transport following the process in RFC3263 section
   // 4.1.
-  bool rc = false;
+  AddrInfo ai;
 
-  LOG_DEBUG("SIPResolver::resolve for target %s, port %d, transport %d, family %d",
-            target.c_str(), port, transport, af);
+  LOG_DEBUG("SIPResolver::resolve for name %s, port %d, transport %d, family %d",
+            name.c_str(), port, transport, af);
 
-  if (parse_ip_target(target, ai.address))
+  if (parse_ip_target(name, ai.address))
   {
-    // The target is already an IP address, so no DNS resolution is possible.
+    // The name is already an IP address, so no DNS resolution is possible.
     // Use specified transport and port or defaults if not specified.
     LOG_DEBUG("Target is an IP address - default port/transport if required");
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
-    rc = true;
+    targets.push_back(ai);
   }
   else
   {
-    std::string srv_target;
-    std::string a_target = target;
+    std::string srv_name;
+    std::string a_name = name;
 
     if (port != 0)
     {
       // Port is specified, so don't do NAPTR or SRV look-ups.  Default transport
       // if required and move straight to A record look-up.
       LOG_DEBUG("Port is specified");
-      ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
+      transport = (transport != -1) ? transport : IPPROTO_UDP;
     }
     else if (transport == -1)
     {
       // Transport protocol isn't specified, so do a NAPTR lookup for the target.
-      LOG_DEBUG("Do NAPTR look-up for %s", target.c_str());
-      NAPTRReplacement* naptr = _naptr_cache->get(target);
+      LOG_DEBUG("Do NAPTR look-up for %s", name.c_str());
+      NAPTRReplacement* naptr = _naptr_cache->get(name);
 
       if (naptr != NULL)
       {
         // NAPTR resolved to a supported service
         LOG_DEBUG("NAPTR resolved to transport %d", naptr->transport);
-        ai.transport = naptr->transport;
+        transport = naptr->transport;
         if (naptr->flags == "S")
         {
           // Do an SRV lookup with the replacement domain from the NAPTR lookup.
-          srv_target = naptr->replacement;
+          srv_name = naptr->replacement;
         }
         else
         {
           // Move straight to A/AAAA lookup of the domain returned by NAPTR.
-          a_target = naptr->replacement;
+          a_name = naptr->replacement;
         }
       }
       else
@@ -126,8 +127,8 @@ bool SIPResolver::resolve(const std::string& target,
         // see which transports are supported.
         LOG_DEBUG("NAPTR lookup failed, so do SRV lookups for UDP and TCP");
         std::vector<std::string> domains;
-        domains.push_back("_sip._udp." + target);
-        domains.push_back("_sip._tcp." + target);
+        domains.push_back("_sip._udp." + name);
+        domains.push_back("_sip._tcp." + name);
         std::vector<DnsResult> results;
         _dns_client->dns_query(domains, ns_t_srv, results);
         DnsResult& udp_result = results[0];
@@ -141,119 +142,57 @@ bool SIPResolver::resolve(const std::string& target,
         {
           // UDP SRV lookup returned some records, so use UDP transport.
           LOG_DEBUG("UDP SRV lookup successful, select UDP transport");
-          ai.transport = IPPROTO_UDP;
-          srv_target = udp_result.domain();
+          transport = IPPROTO_UDP;
+          srv_name = udp_result.domain();
         }
         else if (!tcp_result.records().empty())
         {
           // TCP SRV lookup returned some records, so use TCP transport.
           LOG_DEBUG("TCP SRV lookup successful, select TCP transport");
-          ai.transport = IPPROTO_TCP;
-          srv_target = tcp_result.domain();
+          transport = IPPROTO_TCP;
+          srv_name = tcp_result.domain();
         }
         else
         {
           // Neither UDP nor TCP SRV lookup returned any results, so default to
           // UDP transport and move straight to A/AAAA record lookups.
           LOG_DEBUG("UDP and TCP SRV queries unsuccessful, default to UDP");
-          ai.transport = IPPROTO_UDP;
+          transport = IPPROTO_UDP;
         }
       }
 
-      _naptr_cache->dec_ref(target);
+      _naptr_cache->dec_ref(name);
     }
     else if (transport == IPPROTO_UDP)
     {
       // Use specified transport and try an SRV lookup.
-      ai.transport = IPPROTO_UDP;
-      srv_target = "_sip._udp." + target;
+      DnsResult result = _dns_client->dns_query("_sip._udp." + name, ns_t_srv);
+      if (!result.records().empty())
+      {
+        srv_name = result.domain();
+      }
     }
     else if (transport == IPPROTO_TCP)
     {
       // Use specified transport and try an SRV lookup.
-      ai.transport = IPPROTO_TCP;
-      srv_target = "_sip._tcp." + target;
+      DnsResult result = _dns_client->dns_query("_sip._tcp." + name, ns_t_srv);
+      if (!result.records().empty())
+      {
+        srv_name = result.domain();
+      }
     }
 
-    if (srv_target != "")
+    if (srv_name != "")
     {
-      LOG_DEBUG("Do SRV lookup for %s", srv_target.c_str());
-      SRVSelector* srv = _srv_cache->get(srv_target);
-
-      if (srv != NULL)
-      {
-        // SRV lookup returned a valid selector, so loop selecting servers until
-        // we find one which isn't blacklisted.
-        LOG_DEBUG("SRV lookup successful");
-        while (true)
-        {
-          LOG_DEBUG("Select an entry from SRV list");
-          std::pair<std::string, int> selection = srv->select();
-          LOG_DEBUG("Selected %s:%d", selection.first.c_str(), selection.second);
-
-          if (selection.first == "")
-          {
-            // The selector has no valid, unblacklisted targets, so give up.
-            break;
-          }
-
-          // SRV selector returned a valid result, so do A/AAAA lookup(s) on
-          // this name.
-          LOG_DEBUG("Do A/AAAA record lookup for %s", selection.first.c_str());
-          std::list<IP46Address> addrs;
-          int ttl = a_query(selection.first, af, addrs);
-          LOG_DEBUG("Returned %d A/AAAA records", addrs.size());
-
-          if (!addrs.empty())
-          {
-            // Now filter the list against the global blacklist with the selected
-            // transport and port.
-            ttl = blacklist_filter(addrs, selection.second, ai.transport);
-            LOG_DEBUG("%d candidates not blacklisted", addrs.size());
-
-            if (!addrs.empty())
-            {
-              // We have at least one valid result, so pick one at random.
-              ai.address = select_address(addrs);
-              ai.port = selection.second;
-              rc = true;
-              break;
-            }
-          }
-
-          // Either the SRV target host name failed to resolve, or all the
-          // results are blacklisted.  We will blacklist this target in the SRV
-          // selector and try again.
-          LOG_DEBUG("Adding SRV selection %s:%d to blacklist for %d seconds",
-                    selection.first.c_str(), selection.second, ttl);
-          srv->blacklist(selection, ttl);
-        }
-      }
-
-      _srv_cache->dec_ref(srv_target);
+      LOG_DEBUG("Do SRV lookup for %s", srv_name.c_str());
+      srv_resolve(srv_name, af, transport, retries, targets);
     }
-
-    if (!rc)
+    else
     {
-      // We either didn't try an SRV lookup or we got no results, so just do
-      // an A/AAAA query.
-      LOG_DEBUG("Perform A/AAAA record lookup only, target = %s", a_target.c_str());
-      ai.port = (port != 0) ? port : 5060;
-      std::list<IP46Address> addrs;
-      a_query(a_target, af, addrs);
-
-      // Now filter the list against the global blacklist with the selected
-      // transport and port.
-      blacklist_filter(addrs, ai.port, ai.transport);
-
-      if (!addrs.empty())
-      {
-        // We have at least one valid result, so pick one at random.
-        ai.address = select_address(addrs);
-        rc = true;
-      }
+      LOG_DEBUG("Perform A/AAAA record lookup only, name = %s", a_name.c_str());
+      port = (port != 0) ? port : 5060;
+      a_resolve(a_name, af, port, transport, retries, targets);
     }
   }
-  return rc;
 }
 

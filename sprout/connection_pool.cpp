@@ -172,25 +172,31 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
   if (_sipresolver != NULL)
   {
     // Use the SIPResolver to select a server for this connection.
-    AddrInfo ai;
-    if (_sipresolver->resolve(std::string(host->ptr, host->slen), port, IPPROTO_TCP, _addr_family, ai))
+    std::vector<AddrInfo> ai;
+    _sipresolver->resolve(std::string(host->ptr, host->slen),
+                          _addr_family,
+                          port,
+                          IPPROTO_TCP,
+                          1,
+                          ai);
+    if (!ai.empty())
     {
-      if (ai.address.af == AF_INET)
+      if (ai[0].address.af == AF_INET)
       {
         LOG_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
         addr->ipv4.sin_family = AF_INET;
-        addr->ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
-        pj_sockaddr_set_port(addr, ai.port);
+        addr->ipv4.sin_addr.s_addr = ai[0].address.addr.ipv4.s_addr;
+        pj_sockaddr_set_port(addr, ai[0].port);
         status = PJ_SUCCESS;
       }
-      else if (ai.address.af == AF_INET6)
+      else if (ai[0].address.af == AF_INET6)
       {
         LOG_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
         addr->ipv6.sin6_family = AF_INET6;
         memcpy((char*)&addr->ipv6.sin6_addr,
-               (char*)&ai.address.addr.ipv6,
+               (char*)&ai[0].address.addr.ipv6,
                sizeof(struct in6_addr));
-        pj_sockaddr_set_port(addr, ai.port);
+        pj_sockaddr_set_port(addr, ai[0].port);
         status = PJ_SUCCESS;
       }
       else
@@ -381,14 +387,28 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
         --_active_connections;
         decrement_connection_count(tp);
       }
-
-      // Blacklist the selected destination so we steer clear of it for a while
-      AddrInfo ai;
-      ai.transport = IPPROTO_TCP;
-      ai.port = pj_sockaddr_get_port(&tp->key.rem_addr);
-      ai.address.af = tp->key.rem_addr.addr.sa_family;
-      ai.address.addr.ipv4.s_addr = tp->key.rem_addr.ipv4.sin_addr.s_addr;
-      _sipresolver->blacklist(ai, 30);
+      else if (_sipresolver != NULL)
+      {
+        // Failed to establish a connection to this destination, so blacklist
+        // it so we steer clear of it for a while.  We don't blacklist
+        // if an existing connection fails as this may be a transient error
+        // or even a disconnect triggered by an inactivity timeout .
+        AddrInfo ai;
+        ai.transport = IPPROTO_TCP;
+        ai.port = pj_sockaddr_get_port(&tp->key.rem_addr);
+        ai.address.af = tp->key.rem_addr.addr.sa_family;
+        if (ai.address.af == AF_INET)
+        {
+          ai.address.addr.ipv4.s_addr = tp->key.rem_addr.ipv4.sin_addr.s_addr;
+        }
+        else
+        {
+          memcpy((char*)&ai.address.addr.ipv6,
+                 (char*)&tp->key.rem_addr.ipv6.sin6_addr,
+                 sizeof(struct in6_addr));
+        }
+        _sipresolver->blacklist(ai, 30);
+      }
 
       // Don't listen for any more state changes on this connection (but note
       // it's illegal to call any methods on the transport once it's entered the

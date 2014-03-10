@@ -45,11 +45,12 @@ public:
   SIPResolver(DnsCachedResolver* dns_client);
   ~SIPResolver();
 
-  bool resolve(const std::string& target,
+  void resolve(const std::string& name,
+               int af,
                int port,
                int transport,
-               int af,
-               AddrInfo& ai);
+               int retries,
+               std::vector<AddrInfo>& targets);
 
 };
 
