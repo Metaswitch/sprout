@@ -873,8 +873,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
-  RespMatcher r5(200);
-  r5.matches(tdata->msg);
+  RespMatcher r4(200);
+  r4.matches(tdata->msg);
 
   free_txdata();
 
