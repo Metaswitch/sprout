@@ -138,6 +138,9 @@ const static std::string _known_statnames[] = {
   "hss_location_latency_us",
 };
 
+const static std::string SPROUT_ZMQ_PORT = "6666";
+const static std::string BONO_ZMQ_PORT = "6669";
+
 const std::string* known_statnames = _known_statnames;
 const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
 
@@ -1024,8 +1027,18 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
+  // Set up the Last Value Cache, accumulators and counters. 
+  std::string zmq_port = SPROUT_ZMQ_PORT;
+
+  if ((stack_data.pcscf_trusted_port != 0) &&
+      (stack_data.pcscf_untrusted_port != 0))
+  {
+    zmq_port = BONO_ZMQ_PORT;
+  }
+
   stack_data.stats_aggregator = new LastValueCache(num_known_stats,
-                                                   known_statnames);
+                                                   known_statnames,
+                                                   zmq_port);
 
   latency_accumulator = new StatisticAccumulator("latency_us",
                                                  stack_data.stats_aggregator);
