@@ -1874,7 +1874,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
   free_txdata();
 
   // I-CSCF does another HSS location query for capabilities.  This time
-  // scscf3 is selected.
+  // scscf4 is selected.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.4", 5058, tdata);
