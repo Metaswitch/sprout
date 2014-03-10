@@ -461,7 +461,7 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     }
     else
     {
-      status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
+      status_code = (rsp != NULL) ? parse_hss_response(*rsp, auth_type == "CAPAB") :
                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
 
