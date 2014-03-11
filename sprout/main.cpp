@@ -874,6 +874,24 @@ int main(int argc, char *argv[])
   }
 
   Log::setLoggingLevel(opt.log_level);
+  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
+
+  if ((opt.log_to_file) && (opt.log_directory != ""))
+  {
+    // Work out the program name from argv[0], stripping anything before the final slash.
+    char* prog_name = argv[0];
+    char* slash_ptr = rindex(argv[0], '/');
+    if (slash_ptr != NULL) {
+      prog_name = slash_ptr + 1;
+    }
+    Log::setLogger(new Logger(opt.log_directory, prog_name));
+  }
+
+  if (opt.analytics_enabled)
+  {
+    analytics_logger = new AnalyticsLogger(opt.analytics_directory);
+  }
+
   LOG_STATUS("Log level set to %d", opt.log_level);
 
   if (opt.daemon && opt.interactive)
@@ -994,24 +1012,6 @@ int main(int argc, char *argv[])
   pj_gettimeofday(&now);
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
-
-  init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
-
-  if ((opt.log_to_file) && (opt.log_directory != ""))
-  {
-    // Work out the program name from argv[0], stripping anything before the final slash.
-    char* prog_name = argv[0];
-    char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL) {
-      prog_name = slash_ptr + 1;
-    }
-    Log::setLogger(new Logger(opt.log_directory, prog_name));
-  }
-
-  if (opt.analytics_enabled)
-  {
-    analytics_logger = new AnalyticsLogger(opt.analytics_directory);
-  }
 
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
