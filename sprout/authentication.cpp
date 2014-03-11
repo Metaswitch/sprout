@@ -510,7 +510,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   ACR* acr = NULL;
   if (acr_factory != NULL)
   {
-    acr_factory->get_acr(trail, CALLING_PARTY);
+    acr = acr_factory->get_acr(trail, CALLING_PARTY);
     acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   }
 
