@@ -38,15 +38,20 @@ require 'ffi-rzmq'
 require 'optparse'
 require 'timeout'
 
-# This class creates and owns a subscription to a statistic exposed by a clearwater component.
+# This class creates and owns a subscription to a statistic exposed
+# by a clearwater component.
 #
-# The subscription is created at class initialization time but the values will not be read until the run method is called.
+# The subscription is created at class initialization time but the
+# values will not be read until the run method is called.
 #
-# The subscription can be created in single-shot mode, where the value of the statistic will be polled once only or in repeated mode, where the collector will loop, reporting changes to the statistic when they happen.
+# The subscription can be created in single-shot mode, where the value of the
+# statistic will be polled once only or in repeated mode, where the collector
+# will loop, reporting changes to the statistic when they happen.
 class CWStatCollector
   @@known_stats = {}
 
-  # Registers a renderer to use for a given statistic.  If a rendered is not specified, the statistic cannot be queried
+  # Registers a renderer to use for a given statistic.  If a rendered is not
+  # specified, the statistic cannot be queried
   #
   # For most cases, SimpleStatRenderer will be sufficient.
   def self.register_stat(statname, renderer, options={})
@@ -69,7 +74,8 @@ class CWStatCollector
     end
   end
 
-  # Create a StatCollector and start the subscription.  This will throw an exception if the requested statistic is not recognized.
+  # Create a StatCollector and start the subscription.  This will throw
+  # an exception if the requested statistic is not recognized.
   #
   # @param options Two options are supported:
   #   - :verbose to add more logging
@@ -155,11 +161,13 @@ class CWStatCollector
   end
 end
 
-# A base class for stat renderers.  A subclass must implement the render method.
+# A base class for stat renderers.
+# A subclass must implement the render method.
 #
 # @abstract
 class AbstractRenderer
-  # Render a message (as an array of strings) into an appropriate format for further processing.
+  # Render a message (as an array of strings) into an
+  # appropriate format for further processing.
   def render msg
     fail "Abstract renderer should never be used directly"
   end
@@ -185,7 +193,8 @@ successful_calls_delta:#{msg[7]}
   end
 end
 
-# This simple renderer assumes that there is only one section in the reported statistic and extracts it.
+# This simple renderer assumes that there is only one section in the
+# reported statistic and extracts it.
 #
 # This will be sufficient for many statistics.
 class SimpleStatRenderer < AbstractRenderer
@@ -225,11 +234,9 @@ class ConnectedIpsRenderer < AbstractRenderer
   end
 end
 
-# This renderer reports latency statistics.
-#
-# The output format is picked to be human readable, while still easy to
-# parse so it can be given to another tool (cacti for example).
-class LatencyStatsRenderer < AbstractRenderer
+# This renders latency statistics, and provides a count of how many events
+# occured
+class LatencyCountStatsRenderer < AbstractRenderer
   # @see AbstractRenderer#render
   def render(msg)
     <<-EOF
@@ -237,52 +244,40 @@ mean:#{msg[0]}
 variance:#{msg[1]}
 lwm:#{msg[2]}
 hwm:#{msg[3]}
+count:#{msg[4]}
     EOF
   end
 end
 
-# This renders latency statistics, and provides a count of how many events
-# occured
-class LatencyCountStatsRenderer < AbstractRenderer
-  # @see AbstractRenderer#render
-  def render(msg)
-    <<-EOF
-count:#{msg[0]}
-mean:#{msg[1]}
-variance:#{msg[2]}
-lwm:#{msg[3]}
-hwm:#{msg[4]}
-    EOF
-  end
-end
-
-# Register the sprout/bono stats.
+# Register the sprout/bono stats. These are served on port 6666/9 (to
+# allow both to publish stats when colocated on an all-in-one node).
 CWStatCollector.register_stat("client_count", SimpleStatRenderer)
 CWStatCollector.register_stat("connected_homesteads", ConnectedIpsRenderer)
 CWStatCollector.register_stat("connected_homers", ConnectedIpsRenderer)
 CWStatCollector.register_stat("connected_sprouts", ConnectedIpsRenderer)
 CWStatCollector.register_stat("call_stats", CallStatsRenderer)
-CWStatCollector.register_stat("latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("hss_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("hss_digest_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("hss_subscription_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("hss_user_auth_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("hss_location_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("xdm_latency_us", LatencyStatsRenderer)
+CWStatCollector.register_stat("latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("hss_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("hss_digest_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("hss_subscription_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("hss_user_auth_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("hss_location_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("xdm_latency_us", LatencyCountStatsRenderer)
 CWStatCollector.register_stat("incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_stat("rejected_overload", SimpleStatRenderer)
-CWStatCollector.register_stat("queue_size", LatencyStatsRenderer)
+CWStatCollector.register_stat("queue_size", LatencyCountStatsRenderer)
 
-# Register for homestead stats.
-CWStatCollector.register_stat("H_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("H_hss_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("H_hss_digest_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("H_hss_subscription_latency_us", LatencyStatsRenderer)
-CWStatCollector.register_stat("H_cache_latency_us", LatencyStatsRenderer)
+# Register for homer/homestead stats. These are served on port 6665/8 (to
+# allow both to publish stats when colocated on an all-in-one node).
+CWStatCollector.register_stat("H_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("H_hss_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("H_hss_digest_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("H_hss_subscription_latency_us", LatencyCountStatsRenderer)
+CWStatCollector.register_stat("H_cache_latency_us", LatencyCountStatsRenderer)
 CWStatCollector.register_stat("H_incoming_requests", SimpleStatRenderer)
 CWStatCollector.register_stat("H_rejected_overload", SimpleStatRenderer)
 
-# Listen for the homer/homestead-prov stats. These are served on port 6667 (to
+# Listen for the homestead-prov stats. These are served on port 6667 (to
 # allow homestead-prov to publish stats when colocated with homestead).
 #
 # This currently only listens for stats for the first process.

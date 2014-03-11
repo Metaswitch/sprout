@@ -154,6 +154,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
 
   stack_data.stats_aggregator = new LastValueCache(num_known_stats,
                                                    known_statnames,
+                                                   "6666",
                                                    10);  // Short period to reduce shutdown delays.
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_siptest);

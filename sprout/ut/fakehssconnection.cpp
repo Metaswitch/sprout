@@ -114,27 +114,32 @@ void FakeHSSConnection::delete_rc(const std::string& url)
 }
 
 
-Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
-                                                SAS::TrailId trail)
+long FakeHSSConnection::get_json_object(const std::string& path,
+                                        Json::Value*& object,
+                                        SAS::TrailId trail)
 {
-  Json::Value* root = NULL;
+  HTTPCode http_code = HTTP_NOT_FOUND;
 
   std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
 
   if (i != _results.end())
   {
-    root = new Json::Value;
+    object = new Json::Value;
     Json::Reader reader;
-    bool parsingSuccessful = reader.parse(i->second, *root);
-    if (!parsingSuccessful)
+    bool parsingSuccessful = reader.parse(i->second, *object);
+    if (parsingSuccessful)
+    {
+      http_code = HTTP_OK;
+    }
+    else
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
                 path.c_str(),
                 i->second.c_str(),
                 reader.getFormatedErrorMessages().c_str());
-      delete root;
-      root = NULL;
+      delete object;
+      object = NULL;
     }
   }
   else
@@ -142,7 +147,13 @@ Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
     LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
   }
 
-  return root;
+  std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
+  if (i2 != _rcs.end())
+  {
+    http_code = i2->second;
+  }
+
+  return http_code;
 }
 
 long FakeHSSConnection::get_xml_object(const std::string& path,
