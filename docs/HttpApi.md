@@ -9,7 +9,7 @@ The body sent to this URL must be a JSON document containing a `"registrations"`
 For example:
 
 ```
-{ “registrations”: [ { “primary-impu”: “sip:...” }, { “primary-impu”: “sip:...”, “impi”: “…” }, … ] }
+{ "registrations": [ { "primary-impu": "sip:..." }, { "primary-impu": "sip:...", "impi": "..." }, ... ] }
 ```
 
 Responses have the following error codes:
