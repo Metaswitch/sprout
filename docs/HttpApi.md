@@ -4,7 +4,7 @@ Sprout nodes expose a HTTP interface on port 9888. This is done so that the Chro
 
 The API consists of one URL (`/timers`), which accepts only `POST` requests. This URL has no query parameters.
 
-The body sent to this URL must be a JSON document containing a `"aor_id"` key, where the value is an AoR ID as a string, and a `"binding_id"` key, where the value is a particular binding ID from the AoR as a string. Other keys are ignored
+The body sent to this URL must be a JSON document containing a `"aor_id"` key, where the value is an AoR ID as a string, and a `"binding_id"` key, where the value is a particular binding ID from the AoR as a string. Other keys are ignored.
 
 For example:
 
@@ -23,7 +23,7 @@ Any other request to this URL (e.g. a `GET`) is rejected with `405 Method Not Al
 
 The API consists of one URL (`/registrations`), which accepts only `DELETE` requests. This URL has a mandatory query parameter, `send-notifications`, which must be either `true` or `false`.
 
-The body sent to this URL must be a JSON document containing a `"registrations"` key, where the value is a list of objects, each of which have a mandatory `"primary-impu"` key and an optional `"impi"` key. Other keys are ignored
+The body sent to this URL must be a JSON document containing a `"registrations"` key, where the value is a list of objects, each of which have a mandatory `"primary-impu"` key and an optional `"impi"` key. Other keys are ignored.
 
 For example:
 
