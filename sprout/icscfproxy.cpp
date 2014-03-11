@@ -335,7 +335,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     // 5.3.1.3/TS24.229).
     LOG_DEBUG("Check retry conditions for REGISTER request, status code = %d",
               rsp_status);
-    if (((rsp_status > 300) && (rsp_status <= 399)) ||
+    if (((rsp_status >= 300) && (rsp_status <= 399)) ||
         (rsp_status == PJSIP_SC_REQUEST_TIMEOUT) ||
         (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
     {
@@ -436,11 +436,11 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
               impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
     Json::Value* rsp = NULL;
-    HTTPCode rc =_hss->get_user_auth_status(impi, 
-                                            impu, 
-                                            visited_network, 
-                                            auth_type, 
-                                            rsp, 
+    HTTPCode rc =_hss->get_user_auth_status(impi,
+                                            impu,
+                                            visited_network,
+                                            auth_type,
+                                            rsp,
                                             trail());
 
     // Return a 480 response if the lookup times out, or the HSS returns
@@ -460,16 +460,27 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
       status_code = (rsp != NULL) ? parse_hss_response(*rsp) :
                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
-    
+
     delete rsp;
   }
 
   if (status_code == PJSIP_SC_OK)
   {
+    // The HSS can return the s-cscf name on a REGISTRATION AND CAPABILITIES
+    // request. Only use the name returned from the HSS if it hasn't already
+    // been tried.
     if (!_hss_rsp._scscf.empty())
     {
+      // TODO merge into a single check once satisfied with UTs
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp._scscf;
+      if (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(), _hss_rsp._scscf) == _attempted_scscfs.end())
+      {
+        scscf = _hss_rsp._scscf;
+      }
+      else
+      {
+        LOG_INFO("JJJJJJJJJJJJJ");
+      }
     }
     else if (_hss_rsp._have_caps)
     {
@@ -513,22 +524,22 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
               (auth_type != "") ? auth_type.c_str() : "None");
     Json::Value* rsp = NULL;
     HTTPCode rc =_hss->get_location_data(impu,
-                                         originating, 
-                                         auth_type, 
-                                         rsp, 
+                                         originating,
+                                         auth_type,
+                                         rsp,
                                          trail());
 
-    // Return a 480 response if the lookup times out, or the HSS returns 
-    // invalid information. If the subscriber doesn't exist then return 
-    // 404. 
+    // Return a 480 response if the lookup times out, or the HSS returns
+    // invalid information. If the subscriber doesn't exist then return
+    // 404.
     if (rc != HTTP_OK)
     {
       status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
-      
+
       if (rc == HTTP_NOT_FOUND)
       {
         status_code = PJSIP_SC_NOT_FOUND;
-      } 
+      }
     }
     else
     {
@@ -541,7 +552,12 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 
   if (status_code == PJSIP_SC_OK)
   {
-    if (!_hss_rsp._scscf.empty())
+    // The HSS can return the s-cscf name on a REGISTRATION AND CAPABILITIES
+    // request. Only use the name returned from the HSS if it hasn't already
+    // been tried.
+    if ((!_hss_rsp._scscf.empty()) &&
+        (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
+                   _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
       // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
