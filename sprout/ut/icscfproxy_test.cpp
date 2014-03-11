@@ -667,17 +667,17 @@ TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
   inject_msg(respond_to_current_txdata(480));
 
   // I-CSCF does a second HSS look-up, this time with auth_type set to
-  // CAPAB.  Both scscf1 and scscf2 match the
-  // mandatory capabilities, but only scscf1 matches the optional capabilities.
-  // Since the I-CSCF has already tried scscf1 it picks scscf2 this time.
+  // CAPAB. The HSS returns a scscf name, and no capabilities. The name shouldn't
+  // be used (as it's already been tried). I-CSCF should select the S-CSCF with
+  // the highest priority (as there are no capabilites) which is scscf4.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
-  expect_target("TCP", "10.10.10.2", 5058, tdata);
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
   ReqMatcher r2("REGISTER");
   r2.matches(tdata->msg);
 
   // Check the RequestURI has been altered to direct the message appropriately.
-  ASSERT_EQ("sip:scscf2.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+  ASSERT_EQ("sip:scscf4.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
 
   // Check no Route or Record-Route headers have been added.
   rr = get_headers(tdata->msg, "Record-Route");

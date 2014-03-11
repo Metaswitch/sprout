@@ -465,23 +465,19 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 
   if (status_code == PJSIP_SC_OK)
   {
-    // The HSS can return the s-cscf name on a REGISTRATION AND CAPABILITIES
-    // request. Only use the name returned from the HSS if it hasn't already
+    // The HSS can return the s-cscf name on a CAPAB request.
+    // Only use the name returned from the HSS if it hasn't already
     // been tried.
-    if (!_hss_rsp._scscf.empty())
+    if ((!_hss_rsp._scscf.empty()) &&
+        (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
+                   _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
-      // TODO merge into a single check once satisfied with UTs
-      // Received a specific S-CSCF from the HSS, so use it.
-      if (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(), _hss_rsp._scscf) == _attempted_scscfs.end())
-      {
-        scscf = _hss_rsp._scscf;
-      }
-      else
-      {
-        LOG_INFO("JJJJJJJJJJJJJ");
-      }
+      scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._queried_caps)
+
+    // Use the capabilites to select an S-CSCF if the HSS didn't
+    // return one (that hadn't already been tried).
+    if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
@@ -551,8 +547,8 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 
   if (status_code == PJSIP_SC_OK)
   {
-    // The HSS can return the s-cscf name on a REGISTRATION AND CAPABILITIES
-    // request. Only use the name returned from the HSS if it hasn't already
+    // The HSS can return the s-cscf name on a CAPAB request.
+    // Only use the name returned from the HSS if it hasn't already
     // been tried.
     if ((!_hss_rsp._scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
@@ -561,7 +557,10 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._queried_caps)
+
+    // Use the capabilites to select an S-CSCF if the HSS didn't
+    // return one (that hadn't already been tried).
+    if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
