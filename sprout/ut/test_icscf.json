@@ -1,17 +1,17 @@
 {
     "s-cscfs" : [
         {   "server" : "sip:scscf1.homedomain:5058;transport=TCP",
-            "priority" : 0,
+            "priority" : 1,
             "weight" : 100,
             "capabilities" : [123, 432, 345]
         },
         {   "server" : "sip:scscf2.homedomain:5058;transport=TCP",
-            "priority" : 0,
+            "priority" : 1,
             "weight" : 100,
             "capabilities" : [123, 432, 654]
         },
         {   "server" : "sip:scscf3.homedomain:5058;transport=TCP",
-            "priority" : 1,
+            "priority" : 2,
             "weight" : 100,
             "capabilities" : [654, 567, 789]
         },

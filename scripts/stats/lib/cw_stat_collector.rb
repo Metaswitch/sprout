@@ -240,11 +240,11 @@ class LatencyCountStatsRenderer < AbstractRenderer
   # @see AbstractRenderer#render
   def render(msg)
     <<-EOF
-count:#{msg[0]}
-mean:#{msg[1]}
-variance:#{msg[2]}
-lwm:#{msg[3]}
-hwm:#{msg[4]}
+mean:#{msg[0]}
+variance:#{msg[1]}
+lwm:#{msg[2]}
+hwm:#{msg[3]}
+count:#{msg[4]}
     EOF
   end
 end
