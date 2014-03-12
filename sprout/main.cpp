@@ -1269,6 +1269,8 @@ int main(int argc, char *argv[])
     http_stack = HttpStack::get_instance();
     ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
     HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
+    DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+    HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
 
     try
     {
@@ -1276,6 +1278,8 @@ int main(int argc, char *argv[])
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
       http_stack->register_handler("^/timers$",
                                    &chronos_handler_factory);
+      http_stack->register_handler("^/registrations?*$",
+                                   &deregistration_handler_factory);
       http_stack->start();
     }
     catch (HttpStack::Exception& e)

@@ -204,3 +204,97 @@ int ChronosHandler::parse_response(std::string body)
 
   return 200;
 }
+
+void DeregistrationHandler::run()
+{
+  // HTTP method must be a DELETE
+  if (_req.method() != htp_method_DELETE)
+  {
+    LOG_WARNING("HTTP method isn't delete");
+    _req.send_reply(405);
+    delete this;
+    return;
+  }
+
+  // Mandatory query parameter 'send-notifications' that must be true or false
+  _notify = _req.param("send-notifications");
+
+  if (_notify != "true" && _notify != "false")
+  {
+    LOG_WARNING("Request missing mandatory send-notifications param, send 400");
+    _req.send_reply(400);
+    delete this;
+    return;
+  }
+
+  // Parse the JSON body
+  int rc = parse_response(_req.body());
+
+  if (rc != 200)
+  {
+    LOG_WARNING("Request body is invalid, send 400");
+    _req.send_reply(rc);
+    delete this;
+    return;
+  }
+
+  _req.send_reply(rc);
+  delete this;
+}
+
+// Retrieve the aor and binding ID from the opaque data
+int DeregistrationHandler::parse_response(std::string body)
+{
+  Json::Value json_body;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(body.c_str(), json_body);
+
+  if (!parsingSuccessful)
+  {
+    LOG_WARNING("Failed to read data, %s",
+                reader.getFormattedErrorMessages().c_str());
+    return 400;
+  }
+
+  if ((json_body.isMember("registrations")) &&
+      ((json_body)["registrations"].isArray()))
+  {
+    Json::Value registration_vals = json_body["registrations"];
+
+    for (size_t ii = 0; ii < registration_vals.size(); ++ii)
+
+    {
+      Json::Value registration = registration_vals[(int)ii];
+      std::string primary_impu;
+      std::string impi = "";
+
+      if ((registration.isMember("primary-impu")) &&
+          ((registration)["primary-impu"].isString()))
+      {
+        primary_impu = registration["primary-impu"].asString();
+
+        if ((registration.isMember("impi")) &&
+            (registration["impi"].isString()))
+
+        {
+          impi = registration["impi"].asString();
+        }
+      }
+      else
+      {
+        LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
+        return 400;
+      }
+
+      _bindings.insert(std::make_pair(primary_impu, impi));
+    }
+  }
+  else
+  {
+    LOG_WARNING("Registrations not available in JSON");
+    return 400;
+  }
+
+  LOG_DEBUG("HTTP request successfully parsed");
+  return 200;
+}

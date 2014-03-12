@@ -41,6 +41,7 @@
 #include "chronosconnection.h"
 #include "hssconnection.h"
 #include "regstore.h"
+#include "sipresolver.h"
 
 class ChronosHandler : public HttpStack::Handler
 {
@@ -68,6 +69,29 @@ protected:
   const Config* _cfg;
   std::string _aor_id;
   std::string _binding_id;
+};
+
+class DeregistrationHandler : public HttpStack::Handler
+{
+public:
+  struct Config
+  {
+  Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
+    _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver) {}
+    RegStore* _store;
+    RegStore* _remote_store;
+    HSSConnection* _hss;
+    SIPResolver* _sipresolver;
+  };
+
+  DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+  int parse_response(std::string body);
+
+protected:
+  const Config* _cfg;
+  std::map<std::string, std::string> _bindings;
+  std::string _notify;
 };
 
 #endif
