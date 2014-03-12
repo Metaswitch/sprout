@@ -64,14 +64,15 @@ extern "C" {
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
-  _data_store(data_store),
   _chronos(chronos_connection)
 {
+  _connector = new Connector(data_store);
 }
 
 
 RegStore::~RegStore()
 {
+  delete _connector;
 }
 
 
@@ -80,6 +81,17 @@ RegStore::~RegStore()
 ///
 /// @param aor_id       The SIP Address of Record for the registration
 RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
+{
+  AoR* aor_data = _connector->get_aor_data(aor_id);
+
+  int now = time(NULL);
+  expire_bindings(aor_data, now);
+  expire_subscriptions(aor_data, now);
+
+  return aor_data;
+}
+
+RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id)
 {
   LOG_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
@@ -93,9 +105,6 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
     // Retrieved the data, so deserialize it.
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
-    int now = time(NULL);
-    expire_bindings(aor_data, now);
-    expire_subscriptions(aor_data, now);
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
   }
   else if (status == Store::Status::NOT_FOUND)
@@ -203,13 +212,19 @@ bool RegStore::set_aor_data(const std::string& aor_id,
     }
   }
 
-  std::string data = serialize_aor(aor_data);
+  return _connector->set_aor_data(aor_id, aor_data, max_expires - now);
+}
 
+bool RegStore::Connector::set_aor_data(const std::string& aor_id,
+                                       AoR* aor_data,
+                                       int expiry)
+{
+  std::string data = serialize_aor(aor_data);
   Store::Status status = _data_store->set_data("reg",
                                                aor_id,
                                                data,
                                                aor_data->_cas,
-                                               max_expires - now);
+                                               expiry);
   LOG_DEBUG("Data store set_data returned %d", status);
 
   return (status == Store::Status::OK);
@@ -296,7 +311,7 @@ void RegStore::expire_subscriptions(AoR* aor_data,
 
 
 /// Serialize the contents of an AoR.
-std::string RegStore::serialize_aor(AoR* aor_data)
+std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 {
   std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
 
@@ -374,7 +389,7 @@ std::string RegStore::serialize_aor(AoR* aor_data)
 
 
 /// Deserialize the contents of an AoR
-RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
+RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
 {
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
 
@@ -628,3 +643,13 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
     pjsip_tx_data_dec_ref(tdata_notify);
   }
 }
+
+RegStore::Connector::Connector(Store* data_store) :
+  _data_store(data_store)
+{
+}
+
+RegStore::Connector::~Connector()
+{
+}
+

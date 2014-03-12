@@ -204,6 +204,28 @@ public:
     friend class RegStore;
   };
 
+  /// Provides the interface to the data store
+  class Connector
+  {
+    Connector(Store* data_store);
+
+    ~Connector();
+
+    AoR* get_aor_data(const std::string& aor_id);
+
+    bool set_aor_data(const std::string& aor_id,
+                      AoR* aor_data,
+                      int expiry);
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& s);
+
+    Store* _data_store;
+
+    /// RegStore is the only class that can use Connector
+    friend class RegStore;
+  };
+
   /// Constructor.
   RegStore(Store* data_store, ChronosConnection* chronos_connection);
 
@@ -230,12 +252,8 @@ private:
   int expire_bindings(AoR* aor_data, int now);
   void expire_subscriptions(AoR* aor_data, int now);
 
-  std::string serialize_aor(AoR* aor_data);
-
-  AoR* deserialize_aor(const std::string& s);
-
-  Store* _data_store;
   ChronosConnection* _chronos;
+  Connector* _connector;
 };
 
 #endif
