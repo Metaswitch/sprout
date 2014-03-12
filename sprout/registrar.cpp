@@ -676,6 +676,11 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
+  // Echo back any P-Charging-Vector or P-Charging-Function-Addresses
+  // headers
+  PJUtils::clone_header(&STR_P_CHARGING_V, msg, tdata->msg, tdata->pool);
+  PJUtils::clone_header(&STR_P_CHARGING_F_A, msg, tdata->msg, tdata->pool);
+
   // Construct a Service-Route header pointing at the domain.  We don't
   // care which sprout handles the subsequent requests as they all have access
   // to all subscriber information.
