@@ -1161,7 +1161,7 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
 int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 {
   // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
-  LOG_DEBUG("Compare new status code %d with stored status code %d");
+  LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
   if (sc1 == sc2)
   {
     // Status codes are equal.
