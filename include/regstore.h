@@ -95,6 +95,8 @@ public:
       /// The timer ID provided by Chronos.
       std::string _timer_id;
 
+      /// The private ID this binding was registered with.
+      std::string _private_id;
     };
 
     /// @class RegStore::AoR::Subscription

@@ -334,6 +334,7 @@ std::string RegStore::serialize_aor(AoR* aor_data)
       oss << *i << '\0';
     }
     oss << b->_timer_id << '\0';
+    oss << b->_private_id << '\0';
   }
 
   int num_subscriptions = aor_data->subscriptions().size();
@@ -422,6 +423,7 @@ RegStore::AoR* RegStore::deserialize_aor(const std::string& s)
       LOG_DEBUG("  Deserialized path header %s", i->c_str());
     }
     getline(iss, b->_timer_id, '\0');
+    getline(iss, b->_private_id, '\0');
   }
 
   int num_subscriptions;
