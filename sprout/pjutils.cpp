@@ -589,6 +589,12 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
   {
     // Copy the SAS trail across from the request.
     set_trail(*p_tdata, get_trail(rdata));
+
+    // Some headers should always be copied onto responses, like
+    // charging headers
+    PJUtils::clone_header(&STR_P_C_V, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+    PJUtils::clone_header(&STR_P_C_F_A, rdata->msg_info.msg, (*p_tdata)->msg, (*p_tdata)->pool);
+
   }
   return status;
 }

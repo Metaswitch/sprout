@@ -193,8 +193,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
     PJUtils::clone_header(&STR_P_V_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
 
     // Copy P-Charging-Vector or P-Charging-Function-Addresses from original message
-    PJUtils::clone_header(&STR_P_CHARGING_V, received_register->msg_info.msg, tdata->msg, tdata->pool);
-    PJUtils::clone_header(&STR_P_CHARGING_F_A, received_register->msg_info.msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_V, received_register->msg_info.msg, tdata->msg, tdata->pool);
+    PJUtils::clone_header(&STR_P_C_F_A, received_register->msg_info.msg, tdata->msg, tdata->pool);
 
     // Generate a message body based on Filter Criteria values
     char buf[MAX_SIP_MSG_SIZE];
