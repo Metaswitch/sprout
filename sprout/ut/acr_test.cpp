@@ -268,7 +268,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   pj_time_val ts;
 
   // Create an ACR instance for the test.
-  ACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
+  ACR rf(NULL, 0, SCSCF, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -509,7 +509,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   pj_time_val ts;
 
   // Create an ACR instance for the test.
-  ACR rf(NULL, 0, "sprout.homedomain", SCSCF, CALLING_PARTY);
+  ACR rf(NULL, 0, SCSCF, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
