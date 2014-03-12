@@ -437,7 +437,7 @@ void ACR::send_message(pj_time_val timestamp)
 {
   // Encode and send the request using the Ralf HTTP connection.
   LOG_VERBOSE("Sending ACR");
-  std::string path = "/call_id/" + _user_session_id;
+  std::string path = "/call-id/" + _user_session_id;
   std::map<std::string, std::string> headers;
   long rc = _ralf->send_post(path,
                              get_message(timestamp),
@@ -467,13 +467,13 @@ std::string ACR::get_message(pj_time_val timestamp)
          i != _ccfs.end();
          ++i)
     {
-      p["ccfs"].append(Json::Value(*i));
+      p["ccf"].append(Json::Value(*i));
     }
     for (std::list<std::string>::const_iterator i = _ecfs.begin();
          i != _ecfs.end();
          ++i)
     {
-      p["ecfs"].append(Json::Value(*i));
+      p["ecf"].append(Json::Value(*i));
     }
   }
 
