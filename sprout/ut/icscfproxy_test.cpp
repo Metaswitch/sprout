@@ -1246,6 +1246,100 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 }
 
 
+TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
+{
+  // Tests routing of REGISTER requests when all the valid S-CSCFs
+  // respond with a 480 to the I-CSCF.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the user registration status query using
+  // a default private user identity.  The first response (specifying
+  // auth_type=REG) returns scscf1, the second response (specifying
+  // auth_type=CAPAB) returns scscf1 again.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [123],"
+                              " \"optional-capabilities\": [345]}");
+
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // I-CSCF does an initial HSS lookup with auth_type set to REG,
+  // which returns S-CSCF scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // I-CSCF does a second HSS look-up, this time with auth_type set to
+  // CAPAB. The HSS returns capabilities. I-CSCF selects scscf2 as it's
+  // the only S-CSCF with the mandatory capabilites that hasn't been
+  // tried yet
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5058, tdata);
+  ReqMatcher r2("REGISTER");
+  r2.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf2.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // Check the final response is 504.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(504);
+  r3.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
+
+
 TEST_F(ICSCFProxyTest, RouteOrigInviteHSSServerName)
 {
   pjsip_tx_data* tdata;
