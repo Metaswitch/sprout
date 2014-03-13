@@ -63,4 +63,9 @@ void register_with_application_servers(Ifcs& ifcs,
                                        bool is_initial_registration,
                                        const std::string& served_user,
                                        SAS::TrailId trail);
+void deregister_with_application_servers(Ifcs&,
+                                         RegStore* store,
+                                         SIPResolver* sipresolver,
+                                         const std::string&,
+                                         SAS::TrailId trail);
 }

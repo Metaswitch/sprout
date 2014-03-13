@@ -86,7 +86,14 @@ public:
 
   DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
   void run();
+  int handle_response();
   int parse_response(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store,
+                              std::string aor_id,
+                              std::string private_id,
+                              RegStore::AoR* previous_aor_data,
+                              RegStore* remote_store,
+                              bool is_primary);
 
 protected:
   const Config* _cfg;

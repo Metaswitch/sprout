@@ -40,6 +40,64 @@
 #include "log.h"
 #include "regstore.h"
 #include "ifchandler.h"
+#include "registration_utils.h"
+
+bool handler_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
+                    bool& all_bindings_expired, std::string aor_id,
+                    RegStore* current_store, RegStore* remote_store,
+                    RegStore::AoR** previous_aor_data)
+{
+  // Find the current bindings for the AoR.
+  delete *aor_data;
+  *aor_data = current_store->get_aor_data(aor_id);
+  LOG_DEBUG("Retrieved AoR data %p", *aor_data);
+
+  if (*aor_data == NULL)
+  {
+    // Failed to get data for the AoR because there is no connection
+    // to the store.
+    // LCOV_EXCL_START - local store (used in testing) never fails
+    LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
+    return false;
+    // LCOV_EXCL_STOP
+  }
+
+  // If we don't have any bindings, try the backup AoR and/or store.
+  if ((*aor_data)->bindings().empty())
+  {
+    if ((*previous_aor_data == NULL) &&
+        (remote_store != NULL))
+    {
+      *previous_aor_data = remote_store->get_aor_data(aor_id);
+      previous_aor_data_alloced = true;
+    }
+
+    if ((*previous_aor_data != NULL) &&
+        (!(*previous_aor_data)->bindings().empty()))
+    {
+      //LCOV_EXCL_START
+      for (RegStore::AoR::Bindings::const_iterator i = (*previous_aor_data)->bindings().begin();
+           i != (*previous_aor_data)->bindings().end();
+           ++i)
+      {
+        RegStore::AoR::Binding* src = i->second;
+        RegStore::AoR::Binding* dst = (*aor_data)->get_binding(i->first);
+        *dst = *src;
+      }
+
+      for (RegStore::AoR::Subscriptions::const_iterator i = (*previous_aor_data)->subscriptions().begin();
+           i != (*previous_aor_data)->subscriptions().end();
+           ++i)
+      {
+        RegStore::AoR::Subscription* src = i->second;
+        RegStore::AoR::Subscription* dst = (*aor_data)->get_subscription(i->first);
+        *dst = *src;
+      }
+      //LCOV_EXCL_STOP
+    }
+  }
+  return true;
+}
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void ChronosHandler::run()
@@ -96,56 +154,12 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 
   do
   {
-    // delete NULL is safe, so we can do this on every iteration.
-    delete aor_data;
-
-    // Find the current bindings for the AoR.
-    aor_data = current_store->get_aor_data(aor_id);
-    LOG_DEBUG("Retrieved AoR data %p", aor_data);
-
-    if (aor_data == NULL)
+    if (!handler_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
+                        aor_id, current_store, remote_store, &previous_aor_data))
     {
-      // Failed to get data for the AoR because there is no connection
-      // to the store.
       // LCOV_EXCL_START - local store (used in testing) never fails
-      LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
       break;
       // LCOV_EXCL_STOP
-    }
-
-    // If we don't have any bindings, try the backup AoR and/or store.
-    if (aor_data->bindings().empty())
-    {
-      if ((previous_aor_data == NULL) &&
-          (remote_store != NULL))
-      {
-        previous_aor_data = remote_store->get_aor_data(aor_id);
-        previous_aor_data_alloced = true;
-      }
-
-      if ((previous_aor_data != NULL) &&
-          (!previous_aor_data->bindings().empty()))
-      {
-        //LCOV_EXCL_START
-        for (RegStore::AoR::Bindings::const_iterator i = previous_aor_data->bindings().begin();
-             i != previous_aor_data->bindings().end();
-             ++i)
-        {
-          RegStore::AoR::Binding* src = i->second;
-          RegStore::AoR::Binding* dst = aor_data->get_binding(i->first);
-          *dst = *src;
-        }
-
-        for (RegStore::AoR::Subscriptions::const_iterator i = previous_aor_data->subscriptions().begin();
-             i != previous_aor_data->subscriptions().end();
-             ++i)
-        {
-          RegStore::AoR::Subscription* src = i->second;
-          RegStore::AoR::Subscription* dst = aor_data->get_subscription(i->first);
-          *dst = *src;
-        }
-        //LCOV_EXCL_STOP
-      }
     }
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
@@ -205,6 +219,7 @@ int ChronosHandler::parse_response(std::string body)
   return 200;
 }
 
+//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void DeregistrationHandler::run()
 {
   // HTTP method must be a DELETE
@@ -238,9 +253,11 @@ void DeregistrationHandler::run()
     return;
   }
 
+  rc = handle_response();
   _req.send_reply(rc);
   delete this;
 }
+//LCOV_EXCL_STOP
 
 // Retrieve the aor and binding ID from the opaque data
 int DeregistrationHandler::parse_response(std::string body)
@@ -297,4 +314,109 @@ int DeregistrationHandler::parse_response(std::string body)
 
   LOG_DEBUG("HTTP request successfully parsed");
   return 200;
+}
+
+int DeregistrationHandler::handle_response()
+{
+  for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
+  {
+    RegStore::AoR* aor_data = set_aor_data(_cfg->_store, it->first, it->second, NULL, _cfg->_remote_store, true);
+
+    if (aor_data != NULL)
+    {
+      // If we have a remote store, try to store this there too.  We don't worry
+      // about failures in this case.
+      if (_cfg->_remote_store != NULL)
+      {
+        RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, it->first, it->second, aor_data, NULL, false);
+        delete remote_aor_data;
+      }
+    }
+    else
+    {
+      // Can't connect to memcached, return 500. If this isn't the first AoR being edited
+      // then this will lead to an inconsistency between the HSS and Sprout, as
+      // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
+      // Sprout accepts changes to AoRs that don't exist though.
+      // LCOV_EXCL_START - local store (used in testing) never fails
+      LOG_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
+      delete aor_data;
+      return 500;
+      // LCOV_EXCL_STOP
+    }
+
+    delete aor_data;
+  }
+
+  return 200;
+}
+
+RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
+                                                   std::string aor_id,
+                                                   std::string private_id,
+                                                   RegStore::AoR* previous_aor_data,
+                                                   RegStore* remote_store,
+                                                   bool is_primary)
+{
+  RegStore::AoR* aor_data = NULL;
+  bool previous_aor_data_alloced = false;
+  bool all_bindings_expired = false;
+
+  do
+  {
+    if (!handler_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
+                        aor_id, current_store, remote_store, &previous_aor_data))
+    {
+      // LCOV_EXCL_START - local store (used in testing) never fails
+      break;
+      // LCOV_EXCL_STOP
+    }
+
+    for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+         i != aor_data->bindings().end();
+         ++i)
+    {
+      RegStore::AoR::Binding* b = i->second;
+      std::string b_id = i->first;
+
+      if (private_id == "" || private_id == b->_private_id)
+      {
+        // Update the cseq
+        aor_data->_notify_cseq++;
+
+        // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
+        // if there are any subscriptions
+        if (_notify == "true" && is_primary)
+        {
+          for (RegStore::AoR::Subscriptions::const_iterator j = aor_data->subscriptions().begin();
+              j != aor_data->subscriptions().end();
+               ++j)
+          {
+            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+          }
+        }
+
+        aor_data->remove_binding(b_id);
+      }
+    }
+
+    if (private_id == "")
+    {
+      // Deregister with any application servers
+      std::vector<std::string> uris;
+      std::map<std::string, Ifcs> ifc_map;
+      std::string state;
+      _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
+      RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store, _cfg->_sipresolver, aor_id, 0);
+    }
+  }
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+
+  // If we allocated the AoR, tidy up.
+  if (previous_aor_data_alloced)
+  {
+    delete previous_aor_data;
+  }
+
+  return aor_data;
 }
