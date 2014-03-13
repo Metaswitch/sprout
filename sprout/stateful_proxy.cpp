@@ -2501,10 +2501,11 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
 
   if (targets.size() == 0)
   {
-    // No targets found, so reject with a 404 error - reuse the best_rsp
-    // message.
-    LOG_INFO("Reject request with 404");
-    send_response(PJSIP_SC_NOT_FOUND);
+    // No targets found, so reject with a 480 error.
+    // There will only be no targets when the terminatiing user isn't
+    // registered or has no valid bindings.
+    LOG_INFO("Reject request with 480");
+    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
 
     return;
   }
