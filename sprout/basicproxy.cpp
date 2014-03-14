@@ -1414,7 +1414,7 @@ void BasicProxy::UACTsx::send_request()
 {
   enter_context();
 
-  pj_status_t status;
+  pj_status_t status = PJ_SUCCESS;
 
   LOG_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
