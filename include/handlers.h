@@ -84,7 +84,11 @@ public:
     SIPResolver* _sipresolver;
   };
 
-  DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg)
+  {
+    _pjsip_registered = false;
+  };
+
   void run();
   int handle_response();
   int parse_response(std::string body);
@@ -99,6 +103,7 @@ protected:
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
   std::string _notify;
+  bool _pjsip_registered;
 };
 
 #endif

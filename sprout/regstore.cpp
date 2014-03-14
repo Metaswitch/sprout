@@ -84,9 +84,12 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
 {
   AoR* aor_data = _connector->get_aor_data(aor_id);
 
-  int now = time(NULL);
-  expire_bindings(aor_data, now);
-  expire_subscriptions(aor_data, now);
+  if (aor_data != NULL)
+  {
+    int now = time(NULL);
+    expire_bindings(aor_data, now);
+    expire_subscriptions(aor_data, now);
+  }
 
   return aor_data;
 }

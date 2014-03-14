@@ -36,6 +36,12 @@
 
 #include <json/reader.h>
 
+extern "C" {
+#include <pjsip.h>
+#include <pjlib-util.h>
+#include <pjlib.h>
+}
+
 #include "handlers.h"
 #include "log.h"
 #include "regstore.h"
@@ -222,6 +228,22 @@ int ChronosHandler::parse_response(std::string body)
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void DeregistrationHandler::run()
 {
+  // this thread needs to be registered with pjsip in order
+  // for deregistration from application servers to work
+  pj_thread_desc dereg_thread_desc;
+  pj_thread_t *thread = 0;
+
+  _pjsip_registered = true;
+  if (!pj_thread_is_registered())
+  {
+    pj_status_t thread_reg_status = pj_thread_register("DeregThread", dereg_thread_desc, &thread);
+    if (thread_reg_status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to register Deregistration Handler thread with pjsip");
+      _pjsip_registered = false;
+    }
+  }
+
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
   {
@@ -406,8 +428,16 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
       std::string state;
-      _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
-      RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store, _cfg->_sipresolver, aor_id, 0);
+      if (_pjsip_registered)
+      {
+        _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
+        RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store,
+                                                               _cfg->_sipresolver, aor_id, 0);
+      }
+      else
+      {
+        LOG_INFO("Skipping deregister with application servers");
+      }
     }
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
