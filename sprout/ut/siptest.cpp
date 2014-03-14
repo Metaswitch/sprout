@@ -123,6 +123,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.public_host = pj_str("public_hostname");
   stack_data.home_domain = pj_str("homedomain");
   stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
+  stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
