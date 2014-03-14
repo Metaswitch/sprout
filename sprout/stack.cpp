@@ -823,7 +823,8 @@ pj_status_t init_stack(const std::string& system_name,
                        int record_routing_model,
                        const int default_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
-                       LoadMonitor *load_monitor_arg)
+                       LoadMonitor *load_monitor_arg,
+                       const std::string& cdf_domain)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -843,6 +844,7 @@ pj_status_t init_stack(const std::string& system_name,
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
+  char* cdf_domain_cstr = strdup(cdf_domain.c_str());
 
   // Copy port numbers to stack data.
   stack_data.pcscf_trusted_port = pcscf_trusted_port;
@@ -858,6 +860,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
+  stack_data.cdf_domain = pj_str(cdf_domain_cstr);
 
   // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
   stack_data.addr_family = AF_INET;
@@ -1027,7 +1030,7 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
-  // Set up the Last Value Cache, accumulators and counters. 
+  // Set up the Last Value Cache, accumulators and counters.
   std::string zmq_port = SPROUT_ZMQ_PORT;
 
   if ((stack_data.pcscf_trusted_port != 0) &&
