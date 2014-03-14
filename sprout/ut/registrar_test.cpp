@@ -715,7 +715,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::string regstate;
   _hss_connection->update_registration_state(user, "", HSSConnection::REG, regstate, ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], NULL, user, "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration

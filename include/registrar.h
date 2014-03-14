@@ -49,6 +49,8 @@ extern "C" {
 #include "ifchandler.h"
 #include "sipresolver.h"
 
+extern pjsip_module mod_registrar;
+
 void third_party_register_failed(const std::string& public_id,
                                  SAS::TrailId trail);
 

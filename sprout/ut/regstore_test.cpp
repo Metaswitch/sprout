@@ -40,8 +40,10 @@
 #include "gtest/gtest.h"
 #include <json/reader.h>
 
+#include "siptest.hpp"
 #include "stack.h"
 #include "utils.h"
+#include "pjutils.h"
 #include "sas.h"
 #include "localstore.h"
 #include "regstore.h"
@@ -53,16 +55,38 @@
 using namespace std;
 
 /// Fixture for RegStoreTest.
-class RegStoreTest : public ::testing::Test
+class RegStoreTest : public SipTest
 {
   FakeLogger _log;
 
-  RegStoreTest()
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  RegStoreTest() : SipTest()
   {
   }
 
   virtual ~RegStoreTest()
   {
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
+    // Stop and restart the layer just in case
+    //pjsip_tsx_layer_instance()->stop();
+    //pjsip_tsx_layer_instance()->start();
   }
 };
 
@@ -322,7 +346,7 @@ TEST_F(RegStoreTest, CopyTests)
   delete chronos_connection; chronos_connection = NULL;
 }
 
-TEST_F(RegStoreTest, ExpiryTests)
+TEST_F(RegStoreTest, DISABLED_ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
   init_pjsip_logging(99, false, "");

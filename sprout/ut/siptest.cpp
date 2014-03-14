@@ -140,6 +140,9 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   // Initialise PJSIP and associated resources.
   init_pjsip();
 
+  // Initialize the PJUtils module.
+  PJUtils::init();
+
   // Set up default UDP transports.
   TransportFlow::udp_transport(stack_data.pcscf_trusted_port);
   TransportFlow::udp_transport(stack_data.pcscf_untrusted_port);
@@ -169,6 +172,9 @@ void SipTest::TearDownTestCase()
 
   // Delete the default TCP transport flow.
   delete _tp_default;
+
+  // Terminate the PJUtils module.
+  PJUtils::term();
 
   // Terminate PJSIP
   term_pjsip();
