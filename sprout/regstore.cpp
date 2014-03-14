@@ -60,6 +60,7 @@ extern "C" {
 #include "regstore.h"
 #include "notify_utils.h"
 #include "stack.h"
+#include "pjutils.h"
 #include "chronosconnection.h"
 
 RegStore::RegStore(Store* data_store,
@@ -620,9 +621,6 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
 
   if (status == PJ_SUCCESS)
   {
-    pjsip_tx_data_add_ref(tdata_notify);
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify,
-                                                                    NULL, NULL);
-    pjsip_tx_data_dec_ref(tdata_notify);
+    status = PJUtils::send_request(tdata_notify);
   }
 }

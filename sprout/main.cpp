@@ -1016,6 +1016,10 @@ int main(int argc, char *argv[])
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
+  // Create a DNS resolver and a SIP specific resolver.
+  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  sip_resolver = new SIPResolver(dns_resolver);
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
@@ -1028,6 +1032,7 @@ int main(int argc, char *argv[])
                       opt.home_domain,
                       opt.sprout_domain,
                       opt.alias_hosts,
+                      sip_resolver,
                       opt.pjsip_threads,
                       opt.worker_threads,
                       opt.record_routing_model,
@@ -1040,10 +1045,6 @@ int main(int argc, char *argv[])
     LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
-
-  // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
-  sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialise the OPTIONS handling module.
   status = init_options();

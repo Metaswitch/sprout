@@ -818,6 +818,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& home_domain,
                        const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
+                       SIPResolver* sipresolver,
                        int num_pjsip_threads,
                        int num_worker_threads,
                        int record_routing_model,
@@ -849,6 +850,8 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
   stack_data.scscf_port = scscf_port;
   stack_data.icscf_port = icscf_port;
+
+  stack_data.sipresolver = sipresolver;
 
   // Copy other functional options to stack data.
   stack_data.default_session_expires = default_session_expires;
@@ -918,6 +921,9 @@ pj_status_t init_stack(const std::string& system_name,
   // Register the stack module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
+
+  // Initialize the PJUtils module.
+  PJUtils::init();
 
   // Create listening transports for the ports whichtrusted and untrusted ports.
   stack_data.pcscf_trusted_tcp_factory = NULL;
@@ -1027,7 +1033,7 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
-  // Set up the Last Value Cache, accumulators and counters. 
+  // Set up the Last Value Cache, accumulators and counters.
   std::string zmq_port = SPROUT_ZMQ_PORT;
 
   if ((stack_data.pcscf_trusted_port != 0) &&
@@ -1150,6 +1156,7 @@ void stop_stack()
 // the transaction layer module, which terminates all transactions.
 void unregister_stack_modules(void)
 {
+  PJUtils::term();
   pjsip_tsx_layer_destroy();
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stack);
 }

@@ -251,6 +251,8 @@ public:
   void send_request();
   void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
+  bool retry_request();
+
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -287,10 +289,9 @@ private:
   pj_str_t             _binding_id;
   pjsip_transport*     _transport;
 
-  /// Indicates that the destination address for this UAC transaction was
-  /// resolved (rather than being forced by transport selection).
-  bool                 _resolved;
-  AddrInfo             _ai;
+  // Stores the list of targets returned by the SIPResolver for this transaction.
+  std::vector<AddrInfo> _servers;
+  int                  _current_server;
 
   bool                 _pending_destroy;
   int                  _context_count;
