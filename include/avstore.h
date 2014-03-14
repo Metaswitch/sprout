@@ -82,7 +82,7 @@ private:
   /// Expire AV record after 30 seconds.  This should always be long enough for
   /// the UE to respond to the authentication challenge, while limiting the
   /// scope for replay attacks.
-  static const int AV_EXPIRY = 30;
+  static const int AV_EXPIRY = 0;
 };
 
 #endif
