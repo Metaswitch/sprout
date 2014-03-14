@@ -1534,11 +1534,11 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // terminated or been cancelled).
   LOG_DEBUG("%s - uac_tsx = %p, uas_tsx = %p", name(), this, _uas_tsx);
 
-  if (_uas_tsx != NULL)
+  if ((event->body.tsx_state.tsx == _tsx) && (_uas_tsx != NULL))
   {
     bool retrying = false;
 
-    if (_servers.empty())
+    if (!_servers.empty())
     {
       // Check to see if the destination server has failed so we can blacklist
       // it and retry to an alternative if possible.
@@ -1548,6 +1548,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       {
         // Either failed to connect to the selected server, or failed or get
         // a response, so blacklist it.
+        LOG_DEBUG("Failed to connected to server, so add to blacklist");
         PJUtils::blacklist_server(_servers[_current_server]);
 
         // Attempt a retry.
@@ -1590,7 +1591,8 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
     }
   }
 
-  if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
+  if ((event->body.tsx_state.tsx == _tsx) &&
+      (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
     LOG_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
     _proxy->unbind_transaction(_tsx);
@@ -1609,6 +1611,7 @@ bool BasicProxy::UACTsx::retry_request()
   if (++_current_server < (int)_servers.size())
   {
     // More servers to try, so allocate a new branch ID and transaction.
+    LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
     PJUtils::generate_new_branch_id(_tdata);
     pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
@@ -1620,11 +1623,14 @@ bool BasicProxy::UACTsx::retry_request()
     {
       // Set up the PJSIP transaction user module data to refer to the associated
       // UACTsx object
-      _proxy->bind_transaction(this, retry_tsx);
+      LOG_DEBUG("Created transaction for retry, so send request");
+      _proxy->unbind_transaction(_tsx);
+      pjsip_transaction* original_tsx = _tsx;
+      _tsx = retry_tsx;
+      _proxy->bind_transaction(this, _tsx);
 
       // Add the trail from the UAS transaction to the UAC transaction.
-      set_trail(retry_tsx, _uas_tsx->trail());
-      LOG_DEBUG("Added trail identifier %ld to UAC transaction", get_trail(_tsx));
+      set_trail(_tsx, _uas_tsx->trail());
 
       // Increment the reference count of the request as we are passing
       // it to a new transaction.
@@ -1633,15 +1639,20 @@ bool BasicProxy::UACTsx::retry_request()
       // Copy across the destination information for a retry and try to
       // resend the request.
       PJUtils::set_dest_info(_tdata, _servers[_current_server]);
-      status = pjsip_tsx_send_msg(retry_tsx, _tdata);
+      status = pjsip_tsx_send_msg(_tsx, _tdata);
 
       if (status == PJ_SUCCESS)
       {
-        // Successfully sent the retry.  We need to unbind the old PJSIP UAC
-        // transaction from this object so we get no more events.
-        _proxy->unbind_transaction(_tsx);
-        _tsx = retry_tsx;
+        // Successfully sent the retry.
         retrying = true;
+      }
+      else
+      {
+        // Failed to send, so revert to the original transaction to see it
+        // through to the end.
+        _proxy->unbind_transaction(_tsx);
+        _tsx = original_tsx;
+        _proxy->bind_transaction(this, _tsx);
       }
     }
   }

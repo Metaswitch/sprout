@@ -147,7 +147,7 @@ static SCSCFSelector *scscf_selector;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static ConnectionPool* upstream_conn_pool;
+static ConnectionPool* upstream_conn_pool = NULL;
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
@@ -863,7 +863,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   }
 
   // Select a transport for the request.
-  target_p->transport = upstream_conn_pool->get_connection();
+  if (upstream_conn_pool != NULL)
+  {
+    target_p->transport = upstream_conn_pool->get_connection();
+  }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
@@ -3652,26 +3655,27 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
   // Handle incoming responses (provided the UAS transaction hasn't
   // terminated or been cancelled.
   LOG_DEBUG("%s - uac_data = %p, uas_data = %p", name(), this, _uas_data);
-  if (_uas_data != NULL)
+  if ((event->body.tsx_state.tsx == _tsx) && (_uas_data != NULL))
   {
     bool retrying = false;
 
-    if (_servers.empty())
+    if (!_servers.empty())
     {
       // Check to see if the destination server has failed so we can blacklist
       // it and retry to an alternative if possible.
-      if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+      if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
           ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
       {
         // Either failed to connect to the selected server, or failed or get
         // a response, so blacklist it.
+        LOG_DEBUG("Failed to connected to server, so add to blacklist");
         PJUtils::blacklist_server(_servers[_current_server]);
 
         // Attempt a retry.
         retrying = retry_request();
       }
-      else if ((_tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
+      else if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
                (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
       {
         // The server returned a 5xx error.  We don't blacklist in this case
@@ -3699,7 +3703,7 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 
       // If UAC transaction is terminated because of a timeout, treat this as
       // a 504 error.
-      if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+      if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
           (_uas_data != NULL))
       {
         // UAC transaction has terminated while still connected to the UAS
@@ -3720,7 +3724,8 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     }
   }
 
-  if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
+  if ((event->body.tsx_state.tsx == _tsx) &&
+      (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
     LOG_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
     _tsx->mod_data[mod_tu.id] = NULL;
@@ -3739,6 +3744,7 @@ bool UACTransaction::retry_request()
   if (++_current_server < (int)_servers.size())
   {
     // More servers to try, so allocate a new branch ID and transaction.
+    LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
     PJUtils::generate_new_branch_id(_tdata);
     pj_status_t status = pjsip_tsx_create_uac2(&mod_tu,
@@ -3750,11 +3756,14 @@ bool UACTransaction::retry_request()
     {
       // Set up the PJSIP transaction user module data to refer to the associated
       // UACTsx object
-      retry_tsx->mod_data[mod_tu.id] = this;
+      LOG_DEBUG("Created transaction for retry, so send request");
+      pjsip_transaction* original_tsx = _tsx;
+      _tsx = retry_tsx;
+      original_tsx->mod_data[mod_tu.id] = NULL;
+      _tsx->mod_data[mod_tu.id] = this;
 
       // Add the trail from the UAS transaction to the UAC transaction.
-      set_trail(retry_tsx, trail());
-      LOG_DEBUG("Added trail identifier %ld to UAC transaction", get_trail(_tsx));
+      set_trail(_tsx, _uas_data->trail());
 
       // Increment the reference count of the request as we are passing
       // it to a new transaction.
@@ -3763,15 +3772,20 @@ bool UACTransaction::retry_request()
       // Copy across the destination information for a retry and try to
       // resend the request.
       PJUtils::set_dest_info(_tdata, _servers[_current_server]);
-      status = pjsip_tsx_send_msg(retry_tsx, _tdata);
+      status = pjsip_tsx_send_msg(_tsx, _tdata);
 
       if (status == PJ_SUCCESS)
       {
-        // Successfully sent the retry.  We need to unbind the old PJSIP UAC
-        // transaction from this object so we get no more events.
-        _tsx->mod_data[mod_tu.id] = NULL;
-        _tsx = retry_tsx;
+        // Successfully sent the retry.
         retrying = true;
+      }
+      else
+      {
+        // Failed to send, so revert to the original transaction to see it
+        // through to the end.
+        _tsx->mod_data[mod_tu.id] = NULL;
+        _tsx = original_tsx;
+        _tsx->mod_data[mod_tu.id] = this;
       }
     }
   }
@@ -3909,19 +3923,22 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     dialog_tracker = new DialogTracker(flow_table);
 
     // Create a connection pool to the upstream proxy.
-    pjsip_host_port pool_target;
-    pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
-    pool_target.port = upstream_proxy_port;
-    upstream_conn_pool = new ConnectionPool(&pool_target,
-                                            upstream_proxy_connections,
-                                            upstream_proxy_recycle,
-                                            stack_data.pool,
-                                            stack_data.endpt,
-                                            stack_data.pcscf_trusted_tcp_factory,
-                                            sipresolver,
-                                            stack_data.addr_family,
-                                            stack_data.stats_aggregator);
-    upstream_conn_pool->init();
+    if (upstream_proxy_connections > 0)
+    {
+      pjsip_host_port pool_target;
+      pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
+      pool_target.port = upstream_proxy_port;
+      upstream_conn_pool = new ConnectionPool(&pool_target,
+                                              upstream_proxy_connections,
+                                              upstream_proxy_recycle,
+                                              stack_data.pool,
+                                              stack_data.endpt,
+                                              stack_data.pcscf_trusted_tcp_factory,
+                                              sipresolver,
+                                              stack_data.addr_family,
+                                              stack_data.stats_aggregator);
+      upstream_conn_pool->init();
+    }
 
     ibcf = enable_ibcf;
     if (ibcf)
