@@ -66,7 +66,6 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
 {
   LOG_DEBUG("Add P-Charging headers");
 
-  std::string cdf = "1.2.3.4";
   std::string cdf_domain = PJUtils::pj_str_to_string(&stack_data.cdf_domain);
 
   if (cdf_domain != "")
@@ -74,22 +73,28 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
     // Add the P-Charging-Function-Addresses. The value of the CDF is passed in
     // as a parameter in bono - if this isn't present then don't set these
     // headers.
-    std::string fa_string = "ccf=" + cdf_domain;
-    pj_str_t fa_str = pj_strdup3(tdata->pool, fa_string.c_str());
-    PJUtils::set_generic_header(tdata, &STR_P_C_F_A, &fa_str);
+    pjsip_p_c_f_a_hdr* p_c_f_a = pjsip_p_c_f_a_hdr_create(tdata->pool);
+    pjsip_param* new_param = (pjsip_param*) pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
+    new_param->name = STR_CCF;
+    new_param->value = stack_data.cdf_domain;
+
+    pj_list_insert_before(&p_c_f_a->ccf, new_param);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_f_a);
 
     // Add the P-Charging-Vector Id. The icid-value is the Call-ID, and the
     // icid-generated-at is the bono domain
-    std::string home_domain = PJUtils::pj_str_to_string(&stack_data.home_domain);
     pjsip_cid_hdr* call_id = (pjsip_cid_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg,
                                                                         &STR_CALL_ID,
                                                                         NULL);
     std::string c_id = PJUtils::pj_str_to_string(&call_id->id);
     c_id.erase(std::remove(c_id.begin(), c_id.end(), '@'), c_id.end());
 
-    std::string v_string = "icid-value=" + c_id + ";icid-generated-at=" + home_domain;
-    pj_str_t v_str = pj_strdup3(tdata->pool, v_string.c_str());
-    PJUtils::set_generic_header(tdata, &STR_P_C_V, &v_str);
+    pjsip_p_c_v_hdr* p_c_v = pjsip_p_c_v_hdr_create(tdata->pool);
+
+    pj_strdup2(tdata->pool, &p_c_v->icid, c_id.c_str());
+    p_c_v->icid_gen_addr = stack_data.home_domain;
+
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_v);
   }
 }
 
@@ -109,8 +114,7 @@ void TrustBoundary::process_request(pjsip_tx_data* tdata)
     proxy_strip_trusted(tdata);
   }
 
-  // Always strip the P-Charging headers - don't trust the clients
-  // on these.
+  // Always strip the P-Charging headers
   PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
   PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
 
@@ -142,7 +146,7 @@ std::string TrustBoundary::to_string()
 {
   return _description + "(" + (_strip_request  ? "-req" : "") +
                         "," + (_strip_response ? "-rsp" : "") +
-                        "," + (_add_p_charging ? "-rsp" : "") + ")";
+                        "," + (_add_p_charging ? "-pch" : "") + ")";
 }
 
 /// Trust boundary instance: no boundary;

@@ -77,6 +77,7 @@ const pj_str_t STR_IK = pj_str("ik");
 const pj_str_t STR_P_PROFILE_KEY = pj_str("P-Profile-Key");
 const pj_str_t STR_SESSION_EXPIRES = pj_str("Session-Expires");
 const pj_str_t STR_CALL_ID = pj_str("Call-ID");
+const pj_str_t STR_CCF = pj_str("ccf");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str("odi_");

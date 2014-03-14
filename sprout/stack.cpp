@@ -844,6 +844,8 @@ pj_status_t init_stack(const std::string& system_name,
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
+
+  // This is only set on Bono nodes (it's the empty string otherwise)
   char* cdf_domain_cstr = strdup(cdf_domain.c_str());
 
   // Copy port numbers to stack data.
