@@ -371,7 +371,8 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         // The HSS has returned a negative response to the user registration
         // request - I-CSCF should respond with 403.
         _best_rsp->msg->line.status.code = PJSIP_SC_FORBIDDEN;
-        _best_rsp->msg->line.status.reason = pj_str("Forbidden");
+        _best_rsp->msg->line.status.reason =
+                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
       }
       else
       {
@@ -381,7 +382,8 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         // least one valid S-CSCF (as this is retry processing). The I-CSCF
         //  must return 504 (TS 24.229, 5.3.1.3) in this case.
         _best_rsp->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
-        _best_rsp->msg->line.status.reason = pj_str("Server Timeout");
+        _best_rsp->msg->line.status.reason =
+                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
       }
     }
   }
