@@ -71,6 +71,8 @@ void SIPResolver::resolve(const std::string& name,
                           int retries,
                           std::vector<AddrInfo>& targets)
 {
+  targets.clear();
+
   // First determine the transport following the process in RFC3263 section
   // 4.1.
   AddrInfo ai;
