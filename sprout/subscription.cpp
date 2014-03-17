@@ -331,10 +331,17 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
     // identity doesn't belong to the private identity.  Reject with 403.
+    st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
+
+    if (http_code == HTTP_NOT_FOUND)
+    {
+      st_code = PJSIP_SC_FORBIDDEN;
+    }
+
     LOG_ERROR("Rejecting SUBSCRIBE request");
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_FORBIDDEN,
+                               st_code,
                                NULL,
                                NULL,
                                NULL);
