@@ -204,7 +204,10 @@ public:
     friend class RegStore;
   };
 
-  /// Provides the interface to the data store
+  /// Provides the interface to the data store. This is responsible for
+  /// updating and getting information from the underlying data store. The
+  /// classes that call this class are responsible for retrying the get/set
+  /// functions in case of failure.
   class Connector
   {
     Connector(Store* data_store);

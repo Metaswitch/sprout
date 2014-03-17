@@ -64,7 +64,8 @@ extern "C" {
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
-  _chronos(chronos_connection)
+  _chronos(chronos_connection),
+  _connector(NULL)
 {
   _connector = new Connector(data_store);
 }

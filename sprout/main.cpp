@@ -785,6 +785,21 @@ public:
   }
 };
 
+void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+{
+  pj_thread_desc thread_desc;
+  pj_thread_t *thread = 0;
+
+  if (!pj_thread_is_registered())
+  {
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+
+    if (thread_reg_status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to register thread with pjsip");
+    }
+  }
+}
 
 /*
  * main()
@@ -1280,7 +1295,7 @@ int main(int argc, char *argv[])
                                    &chronos_handler_factory);
       http_stack->register_handler("^/registrations?*$",
                                    &deregistration_handler_factory);
-      http_stack->start();
+      http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
     {

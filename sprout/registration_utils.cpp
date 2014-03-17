@@ -65,10 +65,10 @@ void send_register_to_as(pjsip_rx_data* received_register,
                          SAS::TrailId);
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
-                                         RegStore* store,
-                                         SIPResolver* sipresolver,
-                                         const std::string& served_user,
-                                         SAS::TrailId trail)
+                                                            RegStore* store,
+                                                            SIPResolver* sipresolver,
+                                                            const std::string& served_user,
+                                                            SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs, store, sipresolver, NULL, NULL, 0, false, served_user, trail);
 }
@@ -99,7 +99,6 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
 
   if (received_register == NULL) {
-
     pj_status_t status;
     pjsip_method method;
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
@@ -128,6 +127,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
     ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list);
+
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {

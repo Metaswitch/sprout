@@ -48,10 +48,10 @@ extern "C" {
 #include "ifchandler.h"
 #include "registration_utils.h"
 
-bool handler_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
-                    bool& all_bindings_expired, std::string aor_id,
-                    RegStore* current_store, RegStore* remote_store,
-                    RegStore::AoR** previous_aor_data)
+static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
+                                    bool& all_bindings_expired, std::string aor_id,
+                                    RegStore* current_store, RegStore* remote_store,
+                                    RegStore::AoR** previous_aor_data)
 {
   // Find the current bindings for the AoR.
   delete *aor_data;
@@ -160,8 +160,8 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 
   do
   {
-    if (!handler_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                        aor_id, current_store, remote_store, &previous_aor_data))
+    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
+                                 aor_id, current_store, remote_store, &previous_aor_data))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
@@ -228,22 +228,6 @@ int ChronosHandler::parse_response(std::string body)
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void DeregistrationHandler::run()
 {
-  // this thread needs to be registered with pjsip in order
-  // for deregistration from application servers to work
-  pj_thread_desc dereg_thread_desc;
-  pj_thread_t *thread = 0;
-
-  _pjsip_registered = true;
-  if (!pj_thread_is_registered())
-  {
-    pj_status_t thread_reg_status = pj_thread_register("DeregThread", dereg_thread_desc, &thread);
-    if (thread_reg_status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Failed to register Deregistration Handler thread with pjsip");
-      _pjsip_registered = false;
-    }
-  }
-
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
   {
@@ -258,31 +242,31 @@ void DeregistrationHandler::run()
 
   if (_notify != "true" && _notify != "false")
   {
-    LOG_WARNING("Request missing mandatory send-notifications param, send 400");
+    LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
     _req.send_reply(400);
     delete this;
     return;
   }
 
   // Parse the JSON body
-  int rc = parse_response(_req.body());
+  int rc = parse_request(_req.body());
 
   if (rc != 200)
   {
-    LOG_WARNING("Request body is invalid, send 400");
+    LOG_WARNING("Request body is invalid, send %d", rc);
     _req.send_reply(rc);
     delete this;
     return;
   }
 
-  rc = handle_response();
+  rc = handle_request();
   _req.send_reply(rc);
   delete this;
 }
 //LCOV_EXCL_STOP
 
-// Retrieve the aor and binding ID from the opaque data
-int DeregistrationHandler::parse_response(std::string body)
+// Retrieve the aors and any private IDs from the request body
+int DeregistrationHandler::parse_request(std::string body)
 {
   Json::Value json_body;
   Json::Reader reader;
@@ -301,7 +285,6 @@ int DeregistrationHandler::parse_response(std::string body)
     Json::Value registration_vals = json_body["registrations"];
 
     for (size_t ii = 0; ii < registration_vals.size(); ++ii)
-
     {
       Json::Value registration = registration_vals[(int)ii];
       std::string primary_impu;
@@ -338,7 +321,7 @@ int DeregistrationHandler::parse_response(std::string body)
   return 200;
 }
 
-int DeregistrationHandler::handle_response()
+int DeregistrationHandler::handle_request()
 {
   for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
   {
@@ -386,8 +369,8 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
 
   do
   {
-    if (!handler_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                        aor_id, current_store, remote_store, &previous_aor_data))
+    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
+                                 aor_id, current_store, remote_store, &previous_aor_data))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
@@ -428,16 +411,9 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
       std::string state;
-      if (_pjsip_registered)
-      {
-        _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
-        RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store,
+      _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
+      RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store,
                                                                _cfg->_sipresolver, aor_id, 0);
-      }
-      else
-      {
-        LOG_INFO("Skipping deregister with application servers");
-      }
     }
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));

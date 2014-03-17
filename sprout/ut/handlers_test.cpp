@@ -160,16 +160,16 @@ class DeregistrationHandlerTest : public BaseTest
 TEST_F(DeregistrationHandlerTest, MainlineTest)
 {
   std::string body = "{\"registrations\": [{\"primary-impu\": \"impu_a\", \"impi\": \"impi_a\"}]}";
-  int status = handler->parse_response(body);
+  int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
-  handler->handle_response();
+  handler->handle_request();
 }
 
 TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
 {
   std::string body = "{[}";
-  int status = handler->parse_response(body);
+  int status = handler->parse_request(body);
   EXPECT_TRUE(_log.contains("Failed to read data"));
   ASSERT_EQ(status, 400);
 }
@@ -177,7 +177,7 @@ TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
 TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
 {
   std::string body = "{\"primary-impu\": \"impu_a\", \"impi\": \"impi_a\"}}";
-  int status = handler->parse_response(body);
+  int status = handler->parse_request(body);
   EXPECT_TRUE(_log.contains("Registrations not available in JSON"));
   ASSERT_EQ(status, 400);
 }
@@ -185,7 +185,7 @@ TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
 TEST_F(DeregistrationHandlerTest, MissingPrimaryIMPUJSONTest)
 {
   std::string body = "{\"registrations\": [{\"primary-imp\": \"impu_a\", \"impi\": \"impi_a\"}]}";
-  int status = handler->parse_response(body);
+  int status = handler->parse_request(body);
   EXPECT_TRUE(_log.contains("Invalid JSON - registration doesn't contain primary-impu"));
   ASSERT_EQ(status, 400);
 }

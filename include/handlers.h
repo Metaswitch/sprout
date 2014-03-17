@@ -48,8 +48,9 @@ class ChronosHandler : public HttpStack::Handler
 public:
   struct Config
   {
-  Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
-    _store(store), _remote_store(remote_store), _hss(hss) {}
+    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
+      _store(store), _remote_store(remote_store), _hss(hss)
+      {}
     RegStore* _store;
     RegStore* _remote_store;
     HSSConnection* _hss;
@@ -76,8 +77,9 @@ class DeregistrationHandler : public HttpStack::Handler
 public:
   struct Config
   {
-  Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
-    _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver) {}
+    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
+      _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver)
+      {}
     RegStore* _store;
     RegStore* _remote_store;
     HSSConnection* _hss;
@@ -86,12 +88,11 @@ public:
 
   DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg)
   {
-    _pjsip_registered = false;
   };
 
   void run();
-  int handle_response();
-  int parse_response(std::string body);
+  int handle_request();
+  int parse_request(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
                               std::string private_id,
@@ -103,7 +104,6 @@ protected:
   const Config* _cfg;
   std::map<std::string, std::string> _bindings;
   std::string _notify;
-  bool _pjsip_registered;
 };
 
 #endif
