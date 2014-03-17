@@ -50,18 +50,24 @@ std::string addrinfo_to_string(const AddrInfo& ai)
 
 void resolve(SIPResolver& sipresolver,
              const std::string& target,
+             int af,
              int port,
              int transport,
-             int af,
+             int retries,
              int repeats)
 {
-  AddrInfo ai;
+  std::vector<AddrInfo> servers;
 
   if (repeats == 1)
   {
-    if (sipresolver.resolve(target, port, transport, af, ai))
+    sipresolver.resolve(target, af, port, transport, retries, servers);
+    if (servers.size() > 0)
     {
-      printf("Resolution successful %s\n", addrinfo_to_string(ai).c_str());
+      printf("Resolution successful\n");
+      for (size_t ii = 0; ii < servers.size(); ++ii)
+      {
+        printf("  %s\n", addrinfo_to_string(servers[ii]).c_str());
+      }
     }
     else
     {
@@ -70,26 +76,44 @@ void resolve(SIPResolver& sipresolver,
   }
   else
   {
-    std::map<std::string, int> counts;
+    std::map<std::string, std::vector<int> > counts;
     for (int ii = 0; ii < repeats; ++ii)
     {
-      if (sipresolver.resolve(target, port, transport, af, ai))
+      sipresolver.resolve(target, af, port, transport, retries, servers);
+
+      if ((int)servers.size() > retries)
       {
-        // Successful.
-        counts[addrinfo_to_string(ai)]++;
+        printf("Returned %ld servers when limit is %d\n", servers.size(), retries);
       }
-      else
+      else if ((int)servers.size() < retries)
       {
-        // Failed.
-        counts["Failed"]++;
+        printf("Returned %ld servers when requested %d\n", servers.size(), retries);
+      }
+
+      // Successful.
+      for (size_t jj = 0; jj < servers.size(); ++jj)
+      {
+        std::vector<int>& cv = counts[addrinfo_to_string(servers[jj])];
+
+        if (cv.size() < jj + 1)
+        {
+          cv.resize(jj + 1);
+        }
+        cv[jj]++;
       }
     }
     printf("Completed %d resolutions finding %d unique destinations\n", repeats, (int)counts.size());
-    for (std::map<std::string, int>::const_iterator i = counts.begin();
+    for (std::map<std::string, std::vector<int>>::const_iterator i = counts.begin();
          i != counts.end();
          ++i)
     {
-      printf("  %s : %d (%g%%)\n", i->first.c_str(), i->second, ((double)i->second*100.0)/(double)repeats);
+      printf("  %s :", i->first.c_str());
+      const std::vector<int>& cv = i->second;
+      for (int jj = 0; jj < retries; ++jj)
+      {
+        printf("  %3.2g%%", ((double)cv[jj]*100.0)/(double)repeats);
+      }
+      printf("\n");
     }
   }
 }
@@ -101,6 +125,7 @@ int main(int argc, char *argv[])
   int af = AF_INET;
   int port = 0;
   int transport = -1;
+  int servers = 5;
   int repeats = 1;
   int log_level = 2;
 
@@ -116,7 +141,6 @@ int main(int argc, char *argv[])
   // Parse the command line options
   while (true)
   {
-    printf("optind = %d\n", optind);
     static struct option long_options[] =
     {
       {"tcp",                 no_argument,               0, 't'},
@@ -124,6 +148,7 @@ int main(int argc, char *argv[])
       {"udp",                 no_argument,               0, 'u'},
       {"UDP",                 no_argument,               0, 'U'},
       {"port",                required_argument,         0, 'p'},
+      {"servers",             required_argument,         0, 's'},
       {"repeat",              required_argument,         0, 'r'},
       {"log-level",           required_argument,         0, 'L'},
       {0, 0, 0, 0}
@@ -132,7 +157,7 @@ int main(int argc, char *argv[])
     // getopt_long stores the option index here.
     int option_index = 0;
 
-    char c = getopt_long(argc, argv, "46tup:L:", long_options, &option_index);
+    char c = getopt_long(argc, argv, "46tup:s:r:L:", long_options, &option_index);
 
     // Detect the end of the options.
     if (c == -1)
@@ -160,6 +185,10 @@ int main(int argc, char *argv[])
 
       case 'p':
         port = atoi(optarg);
+        break;
+
+      case 's':
+        servers = atoi(optarg);
         break;
 
       case 'r':
@@ -195,7 +224,7 @@ int main(int argc, char *argv[])
   if (target != "")
   {
     // Query specified on the command line, so issue the query and exit.
-    resolve(sipresolver, target, port, transport, af, repeats);
+    resolve(sipresolver, target, af, port, transport, servers, repeats);
   }
   else
   {
@@ -247,8 +276,9 @@ int main(int argc, char *argv[])
               target = tokens[1];
               port = (tokens.size() >= 3) ? atoi(tokens[2].c_str()) : 0;
               transport = (tokens.size() >= 4) ? get_transport(tokens[3].c_str()) : -1;
-              repeats = (tokens.size() >= 5) ? atoi(tokens[4].c_str()) : 1;
-              resolve(sipresolver, target, port, transport, af, repeats);
+              servers = (tokens.size() >= 5) ? atoi(tokens[4].c_str()) : 5;
+              repeats = (tokens.size() >= 6) ? atoi(tokens[5].c_str()) : 1;
+              resolve(sipresolver, target, af, port, transport, servers, repeats);
             }
             break;
 
