@@ -296,7 +296,7 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &send_register_cb);
   if (resolv_status != PJ_SUCCESS)
   {
-    delete tsxdata;
+    delete tsxdata;                         // LCOV_EXCL_LINE
   }
 }
 
