@@ -79,6 +79,7 @@ pj_status_t PJUtils::init()
 {
   pj_status_t status = pjsip_endpt_register_module(stack_data.endpt, &mod_sprout_util);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+  return status;
 }
 
 
@@ -954,15 +955,9 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                   pjsip_endpt_send_callback cb)
 {
   pjsip_transaction* tsx;
-  pj_status_t status;
+  pj_status_t status = PJ_SUCCESS;
 
   LOG_DEBUG("Sending standalone request statefully");
-  status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
-  if (status != PJ_SUCCESS)
-  {
-    pjsip_tx_data_dec_ref(tdata);
-    return status;
-  }
 
   // Allocate temporary storage for the request.
   StatefulSendState* sss = new StatefulSendState;
@@ -971,26 +966,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   sss->user_token = token;
   sss->user_cb = cb;
 
-  // Store the message and add a reference to prevent the transaction layer
-  // freeing it.
-  sss->tdata = tdata;
-  pjsip_tx_data_add_ref(tdata);
-
-  // Set the trail ID in the transaction from the message.
-  set_trail(tsx, get_trail(tdata));
-
-  // Set up the module data for the new transaction to reference
-  // the state information.
-  tsx->mod_data[mod_sprout_util.id] = sss;
-
-  if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
-  {
-    // Transport has already been determined, so copy it across to the
-    // transaction.
-    LOG_DEBUG("Transport already determined");
-    pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
-  }
-  else
+  if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
     resolve_next_hop(tdata, retries, sss->servers);
@@ -1000,15 +976,6 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
       // Set up the destination information for the first server.
       sss->current_server = 0;
       set_dest_info(tdata, sss->servers[sss->current_server]);
-
-      // If there are multiple servers available, then set the transaction
-      // timeout to a shorter value so we will retry an alternative quickly.
-      if (sss->servers.size() > 1)
-      {
-        LOG_DEBUG("Multiple destinations, reduce transaction timeout to %d seconds",
-                  DEFAULT_TSX_TIMEOUT);
-        pjsip_tsx_set_timeout(tsx, DEFAULT_TSX_TIMEOUT);
-      }
     }
     else
     {
@@ -1019,8 +986,40 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
 
   if (status == PJ_SUCCESS)
   {
-    LOG_DEBUG("Sending request");
-    status = pjsip_tsx_send_msg(tsx, tdata);
+    // We have servers to send the request to, so allocate a transaction.
+    status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
+
+    if (status == PJ_SUCCESS)
+    {
+      // Set the trail ID in the transaction from the message.
+      set_trail(tsx, get_trail(tdata));
+
+      // Set up the module data for the new transaction to reference
+      // the state information.
+      tsx->mod_data[mod_sprout_util.id] = sss;
+
+      if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+      {
+        // Transport has already been determined, so copy it across to the
+        // transaction.
+        LOG_DEBUG("Transport already determined");
+        pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+      }
+      else if (sss->servers.size() > 1)
+      {
+        LOG_DEBUG("Multiple destinations, reduce transaction timeout to %d seconds",
+                  DEFAULT_TSX_TIMEOUT);
+        pjsip_tsx_set_timeout(tsx, DEFAULT_TSX_TIMEOUT);
+      }
+
+      // Store the message and add a reference to prevent the transaction layer
+      // freeing it.
+      sss->tdata = tdata;
+      pjsip_tx_data_add_ref(tdata);
+
+      LOG_DEBUG("Sending request");
+      status = pjsip_tsx_send_msg(tsx, tdata);
+    }
   }
 
   if (status != PJ_SUCCESS)
