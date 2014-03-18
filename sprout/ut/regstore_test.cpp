@@ -69,7 +69,7 @@ class RegStoreTest : public SipTest
     SipTest::TearDownTestCase();
   }
 
-  RegStoreTest() : SipTest()
+  RegStoreTest()
   {
   }
 
@@ -307,7 +307,7 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_expires = now + 300;
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
@@ -321,7 +321,7 @@ TEST_F(RegStoreTest, CopyTests)
   s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   s1->_expires = now + 300;
 
   // Set the NOTIFY CSeq value to 1.
@@ -346,12 +346,9 @@ TEST_F(RegStoreTest, CopyTests)
   delete chronos_connection; chronos_connection = NULL;
 }
 
-TEST_F(RegStoreTest, DISABLED_ExpiryTests)
+TEST_F(RegStoreTest, ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
-  init_pjsip_logging(99, false, "");
-  init_pjsip();
-
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
   RegStore::AoR::Binding* b2;
@@ -406,7 +403,7 @@ TEST_F(RegStoreTest, DISABLED_ExpiryTests)
   s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s1->_expires = now + 150;
   s2 = aor_data1->get_subscription("5678");
   EXPECT_EQ(2u, aor_data1->subscriptions().size());
@@ -416,7 +413,7 @@ TEST_F(RegStoreTest, DISABLED_ExpiryTests)
   s2->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s2->_to_tag = std::string("5678");
   s2->_cid = std::string("xyzabc@192.91.191.29");
-  s2->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s2->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s2->_expires = now + 300;
 
   // Write the record to the store.
@@ -453,7 +450,6 @@ TEST_F(RegStoreTest, DISABLED_ExpiryTests)
   delete store; store = NULL;
   delete datastore; datastore = NULL;
   delete chronos_connection; chronos_connection = NULL;
-  term_pjsip();
 }
 
 
