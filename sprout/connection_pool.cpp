@@ -57,8 +57,6 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
                                pj_pool_t* pool,
                                pjsip_endpoint* endpt,
                                pjsip_tpfactory* tp_factory,
-                               SIPResolver* sipresolver,
-                               int addr_family,
                                LastValueCache* lvc) :
   _target(*target),
   _num_connections(num_connections),
@@ -67,8 +65,6 @@ ConnectionPool::ConnectionPool(pjsip_host_port* target,
   _pool(pool),
   _endpt(endpt),
   _tpfactory(tp_factory),
-  _sipresolver(sipresolver),
-  _addr_family(addr_family),
   _recycler(NULL),
   _terminated(false),
   _active_connections(0),
@@ -169,61 +165,38 @@ pj_status_t ConnectionPool::resolve_host(const pj_str_t* host,
 {
   pj_status_t status = PJ_ENOTFOUND;
 
-  if (_sipresolver != NULL)
-  {
-    // Use the SIPResolver to select a server for this connection.
-    std::vector<AddrInfo> ai;
-    _sipresolver->resolve(std::string(host->ptr, host->slen),
-                          _addr_family,
-                          port,
-                          IPPROTO_TCP,
-                          1,
-                          ai);
-    if (!ai.empty())
-    {
-      if (ai[0].address.af == AF_INET)
-      {
-        LOG_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
-        addr->ipv4.sin_family = AF_INET;
-        addr->ipv4.sin_addr.s_addr = ai[0].address.addr.ipv4.s_addr;
-        pj_sockaddr_set_port(addr, ai[0].port);
-        status = PJ_SUCCESS;
-      }
-      else if (ai[0].address.af == AF_INET6)
-      {
-        LOG_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
-        addr->ipv6.sin6_family = AF_INET6;
-        memcpy((char*)&addr->ipv6.sin6_addr,
-               (char*)&ai[0].address.addr.ipv6,
-               sizeof(struct in6_addr));
-        pj_sockaddr_set_port(addr, ai[0].port);
-        status = PJ_SUCCESS;
-      }
-      else
-      {
-        LOG_ERROR("Resolved %.*s to address of unknown family %d - failing connection!", host->slen, host->ptr); //LCOV_EXCL_LINE
-      }
-    }
-  }
-  else
-  {
-    pj_addrinfo ai[PJ_MAX_HOSTNAME];
-    unsigned count;
-    int af = pj_AF_UNSPEC();
+  // Select a server for this connection.
+  std::vector<AddrInfo> servers;
+  PJUtils::resolve(std::string(host->ptr, host->slen),
+                   port,
+                   IPPROTO_TCP,
+                   1,
+                   servers);
+  memset(addr, 0, sizeof(pj_sockaddr));
 
-    // Use pj_getaddrinfo to resolve the upstream proxy host name to a set of
-    // IP addresses.  Note that PJ_MAX_HOSTNAME is the maximum number of entried
-    // PJSIP can return - if we decide we need more we will need to change this
-    // in the PJSIP code.  Note also that there may be theoretical limits in
-    // DNS anyway.
-    count = PJ_MAX_HOSTNAME;
-    status = pj_getaddrinfo(af, host, &count, ai);
-    if (status == PJ_SUCCESS)
+  if (!servers.empty())
+  {
+    if (servers[0].address.af == AF_INET)
     {
-      // Select an A record at random.
-      int selection = rand() % count;
-      pj_memcpy(addr, &ai[selection].ai_addr, sizeof(pj_sockaddr));
-      pj_sockaddr_set_port(addr, port);
+      LOG_DEBUG("Successfully resolved %.*s to IPv4 address", host->slen, host->ptr);
+      addr->ipv4.sin_family = AF_INET;
+      addr->ipv4.sin_addr.s_addr = servers[0].address.addr.ipv4.s_addr;
+      pj_sockaddr_set_port(addr, servers[0].port);
+      status = PJ_SUCCESS;
+    }
+    else if (servers[0].address.af == AF_INET6)
+    {
+      LOG_DEBUG("Successfully resolved %.*s to IPv6 address", host->slen, host->ptr);
+      addr->ipv6.sin6_family = AF_INET6;
+      memcpy((char*)&addr->ipv6.sin6_addr,
+             (char*)&servers[0].address.addr.ipv6,
+             sizeof(struct in6_addr));
+      pj_sockaddr_set_port(addr, servers[0].port);
+      status = PJ_SUCCESS;
+    }
+    else
+    {
+      LOG_ERROR("Resolved %.*s to address of unknown family %d - failing connection!", host->slen, host->ptr); //LCOV_EXCL_LINE
     }
   }
 
@@ -387,27 +360,27 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
         --_active_connections;
         decrement_connection_count(tp);
       }
-      else if (_sipresolver != NULL)
+      else
       {
-        // Failed to establish a connection to this destination, so blacklist
+        // Failed to establish a connection to this server, so blacklist
         // it so we steer clear of it for a while.  We don't blacklist
         // if an existing connection fails as this may be a transient error
         // or even a disconnect triggered by an inactivity timeout .
-        AddrInfo ai;
-        ai.transport = IPPROTO_TCP;
-        ai.port = pj_sockaddr_get_port(&tp->key.rem_addr);
-        ai.address.af = tp->key.rem_addr.addr.sa_family;
-        if (ai.address.af == AF_INET)
+        AddrInfo server;
+        server.transport = IPPROTO_TCP;
+        server.port = pj_sockaddr_get_port(&tp->key.rem_addr);
+        server.address.af = tp->key.rem_addr.addr.sa_family;
+        if (server.address.af == AF_INET)
         {
-          ai.address.addr.ipv4.s_addr = tp->key.rem_addr.ipv4.sin_addr.s_addr;
+          server.address.addr.ipv4.s_addr = tp->key.rem_addr.ipv4.sin_addr.s_addr;
         }
         else
         {
-          memcpy((char*)&ai.address.addr.ipv6,
+          memcpy((char*)&server.address.addr.ipv6,
                  (char*)&tp->key.rem_addr.ipv6.sin6_addr,
                  sizeof(struct in6_addr));
         }
-        _sipresolver->blacklist(ai, 30);
+        PJUtils::blacklist_server(server);
       }
 
       // Don't listen for any more state changes on this connection (but note

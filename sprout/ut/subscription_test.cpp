@@ -61,7 +61,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
+    add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();

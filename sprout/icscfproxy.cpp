@@ -60,11 +60,10 @@ extern "C" {
 /// Constructor.
 ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        int port,
-                       SIPResolver* sipresolver,
                        int priority,
                        HSSConnection* hss,
                        SCSCFSelector* scscf_selector) :
-  BasicProxy(endpt, "mod-icscf", sipresolver, priority, false),
+  BasicProxy(endpt, "mod-icscf", priority, false),
   _port(port),
   _hss(hss),
   _scscf_selector(scscf_selector)

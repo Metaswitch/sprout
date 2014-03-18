@@ -48,7 +48,6 @@ extern "C" {
 #include "regstore.h"
 #include "ifchandler.h"
 #include "hssconnection.h"
-#include "sipresolver.h"
 
 namespace RegistrationUtils {
 

@@ -102,27 +102,21 @@ SipTest* SipTest::_current_instance;
 /// Automatically run once, before the first test.
 void SipTest::SetUpTestCase(bool clear_host_mapping)
 {
-  FakeLogger _log(false);  // swallow logs during this method
+  _log = new FakeLogger();
 
-  // Add what we need to the resolver map.
-  if (clear_host_mapping)
-  {
-    cwtest_clear_host_mapping();
-  }
-  cwtest_add_host_mapping("local_ip", "localhost");
-  cwtest_add_host_mapping("public_hostname", "localhost");
-  cwtest_add_host_mapping("all.the.sprouts", "localhost");
-  cwtest_add_host_mapping("homedomain", "10.6.6.1");
-  cwtest_add_host_mapping("bono1", "10.6.6.200");
+  // Add the required records to the cache.
+  add_host_mapping("sprout.homedomain", "127.0.0.1");
+  add_host_mapping("homedomain", "10.6.6.1");
+  add_host_mapping("bono1.homedomain", "10.6.6.200");
 
   stack_data.pcscf_untrusted_port = 5060;
   stack_data.pcscf_trusted_port = 5058; // NB - pcscf trusted port must be the
   stack_data.scscf_port = 5058;         // same as the scscf port for the UTs
   stack_data.icscf_port = 5056;
-  stack_data.local_host = pj_str("local_ip");
-  stack_data.public_host = pj_str("public_hostname");
+  stack_data.local_host = pj_str("127.0.0.1");
+  stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domain = pj_str("homedomain");
-  stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
+  stack_data.sprout_cluster_domain = pj_str("sprout.homedomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
@@ -133,6 +127,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.record_route_on_initiation_of_originating = true;
   stack_data.record_route_on_completion_of_terminating = true;
   stack_data.default_session_expires = 60 * 10;
+  stack_data.sipresolver = new SIPResolver(&_dnsresolver);
+  stack_data.addr_family = AF_INET;
 
   // Sort out logging.
   init_pjsip_logging(99, false, "");
@@ -166,7 +162,6 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
 /// Automatically run once, after the last test.
 void SipTest::TearDownTestCase()
 {
-  FakeLogger _log(false);  // swallow logs during this method
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
 
@@ -181,9 +176,13 @@ void SipTest::TearDownTestCase()
 
   // Clear out any UDP transports and TCP factories that have been created.
   TransportFlow::reset();
+
+  delete stack_data.sipresolver;
 }
 
 
+FakeLogger* SipTest::_log;
+DnsCachedResolver SipTest::_dnsresolver("0.0.0.0");
 std::map<int, pjsip_transport*> SipTest::TransportFlow::_udp_transports;
 std::map<int, pjsip_tpfactory*> SipTest::TransportFlow::_tcp_factories;
 
@@ -333,6 +332,18 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
     bool remote_addr_eq = (pj_sockaddr_cmp(&_rem_addr, &tdata->tp_info.dst_addr) == 0);
     EXPECT_EQ(remote_addr_eq, true) << "Wrong destination address";
   }
+}
+
+void SipTest::add_host_mapping(const string& hostname, const string& address)
+{
+  // Add the required records to the cache.  Records are added with a very,
+  // very long expiry time to avoid test cases that advance time causing
+  // problems.
+  std::vector<DnsRRecord*> records;
+  struct in_addr addr;
+  inet_pton(AF_INET, address.c_str(), &addr);
+  records.push_back((DnsRRecord*)new DnsARecord(hostname, 36000000, addr));
+  _dnsresolver.add_to_cache(hostname, ns_t_a, records);
 }
 
 

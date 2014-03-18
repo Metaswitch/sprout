@@ -73,7 +73,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -81,8 +81,6 @@ public:
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
-
-
   }
 
   static void TearDownTestCase()
@@ -1165,7 +1163,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
   s1->_expires = now + 300;
 
   // Set the NOTIFY CSeq value to 1.

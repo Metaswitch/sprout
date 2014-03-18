@@ -61,7 +61,6 @@ extern "C" {
 
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
-                       SIPResolver* sipresolver,
                        int priority,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
@@ -1395,10 +1394,18 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
     tp_selector.u.transport = target->transport;
     pjsip_tx_data_set_transport(_tdata, &tp_selector);
 
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target->transport->key.type;
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target->transport->key.rem_addr, sizeof(pj_sockaddr));
+    _tdata->dest_info.addr.entry[0].addr_len =
+         (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+         sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+    _tdata->dest_info.cur_addr = 0;
+
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(_transport);
   }
-  else if (PJUtils::resolver_enabled())
+  else
   {
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples).
@@ -1434,11 +1441,11 @@ void BasicProxy::UACTsx::send_request()
     // in the request.
     PJUtils::set_dest_info(_tdata, _servers[_current_server]);
   }
-  else if (PJUtils::resolver_enabled())
+  else
   {
     // The resolver is enabled, but we failed to get any valid destination
     // servers, so fail the transaction.
-    status = PJ_ENOTFOUND;
+    status = PJ_ENOTFOUND;                                              //LCOV_EXCL_LINE
   }
 
   if (status == PJ_SUCCESS)
@@ -1458,7 +1465,10 @@ void BasicProxy::UACTsx::send_request()
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
     // tell the UAS transaction.
-    _uas_tsx->on_client_not_responding(this);                           //LCOV_EXCL_LINE
+    if (_uas_tsx != NULL)                                               //LCOV_EXCL_LINE
+    {
+      _uas_tsx->on_client_not_responding(this);                         //LCOV_EXCL_LINE
+    }
   }
 
   exit_context();

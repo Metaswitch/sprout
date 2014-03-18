@@ -55,7 +55,6 @@ extern "C" {
 #include <list>
 
 #include "stack.h"
-#include "sipresolver.h"
 #include "pjmodule.h"
 
 
@@ -66,7 +65,6 @@ class BasicProxy
 public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
-             SIPResolver* sipresolver,
              int priority,
              bool delay_trying);
   virtual ~BasicProxy();

@@ -695,11 +695,19 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
 }
 
 
-/// Used to find whether the SIPResolver is enabled (and therefore whether
-/// calls to resolve_next_hop can be made).
-bool PJUtils::resolver_enabled()
+/// Resolves a destination.
+void PJUtils::resolve(const std::string& name,
+                      int port,
+                      int transport,
+                      int retries,
+                      std::vector<AddrInfo>& servers)
 {
-  return (stack_data.sipresolver != NULL);
+  stack_data.sipresolver->resolve(name,
+                                  stack_data.addr_family,
+                                  port,
+                                  transport,
+                                  retries,
+                                  servers);
 }
 
 
@@ -982,7 +990,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     LOG_DEBUG("Transport already determined");
     pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
   }
-  else if (PJUtils::resolver_enabled())
+  else
   {
     // No transport determined, so resolve the next hop for the message.
     resolve_next_hop(tdata, retries, sss->servers);
@@ -1107,11 +1115,9 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   StatelessSendState* sss = new StatelessSendState;
   sss->current_server = 0;
 
-  if ((tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT) &&
-      (stack_data.sipresolver != NULL))
+  if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
-    // No transport pre-selected and resolver is enabled, so resolve the next
-    // hop to a set of servers.
+    // No transport pre-selected so resolve the next hop to a set of servers.
     resolve_next_hop(tdata, retries, sss->servers);
 
     if (!sss->servers.empty())

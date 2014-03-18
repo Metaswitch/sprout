@@ -123,7 +123,7 @@ public:
   };
 
   BasicProxyUT(pjsip_endpoint* endpt, int priority) :
-    BasicProxy(endpt, "UTProxy", NULL, priority, false)
+    BasicProxy(endpt, "UTProxy", priority, false)
   {
   }
 
@@ -486,21 +486,20 @@ class BasicProxyTest : public BasicProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    // Set up DNS mappings for destinations.
-    cwtest_clear_host_mapping();
-    cwtest_add_host_mapping("proxy1.homedomain", "10.10.10.1");
-    cwtest_add_host_mapping("proxy2.homedomain", "10.10.10.2");
-    cwtest_add_host_mapping("node1.homedomain", "10.10.18.1");
-    cwtest_add_host_mapping("node2.homedomain", "10.10.18.2");
-    cwtest_add_host_mapping("node3.homedomain", "10.10.18.2");
-    cwtest_add_host_mapping("node4.homedomain", "10.10.18.2");
-
-    cwtest_add_host_mapping("proxy1.awaydomain", "10.10.20.1");
-    cwtest_add_host_mapping("proxy2.awaydomain", "10.10.20.2");
-    cwtest_add_host_mapping("node1.awaydomain", "10.10.28.1");
-    cwtest_add_host_mapping("node2.awaydomain", "10.10.28.2");
-
     BasicProxyTestBase::SetUpTestCase();
+
+    // Set up DNS mappings for destinations.
+    add_host_mapping("proxy1.homedomain", "10.10.10.1");
+    add_host_mapping("proxy2.homedomain", "10.10.10.2");
+    add_host_mapping("node1.homedomain", "10.10.18.1");
+    add_host_mapping("node2.homedomain", "10.10.18.2");
+    add_host_mapping("node2.homedomain", "10.10.18.3");
+    add_host_mapping("node2.homedomain", "10.10.18.4");
+
+    add_host_mapping("proxy1.awaydomain", "10.10.20.1");
+    add_host_mapping("proxy2.awaydomain", "10.10.20.2");
+    add_host_mapping("node1.awaydomain", "10.10.28.1");
+    add_host_mapping("node2.awaydomain", "10.10.28.2");
   }
 
   static void TearDownTestCase()
@@ -590,7 +589,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   msg2._to = "bob";
   msg2._todomain = "awaydomain";
   msg2._via = tp->to_string(false);
-  msg2._route = "Route: <sip:local_ip;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg2._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg2.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -720,7 +719,7 @@ TEST_F(BasicProxyTest, RouteToHomeURINoPathTransport)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -793,7 +792,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithPath)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -871,7 +870,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithTransport)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp1->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp1);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -950,7 +949,7 @@ TEST_F(BasicProxyTest, RouteToHomeURITransportCancel)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp1->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp1);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -1069,7 +1068,7 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and five forwarded INVITEs
@@ -1244,7 +1243,7 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and three forwarded INVITEs
@@ -1361,7 +1360,7 @@ TEST_F(BasicProxyTest, ForkedRequestConnFail)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and three forwarded INVITEs
@@ -1452,7 +1451,7 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and three forwarded INVITEs
@@ -1601,7 +1600,7 @@ TEST_F(BasicProxyTest, RouteToHomeURINotFound)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and a 404 Not Found response.
@@ -1642,7 +1641,7 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   // upstream proxy is a strict router.
   Message msg1;
   msg1._method = "INVITE";
-  msg1._requri = "sip:local_ip";
+  msg1._requri = "sip:127.0.0.1";
   msg1._from = "alice";
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
@@ -1690,7 +1689,7 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   // upstream proxy is a strict router.
   Message msg2;
   msg2._method = "INVITE";
-  msg2._requri = "sip:local_ip";
+  msg2._requri = "sip:127.0.0.1";
   msg2._from = "alice";
   msg2._to = "bob";
   msg2._todomain = "awaydomain";
@@ -1745,7 +1744,7 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -1940,7 +1939,7 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
   msg2._to = "bob";
   msg2._todomain = "awaydomain";
   msg2._via = tp->to_string(false);
-  msg2._route = "Route: <sip:local_ip;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg2._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg2.get_request(), tp);
 
   // Request is forwarded to the node in the second Route header.
@@ -1991,7 +1990,7 @@ TEST_F(BasicProxyTest, LateCancel)
   msg1._to = "bob";
   msg1._todomain = "awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:local_ip;transport=TCP;lr>";
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and the forwarded INVITEs

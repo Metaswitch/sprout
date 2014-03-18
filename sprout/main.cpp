@@ -1144,7 +1144,6 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
-                            sip_resolver,
                             ifc_handler,
                             opt.reg_max_expires);
 
@@ -1179,7 +1178,6 @@ int main(int argc, char *argv[])
                                  false,
                                  "",
                                  analytics_logger,
-                                 sip_resolver,
                                  enum_service,
                                  bgcf_service,
                                  hss_connection,
@@ -1211,7 +1209,6 @@ int main(int argc, char *argv[])
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  analytics_logger,
-                                 sip_resolver,
                                  NULL,
                                  NULL,
                                  NULL,
@@ -1245,7 +1242,6 @@ int main(int argc, char *argv[])
     // Launch I-CSCF proxy.
     icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                  stack_data.icscf_port,
-                                 sip_resolver,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
                                  scscf_selector);

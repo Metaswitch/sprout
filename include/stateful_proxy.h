@@ -62,7 +62,6 @@ class UACTransaction;
 #include "aschain.h"
 #include "quiescing_manager.h"
 #include "scscfselector.h"
-#include "sipresolver.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -213,7 +212,6 @@ private:
                                SAS::TrailId trail);
   std::string get_scscf_name(Json::Value* location);
 
-  SIPResolver*         _sipresolver;
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
@@ -313,7 +311,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& trusted_hosts,
                                 AnalyticsLogger* analytics_logger,
-                                SIPResolver* resolver,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,

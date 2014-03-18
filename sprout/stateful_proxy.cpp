@@ -134,8 +134,6 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
-static SIPResolver* sipresolver;
-
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
 
@@ -3516,7 +3514,7 @@ void UACTransaction::set_target(const struct Target& target)
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target.transport);
   }
-  else if (PJUtils::resolver_enabled())
+  else
   {
     // Resolve the next hop destination for this request to a set of servers.
     LOG_DEBUG("Resolve next hop destination");
@@ -3548,7 +3546,7 @@ void UACTransaction::send_request()
     // in the request.
     PJUtils::set_dest_info(_tdata, _servers[_current_server]);
   }
-  else if (PJUtils::resolver_enabled())
+  else
   {
     // The resolver is enabled, but we failed to get any valid destination
     // servers, so fail the transaction.
@@ -3572,7 +3570,10 @@ void UACTransaction::send_request()
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
     // tell the UAS transaction.
-    _uas_data->on_client_not_responding(this);
+    if (_uas_data != NULL)
+    {
+      _uas_data->on_client_not_responding(this);
+    }
   }
   else
   {
@@ -3879,7 +3880,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
-                                SIPResolver* resolver,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
@@ -3894,8 +3894,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   analytics_logger = analytics;
   store = registrar_store;
   remote_store = remote_reg_store;
-
-  sipresolver = resolver;
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
@@ -3934,8 +3932,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                               stack_data.pool,
                                               stack_data.endpt,
                                               stack_data.pcscf_trusted_tcp_factory,
-                                              sipresolver,
-                                              stack_data.addr_family,
                                               stack_data.stats_aggregator);
       upstream_conn_pool->init();
     }

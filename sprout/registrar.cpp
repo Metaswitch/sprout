@@ -66,8 +66,6 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
-static SIPResolver* sipresolver;
-
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
 static IfcHandler* ifchandler;
@@ -786,7 +784,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
-                           SIPResolver* resolver,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
@@ -798,7 +795,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
-  sipresolver = resolver;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

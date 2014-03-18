@@ -156,7 +156,11 @@ pj_status_t create_response_fwd(pjsip_endpoint *endpt,
                                 unsigned options,
                                 pjsip_tx_data **p_tdata);
 
-bool resolver_enabled();
+void resolve(const std::string& name,
+             int port,
+             int transport,
+             int retries,
+             std::vector<AddrInfo>& servers);
 
 void resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<AddrInfo>& servers);
 
