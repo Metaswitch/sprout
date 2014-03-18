@@ -344,7 +344,25 @@ TEST_F(SubscriptionTest, ErrorAssociatedUris)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  check_subscriptions("sip:6505550231@homedomain", 0u);
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+}
+
+/// Homestead fails associated URI request
+TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
+{
+  SubscribeMessage msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          503);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(503, out->line.status.code);
+  EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
 /// Register with non-primary P-Associated-URI
