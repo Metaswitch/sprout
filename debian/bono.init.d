@@ -115,6 +115,8 @@ get_settings()
         then
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
         fi
+
+        [ -z "$ralf_hostname" ] || billing_cdf_arg="--billing-cdf $ralf_hostname"
 }
 
 #
@@ -149,7 +151,8 @@ do_start()
                      -a $log_directory
                      -F $log_directory
                      -L $log_level
-                     $ibcf_arg"
+                     $ibcf_arg
+                     $billing_cdf_arg"
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
