@@ -283,7 +283,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 
   regstate = reg->value();
 
-  if (regstate == HSSConnection::STATE_NOT_REGISTERED && allowNoIMS)
+  if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
   {
     LOG_DEBUG("Subscriber is not registered on a get_registration_state request");
     return true;
