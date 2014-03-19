@@ -132,7 +132,8 @@ void ChronosHandler::run()
 
 void ChronosHandler::handle_response()
 {
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true);
+  bool all_bindings_expired = false;
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
 
   if (aor_data != NULL)
   {
@@ -140,8 +141,14 @@ void ChronosHandler::handle_response()
     // about failures in this case.
     if (_cfg->_remote_store != NULL)
     {
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false);
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, false);
       delete remote_aor_data;
+    }
+
+    if (all_bindings_expired)
+    {
+      LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
 
@@ -152,11 +159,11 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
                                             std::string aor_id,
                                             RegStore::AoR* previous_aor_data,
                                             RegStore* remote_store,
-                                            bool is_primary)
+                                            bool is_primary,
+                                            bool all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-  bool all_bindings_expired = false;
 
   do
   {
@@ -169,12 +176,6 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
     }
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
-
-  if (is_primary && all_bindings_expired)
-  {
-    LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
-    _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
-  }
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -377,6 +378,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
       // LCOV_EXCL_STOP
     }
 
+    // LCOV_EXCL_START - local store (used in testing) never fails
     for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
          i != aor_data->bindings().end();
          ++i)
@@ -404,19 +406,20 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
         aor_data->remove_binding(b_id);
       }
     }
-
-    if (private_id == "")
-    {
-      // Deregister with any application servers
-      std::vector<std::string> uris;
-      std::map<std::string, Ifcs> ifc_map;
-      std::string state;
-      _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
-      RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store,
-                                                               _cfg->_sipresolver, aor_id, 0);
-    }
+    // LCOV_EXCL_STOP
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+
+  if (private_id == "")
+  {
+    // Deregister with any application servers
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    std::string state;
+    LOG_INFO("ID %s", aor_id.c_str());
+    _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
+    RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store, _cfg->_sipresolver, aor_id, 0);
+  }
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)

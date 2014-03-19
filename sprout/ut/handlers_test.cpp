@@ -136,12 +136,17 @@ class DeregistrationHandlerTest : public BaseTest
   void SetUp()
   {
     chronos_connection = new ChronosConnection("localhost");
-   local_data_store = new LocalStore();
+    local_data_store = new LocalStore();
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "registrations");
     deregistration_config = new DeregistrationHandler::Config(store, store, fake_hss, NULL);
     handler = new DeregistrationHandler(*req, deregistration_config);
+
+    stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
+    // The expiry tests require pjsip, so initialise for this test
+    init_pjsip_logging(99, false, "");
+    init_pjsip();
   }
 
   void TearDown()
@@ -153,13 +158,41 @@ class DeregistrationHandlerTest : public BaseTest
     delete store; store = NULL;
     delete local_data_store; local_data_store = NULL;
     delete chronos_connection; chronos_connection = NULL;
+    term_pjsip();
   }
 
 };
 
-TEST_F(DeregistrationHandlerTest, MainlineTest)
+TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"impu_a\", \"impi\": \"impi_a\"}]}";
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
+  int status = handler->parse_request(body);
+  ASSERT_EQ(status, 200);
+
+  handler->handle_request();
+}
+
+TEST_F(DeregistrationHandlerTest, AoROnlyTest)
+{
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
+  int status = handler->parse_request(body);
+  ASSERT_EQ(status, 200);
+
+  handler->handle_request();
+}
+
+TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairsTest)
+{
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip\:6505552002@homedomain\", \"impi\": \"6505552002\"}]}";
+  int status = handler->parse_request(body);
+  ASSERT_EQ(status, 200);
+
+  handler->handle_request();
+}
+
+TEST_F(DeregistrationHandlerTest, AoRsOnlyTest)
+{
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\"}, {\"primary-impu\": \"sip\:6505552002\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
@@ -176,7 +209,7 @@ TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
 
 TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
 {
-  std::string body = "{\"primary-impu\": \"impu_a\", \"impi\": \"impi_a\"}}";
+  std::string body = "{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}";
   int status = handler->parse_request(body);
   EXPECT_TRUE(_log.contains("Registrations not available in JSON"));
   ASSERT_EQ(status, 400);
@@ -184,7 +217,7 @@ TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
 
 TEST_F(DeregistrationHandlerTest, MissingPrimaryIMPUJSONTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-imp\": \"impu_a\", \"impi\": \"impi_a\"}]}";
+  std::string body = "{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
   int status = handler->parse_request(body);
   EXPECT_TRUE(_log.contains("Invalid JSON - registration doesn't contain primary-impu"));
   ASSERT_EQ(status, 400);
