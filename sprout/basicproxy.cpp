@@ -817,17 +817,19 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
     if (status == PJ_SUCCESS)
     {
       // All the data structures, transactions and transmit data have
-      // been created, so start sending messages.
+      // been created, so start sending messages.  Increment the number of
+      // pending targets immediately as some targets may fail immediately.
+      _pending_targets += new_tsx.size();
       while (!new_tsx.empty())
       {
         UACTsx* uac_tsx = new_tsx.front();
         new_tsx.pop_front();
 
-        // Push this onto the array before sending the request (as the request could
-        // fail and try to delete the transaction from the array)
+        // Push this onto the array and increment the count of transactions
+        // before sending the request (as the request could fail and try to
+        // delete the transaction from the array).
         _uac_tsx.push_back(uac_tsx);
         uac_tsx->send_request();
-        ++_pending_targets;
       }
     }
     else
@@ -953,7 +955,7 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
     // UAC transaction has timed out or hit a transport error.  If
     // we've not received a response from on any other UAC
     // transactions then keep this as the best response.
-    LOG_DEBUG("%s - Forked request", uac_tsx->name());
+    LOG_DEBUG("%s - client transaction not responding", uac_tsx->name());
 
     if (--_pending_targets == 0)
     {
@@ -1445,7 +1447,7 @@ void BasicProxy::UACTsx::send_request()
   {
     // The resolver is enabled, but we failed to get any valid destination
     // servers, so fail the transaction.
-    status = PJ_ENOTFOUND;                                              //LCOV_EXCL_LINE
+    status = PJ_ENOTFOUND;
   }
 
   if (status == PJ_SUCCESS)
@@ -1558,7 +1560,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       {
         // Either failed to connect to the selected server, or failed or get
         // a response, so blacklist it.
-        LOG_DEBUG("Failed to connected to server, so add to blacklist");
+        LOG_DEBUG("Failed to connected to server or timed-out, so add to blacklist");
         PJUtils::blacklist_server(_servers[_current_server]);
 
         // Attempt a retry.
@@ -1570,6 +1572,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         // The server returned a 5xx error.  We don't blacklist in this case
         // as it may indicated a transient overload condition, but we can
         // retry to an alternate server if one is available.
+        LOG_DEBUG("Server return 5xx error");
         retrying = retry_request();
       }
     }
@@ -1660,9 +1663,9 @@ bool BasicProxy::UACTsx::retry_request()
       {
         // Failed to send, so revert to the original transaction to see it
         // through to the end.
-        _proxy->unbind_transaction(_tsx);
-        _tsx = original_tsx;
-        _proxy->bind_transaction(this, _tsx);
+        _proxy->unbind_transaction(_tsx);                               //LCOV_EXCL_LINE
+        _tsx = original_tsx;                                            //LCOV_EXCL_LINE
+        _proxy->bind_transaction(this, _tsx);                           //LCOV_EXCL_LINE
       }
     }
   }

@@ -52,7 +52,6 @@ extern "C" {
 #include "custom_headers.h"
 
 static const int DEFAULT_RETRIES = 5;
-static const int DEFAULT_TSX_TIMEOUT = 5;
 
 static void on_tsx_state(pjsip_transaction*, pjsip_event*);
 
@@ -1004,12 +1003,6 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
         // transaction.
         LOG_DEBUG("Transport already determined");
         pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
-      }
-      else if (sss->servers.size() > 1)
-      {
-        LOG_DEBUG("Multiple destinations, reduce transaction timeout to %d seconds",
-                  DEFAULT_TSX_TIMEOUT);
-        pjsip_tsx_set_timeout(tsx, DEFAULT_TSX_TIMEOUT);
       }
 
       // Store the message and add a reference to prevent the transaction layer

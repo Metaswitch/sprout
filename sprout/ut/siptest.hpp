@@ -132,8 +132,9 @@ protected:
     pj_sockaddr _rem_addr;
   };
 
-  /// Add a DNS A record to map hostname to IP address.
-  static void add_host_mapping(const string& hostname, const string& address);
+  /// Add DNS A records to map hostname to a set of IP addresses.  The
+  /// list of addresses should be comma separated.
+  static void add_host_mapping(const string& hostname, const string& addresses);
 
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);

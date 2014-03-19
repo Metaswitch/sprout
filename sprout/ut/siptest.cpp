@@ -334,18 +334,23 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
   }
 }
 
-void SipTest::add_host_mapping(const string& hostname, const string& address)
+void SipTest::add_host_mapping(const string& hostname, const string& addresses)
 {
   // Add the required records to the cache.  Records are added with a very,
   // very long expiry time to avoid test cases that advance time causing
   // problems.
+  std::list<string> address_list;
+  Utils::split_string(addresses, ',', address_list);
   std::vector<DnsRRecord*> records;
-  struct in_addr addr;
-  inet_pton(AF_INET, address.c_str(), &addr);
-  records.push_back((DnsRRecord*)new DnsARecord(hostname, 36000000, addr));
+  while (!address_list.empty())
+  {
+    struct in_addr addr;
+    inet_pton(AF_INET, address_list.front().c_str(), &addr);
+    records.push_back((DnsRRecord*)new DnsARecord(hostname, 36000000, addr));
+    address_list.pop_front();
+  }
   _dnsresolver.add_to_cache(hostname, ns_t_a, records);
 }
-
 
 void SipTest::inject_msg(const string& msg, TransportFlow* tp)
 {
