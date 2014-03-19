@@ -64,9 +64,10 @@ void ChronosHandler::run()
   handle_response();
   delete this;
 }
+
 //LCOV_EXCL_STOP
 
-void ChronosHandler::handle_response()
+void RegistrationTimeoutHandler::handle_response()
 {
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true);
 
@@ -84,11 +85,11 @@ void ChronosHandler::handle_response()
   delete aor_data;
 }
 
-RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
-                                            std::string aor_id,
-                                            RegStore::AoR* previous_aor_data,
-                                            RegStore* remote_store,
-                                            bool is_primary)
+RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
+                                                        std::string aor_id,
+                                                        RegStore::AoR* previous_aor_data,
+                                                        RegStore* remote_store,
+                                                        bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -166,7 +167,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body)
+int RegistrationTimeoutHandler::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -199,6 +200,70 @@ int ChronosHandler::parse_response(std::string body)
   else
   {
     LOG_WARNING("Binding ID not available in JSON");
+    return 400;
+  }
+
+  return 200;
+}
+
+void AuthTimeoutHandler::handle_response()
+{
+  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce);
+
+  if (json != NULL)
+  {
+    LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+    _cfg->_avstore->delete_av(_impi, _nonce);
+    _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
+  }
+
+  delete json;
+}
+
+int AuthTimeoutHandler::parse_response(std::string body)
+{
+  Json::Value json_body;
+  std::string json_str = body;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+
+  if (!parsingSuccessful)
+  {
+    LOG_WARNING("Failed to read opaque data, %s",
+                reader.getFormattedErrorMessages().c_str());
+    return 400;
+  }
+
+  if ((json_body.isMember("impi")) &&
+      ((json_body)["impi"].isString()))
+  {
+    _impi = json_body.get("impi", "").asString();
+  }
+  else
+  {
+    LOG_WARNING("IMPI not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("impu")) &&
+      ((json_body)["impu"].isString()))
+  {
+    _impu = json_body.get("impu", "").asString();
+  }
+  else
+  {
+    LOG_WARNING("IMPU not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("nonce")) &&
+      ((json_body)["nonce"].isString()))
+  {
+    _nonce = json_body.get("nonce", "").asString();
+  }
+  else
+  {
+    LOG_WARNING("Nonce not available in JSON");
     return 400;
   }
 

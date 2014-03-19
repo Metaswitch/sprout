@@ -68,6 +68,18 @@ void AvStore::set_av(const std::string& impi,
   }
 }
 
+void AvStore::delete_av(const std::string& impi,
+                        const std::string& nonce)
+{
+  std::string key = impi + '\\' + nonce;
+  LOG_DEBUG("Delete AV for %s", key.c_str());
+  Store::Status status = _data_store->delete_data("av", key);
+  if (status != Store::Status::OK)
+  {
+    LOG_ERROR("Failed to delete Authentication Vector for private_id %s", impi.c_str());   // LCOV_EXCL_LINE
+  }
+}
+
 
 Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce)

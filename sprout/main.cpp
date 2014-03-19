@@ -1124,7 +1124,7 @@ int main(int argc, char *argv[])
       // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
-      status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);
+      status = init_authentication(opt.auth_realm, av_store, hss_connection, chronos_connection, analytics_logger);
     }
 
     // Create Enum and BGCF services required for S-CSCF.
@@ -1267,15 +1267,19 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
-    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
-    HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
+    RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+    AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
+    HttpStack::ConfiguredHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
+    HttpStack::ConfiguredHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
       http_stack->register_handler("^/timers$",
-                                   &chronos_handler_factory);
+                                   &reg_timeout_handler_factory);
+      http_stack->register_handler("^/authentication-timeout$",
+                                   &auth_timeout_handler_factory);
       http_stack->start();
     }
     catch (HttpStack::Exception& e)
