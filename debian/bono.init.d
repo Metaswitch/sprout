@@ -116,7 +116,7 @@ get_settings()
           [ -z "$trusted_peers" ] || ibcf_arg="--ibcf $trusted_peers"
         fi
 
-        [ -z "$cdf_domain" ] || billing_cdf_arg="--billing-cdf $cdf_domain"
+        [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
 }
 
 #
