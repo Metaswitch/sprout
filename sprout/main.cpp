@@ -132,6 +132,7 @@ struct options
   std::string            http_address;
   int                    http_port;
   int                    http_threads;
+  std::string            billing_cdf;
   int                    worker_threads;
   pj_bool_t              log_to_file;
   std::string            log_directory;
@@ -221,6 +222,7 @@ static void usage(void)
        " -o  --http_port <port>     Specify the HTTP bind port\n"
        " -q  --http_threads N       Number of HTTP threads (default: 1)\n"
        " -P, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
+       " -B, --billing-cdf <server> Billing CDF server\n"
        " -W, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
@@ -287,6 +289,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "http_address",      required_argument, 0, 'T'},
     { "http_port",         required_argument, 0, 'o'},
     { "http_threads",      required_argument, 0, 'q'},
+    { "billing-cdf",       required_argument, 0, 'B'},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
     { "interactive",       no_argument,       0, 't'},
@@ -298,7 +301,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:dth", long_opt, &opt_ind)) != -1)
+  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:B:dth", long_opt, &opt_ind)) != -1)
   {
     switch (c)
     {
@@ -599,6 +602,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       fprintf(stdout, "Use %d HTTP threads\n", options->http_threads);
       break;
 
+    case 'B':
+      options->billing_cdf = atoi(pj_optarg);
+      fprintf(stdout, "Use %s as billing cdf server\n", options->billing_cdf.c_str());
+      break;
+
     case 'L':
       options->log_level = atoi(pj_optarg);
       fprintf(stdout, "Log level set to %s\n", pj_optarg);
@@ -877,6 +885,7 @@ int main(int argc, char *argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
+  opt.billing_cdf = "";
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1048,7 +1057,8 @@ int main(int argc, char *argv[])
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
-                      load_monitor);
+                      load_monitor,
+                      opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
   {
