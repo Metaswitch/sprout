@@ -80,6 +80,7 @@ struct stack_data_struct
   pj_str_t             public_host;
   pj_str_t             home_domain;
   pj_str_t             sprout_cluster_domain;
+  pj_str_t             cdf_domain;
 
   int                  addr_family;
 
@@ -150,7 +151,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int record_routing_model,
                               const int default_session_expires,
                               QuiescingManager *quiescing_mgr,
-                              LoadMonitor *load_monitor);
+                              LoadMonitor *load_monitor,
+                              const std::string& cdf_domain);
 extern pj_status_t start_stack();
 extern void stop_stack();
 extern void unregister_stack_modules(void);

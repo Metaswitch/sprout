@@ -2060,6 +2060,14 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
     EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
   }
 
+  // Check P-Charging headers are added correctly
+  actual = get_headers(tdata->msg, "P-Charging-Function-Addresses");
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=cdfdomain", actual);
+  actual = get_headers(tdata->msg, "P-Charging-Vector");
+  std::string call_id = get_headers(tdata->msg, "Call-ID");
+  call_id.erase(std::remove(call_id.begin(), call_id.end(), '@'), call_id.end());
+  EXPECT_EQ("P-Charging-Vector: icid-value=" + call_id.substr(9) + ";icid-generated-at=homedomain", actual);
+
   // Goes to the right place.
   expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 

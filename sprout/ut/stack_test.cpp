@@ -142,7 +142,8 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               1,                            // RR strategy
                               60 * 10,                      // Session refresh interval
                               NULL,                         // Quiescing manager
-                              NULL);                        // Load monitor
+                              NULL,                         // Load monitor
+                              "");                          // CDF domain
   ASSERT_EQ(PJ_SUCCESS, rc) << PjStatus(rc);
   EXPECT_TRUE(_log.contains("Listening on port 9408"));
   EXPECT_TRUE(_log.contains("Local host aliases:"));

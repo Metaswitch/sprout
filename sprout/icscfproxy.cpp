@@ -334,7 +334,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     // 5.3.1.3/TS24.229).
     LOG_DEBUG("Check retry conditions for REGISTER request, status code = %d",
               rsp_status);
-    if (((rsp_status > 300) && (rsp_status <= 399)) ||
+    if (((rsp_status >= 300) && (rsp_status <= 399)) ||
         (rsp_status == PJSIP_SC_REQUEST_TIMEOUT) ||
         (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
     {
@@ -364,6 +364,25 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         process_tsx_request();
 
         retry = true;
+      }
+      else if (status_code == PJSIP_SC_FORBIDDEN)
+      {
+        // The HSS has returned a negative response to the user registration
+        // request - I-CSCF should respond with 403.
+        _best_rsp->msg->line.status.code = PJSIP_SC_FORBIDDEN;
+        _best_rsp->msg->line.status.reason =
+                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
+      }
+      else
+      {
+        // The I-CSCF can't select an S-CSCF for the REGISTER request (either
+        // because there are no more S-CSCFs that meet the mandatory
+        // capabilitires, or the HSS is temporarily unavailable). There was at
+        // least one valid S-CSCF (as this is retry processing). The I-CSCF
+        //  must return 504 (TS 24.229, 5.3.1.3) in this case.
+        _best_rsp->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
+        _best_rsp->msg->line.status.reason =
+                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
       }
     }
   }
@@ -464,12 +483,19 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 
   if (status_code == PJSIP_SC_OK)
   {
-    if (!_hss_rsp._scscf.empty())
+    // The HSS can return the s-cscf name on a CAPAB request.
+    // Only use the name returned from the HSS if it hasn't already
+    // been tried.
+    if ((!_hss_rsp._scscf.empty()) &&
+        (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
+                   _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
-      // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._queried_caps)
+
+    // Use the capabilites to select an S-CSCF if the HSS didn't
+    // return one (that hadn't already been tried).
+    if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
@@ -539,12 +565,20 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 
   if (status_code == PJSIP_SC_OK)
   {
-    if (!_hss_rsp._scscf.empty())
+    // The HSS can return the s-cscf name on a CAPAB request.
+    // Only use the name returned from the HSS if it hasn't already
+    // been tried.
+    if ((!_hss_rsp._scscf.empty()) &&
+        (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
+                   _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
       // Received a specific S-CSCF from the HSS, so use it.
       scscf = _hss_rsp._scscf;
     }
-    else if (_hss_rsp._queried_caps)
+
+    // Use the capabilites to select an S-CSCF if the HSS didn't
+    // return one (that hadn't already been tried).
+    if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
