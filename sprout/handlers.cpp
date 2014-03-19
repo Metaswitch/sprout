@@ -147,8 +147,10 @@ void ChronosHandler::handle_response()
 
     if (all_bindings_expired)
     {
+      //LCOV_EXCL_START
       LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
+      //LCOV_EXCL_STOP
     }
   }
 
