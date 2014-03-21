@@ -349,7 +349,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       std::string timer_id;
       std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
       LOG_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
-      chronos->send_post(timer_id, 30, "http://localhost:9888/authentication-timeout", chronos_body, 0);
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
     }
 
     delete av;
