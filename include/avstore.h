@@ -61,7 +61,9 @@ public:
   /// @param nonce     A reference to the nonce.
   /// @param av        A pointer to a JSONCPP Json::Value object encoding
   ///                  the Authentication Vector.
-  void set_av(const std::string& impi,
+  /// @returns True if we successfully set the data in memcached,
+  /// false otherwise.
+  bool set_av(const std::string& impi,
               const std::string& nonce,
               const Json::Value* av);
 
@@ -75,7 +77,7 @@ public:
   Json::Value* get_av(const std::string& impi,
                       const std::string& nonce);
 
-  void delete_av(const std::string& impi,
+  bool delete_av(const std::string& impi,
                  const std::string& nonce);
 
 private:

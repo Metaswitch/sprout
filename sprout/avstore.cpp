@@ -53,7 +53,7 @@ AvStore::~AvStore()
 }
 
 
-void AvStore::set_av(const std::string& impi,
+bool AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
                      const Json::Value* av)
 {
@@ -65,10 +65,12 @@ void AvStore::set_av(const std::string& impi,
   if (status != Store::Status::OK)
   {
     LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());   // LCOV_EXCL_LINE
+    return false;  // LCOV_EXCL_LINE
   }
+  return true;
 }
 
-void AvStore::delete_av(const std::string& impi,
+bool AvStore::delete_av(const std::string& impi,
                         const std::string& nonce)
 {
   std::string key = impi + '\\' + nonce;
@@ -77,7 +79,9 @@ void AvStore::delete_av(const std::string& impi,
   if (status != Store::Status::OK)
   {
     LOG_ERROR("Failed to delete Authentication Vector for private_id %s", impi.c_str());   // LCOV_EXCL_LINE
+    return false; // LCOV_EXCL_LINE
   }
+  return true;
 }
 
 

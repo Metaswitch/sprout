@@ -43,17 +43,7 @@
 #include "regstore.h"
 #include "avstore.h"
 
-class ChronosHandler : public HttpStack::Handler
-{
-public:
-  ChronosHandler(HttpStack::Request& req) : HttpStack::Handler(req) {};
-  virtual ~ChronosHandler() {};
-  void run();
-  virtual void handle_response() = 0;
-  virtual int parse_response(std::string body) = 0;
-};
-
-class RegistrationTimeoutHandler : public ChronosHandler
+class RegistrationTimeoutHandler : public HttpStack::Handler
 {
 public:
   struct Config
@@ -65,7 +55,10 @@ public:
     HSSConnection* _hss;
   };
 
-  RegistrationTimeoutHandler(HttpStack::Request& req, const Config* cfg) : ChronosHandler(req), _cfg(cfg) {};
+  RegistrationTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+
+protected:
   void handle_response();
   int parse_response(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
@@ -73,14 +66,12 @@ public:
                               RegStore::AoR* previous_aor_data,
                               RegStore* remote_store,
                               bool update_chronos);
-
-protected:
   const Config* _cfg;
   std::string _aor_id;
   std::string _binding_id;
 };
 
-class AuthTimeoutHandler : public ChronosHandler
+class AuthTimeoutHandler :  public HttpStack::Handler
 {
 public:
   struct Config
@@ -90,10 +81,10 @@ public:
     AvStore* _avstore;
     HSSConnection* _hss;
   };
-  AuthTimeoutHandler(HttpStack::Request& req, const Config* cfg) : ChronosHandler(req), _cfg(cfg) {};
-  void handle_response();
-  int parse_response(std::string body);
+  AuthTimeoutHandler(HttpStack::Request& req, const Config* cfg) :  HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
 protected:
+  int handle_response(std::string body);
   const Config* _cfg;
   std::string _impi;
   std::string _impu;
