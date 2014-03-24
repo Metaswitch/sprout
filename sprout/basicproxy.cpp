@@ -1588,7 +1588,8 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 
       // If UAC transaction is terminated because of a timeout, treat this as
       // a 504 error.
-      if (_tsx->state == PJSIP_TSX_STATE_TERMINATED)
+      if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+          (_uas_tsx != NULL))
       {
         // UAC transaction has terminated while still connected to the UAS
         // transaction.
