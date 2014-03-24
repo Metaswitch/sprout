@@ -54,7 +54,6 @@ XDMConnection::XDMConnection(const std::string& server,
                              LastValueCache* stats_aggregator) :
   _http(new HttpConnection(server,
                            true,
-                           SASEvent::TX_XDM_GET_BASE,
                            "connected_homers",
                            load_monitor,
                            stats_aggregator)),

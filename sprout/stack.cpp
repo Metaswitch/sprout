@@ -308,7 +308,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   set_trail(rdata, trail);
 
   // Log the message event.
-  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 1u);
+  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
   event.add_static_param(rdata->pkt_info.src_port);
   event.add_var_param(rdata->pkt_info.src_name);
@@ -325,7 +325,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   if (trail != 0)
   {
     // Log the message event.
-    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 1u);
+    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
     event.add_static_param(tdata->tp_info.dst_port);
     event.add_var_param(tdata->tp_info.dst_name);

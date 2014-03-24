@@ -65,7 +65,6 @@ HSSConnection::HSSConnection(const std::string& server,
                              LastValueCache *stats_aggregator) :
   _http(new HttpConnection(server,
                            false,
-                           SASEvent::TX_HSS_BASE,
                            "connected_homesteads",
                            load_monitor,
                            stats_aggregator)),
