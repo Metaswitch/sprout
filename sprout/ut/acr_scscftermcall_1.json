@@ -3,7 +3,6 @@
     "Accounting-Record-Type": 2,
     "Acct-Interim-Interval": 600,
     "Event-Timestamp": 1,
-    "Origin-Host": "sprout.homedomain",
     "Service-Information": {
       "IMS-Information": {
         "Application-Server-Information": [
@@ -239,11 +238,11 @@
     }
   },
   "peers": {
-    "ccfs": [
+    "ccf": [
       "192.1.1.1",
       "192.1.1.2"
     ],
-    "ecfs": [
+    "ecf": [
       "192.1.1.3",
       "192.1.1.4"
     ]
