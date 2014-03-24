@@ -46,7 +46,7 @@ void ChronosHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
-    _req.send_reply(405);
+    send_http_reply(405);
     delete this;
     return;
   }
@@ -55,12 +55,12 @@ void ChronosHandler::run()
   if (rc != 200)
   {
     LOG_DEBUG("Unable to parse response from Chronos");
-    _req.send_reply(rc);
+    send_http_reply(rc);
     delete this;
     return;
   }
 
-  _req.send_reply(200);
+  send_http_reply(200);
   handle_response();
   delete this;
 }
