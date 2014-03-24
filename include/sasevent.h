@@ -43,12 +43,27 @@ namespace SASEvent {
 
   const std::string CURRENT_RESOURCE_BUNDLE = "org.projectclearwater";
 
+  //
+  // Event spaces.
+  //
   const int COMMON_BASE = 0x000000;
-  const int SPROUT_BASE = 0x810000;
+  const int SPROUT_BASE = 0x800000;
 
+  //
+  // Common events and protocol flows.
+  //
   const int RX_SIP_MSG = COMMON_BASE + 0;
   const int TX_SIP_MSG = COMMON_BASE + 1;
 
+  const int TX_HTTP_REQ = COMMON_BASE + 2;
+  const int RX_HTTP_REQ = COMMON_BASE + 3;
+  const int TX_HTTP_RSP = COMMON_BASE + 4;
+  const int RX_HTTP_RSP = COMMON_BASE + 5;
+  const int HTTP_REQ_ERROR = COMMON_BASE + 6;
+
+  //
+  // Sprout events.
+  //
   const int ENUM_START = SPROUT_BASE + 0;
   const int ENUM_MATCH = SPROUT_BASE + 1;
   const int ENUM_INCOMPLETE = SPROUT_BASE + 2;
