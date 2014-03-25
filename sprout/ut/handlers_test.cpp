@@ -64,7 +64,7 @@ class HandlersTest : public BaseTest
 
   void SetUp()
   {
-    chronos_connection = new ChronosConnection("localhost");
+    chronos_connection = new ChronosConnection("localhost", "localhost:9888");
     local_data_store = new LocalStore();
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
@@ -135,7 +135,7 @@ class AuthTimeoutTest : public BaseTest
 
   void SetUp()
   {
-    chronos_connection = new ChronosConnection("localhost");
+    chronos_connection = new ChronosConnection("localhost", "localhost:9888");
     local_data_store = new LocalStore();
     store = new AvStore(local_data_store);
     fake_hss = new FakeHSSConnection();
