@@ -189,6 +189,8 @@ string Message::get()
                    "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
+                   "P-Charging-Vector: icid-value=100\r\n"
+                   "P-Charging-Function-Addresses: ccf=1.2.3.4; ecf=5.6.7.8\r\n"
                    "%12$s"
                    "%4$s"
                    "Content-Length:  %5$d\r\n"
@@ -261,7 +263,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -282,10 +284,29 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
+
+/// Simple correct example with Expires header - check that
+/// appropriate headers are passed through
+TEST_F(RegistrarTest, SimpleMainlinePassthrough)
+{
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("P-Charging-Vector: icid-value=100", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+
+  free_txdata();
+}
+
 
 /// Simple correct example with Expires parameter
 TEST_F(RegistrarTest, SimpleMainlineExpiresParameter)
@@ -301,7 +322,7 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresParameter)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -318,7 +339,7 @@ TEST_F(RegistrarTest, SimpleMainlineDeregister)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_EQ("", get_headers(out, "Contact"));  // no existing bindings
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   free_txdata();
 }
 
@@ -337,7 +358,7 @@ TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -371,7 +392,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   //          get_headers(out, "Contact"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -388,7 +409,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
                            "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -407,7 +428,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
                            "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -424,7 +445,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
                            "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -442,7 +463,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
                            "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -460,7 +481,7 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("", get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // even though we have path, we have no bindings
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -479,7 +500,7 @@ TEST_F(RegistrarTest, NoPath)
             get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // because we have no path
   EXPECT_EQ("", get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -531,7 +552,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -673,6 +694,69 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
 
   free_txdata();
 }
+
+/// Verify that third-party REGISTERs have appropriate headers passed through
+TEST_F(RegistrarTest, AppServersPassthrough)
+{
+  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
+                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>0</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // REGISTER passed on to AS
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  // Test the headers we expect to have passed through
+  EXPECT_EQ("P-Charging-Vector: icid-value=100", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
+
+  free_txdata();
+}
+
 
 /// Check that the network-initiated deregistration code works as expected
 TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
@@ -1002,8 +1086,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("P-Associated-URI: sip:6505550233@homedomain\r\n"
-            "P-Associated-URI: sip:6505550234@homedomain",
+  EXPECT_EQ("P-Associated-URI: <sip:6505550233@homedomain>\r\n"
+            "P-Associated-URI: <sip:6505550234@homedomain>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
@@ -1027,8 +1111,8 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("P-Associated-URI: sip:6505550233@homedomain\r\n"
-            "P-Associated-URI: sip:6505550234@homedomain",
+  EXPECT_EQ("P-Associated-URI: <sip:6505550233@homedomain>\r\n"
+            "P-Associated-URI: <sip:6505550234@homedomain>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
@@ -1198,7 +1282,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
@@ -1215,7 +1299,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: sip:6505550231@homedomain", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }

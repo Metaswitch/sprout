@@ -186,6 +186,8 @@ string SubscribeMessage::get()
                    "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
+                   "P-Charging-Vector: icid-value=100\r\n"
+                   "P-Charging-Function-Addresses: ccf=1.2.3.4; ecf=5.6.7.8\r\n"
                    "%10$s"
                    "%11$s"
                    "%12$s"
@@ -380,6 +382,9 @@ void SubscriptionTest::check_standard_OK()
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("P-Charging-Vector: icid-value=100", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+
   out = pop_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   free_txdata();
