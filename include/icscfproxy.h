@@ -116,7 +116,7 @@ private:
                        std::string& scscf);
 
     /// Parses the HSS response.
-    int parse_hss_response(Json::Value& rsp);
+    int parse_hss_response(Json::Value& rsp, bool queried_caps);
 
     /// Parses a set of capabilities in the HSS response.
     bool parse_capabilities(Json::Value& caps, std::vector<int>& parsed_caps);
@@ -148,12 +148,18 @@ private:
     /// capabilities to select an alternate S-CSCF.
     std::string _auth_type;
 
-    /// Flag which indicates whether or not the HSS returned capabilities.
-    bool _have_caps;
+      /// Flag which indicates whether or not we have asked the HSS for
+      /// capabilities and got a successful response (even if there were no
+      /// capabilities specified for this subscriber).
+      bool _queried_caps;
 
-    /// Structure storing the most recent response from the HSS for this
-    /// transaction.
-    ServerCapabilities _hss_rsp;
+      /// The list of mandatory capabilities returned by the HSS.
+      std::vector<int> _mandatory_caps;
+
+      /// The list of optional capabilities returned by the HSS.
+      std::vector<int> _optional_caps;
+
+    } _hss_rsp;
 
     /// The list of S-CSCFs already attempted for this request.
     std::vector<std::string> _attempted_scscfs;

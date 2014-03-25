@@ -385,6 +385,29 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   pj_list_insert_before(&auth_hdr->credential.common.other_param, new_param);
 }
 
+void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out)
+{
+  // Check to see if the request has already been integrity protected?
+  pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+           pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+
+  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
+  impu_out = PJUtils::public_id_from_uri(to_uri);
+  if ((auth_hdr != NULL) &&
+      (auth_hdr->credential.digest.username.slen != 0))
+  {
+    // private user identity is supplied in the Authorization header so use it.
+    impi_out = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+    LOG_DEBUG("Private identity from authorization header = %s", impi_out.c_str());
+  }
+  else
+  {
+    // private user identity not supplied, so construct a default from the
+    // public user identity by stripping the sip: prefix.
+    impi_out = PJUtils::default_private_id_from_uri(to_uri);
+    LOG_DEBUG("Private identity defaulted from public identity = %s", impi_out.c_str());
+  }
+}
 
 /// Adds a P-Asserted-Identity header to the message.
 void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid)

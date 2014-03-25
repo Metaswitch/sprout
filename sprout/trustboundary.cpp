@@ -47,7 +47,9 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 #include "pjutils.h"
+#include "custom_headers.h"
 #include "trustboundary.h"
+#include "stack.h"
 
 /// Strip headers as appropriate when crossing a trust boundary.
 static void proxy_strip_trusted(pjsip_tx_data *tdata)
@@ -59,9 +61,48 @@ static void proxy_strip_trusted(pjsip_tx_data *tdata)
   PJUtils::remove_hdr(tdata->msg, &STR_P_SERVED_USER);
 }
 
-TrustBoundary::TrustBoundary(std::string description, pj_bool_t strip_request, pj_bool_t strip_response) :
+/// Add P-Charging headers on incoming out-of-dialog/dialog initiating requests
+static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
+{
+  LOG_DEBUG("Add P-Charging headers");
+
+  std::string cdf_domain = PJUtils::pj_str_to_string(&stack_data.cdf_domain);
+
+  if (cdf_domain != "")
+  {
+    // Add the P-Charging-Function-Addresses. The value of the CDF is passed in
+    // as a parameter in bono - if this isn't present then don't set these
+    // headers.
+    pjsip_p_c_f_a_hdr* p_c_f_a = pjsip_p_c_f_a_hdr_create(tdata->pool);
+    pjsip_param* new_param = (pjsip_param*) pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
+    new_param->name = STR_CCF;
+    new_param->value = stack_data.cdf_domain;
+
+    pj_list_insert_before(&p_c_f_a->ccf, new_param);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_f_a);
+
+    // Add the P-Charging-Vector Id. The icid-value is the Call-ID, and the
+    // icid-generated-at is the bono domain
+    pjsip_cid_hdr* call_id = (pjsip_cid_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg,
+                                                                        &STR_CALL_ID,
+                                                                        NULL);
+    std::string c_id = PJUtils::pj_str_to_string(&call_id->id);
+    c_id.erase(std::remove(c_id.begin(), c_id.end(), '@'), c_id.end());
+
+    pjsip_p_c_v_hdr* p_c_v = pjsip_p_c_v_hdr_create(tdata->pool);
+
+    pj_strdup2(tdata->pool, &p_c_v->icid, c_id.c_str());
+    p_c_v->icid_gen_addr = stack_data.home_domain;
+
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_v);
+  }
+}
+
+TrustBoundary::TrustBoundary(std::string description, pj_bool_t strip_request,
+                             pj_bool_t strip_response, pj_bool_t add_p_charging) :
   _strip_request(strip_request),
   _strip_response(strip_response),
+  _add_p_charging(add_p_charging),
   _description(description)
 {
 }
@@ -72,6 +113,15 @@ void TrustBoundary::process_request(pjsip_tx_data* tdata)
   {
     proxy_strip_trusted(tdata);
   }
+
+  // Always strip the P-Charging headers
+  PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
+  PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
+
+  if (_add_p_charging)
+  {
+    proxy_add_p_charging_header(tdata);
+  }
 }
 
 void TrustBoundary::process_response(pjsip_tx_data* tdata)
@@ -80,6 +130,10 @@ void TrustBoundary::process_response(pjsip_tx_data* tdata)
   {
     proxy_strip_trusted(tdata);
   }
+
+  // Always remove the P-Charging headers
+  PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
+  PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
 }
 
 void TrustBoundary::process_stateless_message(pjsip_tx_data* tdata)
@@ -91,31 +145,32 @@ void TrustBoundary::process_stateless_message(pjsip_tx_data* tdata)
 std::string TrustBoundary::to_string()
 {
   return _description + "(" + (_strip_request  ? "-req" : "") +
-                        "," + (_strip_response ? "-rsp" : "") + ")";
+                        "," + (_strip_response ? "-rsp" : "") +
+                        "," + (_add_p_charging ? "-pch" : "") + ")";
 }
 
 /// Trust boundary instance: no boundary;
-TrustBoundary TrustBoundary::TRUSTED("TRUSTED", false, false);
+TrustBoundary TrustBoundary::TRUSTED("TRUSTED", false, false, false);
 
 /// Trust boundary instance: from client to core.  Allow client to
 /// provide trusted data to the core, but don't allow it to see
 /// the core's internal data. I.e., strip from responses.
-TrustBoundary TrustBoundary::INBOUND_EDGE_CLIENT("INBOUND_EDGE_CLIENT", false, true);
+TrustBoundary TrustBoundary::INBOUND_EDGE_CLIENT("INBOUND_EDGE_CLIENT", false, true, true);
 
 /// Trust boundary instance: from core to client.  Allow client to
 /// provide trusted data to the core, but don't allow it to see
 /// the core's internal data. I.e., strip from requests.
-TrustBoundary TrustBoundary::OUTBOUND_EDGE_CLIENT("OUTBOUND_EDGE_CLIENT", true, false);
+TrustBoundary TrustBoundary::OUTBOUND_EDGE_CLIENT("OUTBOUND_EDGE_CLIENT", true, false, false);
 
 /// Trust boundary instance: edge processing, but we don't know which
 /// direction. Don't allow trusted data to pass in either direction.
-TrustBoundary TrustBoundary::UNKNOWN_EDGE_CLIENT("UNKNOWN_EDGE_CLIENT", true, true);
+TrustBoundary TrustBoundary::UNKNOWN_EDGE_CLIENT("UNKNOWN_EDGE_CLIENT", true, true, false);
 
 /// Trust boundary instance: from trunk to core.  Don't allow
 /// trusted data to pass in either direction.
-TrustBoundary TrustBoundary::INBOUND_TRUNK("INBOUND_TRUNK", true, true);
+TrustBoundary TrustBoundary::INBOUND_TRUNK("INBOUND_TRUNK", true, true, true);
 
 /// Trust boundary instance: from core to trunk.  Don't allow
 /// trusted data to pass in either direction.
-TrustBoundary TrustBoundary::OUTBOUND_TRUNK("OUTBOUND_TRUNK", true, true);
+TrustBoundary TrustBoundary::OUTBOUND_TRUNK("OUTBOUND_TRUNK", true, true, false);
 

@@ -788,6 +788,7 @@ unsigned int CallServices::Terminating::condition_from_status(int code)
   switch (code)
   {
   case PJSIP_SC_NOT_FOUND:
+  case PJSIP_SC_TEMPORARILY_UNAVAILABLE:
     condition = simservs::Rule::CONDITION_NOT_REGISTERED;
     break;
 

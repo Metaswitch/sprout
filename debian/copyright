@@ -1,7 +1,3 @@
 Format: http://dep.debian.net/deps/dep5
 Upstream-Name: sprout
 Source: http://projectclearwater.org
-
-Files: *
-Copyright: Metaswitch Networks
-License: GPL-3+ with OpenSSL exception

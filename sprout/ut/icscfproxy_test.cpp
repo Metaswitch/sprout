@@ -612,6 +612,98 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
 }
 
 
+TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
+{
+  // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
+  // responds with a retryable error to the REGISTER request.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the user registration status query using
+  // a default private user identity.  The first response (specifying
+  // auth_type=REG) returns scscf1, the second response (specifying
+  // auth_type=CAPAB) returns scscf1 again.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // I-CSCF does an initial HSS lookup with auth_type set to REG,
+  // which returns S-CSCF scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // I-CSCF does a second HSS look-up, this time with auth_type set to
+  // CAPAB. The HSS returns a scscf name, and no capabilities. The name shouldn't
+  // be used (as it's already been tried). I-CSCF should select the S-CSCF with
+  // the highest priority (as there are no capabilites) which is scscf4.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+  ReqMatcher r2("REGISTER");
+  r2.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf4.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
+
 TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
@@ -726,10 +818,6 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
-                              "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [123],"
-                              " \"optional-capabilities\": [345]}");
 
   // Inject a REGISTER request.
   Message msg1;
@@ -772,7 +860,6 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -836,9 +923,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   inject_msg(respond_to_current_txdata(480));
 
   // I-CSCF does a second HSS look-up, this time with auth_type set to
-  // CAPAB.  Both scscf1 and scscf2 match the
-  // mandatory capabilities, but only scscf1 matches the optional capabilities.
-  // Since the I-CSCF has already tried scscf1 it picks scscf2 this time.
+  // CAPAB. scscf2, scscf3 and scscf4 match the
+  // mandatory capabilities, but only scscf2 matches the optional capabilities.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.2", 5058, tdata);
@@ -857,8 +943,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   // Send a 480 Temporarily Unavailable response.
   inject_msg(respond_to_current_txdata(480));
 
-  // I-CSCF does another retry, this time to scscf4 which is the only remaining
-  // S-CSCF which supports the mandatory capabilities.
+  // I-CSCF does another retry. scscf4 is selected as it has a higher priority than scscf3
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.4", 5058, tdata);
@@ -883,6 +968,95 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   expect_target("TCP", "1.2.3.4", 49152, tdata);
   RespMatcher r4(200);
   r4.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
+
+TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
+{
+  // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
+  // responds with a retryable error, and the CAPAB request to the HSS
+  // doesn't return any capabilities (should be treated as empty)
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the user registration status query using
+  // a default private user identity.  The first response (specifying
+  // auth_type=REG) returns scscf1, the second response (specifying
+  // auth_type=CAPAB) returns no capabilities.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+                              "{\"result-code\": 2001}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // I-CSCF does an initial HSS lookup with auth_type set to REG,
+  // which returns S-CSCF scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // I-CSCF does another retry. scscf4 is selected as it is the scscf with the highest
+  // priority (there are no mandatory capabilities)
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+  ReqMatcher r2("REGISTER");
+  r2.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf4.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r3(200);
+  r3.matches(tdata->msg);
 
   free_txdata();
 
@@ -941,7 +1115,6 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSFail)
 TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 {
   // Tests various cases where the HSS response either fails or is malformed.
-
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -952,6 +1125,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   // Don't set up a HSS response, so the query fail (this simulates an
   // HSS or Homestead timeout).
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_SERVER_UNAVAILABLE);
 
   // Inject a REGISTER request.
   Message msg1;
@@ -974,12 +1149,11 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  // Set up HSS response for the user registration status query, with a
-  // malformed JSON response (missing the final brace).
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
-                              "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [654],"
-                              " \"optional-capabilities\": [123]");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+
+  // Return 403 on the request. The registration should fail
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_FORBIDDEN);
 
   // Inject a REGISTER request.
   Message msg2;
@@ -992,25 +1166,25 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
                 ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg2.get_request(), tp);
 
-  // The user registration status query fails, so the REGISTER is rejected
-  // with a 480 Temporarily Unavailable response.
+  // The REGISTER is rejected with a 403 Forbidden response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
-  RespMatcher r2(480);
+  RespMatcher r2(403);
   r2.matches(tdata->msg);
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
 
   // Set up HSS response for the user registration status query, with a
-  // well structured JSON response, but where the capabilities are not
-  // integers.
+  // malformed JSON response (missing the final brace).
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
-                              " \"optional-capabilities\": [123]}");
+                              " \"mandatory-capabilities\": [654],"
+                              " \"optional-capabilities\": [123]");
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_OK);
 
   // Inject a REGISTER request.
   Message msg3;
@@ -1023,8 +1197,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
                 ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg3.get_request(), tp);
 
-  // The user registration status query fails, so the REGISTER is rejected
-  // with a 480 Temporarily Unavailable response.
+  // The HSS response is malformed, so the REGISTER is rejected with a 480 Temporarily Unavailable response.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "1.2.3.4", 49152, tdata);
@@ -1034,10 +1207,205 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
   free_txdata();
 
   _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+
+  // Set up HSS response for the user registration status query, with a
+  // well structured JSON response, but where the capabilities are not
+  // integers.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
+                              " \"optional-capabilities\": [123]}");
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                          HTTP_OK);
+
+  // Inject a REGISTER request.
+  Message msg4;
+  msg4._method = "REGISTER";
+  msg4._requri = "sip:homedomain";
+  msg4._to = msg4._from;        // To header contains AoR in REGISTER requests.
+  msg4._via = tp->to_string(false);
+  msg4._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg4.get_request(), tp);
+
+  // The user registration status query fails, so the REGISTER is rejected
+  // with a 480 Temporarily Unavailable response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r4(480);
+  r4.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
 
   delete tp;
 }
 
+
+TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
+{
+  // Tests routing of REGISTER requests when all the valid S-CSCFs
+  // respond with a 480 to the I-CSCF.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the user registration status query using
+  // a default private user identity.  The first response (specifying
+  // auth_type=REG) returns scscf1, the second response (specifying
+  // auth_type=CAPAB) returns scscf1 again.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+                              "{\"result-code\": 2001,"
+                              " \"mandatory-capabilities\": [123],"
+                              " \"optional-capabilities\": [345]}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // I-CSCF does an initial HSS lookup with auth_type set to REG,
+  // which returns S-CSCF scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // I-CSCF does a second HSS look-up, this time with auth_type set to
+  // CAPAB. The HSS returns capabilities. I-CSCF selects scscf2 as it's
+  // the only S-CSCF with the mandatory capabilites that hasn't been
+  // tried yet
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5058, tdata);
+  ReqMatcher r2("REGISTER");
+  r2.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf2.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // Check the final response is 504.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r3(504);
+  r3.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
+
+TEST_F(ICSCFProxyTest, RouteRegisterHSSNotFound)
+{
+  // Tests routing of REGISTER requests when the HSS CAPAB request fails
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the user registration status query using
+  // a default private user identity.  The first response (specifying
+  // auth_type=REG) returns scscf1, the second response (specifying
+  // auth_type=CAPAB) returns a 403.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+                          HTTP_FORBIDDEN);
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // I-CSCF does an initial HSS lookup with auth_type set to REG,
+  // which returns S-CSCF scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("REGISTER");
+  r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered to direct the message appropriately.
+  ASSERT_EQ("sip:scscf1.homedomain:5058;transport=TCP", str_uri(tdata->msg->line.req.uri));
+
+  // Check no Route or Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("", rr);
+  ASSERT_EQ("", route);
+
+  // Send a 480 Temporarily Unavailable response.
+  inject_msg(respond_to_current_txdata(480));
+
+  // I-CSCF does a second HSS look-up, this time with auth_type set to
+  // CAPAB. This throws a 403 though. Check the final response is 403.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(403);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+
+  delete tp;
+}
 
 TEST_F(ICSCFProxyTest, RouteOrigInviteHSSServerName)
 {
@@ -1346,10 +1714,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
                                         "1.2.3.4",
                                         49152);
 
-  // Set up the HSS response for the originating location query.
-  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_ERROR_NOT_FOUND\"}");
-
+  // Don't set up the HSS response - this will simulate a 404 response
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
@@ -1361,6 +1726,37 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
   msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and final 404 responses.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the 404 Not Found.
+  tdata = current_txdata();
+  RespMatcher(404).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Set up the HSS response for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": \"DIAMETER_ERROR_NOT_FOUND\"}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg2;
+  msg2._method = "INVITE";
+  msg2._via = tp->to_string(false);
+  msg2._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg2._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg2._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg2.get_request(), tp);
 
   // Expecting 100 Trying and final 404 responses.
   ASSERT_EQ(2, txdata_count());
@@ -1718,6 +2114,35 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
   rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
+  // Send a 408 Request Timeout response.
+  inject_msg(respond_to_current_txdata(408));
+  //poll();
+
+  // Expecting an ACK to the 408 and a retried INVITE
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.3", 5058, tdata);
+  ReqMatcher r4("ACK");
+  r4.matches(tdata->msg);
+  free_txdata();
+
+  // I-CSCF does another HSS location query for capabilities.  This time
+  // scscf4 is selected.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.4", 5058, tdata);
+  ReqMatcher r5("INVITE");
+  r5.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf4.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
 
@@ -1725,8 +2150,8 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r4(200);
-  r4.matches(tdata->msg);
+  RespMatcher r6(200);
+  r6.matches(tdata->msg);
 
   free_txdata();
 

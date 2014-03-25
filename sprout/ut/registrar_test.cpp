@@ -47,6 +47,7 @@
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -76,14 +77,8 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
-    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain", HTTP_OK);
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
   }
@@ -111,6 +106,19 @@ public:
 
   ~RegistrarTest()
   {
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
+    // Stop and restart the layer just in case
+    //pjsip_tsx_layer_instance()->stop();
+    //pjsip_tsx_layer_instance()->start();
+
     _analytics->_logger = NULL;
   }
 
@@ -239,14 +247,9 @@ TEST_F(RegistrarTest, NotOurs)
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
-  // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
 
   Message msg;
   msg._expires = "Expires: 300";
@@ -509,8 +512,7 @@ TEST_F(RegistrarTest, NoPath)
 // First case - REGISTER is generated with a multipart body
 TEST_F(RegistrarTest, AppServersWithMultipartBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -576,8 +578,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -639,8 +640,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
 /// Third case - REGISTER is generated with no body
 TEST_F(RegistrarTest, AppServersWithNoBody)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -766,8 +766,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -795,12 +794,14 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   delete aor_data; aor_data = NULL;
   std::map<std::string, Ifcs> ifc_map;
   std::vector<std::string> uris;
-  _hss_connection->get_subscription_data(user, "", ifc_map, uris, 0);
+  std::string regstate;
+  _hss_connection->update_registration_state(user, "", HSSConnection::REG, regstate, ifc_map, uris, 0);
 
   RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], NULL, user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
+  ASSERT_TRUE(current_txdata() != NULL);
   pjsip_msg* out = current_txdata()->msg;
   ReqMatcher r1("REGISTER");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -819,8 +820,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
 TEST_F(RegistrarTest, AppServersInitialRegistration)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -894,9 +894,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 {
   std::string user = "sip:6505550231@homedomain";
 
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
+  std::string xml =                                ("<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
@@ -914,6 +912,9 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "  </ApplicationServer>\n"
                                 "  </InitialFilterCriteria>\n"
                                 "</ServiceProfile></IMSSubscription>");
+
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -952,7 +953,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   // Check that we deleted the binding
   aor_data = _store->get_aor_data(user);
   ASSERT_TRUE(aor_data != NULL);
-  EXPECT_EQ(0u, aor_data->_bindings.size());
+  ASSERT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
 
   SCOPED_TRACE("deREGISTER");
@@ -969,8 +970,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 
 TEST_F(RegistrarTest, AppServersReRegistration)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                                 "<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
@@ -1056,7 +1056,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
 {
   Message msg;
   msg._user = "6505550232";
-  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain",
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
                           503);
 
   inject_msg(msg.get());
@@ -1065,7 +1065,7 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
   EXPECT_EQ(503, out->line.status.code);
   EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
 
-  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain");
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
 /// Multiple P-Associated-URIs
@@ -1073,8 +1073,8 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
 {
   Message msg;
   msg._user = "6505550233";
-  _hss_connection->set_result("/impu/sip%3A6505550233%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+
+  _hss_connection->set_impu_result("sip:6505550233@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
@@ -1098,8 +1098,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
-  _hss_connection->set_result("/impu/sip%3A6505550234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"
@@ -1131,8 +1130,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 /// Test for issue 356
 TEST_F(RegistrarTest, AppServersWithNoExtension)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1189,8 +1187,7 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
 /// Test for issue 358 - IFCs match on SDP but REGISTER doesn't have any - should be no match
 TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1236,13 +1233,7 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 TEST_F(RegistrarTest, RegistrationWithSubscription)
 {
   // We have a private ID in this test, so set up the expect response to the query.
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain?private_id=Alice",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
 
   RegStore::AoR::Subscription* s1;
   int now = time(NULL);

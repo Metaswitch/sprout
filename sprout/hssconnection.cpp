@@ -49,6 +49,16 @@
 #include "hssconnection.h"
 #include "accumulator.h"
 
+const std::string HSSConnection::REG = "reg";
+const std::string HSSConnection::CALL = "call";
+const std::string HSSConnection::DEREG_USER = "dereg-user";
+const std::string HSSConnection::DEREG_ADMIN = "dereg-admin";
+const std::string HSSConnection::DEREG_TIMEOUT = "dereg-timeout";
+const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
+const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
+
+const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
+const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
 HSSConnection::HSSConnection(const std::string& server,
                              LoadMonitor *load_monitor,
@@ -76,9 +86,10 @@ HSSConnection::~HSSConnection()
 
 
 /// Retrieve user's digest data as JSON object. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_digest_data(const std::string& private_user_identity,
-                                            const std::string& public_user_identity,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_digest_data(const std::string& private_user_identity,
+                                        const std::string& public_user_identity,
+                                        Json::Value*& digest_data,
+                                        SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -91,7 +102,7 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
     path += "?public_id=" + Utils::url_escape(public_user_identity);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, digest_data, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -105,11 +116,12 @@ Json::Value* HSSConnection::get_digest_data(const std::string& private_user_iden
 
 
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_identity,
-                                            const std::string& public_user_identity,
-                                            const std::string& auth_type,
-                                            const std::string& autn,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity,
+                                        const std::string& public_user_identity,
+                                        const std::string& auth_type,
+                                        const std::string& autn,
+                                        Json::Value*& av,
+                                        SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -134,7 +146,7 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
     path += "autn=" + Utils::url_escape(autn);
   }
 
-  Json::Value* av = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, av, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -149,32 +161,74 @@ Json::Value* HSSConnection::get_auth_vector(const std::string& private_user_iden
               private_user_identity.c_str());
   }
 
-  return av;
+  return rc;
 }
 
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
-Json::Value* HSSConnection::get_json_object(const std::string& path,
-                                            SAS::TrailId trail)
+HTTPCode HSSConnection::get_json_object(const std::string& path,
+                                        Json::Value*& json_object,
+                                        SAS::TrailId trail)
 {
   std::string json_data;
-  Json::Value* root = NULL;
 
-  if (_http->get(path, json_data, "", trail) == HTTP_OK)
+  HTTPCode rc = _http->get(path, json_data, "", trail);
+  if (rc == HTTP_OK)
   {
-    root = new Json::Value;
+    json_object = new Json::Value;
     Json::Reader reader;
-    bool parsingSuccessful = reader.parse(json_data, *root);
+    bool parsingSuccessful = reader.parse(json_data, *json_object);
     if (!parsingSuccessful)
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), json_data.c_str(), reader.getFormatedErrorMessages().c_str());
-      delete root;
-      root = NULL;
+      delete json_object;
+      json_object = NULL;
     }
   }
+  else
+  {
+    json_object = NULL;
+  }
 
+  return rc;
+}
+
+rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const std::string& url = "")
+{
+  rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
+  try
+  {
+    root->parse<0>(root->allocate_string(raw_data.c_str()));
+  }
+  catch (rapidxml::parse_error& err)
+  {
+    // report to the user the failure and their locations in the document.
+    LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
+    delete root;
+    root = NULL;
+  }
   return root;
+}
+
+
+/// Make a PUT to the server and store off the XML response. Caller is
+/// responsible for deleting the filled-in "root" pointer.
+HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
+                                           std::string body,
+                                           rapidxml::xml_document<>*& root,
+                                           SAS::TrailId trail)
+{
+  std::string raw_data;
+
+  HTTPCode http_code = _http->send_put(path, body, raw_data, trail);
+
+  if (http_code == HTTP_OK)
+  {
+    root = parse_xml(raw_data, path);
+  }
+
+  return http_code;
 }
 
 
@@ -189,84 +243,58 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 
   if (http_code == HTTP_OK)
   {
-    root = new rapidxml::xml_document<>;
-    try
-    {
-      root->parse<0>(root->allocate_string(raw_data.c_str()));
-    }
-    catch (rapidxml::parse_error& err)
-    {
-      // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), raw_data.c_str(), err.what());
-      delete root;
-      root = NULL;
-    }
+    root = parse_xml(raw_data, path);
   }
 
   return http_code;
 }
 
 
-/// Retrieve user's subscription data from the HSS, filling in the associated
-//  URIs in the associated_uris output parameter and the Ifcs object
-//  corresponding to each in the ifcs_map parameter.
-
-// Returns the HTTP code from Homestead - callers should check that
-// this is HTTP_OK before relying on the output parameters.
-
-HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_identity,
-                                              const std::string& private_user_identity,
-                                              std::map<std::string, Ifcs >& ifcs_map,
-                                              std::vector<std::string>& associated_uris,
-                                              SAS::TrailId trail)
+bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
+                          std::string& regstate,
+                          std::map<std::string, Ifcs >& ifcs_map,
+                          std::vector<std::string>& associated_uris,
+                          bool allowNoIMS)
 {
-  Utils::StopWatch stopWatch;
-  stopWatch.start();
-
-  std::string path = "/impu/" + Utils::url_escape(public_user_identity);
-  if (!private_user_identity.empty())
-  {
-    path += "?private_id=" + Utils::url_escape(private_user_identity);
-  }
-
-  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
-  // to it, so we want to delete the underlying document when they all go out
-  // of scope.
-
-  rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
-  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   rapidxml::xml_node<>* sp = NULL;
-
-  unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
-  {
-    _latency_stat.accumulate(latency_us);
-    _subscription_latency_stat.accumulate(latency_us);
-  }
-
-  if (http_code != HTTP_OK)
-  {
-    // If get_xml_object has returned a HTTP error code, we have either not found
-    // the subscriber on the HSS or been unable to communicate with
-    // the HSS successfully. In either case we should fail.
-    LOG_ERROR("Could not get subscriber data from HSS");
-    return http_code;
-  }
 
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
     LOG_ERROR("Malformed HSS XML - document couldn't be parsed");
-    return HTTP_SERVER_ERROR;
+    return false;
   }
 
-  rapidxml::xml_node<>* imss = root->first_node("IMSSubscription");
+  rapidxml::xml_node<>* cw = root->first_node("ClearwaterRegData");
+
+  if (!cw)
+  {
+    LOG_ERROR("Malformed Homestead XML - no ClearwaterRegData element");
+    return false;
+  }
+
+  rapidxml::xml_node<>* reg = cw->first_node("RegistrationState");
+
+  if (!reg)
+  {
+    LOG_ERROR("Malformed Homestead XML - no RegistrationState element");
+    return false;
+  }
+
+  regstate = reg->value();
+
+  if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
+  {
+    LOG_DEBUG("Subscriber is not registered on a get_registration_state request");
+    return true;
+  }
+
+  rapidxml::xml_node<>* imss = cw->first_node("IMSSubscription");
 
   if (!imss)
   {
     LOG_ERROR("Malformed HSS XML - no IMSSubscription element");
-    return HTTP_SERVER_ERROR;
+    return false;
   }
 
   for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile"))
@@ -288,15 +316,151 @@ HTTPCode HSSConnection::get_subscription_data(const std::string& public_user_ide
       }
     }
   }
-  return HTTP_OK;
+  return true;
 }
 
+/// Retrieve user's subscription data from the HSS, filling in the associated
+//  URIs in the associated_uris output parameter and the Ifcs object
+//  corresponding to each in the ifcs_map parameter.
+
+// Returns the HTTP code from Homestead - callers should check that
+// this is HTTP_OK before relying on the output parameters.
+
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
+                                            std::map<std::string, Ifcs >& ifcs_map,
+                                            std::vector<std::string>& associated_uris,
+                                            SAS::TrailId trail)
+{
+  std::string unused;
+  return update_registration_state(public_user_identity,
+                             private_user_identity,
+                             type,
+                             unused,
+                             ifcs_map,
+                             associated_uris,
+                             trail);
+}
+
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
+                                            SAS::TrailId trail)
+{
+  std::map<std::string, Ifcs > ifcs_map;
+  std::vector<std::string> associated_uris;
+  std::string unused;
+  return update_registration_state(public_user_identity,
+                             private_user_identity,
+                             type,
+                             unused,
+                             ifcs_map,
+                             associated_uris,
+                             trail);
+}
+
+
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
+                                            const std::string& private_user_identity,
+                                            const std::string& type,
+                                            std::string& regstate,
+                                            std::map<std::string, Ifcs >& ifcs_map,
+                                            std::vector<std::string>& associated_uris,
+                                            SAS::TrailId trail)
+{
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
+  if (!private_user_identity.empty())
+  {
+    path += "?private_id=" + Utils::url_escape(private_user_identity);
+  }
+
+  LOG_DEBUG("Making Homestead request for %s", path.c_str());
+  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+  // to it, so we want to delete the underlying document when they all go out
+  // of scope.
+
+  rapidxml::xml_document<>* root_underlying_ptr = NULL;
+  HTTPCode http_code = put_for_xml_object(path, "{\"reqtype\": \""+type+"\"}", root_underlying_ptr, trail);
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  unsigned long latency_us = 0;
+
+  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+    if (stopWatch.read(latency_us))
+    {
+      _latency_stat.accumulate(latency_us);
+      _subscription_latency_stat.accumulate(latency_us);
+    }
+  }
+
+  if (http_code != HTTP_OK)
+  {
+    // If get_xml_object has returned a HTTP error code, we have either not found
+    // the subscriber on the HSS or been unable to communicate with
+    // the HSS successfully. In either case we should fail.
+    LOG_ERROR("Could not get subscriber data from HSS");
+    return http_code;
+  }
+
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, false) ? HTTP_OK : HTTP_SERVER_ERROR;
+}
+
+HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
+                                              std::string& regstate,
+                                              std::map<std::string, Ifcs >& ifcs_map,
+                                              std::vector<std::string>& associated_uris,
+                                              SAS::TrailId trail)
+{
+  Utils::StopWatch stopWatch;
+  stopWatch.start();
+
+  std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
+
+  LOG_DEBUG("Making Homestead request for %s", path.c_str());
+  rapidxml::xml_document<>* root_underlying_ptr = NULL;
+  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
+
+
+  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+  // to it, so we want to delete the underlying document when they all go out
+  // of scope.
+  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+  unsigned long latency_us = 0;
+
+  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+    if (stopWatch.read(latency_us))
+    {
+      _latency_stat.accumulate(latency_us);
+      _subscription_latency_stat.accumulate(latency_us);
+    }
+  }
+
+  if (http_code != HTTP_OK)
+  {
+    // If get_xml_object has returned a HTTP error code, we have either not found
+    // the subscriber on the HSS or been unable to communicate with
+    // the HSS successfully. In either case we should fail.
+    LOG_ERROR("Could not get subscriber data from HSS");
+    return http_code;
+  }
+
+  // Return whether the XML was successfully decoded. The XML can be decoded and
+  // not return any IFCs (when the subscriber isn't registered), so a successful
+  // response shouldn't be taken as a guarantee of IFCs.
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, true) ? HTTP_OK : HTTP_SERVER_ERROR;
+}
+
+
 // Makes a user authorization request, and returns the data as a JSON object.
-Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user_identity,
-                                                 const std::string& public_user_identity,
-                                                 const std::string& visited_network,
-                                                 const std::string& auth_type,
-                                                 SAS::TrailId trail)
+HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_identity,
+                                             const std::string& public_user_identity,
+                                             const std::string& visited_network,
+                                             const std::string& auth_type,
+                                             Json::Value*& user_auth_status,
+                                             SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -316,7 +480,7 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
     path += "&auth-type=" + Utils::url_escape(auth_type);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, user_auth_status, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
@@ -329,10 +493,11 @@ Json::Value* HSSConnection::get_user_auth_status(const std::string& private_user
 }
 
 /// Makes a location information request, and returns the data as a JSON object.
-Json::Value* HSSConnection::get_location_data(const std::string& public_user_identity,
-                                              const bool& originating,
-                                              const std::string& auth_type,
-                                              SAS::TrailId trail)
+HTTPCode HSSConnection::get_location_data(const std::string& public_user_identity,
+                                          const bool& originating,
+                                          const std::string& auth_type,
+                                          Json::Value*& location_data,
+                                          SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
@@ -351,7 +516,7 @@ Json::Value* HSSConnection::get_location_data(const std::string& public_user_ide
     path += prefix + "auth-type=" + Utils::url_escape(auth_type);
   }
 
-  Json::Value* rc = get_json_object(path, trail);
+  HTTPCode rc = get_json_object(path, location_data, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))

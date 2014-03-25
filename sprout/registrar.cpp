@@ -219,6 +219,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
   std::map<std::string, RegStore::AoR::Binding> bindings;
+  bool all_bindings_expired = false;
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -393,7 +394,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data, send_notify));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify, all_bindings_expired));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -423,6 +424,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         }
       }
     }
+  }
+
+  if (all_bindings_expired) {
+    LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
+    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, 0);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -505,11 +511,11 @@ void process_register_request(pjsip_rx_data* rdata)
     private_id = "";
   }
 
-  HTTPCode http_code = hss->get_subscription_data(public_id, private_id, ifc_map, uris, trail);
-
-  if (http_code != HTTP_OK)
+  std::string regstate;
+  HTTPCode http_code = hss->update_registration_state(public_id, private_id, HSSConnection::REG, regstate, ifc_map, uris, trail);
+  if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
   {
-    // We failed to get the list of associated URIs.  This indicates that the
+    // We failed to register this subscriber at the HSS.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
     // identity doesn't belong to the private identity.
 
@@ -767,10 +773,12 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 
 void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
 {
+  LOG_DEBUG("In registrar_on_tsx_state");
   ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
 
-  if ((tsxdata != NULL) && (tsx->state == PJSIP_TSX_STATE_COMPLETED))
+  if ((tsxdata != NULL) && ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
   {
+    LOG_DEBUG("Completion of a third-party REGISTER transaction");
     if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
         (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
     {
@@ -788,17 +796,21 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
     if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
         ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
     {
-      LOG_INFO("REGISTER transaction failed with code %d", tsx->status_code);
+      LOG_INFO("Third-party REGISTER transaction failed with code %d", tsx->status_code);
       std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-
       // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
       // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
       std::vector<std::string> uris;
       std::map<std::string, Ifcs> ifc_map;
-      HTTPCode http_code = hss->get_subscription_data(aor, "", ifc_map, uris, get_trail(tsx));
+      HTTPCode http_code = hss->update_registration_state(aor, "", HSSConnection::DEREG_ADMIN, ifc_map, uris, get_trail(tsx));
 
+      // If we try to deregister a subscriber who has already
+      // registered (e.g. because our third-party-registration
+      // announcing a deregistration fails) Homestead will return an
+      // error and we'll avoid sending these in a loop.
       if (http_code == HTTP_OK)
       {
+        LOG_DEBUG("Initiating network-initiated deregistration");
         RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
       }
     }
@@ -813,12 +825,12 @@ void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
   // nothing, as we're terminating anyway.
 
   if ((tsxdata != NULL) &&
-      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)) &&
-      (tsx->tsx_user->id > -1))
+      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) ||
+       (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
   {
+    tsx->mod_data[tsx->tsx_user->id] = NULL;
     delete tsxdata;
     tsxdata = NULL;
-    tsx->mod_data[tsx->tsx_user->id] = NULL;
   }
 }
 

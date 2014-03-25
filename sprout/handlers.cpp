@@ -1,5 +1,5 @@
 /**
- * @file handlers.cpp 
+ * @file handlers.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -39,9 +39,10 @@
 #include "handlers.h"
 #include "log.h"
 #include "regstore.h"
+#include "ifchandler.h"
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void ChronosHandler::run()
+void RegistrationTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -63,9 +64,32 @@ void ChronosHandler::run()
   handle_response();
   delete this;
 }
+
+void AuthTimeoutHandler::run()
+{
+  if (_req.method() != htp_method_POST)
+  {
+    _req.send_reply(405);
+    delete this;
+    return;
+  }
+
+  int rc = handle_response(_req.body());
+  if (rc != 200)
+  {
+    LOG_DEBUG("Unable to handle callback from Chronos");
+    _req.send_reply(rc);
+    delete this;
+    return;
+  }
+
+  _req.send_reply(200);
+  delete this;
+}
+
 //LCOV_EXCL_STOP
 
-void ChronosHandler::handle_response()
+void RegistrationTimeoutHandler::handle_response()
 {
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true);
 
@@ -83,15 +107,16 @@ void ChronosHandler::handle_response()
   delete aor_data;
 }
 
-RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
-                                            std::string aor_id,
-                                            RegStore::AoR* previous_aor_data,
-                                            RegStore* remote_store,
-                                            bool update_chronos)
+RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
+                                                        std::string aor_id,
+                                                        RegStore::AoR* previous_aor_data,
+                                                        RegStore* remote_store,
+                                                        bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
-   
+  bool all_bindings_expired = false;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -146,7 +171,13 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, update_chronos));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+
+  if (is_primary && all_bindings_expired)
+  {
+    LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+    _cfg->_hss->update_registration_state(aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
+  }
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -158,7 +189,7 @@ RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body) 
+int RegistrationTimeoutHandler::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -195,4 +226,88 @@ int ChronosHandler::parse_response(std::string body)
   }
 
   return 200;
+}
+
+int AuthTimeoutHandler::handle_response(std::string body)
+{
+  Json::Value json_body;
+  std::string json_str = body;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+
+  if (!parsingSuccessful)
+  {
+    LOG_ERROR("Failed to read opaque data, %s",
+              reader.getFormattedErrorMessages().c_str());
+    return 400;
+  }
+
+  if ((json_body.isMember("impi")) &&
+      ((json_body)["impi"].isString()))
+  {
+    _impi = json_body.get("impi", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("IMPI not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("impu")) &&
+      ((json_body)["impu"].isString()))
+  {
+    _impu = json_body.get("impu", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("IMPU not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("nonce")) &&
+      ((json_body)["nonce"].isString()))
+  {
+    _nonce = json_body.get("nonce", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("Nonce not available in JSON");
+    return 400;
+  }
+
+  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce);
+  bool success = false;
+
+
+  if (json == NULL)
+  {
+    // Mainline case - our AV has already been deleted because the
+    // user has tried to authenticate. No need to notify the HSS in
+    // this case (as they'll either have successfully authenticated
+    // and triggered a REGISTRATION SAR, or failed and triggered an
+    // AUTHENTICATION_FAILURE SAR).
+    success = true;
+  }
+  else
+  {
+    LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+
+    // Note that both AV deletion and the AUTHENTICATION_TIMEOUT SAR
+    // are idempotent, so there's no problem if Chronos' timer pops
+    // twice (e.g. if we have high latency and these operations take
+    // more than 2 seconds).
+
+    // If either of these operations fail, we return a 500 Internal
+    // Server Error - this will trigger Chronos to try a different
+    // Sprout, which may have better connectivity to Homestead or Memcached.
+    success = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
+
+    if (success)
+    {
+      success = _cfg->_avstore->delete_av(_impi, _nonce);
+    }
+
+    delete json;
+  }
+  return success ? 200 : 500;
 }

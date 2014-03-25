@@ -916,7 +916,6 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
   Flow* tgt_flow = NULL;
   SIPPeerType source_type = determine_source(rdata->tp_info.transport,
                                              rdata->pkt_info.src_addr);
-
   LOG_DEBUG("Perform access proxy routing for %.*s request",
             tdata->msg->line.req.method.name.slen, tdata->msg->line.req.method.name.ptr);
 
@@ -1443,8 +1442,10 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
   {
     std::vector<std::string> uris;
     std::map<std::string, Ifcs> ifc_map;
-    long http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-    info = {ifc_map[public_id], uris};
+    std::string regstate;
+    long http_code = hss->update_registration_state(public_id, "", HSSConnection::CALL, regstate, ifc_map, uris, trail);
+    bool registered = (regstate == HSSConnection::STATE_REGISTERED);
+    info = {registered, ifc_map[public_id], uris};
     if (http_code == 200)
     {
       cached_hss_data[public_id] = info;
@@ -1452,6 +1453,23 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     }
   }
   return rc;
+}
+
+// Look up the registration state for the given public ID, using the
+// per-transaction cache if possible (and caching them and the iFC otherwise).
+bool UASTransaction::is_user_registered(std::string public_id)
+{
+  HSSCallInformation data;
+  bool success = get_data_from_hss(public_id, data, trail());
+  if (success)
+  {
+    return data.registered;
+  }
+  else
+  {
+    LOG_ERROR("Connection to Homestead failed, treating user as unregistered");
+    return false;
+  }
 }
 
 // Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
@@ -1580,11 +1598,15 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // described above, this implies that the element is responsible for the
   // domain in the Request-URI, and the element MAY use whatever mechanism
   // it desires to determine where to send the request.
-  if ((store) && (hss))
+  //
+  // is_user_registered() checks on Homestead to see whether the user
+  // is registered - if not, we don't need to use the memcached store
+  // to look up their bindings.
+  std::string public_id = PJUtils::aor_from_uri(req_uri);
+  if ((store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
-    std::string public_id = PJUtils::aor_from_uri(req_uri);
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris, trail);
 
@@ -1599,6 +1621,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       // Failed to get the associated URIs from Homestead.  We'll try to
       // do the registration look-up with the specified target URI - this may
       // fail, but we'll never misroute the call.
+      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
       aor = public_id;
     }
 
@@ -2158,7 +2181,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         LOG_INFO("Sprout has I-CSCF function enabled");
 
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
-        Json::Value* location = hss->get_location_data(public_id, false, "", trail());
+
+        Json::Value* location = NULL;
+        hss->get_location_data(public_id, false, "", location, trail());
 
         if ((location == NULL) ||
             (!location->isMember("result-code")) ||
@@ -2579,10 +2604,11 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
 
   if (targets.size() == 0)
   {
-    // No targets found, so reject with a 404 error - reuse the best_rsp
-    // message.
-    LOG_INFO("Reject request with 404");
-    send_response(PJSIP_SC_NOT_FOUND);
+    // No targets found, so reject with a 480 error.
+    // There will only be no targets when the terminating user isn't
+    // registered or has no valid bindings.
+    LOG_INFO("Reject request with 480");
+    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
 
     return;
   }
@@ -3722,6 +3748,13 @@ void UACTransaction::cancel_pending_tsx(int st_code)
 
       LOG_DEBUG("Sending CANCEL request");
       pj_status_t status = PJUtils::send_request(stack_data.endpt, cancel);
+
+      // We used to deregister the user here if we had
+      // SIP_STATUS_FLOW_FAILED, but this is inappropriate - only one
+      // of their bindings has failed, but they may be registered
+      // elsewhere. If this was the last binding, Chronos will
+      // eventually time it out and cause a deregistration.
+
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Error sending CANCEL, %s", PJUtils::pj_status_to_string(status).c_str());
@@ -3757,22 +3790,6 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
     pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
     _uas_data->on_new_client_response(this, rdata);
 
-    if ((rdata->msg_info.msg->line.status.code == SIP_STATUS_FLOW_FAILED) &&
-        (_from_store))
-    {
-      // We're the auth proxy and the flow we used failed, delete the
-      // record of the flow.
-      std::string aor = PJUtils::pj_str_to_string(&_aor);
-      std::string binding_id = PJUtils::pj_str_to_string(&_binding_id);
-      std::vector<std::string> uris;
-      std::map<std::string, Ifcs> ifc_map;
-      hss->get_subscription_data(aor, "", ifc_map, uris, trail());
-
-      if (!uris.empty())
-      {
-        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, binding_id, trail());
-      }
-    }
   }
 
   // If UAC transaction is terminated because of a timeout, treat this as
@@ -4176,37 +4193,6 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   pjsip_msg_insert_first_hdr(tdata->msg, path_hdr);
 
   return PJ_SUCCESS;
-}
-
-
-/// Determine if the given user is registered in the registration data
-/// store.
-bool is_user_registered(std::string served_user)
-{
-  bool is_registered = false;
-
-  if (store)
-  {
-    std::string aor = served_user;
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
-
-    // If we have a remote store and the local store suggests the subscriber is
-    // unregistered, double-check in the remote store.
-    if ((remote_store != NULL) &&
-        ((aor_data == NULL) ||
-         (aor_data->bindings().empty())))
-    {
-      delete aor_data;
-      aor_data = remote_store->get_aor_data(aor);
-    }
-
-    is_registered = (aor_data != NULL) &&
-                    (aor_data->bindings().size() != 0u);
-    delete aor_data; aor_data = NULL;
-    LOG_DEBUG("User %s is %sregistered", aor.c_str(), is_registered ? "" : "un");
-  }
-
-  return is_registered;
 }
 
 

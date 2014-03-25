@@ -335,16 +335,26 @@ void process_subscription_request(pjsip_rx_data* rdata)
   std::map<std::string, Ifcs> ifc_map;
 
   // Subscriber must have already registered to be making a subscribe
-  HTTPCode http_code = hss->get_subscription_data(public_id, "", ifc_map, uris, trail);
-  if (http_code != HTTP_OK)
+  std::string state;
+  HTTPCode http_code = hss->get_registration_data(public_id, state, ifc_map, uris, trail);
+  if ((http_code != HTTP_OK) || (state != "REGISTERED"))
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.  Reject with 403.
+    // identity doesn't belong to the private identity.
+    st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
+
+    // If the client shouldn't retry (when the subscriber isn't present in the HSS)
+    // reject with a 403, otherwise reject with a 503.
+    if (http_code == HTTP_NOT_FOUND)
+    {
+      st_code = PJSIP_SC_FORBIDDEN;
+    }
+
     LOG_ERROR("Rejecting SUBSCRIBE request");
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_FORBIDDEN,
+                               st_code,
                                NULL,
                                NULL,
                                NULL);
@@ -460,11 +470,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     // whether it should be processed by this module or passed up to an AS.
     pjsip_msg *msg = rdata->msg_info.msg;
 
-    // A valid subscription must have the Event header set to "Reg"
+    // A valid subscription must have the Event header set to "reg". This is case-sensitive
     pj_str_t event_name = pj_str("Event");
     pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
 
-    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "Reg"))
+    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
     {
       // The Event header is missing or doesn't match "Reg"
       LOG_DEBUG("Rejecting subscription request with invalid event header");

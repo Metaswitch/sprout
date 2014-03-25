@@ -166,15 +166,15 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
-                             &method,      // Method
-                             &as_uri,      // Target
-                             &scscf_uri,   // From
-                             &user_uri,    // To
-                             &scscf_uri,   // Contact
-                             NULL,         // Auto-generate Call-ID
-                             1,            // CSeq
-                             NULL,         // No body
-                             &tdata);      // OUT
+                                      &method,      // Method
+                                      &as_uri,      // Target
+                                      &scscf_uri,   // From
+                                      &user_uri,    // To
+                                      &scscf_uri,   // Contact
+                                      NULL,         // Auto-generate Call-ID
+                                      1,            // CSeq
+                                      NULL,         // No body
+                                      &tdata);      // OUT
 
   assert(status == PJ_SUCCESS);
 

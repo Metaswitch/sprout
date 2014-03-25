@@ -56,17 +56,48 @@ void FakeHSSConnection::flush_all()
   _results.clear();
 }
 
-
 void FakeHSSConnection::set_result(const std::string& url,
                                    const std::string& result)
 {
-  _results[url] = result;
+  _results[UrlBody(url, "")] = result;
+}
+
+void FakeHSSConnection::set_impu_result(const std::string& impu,
+                                        const std::string& type,
+                                        const std::string& state,
+                                        std::string subxml,
+                                        std::string extra_params)
+{
+  std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
+
+  if (subxml.compare("") == 0)
+  {
+    subxml = ("<IMSSubscription><ServiceProfile>\n"
+              "<PublicIdentity><Identity>"+impu+"</Identity></PublicIdentity>"
+              "  <InitialFilterCriteria>\n"
+              "  </InitialFilterCriteria>\n"
+              "</ServiceProfile></IMSSubscription>");
+  }
+
+  std::string result = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
+                        + subxml + "</ClearwaterRegData>");
+
+  _results[UrlBody(url, (type.empty() ? "" : "{\"reqtype\": \""+type+"\"}"))] = result;
 }
 
 
 void FakeHSSConnection::delete_result(const std::string& url)
 {
-  _results.erase(url);
+  _results.erase(UrlBody(url, ""));
+}
+
+long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail)
+{
+  return FakeHSSConnection::get_xml_object(path,
+                                           body,
+                                           root,
+                                           trail);
 }
 
 
@@ -83,27 +114,32 @@ void FakeHSSConnection::delete_rc(const std::string& url)
 }
 
 
-Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
-                                                SAS::TrailId trail)
+long FakeHSSConnection::get_json_object(const std::string& path,
+                                        Json::Value*& object,
+                                        SAS::TrailId trail)
 {
-  Json::Value* root = NULL;
+  HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<std::string, std::string>::const_iterator i = _results.find(path);
+  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
 
   if (i != _results.end())
   {
-    root = new Json::Value;
+    object = new Json::Value;
     Json::Reader reader;
-    bool parsingSuccessful = reader.parse(i->second, *root);
-    if (!parsingSuccessful)
+    bool parsingSuccessful = reader.parse(i->second, *object);
+    if (parsingSuccessful)
+    {
+      http_code = HTTP_OK;
+    }
+    else
     {
       // report to the user the failure and their locations in the document.
       LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
                 path.c_str(),
                 i->second.c_str(),
                 reader.getFormatedErrorMessages().c_str());
-      delete root;
-      root = NULL;
+      delete object;
+      object = NULL;
     }
   }
   else
@@ -111,17 +147,30 @@ Json::Value* FakeHSSConnection::get_json_object(const std::string& path,
     LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
   }
 
-  return root;
-}
+  std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
+  if (i2 != _rcs.end())
+  {
+    http_code = i2->second;
+  }
 
+  return http_code;
+}
 
 long FakeHSSConnection::get_xml_object(const std::string& path,
                                        rapidxml::xml_document<>*& root,
                                        SAS::TrailId trail)
 {
+  return get_xml_object(path, "", root, trail);
+}
+
+long FakeHSSConnection::get_xml_object(const std::string& path,
+                                       std::string body,
+                                       rapidxml::xml_document<>*& root,
+                                       SAS::TrailId trail)
+{
   HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<std::string, std::string>::const_iterator i = _results.find(path);
+  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, body));
 
   if (i != _results.end())
   {
@@ -148,7 +197,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   }
   else
   {
-    LOG_DEBUG("Failed to find XML result for URL %s", path.c_str());
+    LOG_ERROR("Failed to find XML result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);

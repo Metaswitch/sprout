@@ -76,13 +76,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
-    _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                                "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                                "  <InitialFilterCriteria>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
   }
 
   static void TearDownTestCase()
@@ -153,7 +147,7 @@ public:
     _user("6505550231"),
     _domain("homedomain"),
     _contact("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob"),
-    _event("Event: Reg"),
+    _event("Event: reg"),
     _accepts("Accept: application/reginfo+xml"),
     _expires(""),
     _route(""),
@@ -242,6 +236,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
+
   RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
   RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
@@ -280,7 +275,7 @@ TEST_F(SubscriptionTest, MissingEventHeader)
 }
 
 // Test the Event Header
-// Event that isn't Reg should be rejected
+// Event that isn't reg should be rejected
 TEST_F(SubscriptionTest, IncorrectEventHeader)
 {
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -288,6 +283,12 @@ TEST_F(SubscriptionTest, IncorrectEventHeader)
   SubscribeMessage msg;
   msg._event = "Event: Not Reg";
   pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg2;
+  msg2._event = "Event: Reg";
+  ret = inject_msg_direct(msg2.get());
   EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -345,7 +346,25 @@ TEST_F(SubscriptionTest, ErrorAssociatedUris)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  check_subscriptions("sip:6505550231@homedomain", 0u);
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+}
+
+/// Homestead fails associated URI request
+TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
+{
+  SubscribeMessage msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          503);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(503, out->line.status.code);
+  EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
 /// Register with non-primary P-Associated-URI
@@ -353,8 +372,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 {
   SubscribeMessage msg;
   msg._user = "6505550234";
-  _hss_connection->set_result("/impu/sip%3A6505550234%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+  _hss_connection->set_impu_result("sip:6505550234@homedomain", "", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
                               "  <PublicIdentity><Identity>sip:6505550234@homedomain</Identity></PublicIdentity>\n"

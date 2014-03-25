@@ -1,5 +1,5 @@
 /**
- * @file handlers.cpp 
+ * @file handlers.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -39,33 +39,57 @@
 
 #include "httpstack.h"
 #include "chronosconnection.h"
+#include "hssconnection.h"
 #include "regstore.h"
+#include "avstore.h"
 
-class ChronosHandler : public HttpStack::Handler
+class RegistrationTimeoutHandler : public HttpStack::Handler
 {
 public:
   struct Config
   {
-    Config(RegStore* store, RegStore* remote_store) : 
-              _store(store), _remote_store(remote_store) {}
+  Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
+    _store(store), _remote_store(remote_store), _hss(hss) {}
     RegStore* _store;
     RegStore* _remote_store;
+    HSSConnection* _hss;
   };
 
-  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  RegistrationTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
   void run();
-  void handle_response();
-  int parse_response(std::string body);
-  RegStore::AoR* set_aor_data(RegStore* current_store, 
-                              std::string aor_id, 
-                              RegStore::AoR* previous_aor_data, 
-                              RegStore* remote_store, 
-                              bool update_chronos);
 
 protected:
+  void handle_response();
+  int parse_response(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store,
+                              std::string aor_id,
+                              RegStore::AoR* previous_aor_data,
+                              RegStore* remote_store,
+                              bool update_chronos);
   const Config* _cfg;
   std::string _aor_id;
   std::string _binding_id;
+};
+
+class AuthTimeoutHandler :  public HttpStack::Handler
+{
+public:
+  struct Config
+  {
+  Config(AvStore* store, HSSConnection* hss) :
+    _avstore(store), _hss(hss) {}
+    AvStore* _avstore;
+    HSSConnection* _hss;
+  };
+  AuthTimeoutHandler(HttpStack::Request& req, const Config* cfg) :  HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+protected:
+  int handle_response(std::string body);
+  const Config* _cfg;
+  std::string _impi;
+  std::string _impu;
+  std::string _nonce;
+
 };
 
 #endif

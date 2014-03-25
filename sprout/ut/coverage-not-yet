@@ -13,6 +13,7 @@ modules/cpp-common/src/zmq_lvc.cpp
 modules/cpp-common/src/dnscachedresolver.cpp
 modules/cpp-common/src/dnsparser.cpp
 modules/cpp-common/src/baseresolver.cpp
+modules/cpp-common/src/fakelogger.cpp
 
 sprout/stateful_proxy.cpp
 sprout/connection_pool.cpp

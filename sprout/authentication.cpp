@@ -89,6 +89,7 @@ pjsip_module mod_auth =
 // Connection to the HSS service for retrieving subscriber credentials.
 static HSSConnection* hss;
 
+static ChronosConnection* chronos;
 
 // Factory for creating ACR messages for Rf billing.
 static ACRFactory* acr_factory;
@@ -173,8 +174,17 @@ pj_status_t user_lookup(pj_pool_t *pool,
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
-  // Get the Authentication Vector from the store.
+  // Get the Authentication Vector from the store. We should
+  // immediately clear the AV, to avoid replay attacks. This is true
+  // even if the get fails and av is NULL - someone could still be
+  // snooping traffic, see the nonce, and try and reuse it when
+  // memcached recovers.
   Json::Value* av = av_store->get_av(impi, nonce);
+
+  // No point checking the return value of delete_av - there's no
+  // sensible recovery action we can take (and it logs internally if
+  // it fails).
+  av_store->delete_av(impi, nonce);
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
@@ -225,7 +235,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
   return status;
 }
 
-
 void create_challenge(pjsip_authorization_hdr* auth_hdr,
                       std::string resync,
                       pjsip_rx_data* rdata,
@@ -236,23 +245,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   std::string impu;
   std::string nonce;
 
-  pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri);
-  impu = PJUtils::public_id_from_uri(to_uri);
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.username.slen != 0))
-  {
-    // private user identity is supplied in the Authorization header so use it.
-    impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
-    LOG_DEBUG("Private identity from authorization header = %s", impi.c_str());
-  }
-  else
-  {
-    // private user identity not supplied, so construct a default from the
-    // public user identity by stripping the sip: prefix.
-    impi = PJUtils::default_private_id_from_uri(to_uri);
-    LOG_DEBUG("Private identity defaulted from public identity = %s", impi.c_str());
-  }
-
+  PJUtils::get_impi_and_impu(rdata, impi, impu);
   // Set up the authorization type, following Annex P.4 of TS 33.203.  Currently
   // only support AKA and SIP Digest, so only implement the subset of steps
   // required to distinguish between the two.
@@ -273,11 +266,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
 
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = hss->get_auth_vector(impi,
-                                         impu,
-                                         auth_type,
-                                         resync,
-                                         get_trail(rdata));
+  Json::Value* av = NULL;
+  hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
@@ -354,7 +344,17 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
-    av_store->set_av(impi, nonce, av);
+    bool success = av_store->set_av(impi, nonce, av);
+    if (success)
+    {
+      // We've written the AV into the store, so need to set a Chronos
+      // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
+      // HSS when it expires.
+      std::string timer_id;
+      std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
+      LOG_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
+    }
 
     delete av;
   }
@@ -389,7 +389,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
-  if ((auth_hdr != NULL) &&
+ if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen == 0))
   {
     // There is an authorization header with no challenge response, so check
@@ -553,6 +553,19 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // Authentication failed.
     LOG_ERROR("Authentication failed, %s",
               PJUtils::pj_status_to_string(status).c_str());
+
+    if (sc != PJSIP_SC_UNAUTHORIZED)
+    {
+      // Notify Homestead and the HSS that this authentication attempt
+      // has definitively failed.
+      std::string impi;
+      std::string impu;
+
+      PJUtils::get_impi_and_impu(rdata, impi, impu);
+
+      hss->update_registration_state(impu, impi, HSSConnection::AUTH_FAIL, 0);
+    }
+
     if (analytics != NULL)
     {
       analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
@@ -578,6 +591,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
+                                ChronosConnection* chronos_connection,
                                 ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger)
 {
@@ -585,6 +599,7 @@ pj_status_t init_authentication(const std::string& realm_name,
 
   av_store = avstore;
   hss = hss_connection;
+  chronos = chronos_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
 

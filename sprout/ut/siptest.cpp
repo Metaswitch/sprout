@@ -123,6 +123,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.public_host = pj_str("public_hostname");
   stack_data.home_domain = pj_str("homedomain");
   stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
+  stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
@@ -154,6 +155,7 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
 
   stack_data.stats_aggregator = new LastValueCache(num_known_stats,
                                                    known_statnames,
+                                                   "6666",
                                                    10);  // Short period to reduce shutdown delays.
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_siptest);
@@ -513,13 +515,7 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   uri.append(user).append("@").append(domain);
   if (hss)
   {
-    hss->set_result("/impu/" + Utils::url_escape(uri),
-                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                    "<IMSSubscription><ServiceProfile>\n"
-                    "  <PublicIdentity><Identity>" + uri + "</Identity></PublicIdentity>"
-                    "  <InitialFilterCriteria>\n"
-                    "  </InitialFilterCriteria>\n"
-                    "</ServiceProfile></IMSSubscription>");
+    hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
   }
   RegStore::AoR* aor = store->get_aor_data(uri);
   RegStore::AoR::Binding* binding = aor->get_binding(contact);

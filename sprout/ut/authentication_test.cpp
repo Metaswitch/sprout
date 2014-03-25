@@ -53,6 +53,7 @@ extern "C" {
 #include "authentication.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "fakechronosconnection.hpp"
 #include "md5.h"
 
 using namespace std;
@@ -76,10 +77,11 @@ public:
     _local_data_store = new LocalStore();
     _av_store = new AvStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
+    _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("homedomain", _av_store, _hss_connection, NULL, _analytics);
+    pj_status_t ret = init_authentication("homedomain", _av_store, _hss_connection, NULL, _chronos_connection, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -87,6 +89,7 @@ public:
   {
     destroy_authentication();
     delete _hss_connection;
+    delete _chronos_connection;
     delete _analytics;
     delete _av_store;
     delete _local_data_store;
@@ -157,12 +160,14 @@ protected:
   static LocalStore* _local_data_store;
   static AvStore* _av_store;
   static FakeHSSConnection* _hss_connection;
+  static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
 };
 
 LocalStore* AuthenticationTest::_local_data_store;
 AvStore* AuthenticationTest::_av_store;
 FakeHSSConnection* AuthenticationTest::_hss_connection;
+FakeChronosConnection* AuthenticationTest::_chronos_connection;
 AnalyticsLogger* AuthenticationTest::_analytics;
 
 class AuthenticationMessage
