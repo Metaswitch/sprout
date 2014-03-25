@@ -832,7 +832,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "</ServiceProfile></IMSSubscription>");
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", "NOT_REGISTERED", xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 

@@ -192,7 +192,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
       HTTPCode status;
       std::string timer_id = "";
       std::string opaque = "{\"aor_id\": \"" + aor_id + "\", \"binding_id\": \"" + b_id +"\"}";
-      std::string callback_uri = "http://localhost:9888/timers";
+      std::string callback_uri = "/timers";
 
       int now = time(NULL);
       int expiry = b->_expires - now;

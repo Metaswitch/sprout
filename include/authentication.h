@@ -40,6 +40,7 @@
 
 #include "avstore.h"
 #include "hssconnection.h"
+#include "chronosconnection.h"
 #include "analyticslogger.h"
 
 extern pjsip_module mod_auth;
@@ -47,6 +48,7 @@ extern pjsip_module mod_auth;
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
+                                ChronosConnection* chronos_connection,
                                 AnalyticsLogger* analytics_logger);
 
 void destroy_authentication();

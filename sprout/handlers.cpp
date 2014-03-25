@@ -106,7 +106,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void ChronosHandler::run()
+void RegistrationTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -128,107 +128,29 @@ void ChronosHandler::run()
   handle_response();
   delete this;
 }
-//LCOV_EXCL_STOP
 
-void ChronosHandler::handle_response()
+void AuthTimeoutHandler::run()
 {
-  bool all_bindings_expired = false;
-  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
-
-  if (aor_data != NULL)
+  if (_req.method() != htp_method_POST)
   {
-    // If we have a remote store, try to store this there too.  We don't worry
-    // about failures in this case.
-    if (_cfg->_remote_store != NULL)
-    {
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, false);
-      delete remote_aor_data;
-    }
-
-    if (all_bindings_expired)
-    {
-      //LCOV_EXCL_START
-      LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
-      //LCOV_EXCL_STOP
-    }
+    _req.send_reply(405);
+    delete this;
+    return;
   }
 
-  delete aor_data;
+  int rc = handle_response(_req.body());
+  if (rc != 200)
+  {
+    LOG_DEBUG("Unable to handle callback from Chronos");
+    _req.send_reply(rc);
+    delete this;
+    return;
+  }
+
+  _req.send_reply(200);
+  delete this;
 }
 
-RegStore::AoR* ChronosHandler::set_aor_data(RegStore* current_store,
-                                            std::string aor_id,
-                                            RegStore::AoR* previous_aor_data,
-                                            RegStore* remote_store,
-                                            bool is_primary,
-                                            bool all_bindings_expired)
-{
-  RegStore::AoR* aor_data = NULL;
-  bool previous_aor_data_alloced = false;
-
-  do
-  {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                                 aor_id, current_store, remote_store, &previous_aor_data))
-    {
-      // LCOV_EXCL_START - local store (used in testing) never fails
-      break;
-      // LCOV_EXCL_STOP
-    }
-  }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
-
-  // If we allocated the AoR, tidy up.
-  if (previous_aor_data_alloced)
-  {
-    delete previous_aor_data;
-  }
-
-  return aor_data;
-}
-
-// Retrieve the aor and binding ID from the opaque data
-int ChronosHandler::parse_response(std::string body)
-{
-  Json::Value json_body;
-  std::string json_str = body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
-
-  if (!parsingSuccessful)
-  {
-    LOG_WARNING("Failed to read opaque data, %s",
-                reader.getFormattedErrorMessages().c_str());
-    return 400;
-  }
-
-  if ((json_body.isMember("aor_id")) &&
-      ((json_body)["aor_id"].isString()))
-  {
-    _aor_id = json_body.get("aor_id", "").asString();
-  }
-  else
-  {
-    LOG_WARNING("AoR ID not available in JSON");
-    return 400;
-  }
-
-  if ((json_body.isMember("binding_id")) &&
-      ((json_body)["binding_id"].isString()))
-  {
-    _binding_id = json_body.get("binding_id", "").asString();
-  }
-  else
-  {
-    LOG_WARNING("Binding ID not available in JSON");
-    return 400;
-  }
-
-  return 200;
-}
-
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void DeregistrationHandler::run()
 {
   // HTTP method must be a DELETE
@@ -267,6 +189,104 @@ void DeregistrationHandler::run()
   delete this;
 }
 //LCOV_EXCL_STOP
+
+void RegistrationTimeoutHandler::handle_response()
+{
+  bool all_bindings_expired = false;
+  RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
+
+  if (aor_data != NULL)
+  {
+    // If we have a remote store, try to store this there too.  We don't worry
+    // about failures in this case.
+    if (_cfg->_remote_store != NULL)
+    {
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, false);
+      delete remote_aor_data;
+    }
+
+    if (all_bindings_expired)
+    {
+      //LCOV_EXCL_START
+      LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
+      //LCOV_EXCL_STOP
+    }
+  }
+
+  delete aor_data;
+}
+
+RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
+                                                        std::string aor_id,
+                                                        RegStore::AoR* previous_aor_data,
+                                                        RegStore* remote_store,
+                                                        bool is_primary,
+                                                        bool all_bindings_expired)
+{
+  RegStore::AoR* aor_data = NULL;
+  bool previous_aor_data_alloced = false;
+
+  do
+  {
+    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
+                                 aor_id, current_store, remote_store, &previous_aor_data))
+    {
+      // LCOV_EXCL_START - local store (used in testing) never fails
+      break;
+      // LCOV_EXCL_STOP
+    }
+  }
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+
+  // If we allocated the AoR, tidy up.
+  if (previous_aor_data_alloced)
+  {
+    delete previous_aor_data;
+  }
+
+  return aor_data;
+}
+
+// Retrieve the aor and binding ID from the opaque data
+int RegistrationTimeoutHandler::parse_response(std::string body)
+{
+  Json::Value json_body;
+  std::string json_str = body;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+
+  if (!parsingSuccessful)
+  {
+    LOG_WARNING("Failed to read opaque data, %s",
+                reader.getFormattedErrorMessages().c_str());
+    return 400;
+  }
+
+  if ((json_body.isMember("aor_id")) &&
+      ((json_body)["aor_id"].isString()))
+  {
+    _aor_id = json_body.get("aor_id", "").asString();
+  }
+  else
+  {
+    LOG_WARNING("AoR ID not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("binding_id")) &&
+      ((json_body)["binding_id"].isString()))
+  {
+    _binding_id = json_body.get("binding_id", "").asString();
+  }
+  else
+  {
+    LOG_WARNING("Binding ID not available in JSON");
+    return 400;
+  }
+
+  return 200;
+}
 
 // Retrieve the aors and any private IDs from the request body
 int DeregistrationHandler::parse_request(std::string body)
@@ -430,4 +450,88 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
   }
 
   return aor_data;
+}
+
+int AuthTimeoutHandler::handle_response(std::string body)
+{
+  Json::Value json_body;
+  std::string json_str = body;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+
+  if (!parsingSuccessful)
+  {
+    LOG_ERROR("Failed to read opaque data, %s",
+              reader.getFormattedErrorMessages().c_str());
+    return 400;
+  }
+
+  if ((json_body.isMember("impi")) &&
+      ((json_body)["impi"].isString()))
+  {
+    _impi = json_body.get("impi", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("IMPI not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("impu")) &&
+      ((json_body)["impu"].isString()))
+  {
+    _impu = json_body.get("impu", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("IMPU not available in JSON");
+    return 400;
+  }
+
+  if ((json_body.isMember("nonce")) &&
+      ((json_body)["nonce"].isString()))
+  {
+    _nonce = json_body.get("nonce", "").asString();
+  }
+  else
+  {
+    LOG_ERROR("Nonce not available in JSON");
+    return 400;
+  }
+
+  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce);
+  bool success = false;
+
+
+  if (json == NULL)
+  {
+    // Mainline case - our AV has already been deleted because the
+    // user has tried to authenticate. No need to notify the HSS in
+    // this case (as they'll either have successfully authenticated
+    // and triggered a REGISTRATION SAR, or failed and triggered an
+    // AUTHENTICATION_FAILURE SAR).
+    success = true;
+  }
+  else
+  {
+    LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+
+    // Note that both AV deletion and the AUTHENTICATION_TIMEOUT SAR
+    // are idempotent, so there's no problem if Chronos' timer pops
+    // twice (e.g. if we have high latency and these operations take
+    // more than 2 seconds).
+
+    // If either of these operations fail, we return a 500 Internal
+    // Server Error - this will trigger Chronos to try a different
+    // Sprout, which may have better connectivity to Homestead or Memcached.
+    success = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
+
+    if (success)
+    {
+      success = _cfg->_avstore->delete_av(_impi, _nonce);
+    }
+
+    delete json;
+  }
+  return success ? 200 : 500;
 }
