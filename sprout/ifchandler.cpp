@@ -192,6 +192,12 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
               break;
               // LCOV_EXCL_STOP
             }
+
+            // If we've found a match, break out of the for loop.
+            if (ret)
+            {
+              break;
+            }
           }
         }
       }
@@ -524,8 +530,6 @@ static std::string get_text_or_cdata(xml_node<>* node)
     return "";
   }
 }
-
-
 
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
 {

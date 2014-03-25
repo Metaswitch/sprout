@@ -1522,6 +1522,7 @@ TEST_F(IfcHandlerTest, RegTypes)
             "      <Extension>\n"
             "        <RegistrationType>1</RegistrationType>\n"
             "        <RegistrationType>0</RegistrationType>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
             "      </Extension>\n"
             "    </SPT>\n"
             "  </TriggerPoint>\n",
