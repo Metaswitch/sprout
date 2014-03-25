@@ -366,6 +366,7 @@ public:
                                           _hss_connection,
                                           NULL,
                                           NULL,
+                                          NULL,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
                                           _scscf_selector,

@@ -147,6 +147,7 @@ static SCSCFSelector *scscf_selector;
 
 static ACRFactory* cscf_acr_factory;
 static ACRFactory* bgcf_acr_factory;
+static ACRFactory* icscf_acr_factory;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
@@ -1553,6 +1554,25 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     }
 
     targets.push_back(target);
+
+    if (bgcf_acr_factory != NULL)
+    {
+      // We need to set up the downstream ACR on this transaction as a BGCF ACR.
+      if ((_downstream_acr != NULL) &&
+          (_downstream_acr != _upstream_acr))
+      {
+        // We've already set up a different downstream ACR to the upstream ACR
+        // so free it off.
+        delete _downstream_acr;
+      }
+      _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+
+      // Pass the request to the downstream ACR as if it is being received.
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _downstream_acr->rx_request(msg, ts);
+    }
+
     return;
   }
 
@@ -2102,11 +2122,11 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
       }
 
-      if (_as_chain_link.is_set() &&
-          _as_chain_link.session_case().is_originating() &&
-          disposition == AsChainLink::Disposition::Complete &&
+      if ((_as_chain_link.is_set()) &&
+          (_as_chain_link.session_case().is_originating()) &&
+          (disposition == AsChainLink::Disposition::Complete) &&
           (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          icscf_uri)
+          (icscf_uri))
       {
         // We've completed the originating half, the destination is local and
         // we have an external I-CSCF configured.  Route the call there.
@@ -2126,22 +2146,22 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // The Request-URI should remain unchanged
         target->uri = _req->msg->line.req.uri;
       }
-      else if (_as_chain_link.is_set() &&
-               _as_chain_link.session_case().is_originating() &&
-               disposition == AsChainLink::Disposition::Complete &&
+      else if ((_as_chain_link.is_set()) &&
+               (_as_chain_link.session_case().is_originating()) &&
+               (disposition == AsChainLink::Disposition::Complete) &&
                (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-               (icscf && scscf))
+               (icscf))
       {
         // We've completed the originating half, the destination is local and
-        // both scscf and icscf function is enabled. Check whether the terminating S-CSCF
-        // is this S-CSCF
-        LOG_INFO("Sprout has I-CSCF and S-CSCF function");
+        // I-CSCF function is enabled.  In this case we should do the LIR lookup
+        // ourselves rather than invoking an external I-CSCF.
+        LOG_INFO("Sprout has I-CSCF function enabled");
 
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
         Json::Value* location = hss->get_location_data(public_id, false, "", trail());
 
-        if (location == NULL ||
-            !location->isMember("result-code") ||
+        if ((location == NULL) ||
+            (!location->isMember("result-code")) ||
             ((location->get("result-code", "").asString() != "2001") &&
              (location->get("result-code", "").asString() != "2002") &&
              (location->get("result-code", "").asString() != "2003")))
@@ -3885,6 +3905,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
                                 ACRFactory* bgcf_rfacr_factory,
+                                ACRFactory* icscf_rfacr_factory,
                                 const std::string& icscf_uri_str,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,
@@ -3907,6 +3928,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   cscf_acr_factory = cscf_rfacr_factory;
   bgcf_acr_factory = bgcf_rfacr_factory;
+  icscf_acr_factory = icscf_rfacr_factory;
 
   edge_proxy = enable_edge_proxy;
   if (edge_proxy)
