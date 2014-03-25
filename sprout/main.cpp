@@ -1069,8 +1069,7 @@ int main(int argc, char *argv[])
 
   if (opt.chronos_service != "")
   {
-    char port_str[33];
-    std::itoa(opt.http_port, port_str, 10);
+    std::string port_str = std::to_string(opt.http_port);
     std::string http_uri = opt.http_address + std::string(port_str);
     // Create a connection to Chronos.
     LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
