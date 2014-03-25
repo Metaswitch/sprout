@@ -148,6 +148,13 @@ private:
     /// capabilities to select an alternate S-CSCF.
     std::string _auth_type;
 
+    /// Structure storing the most recent response from the HSS for this
+    /// transaction.
+    struct
+    {
+      /// The S-CSCF returned by the HSS.
+      std::string _scscf;
+
       /// Flag which indicates whether or not we have asked the HSS for
       /// capabilities and got a successful response (even if there were no
       /// capabilities specified for this subscriber).

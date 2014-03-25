@@ -115,7 +115,6 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
   BasicProxy::UASTsx(proxy),
   _hss(hss),
   _scscf_selector(scscf_selector),
-  _have_caps(false),
   _hss_rsp(),
   _attempted_scscfs()
 {
@@ -490,7 +489,7 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
                    _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
-      scscf = _hss_rsp.scscf;
+      scscf = _hss_rsp._scscf;
     }
 
     // Use the capabilites to select an S-CSCF if the HSS didn't
@@ -498,8 +497,8 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
-                                         _hss_rsp.optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
+                                         _hss_rsp._optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -573,7 +572,7 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
                    _hss_rsp._scscf) == _attempted_scscfs.end()))
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp.scscf;
+      scscf = _hss_rsp._scscf;
     }
 
     // Use the capabilites to select an S-CSCF if the HSS didn't
@@ -581,8 +580,8 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
     if (scscf.empty() && _hss_rsp._queried_caps)
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
-                                         _hss_rsp.optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
+                                         _hss_rsp._optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -605,9 +604,9 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
 
   // Clear out any older response.
   _hss_rsp._queried_caps = false;
-  _hss_rsp.mandatory_caps.clear();
-  _hss_rsp.optional_caps.clear();
-  _hss_rsp.scscf = "";
+  _hss_rsp._mandatory_caps.clear();
+  _hss_rsp._optional_caps.clear();
+  _hss_rsp._scscf = "";
 
   if ((!rsp.isMember("result-code")) ||
       ((rsp["result-code"].asString() != "2001") &&
@@ -626,7 +625,7 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
     {
       // Response specifies a S-CSCF, so select this as the target.
       LOG_DEBUG("HSS returned S-CSCF %s as target", rsp["scscf"].asCString());
-      _hss_rsp.scscf = rsp["scscf"].asString();
+      _hss_rsp._scscf = rsp["scscf"].asString();
     }
 
     if ((rsp.isMember("mandatory-capabilities")) &&

@@ -612,7 +612,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'B':
-      options->billing_cdf = atoi(pj_optarg);
+      options->billing_cdf = std::string(pj_optarg);
       fprintf(stdout, "Use %s as billing cdf server\n", options->billing_cdf.c_str());
       break;
 
@@ -1185,7 +1185,7 @@ int main(int argc, char *argv[])
       status = init_authentication(opt.auth_realm,
                                    av_store,
                                    hss_connection,
-                                   chronos_connection
+                                   chronos_connection,
                                    scscf_acr_factory,
                                    analytics_logger);
     }

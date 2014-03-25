@@ -81,7 +81,12 @@ public:
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("homedomain", _av_store, _hss_connection, NULL, _chronos_connection, _analytics);
+    pj_status_t ret = init_authentication("homedomain",
+                                          _av_store,
+                                          _hss_connection,
+                                          _chronos_connection,
+                                          NULL,
+                                          _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
