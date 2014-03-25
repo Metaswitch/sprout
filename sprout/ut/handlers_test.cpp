@@ -58,19 +58,19 @@ class HandlersTest : public BaseTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  ChronosHandler::Config* chronos_config;
+  RegistrationTimeoutHandler::Config* chronos_config;
 
-  ChronosHandler* handler;
+  RegistrationTimeoutHandler* handler;
 
   void SetUp()
   {
-    chronos_connection = new ChronosConnection("localhost");
+    chronos_connection = new ChronosConnection("localhost", "localhost:9888");
     local_data_store = new LocalStore();
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new ChronosHandler::Config(store, store, fake_hss);
-    handler = new ChronosHandler(*req, chronos_config);
+    chronos_config = new RegistrationTimeoutHandler::Config(store, store, fake_hss);
+    handler = new RegistrationTimeoutHandler(*req, chronos_config);
   }
 
   void TearDown()
@@ -116,6 +116,94 @@ TEST_F(HandlersTest, MissingBindingJSONTest)
 {
   std::string body = "{\"aor_id\": \"aor_id\"}";
   int status = handler->parse_response(body);
+
+  ASSERT_EQ(status, 400);
+}
+
+class AuthTimeoutTest : public BaseTest
+{
+  ChronosConnection* chronos_connection;
+  LocalStore* local_data_store;
+  AvStore* store;
+  HSSConnection* fake_hss;
+
+  MockHttpStack stack;
+  MockHttpStack::Request* req;
+  AuthTimeoutHandler::Config* chronos_config;
+
+  AuthTimeoutHandler* handler;
+
+  void SetUp()
+  {
+    chronos_connection = new ChronosConnection("localhost", "localhost:9888");
+    local_data_store = new LocalStore();
+    store = new AvStore(local_data_store);
+    fake_hss = new FakeHSSConnection();
+    req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
+    chronos_config = new AuthTimeoutHandler::Config(store, fake_hss);
+    handler = new AuthTimeoutHandler(*req, chronos_config);
+  }
+
+  void TearDown()
+  {
+    delete handler;
+    delete chronos_config;
+    delete req;
+    delete fake_hss;
+    delete store; store = NULL;
+    delete local_data_store; local_data_store = NULL;
+    delete chronos_connection; chronos_connection = NULL;
+  }
+
+};
+
+TEST_F(AuthTimeoutTest, NonceTimedOut)
+{
+  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  Json::Value json("{}");
+  store->set_av("test@example.com", "abcdef", &json);
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 200);
+  ASSERT_EQ(NULL, store->get_av("test@example.com", "abcdef"));
+}
+
+TEST_F(AuthTimeoutTest, MainlineTest)
+{
+  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 200);
+}
+
+TEST_F(AuthTimeoutTest, NoIMPU)
+{
+  std::string body = "{\"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 400);
+}
+
+TEST_F(AuthTimeoutTest, NoIMPI)
+{
+  std::string body = "{\"impu\": \"sip:test@example.com\", \"nonce\": \"abcdef\"}";
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 400);
+}
+
+TEST_F(AuthTimeoutTest, NoNonce)
+{
+  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\"}";
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 400);
+}
+
+TEST_F(AuthTimeoutTest, BadJSON)
+{
+  std::string body = "{\"impu\" \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 400);
 }
