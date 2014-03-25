@@ -195,7 +195,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               bool& out_is_initial_registration,
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
-                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store)
+                              bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
+                              std::string private_id)        ///<private id that the binding was registered with
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -306,7 +307,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
         {
-
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
@@ -356,6 +356,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
             binding->_params.push_back(std::make_pair(pname, pvalue));
             p = p->next;
           }
+
+          binding->_private_id = private_id;
 
           // Calculate the expiry period for the updated binding.
           expiry = (contact->expires != -1) ? contact->expires :
@@ -478,10 +480,10 @@ void process_register_request(pjsip_rx_data* rdata)
   PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
-
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
+  std::string private_id_for_binding;
   bool success = get_private_id(rdata, private_id);
   if (!success)
   {
@@ -496,6 +498,15 @@ void process_register_request(pjsip_rx_data* rdata)
     // initial registration, so we can just make a request using our
     // public ID.
     private_id = "";
+
+    // IMS compliant clients will always have the Auth header on all REGISTERs,
+    // including reREGISTERS. Non-IMS clients won't, but their private ID
+    // will always be the public ID with the sip: removed.
+    private_id_for_binding = PJUtils::default_private_id_from_uri(uri);
+  }
+  else
+  {
+    private_id_for_binding = private_id;
   }
 
   std::string regstate;
@@ -534,7 +545,9 @@ void process_register_request(pjsip_rx_data* rdata)
   bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store, true);
+  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
+                                           is_initial_registration, NULL, remote_store,
+                                           true, private_id_for_binding);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -546,7 +559,9 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       int tmp_expiry = 0;
       bool ignored;
-      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL, false);
+      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
+                                                      tmp_expiry, ignored, aor_data,
+                                                      NULL, false, private_id_for_binding);
       delete remote_aor_data;
     }
   }
