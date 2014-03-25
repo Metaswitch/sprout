@@ -1433,8 +1433,6 @@ TEST_F(IfcHandlerTest, RegTypeMethodNoMatch)
          false);
 }
 
-
-
 void IfcHandlerTest::doRegTest(string description,
                                string frag,
                                bool reg,
@@ -1513,6 +1511,24 @@ TEST_F(IfcHandlerTest, RegTypes)
             msg,
             true,
             false);
+
+  doRegTest("Match on second specified RegistrationType",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            true,
+            true);
 
   str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ";expires=0"), "$2", "");
   rdata = build_rxdata(str);
@@ -1743,6 +1759,24 @@ TEST_F(IfcHandlerTest, RegTypes)
             "      <Group>0</Group>\n"
             "      <Method>REGISTER</Method>\n"
             "      <Extension>\n"
+            "        <RegistrationType>1</RegistrationType>\n"
+            "      </Extension>\n"
+            "    </SPT>\n"
+            "  </TriggerPoint>\n",
+            true,
+            msg,
+            false,
+            false);
+
+  doRegTest("No match for register or reregister with expires header set to 0",
+            "    <TriggerPoint>\n"
+            "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+            "    <SPT>\n"
+            "      <ConditionNegated>0</ConditionNegated>\n"
+            "      <Group>0</Group>\n"
+            "      <Method>REGISTER</Method>\n"
+            "      <Extension>\n"
+            "        <RegistrationType>0</RegistrationType>\n"
             "        <RegistrationType>1</RegistrationType>\n"
             "      </Extension>\n"
             "    </SPT>\n"
