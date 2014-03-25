@@ -135,7 +135,7 @@ class DeregistrationHandlerTest : public BaseTest
 
   void SetUp()
   {
-    chronos_connection = new ChronosConnection("localhost");
+    chronos_connection = new ChronosConnection("localhost", "localhost:9888");
     local_data_store = new LocalStore();
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
@@ -182,7 +182,7 @@ TEST_F(DeregistrationHandlerTest, AoROnlyTest)
 
 TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairsTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip\:6505552002@homedomain\", \"impi\": \"6505552002\"}]}";
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
@@ -191,7 +191,7 @@ TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairsTest)
 
 TEST_F(DeregistrationHandlerTest, AoRsOnlyTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\"}, {\"primary-impu\": \"sip\:6505552002\"}]}";
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}, {\"primary-impu\": \"sip:6505552002\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
