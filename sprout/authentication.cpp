@@ -506,7 +506,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  // Also create an ACR for the message for ACR generation is enabled.
+  // Also create an ACR for the message if ACR generation is enabled.
   ACR* acr = NULL;
   if (acr_factory != NULL)
   {

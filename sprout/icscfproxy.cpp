@@ -65,10 +65,11 @@ ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        HSSConnection* hss,
                        ACRFactory* acr_factory,
                        SCSCFSelector* scscf_selector) :
-  BasicProxy(endpt, "mod-icscf", sipresolver, acr_factory, priority, false),
+  BasicProxy(endpt, "mod-icscf", sipresolver, priority, false),
   _port(port),
   _hss(hss),
-  _scscf_selector(scscf_selector)
+  _scscf_selector(scscf_selector),
+  _acr_factory(acr_factory)
 {
 }
 
@@ -84,8 +85,9 @@ pj_bool_t ICSCFProxy::on_rx_request(pjsip_rx_data* rdata)
 {
   if (rdata->tp_info.transport->local_name.port == _port)
   {
-    /// Request received on I-CSCF port, so process it.
+    // Request received on I-CSCF port, so process it.
     LOG_INFO("I-CSCF processing request");
+
     return BasicProxy::on_rx_request(rdata);
   }
 
@@ -96,10 +98,6 @@ pj_bool_t ICSCFProxy::on_rx_request(pjsip_rx_data* rdata)
 /// Perform I-CSCF specific verification of incoming requests.
 pj_status_t ICSCFProxy::verify_request(pjsip_rx_data *rdata)
 {
-
-
-
-
   return BasicProxy::verify_request(rdata);
 }
 
@@ -131,11 +129,10 @@ ICSCFProxy::UASTsx::~UASTsx()
 
 
 /// Initialise the UAS transaction object.
-pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
-                                     pjsip_tx_data* tdata)
+pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
   // Do the BasicProxy initialization first.
-  pj_status_t status = BasicProxy::UASTsx::init(rdata, tdata);
+  pj_status_t status = BasicProxy::UASTsx::init(rdata);
 
   pjsip_msg* msg = rdata->msg_info.msg;
 
@@ -203,14 +200,14 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
       // Originating request.
       LOG_DEBUG("Originating request");
       _case = SessionCase::ORIGINATING;
-      _impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(tdata->msg));
+      _impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(msg));
     }
     else
     {
       // Terminating request.
       LOG_DEBUG("Terminating request");
       _case = SessionCase::TERMINATING;
-      _impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(tdata->msg));
+      _impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(msg));
     }
     _auth_type = "";
   }
@@ -220,7 +217,7 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
 
 
 /// Calculate targets for incoming requests by querying HSS.
-int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
+int ICSCFProxy::UASTsx::calculate_targets()
 {
   int status_code = PJSIP_SC_OK;
 
@@ -261,7 +258,7 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
     LOG_DEBUG("I-CSCF - calculate target for non-REGISTER request");
 
     // Remove P-Profile-Key header if present.
-    PJUtils::remove_hdr(tdata->msg, &STR_P_PROFILE_KEY);
+    PJUtils::remove_hdr(_req->msg, &STR_P_PROFILE_KEY);
 
     std::string scscf;
 
@@ -287,8 +284,8 @@ int ICSCFProxy::UASTsx::calculate_targets(pjsip_tx_data* tdata)
       if (_case == SessionCase::ORIGINATING)
       {
         // Add the "orig" parameter.
-        pjsip_param* p = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-        pj_strdup(tdata->pool, &p->name, &STR_ORIG);
+        pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+        pj_strdup(_req->pool, &p->name, &STR_ORIG);
         p->value.slen = 0;
         pj_list_insert_after(&route_uri->other_param, p);
       }
@@ -364,7 +361,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
         _attempted_scscfs.push_back(scscf);
 
         // Invoke the retry.
-        process_tsx_request();
+        forward_request();
 
         retry = true;
       }
@@ -412,7 +409,7 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
           _attempted_scscfs.push_back(scscf);
 
           // Invoke the retry.
-          process_tsx_request();
+          forward_request();
 
           retry = true;
         }

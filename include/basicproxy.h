@@ -68,7 +68,6 @@ public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
              SIPResolver* sipresolver,
-             ACRFactory* acr_factory,
              int priority,
              bool delay_trying);
   virtual ~BasicProxy();
@@ -113,17 +112,10 @@ protected:
     inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
     /// Initializes the UAS transaction.
-    virtual pj_status_t init(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
-
-    /// Adds a target to the target list for this transaction.
-    virtual void add_target(BasicProxy::Target* target);
+    virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
     virtual void process_tsx_request();
-
-    /// Initializes UAC transactions to each of the specified targets.
-    /// @returns a status code indicating whether or not the operation succeeded.
-    virtual pj_status_t init_uac_transactions();
 
     /// Handles a response to an associated UACTransaction.
     virtual void on_new_client_response(UACTsx* uac_tsx,
@@ -151,9 +143,23 @@ protected:
     void exit_context();
 
   protected:
+    /// Process route information in the request.
+    virtual int process_routing();
+
+    /// Create a PJSIP transaction for the request.
+    virtual pj_status_t create_pjsip_transaction(pjsip_rx_data* rdata);
+
+    /// Adds a target to the target list for this transaction.
+    virtual void add_target(BasicProxy::Target* target);
+
+    /// Initializes UAC transactions to each of the specified targets and
+    /// forwards the request.
+    /// @returns a status code indicating whether or not the operation succeeded.
+    virtual pj_status_t forward_request();
+
     /// Calculate targets for requests where Route headers do not determine
     /// the target.
-    virtual int calculate_targets(pjsip_tx_data* tdata);
+    virtual int calculate_targets();
 
     /// Called when the final response has been determined and should be sent
     /// back on the UAS transaction.
@@ -182,7 +188,7 @@ protected:
     virtual BasicProxy::UACTsx* create_uac_tsx(size_t index);
 
     /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
+    SAS::TrailId trail() const { return _trail; }
 
     /// Owning proxy object.
     BasicProxy* _proxy;
@@ -198,6 +204,9 @@ protected:
     /// PJSIP group lock used to protect all PJSIP UAS and UAC transactions
     /// involved in this proxied request.
     pj_grp_lock_t* _lock;
+
+    /// The trail identifier for the transaction/request.
+    SAS::TrailId _trail;
 
     /// Targets the request is forked to.
     std::list<Target*> _targets;
@@ -307,10 +316,6 @@ protected:
   /// Return non-zero if verification failed.
   virtual pj_status_t verify_request(pjsip_rx_data *rdata);
 
-  /// Process route information in the request.
-  virtual int process_routing(pjsip_tx_data* tdata,
-                              BasicProxy::Target*& target);
-
   /// Utility method to create a UASTsx objects for incoming requests.
   virtual BasicProxy::UASTsx* create_uas_tsx();
 
@@ -327,9 +332,6 @@ protected:
 
   /// A pointer to the SIP resolver used to resolve URI targets to servers.
   SIPResolver* _sipresolver;
-
-  /// Factory for generating Rf ACR messages.
-  ACRFactory* _acr_factory;
 
   /// Indicates that 100 Trying response to INVITE requests should be delayed
   /// until at least one downstream node has sent a 100 Trying response.

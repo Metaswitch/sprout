@@ -87,11 +87,11 @@ private:
     ~UASTsx();
 
     /// Initialise the UAS transaction.
-    virtual pj_status_t init(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+    virtual pj_status_t init(pjsip_rx_data* rdata);
 
   protected:
     /// Calculate targets for incoming requests by querying HSS.
-    virtual int calculate_targets(pjsip_tx_data* tdata);
+    virtual int calculate_targets();
 
     /// Called when the final response has been determined.
     virtual void on_final_response();
@@ -169,6 +169,8 @@ private:
   /// S-CSCF selector used to select S-CSCFs from configuration.
   SCSCFSelector* _scscf_selector;
 
+  /// ACR factory for I-CSCF ACRs.
+  ACRFactory* _acr_factory;
 };
 
 
