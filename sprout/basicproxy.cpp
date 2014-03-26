@@ -486,6 +486,7 @@ BasicProxy::UASTsx::~UASTsx()
 }
 
 
+/// Initializes the UASTsx object to handle proxying of the request.
 pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
   pj_status_t status;
@@ -741,6 +742,7 @@ int BasicProxy::UASTsx::process_routing()
 }
 
 
+/// Create a PJSIP UAS transaction for handling stateful request proxying.
 pj_status_t BasicProxy::UASTsx::create_pjsip_transaction(pjsip_rx_data* rdata)
 {
   // Create a group lock, and take it.  This avoids the transaction being
@@ -829,10 +831,10 @@ void BasicProxy::UASTsx::add_target(BasicProxy::Target* target)
 }
 
 
-// Initializes UAC transactions to each of the specified targets and
-// forwards the request.
-//
-// @returns a status code indicating whether or not the operation succeeded.
+/// Initializes UAC transactions to each of the specified targets and
+/// forwards the request.
+///
+/// @returns a status code indicating whether or not the operation succeeded.
 pj_status_t BasicProxy::UASTsx::forward_request()
 {
   pj_status_t status = PJ_EUNKNOWN;
@@ -915,7 +917,7 @@ pj_status_t BasicProxy::UASTsx::forward_request()
 }
 
 
-// Handles a response to an associated UACTsx.
+/// Handles a response to an associated UACTsx.
 void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
                                                 pjsip_rx_data *rdata)
 {
@@ -957,6 +959,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       LOG_DEBUG("%s - Forward 1xx response", uac_tsx->name());
 
       // Forward response with the UAS transaction
+      on_tx_response(tdata);
       pjsip_tsx_send_msg(_tsx, tdata);
     }
     else if (status_code == 200)
@@ -1015,7 +1018,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 }
 
 
-// Notification that a client transaction is not responding.
+/// Notification that a client transaction is not responding.
 void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
 {
   if (_tsx != NULL)
@@ -1045,11 +1048,11 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
 }
 
 
-// Notification that the underlying PJSIP transaction has changed state.
-//
-// After calling this, the caller must not assume that the UASTsx still
-// exists - if the PJSIP transaction is being destroyed, this method will
-// destroy the UASTsx.
+/// Notification that the underlying PJSIP transaction has changed state.
+///
+/// After calling this, the caller must not assume that the UASTsx still
+/// exists - if the PJSIP transaction is being destroyed, this method will
+/// destroy the UASTsx.
 void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
 {
   enter_context();
@@ -1079,8 +1082,8 @@ void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
 }
 
 
-// Handles the best final response, once all final responses have been received
-// from all forked INVITEs.
+/// Handles the best final response, once all final responses have been received
+/// from all forked INVITEs.
 void BasicProxy::UASTsx::on_final_response()
 {
   if (_tsx != NULL)
@@ -1089,6 +1092,7 @@ void BasicProxy::UASTsx::on_final_response()
     int st_code = best_rsp->msg->line.status.code;
     _best_rsp = NULL;
     set_trail(best_rsp, trail());
+    on_tx_response(best_rsp);
     pjsip_tsx_send_msg(_tsx, best_rsp);
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
@@ -1105,7 +1109,7 @@ void BasicProxy::UASTsx::on_final_response()
 }
 
 
-// Sends a response using the buffer saved off for the best response.
+/// Sends a response using the buffer saved off for the best response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
   if ((st_code >= 100) && (st_code < 200))
@@ -1117,6 +1121,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
     set_trail(prov_rsp, trail());
+    on_tx_response(prov_rsp);
     pjsip_tsx_send_msg(_tsx, prov_rsp);
     // LCOV_EXCL_STOP
   }
@@ -1129,12 +1134,26 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     best_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
     set_trail(best_rsp, trail());
+    on_tx_response(best_rsp);
     pjsip_tsx_send_msg(_tsx, best_rsp);
   }
 }
 
 
-// Perform actions on a new transaction starting.
+/// Called when a response is transmitted on this transaction.
+void BasicProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
+{
+}
+
+
+/// Called when a request is transmitted on an associated downstream client
+/// transaction.
+void BasicProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
+{
+}
+
+
+/// Perform actions on a new transaction starting.
 void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
 {
   // Report SAS markers for the transaction.
@@ -1162,7 +1181,7 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
 }
 
 
-// Perform actions on a transaction completing.
+/// Perform actions on a transaction completing.
 void BasicProxy::UASTsx::on_tsx_complete()
 {
   // Report SAS markers for the transaction.
@@ -1172,7 +1191,7 @@ void BasicProxy::UASTsx::on_tsx_complete()
 }
 
 
-// Cancels all pending UAC transactions associated with this UAS transaction.
+/// Cancels all pending UAC transactions associated with this UAS transaction.
 void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
 {
   enter_context();
@@ -1218,14 +1237,14 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
 }
 
 
-// Compare two status codes from the perspective of which is the best to
-// return to the originator of a forked transaction.  This will only ever
-// be called for 3xx/4xx/5xx/6xx response codes.
-//
-// @returns +1 if sc1 is better than sc2
-//          0 if sc1 and sc2 are identical (or equally as good)
-//          -1 if sc2 is better than sc1
-//
+/// Compare two status codes from the perspective of which is the best to
+/// return to the originator of a forked transaction.  This will only ever
+/// be called for 3xx/4xx/5xx/6xx response codes.
+///
+/// @returns +1 if sc1 is better than sc2
+///          0 if sc1 and sc2 are identical (or equally as good)
+///          -1 if sc2 is better than sc1
+///
 int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 {
   // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
@@ -1268,8 +1287,8 @@ int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 }
 
 
-// Disassociates the specified UAC transaction from this UAS transaction, and
-// vice-versa.  Must be called before destroying either transaction.
+/// Disassociates the specified UAC transaction from this UAS transaction, and
+/// vice-versa.  Must be called before destroying either transaction.
 void BasicProxy::UASTsx::dissociate(UACTsx* uac_tsx)
 {
   LOG_DEBUG("Dissociate UAC transaction %p for target %d", uac_tsx, uac_tsx->_index);
@@ -1285,9 +1304,9 @@ BasicProxy::UACTsx* BasicProxy::UASTsx::create_uac_tsx(size_t index)
 }
 
 
-// Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+/// Enters this transaction's context.  While in the transaction's
+/// context, it will not be destroyed.  Whenever enter_context is called,
+/// exit_context must be called before the end of the method.
 void BasicProxy::UASTsx::enter_context()
 {
   if (_lock != NULL)
@@ -1305,8 +1324,8 @@ void BasicProxy::UASTsx::enter_context()
 }
 
 
-// Exits this transaction's context.  On return from this method, the caller
-// must not assume that the transaction still exists.
+/// Exits this transaction's context.  On return from this method, the caller
+/// must not assume that the transaction still exists.
 void BasicProxy::UASTsx::exit_context()
 {
   // If the transaction is pending destroy, the context count must be greater
@@ -1327,7 +1346,7 @@ void BasicProxy::UASTsx::exit_context()
 }
 
 
-// UACTsx constructor
+/// UACTsx constructor
 BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
                            UASTsx* uas_tsx,
                            size_t index) :
@@ -1383,7 +1402,7 @@ BasicProxy::UACTsx::~UACTsx()
 }
 
 
-// Initializes a UAC transaction.
+/// Initializes a UAC transaction.
 pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 {
   pj_status_t status;
@@ -1412,7 +1431,7 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 }
 
 
-// Set the target for this UAC transaction.
+/// Set the target for this UAC transaction.
 void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
 {
   enter_context();
@@ -1470,7 +1489,7 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
 }
 
 
-// Sends the initial request on this UAC transaction.
+/// Sends the initial request on this UAC transaction.
 void BasicProxy::UACTsx::send_request()
 {
   enter_context();
@@ -1490,6 +1509,8 @@ void BasicProxy::UACTsx::send_request()
 
   if (status == PJ_SUCCESS)
   {
+    // Notify the UASTsx the request is being sent and send it.
+    _uas_tsx->on_tx_client_request(_tdata);
     status = pjsip_tsx_send_msg(_tsx, _tdata);
   }
 
@@ -1514,9 +1535,8 @@ void BasicProxy::UACTsx::send_request()
 }
 
 
-
-// Cancels the pending transaction, using the specified status code in the
-// Reason header.
+/// Cancels the pending transaction, using the specified status code in the
+/// Reason header.
 void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
 {
   if (_tsx != NULL)
@@ -1568,11 +1588,11 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
 }
 
 
-// Notification that the underlying PJSIP transaction has changed state.
-//
-// After calling this, the caller must not assume that the UACTsx still
-// exists - if the PJSIP transaction is being destroyed, this method will
-// destroy the UACTsx.
+/// Notification that the underlying PJSIP transaction has changed state.
+///
+/// After calling this, the caller must not assume that the UACTsx still
+/// exists - if the PJSIP transaction is being destroyed, this method will
+/// destroy the UACTsx.
 void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 {
   enter_context();
@@ -1621,9 +1641,9 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 }
 
 
-// Enters this transaction's context.  While in the transaction's
-// context, it will not be destroyed.  Whenever enter_context is called,
-// exit_context must be called before the end of the method.
+/// Enters this transaction's context.  While in the transaction's
+/// context, it will not be destroyed.  Whenever enter_context is called,
+/// exit_context must be called before the end of the method.
 void BasicProxy::UACTsx::enter_context()
 {
   // Take the group lock.
@@ -1638,8 +1658,8 @@ void BasicProxy::UACTsx::enter_context()
 }
 
 
-// Exits this transaction's context.  On return from this method, the caller
-// must not assume that the transaction still exists.
+/// Exits this transaction's context.  On return from this method, the caller
+/// must not assume that the transaction still exists.
 void BasicProxy::UACTsx::exit_context()
 {
   // If the transaction is pending destroy, the context count must be greater

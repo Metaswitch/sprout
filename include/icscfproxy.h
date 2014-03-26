@@ -97,6 +97,16 @@ private:
     virtual void on_final_response();
 
   private:
+    /// Handles a response to an associated UACTsx.
+    void on_new_client_response(UACTsx* uac_tsx,
+                                pjsip_rx_data *rdata);
+
+    /// Notification that a response is being transmitted on this transaction.
+    void on_tx_response(pjsip_tx_data* tdata);
+
+    /// Notification that a request is being transmitted to a client.
+    void on_tx_client_request(pjsip_tx_data* tdata);
+
     /// Attempts to retry the request to an alternative S-CSCF.
     bool retry_request(int rsp_status);
 
@@ -148,28 +158,20 @@ private:
     /// capabilities to select an alternate S-CSCF.
     std::string _auth_type;
 
+    /// Flag which indicates whether or not we have asked the HSS for
+    /// capabilities and got a successful response (even if there were no
+    /// capabilities specified for this subscriber).
+    bool _queried_caps;
+
     /// Structure storing the most recent response from the HSS for this
     /// transaction.
-    struct
-    {
-      /// The S-CSCF returned by the HSS.
-      std::string _scscf;
-
-      /// Flag which indicates whether or not we have asked the HSS for
-      /// capabilities and got a successful response (even if there were no
-      /// capabilities specified for this subscriber).
-      bool _queried_caps;
-
-      /// The list of mandatory capabilities returned by the HSS.
-      std::vector<int> _mandatory_caps;
-
-      /// The list of optional capabilities returned by the HSS.
-      std::vector<int> _optional_caps;
-
-    } _hss_rsp;
+    ServerCapabilities _hss_rsp;
 
     /// The list of S-CSCFs already attempted for this request.
     std::vector<std::string> _attempted_scscfs;
+
+    /// The ACR for the request (if ACR generation is enabled).
+    ACR* _acr;
   };
 
   /// Port for I-CSCF function.  This proxy will only process requests

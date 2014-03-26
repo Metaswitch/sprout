@@ -117,12 +117,18 @@ protected:
     /// Handle the incoming half of a transaction request.
     virtual void process_tsx_request();
 
-    /// Handles a response to an associated UACTransaction.
+    /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_rx_data *rdata);
 
     /// Notification that a client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx);
+
+    /// Notification that a response is being transmitted on this transaction.
+    virtual void on_tx_response(pjsip_tx_data* tdata);
+
+    /// Notification that a request is being transmitted to a client.
+    virtual void on_tx_client_request(pjsip_tx_data* tdata);
 
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UASTsx still

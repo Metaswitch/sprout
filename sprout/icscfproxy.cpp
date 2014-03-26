@@ -115,8 +115,10 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
   BasicProxy::UASTsx(proxy),
   _hss(hss),
   _scscf_selector(scscf_selector),
+  _queried_caps(false),
   _hss_rsp(),
-  _attempted_scscfs()
+  _attempted_scscfs(),
+  _acr(NULL)
 {
 }
 
@@ -124,6 +126,16 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
 ICSCFProxy::UASTsx::~UASTsx()
 {
   LOG_DEBUG("ICSCFProxy::UASTsx destructor (%p)", this);
+
+  if (_acr != NULL)
+  {
+    // Send the ACR and delete it.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _acr->send_message(ts);
+
+    delete _acr;
+  }
 }
 
 
@@ -209,6 +221,18 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
       _impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(msg));
     }
     _auth_type = "";
+  }
+
+  if (((ICSCFProxy*)_proxy)->_acr_factory != NULL)
+  {
+    // ACR generation is enabled, so create an ACR for this request.
+    _acr = ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(trail(), CALLING_PARTY);
+
+    if (_acr != NULL)
+    {
+      // Pass the received request to the ACR.
+      _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+    }
   }
 
   return status;
@@ -300,6 +324,23 @@ int ICSCFProxy::UASTsx::calculate_targets()
 }
 
 
+/// Handles a response to an associated UACTsx.
+void ICSCFProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
+                                                pjsip_rx_data *rdata)
+{
+  if (_acr != NULL)
+  {
+    // Pass the response to the ACR for reporting.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _acr->rx_response(rdata->msg_info.msg, ts);
+  }
+
+  // Pass the response on to the BasicProxy method.
+  BasicProxy::UASTsx::on_new_client_response(uac_tsx, rdata);
+}
+
+
 /// Handles the best final response, once all final responses have been received
 /// from all forked INVITEs.
 void ICSCFProxy::UASTsx::on_final_response()
@@ -318,6 +359,38 @@ void ICSCFProxy::UASTsx::on_final_response()
       // Send the final response.
       BasicProxy::UASTsx::on_final_response();
     }
+  }
+}
+
+
+/// Called when a response is transmitted on this transaction.  Handles
+/// interactions with the ACR if one is allocated.
+void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
+{
+  if (_acr != NULL)
+  {
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _acr->tx_response(tdata->msg, ts);
+  }
+}
+
+
+/// Called when a request is transmitted on an associated client transaction.
+/// Handles interactions with the ACR for the request if one is allocated.
+void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
+{
+  if (_acr != NULL)
+  {
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _acr->tx_request(tdata->msg, ts);
+
+    // TS 32.260 is a bit vague on this point, but it implies that an I-CSCF
+    // should generate an ACR[Event] both when the initial request is
+    // forwarded, and when the transaction completes.  We therefore send the
+    // ACR here, but leave it in place to send later as well.
+    _acr->send_message(ts);
   }
 }
 
@@ -446,7 +519,7 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._queried_caps)
+  if (!_queried_caps)
   {
     LOG_DEBUG("Perform UAR - impi %s, impu %s, vn %s, auth_type %s",
               impi.c_str(), impu.c_str(), visited_network.c_str(), auth_type.c_str());
@@ -477,6 +550,20 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
 
+    if (_acr != NULL)
+    {
+      // TS 32.260 table 5.2.1.1 says we should generate an ACR[Event] on
+      // completion of a Cx Query.  We therefore send the ACR here, but
+      // leave it in place so we will send another ACR when the transaction
+      // completes.  (Note that TS 32.260 isn't clear on whether this ACR
+      // should be generated if the Cx Query fails - we are sending on both
+      // success and failure, but that could be wrong.  Also, in the failure
+      // case we will not include a Server-Capabilities AVP.)
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _acr->send_message(ts);
+    }
+
     delete rsp;
   }
 
@@ -485,20 +572,20 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     // The HSS can return the s-cscf name on a CAPAB request.
     // Only use the name returned from the HSS if it hasn't already
     // been tried.
-    if ((!_hss_rsp._scscf.empty()) &&
+    if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
-                   _hss_rsp._scscf) == _attempted_scscfs.end()))
+                   _hss_rsp.scscf) == _attempted_scscfs.end()))
     {
-      scscf = _hss_rsp._scscf;
+      scscf = _hss_rsp.scscf;
     }
 
     // Use the capabilites to select an S-CSCF if the HSS didn't
     // return one (that hadn't already been tried).
-    if (scscf.empty() && _hss_rsp._queried_caps)
+    if ((scscf.empty()) && (_queried_caps))
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
-                                         _hss_rsp._optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
+                                         _hss_rsp.optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -528,7 +615,7 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 {
   int status_code = PJSIP_SC_OK;
 
-  if (!_hss_rsp._queried_caps)
+  if (!_queried_caps)
   {
     LOG_DEBUG("Perform LIR - impu %s, originating %s, auth_type %s",
               impu.c_str(),
@@ -559,6 +646,20 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
                                     PJSIP_SC_TEMPORARILY_UNAVAILABLE;
     }
 
+    if (_acr != NULL)
+    {
+      // TS 32.260 table 5.2.1.1 says we should generate an ACR[Event] on
+      // completion of a Cx Query.  We therefore send the ACR here, but
+      // leave it in place so we will send another ACR when the transaction
+      // completes.  (Note that TS 32.260 isn't clear on whether this ACR
+      // should be generated if the Cx Query fails - we are sending on both
+      // success and failure, but that could be wrong.  Also, in the failure
+      // case we will not include a Server-Capabilities AVP.)
+      pj_time_val ts;
+      pj_gettimeofday(&ts);
+      _acr->send_message(ts);
+    }
+
     delete rsp;
   }
 
@@ -567,21 +668,21 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
     // The HSS can return the s-cscf name on a CAPAB request.
     // Only use the name returned from the HSS if it hasn't already
     // been tried.
-    if ((!_hss_rsp._scscf.empty()) &&
+    if ((!_hss_rsp.scscf.empty()) &&
         (std::find(_attempted_scscfs.begin(), _attempted_scscfs.end(),
-                   _hss_rsp._scscf) == _attempted_scscfs.end()))
+                   _hss_rsp.scscf) == _attempted_scscfs.end()))
     {
       // Received a specific S-CSCF from the HSS, so use it.
-      scscf = _hss_rsp._scscf;
+      scscf = _hss_rsp.scscf;
     }
 
     // Use the capabilites to select an S-CSCF if the HSS didn't
     // return one (that hadn't already been tried).
-    if (scscf.empty() && _hss_rsp._queried_caps)
+    if ((scscf.empty()) && (_queried_caps))
     {
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
-      scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
-                                         _hss_rsp._optional_caps,
+      scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
+                                         _hss_rsp.optional_caps,
                                          _attempted_scscfs);
     }
 
@@ -598,15 +699,16 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
 }
 
 
+/// Parses the response from the HSS.
 int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
 {
   int status_code = PJSIP_SC_OK;
 
   // Clear out any older response.
-  _hss_rsp._queried_caps = false;
-  _hss_rsp._mandatory_caps.clear();
-  _hss_rsp._optional_caps.clear();
-  _hss_rsp._scscf = "";
+  _queried_caps = false;
+  _hss_rsp.mandatory_caps.clear();
+  _hss_rsp.optional_caps.clear();
+  _hss_rsp.scscf = "";
 
   if ((!rsp.isMember("result-code")) ||
       ((rsp["result-code"].asString() != "2001") &&
@@ -625,7 +727,7 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
     {
       // Response specifies a S-CSCF, so select this as the target.
       LOG_DEBUG("HSS returned S-CSCF %s as target", rsp["scscf"].asCString());
-      _hss_rsp._scscf = rsp["scscf"].asString();
+      _hss_rsp.scscf = rsp["scscf"].asString();
     }
 
     if ((rsp.isMember("mandatory-capabilities")) &&
@@ -637,8 +739,8 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
       // or implicitly because there was no server assigned.
       LOG_DEBUG("HSS returned capabilities");
       queried_caps = true;
-      if ((!parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp._mandatory_caps)) ||
-          (!parse_capabilities(rsp["optional-capabilities"], _hss_rsp._optional_caps)))
+      if ((!parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp.mandatory_caps)) ||
+          (!parse_capabilities(rsp["optional-capabilities"], _hss_rsp.optional_caps)))
       {
         // Failed to parse capabilities, so reject with 480 response.
         LOG_WARNING("Malformed required capabilities returned by HSS for %s\n%s",
@@ -647,12 +749,19 @@ int ICSCFProxy::UASTsx::parse_hss_response(Json::Value& rsp, bool queried_caps)
       }
     }
   }
-  _hss_rsp._queried_caps = (status_code == PJSIP_SC_OK) ? queried_caps : false;
+  _queried_caps = (status_code == PJSIP_SC_OK) ? queried_caps : false;
+
+  if (_acr != NULL)
+  {
+    // Pass the server capabilities to the ACR for reporting.
+    _acr->server_capabilities(_hss_rsp);
+  }
 
   return status_code;
 }
 
 
+/// Parses a set of capabilities in the HSS response to a vector of integers.
 bool ICSCFProxy::UASTsx::parse_capabilities(Json::Value& caps,
                                             std::vector<int>& parsed_caps)
 {
@@ -669,5 +778,7 @@ bool ICSCFProxy::UASTsx::parse_capabilities(Json::Value& caps,
   }
   return true;
 }
+
+
 
 
