@@ -41,7 +41,13 @@
 using namespace std;
 
 FakeHttpConnection::FakeHttpConnection() :
-  HttpConnection("localhost", true, "connected_homesteads", NULL, NULL)  // dummy values
+  // Initialize with dummay values.
+  HttpConnection("localhost",
+                 true,
+                 "connected_homesteads",
+                 NULL,
+                 NULL,
+                 SASEvent::HttpLogLevel::PROTOCOL)
 {
 }
 

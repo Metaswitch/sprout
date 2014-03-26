@@ -1278,7 +1278,7 @@ int main(int argc, char *argv[])
   {
     http_stack = HttpStack::get_instance();
     ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
-    HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
+    ChronosHandlerFactory chronos_handler_factory(&chronos_config);
 
     try
     {

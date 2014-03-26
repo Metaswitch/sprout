@@ -70,4 +70,23 @@ protected:
   std::string _binding_id;
 };
 
+/// Chronos handler factory. This is a normal configured handler factory, but
+/// causes all HTTP flows to be logged at detail level.
+class ChronosHandlerFactory :
+  public HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config>
+{
+public:
+  ChronosHandlerFactory(ChronosHandler::Config* cfg) :
+    HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config>(cfg)
+  {}
+
+  virtual ~ChronosHandlerFactory() {}
+
+  SASEvent::HttpLogLevel sas_log_level(HttpStack::Request& req)
+  {
+    // Log all chronos flows at detail level.
+    return SASEvent::HttpLogLevel::DETAIL;
+  }
+};
+
 #endif
