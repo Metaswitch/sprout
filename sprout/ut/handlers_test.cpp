@@ -164,7 +164,7 @@ class DeregistrationHandlerTest : public BaseTest
 
 TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip\:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
