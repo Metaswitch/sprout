@@ -252,33 +252,25 @@ void* BasicProxy::get_from_transaction(pjsip_transaction* tsx)
 /// Process a transaction (that is, non-CANCEL) request
 void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
 {
-  pj_status_t status;
-
   // Verify incoming request.
-  status = verify_request(rdata);
-  if (status != PJ_SUCCESS)
+  int status_code = verify_request(rdata);
+  if (status_code != PJSIP_SC_OK)
   {
-    LOG_ERROR("RX invalid request, %s",
-              PJUtils::pj_status_to_string(status).c_str());
+    reject_request(rdata, status_code);
     return;
   }
 
   // Request looks sane, so create and initialize an object to handle the
   // request.
   UASTsx* uas_tsx = create_uas_tsx();
-  status = (uas_tsx != NULL) ? uas_tsx->init(rdata) : PJ_ENOMEM;
+  pj_status_t status = (uas_tsx != NULL) ? uas_tsx->init(rdata) : PJ_ENOMEM;
 
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START
     LOG_ERROR("Failed to create BasicProxy UAS transaction object, %s",
               PJUtils::pj_status_to_string(status).c_str());
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL,
-                               NULL,
-                               NULL);
+    reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     delete uas_tsx;
     return;
     // LCOV_EXCL_STOP
@@ -305,8 +297,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
   if (!invite_uas)
   {
     // Invite transaction not found, respond to CANCEL with 481
-    PJUtils::respond_stateless(stack_data.endpt, rdata, 481, NULL,
-                               NULL, NULL);
+    reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
     return;
   }
 
@@ -318,7 +309,7 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
 
 /// Proxy utility to verify incoming requests.
 // Return non-zero if verification failed.
-pj_status_t BasicProxy::verify_request(pjsip_rx_data *rdata)
+int BasicProxy::verify_request(pjsip_rx_data *rdata)
 {
   // RFC 3261 Section 16.3 Request Validation
 
@@ -339,11 +330,7 @@ pj_status_t BasicProxy::verify_request(pjsip_rx_data *rdata)
   // We only want to support "sip:" URI scheme for this simple proxy.
   if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
   {
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_UNSUPPORTED_URI_SCHEME,
-                               NULL, NULL, NULL);
-    return PJSIP_ERRNO_FROM_SIP_STATUS(PJSIP_SC_UNSUPPORTED_URI_SCHEME);
+    return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
 
   // 3. Max-Forwards.
@@ -351,11 +338,7 @@ pj_status_t BasicProxy::verify_request(pjsip_rx_data *rdata)
   if ((rdata->msg_info.max_fwd) &&
       (rdata->msg_info.max_fwd->ivalue <= 1))
   {
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_TOO_MANY_HOPS,
-                               NULL, NULL, NULL);
-    return PJSIP_ERRNO_FROM_SIP_STATUS(PJSIP_SC_TOO_MANY_HOPS);
+    return PJSIP_SC_TOO_MANY_HOPS;
   }
 
   // 4. (Optional) Loop Detection.  Not checked in the BasicProxy.
@@ -365,7 +348,19 @@ pj_status_t BasicProxy::verify_request(pjsip_rx_data *rdata)
 
   // 6. Proxy-Authorization.  Not checked in the BasicProxy.
 
-  return PJ_SUCCESS;
+  return PJSIP_SC_OK;
+}
+
+
+/// Rejects a request statelessly.
+void BasicProxy::reject_request(pjsip_rx_data* rdata, int status_code)
+{
+  PJUtils::respond_stateless(stack_data.endpt,
+                             rdata,
+                             status_code,
+                             NULL,
+                             NULL,
+                             NULL);
 }
 
 
@@ -634,12 +629,7 @@ void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL,
-                               NULL,
-                               NULL);
+    _proxy->reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
     // LCOV_EXCL_STOP
   }

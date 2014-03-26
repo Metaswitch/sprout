@@ -322,8 +322,11 @@ protected:
   virtual void on_cancel_request(pjsip_rx_data* rdata);
 
   /// Utility to verify incoming requests.
-  /// Return non-zero if verification failed.
-  virtual pj_status_t verify_request(pjsip_rx_data *rdata);
+  /// Return the SIP status code if verification failed.
+  virtual int verify_request(pjsip_rx_data* rdata);
+
+  /// Rejects a received request statelessly.
+  virtual void reject_request(pjsip_rx_data* rdata, int status_code);
 
   /// Utility method to create a UASTsx objects for incoming requests.
   virtual BasicProxy::UASTsx* create_uas_tsx();
