@@ -223,19 +223,39 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
     _auth_type = "";
   }
 
-  if (((ICSCFProxy*)_proxy)->_acr_factory != NULL)
-  {
-    // ACR generation is enabled, so create an ACR for this request.
-    _acr = ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(trail(), CALLING_PARTY);
+  // Create an ACR if ACR generation is enabled.
+  _acr = create_acr();
 
-    if (_acr != NULL)
-    {
-      // Pass the received request to the ACR.
-      _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-    }
+  if (_acr != NULL)
+  {
+    // ACR generation is enabled, so pass the received request to the ACR.
+    _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   }
 
   return status;
+}
+
+
+/// Handle a received CANCEL request.
+void ICSCFProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
+{
+  // Pass the CANCEL to the BasicProxy code to handle.
+  BasicProxy::UASTsx::process_cancel_request(rdata);
+
+  ACR* acr = create_acr();
+
+  if (acr != NULL)
+  {
+    // ACR generation is enabled, so send an ACR for the CANCEL
+    // request.
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+
+    delete acr;
+  }
 }
 
 
@@ -351,7 +371,7 @@ void ICSCFProxy::UASTsx::on_final_response()
     if (_best_rsp->msg->line.status.code >= 300)
     {
       // Request rejected, see if we can/should do a retry.
-      retried = retry_request(_best_rsp->msg->line.status.code);
+      retried = retry_to_alternate_scscf(_best_rsp->msg->line.status.code);
     }
 
     if (!retried)
@@ -396,7 +416,7 @@ void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
 
 
 /// Retry the request to an alternate S-CSCF if possible.
-bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
+bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
 {
   bool retry = false;
 
@@ -780,5 +800,17 @@ bool ICSCFProxy::UASTsx::parse_capabilities(Json::Value& caps,
 }
 
 
+/// Create an ACR if ACR generation is enabled.
+ACR* ICSCFProxy::UASTsx::create_acr()
+{
+  ACR* acr = NULL;
+
+  if (((ICSCFProxy*)_proxy)->_acr_factory != NULL)
+  {
+    acr = ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(_trail, CALLING_PARTY);
+  }
+
+  return acr;
+}
 
 

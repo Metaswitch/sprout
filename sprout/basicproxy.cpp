@@ -310,37 +310,9 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Respond 200 OK to CANCEL.  Must do this statefully.
-  pjsip_transaction* tsx;
-  pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &tsx);
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL,
-                               NULL,
-                               NULL);
-    return;
-    // LCOV_EXCL_STOP
-  }
-
-  // Feed the CANCEL request to the transaction.
-  pjsip_tsx_recv_msg(tsx, rdata);
-
-  // Send the 200 OK statefully.
-  PJUtils::respond_stateful(stack_data.endpt, tsx, rdata, 200, NULL, NULL, NULL);
-
-  // Send CANCEL to cancel the UAC transactions.
-  // The UAS INVITE transaction will get final response when
-  // we receive final response from the UAC INVITE transaction.
-  LOG_DEBUG("%s - Cancel for UAS transaction", invite_uas->obj_name);
+  // Pass the CANCEL to the UASTsx object to process.
   UASTsx *uas_tsx = (UASTsx*)get_from_transaction(invite_uas);
-  uas_tsx->cancel_pending_uac_tsx(0, false);
-
-  // Unlock UAS tsx because it is locked in find_tsx()
-  pj_grp_lock_release(invite_uas->grp_lock);
+  uas_tsx->process_cancel_request(rdata);
 }
 
 
@@ -648,6 +620,43 @@ void BasicProxy::UASTsx::process_tsx_request()
     return;
     // LCOV_EXCL_STOP
   }
+}
+
+
+/// Handle a received CANCEL request.
+void BasicProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
+{
+  LOG_DEBUG("%s - Cancel for UAS transaction", name());
+
+  // Respond 200 OK to CANCEL.  Must do this statefully.
+  pjsip_transaction* cancel_tsx;
+  pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &cancel_tsx);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_INTERNAL_SERVER_ERROR,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  // Feed the CANCEL request to the transaction.
+  pjsip_tsx_recv_msg(cancel_tsx, rdata);
+
+  // Send the 200 OK statefully.
+  PJUtils::respond_stateful(stack_data.endpt, cancel_tsx, rdata, 200, NULL, NULL, NULL);
+
+  // Send CANCEL to cancel the UAC transactions.
+  // The UAS INVITE transaction will get final response when
+  // we receive final response from the UAC INVITE transaction.
+  cancel_pending_uac_tsx(0, false);
+
+  // Unlock UAS tsx because it is locked in find_tsx()
+  pj_grp_lock_release(_lock);
 }
 
 

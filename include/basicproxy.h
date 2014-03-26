@@ -117,6 +117,9 @@ protected:
     /// Handle the incoming half of a transaction request.
     virtual void process_tsx_request();
 
+    /// Handle a received CANCEL request.
+    virtual void process_cancel_request(pjsip_rx_data* rdata);
+
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_rx_data *rdata);

@@ -89,6 +89,9 @@ private:
     /// Initialise the UAS transaction.
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
+    /// Handle a received CANCEL request.
+    virtual void process_cancel_request(pjsip_rx_data* rdata);
+
   protected:
     /// Calculate targets for incoming requests by querying HSS.
     virtual int calculate_targets();
@@ -98,17 +101,17 @@ private:
 
   private:
     /// Handles a response to an associated UACTsx.
-    void on_new_client_response(UACTsx* uac_tsx,
+    virtual void on_new_client_response(UACTsx* uac_tsx,
                                 pjsip_rx_data *rdata);
 
     /// Notification that a response is being transmitted on this transaction.
-    void on_tx_response(pjsip_tx_data* tdata);
+    virtual void on_tx_response(pjsip_tx_data* tdata);
 
     /// Notification that a request is being transmitted to a client.
-    void on_tx_client_request(pjsip_tx_data* tdata);
+    virtual void on_tx_client_request(pjsip_tx_data* tdata);
 
     /// Attempts to retry the request to an alternative S-CSCF.
-    bool retry_request(int rsp_status);
+    bool retry_to_alternate_scscf(int rsp_status);
 
     /// Performs a registration status query and finds a suitable S-CSCF
     /// for the request.
@@ -130,6 +133,9 @@ private:
 
     /// Parses a set of capabilities in the HSS response.
     bool parse_capabilities(Json::Value& caps, std::vector<int>& parsed_caps);
+
+    /// Create an ACR if ACR generation is enabled.
+    ACR* create_acr();
 
     /// Homestead connection class for performing HSS queries.
     HSSConnection* _hss;
