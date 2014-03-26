@@ -52,6 +52,7 @@
 #include "test_interposer.hpp"
 #include "test_utils.hpp"
 #include "load_monitor.h"
+#include "mock_sas.h"
 
 using namespace std;
 using ::testing::MatchesRegex;
@@ -193,8 +194,13 @@ TEST_F(HttpConnectionTest, DeleteBody)
 
 TEST_F(HttpConnectionTest, SASCorrelationHeader)
 {
-  string output;
+  mock_sas_collect_messages(true);
+
+  std::string uuid;
+  std::string output;
+
   _http.get("/blah/blah/blah", output, "gandalf", 0);
+
   Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
 
   // The CURL request should contain an X-SAS-HTTP-Branch-ID whose value is a
@@ -212,8 +218,19 @@ TEST_F(HttpConnectionTest, SASCorrelationHeader)
                                 "[0-9a-fA-F]{4}-"
                                 "[0-9a-fA-F]{4}-"
                                 "[0-9a-fA-F]{12}$"));
+
+      // This strips off the header name and leaves just the value.
+      uuid = it->substr(std::string("X-SAS-HTTP-Branch-ID: ").length());
       found_header = true;
     }
   }
   EXPECT_TRUE(found_header);
+
+  // Check that we logged a branch ID marker.
+  MockSASMessage* marker = mock_sas_find_marker(MARKER_ID_VIA_BRANCH_PARAM);
+  EXPECT_TRUE(marker != NULL);
+  EXPECT_EQ(marker->var_params.size(), 1u);
+  EXPECT_EQ(marker->var_params[0], uuid);
+
+  mock_sas_collect_messages(false);
 }
