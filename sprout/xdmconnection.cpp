@@ -56,7 +56,8 @@ XDMConnection::XDMConnection(const std::string& server,
                            true,
                            "connected_homers",
                            load_monitor,
-                           stats_aggregator)),
+                           stats_aggregator,
+                           SASEvent::HttpLogLevel::PROTOCOL)),
   _latency_stat("xdm_latency_us", stats_aggregator)
 {
 }
