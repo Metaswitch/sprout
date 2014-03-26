@@ -162,9 +162,9 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
         name = node->name();
         if (strcmp(name, "Extension") == 0)
         {
-          xml_node<>* reg_type_node = node->first_node("RegistrationType");
-
-          if (reg_type_node)
+          for (xml_node<>* reg_type_node = node->first_node("RegistrationType");
+               reg_type_node;
+               reg_type_node = reg_type_node->next_sibling("RegistrationType"))
           {
             name = reg_type_node->name();
             int reg_type = parse_integer(reg_type_node, "registration type", 0, 2);
@@ -186,11 +186,17 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
               ret = (expiry == 0);
               break;
             default:
-            // LCOV_EXCL_START Unreachable
+              // LCOV_EXCL_START Unreachable
               LOG_WARNING("Impossible case %d", reg_type);
               ret = false;
               break;
-            // LCOV_EXCL_STOP
+              // LCOV_EXCL_STOP
+            }
+
+            // If we've found a match, break out of the for loop.
+            if (ret)
+            {
+              break;
             }
           }
         }
@@ -524,8 +530,6 @@ static std::string get_text_or_cdata(xml_node<>* node)
     return "";
   }
 }
-
-
 
 static bool does_child_node_exist(xml_node<>* parent_node, std::string child_node_name)
 {

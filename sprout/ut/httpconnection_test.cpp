@@ -185,6 +185,12 @@ TEST_F(HttpConnectionTest, SimpleDelete)
   EXPECT_EQ(200, ret);
 }
 
+TEST_F(HttpConnectionTest, DeleteBody)
+{
+  long ret = _http.send_delete("/delete_id", "body", 0);
+  EXPECT_EQ(200, ret);
+}
+
 TEST_F(HttpConnectionTest, SASCorrelationHeader)
 {
   string output;

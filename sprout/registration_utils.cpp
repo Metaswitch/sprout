@@ -64,13 +64,11 @@ void send_register_to_as(pjsip_rx_data* received_register,
                          const std::string&,
                          SAS::TrailId);
 
-void deregister_with_application_servers(Ifcs&, RegStore* store, SIPResolver* sipresolver, const std::string&, SAS::TrailId trail);
-
-void deregister_with_application_servers(Ifcs& ifcs,
-                                         RegStore* store,
-                                         SIPResolver* sipresolver,
-                                         const std::string& served_user,
-                                         SAS::TrailId trail)
+void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
+                                                            RegStore* store,
+                                                            SIPResolver* sipresolver,
+                                                            const std::string& served_user,
+                                                            SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs, store, sipresolver, NULL, NULL, 0, false, served_user, trail);
 }

@@ -89,6 +89,7 @@ pjsip_module mod_auth =
 // Connection to the HSS service for retrieving subscriber credentials.
 static HSSConnection* hss;
 
+static ChronosConnection* chronos;
 
 // AV store used to store Authentication Vectors while waiting for the
 // client to respond to a challenge.
@@ -169,8 +170,17 @@ pj_status_t user_lookup(pj_pool_t *pool,
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
-  // Get the Authentication Vector from the store.
+  // Get the Authentication Vector from the store. We should
+  // immediately clear the AV, to avoid replay attacks. This is true
+  // even if the get fails and av is NULL - someone could still be
+  // snooping traffic, see the nonce, and try and reuse it when
+  // memcached recovers.
   Json::Value* av = av_store->get_av(impi, nonce);
+
+  // No point checking the return value of delete_av - there's no
+  // sensible recovery action we can take (and it logs internally if
+  // it fails).
+  av_store->delete_av(impi, nonce);
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
@@ -254,7 +264,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   // Get the Authentication Vector from the HSS.
   Json::Value* av = NULL;
   hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
-  
+
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi)))
   {
@@ -330,7 +340,17 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
-    av_store->set_av(impi, nonce, av);
+    bool success = av_store->set_av(impi, nonce, av);
+    if (success)
+    {
+      // We've written the AV into the store, so need to set a Chronos
+      // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
+      // HSS when it expires.
+      std::string timer_id;
+      std::string chronos_body = "{\"impi\": \"" + impi + "\", \"impu\": \"" + impu +"\", \"nonce\": \"" + nonce +"\"}";
+      LOG_DEBUG("Sending %s to Chronos to set AV timer", chronos_body.c_str());
+      chronos->send_post(timer_id, 30, "/authentication-timeout", chronos_body, 0);
+    }
 
     delete av;
   }
@@ -551,12 +571,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
+                                ChronosConnection* chronos_connection,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
 
   av_store = avstore;
   hss = hss_connection;
+  chronos = chronos_connection;
   analytics = analytics_logger;
 
   // Register the authentication module.  This needs to be in the stack

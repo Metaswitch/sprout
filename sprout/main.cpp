@@ -793,6 +793,21 @@ public:
   }
 };
 
+void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+{
+  pj_thread_desc thread_desc;
+  pj_thread_t *thread = 0;
+
+  if (!pj_thread_is_registered())
+  {
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+
+    if (thread_reg_status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to register thread with pjsip");
+    }
+  }
+}
 
 /*
  * main()
@@ -1069,9 +1084,11 @@ int main(int argc, char *argv[])
 
   if (opt.chronos_service != "")
   {
+    std::string port_str = std::to_string(opt.http_port);
+    std::string http_uri = opt.http_address + ":" + std::string(port_str);
     // Create a connection to Chronos.
     LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service);
+    chronos_connection = new ChronosConnection(opt.chronos_service, http_uri);
   }
 
   if (opt.scscf_enabled)
@@ -1134,7 +1151,7 @@ int main(int argc, char *argv[])
       // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
-      status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);
+      status = init_authentication(opt.auth_realm, av_store, hss_connection, chronos_connection, analytics_logger);
     }
 
     // Create Enum and BGCF services required for S-CSCF.
@@ -1277,16 +1294,28 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
-    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
-    ChronosHandlerFactory chronos_handler_factory(&chronos_config);
+
+    RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+    AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
+    DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+
+    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
+    // chronos requests, so use the ChronosHandlerFactory.
+    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
+    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
+    HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
       http_stack->register_handler("^/timers$",
-                                   &chronos_handler_factory);
-      http_stack->start();
+                                   &reg_timeout_handler_factory);
+      http_stack->register_handler("^/authentication-timeout$",
+                                   &auth_timeout_handler_factory);
+      http_stack->register_handler("^/registrations?*$",
+                                   &deregistration_handler_factory);
+      http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
     {
