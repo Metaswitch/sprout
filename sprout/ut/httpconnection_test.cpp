@@ -41,6 +41,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
+#include <boost/algorithm/string.hpp>
 
 #include "utils.h"
 #include "sas.h"
@@ -53,6 +54,7 @@
 #include "load_monitor.h"
 
 using namespace std;
+using ::testing::MatchesRegex;
 
 /// Fixture for test.
 class HttpConnectionTest : public BaseTest
@@ -181,4 +183,31 @@ TEST_F(HttpConnectionTest, SimpleDelete)
 {
   long ret = _http.send_delete("/delete_id", 0);
   EXPECT_EQ(200, ret);
+}
+
+TEST_F(HttpConnectionTest, SASCorrelationHeader)
+{
+  string output;
+  _http.get("/blah/blah/blah", output, "gandalf", 0);
+  Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
+
+  // The CURL request should contain an X-SAS-HTTP-Branch-ID whose value is a
+  // UUID.
+  bool found_header = false;
+  for(std::list<std::string>::iterator it = req._headers.begin();
+      it != req._headers.end();
+      ++it)
+  {
+    if (boost::starts_with(*it, "X-SAS-HTTP-Branch-ID"))
+    {
+      EXPECT_THAT(*it, MatchesRegex(
+        "^X-SAS-HTTP-Branch-ID: *[0-9a-fA-F]{8}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{12}$"));
+      found_header = true;
+    }
+  }
+  EXPECT_TRUE(found_header);
 }
