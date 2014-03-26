@@ -67,8 +67,12 @@ protected:
   /// Process received requests not absorbed by transaction layer.
   virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);
 
-  /// Perform I-CSCF specific verification of incoming requests.
-  virtual pj_status_t verify_request(pjsip_rx_data *rdata);
+  /// Utility to verify incoming requests.
+  /// Return the SIP status code if verification failed.
+  virtual int verify_request(pjsip_rx_data* rdata);
+
+  /// Rejects a received request statelessly.
+  virtual void reject_request(pjsip_rx_data* rdata, int status_code);
 
   /// Create I-CSCF UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();

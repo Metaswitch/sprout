@@ -102,6 +102,58 @@ pj_status_t ICSCFProxy::verify_request(pjsip_rx_data *rdata)
 }
 
 
+/// Rejects a request statelessly.
+void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
+{
+  pj_status_t status;
+
+  ACR* acr = (_acr_factory != NULL) ?
+                 _acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
+  if (acr != NULL)
+  {
+    // ACR generation is enabled, so pass the received request to the ACR for
+    // reporting.
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  }
+
+  pjsip_tx_data* tdata;
+
+  status = PJUtils::create_response(stack_data.endpt, rdata, status_code, NULL, &tdata);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  if (acr != NULL)
+  {
+    // Pass the response to the ACR.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->tx_response(tdata->msg, ts);
+  }
+
+  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+  if (status != PJ_SUCCESS)
+  {
+    // LCOV_EXCL_START
+    pjsip_tx_data_dec_ref(tdata);
+    return;
+    // LCOV_EXCL_STOP
+  }
+
+  if (acr != NULL)
+  {
+    // Send the ACR and delete it.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+    delete acr;
+  }
+}
+
+
 /// Utility method to create a UASTsx object for incoming requests.
 BasicProxy::UASTsx* ICSCFProxy::create_uas_tsx()
 {
