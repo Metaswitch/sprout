@@ -41,33 +41,95 @@
 #include "chronosconnection.h"
 #include "hssconnection.h"
 #include "regstore.h"
+#include "sipresolver.h"
+#include "avstore.h"
 
-class ChronosHandler : public HttpStack::Handler
+class RegistrationTimeoutHandler : public HttpStack::Handler
 {
 public:
   struct Config
   {
-  Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
-    _store(store), _remote_store(remote_store), _hss(hss) {}
+    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss) :
+      _store(store), _remote_store(remote_store), _hss(hss)
+      {}
     RegStore* _store;
     RegStore* _remote_store;
     HSSConnection* _hss;
   };
 
-  ChronosHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  RegistrationTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
   void run();
+
+protected:
   void handle_response();
   int parse_response(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
                               RegStore::AoR* previous_aor_data,
                               RegStore* remote_store,
-                              bool update_chronos);
+                              bool update_chronos,
+                              bool all_bindings_expired);
 
 protected:
   const Config* _cfg;
   std::string _aor_id;
   std::string _binding_id;
+};
+
+class DeregistrationHandler : public HttpStack::Handler
+{
+public:
+  struct Config
+  {
+    Config(RegStore* store, RegStore* remote_store, HSSConnection* hss, SIPResolver* sipresolver) :
+      _store(store), _remote_store(remote_store), _hss(hss), _sipresolver(sipresolver)
+      {}
+    RegStore* _store;
+    RegStore* _remote_store;
+    HSSConnection* _hss;
+    SIPResolver* _sipresolver;
+  };
+
+
+  DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg)
+  {
+  };
+
+  void run();
+  int handle_request();
+  int parse_request(std::string body);
+  RegStore::AoR* set_aor_data(RegStore* current_store,
+                              std::string aor_id,
+                              std::string private_id,
+                              RegStore::AoR* previous_aor_data,
+                              RegStore* remote_store,
+                              bool is_primary);
+
+protected:
+  const Config* _cfg;
+  std::map<std::string, std::string> _bindings;
+  std::string _notify;
+};
+
+class AuthTimeoutHandler : public HttpStack::Handler
+{
+public:
+  struct Config
+  {
+  Config(AvStore* store, HSSConnection* hss) :
+    _avstore(store), _hss(hss) {}
+    AvStore* _avstore;
+    HSSConnection* _hss;
+  };
+  AuthTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  void run();
+protected:
+  int handle_response(std::string body);
+  const Config* _cfg;
+  std::string _impi;
+  std::string _impu;
+  std::string _nonce;
+
 };
 
 #endif

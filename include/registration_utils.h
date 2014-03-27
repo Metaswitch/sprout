@@ -66,5 +66,3 @@ void register_with_application_servers(Ifcs& ifcs,
                                        SAS::TrailId trail);
 
 } // namespace RegistrationUtils
-
-#endif

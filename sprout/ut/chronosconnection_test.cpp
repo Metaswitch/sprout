@@ -1,5 +1,5 @@
 /**
- * @file chronosconnection_test.cpp 
+ * @file chronosconnection_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -56,7 +56,7 @@ class ChronosConnectionTest : public BaseTest
   ChronosConnection _chronos;
 
   ChronosConnectionTest() :
-    _chronos("narcissus")
+    _chronos("narcissus", "localhost:9888")
   {
     fakecurl_responses.clear();
   }
@@ -86,7 +86,7 @@ TEST_F(ChronosConnectionTest, SendPost)
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
-  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  HTTPCode status = _chronos.send_post(post_identity, 300, "/timers", opaque,  0);
   EXPECT_EQ(status, 200);
   EXPECT_EQ(post_identity, "abcd");
 }
@@ -98,7 +98,7 @@ TEST_F(ChronosConnectionTest, SendPostWithNoLocationHeader)
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
-  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  HTTPCode status = _chronos.send_post(post_identity, 300, "/timers", opaque,  0);
   EXPECT_EQ(status, 400);
   EXPECT_EQ(post_identity, "");
 }
@@ -110,7 +110,7 @@ TEST_F(ChronosConnectionTest, SendPostWithNoHeaders)
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
-  HTTPCode status = _chronos.send_post(post_identity, 300, "localhost:9888/timers", opaque,  0);
+  HTTPCode status = _chronos.send_post(post_identity, 300, "/timers", opaque,  0);
   EXPECT_EQ(status, 400);
   EXPECT_EQ(post_identity, "");
 }
@@ -120,6 +120,6 @@ TEST_F(ChronosConnectionTest, SendPut)
   fakecurl_responses["http://narcissus/timers/abcd"] = CURLE_OK;
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string put_identity = "abcd";
-  HTTPCode status = _chronos.send_put("abcd", 300, "localhost:9888/timers", opaque,  0);
+  HTTPCode status = _chronos.send_put("abcd", 300, "/timers", opaque,  0);
   EXPECT_EQ(status, 200);
 }
