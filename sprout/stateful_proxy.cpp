@@ -4245,7 +4245,7 @@ std::string UASTransaction::get_scscf_name(Json::Value* location)
       optional.push_back(options[(int)jj].asInt());
     }
 
-    server_name = scscf_selector->get_scscf(mandatory, optional, {});
+    server_name = scscf_selector->get_scscf(mandatory, optional, {}, trail());
   }
 
   delete location;

@@ -500,7 +500,8 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
-                                         _attempted_scscfs);
+                                         _attempted_scscfs,
+                                         trail());
     }
 
     if (scscf.empty())
@@ -583,7 +584,8 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
-                                         _attempted_scscfs);
+                                         _attempted_scscfs,
+                                         trail());
     }
 
     if (scscf.empty())
