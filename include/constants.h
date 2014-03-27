@@ -37,61 +37,63 @@
 #ifndef CONSTANTS_H_
 #define CONSTANTS_H_
 
-const pj_str_t STR_DIVERSION = pj_str("Diversion");
-const pj_str_t STR_SUPPORTED = pj_str("Supported");
-const pj_str_t STR_REQUIRE = pj_str("Require");
-const pj_str_t STR_PATH = pj_str("Path");
-const pj_str_t STR_OUTBOUND = pj_str("outbound");
-const pj_str_t STR_PARAM_OB = pj_str("ob");
-const pj_str_t STR_SIP_INSTANCE = pj_str("+sip.instance");
-const pj_str_t STR_REG_ID = pj_str("reg-id");
-const pj_str_t STR_OB = pj_str("ob");
-const pj_str_t STR_INTEGRITY_PROTECTED = pj_str("integrity-protected");
-const pj_str_t STR_YES = pj_str("yes");
-const pj_str_t STR_NO = pj_str("no");
-const pj_str_t STR_TLS_YES = pj_str("tls-yes");
-const pj_str_t STR_TLS_PENDING = pj_str("tls-pending");
-const pj_str_t STR_IP_ASSOC_YES = pj_str("ip-assoc-yes");
-const pj_str_t STR_IP_ASSOC_PENDING = pj_str("ip-assoc-pending");
-const pj_str_t STR_AUTH_DONE = pj_str("auth-done");
-const pj_str_t STR_PRIVACY = pj_str("Privacy");
-const pj_str_t STR_P_A_N_I = pj_str("P-Access-Network-Info");
-const pj_str_t STR_P_V_N_I = pj_str("P-Visited-Network-Id");
-const pj_str_t STR_P_SERVED_USER = pj_str("P-Served-User");
-const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str("P-Asserted-Identity");
-const pj_str_t STR_P_PREFERRED_IDENTITY = pj_str("P-Preferred-Identity");
-const pj_str_t STR_P_ASSOCIATED_URI = pj_str("P-Associated-URI");
-const pj_str_t STR_REQUEST_DISPOSITION = pj_str("Request-Disposition");
-const pj_str_t STR_SERVICE_ROUTE = pj_str("Service-Route");
-const pj_str_t STR_ORIG = pj_str("orig");
-const pj_str_t STR_NO_FORK = pj_str("no-fork");
-const pj_str_t STR_P_C_V = pj_str("P-Charging-Vector");
-const pj_str_t STR_P_C_F_A = pj_str("P-Charging-Function-Addresses");
-const pj_str_t STR_DIGEST = pj_str("Digest");
-const pj_str_t STR_MD5 = pj_str("MD5");
-const pj_str_t STR_AKAV1_MD5 = pj_str("AKAv1-MD5");
-const pj_str_t STR_AUTH = pj_str("auth");
-const pj_str_t STR_AUTS = pj_str("auts");
-const pj_str_t STR_CK = pj_str("ck");
-const pj_str_t STR_IK = pj_str("ik");
-const pj_str_t STR_P_PROFILE_KEY = pj_str("P-Profile-Key");
-const pj_str_t STR_APPLICATION = pj_str("application");
-const pj_str_t STR_SDP = pj_str("sdp");
-const pj_str_t STR_EVENT = pj_str("Event");
-const pj_str_t STR_X = pj_str("X");
-const pj_str_t STR_REASON = pj_str("Reason");
-const pj_str_t STR_TRANSIT_IOI = pj_str("transit-ioi");
-const pj_str_t STR_SESSION_EXPIRES = pj_str("Session-Expires");
-const pj_str_t STR_CALL_ID = pj_str("Call-ID");
-const pj_str_t STR_CCF = pj_str("ccf");
+#include <pjsip.h>
+
+const pj_str_t STR_DIVERSION = pj_str((char *)"Diversion");
+const pj_str_t STR_SUPPORTED = pj_str((char *)"Supported");
+const pj_str_t STR_REQUIRE = pj_str((char *)"Require");
+const pj_str_t STR_PATH = pj_str((char *)"Path");
+const pj_str_t STR_OUTBOUND = pj_str((char *)"outbound");
+const pj_str_t STR_PARAM_OB = pj_str((char *)"ob");
+const pj_str_t STR_SIP_INSTANCE = pj_str((char *)"+sip.instance");
+const pj_str_t STR_REG_ID = pj_str((char *)"reg-id");
+const pj_str_t STR_OB = pj_str((char *)"ob");
+const pj_str_t STR_INTEGRITY_PROTECTED = pj_str((char *)"integrity-protected");
+const pj_str_t STR_YES = pj_str((char *)"yes");
+const pj_str_t STR_NO = pj_str((char *)"no");
+const pj_str_t STR_TLS_YES = pj_str((char *)"tls-yes");
+const pj_str_t STR_TLS_PENDING = pj_str((char *)"tls-pending");
+const pj_str_t STR_IP_ASSOC_YES = pj_str((char *)"ip-assoc-yes");
+const pj_str_t STR_IP_ASSOC_PENDING = pj_str((char *)"ip-assoc-pending");
+const pj_str_t STR_AUTH_DONE = pj_str((char *)"auth-done");
+const pj_str_t STR_PRIVACY = pj_str((char *)"Privacy");
+const pj_str_t STR_P_A_N_I = pj_str((char *)"P-Access-Network-Info");
+const pj_str_t STR_P_V_N_I = pj_str((char *)"P-Visited-Network-Id");
+const pj_str_t STR_P_SERVED_USER = pj_str((char*)"P-Served-User");
+const pj_str_t STR_P_ASSERTED_IDENTITY = pj_str((char*)"P-Asserted-Identity");
+const pj_str_t STR_P_PREFERRED_IDENTITY = pj_str((char*)"P-Preferred-Identity");
+const pj_str_t STR_P_ASSOCIATED_URI = pj_str((char*)"P-Associated-URI");
+const pj_str_t STR_REQUEST_DISPOSITION = pj_str((char*)"Request-Disposition");
+const pj_str_t STR_SERVICE_ROUTE = pj_str((char*)"Service-Route");
+const pj_str_t STR_ORIG = pj_str((char*)"orig");
+const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");
+const pj_str_t STR_P_C_V = pj_str((char*)"P-Charging-Vector");
+const pj_str_t STR_P_C_F_A = pj_str((char*)"P-Charging-Function-Addresses");
+const pj_str_t STR_DIGEST = pj_str((char*)"Digest");
+const pj_str_t STR_MD5 = pj_str((char*)"MD5");
+const pj_str_t STR_AKAV1_MD5 = pj_str((char*)"AKAv1-MD5");
+const pj_str_t STR_AUTH = pj_str((char*)"auth");
+const pj_str_t STR_AUTS = pj_str((char*)"auts");
+const pj_str_t STR_CK = pj_str((char*)"ck");
+const pj_str_t STR_IK = pj_str((char*)"ik");
+const pj_str_t STR_P_PROFILE_KEY = pj_str((char*)"P-Profile-Key");
+const pj_str_t STR_APPLICATION = pj_str((char*)"application");
+const pj_str_t STR_SDP = pj_str((char*)"sdp");
+const pj_str_t STR_EVENT = pj_str((char*)"Event");
+const pj_str_t STR_X = pj_str((char*)"X");
+const pj_str_t STR_REASON = pj_str((char*)"Reason");
+const pj_str_t STR_TRANSIT_IOI = pj_str((char*)"transit-ioi");
+const pj_str_t STR_SESSION_EXPIRES = pj_str((char*)"Session-Expires");
+const pj_str_t STR_CALL_ID = pj_str((char*)"Call-ID");
+const pj_str_t STR_CCF = pj_str((char*)"ccf");
 
 /// Prefix of ODI tokens we generate.
-const pj_str_t STR_ODI_PREFIX = pj_str("odi_");
+const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
 
 const int SIP_STATUS_FLOW_FAILED = 430;
-const pj_str_t SIP_REASON_FLOW_FAILED = pj_str("Flow failed");
-const pj_str_t SIP_REASON_ENUM_FAILED = pj_str("ENUM translation failed");
-const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str("Off-net calling not allowed");
+const pj_str_t SIP_REASON_FLOW_FAILED = pj_str((char*)"Flow failed");
+const pj_str_t SIP_REASON_ENUM_FAILED = pj_str((char*)"ENUM translation failed");
+const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str((char*)"Off-net calling not allowed");
 
 #define DEFAULT_HANDLING_SESSION_CONTINUED 0
 #define DEFAULT_HANDLING_SESSION_TERMINATED 1
