@@ -55,7 +55,6 @@ extern "C" {
 #include <list>
 
 #include "stack.h"
-#include "sipresolver.h"
 #include "pjmodule.h"
 #include "acr.h"
 
@@ -67,7 +66,6 @@ class BasicProxy
 public:
   BasicProxy(pjsip_endpoint* endpt,
              std::string name,
-             SIPResolver* sipresolver,
              int priority,
              bool delay_trying);
   virtual ~BasicProxy();
@@ -263,6 +261,9 @@ protected:
     /// Reason header.
     virtual void cancel_pending_tsx(int st_code);
 
+    /// Attempts a retry of the request.
+    virtual bool retry_request();
+
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UACTransaction still
     /// exists - if the PJSIP transaction is being destroyed, this method will
@@ -297,16 +298,14 @@ protected:
     /// Pointer to the associated PJSIP UAC transaction.
     pjsip_transaction* _tsx;
 
-    /// The request data for this transaction.  This is only valid prior to
-    /// sending the request, and should not be accessed afterwards.
+    /// The request data for this transaction.  The reference count is
+    /// incremented on this request so it is available for retries even
+    /// after it has been passed to PJSIP for sending.
     pjsip_tx_data* _tdata;
 
-    /// A pointer to the transport selected for this transaction.
-    pjsip_transport* _transport;
-
-    /// The resolved server address for this transaction.
-    bool _resolved;
-    AddrInfo _ai;
+    /// The resolved server addresses for this transaction.
+    std::vector<AddrInfo> _servers;
+    int _current_server;
 
     bool _pending_destroy;
     int _context_count;
@@ -341,9 +340,6 @@ protected:
   /// on_tsx_state callbacks.
   static const int PJMODULE_MASK_TU = PJCallback::ON_TSX_STATE;
   PJModule<BasicProxy, 2> _mod_tu;
-
-  /// A pointer to the SIP resolver used to resolve URI targets to servers.
-  SIPResolver* _sipresolver;
 
   /// Indicates that 100 Trying response to INVITE requests should be delayed
   /// until at least one downstream node has sent a 100 Trying response.

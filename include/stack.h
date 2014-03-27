@@ -39,8 +39,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
 
 #ifndef STACK_H__
 #define STACK_H__
@@ -54,6 +52,7 @@ extern "C" {
 #include "sas.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
+#include "sipresolver.h"
 
 /* Pre-declariations */
 class LastValueCache;
@@ -61,6 +60,8 @@ class LastValueCache;
 /* Options */
 struct stack_data_struct
 {
+  SIPResolver*         sipresolver;
+
   pj_caching_pool      cp;
   pj_pool_t           *pool;
   pjsip_endpoint      *endpt;
@@ -144,6 +145,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& home_domain,
                               const std::string& sprout_domain,
                               const std::string& alias_hosts,
+                              SIPResolver* sipresolver,
                               int num_pjsip_threads,
                               int num_worker_threads,
                               int record_routing_model,

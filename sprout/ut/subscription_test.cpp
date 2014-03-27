@@ -61,7 +61,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
+    add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -402,9 +402,9 @@ void SubscriptionTest::check_standard_OK()
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("P-Charging-Vector: icid-value=100", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
-
-  out = pop_txdata()->msg;
+  out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  free_txdata();
+  inject_msg(respond_to_current_txdata(200));
+  //free_txdata();
 }
 

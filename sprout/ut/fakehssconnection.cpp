@@ -126,6 +126,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
   {
     object = new Json::Value;
     Json::Reader reader;
+    LOG_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
     bool parsingSuccessful = reader.parse(i->second, *object);
     if (parsingSuccessful)
     {

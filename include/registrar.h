@@ -47,35 +47,22 @@ extern "C" {
 #include "chronosconnection.h"
 #include "analyticslogger.h"
 #include "ifchandler.h"
-#include "sipresolver.h"
 #include "acr.h"
 
 extern pjsip_module mod_registrar;
+
+void third_party_register_failed(const std::string& public_id,
+                                 SAS::TrailId trail);
 
 extern pj_status_t init_registrar(RegStore* registrar_store,
                                   RegStore* remote_reg_store,
                                   HSSConnection* hss_connection,
                                   AnalyticsLogger* analytics_logger,
-                                  SIPResolver* resolver,
                                   ACRFactory* rfacr_factory,
                                   IfcHandler* ifchandler_ref,
                                   int cfg_max_expires);
 
+
 extern void destroy_registrar();
-
-struct ThirdPartyRegData
-{
-  ThirdPartyRegData(SIPResolver* resolver, bool handling) :
-    sipresolver(resolver),
-    default_handling(handling),
-    resolved(false)
-  {
-  };
-
-  SIPResolver* sipresolver;
-  bool default_handling;
-  bool resolved;
-  AddrInfo ai;
-};
 
 #endif

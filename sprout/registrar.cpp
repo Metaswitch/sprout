@@ -67,8 +67,6 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
-static SIPResolver* sipresolver;
-
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
 
@@ -86,7 +84,6 @@ static int max_expires;
 // must get invoked before the proxy UA module.
 //
 static pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata);
-static void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event);
 
 pjsip_module mod_registrar =
 {
@@ -102,7 +99,7 @@ pjsip_module mod_registrar =
   NULL,                               // on_rx_response()
   NULL,                               // on_tx_request()
   NULL,                               // on_tx_response()
-  &registrar_on_tsx_state,            // on_tsx_state()
+  NULL,                               // on_tsx_state()
 };
 
 
@@ -200,7 +197,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               bool& out_is_initial_registration,
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
-                              bool send_notify)              ///<whether to send notifies (only send when writing to the local store)
+                              bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
+                              std::string private_id)        ///<private id that the binding was registered with
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -311,7 +309,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         if ((cid != binding->_cid) ||
             (cseq > binding->_cseq))
         {
-
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
           binding->_uri = contact_uri;
@@ -361,6 +358,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
             binding->_params.push_back(std::make_pair(pname, pvalue));
             p = p->next;
           }
+
+          binding->_private_id = private_id;
 
           // Calculate the expiry period for the updated binding.
           expiry = (contact->expires != -1) ? contact->expires :
@@ -418,9 +417,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
         {
-          pjsip_tx_data_add_ref(tdata_notify);
-          status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
-          pjsip_tx_data_dec_ref(tdata_notify);
+          status = PJUtils::send_request(tdata_notify);
         }
       }
     }
@@ -491,10 +488,10 @@ void process_register_request(pjsip_rx_data* rdata)
   PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
-
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifc_map;
   std::string private_id;
+  std::string private_id_for_binding;
   bool success = get_private_id(rdata, private_id);
   if (!success)
   {
@@ -509,6 +506,15 @@ void process_register_request(pjsip_rx_data* rdata)
     // initial registration, so we can just make a request using our
     // public ID.
     private_id = "";
+
+    // IMS compliant clients will always have the Auth header on all REGISTERs,
+    // including reREGISTERS. Non-IMS clients won't, but their private ID
+    // will always be the public ID with the sip: removed.
+    private_id_for_binding = PJUtils::default_private_id_from_uri(uri);
+  }
+  else
+  {
+    private_id_for_binding = private_id;
   }
 
   std::string regstate;
@@ -547,7 +553,9 @@ void process_register_request(pjsip_rx_data* rdata)
   bool is_initial_registration;
 
   // Write to the local store, checking the remote store if there is no entry locally.
-  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry, is_initial_registration, NULL, remote_store, true);
+  RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
+                                           is_initial_registration, NULL, remote_store,
+                                           true, private_id_for_binding);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -559,7 +567,9 @@ void process_register_request(pjsip_rx_data* rdata)
     {
       int tmp_expiry = 0;
       bool ignored;
-      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now, tmp_expiry, ignored, aor_data, NULL, false);
+      RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
+                                                      tmp_expiry, ignored, aor_data,
+                                                      NULL, false, private_id_for_binding);
       delete remote_aor_data;
     }
   }
@@ -745,7 +755,14 @@ void process_register_request(pjsip_rx_data* rdata)
   // appropriate data structure (representing the ServiceProfile
   // nodes) and we should loop through that.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id], store, sipresolver, rdata, tdata, expiry, is_initial_registration, public_id, trail);
+  RegistrationUtils::register_with_application_servers(ifc_map[public_id],
+                                                       store,
+                                                       rdata,
+                                                       tdata,
+                                                       expiry,
+                                                       is_initial_registration,
+                                                       public_id,
+                                                       trail);
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
@@ -755,6 +772,40 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_marker(end_marker);
   delete aor_data;
 }
+
+
+// Called when a third-party register request failed when the default handling
+// on the iFC was set to SESSION_TERMINATE.
+void third_party_register_failed(const std::string& public_id,
+                                 SAS::TrailId trail)
+{
+  // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
+  // where SESSION_TERMINATED is set means that we should deregister "the
+  // currently registered public user identity" - i.e. all bindings
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifc_map;
+  HTTPCode http_code = hss->update_registration_state(public_id,
+                                                      "",
+                                                      HSSConnection::DEREG_ADMIN,
+                                                      ifc_map,
+                                                      uris,
+                                                      trail);
+
+  // If we try to deregister a subscriber who has already
+  // registered (e.g. because our third-party-registration
+  // announcing a deregistration fails) Homestead will return an
+  // error and we'll avoid sending these in a loop.
+  if (http_code == HTTP_OK)
+  {
+    LOG_DEBUG("Initiating network-initiated deregistration");
+    RegistrationUtils::network_initiated_deregistration(store,
+                                                        ifc_map[public_id],
+                                                        public_id,
+                                                        "*",
+                                                        trail);
+  }
+}
+
 
 pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
 {
@@ -771,74 +822,10 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   return PJ_FALSE;
 }
 
-void registrar_on_tsx_state(pjsip_transaction *tsx, pjsip_event *event)
-{
-  LOG_DEBUG("In registrar_on_tsx_state");
-  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)  tsx->mod_data[tsx->tsx_user->id];
-
-  if ((tsxdata != NULL) && ((tsx->state == PJSIP_TSX_STATE_COMPLETED) || (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
-  {
-    LOG_DEBUG("Completion of a third-party REGISTER transaction");
-    if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
-    {
-      // LCOV_EXCL_START - no SIP resolver in UT
-      if (tsxdata->resolved)
-      {
-        // Blacklist the destination address/port/transport selected for this
-        // transaction so we don't repeatedly attempt to use it.
-        LOG_DEBUG("Blacklisting failed/uncontactable destination");
-        tsxdata->sipresolver->blacklist(tsxdata->ai, 30);
-      }
-      // LCOV_EXCL_STOP
-    }
-
-    if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
-        ((tsx->status_code == 408) || ((tsx->status_code >= 500) && (tsx->status_code < 600))))
-    {
-      LOG_INFO("Third-party REGISTER transaction failed with code %d", tsx->status_code);
-      std::string aor = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tsx->last_tx->msg)->uri));
-      // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure where SESSION_TERMINATED
-      // is set means that we should deregister "the currently registered public user identity" - i.e. all bindings
-      std::vector<std::string> uris;
-      std::map<std::string, Ifcs> ifc_map;
-      HTTPCode http_code = hss->update_registration_state(aor, "", HSSConnection::DEREG_ADMIN, ifc_map, uris, get_trail(tsx));
-
-      // If we try to deregister a subscriber who has already
-      // registered (e.g. because our third-party-registration
-      // announcing a deregistration fails) Homestead will return an
-      // error and we'll avoid sending these in a loop.
-      if (http_code == HTTP_OK)
-      {
-        LOG_DEBUG("Initiating network-initiated deregistration");
-        RegistrationUtils::network_initiated_deregistration(store, ifc_map[aor], sipresolver, aor, "*", get_trail(tsx));
-      }
-    }
-  }
-
-  // Deletion of the ThirdPartyRegData should be done in
-  // TERMINATED state, not just COMPLETED - otherwise we risk leaking
-  // memory if e.g. a send fails.
-
-  // However, we may be in TERMINATED state because we're shutting
-  // down, in which case our module ID is -1 - in this case, just do
-  // nothing, as we're terminating anyway.
-
-  if ((tsxdata != NULL) &&
-      ((tsx->state == PJSIP_TSX_STATE_COMPLETED) ||
-       (tsx->state == PJSIP_TSX_STATE_TERMINATED)))
-  {
-    tsx->mod_data[tsx->tsx_user->id] = NULL;
-    delete tsxdata;
-    tsxdata = NULL;
-  }
-}
-
 pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
-                           SIPResolver* resolver,
                            ACRFactory* rfacr_factory,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
@@ -851,7 +838,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
-  sipresolver = resolver;
   acr_factory = rfacr_factory;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);

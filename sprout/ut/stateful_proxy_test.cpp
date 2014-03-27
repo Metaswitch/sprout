@@ -360,7 +360,6 @@ public:
                                           !_ibcf_trusted_hosts.empty(),
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
-                                          NULL,
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
@@ -509,13 +508,11 @@ public:
 
   static void SetUpTestCase(const string& icscf_uri_str)
   {
-    cwtest_clear_host_mapping();
     StatefulProxyTestBase::SetUpTestCase("", "", false, true, false, icscf_uri_str);
   }
 
   static void SetUpTestCase(bool icscf_enabled, bool scscf_enabled)
   {
-    cwtest_clear_host_mapping();
     StatefulProxyTestBase::SetUpTestCase("", "", false, icscf_enabled, scscf_enabled);
   }
 
@@ -545,9 +542,8 @@ class StatefulEdgeProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    cwtest_clear_host_mapping();
-    cwtest_add_host_mapping("upstreamnode", "10.6.6.8");
     StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", false);
+    add_host_mapping("upstreamnode", "10.6.6.8");
   }
 
   static void TearDownTestCase()
@@ -582,11 +578,10 @@ class StatefulTrunkProxyTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    cwtest_clear_host_mapping();
-    cwtest_add_host_mapping("upstreamnode", "10.6.6.8");
-    cwtest_add_host_mapping("trunknode", "10.7.7.10");
-    cwtest_add_host_mapping("trunknode2", "10.7.7.11");
-    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "trunknode,trunknode2", false);
+    add_host_mapping("upstreamnode", "10.6.6.8");
+    add_host_mapping("trunknode", "10.7.7.10");
+    add_host_mapping("trunknode2", "10.7.7.11");
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "10.7.7.10,10.7.7.11", false);
   }
 
   static void TearDownTestCase()
@@ -610,7 +605,6 @@ class IscTest : public StatefulProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    cwtest_clear_host_mapping();
     StatefulProxyTestBase::SetUpTestCase("", "", true);
   }
 
@@ -638,7 +632,7 @@ public:
   static void SetUpTestCase()
   {
     StatefulProxyTest::SetUpTestCase("sip:icscf");
-    cwtest_add_host_mapping("icscf", "10.8.8.1");
+    add_host_mapping("icscf", "10.8.8.1");
   }
 
   static void TearDownTestCase()
@@ -661,8 +655,8 @@ public:
   static void SetUpTestCase()
   {
     StatefulProxyTest::SetUpTestCase(true, true);
-    cwtest_add_host_mapping("scscf1.homedomain", "10.8.8.1");
-    cwtest_add_host_mapping("scscf2.homedomain", "10.8.8.2");
+    add_host_mapping("scscf1.homedomain", "10.8.8.1");
+    add_host_mapping("scscf2.homedomain", "10.8.8.2");
   }
 
   static void TearDownTestCase()
@@ -831,7 +825,7 @@ void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_serve
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 turns it around (acting as proxy)
   const pj_str_t STR_ROUTE = pj_str("Route");
@@ -864,7 +858,7 @@ void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_serve
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:4\\.2\\.3\\.4:56788;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS2 turns it around (acting as proxy)
   if (app_servers_record_route)
@@ -895,7 +889,7 @@ void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_serve
   tpAS3.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS3 turns it around (acting as proxy)
   if (app_servers_record_route)
@@ -926,7 +920,7 @@ void IscTest::doFourAppServerFlow(std::string record_route_regex, bool app_serve
   tpAS4.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:6\\.2\\.3\\.4:56786;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS4 turns it around (acting as proxy)
   if (app_servers_record_route)
@@ -1469,6 +1463,8 @@ TEST_F(StatefulProxyTest, TestStrictRouteThrough)
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
   Message msg;
+  add_host_mapping("intermediate.com", "10.10.10.1");
+  add_host_mapping("destination.com", "10.10.10.2");
   msg._extra = "Route: <sip:nexthop@intermediate.com;transport=tcp>\r\nRoute: <sip:lasthop@destination.com>";
   msg._to = "lasthop";
   msg._todomain = "destination.com";
@@ -1483,12 +1479,12 @@ TEST_F(StatefulProxyTest, TestMultipleRouteHeaders)
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
-  msg._extra = "Route: <sip:local_ip:5054;transport=tcp;lr>\r\nRoute: <sip:local_ip:5058;lr>";
+  msg._extra = "Route: <sip:127.0.0.1:5054;transport=tcp;lr>\r\nRoute: <sip:127.0.0.1:5058;lr>";
   list<HeaderMatcher> hdrs;
   // Expect only the top Route header to be stripped, as is necessary
   // for Sprout and Bono to be colocated
 
-  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:local_ip:5058;lr>"));
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:127.0.0.1:5058;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
@@ -1541,7 +1537,7 @@ TEST_F(StatefulProxyTest, TestExternal)
   Message msg;
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
-  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
@@ -1552,9 +1548,9 @@ TEST_F(StatefulProxyTest, TestExternalRecordRoute)
   Message msg;
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
-  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"));
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
@@ -1568,7 +1564,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccess)
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
-  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
@@ -1587,7 +1583,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalSuccessFromFromHeader)
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>";
 
-  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
@@ -1604,7 +1600,7 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
 
-  cwtest_add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
@@ -2357,8 +2353,8 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:127.0.0.1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // P-Preferred-Identity header has been converted to P-Asserted-Identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2398,8 +2394,8 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:127.0.0.1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // A P-Asserted-Identity header has been added with the default identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2440,8 +2436,8 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:127.0.0.1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // P-Asserted-Identity headers have been added with both identities.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2526,8 +2522,8 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Edge proxy must double record route for transition to trust zone.
   actual = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("Record-Route: <sip:local_ip:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
-            "Record-Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
+  EXPECT_EQ("Record-Route: <sip:127.0.0.1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n" +
+            "Record-Route: <sip:" + baretoken + "@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>", actual);
 
   // A P-Asserted-Identity header has been added with the default identity.
   actual = get_headers(tdata->msg, "P-Asserted-Identity");
@@ -2630,7 +2626,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeCorruptToken)
 
   // Not base 64 (this actually gets decoded as if it is, so doesn't
   // exercise a different path, but we leave it in anyway).
-  tokens.push_back("sip:Not&valid&base64)@public_hostname:5060;lr");
+  tokens.push_back("sip:Not&valid&base64)@127.0.0.1:5060;lr");
 
   // Too short
   string tooshort(token);
@@ -2921,10 +2917,10 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   msg._requri = "sip:6505551234@127.0.0.1;transport=tcp";
   msg._to = "6505551234";
   msg._from = "6505551000";
-  msg._route = "Route: <sip:" + baretoken + "@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:bono1:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
-  msg._route += "Route: <sip:123456@public_hostname:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>";
+  msg._route = "Route: <sip:" + baretoken + "@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
+  msg._route += "Route: <sip:123456@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>";
   inject_msg(msg.get_request(), &tp);
 
   // Check that the message is forwarded as expected.
@@ -3091,7 +3087,7 @@ TEST_F(StatefulTrunkProxyTest, TestIbcfOrig)
   // Set up default message.
   Message msg;
   msg._method = "INVITE";
-  msg._to = "public_hostname";
+  msg._to = "127.0.0.1";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "homedomain";
   msg._requri = "sip:6505551000@homedomain";
@@ -3129,7 +3125,7 @@ TEST_F(StatefulTrunkProxyTest, TestPcscfOrig)
   // Set up default message.
   Message msg;
   msg._method = "INVITE";
-  msg._to = "public_hostname";
+  msg._to = "127.0.0.1";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "homedomain";
   msg._requri = "sip:6505551000@homedomain";
@@ -3253,7 +3249,7 @@ TEST_F(IscTest, SimpleMainline)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=unreg"));
 
@@ -3362,7 +3358,7 @@ TEST_F(IscTest, SimpleNextOrigFlow)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 turns it around (acting as proxy)
   const pj_str_t STR_ROUTE = pj_str("Route");
@@ -3454,7 +3450,7 @@ TEST_F(IscTest, SimpleReject)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 rejects it.
   string fresp = respond_to_txdata(current_txdata(), 404);
@@ -3541,7 +3537,7 @@ TEST_F(IscTest, SimpleNonLocalReject)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 rejects it.
   string fresp = respond_to_txdata(current_txdata(), 404);
@@ -3629,7 +3625,7 @@ TEST_F(IscTest, SimpleAccept)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 accepts it with 200.
   string fresp = respond_to_txdata(current_txdata(), 200);
@@ -3717,7 +3713,7 @@ TEST_F(IscTest, SimpleRedirect)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 redirects it to another user on the same server.
   string fresp = respond_to_txdata(current_txdata(), 302, "", "Contact: sip:6505559876@homedomain");
@@ -3806,7 +3802,7 @@ TEST_F(IscTest, DefaultHandlingTerminate)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 rejects it with a 408 error.
   string fresp = respond_to_txdata(current_txdata(), 408);
@@ -3894,7 +3890,7 @@ TEST_F(IscTest, DefaultHandlingContinueNonResponsive)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 rejects it with a 408 error.
   string fresp = respond_to_txdata(current_txdata(), 408);
@@ -3980,7 +3976,7 @@ TEST_F(IscTest, DefaultHandlingContinueResponsiveError)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 sends a 100 Trying to indicate it has received the request.
   // This will disable the default handling.
@@ -4032,12 +4028,12 @@ TEST_F(IscTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
   free_txdata();
 }
 
@@ -4058,13 +4054,13 @@ TEST_F(IscTest, RecordRoutingTestStartAndEnd)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
 }
@@ -4090,15 +4086,15 @@ TEST_F(IscTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
-  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
   stack_data.record_route_on_every_hop = false;
 }
 
@@ -4107,7 +4103,7 @@ TEST_F(IscTest, RecordRoutingTestEachHop)
 TEST_F(IscTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
-  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), false);
 }
 
 // Test that even when Sprout is configured to Record-Route itself on each
@@ -4117,7 +4113,7 @@ TEST_F(IscTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
-  doFourAppServerFlow(("Record-Route: <sip:all.the.sprouts:5058;transport=TCP;lr>"), false);
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), false);
   stack_data.record_route_on_every_hop = false;
 }
 
@@ -4197,7 +4193,7 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
     tpAS1.expect_target(current_txdata(), false);
     EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
     EXPECT_THAT(get_headers(out, "Route"),
-                testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+                testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
     // ---------- AS1 turns it around (acting as proxy)
     hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -4224,7 +4220,7 @@ void IscTest::doAsOriginated(Message& msg, bool expect_orig)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS2 turns it around (acting as proxy)
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -4382,7 +4378,7 @@ TEST_F(IscTest, Cdiv)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
@@ -4412,7 +4408,7 @@ TEST_F(IscTest, Cdiv)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505555678@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
 
@@ -4514,7 +4510,7 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
 
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
@@ -4591,7 +4587,7 @@ TEST_F(IscTest, TerminatingWithNoEnumRewrite)
 
   EXPECT_EQ("sip:1115551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:1115551234@homedomain>;sescase=term;regstate=reg"));
 
@@ -4717,7 +4713,7 @@ TEST_F(IscTest, MmtelCdiv)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505555678@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
@@ -4925,7 +4921,7 @@ TEST_F(IscTest, MmtelDoubleCdiv)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505559012@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505555678@homedomain>;sescase=orig-cdiv"));
   EXPECT_THAT(get_headers(out, "History-Info"),
@@ -5017,7 +5013,7 @@ TEST_F(IscTest, ExpiredChain)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 gives final response, ending the transaction.
   string fresp = respond_to_txdata(current_txdata(), 404);
@@ -5160,7 +5156,7 @@ TEST_F(IscTest, MmtelFlow)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
 
   // ---------- AS1 turns it around (acting as proxy)
@@ -5342,7 +5338,7 @@ TEST_F(IscTest, MmtelThenExternal)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=unreg"));
@@ -5381,7 +5377,7 @@ TEST_F(IscTest, MmtelThenExternal)
   tpAS2.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
@@ -5578,7 +5574,7 @@ TEST_F(IscTest, DISABLED_MultipleMmtelFlow)  // @@@KSW not working: https://gith
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:5\\.2\\.3\\.4:56787;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_EQ("Privacy: id, header, user", get_headers(out, "Privacy"));
 
   // ---------- AS1 turns it around (acting as proxy)
@@ -5664,7 +5660,7 @@ TEST_F(IscTest, SimpleOptionsAccept)
   tpAS1.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@local_ip:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
 
   // ---------- AS1 accepts it with 200.
   string fresp = respond_to_txdata(current_txdata(), 200);
@@ -5727,7 +5723,7 @@ TEST_F(InternalIcscfTest, TestHSSHasCurrentSCSCF)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
-                              "{\"result-code\": 2001, \"scscf\": \"sip:all.the.sprouts:5058\"}");
+                              "{\"result-code\": 2001, \"scscf\": \"sip:sprout.homedomain:5058\"}");
 
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;

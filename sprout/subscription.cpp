@@ -251,7 +251,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
       if (update_notify)
       {
-       status = NotifyUtils::create_notify(tdata_notify, subscription, aor, (*aor_data)->_notify_cseq, bindings,
+        status = NotifyUtils::create_notify(tdata_notify, subscription, aor, (*aor_data)->_notify_cseq, bindings,
                            NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
       }
 
@@ -431,9 +431,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   }
 
   // Send the response.
-  pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-  pjsip_tx_data_dec_ref(tdata);
 
   if (acr != NULL)
   {
@@ -446,9 +444,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
-    pjsip_tx_data_add_ref(tdata_notify);
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
-    pjsip_tx_data_dec_ref(tdata_notify);
+    set_trail(tdata_notify, trail);
+    status = PJUtils::send_request(tdata_notify);
   }
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
