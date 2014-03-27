@@ -1511,7 +1511,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain);
+      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
       {

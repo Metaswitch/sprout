@@ -79,7 +79,7 @@ public:
   void test(BgcfService& bgcf_)
   {
     SCOPED_TRACE(_in);
-    vector<string> ret = bgcf_.get_route(_in);
+    vector<string> ret = bgcf_.get_route(_in, 0);
     std::stringstream store_strings;
 
     for(size_t ii = 0; ii < ret.size(); ++ii)
