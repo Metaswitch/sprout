@@ -62,7 +62,6 @@ class UACTransaction;
 #include "aschain.h"
 #include "quiescing_manager.h"
 #include "scscfselector.h"
-#include "sipresolver.h"
 
 /// Short-lived data structure holding details of how we are to serve
 // this request.
@@ -213,7 +212,6 @@ private:
                                SAS::TrailId trail);
   std::string get_scscf_name(Json::Value* location);
 
-  SIPResolver*         _sipresolver;
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
   int                  _num_targets;
@@ -251,6 +249,8 @@ public:
   void send_request();
   void cancel_pending_tsx(int st_code);
   void on_tsx_state(pjsip_event* event);
+  bool retry_request();
+
   inline pjsip_method_e method() { return (_tsx != NULL) ? _tsx->method.id : PJSIP_OTHER_METHOD; }
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
@@ -287,10 +287,9 @@ private:
   pj_str_t             _binding_id;
   pjsip_transport*     _transport;
 
-  /// Indicates that the destination address for this UAC transaction was
-  /// resolved (rather than being forced by transport selection).
-  bool                 _resolved;
-  AddrInfo             _ai;
+  // Stores the list of targets returned by the SIPResolver for this transaction.
+  std::vector<AddrInfo> _servers;
+  int                  _current_server;
 
   bool                 _pending_destroy;
   int                  _context_count;
@@ -312,7 +311,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& trusted_hosts,
                                 AnalyticsLogger* analytics_logger,
-                                SIPResolver* resolver,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,

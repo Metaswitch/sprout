@@ -1040,6 +1040,10 @@ int main(int argc, char *argv[])
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
+  // Create a DNS resolver and a SIP specific resolver.
+  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  sip_resolver = new SIPResolver(dns_resolver);
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
@@ -1052,6 +1056,7 @@ int main(int argc, char *argv[])
                       opt.home_domain,
                       opt.sprout_domain,
                       opt.alias_hosts,
+                      sip_resolver,
                       opt.pjsip_threads,
                       opt.worker_threads,
                       opt.record_routing_model,
@@ -1065,10 +1070,6 @@ int main(int argc, char *argv[])
     LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
-
-  // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
-  sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialise the OPTIONS handling module.
   status = init_options();
@@ -1170,7 +1171,6 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
-                            sip_resolver,
                             ifc_handler,
                             opt.reg_max_expires);
 
@@ -1205,7 +1205,6 @@ int main(int argc, char *argv[])
                                  false,
                                  "",
                                  analytics_logger,
-                                 sip_resolver,
                                  enum_service,
                                  bgcf_service,
                                  hss_connection,
@@ -1237,7 +1236,6 @@ int main(int argc, char *argv[])
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  analytics_logger,
-                                 sip_resolver,
                                  NULL,
                                  NULL,
                                  NULL,
@@ -1271,7 +1269,6 @@ int main(int argc, char *argv[])
     // Launch I-CSCF proxy.
     icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                  stack_data.icscf_port,
-                                 sip_resolver,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
                                  scscf_selector);

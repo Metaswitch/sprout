@@ -41,15 +41,20 @@ clean:
 	rm -f ${OBJS_DNSTEST}
 	rm -f ${OBJS_SIPRESOLVETEST}
 
-$(OBJS): | $(OBJ_DIR)
+$(OBJS_DNSTEST): | $(OBJ_DIR)
+
+$(OBJS_SIPRESOLVETEST): | $(OBJ_DIR)
 
 $(OBJ_DIR):
-	mkdir $(OBJ_DIR)
+	mkdir -p $(OBJ_DIR)
 
-$(BIN_DIR)/dnstest : $(OBJS_DNSTEST)
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+$(BIN_DIR)/dnstest : $(OBJS_DNSTEST) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
-$(BIN_DIR)/sipresolvetest : $(OBJS_SIPRESOLVETEST)
+$(BIN_DIR)/sipresolvetest : $(OBJS_SIPRESOLVETEST) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDFLAGS) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
 $(OBJ_DIR)/%.o : %.cpp

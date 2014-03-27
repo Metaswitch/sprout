@@ -61,7 +61,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
+    add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -398,8 +398,10 @@ void SubscriptionTest::check_standard_OK()
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  out = pop_txdata()->msg;
+
+  out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  free_txdata();
+  inject_msg(respond_to_current_txdata(200));
+  //free_txdata();
 }
 

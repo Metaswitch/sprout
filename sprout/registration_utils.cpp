@@ -56,9 +56,17 @@ extern "C" {
 
 #define MAX_SIP_MSG_SIZE 65535
 
+/// Temporary data structure maintained while transmitting a third-party
+/// REGISTER to an application server.
+struct ThirdPartyRegData
+{
+  std::string public_id;
+  bool default_handling;
+  SAS::TrailId trail;
+};
+
 void send_register_to_as(pjsip_rx_data* received_register,
                          pjsip_tx_data* ok_response,
-                         SIPResolver* sipresolver,
                          AsInvocation& as,
                          int expires,
                          const std::string&,
@@ -66,16 +74,21 @@ void send_register_to_as(pjsip_rx_data* received_register,
 
 void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
                                                             RegStore* store,
-                                                            SIPResolver* sipresolver,
                                                             const std::string& served_user,
                                                             SAS::TrailId trail)
 {
-  RegistrationUtils::register_with_application_servers(ifcs, store, sipresolver, NULL, NULL, 0, false, served_user, trail);
+  RegistrationUtils::register_with_application_servers(ifcs,
+                                                       store,
+                                                       NULL,
+                                                       NULL,
+                                                       0,
+                                                       false,
+                                                       served_user,
+                                                       trail);
 }
 
 void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           RegStore* store,
-                                                          SIPResolver* sipresolver,
                                                           pjsip_rx_data *received_register,
                                                           pjsip_tx_data *ok_response, // Can only be NULL if received_register is
                                                           int expires,
@@ -137,13 +150,27 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
   // Loop through the as_list
   for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
-    send_register_to_as(received_register, ok_response, sipresolver, *as_iter, expires, served_user, trail);
+    send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
   }
+}
+
+static void send_register_cb(void* token, pjsip_event *event)
+{
+  ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)token;
+  pjsip_transaction* tsx = event->body.tsx_state.tsx;
+
+  if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+      ((tsx->status_code == 408) ||
+       (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
+  {
+    LOG_INFO("Third-party REGISTER transaction failed with code %d", tsx->status_code);
+    third_party_register_failed(tsxdata->public_id, tsxdata->trail);
+  }
+  delete tsxdata;
 }
 
 void send_register_to_as(pjsip_rx_data *received_register,
                          pjsip_tx_data *ok_response,
-                         SIPResolver* sipresolver,
                          AsInvocation& as,
                          int expires,
                          const std::string& served_user,
@@ -151,7 +178,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
 {
   pj_status_t status;
   pjsip_tx_data *tdata;
-  pjsip_transaction *tsx;
   pjsip_method method;
   pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
 
@@ -253,19 +279,20 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   }
 
-  // Associate this transaction with mod_registrar, so that registrar_on_tsx_state_change gets called
-  // if it fails
-  status = pjsip_tsx_create_uac(&mod_registrar, tdata, &tsx);
-  ThirdPartyRegData* regtsx = new ThirdPartyRegData(sipresolver, as.default_handling);
-  pj_status_t resolv_status = PJUtils::resolve_next_hop(sipresolver, tdata, regtsx->ai);
-  if (resolv_status == PJ_SUCCESS)
-  {
-    regtsx->resolved = true;
-  }
-  tsx->mod_data[mod_registrar.id] = (void*)regtsx;
+  // Set the SAS trail on the request.
   set_trail(tdata, trail);
-  set_trail(tsx, trail);
-  status = pjsip_tsx_send_msg(tsx, tdata);
+
+  // Allocate a temporary structure to record the default handling for this
+  // REGISTER, and send it statefully.
+  ThirdPartyRegData* tsxdata = new ThirdPartyRegData;
+  tsxdata->default_handling = as.default_handling;
+  tsxdata->trail = trail;
+  tsxdata->public_id = served_user;
+  pj_status_t resolv_status = PJUtils::send_request(tdata, 0, tsxdata, &send_register_cb);
+  if (resolv_status != PJ_SUCCESS)
+  {
+    delete tsxdata;                         // LCOV_EXCL_LINE
+  }
 }
 
 void notify_application_servers() {
@@ -306,7 +333,6 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
 
 void RegistrationUtils::network_initiated_deregistration(RegStore *store,
                                                          Ifcs& ifcs,
-                                                         SIPResolver* sipresolver,
                                                          const std::string& served_user,
                                                          const std::string& binding_id,
                                                          SAS::TrailId trail)
@@ -315,6 +341,6 @@ void RegistrationUtils::network_initiated_deregistration(RegStore *store,
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifcs, store, sipresolver, served_user, trail);
+  RegistrationUtils::deregister_with_application_servers(ifcs, store, served_user, trail);
   notify_application_servers();
 };

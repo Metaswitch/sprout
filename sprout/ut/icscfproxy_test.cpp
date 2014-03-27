@@ -76,7 +76,6 @@ public:
 
     _icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                   stack_data.icscf_port,
-                                  NULL,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
                                   _scscf_selector);
@@ -293,15 +292,14 @@ class ICSCFProxyTest : public ICSCFProxyTestBase
 public:
   static void SetUpTestCase()
   {
-    // Set up DNS mappings for some S-CSCFs.
-    cwtest_clear_host_mapping();
-    cwtest_add_host_mapping("scscf1.homedomain", "10.10.10.1");
-    cwtest_add_host_mapping("scscf2.homedomain", "10.10.10.2");
-    cwtest_add_host_mapping("scscf3.homedomain", "10.10.10.3");
-    cwtest_add_host_mapping("scscf4.homedomain", "10.10.10.4");
-    cwtest_add_host_mapping("scscf5.homedomain", "10.10.10.5");
-
     ICSCFProxyTestBase::SetUpTestCase();
+
+    // Set up DNS mappings for some S-CSCFs.
+    add_host_mapping("scscf1.homedomain", "10.10.10.1");
+    add_host_mapping("scscf2.homedomain", "10.10.10.2");
+    add_host_mapping("scscf3.homedomain", "10.10.10.3");
+    add_host_mapping("scscf4.homedomain", "10.10.10.4");
+    add_host_mapping("scscf5.homedomain", "10.10.10.5");
   }
 
   static void TearDownTestCase()
