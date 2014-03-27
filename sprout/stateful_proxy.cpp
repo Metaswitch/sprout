@@ -3519,7 +3519,7 @@ void UACTransaction::set_target(const struct Target& target)
   {
     // Resolve the next hop destination for this request to a set of servers.
     LOG_DEBUG("Resolve next hop destination");
-    PJUtils::resolve_next_hop(_tdata, 0, _servers);
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
   }
 
   exit_context();
