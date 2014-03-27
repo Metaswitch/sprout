@@ -13,6 +13,7 @@ TARGET := sprout
 TARGET_TEST := sprout_test
 
 TARGET_SOURCES := logger.cpp \
+                  saslogger.cpp \
                   utils.cpp \
                   analyticslogger.cpp \
                   stack.cpp \
@@ -66,7 +67,7 @@ TARGET_SOURCES := logger.cpp \
                   chronosconnection.cpp \
                   accesslogger.cpp \
                   httpstack.cpp \
-                  handlers.cpp 
+                  handlers.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -187,7 +188,7 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads 
+           -levent_pthreads
 
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas
