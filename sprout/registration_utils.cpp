@@ -72,15 +72,10 @@ void send_register_to_as(pjsip_rx_data* received_register,
                          const std::string&,
                          SAS::TrailId);
 
-void deregister_with_application_servers(Ifcs&,
-                                         RegStore* store,
-                                         const std::string&,
-                                         SAS::TrailId trail);
-
-void deregister_with_application_servers(Ifcs& ifcs,
-                                         RegStore* store,
-                                         const std::string& served_user,
-                                         SAS::TrailId trail)
+void RegistrationUtils::deregister_with_application_servers(Ifcs& ifcs,
+                                                            RegStore* store,
+                                                            const std::string& served_user,
+                                                            SAS::TrailId trail)
 {
   RegistrationUtils::register_with_application_servers(ifcs,
                                                        store,
@@ -346,6 +341,6 @@ void RegistrationUtils::network_initiated_deregistration(RegStore *store,
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.
-  deregister_with_application_servers(ifcs, store, served_user, trail);
+  RegistrationUtils::deregister_with_application_servers(ifcs, store, served_user, trail);
   notify_application_servers();
 };
