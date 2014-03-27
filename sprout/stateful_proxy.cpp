@@ -213,14 +213,15 @@ static pjsip_module mod_tu =
 // High-level functions.
 static void process_tsx_request(pjsip_rx_data* rdata);
 static void process_cancel_request(pjsip_rx_data* rdata);
-static pj_status_t proxy_verify_request(pjsip_rx_data *rdata);
+static int proxy_verify_request(pjsip_rx_data *rdata);
+static void reject_request(pjsip_rx_data* rdata, int status_code);
 #ifndef UNIT_TEST
 static
 #endif
-pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
-                                         pjsip_tx_data *tdata,
-                                         TrustBoundary **trust,
-                                         Target **target);
+int proxy_process_access_routing(pjsip_rx_data *rdata,
+                                 pjsip_tx_data *tdata,
+                                 TrustBoundary **trust,
+                                 Target **target);
 static bool ibcf_trusted_peer(const pj_sockaddr& addr);
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata);
 static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
@@ -384,11 +385,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
   ACR* acr = NULL;
 
   // Verify incoming request.
-  status = proxy_verify_request(rdata);
-  if (status != PJ_SUCCESS)
+  int status_code = proxy_verify_request(rdata);
+  if (status_code != PJSIP_SC_OK)
   {
-    LOG_ERROR("RX invalid request, %s",
-              PJUtils::pj_status_to_string(status).c_str());
+    reject_request(rdata, status_code);
     return;
   }
 
@@ -397,23 +397,23 @@ void process_tsx_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to clone request to forward");
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR,
-                               NULL, NULL, NULL);
+    reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
 
   if (edge_proxy)
   {
     // Process access proxy routing.  This also does IBCF function if enabled.
-    status = proxy_process_access_routing(rdata, tdata, &trust, &target);
-    if (status != PJ_SUCCESS)
+    status_code = proxy_process_access_routing(rdata, tdata, &trust, &target);
+    if (status_code != PJSIP_SC_OK)
     {
-      delete target;
-      target = NULL;
+      // Request failed routing checks, so reject it.
+      reject_request(rdata, status_code);
 
       // Delete the request since we're not forwarding it
       pjsip_tx_data_dec_ref(tdata);
+      delete target;
+      target = NULL;
       return;
     }
   }
@@ -458,9 +458,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
           LOG_ERROR("Original dialog lookup for %.*s not found",
                     uri->user.slen, uri->user.ptr);
           pjsip_tx_data_dec_ref(tdata);
-          PJUtils::respond_stateless(stack_data.endpt, rdata,
-                                     PJSIP_SC_BAD_REQUEST, NULL,
-                                     NULL, NULL);
+          reject_request(rdata, PJSIP_SC_BAD_REQUEST);
           return;
         }
       }
@@ -558,9 +556,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     // Delete the request since we're not forwarding it
     pjsip_tx_data_dec_ref(tdata);
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_INTERNAL_SERVER_ERROR, NULL,
-                               NULL, NULL);
+    reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     delete target;
     target = NULL;
     return;
@@ -600,8 +596,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   if (!invite_uas)
   {
     // Invite transaction not found, respond to CANCEL with 481
-    PJUtils::respond_stateless(stack_data.endpt, rdata, 481, NULL,
-                               NULL, NULL);
+    reject_request(rdata, PJSIP_SC_CALL_TSX_DOES_NOT_EXIST);
     return;
   }
 
@@ -609,7 +604,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   {
     // The CANCEL request has not come from a trusted source, so reject it
     // (can't challenge a CANCEL).
-    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
+    reject_request(rdata, PJSIP_SC_FORBIDDEN);
     return;
   }
 
@@ -618,7 +613,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   pj_status_t status = pjsip_tsx_create_uas(NULL, rdata, &tsx);
   if (status != PJ_SUCCESS)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_INTERNAL_SERVER_ERROR, NULL, NULL, NULL);
+    reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
 
@@ -638,14 +633,30 @@ void process_cancel_request(pjsip_rx_data* rdata)
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
   uas_data->cancel_pending_uac_tsx(0, false);
 
+  ACR* acr = (cscf_acr_factory != NULL) ?
+             cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
+
+  if (acr != NULL)
+  {
+    // ACR generation is enabled, so send an ACR for the CANCEL
+    // request.
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+
+    delete acr;
+  }
+
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
 }
 
 
 // Proxy utility to verify incoming requests.
-// Return non-zero if verification failed.
-static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
+// Return the SIP status code if verification failed.
+static int proxy_verify_request(pjsip_rx_data *rdata)
 {
   const pj_str_t STR_PROXY_REQUIRE = pj_str("Proxy-Require");
 
@@ -668,20 +679,14 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   // We only want to support "sip:" URI scheme for this simple proxy.
   if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_UNSUPPORTED_URI_SCHEME, NULL,
-                               NULL, NULL);
-    return PJSIP_ERRNO_FROM_SIP_STATUS(PJSIP_SC_UNSUPPORTED_URI_SCHEME);
+    return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
 
   // 3. Max-Forwards.
   // Send error if Max-Forwards is 1 or lower.
   if (rdata->msg_info.max_fwd && rdata->msg_info.max_fwd->ivalue <= 1)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_TOO_MANY_HOPS, NULL,
-                               NULL, NULL);
-    return PJSIP_ERRNO_FROM_SIP_STATUS(PJSIP_SC_TOO_MANY_HOPS);
+    return PJSIP_SC_TOO_MANY_HOPS;
   }
 
   // 4. (Optional) Loop Detection.
@@ -691,16 +696,73 @@ static pj_status_t proxy_verify_request(pjsip_rx_data *rdata)
   if (pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PROXY_REQUIRE,
                                  NULL) != NULL)
   {
-    PJUtils::respond_stateless(stack_data.endpt, rdata,
-                               PJSIP_SC_BAD_EXTENSION, NULL,
-                               NULL, NULL);
-    return PJSIP_ERRNO_FROM_SIP_STATUS(PJSIP_SC_BAD_EXTENSION);
+    return PJSIP_SC_BAD_EXTENSION;
   }
 
   // 6. Proxy-Authorization.
   // Nah, we don't require any authorization with this sample.
 
-  return PJ_SUCCESS;
+  return PJSIP_SC_OK;
+}
+
+/// Rejects a request statelessly.
+static void reject_request(pjsip_rx_data* rdata, int status_code)
+{
+  pj_status_t status;
+
+  ACR* acr = (cscf_acr_factory != NULL) ?
+             cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
+  if (acr != NULL)
+  {
+    // ACR generation is enabled, so pass the received request to the ACR for
+    // reporting.
+    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  }
+
+  if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
+  {
+    // Not an ACK, so we should send a response.
+    LOG_ERROR("Reject %.*s request with %d status code",
+              rdata->msg_info.msg->line.req.method.name.slen,
+              rdata->msg_info.msg->line.req.method.name.ptr, status_code);
+    pjsip_tx_data* tdata;
+
+    // Use default status text except for cases where PJSIP doesn't
+    const pj_str_t* status_text = NULL;
+    if (status_code == SIP_STATUS_FLOW_FAILED)
+    {
+      status_text = &SIP_REASON_FLOW_FAILED;
+    }
+
+    status = PJUtils::create_response(stack_data.endpt, rdata, status_code, status_text, &tdata);
+    if (status == PJ_SUCCESS)
+    {
+      if (acr != NULL)
+      {
+        // Pass the response to the ACR.
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        acr->tx_response(tdata->msg, ts);
+      }
+
+      status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        pjsip_tx_data_dec_ref(tdata);
+        // LCOV_EXCL_STOP
+      }
+    }
+  }
+
+  if (acr != NULL)
+  {
+    // Send the ACR and delete it.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+    delete acr;
+  }
 }
 
 static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
@@ -909,10 +971,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
 #ifndef UNIT_TEST
 static
 #endif
-pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
-                                         pjsip_tx_data *tdata,
-                                         TrustBoundary **trust,
-                                         Target **target)
+int proxy_process_access_routing(pjsip_rx_data *rdata,
+                                 pjsip_tx_data *tdata,
+                                 TrustBoundary **trust,
+                                 Target **target)
 {
   pj_status_t status;
   Flow* src_flow = NULL;
@@ -927,21 +989,13 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     if (source_type == SIP_PEER_TRUSTED_PORT)
     {
       LOG_WARNING("Rejecting REGISTER request received from within the trust domain");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_METHOD_NOT_ALLOWED,
-                                 NULL, NULL, NULL);
-      return PJ_ENOTFOUND;
+      return PJSIP_SC_METHOD_NOT_ALLOWED;
     }
 
     if (source_type == SIP_PEER_CONFIGURED_TRUNK)
     {
       LOG_WARNING("Rejecting REGISTER request received over SIP trunk");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_METHOD_NOT_ALLOWED,
-                                 NULL, NULL, NULL);
-      return PJ_ENOTFOUND;
+      return PJSIP_SC_METHOD_NOT_ALLOWED;
     }
 
     // The REGISTER came from outside the trust domain and not over a SIP
@@ -955,7 +1009,7 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     if (src_flow == NULL)
     {
       LOG_ERROR("Failed to create flow data record");
-      return PJ_ENOMEM; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
+      return PJSIP_SC_INTERNAL_SERVER_ERROR; // LCOV_EXCL_LINE find_create_flow failure cases are all excluded already
     }
 
     LOG_DEBUG("Found or created flow data record, token = %s", src_flow->token().c_str());
@@ -965,15 +1019,8 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     if (src_flow->should_quiesce())
     {
       LOG_DEBUG("REGISTER request received on a quiescing flow - responding with 305");
-      PJUtils::respond_stateless(stack_data.endpt,
-                                 rdata,
-                                 PJSIP_SC_USE_PROXY,
-                                 NULL, NULL, NULL);
       src_flow->dec_ref();
-
-      // Of the PJSIP error codes, EIGNORED seems most appropriate -
-      // but anything that's not PJ_SUCCESS will do.
-      return PJ_EIGNORED;
+      return PJSIP_SC_USE_PROXY;
     }
 
     // Touch the flow to make sure it doesn't time out while we are waiting
@@ -1061,11 +1108,7 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
           // We are slightly overloading TrustBoundary here - how to
           // improve this is FFS.
           LOG_WARNING("Request for originating handling but not from known client");
-          PJUtils::respond_stateless(stack_data.endpt,
-                                     rdata,
-                                     PJSIP_SC_FORBIDDEN,
-                                     NULL, NULL, NULL);
-          return PJ_ENOTFOUND;
+          return PJSIP_SC_FORBIDDEN;
         }
       }
       else
@@ -1086,9 +1129,8 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
           {
             // Cannot have more than two preferred identities.
             LOG_DEBUG("Request has more than two P-Preferred-Identitys, rejecting");
-            PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
             src_flow->dec_ref();
-            return PJ_ENOTFOUND;
+            return PJSIP_SC_FORBIDDEN;
           }
           else if (identities.size() == 0)
           {
@@ -1113,9 +1155,8 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
             {
               // Preferred identity must be sip, sips or tel URI.
               LOG_DEBUG("Invalid URI scheme in P-Preferred-Identity, rejecting");
-              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
               src_flow->dec_ref();
-              return PJ_ENOTFOUND;
+              return PJSIP_SC_FORBIDDEN;
             }
 
             // Check the preferred identity is authorized and get the corresponding
@@ -1141,9 +1182,8 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
               // One identity must be sip or sips URI and the other must be
               // tel URI
               LOG_DEBUG("Invalid combination of URI schemes in P-Preferred-Identitys, rejecting");
-              PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
               src_flow->dec_ref();
-              return PJ_ENOTFOUND;
+              return PJSIP_SC_FORBIDDEN;
             }
 
             // Check both preferred identities are authorized and get the
@@ -1188,14 +1228,7 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
           // that we don't have).  The authentication module
           // should handle that.
           LOG_ERROR("Route header flow identifier failed to correlate");
-          if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
-          {
-            PJUtils::respond_stateless(stack_data.endpt, rdata,
-                                       SIP_STATUS_FLOW_FAILED,
-                                       &SIP_REASON_FLOW_FAILED,
-                                       NULL, NULL);
-          }
-          return PJ_ENOTFOUND;
+          return SIP_STATUS_FLOW_FAILED;
         }
 
         // This must be a request for a client, so make sure it is routed
@@ -1224,20 +1257,12 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     if (!trusted)
     {
       // Request is not from a trusted source, so reject or discard it.
-      if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
-      {
-        LOG_WARNING("Rejecting request from untrusted source");
-        PJUtils::respond_stateless(stack_data.endpt, rdata, PJSIP_SC_FORBIDDEN, NULL, NULL, NULL);
-      }
-      else
-      {
-        LOG_WARNING("Discard ACK from untrusted source not directed to Sprout");
-      }
+      LOG_WARNING("Rejecting request from untrusted source");
       if (src_flow != NULL)
       {
         src_flow->dec_ref();
       }
-      return PJ_ENOTFOUND;
+      return PJSIP_SC_FORBIDDEN;
     }
 
     // Do standard route header processing for the request.  This may
@@ -1332,7 +1357,7 @@ pj_status_t proxy_process_access_routing(pjsip_rx_data *rdata,
     }
   }
 
-  return PJ_SUCCESS;
+  return PJSIP_SC_OK;
 }
 
 
@@ -2655,7 +2680,6 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       pj_time_val ts;
       pj_gettimeofday(&ts);
       _downstream_acr->rx_response(rdata->msg_info.msg, ts);
-
     }
 
     pjsip_tx_data *tdata;
@@ -2690,8 +2714,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       proxy_process_register_response(rdata);
     }
 
-    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0,
-                                            &tdata);
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error creating response, %s",
@@ -2715,12 +2738,12 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
     if (_downstream_acr != _upstream_acr)
     {
       // The downstream and upstream legs are in different Rf contexts, so
-      // pass the received response to the downstream ACR as a transmitted
-      // response, and the modified response (after trust boundary
-      // changes) to the upstream ACR as a received response.
+      // pass the received response (after trust boundary changes) to the
+      // downstream ACR as a transmitted response and to the upstream ACR as
+      // a received response.
       pj_time_val ts;
       pj_gettimeofday(&ts);
-      _downstream_acr->tx_response(rdata->msg_info.msg, ts);
+      _downstream_acr->tx_response(tdata->msg, ts);
       _upstream_acr->rx_response(tdata->msg, ts);
     }
 

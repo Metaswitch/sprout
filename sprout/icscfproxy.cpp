@@ -115,31 +115,33 @@ void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
     acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   }
 
-  pjsip_tx_data* tdata;
-
-  status = PJUtils::create_response(stack_data.endpt, rdata, status_code, NULL, &tdata);
-  if (status != PJ_SUCCESS)
+  if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
-    // LCOV_EXCL_START
-    return;
-    // LCOV_EXCL_STOP
-  }
+    LOG_ERROR("Rejecting %.*s request with %d status code",
+              rdata->msg_info.msg->line.req.method.name.slen,
+              rdata->msg_info.msg->line.req.method.name.ptr,
+              status_code);
+    pjsip_tx_data* tdata;
 
-  if (acr != NULL)
-  {
-    // Pass the response to the ACR.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->tx_response(tdata->msg, ts);
-  }
+    status = PJUtils::create_response(stack_data.endpt, rdata, status_code, NULL, &tdata);
+    if (status == PJ_SUCCESS)
+    {
+      if (acr != NULL)
+      {
+        // Pass the response to the ACR.
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        acr->tx_response(tdata->msg, ts);
+      }
 
-  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START
-    pjsip_tx_data_dec_ref(tdata);
-    return;
-    // LCOV_EXCL_STOP
+      status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+      if (status != PJ_SUCCESS)
+      {
+        // LCOV_EXCL_START
+        pjsip_tx_data_dec_ref(tdata);
+        // LCOV_EXCL_STOP
+      }
+    }
   }
 
   if (acr != NULL)
