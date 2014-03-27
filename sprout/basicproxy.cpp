@@ -1264,7 +1264,6 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _uas_tsx(uas_tsx),
   _index(index),
   _tdata(NULL),
-  _transport(NULL),
   _servers(),
   _current_server(0),
   _pending_destroy(false),
@@ -1405,7 +1404,7 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
     _tdata->dest_info.cur_addr = 0;
 
     // Remove the reference to the transport added when it was chosen.
-    pjsip_transport_dec_ref(_transport);
+    pjsip_transport_dec_ref(target->transport);
   }
   else
   {
@@ -1445,8 +1444,7 @@ void BasicProxy::UACTsx::send_request()
   }
   else
   {
-    // The resolver is enabled, but we failed to get any valid destination
-    // servers, so fail the transaction.
+    // We failed to get any valid destination servers, so fail the transaction.
     status = PJ_ENOTFOUND;
   }
 
@@ -1546,6 +1544,9 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // terminated or been cancelled).
   LOG_DEBUG("%s - uac_tsx = %p, uas_tsx = %p", name(), this, _uas_tsx);
 
+  // Check that the event is on the current UAC transaction (we may have
+  // created a new one for a retry) and is still connected to the UAS
+  // transaction.
   if ((event->body.tsx_state.tsx == _tsx) && (_uas_tsx != NULL))
   {
     bool retrying = false;
@@ -1622,9 +1623,19 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
 bool BasicProxy::UACTsx::retry_request()
 {
   bool retrying = false;
-  if (++_current_server < (int)_servers.size())
+
+  // See if we have any more servers in the list returned by the resolver that
+  // we can try.
+  _current_server++;
+  if (_current_server < (int)_servers.size())
   {
-    // More servers to try, so allocate a new branch ID and transaction.
+    // More servers to try.  As per RFC3263, retries to an alternate server
+    // have to be a completely new transaction, presumably to avoid any
+    // possibility of mis-correlating a late response from the original server.
+    // We therefore have to allocate a new branch ID and transaction for the
+    // retry and connect it to this object.  We'll leave the old transaction
+    // connected to this object while PJSIP closes it down, but ignore any
+    // future events from it.
     LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
     PJUtils::generate_new_branch_id(_tdata);

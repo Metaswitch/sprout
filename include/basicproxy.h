@@ -283,9 +283,6 @@ protected:
     /// after it has been passed to PJSIP for sending.
     pjsip_tx_data* _tdata;
 
-    /// A pointer to the transport selected for this transaction.
-    pjsip_transport* _transport;
-
     /// The resolved server addresses for this transaction.
     std::vector<AddrInfo> _servers;
     int _current_server;

@@ -3657,6 +3657,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
   // Handle incoming responses (provided the UAS transaction hasn't
   // terminated or been cancelled.
   LOG_DEBUG("%s - uac_data = %p, uas_data = %p", name(), this, _uas_data);
+
+  // Check that the event is on the current UAC transaction (we may have
+  // created a new one for a retry) and is still connected to the UAS
+  // transaction.
   if ((event->body.tsx_state.tsx == _tsx) && (_uas_data != NULL))
   {
     bool retrying = false;
@@ -3743,9 +3747,16 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
 bool UACTransaction::retry_request()
 {
   bool retrying = false;
-  if (++_current_server < (int)_servers.size())
+  _current_server++;
+  if (_current_server < (int)_servers.size())
   {
-    // More servers to try, so allocate a new branch ID and transaction.
+    // More servers to try.  As per RFC3263, retries to an alternate server
+    // have to be a completely new transaction, presumably to avoid any
+    // possibility of mis-correlating a late response from the original server.
+    // We therefore have to allocate a new branch ID and transaction for the
+    // retry and connect it to this object.  We'll leave the old transaction
+    // connected to this object while PJSIP closes it down, but ignore any
+    // future events from it.
     LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
     PJUtils::generate_new_branch_id(_tdata);
