@@ -690,7 +690,7 @@ std::string ACR::get_message(pj_time_val timestamp)
   {
     // Cause code is always zero for STOP requests.
     LOG_DEBUG("Adding Cause-Code(0) AVP");
-    ii["Cause_code"] = Json::Value(0);
+    ii["Cause-Code"] = Json::Value(0);
   }
   else if (_record_type == EVENT_RECORD)
   {
