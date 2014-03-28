@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -139,6 +136,7 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               "woot.example.com",           // home domain
                               "all-the-sprouts",            // sprout cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
+                              NULL,                         // SIPResolver
                               7,                            // #PJsip threads
                               9,                            // #worker threads
                               1,                            // RR strategy

@@ -41,7 +41,7 @@ void query(DnsCachedResolver& resolver, const std::string& name, const std::stri
   printf("%ld results\n", result.records().size());
 
   printf("DNS Query for %s %s\n", name.c_str(), type.c_str());
-  for (std::list<DnsRRecord*>::const_iterator i = result.records().begin();
+  for (std::vector<DnsRRecord*>::const_iterator i = result.records().begin();
        i != result.records().end();
        ++i)
   {

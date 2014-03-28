@@ -440,7 +440,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
     std::string state;
     LOG_INFO("ID %s", aor_id.c_str());
     _cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0);
-    RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store, _cfg->_sipresolver, aor_id, 0);
+    RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id], current_store, aor_id, 0);
   }
 
   // If we allocated the AoR, tidy up.

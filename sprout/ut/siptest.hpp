@@ -46,8 +46,10 @@ extern "C" {
 }
 
 #include "utils.h"
+#include "dnscachedresolver.h"
 #include "localstore.h"
 #include "regstore.h"
+#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 
 using std::string;
@@ -77,7 +79,6 @@ public:
   static void TearDownTestCase();
 
 protected:
-
 
   /// Class containing transport factories for the various ports.
   class TransportFactory
@@ -130,6 +131,10 @@ protected:
     pjsip_transport* _transport;
     pj_sockaddr _rem_addr;
   };
+
+  /// Add DNS A records to map hostname to a set of IP addresses.  The
+  /// list of addresses should be comma separated.
+  static void add_host_mapping(const string& hostname, const string& addresses);
 
   /// Inject an inbound SIP message by passing it into the stack.
   void inject_msg(const string& msg, TransportFlow* tp = _tp_default);
@@ -235,6 +240,11 @@ private:
   pjsip_module* _module;
 
   std::list<pjsip_tx_data*> _out;
+
+  // The DNS resolver.
+  static DnsCachedResolver _dnsresolver;
+
+  static FakeLogger* _log;
 };
 
 /// Helper to print pj_status_t to ostream.
