@@ -36,6 +36,8 @@
 
 #include "log.h"
 #include "sipresolver.h"
+#include "sas.h"
+#include "sasevent.h"
 
 SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
   BaseResolver(dns_client)
@@ -69,7 +71,8 @@ void SIPResolver::resolve(const std::string& name,
                           int port,
                           int transport,
                           int retries,
-                          std::vector<AddrInfo>& targets)
+                          std::vector<AddrInfo>& targets,
+                          SAS::TrailId trail)
 {
   targets.clear();
 
@@ -80,6 +83,15 @@ void SIPResolver::resolve(const std::string& name,
   LOG_DEBUG("SIPResolver::resolve for name %s, port %d, transport %d, family %d",
             name.c_str(), port, transport, af);
 
+  if (trail != 0)
+  {
+    SAS::Event event(trail, SASEvent::SIPRESOLVE_START, 0);
+    event.add_var_param(name);
+    event.add_var_param(std::to_string(port));
+    event.add_var_param(std::to_string(transport));
+    SAS::report_event(event);
+  }
+
   if (parse_ip_target(name, ai.address))
   {
     // The name is already an IP address, so no DNS resolution is possible.
@@ -88,6 +100,15 @@ void SIPResolver::resolve(const std::string& name,
     ai.transport = (transport != -1) ? transport : IPPROTO_UDP;
     ai.port = (port != 0) ? port : 5060;
     targets.push_back(ai);
+
+    if (trail != 0)
+    {
+      SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
+      event.add_var_param(name);
+      event.add_var_param(std::to_string(ai.transport));
+      event.add_var_param(std::to_string(ai.port));
+      SAS::report_event(event);
+    }
   }
   else
   {
@@ -100,11 +121,28 @@ void SIPResolver::resolve(const std::string& name,
       // if required and move straight to A record look-up.
       LOG_DEBUG("Port is specified");
       transport = (transport != -1) ? transport : IPPROTO_UDP;
+
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_PORT_A_LOOKUP, 0);
+        event.add_var_param(name);
+        event.add_var_param(std::to_string(transport));
+        event.add_var_param(std::to_string(port));
+        SAS::report_event(event);
+      }
     }
     else if (transport == -1)
     {
       // Transport protocol isn't specified, so do a NAPTR lookup for the target.
       LOG_DEBUG("Do NAPTR look-up for %s", name.c_str());
+
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_LOOKUP, 0);
+        event.add_var_param(name);
+        SAS::report_event(event);
+      }
+
       NAPTRReplacement* naptr = _naptr_cache->get(name);
 
       if (naptr != NULL)
@@ -116,11 +154,28 @@ void SIPResolver::resolve(const std::string& name,
         {
           // Do an SRV lookup with the replacement domain from the NAPTR lookup.
           srv_name = naptr->replacement;
+
+          if (trail != 0)
+          {
+            SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_SUCCESS_SRV, 0);
+            event.add_var_param(name);
+            event.add_var_param(srv_name);
+            event.add_var_param(std::to_string(naptr->transport));
+            SAS::report_event(event);
+          }
         }
         else
         {
           // Move straight to A/AAAA lookup of the domain returned by NAPTR.
           a_name = naptr->replacement;
+
+          if (trail != 0)
+          {
+            SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_SUCCESS_A, 0);
+            event.add_var_param(name);
+            event.add_var_param(a_name);
+            SAS::report_event(event);
+          }
         }
       }
       else
@@ -128,6 +183,14 @@ void SIPResolver::resolve(const std::string& name,
         // NAPTR resolution failed, so do SRV lookups for both UDP and TCP to
         // see which transports are supported.
         LOG_DEBUG("NAPTR lookup failed, so do SRV lookups for UDP and TCP");
+
+        if (trail != 0)
+        {
+          SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_FAILURE, 0);
+          event.add_var_param(name);
+          SAS::report_event(event);
+        }
+
         std::vector<std::string> domains;
         domains.push_back("_sip._udp." + name);
         domains.push_back("_sip._tcp." + name);
@@ -168,7 +231,16 @@ void SIPResolver::resolve(const std::string& name,
     else if (transport == IPPROTO_UDP)
     {
       // Use specified transport and try an SRV lookup.
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_TRANSPORT_SRV_LOOKUP, 0);
+        event.add_var_param(name);
+        event.add_var_param(std::to_string(transport));
+        SAS::report_event(event);
+      }
+
       DnsResult result = _dns_client->dns_query("_sip._udp." + name, ns_t_srv);
+
       if (!result.records().empty())
       {
         srv_name = result.domain();
@@ -177,7 +249,16 @@ void SIPResolver::resolve(const std::string& name,
     else if (transport == IPPROTO_TCP)
     {
       // Use specified transport and try an SRV lookup.
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_TRANSPORT_SRV_LOOKUP, 0);
+        event.add_var_param(name);
+        event.add_var_param(std::to_string(transport));
+        SAS::report_event(event);
+      }
+
       DnsResult result = _dns_client->dns_query("_sip._tcp." + name, ns_t_srv);
+
       if (!result.records().empty())
       {
         srv_name = result.domain();
@@ -187,13 +268,32 @@ void SIPResolver::resolve(const std::string& name,
     if (srv_name != "")
     {
       LOG_DEBUG("Do SRV lookup for %s", srv_name.c_str());
-      srv_resolve(srv_name, af, transport, retries, targets);
+
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_SRV_LOOKUP, 0);
+        event.add_var_param(srv_name);
+        event.add_var_param(std::to_string(transport));
+        SAS::report_event(event);
+      }
+
+      srv_resolve(srv_name, af, transport, retries, targets, trail);
     }
     else
     {
       LOG_DEBUG("Perform A/AAAA record lookup only, name = %s", a_name.c_str());
       port = (port != 0) ? port : 5060;
-      a_resolve(a_name, af, port, transport, retries, targets);
+
+      if (trail != 0)
+      {
+        SAS::Event event(trail, SASEvent::SIPRESOLVE_A_LOOKUP, 0);
+        event.add_var_param(a_name);
+        event.add_var_param(std::to_string(transport));
+        event.add_var_param(std::to_string(port));
+        SAS::report_event(event);
+      }
+
+      a_resolve(a_name, af, port, transport, retries, targets, trail);
     }
   }
 }

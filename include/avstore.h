@@ -65,7 +65,8 @@ public:
   /// false otherwise.
   bool set_av(const std::string& impi,
               const std::string& nonce,
-              const Json::Value* av);
+              const Json::Value* av,
+              SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
@@ -75,10 +76,12 @@ public:
   /// @param impi      A reference to the private user identity.
   /// @param nonce     A reference to the nonce.
   Json::Value* get_av(const std::string& impi,
-                      const std::string& nonce);
+                      const std::string& nonce,
+                      SAS::TrailId trail);
 
   bool delete_av(const std::string& impi,
-                 const std::string& nonce);
+                 const std::string& nonce,
+                 SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.

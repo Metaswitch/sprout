@@ -162,7 +162,10 @@ void resolve(const std::string& name,
              int retries,
              std::vector<AddrInfo>& servers);
 
-void resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<AddrInfo>& servers);
+void resolve_next_hop(pjsip_tx_data* tdata,
+                      int retries,
+                      std::vector<AddrInfo>& servers,
+                      SAS::TrailId trail);
 
 void blacklist_server(AddrInfo& server);
 

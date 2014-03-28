@@ -43,6 +43,8 @@
 
 #include "bgcfservice.h"
 #include "log.h"
+#include "sas.h"
+#include "sasevent.h"
 
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
@@ -61,7 +63,7 @@ void BgcfService::update_routes()
   std::ifstream file;
 
   LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
-  
+
   std::map<std::string, std::vector<std::string>> new_routes;
 
   file.open(_configuration.c_str());
@@ -124,7 +126,8 @@ BgcfService::~BgcfService()
   _updater = NULL;
 }
 
-std::vector<std::string> BgcfService::get_route(const std::string &domain) const
+std::vector<std::string> BgcfService::get_route(const std::string &domain,
+                                                SAS::TrailId trail) const
 {
   LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
@@ -133,6 +136,19 @@ std::vector<std::string> BgcfService::get_route(const std::string &domain) const
   if (i != _routes.end())
   {
     LOG_INFO("Found route to domain %s", domain.c_str());
+
+    SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE, 0);
+    event.add_var_param(domain);
+    std::string route_string;
+
+    for (std::vector<std::string>::const_iterator ii = i->second.begin(); ii != i->second.end(); ++ii)
+    {
+      route_string = route_string + *ii + ";";
+    }
+
+    event.add_var_param(route_string);
+    SAS::report_event(event);
+
     return i->second;
   }
 
@@ -141,8 +157,25 @@ std::vector<std::string> BgcfService::get_route(const std::string &domain) const
   if (i != _routes.end())
   {
     LOG_INFO("Found default route");
+
+    SAS::Event event(trail, SASEvent::BGCF_DEFAULT_ROUTE, 0);
+    event.add_var_param(domain);
+    std::string route_string;
+
+    for (std::vector<std::string>::const_iterator ii = i->second.begin(); ii != i->second.end(); ++ii)
+    {
+      route_string = route_string + *ii + ";";
+    }
+
+    event.add_var_param(route_string);
+    SAS::report_event(event);
+
     return i->second;
   }
+
+  SAS::Event event(trail, SASEvent::BGCF_NO_ROUTE, 0);
+  event.add_var_param(domain);
+  SAS::report_event(event);
 
   return std::vector<std::string>();
 }

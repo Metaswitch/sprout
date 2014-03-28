@@ -45,6 +45,7 @@
 
 #include <functional>
 #include "updater.h"
+#include "sas.h"
 
 class BgcfService
 {
@@ -55,10 +56,10 @@ public:
   /// Updates the bgcf routes
   void update_routes();
 
-  std::vector<std::string> get_route(const std::string &domain) const;
+  std::vector<std::string> get_route(const std::string &domain, SAS::TrailId trail) const;
 
 private:
-  std::map<std::string, std::vector<std::string>> _routes; 
+  std::map<std::string, std::vector<std::string>> _routes;
   std::string _configuration;
   Updater<void, BgcfService>* _updater;
 };
