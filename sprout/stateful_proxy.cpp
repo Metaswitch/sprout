@@ -1975,10 +1975,10 @@ UASTransaction::~UASTransaction()
     }
   }
 
-  if ((!_as_chain_link.is_set()) && (_upstream_acr != NULL))
+  if ((_victims.empty()) && (_upstream_acr != NULL))
   {
-    // This transaction isn't part of a larger AS chain (or chains) so
-    // send the ACR messages now.
+    // This transaction has not been linked to any AS chains, so is still
+    // in control of the ACR, so send it now.
     pj_time_val ts;
     pj_gettimeofday(&ts);
 
