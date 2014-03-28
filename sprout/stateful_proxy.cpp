@@ -1597,27 +1597,27 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
           target.paths.push_back((pjsip_uri*)route_uri);
         }
       }
+
+      if (bgcf_acr_factory != NULL)
+      {
+        // We need to set up the downstream ACR on this transaction as a BGCF ACR.
+        if ((_downstream_acr != NULL) &&
+            (_downstream_acr != _upstream_acr))
+        {
+          // We've already set up a different downstream ACR to the upstream ACR
+          // so free it off.
+          delete _downstream_acr;
+        }
+        _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+
+        // Pass the request to the downstream ACR as if it is being received.
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        _downstream_acr->rx_request(msg, ts);
+      }
     }
 
     targets.push_back(target);
-
-    if (bgcf_acr_factory != NULL)
-    {
-      // We need to set up the downstream ACR on this transaction as a BGCF ACR.
-      if ((_downstream_acr != NULL) &&
-          (_downstream_acr != _upstream_acr))
-      {
-        // We've already set up a different downstream ACR to the upstream ACR
-        // so free it off.
-        delete _downstream_acr;
-      }
-      _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
-
-      // Pass the request to the downstream ACR as if it is being received.
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _downstream_acr->rx_request(msg, ts);
-    }
 
     return;
   }

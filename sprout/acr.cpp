@@ -55,6 +55,10 @@ ACR::ACR(HttpConnection* ralf,
   _user_session_id(),
   _status_code(0)
 {
+  // Clear timestamps.
+  _req_timestamp.sec = 0;
+  _rsp_timestamp.sec = 0;
+
   LOG_DEBUG("Created %s ACR (%p)",
             ACRFactory::node_name(_node_functionality).c_str(), this);
 }
@@ -297,6 +301,9 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
   // Now process any fields which may be overriden by subsequent forwarded
   // requests.
 
+  // Store the charging function addresses if present.
+  store_charging_addresses(req);
+
   if (_node_role == NODE_ROLE_TERMINATING)
   {
     // In the terminating case, the called party address is taken from the
@@ -325,6 +332,9 @@ void ACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
     // RequestURI when the request is transmitted.
     store_called_party_address(req);
   }
+
+  // Store the charging function addresses if present.
+  store_charging_addresses(req);
 
   // If this is a terminating request store the SDP and non-SDP bodies from
   // every transmitted request.
@@ -373,6 +383,9 @@ void ACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
     }
   }
 
+  // Store the charging function addresses if present.
+  store_charging_addresses(rsp);
+
   // Store the latest status code.
   _status_code = rsp->line.status.code;
 }
@@ -381,9 +394,7 @@ void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
   _rsp_timestamp = timestamp;
 
-  // Store the charging function addresses.  Currently we take this from the
-  // response we transmit as this is guaranteed to have the correct
-  // P-Charging-Function-Address header in all cases.
+  // Store the charging function addresses if present.
   store_charging_addresses(rsp);
 
   if (_node_role == NODE_ROLE_ORIGINATING)
@@ -579,10 +590,16 @@ std::string ACR::get_message(pj_time_val timestamp)
   // Add the Time-Stamps AVP group.
   LOG_DEBUG("Adding Time-Stamps AVP group");
   Json::Value& timestamps = ii["Time-Stamps"];
-  timestamps["SIP-Request-Timestamp"] = Json::Value((Json::UInt)_req_timestamp.sec);
-  timestamps["SIP-Request-Timestamp-Fraction"] = Json::Value((Json::UInt)_req_timestamp.msec);
-  timestamps["SIP-Response-Timestamp"] = Json::Value((Json::UInt)_rsp_timestamp.sec);
-  timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::UInt)_rsp_timestamp.msec);
+  if (_req_timestamp.sec != 0)
+  {
+    timestamps["SIP-Request-Timestamp"] = Json::Value((Json::UInt)_req_timestamp.sec);
+    timestamps["SIP-Request-Timestamp-Fraction"] = Json::Value((Json::UInt)_req_timestamp.msec);
+  }
+  if (_rsp_timestamp.sec != 0)
+  {
+    timestamps["SIP-Response-Timestamp"] = Json::Value((Json::UInt)_rsp_timestamp.sec);
+    timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::UInt)_rsp_timestamp.msec);
+  }
 
   // Add the Application-Server-Information AVPs.
   LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
@@ -689,7 +706,7 @@ std::string ACR::get_message(pj_time_val timestamp)
   if (_record_type == STOP_RECORD)
   {
     // Cause code is always zero for STOP requests.
-    LOG_DEBUG("Adding Cause-Code(0) AVP");
+    LOG_DEBUG("Adding Cause-Code(0) AVP to ACR[Stop]");
     ii["Cause-Code"] = Json::Value(0);
   }
   else if (_record_type == EVENT_RECORD)
@@ -708,7 +725,7 @@ std::string ACR::get_message(pj_time_val timestamp)
                (_expires == 0))
       {
         // End of REGISTER dialog (nonsense I know, but it's what the spec
-        // says").
+        // says).
         cause_code = -3;
       }
       else
@@ -732,7 +749,7 @@ std::string ACR::get_message(pj_time_val timestamp)
     // session setup (2) or Internal error (3) cause codes - in all of these
     // cases we have to send a SIP response with a valid 4xx/5xx/6xx status
     // code, so we use that status code.
-    LOG_DEBUG("Adding Cause-Code(%d) AVP", cause_code);
+    LOG_DEBUG("Adding Cause-Code(%d) AVP to ACR[Interim]", cause_code);
     ii["Cause-Code"] = Json::Value(cause_code);
   }
 

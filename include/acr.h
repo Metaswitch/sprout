@@ -53,7 +53,7 @@ extern "C" {
 #include "httpconnection.h"
 #include "servercaps.h"
 
-typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=6, AS=7, IBCF=8 } RfNode;
+typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } RfNode;
 
 typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 
