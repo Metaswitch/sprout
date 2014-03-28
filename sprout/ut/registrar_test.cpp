@@ -704,7 +704,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "</ServiceProfile></IMSSubscription>");
 
   RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -728,7 +728,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   free_txdata();
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -849,7 +849,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   free_txdata();
 
   RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -867,7 +867,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   inject_msg(respond_to_current_txdata(500));
 
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   ASSERT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -1033,11 +1033,11 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain");
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
-  aor_data = _store->get_aor_data("sip:6505550234@homedomain");
+  aor_data = _store->get_aor_data("sip:6505550234@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -1153,7 +1153,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
 
   RegStore::AoR::Subscription* s1;
   int now = time(NULL);
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
 
   // Add a subscription
   s1 = aor_data1->get_subscription("1234");
@@ -1170,7 +1170,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false);
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

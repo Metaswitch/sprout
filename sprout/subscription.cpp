@@ -123,7 +123,8 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          RegStore* backup_store,       ///<backup store to read from if no entry in store and no backup data
                                          pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
                                          RegStore::AoR** aor_data,     ///<aor_data to write to
-                                         bool update_notify)           ///<whether to generate a SIP NOTIFY
+                                         bool update_notify,           ///<whether to generate a SIP NOTIFY
+                                         SAS::TrailId trail)
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -146,7 +147,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     delete (*aor_data);
 
     // Find the current subscriptions for the AoR.
-    (*aor_data) = primary_store->get_aor_data(aor);
+    (*aor_data) = primary_store->get_aor_data(aor, trail);
     LOG_DEBUG("Retrieved AoR data %p", (*aor_data));
 
     if ((*aor_data) == NULL)
@@ -165,7 +166,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       if ((backup_aor == NULL) &&
           (backup_store != NULL))
       {
-        backup_aor = backup_store->get_aor_data(aor);
+        backup_aor = backup_store->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -260,7 +261,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data), false));
+  while (!primary_store->set_aor_data(aor, (*aor_data), false, trail));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -376,7 +377,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Write to the local store, checking the remote store if there is no entry locally. If the write to the local store succeeds, then write to the remote store.
   pjsip_tx_data* tdata_notify = NULL;
   RegStore::AoR* aor_data = NULL;
-  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store, &tdata_notify, &aor_data, true);
+  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store, &tdata_notify, &aor_data, true, trail);
 
   if (aor_data != NULL)
   {
@@ -388,7 +389,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     if (remote_store != NULL)
     {
       RegStore::AoR* remote_aor_data = NULL;
-      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL, &tdata_notify, &remote_aor_data, false);
+      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL, &tdata_notify, &remote_aor_data, false, trail);
       delete remote_aor_data;
     }
   }
@@ -443,10 +444,12 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
     if (status != PJ_SUCCESS)
     {
+      // LCOV_EXCL_START
       SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
       std::string error_msg = "Sending notification failed with error code: " + std::to_string(status);
       event.add_var_param(error_msg);
       SAS::report_event(event);
+      // LCOV_EXCL_STOP
     }
   }
 

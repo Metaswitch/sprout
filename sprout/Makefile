@@ -13,6 +13,7 @@ TARGET := sprout
 TARGET_TEST := sprout_test
 
 TARGET_SOURCES := logger.cpp \
+                  saslogger.cpp \
                   utils.cpp \
                   analyticslogger.cpp \
                   stack.cpp \
@@ -66,7 +67,7 @@ TARGET_SOURCES := logger.cpp \
                   chronosconnection.cpp \
                   accesslogger.cpp \
                   httpstack.cpp \
-                  handlers.cpp 
+                  handlers.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -115,7 +116,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        scscfselector_test.cpp \
                        subscription_test.cpp \
                        chronosconnection_test.cpp \
-                       handlers_test.cpp 
+                       handlers_test.cpp \
+                       mock_sas.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -184,13 +186,12 @@ LDFLAGS += -lmemcached \
            -lboost_date_time \
            -lcares \
            -lzmq \
-           -lsas \
            -levhtp \
            -levent \
-           -levent_pthreads 
+           -levent_pthreads
 
 # Test build fakes out cURL
-LDFLAGS_BUILD += -lcurl
+LDFLAGS_BUILD += -lcurl -lsas
 
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib

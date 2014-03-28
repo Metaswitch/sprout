@@ -44,6 +44,26 @@
 #include "sipresolver.h"
 #include "avstore.h"
 
+/// Common factory for all handlers that deal with chronos timer pops. This is
+/// a subclass of ConfiguredHandlerFactory that requests HTTP flows to be
+/// logged at detail level. 
+template<class H, class C>
+class ChronosHandlerFactory : public HttpStack::ConfiguredHandlerFactory<H, C>
+{
+public:
+  ChronosHandlerFactory(C* cfg) :
+    HttpStack::ConfiguredHandlerFactory<H, C>(cfg)
+  {}
+
+  virtual ~ChronosHandlerFactory() {}
+
+  SASEvent::HttpLogLevel sas_log_level(HttpStack::Request& req)
+  {
+    // Log all chronos flows at detail level.
+    return SASEvent::HttpLogLevel::DETAIL;
+  }
+};
+
 class RegistrationTimeoutHandler : public HttpStack::Handler
 {
 public:

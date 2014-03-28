@@ -131,7 +131,7 @@ void DNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) const
 void DNSResolver::send_naptr_query(const std::string& domain, SAS::TrailId trail)
 {
   // Log the query.
-  SAS::Event event(trail, SASEvent::TX_ENUM_REQ, 1u);
+  SAS::Event event(trail, SASEvent::TX_ENUM_REQ, 0);
   event.add_var_param(domain);
   SAS::report_event(event);
   _trail = trail;
@@ -233,7 +233,7 @@ void DNSResolver::ares_callback(int status,
   if (status == ARES_SUCCESS)
   {
     // Log that we've succeeded.
-    SAS::Event event(_trail, SASEvent::RX_ENUM_RSP, 1u);
+    SAS::Event event(_trail, SASEvent::RX_ENUM_RSP, 0);
     event.add_var_param(_domain);
     event.add_var_param(alen, abuf);
     SAS::report_event(event);
@@ -249,7 +249,7 @@ void DNSResolver::ares_callback(int status,
   {
     // Log that we've failed.
     LOG_WARNING("DNS ENUM query failed for host %s: %s", _domain.c_str(), ares_strerror(status));
-    SAS::Event event(_trail, SASEvent::RX_ENUM_ERR, 1u);
+    SAS::Event event(_trail, SASEvent::RX_ENUM_ERR, 0);
     event.add_static_param(status);
     event.add_var_param(_domain);
     SAS::report_event(event);

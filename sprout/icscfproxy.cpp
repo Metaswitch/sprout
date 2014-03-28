@@ -311,7 +311,7 @@ void ICSCFProxy::UASTsx::on_final_response()
     if (_best_rsp->msg->line.status.code >= 300)
     {
       // Request rejected, see if we can/should do a retry.
-      retried = retry_request(_best_rsp->msg->line.status.code);
+     retried = retry_request(_best_rsp->msg->line.status.code);
     }
 
     if (!retried)
@@ -341,6 +341,13 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
       // Can do a retry (we support service restoration, so integrity-protected
       // settings in Authorization header are immaterial).
       LOG_DEBUG("Attempt retry for REGISTER request");
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      event.add_var_param("REGISTER");
+      event.add_var_param(st_code);
+      SAS::report_event(event);
+
       _auth_type = "CAPAB";
       std::string scscf;
       int status_code = registration_status_query(_impi,
@@ -395,6 +402,13 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
       LOG_DEBUG("Attempt retry for non-REGISTER request");
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      event.add_var_param("NON-REGISTER");
+      event.add_var_param(st_code);
+      SAS::report_event(event);
+
       _auth_type = "CAPAB";
       std::string scscf;
       int status_code = location_query(_impu,
@@ -518,6 +532,13 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     status_code = PJSIP_SC_FORBIDDEN;
   }
 
+  SAS::Event event(trail(), SASEvent::SCSCF_SELECTION, 0);
+  event.add_var_param(scscf);
+  event.add_var_param(_hss_rsp._scscf);
+  std::string st_code = std::to_string(status_code);
+  event.add_var_param(st_code);
+  SAS::report_event(event);
+
   return status_code;
 }
 
@@ -596,6 +617,13 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       status_code = PJSIP_SC_BUSY_EVERYWHERE;
     }
   }
+
+  SAS::Event event(trail(), SASEvent::SCSCF_SELECTION, 0);
+  event.add_var_param(scscf);
+  event.add_var_param(_hss_rsp._scscf);
+  std::string st_code = std::to_string(status_code);
+  event.add_var_param(st_code);
+  SAS::report_event(event);
 
   return status_code;
 }

@@ -1291,11 +1291,15 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
+
     RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
     AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
     DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
-    HttpStack::ConfiguredHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
-    HttpStack::ConfiguredHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
+
+    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
+    // chronos requests, so use the ChronosHandlerFactory.
+    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
+    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
     HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
 
     try

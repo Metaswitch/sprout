@@ -1576,7 +1576,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
     // Look up the target in the registration data store.
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
 
     // If we didn't get bindings from the local store and we have a remote
     // store, try the remote.
@@ -1585,7 +1585,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
          (aor_data->bindings().empty())))
     {
       delete aor_data;
-      aor_data = remote_store->get_aor_data(aor);
+      aor_data = remote_store->get_aor_data(aor, trail);
     }
 
     // Pick up to max_targets bindings to attempt to contact.  Since

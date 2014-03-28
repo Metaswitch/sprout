@@ -41,6 +41,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <json/reader.h>
+#include <boost/algorithm/string.hpp>
 
 #include "utils.h"
 #include "sas.h"
@@ -51,8 +52,10 @@
 #include "test_interposer.hpp"
 #include "test_utils.hpp"
 #include "load_monitor.h"
+#include "mock_sas.h"
 
 using namespace std;
+using ::testing::MatchesRegex;
 
 /// Fixture for test.
 class HttpConnectionTest : public BaseTest
@@ -63,7 +66,12 @@ class HttpConnectionTest : public BaseTest
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
     _lvc(num_known_stats, known_statnames, "6666", 10), // Short timeout to avoid shutdown delays.
-    _http("cyrus", true, SASEvent::TX_XDM_GET_BASE, "connected_homers", &_lm, &_lvc)
+    _http("cyrus",
+          true,
+          "connected_homers",
+          &_lm,
+          &_lvc,
+          SASEvent::HttpLogLevel::PROTOCOL)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
@@ -78,7 +86,7 @@ class HttpConnectionTest : public BaseTest
     fakecurl_responses["http://cyrus/put_id"] = CURLE_OK;
     fakecurl_responses["http://cyrus/post_id"] = Response({"Location: test"});
   }
- 
+
   virtual ~HttpConnectionTest()
   {
     fakecurl_responses.clear();
@@ -182,4 +190,47 @@ TEST_F(HttpConnectionTest, DeleteBody)
 {
   long ret = _http.send_delete("/delete_id", "body", 0);
   EXPECT_EQ(200, ret);
+}
+
+TEST_F(HttpConnectionTest, SASCorrelationHeader)
+{
+  mock_sas_collect_messages(true);
+
+  std::string uuid;
+  std::string output;
+
+  _http.get("/blah/blah/blah", output, "gandalf", 0);
+
+  Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
+
+  // The CURL request should contain an X-SAS-HTTP-Branch-ID whose value is a
+  // UUID.
+  bool found_header = false;
+  for(std::list<std::string>::iterator it = req._headers.begin();
+      it != req._headers.end();
+      ++it)
+  {
+    if (boost::starts_with(*it, "X-SAS-HTTP-Branch-ID"))
+    {
+      EXPECT_THAT(*it, MatchesRegex(
+        "^X-SAS-HTTP-Branch-ID: *[0-9a-fA-F]{8}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{4}-"
+                                "[0-9a-fA-F]{12}$"));
+
+      // This strips off the header name and leaves just the value.
+      uuid = it->substr(std::string("X-SAS-HTTP-Branch-ID: ").length());
+      found_header = true;
+    }
+  }
+  EXPECT_TRUE(found_header);
+
+  // Check that we logged a branch ID marker.
+  MockSASMessage* marker = mock_sas_find_marker(MARKER_ID_VIA_BRANCH_PARAM);
+  EXPECT_TRUE(marker != NULL);
+  EXPECT_EQ(marker->var_params.size(), 1u);
+  EXPECT_EQ(marker->var_params[0], uuid);
+
+  mock_sas_collect_messages(false);
 }
