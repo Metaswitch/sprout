@@ -74,7 +74,7 @@ remove_logging() {
 }
 
 case "$1" in
-    remove|upgrade|deconfigure)
+    remove|deconfigure)
         # Must stop before attempting to remove the user, else that will fail.
         # Use || /bin/true to ignore a failure, because set -e is in effect.
         rm -f /etc/monit/conf.d/$NAME.monit
@@ -82,6 +82,13 @@ case "$1" in
         service $NAME quiesce || /bin/true
         remove_user
         remove_logging
+        remove_section /etc/security/limits.conf $NAME
+    ;;
+    upgrade)
+        # Like removal, except we don't delete the user or the log directory
+        rm -f /etc/monit/conf.d/$NAME.monit
+        service monit restart
+        service $NAME quiesce || /bin/true
         remove_section /etc/security/limits.conf $NAME
     ;;
 
