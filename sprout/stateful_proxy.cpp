@@ -4366,7 +4366,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   else if (session_case == SessionCase::OriginatingCdiv)
   {
     // Originating-cdiv chain, so create a copy of the downstream ACR.
-    acr = new ACR(*_downstream_acr);
+    acr = (_downstream_acr != NULL) ? new ACR(*_downstream_acr) : NULL;
   }
 
   // Create the AsChain, and schedule its destruction.  AsChain
