@@ -514,6 +514,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   }
 
+  pjsip_tx_data* tdata;
+
   if ((status == PJSIP_EAUTHNOAUTH) ||
       (status == PJSIP_EAUTHACCNOTFOUND))
   {
@@ -521,32 +523,20 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // found in the store (so request is likely stale), so must issue
     // challenge.
     LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
-    pjsip_tx_data* tdata;
     sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
+
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error building challenge response, %s",           // LCOV_EXCL_LINE
-                PJUtils::pj_status_to_string(status).c_str());     // LCOV_EXCL_LINE
-      PJUtils::respond_stateless(stack_data.endpt,                 // LCOV_EXCL_LINE
-                                 rdata,                            // LCOV_EXCL_LINE
-                                 PJSIP_SC_INTERNAL_SERVER_ERROR,   // LCOV_EXCL_LINE
-                                 NULL,                             // LCOV_EXCL_LINE
-                                 NULL,                             // LCOV_EXCL_LINE
-                                 NULL);                            // LCOV_EXCL_LINE
-      return PJ_TRUE;                                              // LCOV_EXCL_LINE
+      // Failed to create a response.  This really shouldn't happen, but there
+      // is nothing else we can do.
+      // LCOV_EXCL_START
+      delete acr;
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
     }
 
     create_challenge(auth_hdr, resync, rdata, tdata);
-
-    if (acr != NULL)
-    {
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      acr->tx_response(tdata->msg, ts);
-    }
-
-    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
   else
   {
@@ -575,13 +565,35 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // @TODO - need more diagnostics here so we can identify and flag
     // attacks.
 
-    // Reject the request.
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               sc,
-                               NULL,
-                               NULL,
-                               NULL);
+    status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // Failed to create a response.  This really shouldn't happen, but there
+      // is nothing else we can do.
+      // LCOV_EXCL_START
+      delete acr;
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
+  }
+
+  if (acr != NULL)
+  {
+    // Pass the response to the ACR for reporting.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->tx_response(tdata->msg, ts);
+  }
+
+  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  if (acr != NULL)
+  {
+    // Send the ACR.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    acr->send_message(ts);
+    delete acr;
   }
 
   return PJ_TRUE;
