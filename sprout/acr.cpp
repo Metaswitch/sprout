@@ -52,8 +52,11 @@ ACR::ACR(HttpConnection* ralf,
   _first_rsp(true),
   _interim_interval(0),
   _node_functionality(node_functionality),
+  _user_session_id(),
   _status_code(0)
 {
+  LOG_DEBUG("Created %s ACR (%p)",
+            ACRFactory::node_name(_node_functionality).c_str(), this);
 }
 
 ACR::~ACR()
@@ -436,7 +439,8 @@ void ACR::server_capabilities(const ServerCapabilities& caps)
 void ACR::send_message(pj_time_val timestamp)
 {
   // Encode and send the request using the Ralf HTTP connection.
-  LOG_VERBOSE("Sending ACR");
+  LOG_VERBOSE("Sending %s ACR (%p)",
+              ACRFactory::node_name(_node_functionality).c_str(), this);
   std::string path = "/call-id/" + _user_session_id;
   std::map<std::string, std::string> headers;
   long rc = _ralf->send_post(path,

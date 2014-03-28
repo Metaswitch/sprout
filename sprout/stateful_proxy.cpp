@@ -4348,9 +4348,26 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   }
   bool is_registered = is_user_registered(served_user);
 
-  // Select the ACR to use for the AS Chain.  Use the upstream ACR for
-  // originating call and the downstream ACR for terminating call.
-  ACR* acr = (session_case.is_originating()) ? _upstream_acr : _downstream_acr;
+  // Select the ACR to use for the AS Chain.  For originating chains and
+  // terminating chains we use the upstream and downstream ACRs respectivly.
+  // For the originating-cdiv case we create a new ACR copied from the
+  // downstream ACR.
+  ACR* acr = NULL;
+  if (session_case == SessionCase::Originating)
+  {
+    // Originating chain, so use upstream ACR.
+    acr = _upstream_acr;
+  }
+  else if (session_case == SessionCase::Terminating)
+  {
+    // Terminating chain, so use downstream ACR.
+    acr = _downstream_acr;
+  }
+  else if (session_case == SessionCase::OriginatingCdiv)
+  {
+    // Originating-cdiv chain, so create a copy of the downstream ACR.
+    acr = new ACR(*_downstream_acr);
+  }
 
   // Create the AsChain, and schedule its destruction.  AsChain
   // lifetime is tied to the lifetime of the creating transaction.
