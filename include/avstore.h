@@ -61,7 +61,9 @@ public:
   /// @param nonce     A reference to the nonce.
   /// @param av        A pointer to a JSONCPP Json::Value object encoding
   ///                  the Authentication Vector.
-  void set_av(const std::string& impi,
+  /// @returns True if we successfully set the data in memcached,
+  /// false otherwise.
+  bool set_av(const std::string& impi,
               const std::string& nonce,
               const Json::Value* av);
 
@@ -75,14 +77,18 @@ public:
   Json::Value* get_av(const std::string& impi,
                       const std::string& nonce);
 
+  bool delete_av(const std::string& impi,
+                 const std::string& nonce);
+
 private:
   /// A pointer to the underlying data store.
   Store* _data_store;
 
-  /// Expire AV record after 30 seconds.  This should always be long enough for
-  /// the UE to respond to the authentication challenge, while limiting the
-  /// scope for replay attacks.
-  static const int AV_EXPIRY = 30;
+  /// Expire AV record after 40 seconds.  This should always be long enough for
+  /// the UE to respond to the authentication challenge, and means
+  /// that on authentication timeout our 30-second Chronos timer
+  /// should pop before it expires.
+  static const int AV_EXPIRY = 40;
 };
 
 #endif

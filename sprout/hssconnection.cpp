@@ -58,6 +58,7 @@ const std::string HSSConnection::AUTH_TIMEOUT = "dereg-auth-timeout";
 const std::string HSSConnection::AUTH_FAIL = "dereg-auth-failed";
 
 const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
+const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
 HSSConnection::HSSConnection(const std::string& server,
                              LoadMonitor *load_monitor,
@@ -252,7 +253,8 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
-                          std::vector<std::string>& associated_uris)
+                          std::vector<std::string>& associated_uris,
+                          bool allowNoIMS)
 {
   rapidxml::xml_node<>* sp = NULL;
 
@@ -280,6 +282,12 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
   }
 
   regstate = reg->value();
+
+  if ((regstate == HSSConnection::STATE_NOT_REGISTERED) && (allowNoIMS))
+  {
+    LOG_DEBUG("Subscriber is not registered on a get_registration_state request");
+    return true;
+  }
 
   rapidxml::xml_node<>* imss = cw->first_node("IMSSubscription");
 
@@ -397,7 +405,7 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     return http_code;
   }
 
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, false) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
@@ -439,7 +447,10 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
     return http_code;
   }
 
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris) ? HTTP_OK : HTTP_SERVER_ERROR;
+  // Return whether the XML was successfully decoded. The XML can be decoded and
+  // not return any IFCs (when the subscriber isn't registered), so a successful
+  // response shouldn't be taken as a guarantee of IFCs.
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, true) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 

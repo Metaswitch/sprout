@@ -93,7 +93,13 @@ class HssConnectionTest : public BaseTest
       "</ServiceProfile>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+      "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")];
+    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")];
 
     fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42_malformed/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -204,6 +210,16 @@ TEST_F(HssConnectionTest, SimpleAssociatedUris)
   EXPECT_EQ("sip:456@example.com", uris[1]);
 }
 
+TEST_F(HssConnectionTest, SimpleNotRegisteredGet)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.get_registration_data("pubid43", regstate, ifcs_map, uris, 0);
+  EXPECT_EQ("NOT_REGISTERED", regstate);
+  EXPECT_EQ(0u, uris.size());
+}
+
 TEST_F(HssConnectionTest, SimpleUnregistered)
 {
   std::vector<std::string> uris;
@@ -213,7 +229,7 @@ TEST_F(HssConnectionTest, SimpleUnregistered)
   EXPECT_EQ("UNREGISTERED", regstate);
 }
 
-TEST_F(HssConnectionTest, SimpleNotRegistered)
+TEST_F(HssConnectionTest, SimpleNotRegisteredUpdate)
 {
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;

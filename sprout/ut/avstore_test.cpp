@@ -121,8 +121,8 @@ TEST_F(AvStoreTest, ReadExpired)
 
   av_store->set_av(impi, nonce, av_json_write);
 
-  // Advance the time by 29 seconds and read the record.
-  cwtest_advance_time_ms(29000);
+  // Advance the time by 39 seconds and read the record.
+  cwtest_advance_time_ms(39000);
   Json::Value* av_json_read = av_store->get_av(impi, nonce);
 
   EXPECT_THAT(av_json_read, ::testing::NotNull());

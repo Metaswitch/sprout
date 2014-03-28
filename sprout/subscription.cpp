@@ -247,7 +247,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
       if (update_notify)
       {
-       status = NotifyUtils::create_notify(tdata_notify, subscription, aor, (*aor_data)->_notify_cseq, bindings,
+        status = NotifyUtils::create_notify(tdata_notify, subscription, aor, (*aor_data)->_notify_cseq, bindings,
                            NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
       }
 
@@ -330,11 +330,20 @@ void process_subscription_request(pjsip_rx_data* rdata)
   {
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
-    // identity doesn't belong to the private identity.  Reject with 403.
+    // identity doesn't belong to the private identity.
+    st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
+
+    // If the client shouldn't retry (when the subscriber isn't present in the HSS)
+    // reject with a 403, otherwise reject with a 503.
+    if (http_code == HTTP_NOT_FOUND)
+    {
+      st_code = PJSIP_SC_FORBIDDEN;
+    }
+
     LOG_ERROR("Rejecting SUBSCRIBE request");
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
-                               PJSIP_SC_FORBIDDEN,
+                               st_code,
                                NULL,
                                NULL,
                                NULL);
@@ -403,16 +412,13 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
 
   // Send the response.
-  pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
-  pjsip_tx_data_dec_ref(tdata);
 
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
-    pjsip_tx_data_add_ref(tdata_notify);
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata_notify, NULL, NULL);
-    pjsip_tx_data_dec_ref(tdata_notify);
+    set_trail(tdata_notify, trail);
+    status = PJUtils::send_request(tdata_notify);
   }
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);

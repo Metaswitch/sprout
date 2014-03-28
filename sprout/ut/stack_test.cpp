@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -139,12 +136,14 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               "woot.example.com",           // home domain
                               "all-the-sprouts",            // sprout cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
+                              NULL,                         // SIPResolver
                               7,                            // #PJsip threads
                               9,                            // #worker threads
                               1,                            // RR strategy
                               60 * 10,                      // Session refresh interval
                               NULL,                         // Quiescing manager
-                              NULL);                        // Load monitor
+                              NULL,                         // Load monitor
+                              "");                          // CDF domain
   ASSERT_EQ(PJ_SUCCESS, rc) << PjStatus(rc);
   EXPECT_TRUE(_log.contains("Listening on port 9408"));
   EXPECT_TRUE(_log.contains("Local host aliases:"));
