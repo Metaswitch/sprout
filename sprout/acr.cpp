@@ -801,7 +801,7 @@ std::string ACR::get_message(pj_time_val timestamp)
     ii["Instance-Id"] = Json::Value(_instance_id);
   }
 
-  LOG_DEBUG("Built JSON message, rendering to string");
+  //LOG_DEBUG("Built JSON message %s", v.toStyledString().c_str());
 
   // Render the message to a string and return it.
   Json::FastWriter writer;

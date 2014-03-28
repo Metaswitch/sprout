@@ -181,6 +181,10 @@ private:
 
     /// The ACR for the request (if ACR generation is enabled).
     ACR* _acr;
+
+    /// Records whether or not the request is an in-dialog request.  This is
+    /// used when deciding whether to send ACRs on provisional responses.
+    bool _in_dialog;
   };
 
   /// Port for I-CSCF function.  This proxy will only process requests

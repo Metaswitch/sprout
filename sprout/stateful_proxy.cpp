@@ -1596,24 +1596,25 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
           route_uri->lr_param = 1;
           target.paths.push_back((pjsip_uri*)route_uri);
         }
-      }
 
-      if (bgcf_acr_factory != NULL)
-      {
-        // We need to set up the downstream ACR on this transaction as a BGCF ACR.
-        if ((_downstream_acr != NULL) &&
-            (_downstream_acr != _upstream_acr))
+        // We have added a BGCF generated route to the request, so we should
+        // switch ACR context for the downstream leg if ACRs are enabled.
+        if (bgcf_acr_factory != NULL)
         {
-          // We've already set up a different downstream ACR to the upstream ACR
-          // so free it off.
-          delete _downstream_acr;
-        }
-        _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+          if ((_downstream_acr != NULL) &&
+              (_downstream_acr != _upstream_acr))
+          {
+            // We've already set up a different downstream ACR to the upstream ACR
+            // so free it off.
+            delete _downstream_acr;
+          }
+          _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
 
-        // Pass the request to the downstream ACR as if it is being received.
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        _downstream_acr->rx_request(msg, ts);
+          // Pass the request to the downstream ACR as if it is being received.
+          pj_time_val ts;
+          pj_gettimeofday(&ts);
+          _downstream_acr->rx_request(msg, ts);
+        }
       }
     }
 
@@ -1907,7 +1908,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _as_chain_link(),
   _victims(),
   _upstream_acr(acr),
-  _downstream_acr(acr)
+  _downstream_acr(acr),
+  _in_dialog(false)
 {
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1934,6 +1936,12 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   log_on_tsx_start(rdata);
 
   _tsx->mod_data[mod_tu.id] = this;
+
+  // Record whether or not this is an in-dialog request.  This is needed
+  // to determine whether or not to send interim ACRs on provisional
+  // responses.
+  _in_dialog = (rdata->msg_info.msg->line.req.method.id != PJSIP_BYE_METHOD) &&
+               (rdata->msg_info.to->tag.slen != 0);
 }
 
 /// UASTransaction destructor.  On entry, the group lock must be held.  On
@@ -2744,6 +2752,19 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       pj_time_val ts;
       pj_gettimeofday(&ts);
       _downstream_acr->tx_response(tdata->msg, ts);
+
+      if ((_in_dialog) &&
+          (status_code > 100) &&
+          (status_code < 199))
+      {
+        // This is a provisional response to a mid-dialog message, so we
+        // should send an ACR now.
+        _downstream_acr->send_message(ts);
+
+        // Don't delete the ACR as we will send another on any subsequent
+        // provisional responses, and also when the transaction completes.
+      }
+
       _upstream_acr->rx_response(tdata->msg, ts);
     }
 
@@ -2754,6 +2775,24 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       {
         // Forward all provisional responses.
         LOG_DEBUG("%s - Forward 1xx response", uac_data->name());
+
+        if (_upstream_acr != NULL)
+        {
+          // Pass the response to the upstream ACR for reporting.
+          pj_time_val ts;
+          pj_gettimeofday(&ts);
+          _upstream_acr->tx_response(tdata->msg, ts);
+
+          if (_in_dialog)
+          {
+            // This is a provisional response to a mid-dialog message, so we
+            // should send an ACR now.
+            _upstream_acr->send_message(ts);
+
+            // Don't delete the ACR as we will send another on any subsequent
+            // provisional responses, and also when the transaction completes.
+          }
+        }
 
         // Forward response with the UAS transaction
         pjsip_tsx_send_msg(_tsx, tdata);

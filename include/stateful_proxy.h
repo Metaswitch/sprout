@@ -248,6 +248,10 @@ private:
   /// if upstream is originating side S-CSCF and downstream is terminating side
   /// S-CSCF, or I-CSCF or BGCF.
   ACR*                 _downstream_acr;
+
+  /// Indication of in-dialog transaction.  This is used to determine whether
+  /// or not to send ACRs on 1xx responses.
+  bool                 _in_dialog;
 };
 
 // This is the data that is attached to the UAC transaction

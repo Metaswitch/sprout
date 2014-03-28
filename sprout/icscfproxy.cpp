@@ -171,7 +171,8 @@ ICSCFProxy::UASTsx::UASTsx(HSSConnection* hss,
   _queried_caps(false),
   _hss_rsp(),
   _attempted_scscfs(),
-  _acr(NULL)
+  _acr(NULL),
+  _in_dialog(false)
 {
 }
 
@@ -283,6 +284,12 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
   {
     // ACR generation is enabled, so pass the received request to the ACR.
     _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
+    // Record whether or not this is an in-dialog request.  This is needed
+    // to determine whether or not to send interim ACRs on provisional
+    // responses.
+    _in_dialog = (rdata->msg_info.msg->line.req.method.id != PJSIP_BYE_METHOD) &&
+                 (rdata->msg_info.to->tag.slen != 0);
   }
 
   return status;
@@ -445,6 +452,18 @@ void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
     pj_time_val ts;
     pj_gettimeofday(&ts);
     _acr->tx_response(tdata->msg, ts);
+
+    if ((_in_dialog) &&
+        (tdata->msg->line.status.code > 100) &&
+        (tdata->msg->line.status.code < 200))
+    {
+      // This is a provisional response to a mid-dialog message, so we
+      // should send an ACR now.
+      _acr->send_message(ts);
+
+      // Don't delete the ACR as we will send another on any subsequent
+      // provisional responses, and also when the transaction completes.
+    }
   }
 }
 
