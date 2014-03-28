@@ -53,8 +53,12 @@ extern "C" {
 class TrustBoundary
 {
 public:
-  TrustBoundary(std::string description, pj_bool_t strip_request,
-                pj_bool_t strip_response, pj_bool_t add_p_charging);
+  TrustBoundary(std::string description,
+                pj_bool_t strip_request,
+                pj_bool_t strip_response,
+                pj_bool_t strip_p_charging,
+                pj_bool_t add_p_charging,
+                pj_bool_t add_p_charging_rsp);
 
   /// Strip as necessary for request from server to client.
   void process_request(pjsip_tx_data* tdata);
@@ -79,7 +83,9 @@ public:
 protected:
   pj_bool_t _strip_request;
   pj_bool_t _strip_response;
+  pj_bool_t _strip_p_charging;
   pj_bool_t _add_p_charging;
+  pj_bool_t _add_p_charging_rsp;
   std::string _description;
 
  private:
