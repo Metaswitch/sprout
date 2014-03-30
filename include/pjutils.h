@@ -72,6 +72,7 @@ pj_status_t init();
 void term();
 
 pj_bool_t is_home_domain(const pjsip_uri* uri);
+pj_bool_t is_home_domain(const std::string& domain);
 pj_bool_t is_uri_local(const pjsip_uri* uri);
 
 pj_bool_t is_e164(const pj_str_t* user);

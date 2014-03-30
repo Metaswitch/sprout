@@ -115,7 +115,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.icscf_port = 5056;
   stack_data.local_host = pj_str("127.0.0.1");
   stack_data.public_host = pj_str("127.0.0.1");
-  stack_data.home_domain = pj_str("homedomain");
+  stack_data.home_domains.insert("homedomain");
+  stack_data.default_home_domain = pj_str("homedomain");
   stack_data.sprout_cluster_domain = pj_str("sprout.homedomain");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;

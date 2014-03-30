@@ -92,7 +92,7 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
     pjsip_p_c_v_hdr* p_c_v = pjsip_p_c_v_hdr_create(tdata->pool);
 
     pj_strdup2(tdata->pool, &p_c_v->icid, c_id.c_str());
-    p_c_v->icid_gen_addr = stack_data.home_domain;
+    p_c_v->icid_gen_addr = stack_data.default_home_domain;
 
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_v);
   }

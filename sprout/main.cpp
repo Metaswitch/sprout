@@ -108,7 +108,7 @@ struct options
   int                    default_session_expires;
   std::string            local_host;
   std::string            public_host;
-  std::string            home_domain;
+  std::string            home_domains;
   std::string            sprout_domain;
   std::string            alias_hosts;
   std::string            trusted_hosts;
@@ -170,7 +170,7 @@ static void usage(void)
        "                            Override the local host name with the specified\n"
        "                            hostname(s) or IP address(es).  If one name/address\n"
        "                            is specified it is used as both private and public names.\n"
-       " -D, --domain <name>        Override the home domain name\n"
+       " -D, --domains <names>      Comma-separated list of home domain names\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[:<recycle time>]]]\n"
@@ -420,8 +420,8 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'D':
-      options->home_domain = std::string(pj_optarg);
-      fprintf(stdout, "Override home domain set to %s\n", pj_optarg);
+      options->home_domains = std::string(pj_optarg);
+      fprintf(stdout, "Override home domains set to %s\n", pj_optarg);
       break;
 
     case 'c':
@@ -1053,7 +1053,7 @@ int main(int argc, char *argv[])
                       opt.icscf_port,
                       opt.local_host,
                       opt.public_host,
-                      opt.home_domain,
+                      opt.home_domains,
                       opt.sprout_domain,
                       opt.alias_hosts,
                       sip_resolver,

@@ -815,7 +815,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     // Change host/domain in target to use home domain.
     target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
         tdata->msg->line.req.uri);
-    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.home_domain;
+    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.default_home_domain;
   }
   else
   {
@@ -2359,7 +2359,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->orig_ioi = stack_data.home_domain;
+    pcv->orig_ioi = stack_data.default_home_domain;
   }
 
   // Apply originating call services to the message
@@ -2458,7 +2458,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->term_ioi = stack_data.home_domain;
+    pcv->term_ioi = stack_data.default_home_domain;
   }
 
   // Apply terminating call services to the message

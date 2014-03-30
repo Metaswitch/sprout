@@ -95,13 +95,18 @@ pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
-    if (pj_stricmp(&host_from_uri, &stack_data.home_domain)==0)
-    {
-      return PJ_TRUE;
-    }
+    std::string host = pj_str_to_string(&((pjsip_sip_uri*)uri)->host);
+    return is_home_domain(host);
   }
   return PJ_FALSE;
+}
+
+
+/// Utility to determine if this domain is a home domain
+pj_bool_t PJUtils::is_home_domain(const std::string& domain)
+{
+  return (stack_data.home_domains.find(domain) != stack_data.home_domains.end()) ?
+         PJ_TRUE : PJ_FALSE;
 }
 
 
@@ -375,7 +380,7 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   {
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
-    auth_hdr->credential.digest.realm = stack_data.home_domain;
+    auth_hdr->credential.digest.realm = stack_data.default_home_domain;
     // Construct a default private identifier from the URI in the To header.
     LOG_DEBUG("Construct default private identity");
     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
