@@ -7,9 +7,6 @@
 [submodule "modules/curl"]
 	path = modules/curl
 	url = git@github.com:bagder/curl.git
-[submodule "modules/gcovr"]
-	path = modules/gcovr
-	url = git@github.com:Metaswitch/gcovr-upstream.git
 [submodule "modules/gmock"]
 	path = modules/gmock
 	url = git@github.com:Metaswitch/gmock-upstream.git
@@ -46,3 +43,6 @@
 [submodule "modules/libevhtp"]
 	path = modules/libevhtp
 	url = git@github.com:Metaswitch/libevhtp.git
+[submodule "modules/gcovr"]
+	path = modules/gcovr
+	url = git@github.com:gcovr/gcovr.git

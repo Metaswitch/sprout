@@ -15,13 +15,13 @@ modules/cpp-common/src/dnsparser.cpp
 modules/cpp-common/src/baseresolver.cpp
 modules/cpp-common/src/fakelogger.cpp
 
-sprout/stateful_proxy.cpp
-sprout/connection_pool.cpp
-sprout/pjutils.cpp
-sprout/callservices.cpp
-sprout/stack.cpp
-sprout/websockets.cpp
-sprout/dnsresolver.cpp
-sprout/flowtable.cpp
-sprout/custom_headers.cpp
-sprout/sipresolver.cpp
+stateful_proxy.cpp
+connection_pool.cpp
+pjutils.cpp
+callservices.cpp
+stack.cpp
+websockets.cpp
+dnsresolver.cpp
+flowtable.cpp
+custom_headers.cpp
+sipresolver.cpp
