@@ -713,7 +713,10 @@ void PJUtils::resolve(const std::string& name,
 
 
 /// Resolves the next hop target of the SIP message
-void PJUtils::resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<AddrInfo>& servers)
+void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
+                               int retries,
+                               std::vector<AddrInfo>& servers,
+                               SAS::TrailId trail)
 {
   // Get the next hop URI from the message and parse out the destination, port
   // and transport.
@@ -741,7 +744,9 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<Ad
                                   port,
                                   transport,
                                   retries,
-                                  servers);
+                                  servers,
+                                  trail);
+
   LOG_INFO("Resolved destination URI %s to %d servers",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   (pjsip_uri*)next_hop).c_str(),
@@ -970,7 +975,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
-    resolve_next_hop(tdata, retries, sss->servers);
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
@@ -1112,7 +1117,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport pre-selected so resolve the next hop to a set of servers.
-    resolve_next_hop(tdata, retries, sss->servers);
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
 
     if (!sss->servers.empty())
     {

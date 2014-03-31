@@ -110,7 +110,7 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stateful_proxy.h"
@@ -1511,7 +1511,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain);
+      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
       {
@@ -1576,7 +1576,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
     // Look up the target in the registration data store.
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
 
     // If we didn't get bindings from the local store and we have a remote
     // store, try the remote.
@@ -1585,7 +1585,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
          (aor_data->bindings().empty())))
     {
       delete aor_data;
-      aor_data = remote_store->get_aor_data(aor);
+      aor_data = remote_store->get_aor_data(aor, trail);
     }
 
     // Pick up to max_targets bindings to attempt to contact.  Since
@@ -3519,7 +3519,7 @@ void UACTransaction::set_target(const struct Target& target)
   {
     // Resolve the next hop destination for this request to a set of servers.
     LOG_DEBUG("Resolve next hop destination");
-    PJUtils::resolve_next_hop(_tdata, 0, _servers);
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
   }
 
   exit_context();
@@ -4245,7 +4245,7 @@ std::string UASTransaction::get_scscf_name(Json::Value* location)
       optional.push_back(options[(int)jj].asInt());
     }
 
-    server_name = scscf_selector->get_scscf(mandatory, optional, {});
+    server_name = scscf_selector->get_scscf(mandatory, optional, {}, trail());
   }
 
   delete location;

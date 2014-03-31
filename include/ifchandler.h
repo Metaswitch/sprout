@@ -49,6 +49,7 @@ extern "C" {
 #include "rapidxml/rapidxml.hpp"
 #include "sessioncase.h"
 
+#include "sas.h"
 
 /// An invocation of an AS - the result of a matching iFC.
 //
@@ -75,7 +76,8 @@ public:
   bool filter_matches(const SessionCase& session_case,
                       bool is_registered,
                       bool is_initial_registration,
-                      pjsip_msg* msg) const;
+                      pjsip_msg* msg,
+                      SAS::TrailId trail) const;
 
   AsInvocation as_invocation() const;
 
@@ -84,7 +86,9 @@ private:
                           bool is_registered,
                           bool is_initial_registration,
                           pjsip_msg *msg,
-                          rapidxml::xml_node<>* spt);
+                          rapidxml::xml_node<>* spt,
+                          std::string ifc_str,
+                          SAS::TrailId trail);
 
   rapidxml::xml_node<>* _ifc;
 };
@@ -113,7 +117,8 @@ public:
                  bool is_registered,
                  bool is_initial_registration,
                  pjsip_msg *msg,
-                 std::vector<AsInvocation>& application_servers) const;
+                 std::vector<AsInvocation>& application_servers,
+                 SAS::TrailId trail) const;
 
 private:
   std::shared_ptr<rapidxml::xml_document<> > _ifc_doc;

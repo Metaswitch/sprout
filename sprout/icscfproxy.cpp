@@ -50,7 +50,7 @@ extern "C" {
 
 #include "log.h"
 #include "pjutils.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "analyticslogger.h"
 #include "constants.h"
 #include "basicproxy.h"
@@ -341,6 +341,14 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
       // Can do a retry (we support service restoration, so integrity-protected
       // settings in Authorization header are immaterial).
       LOG_DEBUG("Attempt retry for REGISTER request");
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      std::string method = "REGISTER";
+      event.add_var_param(method);
+      event.add_var_param(st_code);
+      SAS::report_event(event);
+
       _auth_type = "CAPAB";
       std::string scscf;
       int status_code = registration_status_query(_impi,
@@ -395,6 +403,14 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
     if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
     {
       LOG_DEBUG("Attempt retry for non-REGISTER request");
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      std::string method = "NON-REGISTER";
+      event.add_var_param(method);
+      event.add_var_param(st_code);
+      SAS::report_event(event);
+
       _auth_type = "CAPAB";
       std::string scscf;
       int status_code = location_query(_impu,
@@ -500,7 +516,8 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
-                                         _attempted_scscfs);
+                                         _attempted_scscfs,
+                                         trail());
     }
 
     if (scscf.empty())
@@ -515,6 +532,21 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
   {
     // Convert 404 Not Found to 403 Forbidden for registration status query.
     status_code = PJSIP_SC_FORBIDDEN;
+  }
+
+  if (status_code == PJSIP_SC_OK)
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    event.add_var_param(scscf);
+    event.add_var_param(_hss_rsp._scscf);
+    SAS::report_event(event);
+  }
+  else
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    std::string st_code = std::to_string(status_code);
+    event.add_var_param(st_code);
+    SAS::report_event(event);
   }
 
   return status_code;
@@ -583,7 +615,8 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       // Queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp._mandatory_caps,
                                          _hss_rsp._optional_caps,
-                                         _attempted_scscfs);
+                                         _attempted_scscfs,
+                                         trail());
     }
 
     if (scscf.empty())
@@ -593,6 +626,21 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
       LOG_DEBUG("No suitable S-CSCF");
       status_code = PJSIP_SC_BUSY_EVERYWHERE;
     }
+  }
+
+  if (status_code == PJSIP_SC_OK)
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    event.add_var_param(scscf);
+    event.add_var_param(_hss_rsp._scscf);
+    SAS::report_event(event);
+  }
+  else
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    std::string st_code = std::to_string(status_code);
+    event.add_var_param(st_code);
+    SAS::report_event(event);
   }
 
   return status_code;

@@ -54,6 +54,8 @@ extern "C" {
 #include "log.h"
 #include "notify_utils.h"
 #include "constants.h"
+#include "sas.h"
+#include "sproutsasevent.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -121,7 +123,8 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          RegStore* backup_store,       ///<backup store to read from if no entry in store and no backup data
                                          pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
                                          RegStore::AoR** aor_data,     ///<aor_data to write to
-                                         bool update_notify)           ///<whether to generate a SIP NOTIFY
+                                         bool update_notify,           ///<whether to generate a SIP NOTIFY
+                                         SAS::TrailId trail)
 {
   // Parse the headers
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);;
@@ -144,7 +147,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     delete (*aor_data);
 
     // Find the current subscriptions for the AoR.
-    (*aor_data) = primary_store->get_aor_data(aor);
+    (*aor_data) = primary_store->get_aor_data(aor, trail);
     LOG_DEBUG("Retrieved AoR data %p", (*aor_data));
 
     if ((*aor_data) == NULL)
@@ -163,7 +166,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       if ((backup_aor == NULL) &&
           (backup_store != NULL))
       {
-        backup_aor = backup_store->get_aor_data(aor);
+        backup_aor = backup_store->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -258,7 +261,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
     }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data), false));
+  while (!primary_store->set_aor_data(aor, (*aor_data), false, trail));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -274,6 +277,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
 
+  SAS::TrailId trail = get_trail(rdata);
+
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
   pjsip_msg *msg = rdata->msg_info.msg;
@@ -287,6 +292,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     // LCOV_EXCL_START
     LOG_ERROR("Rejecting subscribe request using non SIP URI");
+
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+    // Can't log the public ID as the subscribe has failed too early
+    std::string pub_id = "UNKNOWN";
+    std::string error_msg = "Subscribe failed as using non SIP URI";
+    event.add_var_param(pub_id);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                PJSIP_SC_NOT_FOUND,
@@ -307,7 +321,10 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
-  SAS::TrailId trail = get_trail(rdata);
+  SAS::Event event(trail, SASEvent::SUBSCRIBE_START, 0);
+  event.add_var_param(public_id);
+  SAS::report_event(event);
+
   LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
@@ -341,6 +358,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     }
 
     LOG_ERROR("Rejecting SUBSCRIBE request");
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                st_code,
@@ -362,7 +380,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Write to the local store, checking the remote store if there is no entry locally. If the write to the local store succeeds, then write to the remote store.
   pjsip_tx_data* tdata_notify = NULL;
   RegStore::AoR* aor_data = NULL;
-  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store, &tdata_notify, &aor_data, true);
+  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store, &tdata_notify, &aor_data, true, trail);
 
   if (aor_data != NULL)
   {
@@ -374,7 +392,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     if (remote_store != NULL)
     {
       RegStore::AoR* remote_aor_data = NULL;
-      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL, &tdata_notify, &remote_aor_data, false);
+      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL, &tdata_notify, &remote_aor_data, false, trail);
       delete remote_aor_data;
     }
   }
@@ -394,8 +412,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
-   LOG_ERROR("Error building SUBSCRIBE %d response %s", st_code,
+    LOG_ERROR("Error building SUBSCRIBE %d response %s", st_code,
               PJUtils::pj_status_to_string(status).c_str());
+
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Error building SUBSCRIBE (" + std::to_string(st_code) + ") " + PJUtils::pj_status_to_string(status);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                PJSIP_SC_INTERNAL_SERVER_ERROR,
@@ -419,6 +444,16 @@ void process_subscription_request(pjsip_rx_data* rdata)
   {
     set_trail(tdata_notify, trail);
     status = PJUtils::send_request(tdata_notify);
+
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
+      std::string error_msg = "Failed to send NOTIFY - error code: " + std::to_string(status);
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+      // LCOV_EXCL_STOP
+    }
   }
 
   LOG_DEBUG("Report SAS end marker - trail (%llx)", trail);
@@ -431,6 +466,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
 // Reject request unless it's a SUBSCRIBE targeted at the home domain / this node.
 pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 {
+  SAS::TrailId trail = get_trail(rdata);
+
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) &&
       ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
@@ -446,8 +483,14 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 
     if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
     {
-      // The Event header is missing or doesn't match "Reg"
+      // The Event header is missing or doesn't match "reg"
       LOG_DEBUG("Rejecting subscription request with invalid event header");
+
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+      std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Event header is invalid or missing - it should be 'reg'";
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
       return PJ_FALSE;
     }
 
@@ -469,6 +512,12 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
       {
         // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
         LOG_DEBUG("Rejecting subscription request with invalid accept header");
+
+        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+        std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Accepts header is invalid - if it's present it should be 'application/reginfo+xml'";
+        event.add_var_param(error_msg);
+        SAS::report_event(event);
+
         return PJ_FALSE;
       }
     }
@@ -476,6 +525,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     process_subscription_request(rdata);
     return PJ_TRUE;
   }
+
+  SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+  std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as it wasn't targeted at the home domain or this node";
+  event.add_var_param(error_msg);
+  SAS::report_event(event);
 
   return PJ_FALSE;
 }

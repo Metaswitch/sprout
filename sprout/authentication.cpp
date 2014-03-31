@@ -53,7 +53,7 @@ extern "C" {
 
 #include "log.h"
 #include "stack.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "pjutils.h"
 #include "constants.h"
 #include "analyticslogger.h"
@@ -105,7 +105,7 @@ pjsip_auth_srv auth_srv;
 
 
 /// Verifies that the supplied authentication vector is valid.
-bool verify_auth_vector(Json::Value* av, const std::string& impi)
+bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId trail)
 {
   bool rc = true;
 
@@ -124,6 +124,11 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi)
       LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
                 impi.c_str(), av->toStyledString().c_str());
       rc = false;
+
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+      std::string error_msg = "AKA authentication vector is malformed: " + av->toStyledString();
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
     }
   }
   else if (av->isMember("digest"))
@@ -139,6 +144,11 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi)
       LOG_ERROR("Badly formed Digest authentication vector for %s\n%s",
                 impi.c_str(), av->toStyledString().c_str());
       rc = false;
+
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+      std::string error_msg = "Digest authentication vector is malformed: " + av->toStyledString();
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
     }
   }
   else
@@ -147,6 +157,11 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi)
     LOG_ERROR("No AKA or Digest object in authentication vector for %s\n%s",
               impi.c_str(), av->toStyledString().c_str());
     rc = false;
+
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+    std::string error_msg = "Authentication vector is malformed: " + av->toStyledString();
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
   }
 
   return rc;
@@ -160,6 +175,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
   const pj_str_t* acc_name = &param->acc_name;
   const pj_str_t* realm = &param->realm;
   const pjsip_rx_data* rdata = param->rdata;
+  SAS::TrailId trail = get_trail(rdata);
 
   pj_status_t status = PJSIP_EAUTHACCNOTFOUND;
 
@@ -175,15 +191,15 @@ pj_status_t user_lookup(pj_pool_t *pool,
   // even if the get fails and av is NULL - someone could still be
   // snooping traffic, see the nonce, and try and reuse it when
   // memcached recovers.
-  Json::Value* av = av_store->get_av(impi, nonce);
+  Json::Value* av = av_store->get_av(impi, nonce, trail);
 
   // No point checking the return value of delete_av - there's no
   // sensible recovery action we can take (and it logs internally if
   // it fails).
-  av_store->delete_av(impi, nonce);
+  av_store->delete_av(impi, nonce, trail);
 
   if ((av != NULL) &&
-      (!verify_auth_vector(av, impi)))
+      (!verify_auth_vector(av, impi, trail)))
   {
     // Authentication vector is badly formed.
     delete av;                                                 // LCOV_EXCL_LINE
@@ -266,7 +282,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
 
   if ((av != NULL) &&
-      (!verify_auth_vector(av, impi)))
+      (!verify_auth_vector(av, impi, get_trail(rdata))))
   {
     // Authentication Vector is badly formed.
     delete av;
@@ -293,6 +309,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     {
       // AKA authentication.
       LOG_DEBUG("Add AKA information");
+
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
+      std::string AKA = "AKA";
+      event.add_var_param(AKA);
+      SAS::report_event(event);
+
       Json::Value& aka = (*av)["aka"];
 
       // Use default realm for AKA as not specified in the AV.
@@ -323,6 +345,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     {
       // Digest authentication.
       LOG_DEBUG("Add Digest information");
+
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
+      std::string DIGEST = "DIGEST";
+      event.add_var_param(DIGEST);
+      SAS::report_event(event);
+
       Json::Value& digest = (*av)["digest"];
       pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, digest["realm"].asCString());
       hdr->challenge.digest.algorithm = STR_MD5;
@@ -340,7 +368,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
-    bool success = av_store->set_av(impi, nonce, av);
+    bool success = av_store->set_av(impi, nonce, av, get_trail(rdata));
     if (success)
     {
       // We've written the AV into the store, so need to set a Chronos
@@ -356,7 +384,11 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
   else
   {
-    LOG_DEBUG("Failed to get Authentication vector");
+    SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED, 0);
+    std::string error_msg = "Failed to get Authentication vector";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
     tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
   }
@@ -368,9 +400,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pj_status_t status;
   std::string resync;
 
+  SAS::TrailId trail = get_trail(rdata);
+
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
     // Request not received on S-CSCF port, so don't authenticate it.
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
+    std::string error_msg = "Request wasn't received on S-CSCF port";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     return PJ_FALSE;
   }
 
@@ -378,6 +417,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   {
     // Non-REGISTER request, so don't do authentication as it must have come
     // from an authenticated or trusted source.
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
+    std::string error_msg = "Request wasn't a REGISTER";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     return PJ_FALSE;
   }
 
@@ -404,6 +448,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     {
       // Request is already integrity protected, so let it through.
       LOG_INFO("Request integrity protected by edge proxy");
+
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
+      std::string error_msg = "Request integrity protected by edge proxy";
+      event.add_var_param(error_msg);
+      SAS::report_event(event);
+
       return PJ_FALSE;
     }
   }
@@ -418,10 +468,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // the authentication module to verify.
     LOG_DEBUG("Verify authentication information in request");
     status = pjsip_auth_srv_verify(&auth_srv, rdata, &sc);
+
     if (status == PJ_SUCCESS)
     {
       // The authentication information in the request was verified.
       LOG_DEBUG("Request authenticated successfully");
+
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
+      SAS::report_event(event);
 
       // If doing AKA authentication, check for an AUTS parameter.  We only
       // check this if the request authenticated as actioning it otherwise
@@ -477,7 +531,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // has failed authentication.  In either case, the message will be
   // absorbed and responded to by the authentication module, so we need to
   // add SAS markers so the trail will become searchable.
-  SAS::TrailId trail = get_trail(rdata);
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
   if (rdata->msg_info.from)
@@ -509,6 +562,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // found in the store (so request is likely stale), so must issue
     // challenge.
     LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
+
     pjsip_tx_data* tdata;
     sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
@@ -531,8 +585,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   else
   {
     // Authentication failed.
-    LOG_ERROR("Authentication failed, %s",
-              PJUtils::pj_status_to_string(status).c_str());
+    std::string error_msg = PJUtils::pj_status_to_string(status);
+
+    LOG_ERROR("Authentication failed, %s", error_msg.c_str());
+
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
 
     if (sc != PJSIP_SC_UNAUTHORIZED)
     {

@@ -539,14 +539,14 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   {
     hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
   }
-  RegStore::AoR* aor = store->get_aor_data(uri);
+  RegStore::AoR* aor = store->get_aor_data(uri, 0);
   RegStore::AoR::Binding* binding = aor->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
-  bool ret = store->set_aor_data(uri, aor, false);
+  bool ret = store->set_aor_data(uri, aor, false, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };

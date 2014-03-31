@@ -47,6 +47,7 @@
 #include "store.h"
 #include "regstore.h"
 #include "chronosconnection.h"
+#include "sas.h"
 
 class RegStore
 {
@@ -214,11 +215,12 @@ public:
 
     ~Connector();
 
-    AoR* get_aor_data(const std::string& aor_id);
+    AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
 
     bool set_aor_data(const std::string& aor_id,
                       AoR* aor_data,
-                      int expiry);
+                      int expiry,
+                      SAS::TrailId trail);
 
     std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& s);
@@ -239,14 +241,14 @@ public:
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
-  AoR* get_aor_data(const std::string& aor_id);
+  AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
 
   /// Update the data for a particular address of record.  Writes the data
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers);
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired, SAS::TrailId trail);
 
   // Send a SIP NOTIFY
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);

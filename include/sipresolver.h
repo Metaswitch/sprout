@@ -38,6 +38,7 @@
 #define SIPRESOLVER_H__
 
 #include "baseresolver.h"
+#include "sas.h"
 
 class SIPResolver : public BaseResolver
 {
@@ -50,8 +51,10 @@ public:
                int port,
                int transport,
                int retries,
-               std::vector<AddrInfo>& targets);
+               std::vector<AddrInfo>& targets,
+               SAS::TrailId trail = 0);
 
+  std::string get_transport_str(int transport);
 };
 
 #endif

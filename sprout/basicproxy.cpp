@@ -54,7 +54,7 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "constants.h"
 #include "basicproxy.h"
 
@@ -1410,7 +1410,7 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
   {
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples).
-    PJUtils::resolve_next_hop(_tdata, 0, _servers);
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
   }
 
   exit_context();

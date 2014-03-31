@@ -1,5 +1,5 @@
 /**
- * @file scscfselector_test.cpp 
+ * @file scscfselector_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -80,7 +80,7 @@ public:
 
   void test(SCSCFSelector& scscf_)
   {
-    string ret = scscf_.get_scscf(_mandate, _optional, _rejects);
+    string ret = scscf_.get_scscf(_mandate, _optional, _rejects, 0);
     EXPECT_EQ(_out, ret);
   }
 
@@ -94,7 +94,7 @@ private:
 
 TEST_F(SCSCFSelectorTest, ValidConfig)
 {
-  // Parse a valid file. There should be no warnings in the logs. If this 
+  // Parse a valid file. There should be no warnings in the logs. If this
   // test fails, so will the Select* tests below
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
   EXPECT_FALSE(_log.contains("Failed to read S-CSCF configuration data"));
@@ -105,7 +105,7 @@ TEST_F(SCSCFSelectorTest, ValidConfig)
 
 TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
 {
-  // Parse a valid file. 
+  // Parse a valid file.
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test when there's no S-CSCF with all the mandatory capabilities
@@ -126,7 +126,7 @@ TEST_F(SCSCFSelectorTest, SelectOptionalCapabilities)
 
 TEST_F(SCSCFSelectorTest, SelectPriorities)
 {
-  // Parse a valid file. 
+  // Parse a valid file.
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
   // Test with S-CSCFs with the same mandatory and optional capabilities, but different priorities
@@ -150,11 +150,11 @@ TEST_F(SCSCFSelectorTest, RejectSCSCFs)
   // Parse a valid file.
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
 
-  // Test when there's only one S-CSCF with all the mandatory capabilities, but it's on the 
+  // Test when there's only one S-CSCF with all the mandatory capabilities, but it's on the
   // reject list
   ST({123, 432, 345}, {}, {"cw-scscf1.cw-ngv.com"}, "").test(scscf_);
 
-  // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites. The 
+  // Test with two S-CSCFs with the mandatory capabilities, and one has more optional capabilites. The
   // one with more optional capabilities is on the reject list, so the other one should be chosen.
   ST({123, 432}, {654}, {"cw-scscf2.cw-ngv.com"}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
@@ -173,7 +173,7 @@ TEST_F(SCSCFSelectorTest, MissingParts)
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_missing_parts.json"));
   EXPECT_TRUE(_log.contains("Badly formed S-CSCF entry"));
 
-  // Check that only one S-CSCF returned (with low priority), as the others couldn't 
+  // Check that only one S-CSCF returned (with low priority), as the others couldn't
   // be parsed
   ST({123, 432}, {123, 432}, {}, "cw-scscf1.cw-ngv.com").test(scscf_);
 }
@@ -191,7 +191,7 @@ TEST_F(SCSCFSelectorTest, MissingFile)
 {
   SCSCFSelector scscf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
   EXPECT_TRUE(_log.contains("Failed to read S-CSCF configuration data"));
-  
+
   // Check that no S-CSCF is returned
   ST({}, {}, {}, "").test(scscf_);
 }
