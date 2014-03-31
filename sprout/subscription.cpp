@@ -55,7 +55,7 @@ extern "C" {
 #include "notify_utils.h"
 #include "constants.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 static RegStore* store;
 static RegStore* remote_store;

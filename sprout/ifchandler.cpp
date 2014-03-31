@@ -52,7 +52,7 @@ extern "C" {
 #include "ifchandler.h"
 
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 #include "rapidxml/rapidxml_print.hpp"
 using namespace rapidxml;

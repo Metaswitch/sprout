@@ -43,7 +43,7 @@
 #include "utils.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
 #include "accumulator.h"

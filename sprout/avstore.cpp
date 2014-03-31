@@ -41,7 +41,7 @@
 #include "store.h"
 #include "avstore.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 AvStore::AvStore(Store* data_store) :
   _data_store(data_store)

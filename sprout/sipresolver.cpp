@@ -37,7 +37,7 @@
 #include "log.h"
 #include "sipresolver.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
   BaseResolver(dns_client)

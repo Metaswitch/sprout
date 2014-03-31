@@ -44,7 +44,7 @@
 #include "bgcfservice.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),

@@ -62,6 +62,7 @@ extern "C" {
 #include "stack.h"
 #include "pjutils.h"
 #include "chronosconnection.h"
+#include "sproutsasevent.h"
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :

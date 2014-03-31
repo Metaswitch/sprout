@@ -42,7 +42,7 @@
 #include "scscfselector.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 SCSCFSelector::SCSCFSelector(std::string configuration) :
   _configuration(configuration),

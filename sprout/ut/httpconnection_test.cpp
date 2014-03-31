@@ -45,7 +45,7 @@
 
 #include "utils.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"

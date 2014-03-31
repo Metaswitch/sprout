@@ -47,7 +47,7 @@
 #include "dnsresolver.h"
 #include "utils.h"
 #include "log.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 
 const boost::regex EnumService::CHARS_TO_STRIP_FROM_UAS = boost::regex("([^0-9+]|(?<=.)[^0-9])");

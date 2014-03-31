@@ -61,7 +61,7 @@ extern "C" {
 #include "log.h"
 #include "sas.h"
 #include "saslogger.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
 #include "zmq_lvc.h"

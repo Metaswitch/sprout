@@ -47,7 +47,7 @@
 
 #include "dnsresolver.h"
 #include "log.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 DNSResolver::DNSResolver(const struct IP46Address& server) :
                          _req_pending(false),

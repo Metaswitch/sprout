@@ -53,6 +53,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "log.h"
 #include <boost/lexical_cast.hpp>
+#include "sproutsasevent.h"
 
 #define MAX_SIP_MSG_SIZE 65535
 
