@@ -384,8 +384,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   stopWatch.start();
 
   SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_UPDATE_REG, 0);
+  event.add_var_param(public_user_identity);
   event.add_var_param(private_user_identity);
-  event.add_var_param(regstate);
   SAS::report_event(event);
 
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
