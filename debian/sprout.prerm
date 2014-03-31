@@ -80,8 +80,12 @@ case "$1" in
         rm -f /etc/monit/conf.d/$NAME.monit
         service monit restart
         service $NAME quiesce || /bin/true
-        remove_user
-        remove_logging
+        if [ $1 != "upgrade" ]; then
+            # We shouldn't do this cleanup on upgrade - deleting the
+            # logs loses valuable information
+            remove_user
+            remove_logging
+        fi
         remove_section /etc/security/limits.conf $NAME
     ;;
 
