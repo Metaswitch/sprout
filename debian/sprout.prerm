@@ -74,21 +74,18 @@ remove_logging() {
 }
 
 case "$1" in
-    remove|deconfigure)
+    remove|upgrade|deconfigure)
         # Must stop before attempting to remove the user, else that will fail.
         # Use || /bin/true to ignore a failure, because set -e is in effect.
         rm -f /etc/monit/conf.d/$NAME.monit
         service monit restart
         service $NAME quiesce || /bin/true
-        remove_user
-        remove_logging
-        remove_section /etc/security/limits.conf $NAME
-    ;;
-    upgrade)
-        # Like removal, except we don't delete the user or the log directory
-        rm -f /etc/monit/conf.d/$NAME.monit
-        service monit restart
-        service $NAME quiesce || /bin/true
+        if [ $1 != "upgrade" ]; then
+            # We shouldn't do this cleanup on upgrade - deleting the
+            # logs loses valuable information
+            remove_user
+            remove_logging
+        fi
         remove_section /etc/security/limits.conf $NAME
     ;;
 
