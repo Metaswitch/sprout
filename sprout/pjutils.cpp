@@ -708,8 +708,7 @@ void PJUtils::resolve(const std::string& name,
                                   port,
                                   transport,
                                   retries,
-                                  servers,
-                                  0);
+                                  servers);
 }
 
 

@@ -64,16 +64,16 @@ bool AvStore::set_av(const std::string& impi,
   std::string data = writer.write(*av);
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
-
+  std::string operation = "SET";
   if (status != Store::Status::OK)
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+    std::string error_msg = "Failed to write Authentication Vector for private_id " + impi;
+    LOG_ERROR(error_msg.c_str());
 
     SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param("SET");
-    event.add_var_param(key);
-    event.add_static_param(status);
+    event.add_var_param(operation);
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     return false;
@@ -81,9 +81,8 @@ bool AvStore::set_av(const std::string& impi,
   }
 
   SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-  event.add_var_param("SET");
-  event.add_var_param(key);
-  event.add_var_param(data);
+  event.add_var_param(operation);
+  event.add_var_param(impi);
   SAS::report_event(event);
 
   return true;
@@ -96,16 +95,16 @@ bool AvStore::delete_av(const std::string& impi,
   std::string key = impi + '\\' + nonce;
   LOG_DEBUG("Delete AV for %s", key.c_str());
   Store::Status status = _data_store->delete_data("av", key, trail);
-
+  std::string operation = "DELETE";
   if (status != Store::Status::OK)
   {
     // LCOV_EXCL_START
-    LOG_ERROR("Failed to delete Authentication Vector for private_id %s", impi.c_str());
+    std::string error_msg = "Failed to delete Authentication Vector for private_id " + impi;
+    LOG_ERROR(error_msg.c_str());
 
     SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param("DELETE");
-    event.add_var_param(key);
-    event.add_static_param(status);
+    event.add_var_param(operation);
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     return false;
@@ -113,9 +112,8 @@ bool AvStore::delete_av(const std::string& impi,
   }
 
   SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-  event.add_var_param("DELETE");
-  event.add_var_param(key);
-  event.add_var_param("");
+  event.add_var_param(operation);
+  event.add_var_param(impi);
   SAS::report_event(event);
 
   return true;
@@ -131,6 +129,7 @@ Json::Value* AvStore::get_av(const std::string& impi,
   std::string data;
   uint64_t cas;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
+  std::string operation = "GET";
 
   if (status == Store::Status::OK)
   {
@@ -147,17 +146,16 @@ Json::Value* AvStore::get_av(const std::string& impi,
     }
 
     SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-    event.add_var_param("GET");
-    event.add_var_param(key);
-    event.add_var_param(data);
+    event.add_var_param(operation);
+    event.add_var_param(impi);
     SAS::report_event(event);
   }
   else
   {
+    std::string error_msg = "Failed to get Authentication Vector for private_id " + impi;
     SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param("GET");
-    event.add_var_param(key);
-    event.add_static_param(status);
+    event.add_var_param(operation);
+    event.add_var_param(error_msg);
     SAS::report_event(event);
   }
 

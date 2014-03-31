@@ -87,8 +87,10 @@ void SIPResolver::resolve(const std::string& name,
   {
     SAS::Event event(trail, SASEvent::SIPRESOLVE_START, 0);
     event.add_var_param(name);
-    event.add_var_param(std::to_string(port));
-    event.add_var_param(std::to_string(transport));
+    std::string port_str = std::to_string(port);
+    std::string transport_str = get_transport_str(transport);
+    event.add_var_param(port_str);
+    event.add_var_param(transport_str);
     SAS::report_event(event);
   }
 
@@ -105,8 +107,10 @@ void SIPResolver::resolve(const std::string& name,
     {
       SAS::Event event(trail, SASEvent::SIPRESOLVE_IP_ADDRESS, 0);
       event.add_var_param(name);
-      event.add_var_param(std::to_string(ai.transport));
-      event.add_var_param(std::to_string(ai.port));
+      std::string port_str = std::to_string(ai.port);
+      std::string transport_str = get_transport_str(ai.transport);
+      event.add_var_param(transport_str);
+      event.add_var_param(port_str);
       SAS::report_event(event);
     }
   }
@@ -126,8 +130,10 @@ void SIPResolver::resolve(const std::string& name,
       {
         SAS::Event event(trail, SASEvent::SIPRESOLVE_PORT_A_LOOKUP, 0);
         event.add_var_param(name);
-        event.add_var_param(std::to_string(transport));
-        event.add_var_param(std::to_string(port));
+        std::string port_str = std::to_string(port);
+        std::string transport_str = get_transport_str(transport);
+        event.add_var_param(transport_str);
+        event.add_var_param(port_str);
         SAS::report_event(event);
       }
     }
@@ -160,7 +166,8 @@ void SIPResolver::resolve(const std::string& name,
             SAS::Event event(trail, SASEvent::SIPRESOLVE_NAPTR_SUCCESS_SRV, 0);
             event.add_var_param(name);
             event.add_var_param(srv_name);
-            event.add_var_param(std::to_string(naptr->transport));
+            std::string transport_str = get_transport_str(naptr->transport);
+            event.add_var_param(transport_str);
             SAS::report_event(event);
           }
         }
@@ -235,7 +242,8 @@ void SIPResolver::resolve(const std::string& name,
       {
         SAS::Event event(trail, SASEvent::SIPRESOLVE_TRANSPORT_SRV_LOOKUP, 0);
         event.add_var_param(name);
-        event.add_var_param(std::to_string(transport));
+        std::string transport_str = get_transport_str(transport);
+        event.add_var_param(transport_str);
         SAS::report_event(event);
       }
 
@@ -253,7 +261,8 @@ void SIPResolver::resolve(const std::string& name,
       {
         SAS::Event event(trail, SASEvent::SIPRESOLVE_TRANSPORT_SRV_LOOKUP, 0);
         event.add_var_param(name);
-        event.add_var_param(std::to_string(transport));
+        std::string transport_str = get_transport_str(transport);
+        event.add_var_param(transport_str);
         SAS::report_event(event);
       }
 
@@ -273,7 +282,8 @@ void SIPResolver::resolve(const std::string& name,
       {
         SAS::Event event(trail, SASEvent::SIPRESOLVE_SRV_LOOKUP, 0);
         event.add_var_param(srv_name);
-        event.add_var_param(std::to_string(transport));
+        std::string transport_str = get_transport_str(transport);
+        event.add_var_param(transport_str);
         SAS::report_event(event);
       }
 
@@ -288,8 +298,10 @@ void SIPResolver::resolve(const std::string& name,
       {
         SAS::Event event(trail, SASEvent::SIPRESOLVE_A_LOOKUP, 0);
         event.add_var_param(a_name);
-        event.add_var_param(std::to_string(transport));
-        event.add_var_param(std::to_string(port));
+        std::string transport_str = get_transport_str(transport);
+        std::string port_str = std::to_string(port);
+        event.add_var_param(transport_str);
+        event.add_var_param(port_str);
         SAS::report_event(event);
       }
 
@@ -298,3 +310,18 @@ void SIPResolver::resolve(const std::string& name,
   }
 }
 
+std::string SIPResolver::get_transport_str(int transport)
+{
+  if (transport == IPPROTO_UDP)
+  {
+    return "UDP";
+  }
+  else if (transport == IPPROTO_TCP)
+  {
+    return "UDP";
+  }
+  else
+  {
+    return "UNKNOWN";
+  }
+}

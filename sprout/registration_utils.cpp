@@ -144,12 +144,12 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     assert(status == PJ_SUCCESS);
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list, trail);
 
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 

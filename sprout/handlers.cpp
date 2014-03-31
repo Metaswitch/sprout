@@ -126,7 +126,18 @@ void RegistrationTimeoutHandler::run()
   }
 
   send_http_reply(200);
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
+  calling_dn.add_var_param(_aor_id);
+  SAS::report_marker(calling_dn);
+
   handle_response();
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   delete this;
 }
 
@@ -139,7 +150,17 @@ void AuthTimeoutHandler::run()
     return;
   }
 
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
+  calling_dn.add_var_param(_impu);
+  SAS::report_marker(calling_dn);
+
   int rc = handle_response(_req.body());
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   if (rc != 200)
   {
     LOG_DEBUG("Unable to handle callback from Chronos");
@@ -186,6 +207,7 @@ void DeregistrationHandler::run()
   }
 
   rc = handle_request();
+
   send_http_reply(rc);
   delete this;
 }

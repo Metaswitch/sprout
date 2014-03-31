@@ -446,8 +446,11 @@ void process_register_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting register request using non SIP URI");
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
-    event.add_var_param("");
-    event.add_var_param("Rejecting register request using non SIP URI");
+    // Can't log the public ID as the REGISTER has failed too early
+    std::string public_id = "UNKNOWN";
+    std::string error_msg = "Rejecting register request using non SIP URI";
+    event.add_var_param(public_id);
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -536,7 +539,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
-    event.add_var_param("Rejecting register request with invalid public/private identity");
+    std::string error_msg = "Rejecting register request with invalid public/private identity";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -588,7 +592,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
-    event.add_var_param("Unable to access Registration Store");
+    std::string error_msg = "Unable to access Registration Store";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     // LCOV_EXCL_STOP
@@ -650,7 +655,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
     event.add_var_param(public_id);
-    event.add_var_param("Failed to add RFC 5636 headers");
+    std::string error_msg = "Failed to add RFC 5636 headers";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
@@ -701,7 +707,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
         SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
         event.add_var_param(public_id);
-        event.add_var_param("Badly formed contact URI - " + binding->_uri);
+        std::string error_msg = "Badly formed contact URI - " + binding->_uri;
+        event.add_var_param(error_msg);
         SAS::report_event(event);
         // LCOV_EXCL_STOP
       }

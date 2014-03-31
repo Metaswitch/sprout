@@ -311,7 +311,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       LOG_DEBUG("Add AKA information");
 
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
-      event.add_var_param("AKA");
+      std::string AKA = "AKA";
+      event.add_var_param(AKA);
       SAS::report_event(event);
 
       Json::Value& aka = (*av)["aka"];
@@ -346,7 +347,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       LOG_DEBUG("Add Digest information");
 
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
-      event.add_var_param("DIGEST");
+      std::string DIGEST = "DIGEST";
+      event.add_var_param(DIGEST);
       SAS::report_event(event);
 
       Json::Value& digest = (*av)["digest"];
@@ -383,7 +385,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   else
   {
     SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED, 0);
-    event.add_var_param("Failed to get Authentication vector");
+    std::string error_msg = "Failed to get Authentication vector";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
@@ -403,7 +406,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   {
     // Request not received on S-CSCF port, so don't authenticate it.
     SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
-    event.add_var_param("Request wasn't received on S-CSCF port");
+    std::string error_msg = "Request wasn't received on S-CSCF port";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     return PJ_FALSE;
@@ -414,7 +418,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // Non-REGISTER request, so don't do authentication as it must have come
     // from an authenticated or trusted source.
     SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
-    event.add_var_param("Request wasn't a REGISTER");
+    std::string error_msg = "Request wasn't a REGISTER";
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     return PJ_FALSE;
@@ -445,7 +450,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       LOG_INFO("Request integrity protected by edge proxy");
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
-      event.add_var_param("Request integrity protected by edge proxy");
+      std::string error_msg = "Request integrity protected by edge proxy";
+      event.add_var_param(error_msg);
       SAS::report_event(event);
 
       return PJ_FALSE;
@@ -469,8 +475,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       LOG_DEBUG("Request authenticated successfully");
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
-      std::string auth_header = PJUtils::get_header_value((pjsip_hdr*)auth_hdr);
-      event.add_var_param(auth_header);
       SAS::report_event(event);
 
       // If doing AKA authentication, check for an AUTS parameter.  We only

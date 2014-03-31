@@ -249,8 +249,10 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
     event.add_var_param(matches[0].server);
     event.add_var_param(mandatory_str);
     event.add_var_param(optional_str);
-    event.add_var_param(std::to_string(matches[0].priority));
-    event.add_var_param(std::to_string(matches[0].weight));
+    std::string priority_str = std::to_string(matches[0].priority);
+    std::string weight_str = std::to_string(matches[0].weight);
+    event.add_var_param(priority_str);
+    event.add_var_param(weight_str);
     event.add_var_param(reject_str);
     SAS::report_event(event);
 
@@ -278,8 +280,10 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   event.add_var_param(matches[index].server);
   event.add_var_param(mandatory_str);
   event.add_var_param(optional_str);
-  event.add_var_param(std::to_string(matches[index].priority));
-  event.add_var_param(std::to_string(matches[index].weight));
+  std::string priority_str = std::to_string(matches[index].priority);
+  std::string weight_str = std::to_string(matches[index].weight);
+  event.add_var_param(priority_str);
+  event.add_var_param(weight_str);
   event.add_var_param(reject_str);
   SAS::report_event(event);
 

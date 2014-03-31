@@ -311,7 +311,7 @@ void ICSCFProxy::UASTsx::on_final_response()
     if (_best_rsp->msg->line.status.code >= 300)
     {
       // Request rejected, see if we can/should do a retry.
-     retried = retry_request(_best_rsp->msg->line.status.code);
+      retried = retry_request(_best_rsp->msg->line.status.code);
     }
 
     if (!retried)
@@ -344,7 +344,8 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
 
       std::string st_code = std::to_string(rsp_status);
       SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
-      event.add_var_param("REGISTER");
+      std::string method = "REGISTER";
+      event.add_var_param(method);
       event.add_var_param(st_code);
       SAS::report_event(event);
 
@@ -405,7 +406,8 @@ bool ICSCFProxy::UASTsx::retry_request(int rsp_status)
 
       std::string st_code = std::to_string(rsp_status);
       SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
-      event.add_var_param("NON-REGISTER");
+      std::string method = "NON-REGISTER";
+      event.add_var_param(method);
       event.add_var_param(st_code);
       SAS::report_event(event);
 
@@ -532,12 +534,20 @@ int ICSCFProxy::UASTsx::registration_status_query(const std::string& impi,
     status_code = PJSIP_SC_FORBIDDEN;
   }
 
-  SAS::Event event(trail(), SASEvent::SCSCF_SELECTION, 0);
-  event.add_var_param(scscf);
-  event.add_var_param(_hss_rsp._scscf);
-  std::string st_code = std::to_string(status_code);
-  event.add_var_param(st_code);
-  SAS::report_event(event);
+  if (status_code == PJSIP_SC_OK)
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    event.add_var_param(scscf);
+    event.add_var_param(_hss_rsp._scscf);
+    SAS::report_event(event);
+  }
+  else
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    std::string st_code = std::to_string(status_code);
+    event.add_var_param(st_code);
+    SAS::report_event(event);
+  }
 
   return status_code;
 }
@@ -618,12 +628,20 @@ int ICSCFProxy::UASTsx::location_query(const std::string& impu,
     }
   }
 
-  SAS::Event event(trail(), SASEvent::SCSCF_SELECTION, 0);
-  event.add_var_param(scscf);
-  event.add_var_param(_hss_rsp._scscf);
-  std::string st_code = std::to_string(status_code);
-  event.add_var_param(st_code);
-  SAS::report_event(event);
+  if (status_code == PJSIP_SC_OK)
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    event.add_var_param(scscf);
+    event.add_var_param(_hss_rsp._scscf);
+    SAS::report_event(event);
+  }
+  else
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    std::string st_code = std::to_string(status_code);
+    event.add_var_param(st_code);
+    SAS::report_event(event);
+  }
 
   return status_code;
 }

@@ -114,8 +114,6 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
 
     SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
     event.add_var_param(aor_id);
-    event.add_var_param(data);
-    event.add_var_param(std::to_string(cas));
     SAS::report_event(event);
   }
   else if (status == Store::Status::NOT_FOUND)
@@ -134,7 +132,6 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
     // LCOV_EXCL_START
     SAS::Event event(trail, SASEvent::REGSTORE_GET_FAILURE, 0);
     event.add_var_param(aor_id);
-    event.add_static_param(status);
     SAS::report_event(event);
     // LCOV_EXCL_STOP
   }
@@ -251,9 +248,6 @@ bool RegStore::Connector::set_aor_data(const std::string& aor_id,
 
   SAS::Event event(trail, SASEvent::REGSTORE_SET_START, 0);
   event.add_var_param(aor_id);
-  event.add_var_param(data);
-  event.add_var_param(std::to_string(aor_data->_cas));
-  event.add_var_param(std::to_string(expiry));
   SAS::report_event(event);
 
   Store::Status status = _data_store->set_data("reg",
@@ -265,10 +259,21 @@ bool RegStore::Connector::set_aor_data(const std::string& aor_id,
 
   LOG_DEBUG("Data store set_data returned %d", status);
 
-  SAS::Event event2(trail, SASEvent::REGSTORE_SET_RESULT, 0);
-  event2.add_var_param(aor_id);
-  event2.add_static_param(status);
-  SAS::report_event(event2);
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event2(trail, SASEvent::REGSTORE_SET_SUCCESS, 0);
+    event2.add_var_param(aor_id);
+    SAS::report_event(event2);
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    SAS::Event event2(trail, SASEvent::REGSTORE_SET_FAILURE, 0);
+    event2.add_var_param(aor_id);
+    SAS::report_event(event2);
+    // LCOV_EXCL_STOP
+  }
+
 
   return (status == Store::Status::OK);
 }

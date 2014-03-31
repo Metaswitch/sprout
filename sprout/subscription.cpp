@@ -294,8 +294,11 @@ void process_subscription_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting subscribe request using non SIP URI");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
-    event.add_var_param("");
-    event.add_var_param("Subscribe failed as using non SIP URI");
+    // Can't log the public ID as the subscribe has failed too early
+    std::string pub_id = "UNKNOWN";
+    std::string error_msg = "Subscribe failed as using non SIP URI";
+    event.add_var_param(pub_id);
+    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -446,7 +449,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     {
       // LCOV_EXCL_START
       SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-      std::string error_msg = "Sending notification failed with error code: " + std::to_string(status);
+      std::string error_msg = "Failed to send NOTIFY - error code: " + std::to_string(status);
       event.add_var_param(error_msg);
       SAS::report_event(event);
       // LCOV_EXCL_STOP
@@ -480,11 +483,12 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 
     if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
     {
-      // The Event header is missing or doesn't match "Reg"
+      // The Event header is missing or doesn't match "reg"
       LOG_DEBUG("Rejecting subscription request with invalid event header");
 
       SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-      event.add_var_param("SUBSCRIBE rejected by the S-CSCF as the Event header is invalid or missing - it should be 'reg'");
+      std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Event header is invalid or missing - it should be 'reg'";
+      event.add_var_param(error_msg);
       SAS::report_event(event);
 
       return PJ_FALSE;
@@ -510,7 +514,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
         LOG_DEBUG("Rejecting subscription request with invalid accept header");
 
         SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-        event.add_var_param("SUBSCRIBE rejected by the S-CSCF as the Accepts header is invalid - if it's present it should be 'application/reginfo+xml'");
+        std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Accepts header is invalid - if it's present it should be 'application/reginfo+xml'";
+        event.add_var_param(error_msg);
         SAS::report_event(event);
 
         return PJ_FALSE;
@@ -522,7 +527,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   }
 
   SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-  event.add_var_param("SUBSCRIBE rejected by the S-CSCF as it wasn't targeted at the home domain or this node");
+  std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as it wasn't targeted at the home domain or this node";
+  event.add_var_param(error_msg);
   SAS::report_event(event);
 
   return PJ_FALSE;
