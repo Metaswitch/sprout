@@ -81,6 +81,12 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     // Save the method.
     _method = PJUtils::pj_str_to_string(&req->line.req.method.name);
 
+    // Find the From and To headers.
+    pjsip_fromto_hdr* to_hdr = (pjsip_fromto_hdr*)
+                                     pjsip_msg_find_hdr(req, PJSIP_H_TO, NULL);
+    pjsip_fromto_hdr* from_hdr = (pjsip_fromto_hdr*)
+                                   pjsip_msg_find_hdr(req, PJSIP_H_FROM, NULL);
+
     // Set the record type based on the node functionality and the method.
     // This may get changed later (for example, if an INVITE transaction fails
     // we send EVENT instead of START).
@@ -88,7 +94,6 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
         (_node_functionality == SCSCF))
     {
       LOG_DEBUG("Set record type for P/S-CSCF");
-      pjsip_fromto_hdr* to_hdr = (pjsip_fromto_hdr*)pjsip_msg_find_hdr(req, PJSIP_H_TO, NULL);
       if ((_method == "REGISTER") ||
           (_method == "SUBSCRIBE") ||
           (_method == "NOTIFY") ||
@@ -172,8 +177,6 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     }
 
     // Store contents of From header.
-    pjsip_fromto_hdr* from_hdr = (pjsip_fromto_hdr*)
-                                   pjsip_msg_find_hdr(req, PJSIP_H_FROM, NULL);
     if (from_hdr != NULL)
     {
       _from_address = hdr_contents((pjsip_hdr*)from_hdr);
@@ -234,6 +237,21 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
       // For originating requests take the subscription identifiers from
       // P-Asserted-Identity headers in the original request.
       store_subscription_ids(req);
+    }
+
+    if ((_method == "REGISTER") &&
+        (to_hdr != NULL))
+    {
+      // For a register method, both the subscription id and the called party
+      // address are the public user identity being registered, so should be
+      // the URI in the To header.
+      pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri);
+      _called_party_address =
+                          PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
+      SubscriptionId id;
+      id.type = END_USER_SIP_URI;
+      id.id = _called_party_address;
+      _subscription_ids.push_back(id);
     }
 
     // Store the calling party addresses (from P-Asserted-Identity headers).
@@ -941,31 +959,37 @@ void ACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 
 void ACR::store_charging_addresses(pjsip_msg* msg)
 {
-  pjsip_p_c_f_a_hdr* p_cfa_hdr = (pjsip_p_c_f_a_hdr*)
-                           pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
-  if (p_cfa_hdr != NULL)
+  // Only store charging addresses for START or EVENT ACRs - they are not
+  // needed for INTERIM or STOP ACRs.
+  if ((_record_type == START_RECORD) ||
+      (_record_type == EVENT_RECORD))
   {
-    // Clear out any existing entries.
-    LOG_DEBUG("Found a P-Charging-Function-Address header");
-    _ccfs.clear();
-    _ecfs.clear();
-
-    // Copy CCFs from the header.
-    for (pjsip_param* p = p_cfa_hdr->ccf.next;
-         (p != NULL) && (p != &p_cfa_hdr->ccf);
-         p = p->next)
+    pjsip_p_c_f_a_hdr* p_cfa_hdr = (pjsip_p_c_f_a_hdr*)
+                             pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
+    if (p_cfa_hdr != NULL)
     {
-      _ccfs.push_back(PJUtils::pj_str_to_string(&p->value));
-    }
+      // Clear out any existing entries.
+      LOG_DEBUG("Found a P-Charging-Function-Address header");
+      _ccfs.clear();
+      _ecfs.clear();
 
-    // Copy ECFs from the header.
-    for (pjsip_param* p = p_cfa_hdr->ecf.next;
-         (p != NULL) && (p != &p_cfa_hdr->ecf);
-         p = p->next)
-    {
-      _ecfs.push_back(PJUtils::pj_str_to_string(&p->value));
+      // Copy CCFs from the header.
+      for (pjsip_param* p = p_cfa_hdr->ccf.next;
+           (p != NULL) && (p != &p_cfa_hdr->ccf);
+           p = p->next)
+      {
+        _ccfs.push_back(PJUtils::pj_str_to_string(&p->value));
+      }
+
+      // Copy ECFs from the header.
+      for (pjsip_param* p = p_cfa_hdr->ecf.next;
+           (p != NULL) && (p != &p_cfa_hdr->ecf);
+           p = p->next)
+      {
+        _ecfs.push_back(PJUtils::pj_str_to_string(&p->value));
+      }
+      LOG_DEBUG("%d ccfs and %d ecfs", _ccfs.size(), _ecfs.size());
     }
-    LOG_DEBUG("%d ccfs and %d ecfs", _ccfs.size(), _ecfs.size());
   }
 }
 

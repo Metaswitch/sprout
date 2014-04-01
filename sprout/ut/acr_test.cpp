@@ -125,13 +125,12 @@ protected:
     {
       Json::FastWriter writer;
       printf("JSON comparison failed\n%s\n%s\n",
-             writer.write(json_output).c_str(),
-             writer.write(json_expected).c_str());
+             json_output.toStyledString().c_str(),
+             json_expected.toStyledString().c_str());
     }
 
     return rc;
   }
-
 };
 
 class SIPRequest
@@ -190,6 +189,8 @@ public:
       );
 
     EXPECT_LT(n, (int)sizeof(buf));
+
+    LOG_DEBUG("Request\n%s", buf);
 
     return string(buf, n);
   }
@@ -255,26 +256,79 @@ public:
 
     EXPECT_LT(n, (int)sizeof(buf));
 
+    LOG_DEBUG("Response\n%s", buf);
+
     return string(buf, n);
   }
 
 };
 
 
+TEST_F(ACRTest, SCSCFRegister)
+{
+  // Tests mainline Rf message generation for a successful registration transaction
+  // at the S-CSCF.
+  pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
+
+  // Create an ACR factory for S-CSCF ACRs.
+  ACRFactory f(NULL, SCSCF);
+
+  // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the original REGISTER request.
+  SIPRequest reg("REGISTER");
+  reg._requri = "sip:homedomain";
+  reg._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  reg._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reg._extra_hdrs += "Expires: 300\r\n";
+  reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  reg._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the request to the ACR as a received request.
+  ts.sec = 1;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(reg.get()), ts);
+
+  // Now build a 200 OK response.
+  SIPResponse reg200ok(200, "REGISTER");
+  reg200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reg200ok._extra_hdrs = "P-Associated-URI: <sip:6505550000@homedomain>, <tel:6505550000>\r\n";
+
+  // Pass the response to ACR as a transmitted response.
+  ts.msec = 25;
+  acr->tx_response(parse_msg(reg200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscfregister.json"));
+  delete acr;
+
+}
+
 TEST_F(ACRTest, SCSCFOrigCall)
 {
   // Tests mainline Rf message generation for a successful originating call
   // through a S-CSCF.
   pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
 
-  // Create an ACR instance for the test.
-  ACR rf(NULL, 0, SCSCF, CALLING_PARTY);
+  // Create an ACR factory for S-CSCF ACRs.
+  ACRFactory f(NULL, SCSCF);
+
+  // Create an ACR instance for the ACR[START] triggered by the INVITE.
+  acr = f.get_acr(0, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
   invite._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
   invite._to = "\"6505550001\" <sip:6505550001@homedomain>";   // Strip tag.
-  invite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\">\r\n";
+  invite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   invite._extra_hdrs += "Session-Expires: 600\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
@@ -356,13 +410,13 @@ TEST_F(ACRTest, SCSCFOrigCall)
   // Pass the request to the ACR as a received request.
   ts.sec = 1;
   ts.msec = 0;
-  rf.rx_request(parse_msg(invite.get()), ts);
+  acr->rx_request(parse_msg(invite.get()), ts);
 
   // Build a 100 Trying response and pass it to the ACR as a transmitted
   // response.
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
-  rf.tx_response(parse_msg(r100trying.get()), ts);
+  acr->tx_response(parse_msg(r100trying.get()), ts);
 
   // Update the message as if we're transmitting it to an AS, by replacing
   // the existing Route header with the usual two Route headers.
@@ -370,11 +424,11 @@ TEST_F(ACRTest, SCSCFOrigCall)
 
   // Pass the request to the ACR as a transmitted request.
   ts.msec = 10;
-  rf.tx_request(parse_msg(invite.get()), ts);
+  acr->tx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR as a received response (from the AS).
   ts.msec = 15;
-  rf.rx_response(parse_msg(r100trying.get()), ts);
+  acr->rx_response(parse_msg(r100trying.get()), ts);
 
   // Update the INVITE request as it comes back from the AS - remove the first
   // Route header and change the RequestURI to do a redirect.
@@ -383,12 +437,12 @@ TEST_F(ACRTest, SCSCFOrigCall)
 
   // Pass the request to the ACR as a received request.
   ts.msec = 20;
-  rf.rx_request(parse_msg(invite.get()), ts);
+  acr->rx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR again as a transmitted response,
   // this time to the target endpoint.
   ts.msec = 25;
-  rf.tx_response(parse_msg(r100trying.get()), ts);
+  acr->tx_response(parse_msg(r100trying.get()), ts);
 
   // Update the request as it is finally forwarded by the S-CSCF by adding
   // a Route header routing the request to the I-CSCF.
@@ -396,22 +450,22 @@ TEST_F(ACRTest, SCSCFOrigCall)
 
   // Pass the request to the ACR as a finally transmitted request.
   ts.msec = 30;
-  rf.tx_request(parse_msg(invite.get()), ts);
+  acr->tx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR again as a received response,
   // this time from the target endpoint.
   ts.msec = 35;
-  rf.rx_response(parse_msg(r100trying.get()), ts);
+  acr->rx_response(parse_msg(r100trying.get()), ts);
 
   // Now build a 200 OK response.
-  SIPResponse r200ok(200, "INVITE");
-  r200ok._extra_hdrs = "Contact: <sip:6505550001@10.83.18.50:12345;transport=TCP;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\">\r\n";
-  r200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
-  r200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
-  r200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
-  r200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
-  r200ok._extra_hdrs += "Content-Type: application/sdp\r\n";
-  r200ok._body =
+  SIPResponse invite200ok(200, "INVITE");
+  invite200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
+  invite200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
+  invite200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
+  invite200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
+  invite200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  invite200ok._extra_hdrs += "Content-Type: application/sdp\r\n";
+  invite200ok._body =
 "v=0\r\n"
 "o=- 2728502836004741600 2 IN IP4 127.0.0.1\r\n"
 "s=Doubango Telecom - chrome\r\n"
@@ -486,20 +540,99 @@ TEST_F(ACRTest, SCSCFOrigCall)
   // Pass the response to ACR as if it was making its way back through the
   // AS chain.
   ts.msec = 40;
-  rf.rx_response(parse_msg(r200ok.get()), ts);
+  acr->rx_response(parse_msg(invite200ok.get()), ts);
   ts.msec = 50;
-  rf.tx_response(parse_msg(r200ok.get()), ts);
+  acr->tx_response(parse_msg(invite200ok.get()), ts);
   ts.msec = 60;
-  rf.rx_response(parse_msg(r200ok.get()), ts);
-  rf.as_info("sip:as1.homedomain:5060;transport=TCP",
-             "sip:6505559999@homedomain",
-             200);
+  acr->rx_response(parse_msg(invite200ok.get()), ts);
+  acr->as_info("sip:as1.homedomain:5060;transport=TCP",
+               "sip:6505559999@homedomain",
+               200);
   ts.msec = 70;
-  rf.tx_response(parse_msg(r200ok.get()), ts);
+  acr->tx_response(parse_msg(invite200ok.get()), ts);
 
   // Build and checked the resulting Rf ACR message.
-  string rf_acr = rf.get_message(ts);
-  EXPECT_TRUE(compare_acr(rf_acr, "acr_scscforigcall_1.json"));
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscforigcall_start.json"));
+  delete acr;
+
+  // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the reINVITE request.
+  SIPRequest reinvite("INVITE");
+  reinvite._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
+  reinvite._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  reinvite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reinvite._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
+  reinvite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
+  reinvite._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  reinvite._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the reINVITE request to the ACR on its way through the S-CSCF.  We're
+  // assuming the AS didn't Record-Route itself.
+  ts.sec = 60;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(reinvite.get()), ts);
+  ts.msec = 5;
+  acr->tx_request(parse_msg(reinvite.get()), ts);
+
+  // Build a 200 OK response, and pass it to the ACR on the way through the S-CSCF.
+  // Now build a 200 OK response.
+  SIPResponse reinvite200ok(200, "INVITE");
+  reinvite200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
+  reinvite200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
+  reinvite200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
+  reinvite200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
+  reinvite200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  ts.msec = 10;
+  acr->rx_response(parse_msg(reinvite200ok.get()), ts);
+  ts.msec = 15;
+  acr->tx_response(parse_msg(reinvite200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscforigcall_interim.json"));
+  delete acr;
+
+  // Create an ACR instance for the ACR[STOP] triggered by a BYE.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the BYE request.
+  SIPRequest bye("BYE");
+  bye._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
+  bye._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  bye._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  bye._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
+  bye._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
+  bye._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  bye._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the BYE request to the ACR on its way through the S-CSCF.  We're
+  // assuming the AS didn't Record-Route itself.
+  ts.sec = 120;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(bye.get()), ts);
+  ts.msec = 5;
+  acr->tx_request(parse_msg(bye.get()), ts);
+
+  // Build a 200 OK response, and pass it to the ACR on the way through the S-CSCF.
+  // Now build a 200 OK response.
+  SIPResponse bye200ok(200, "BYE");
+  bye200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
+  bye200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
+  bye200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
+  bye200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
+  bye200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  ts.msec = 15;
+  acr->rx_response(parse_msg(bye200ok.get()), ts);
+  ts.msec = 20;
+  acr->tx_response(parse_msg(bye200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscforigcall_stop.json"));
+  delete acr;
 }
 
 TEST_F(ACRTest, SCSCFTermCall)
@@ -507,15 +640,20 @@ TEST_F(ACRTest, SCSCFTermCall)
   // Tests mainline Rf message generation for a successful terminating call
   // through a S-CSCF.
   pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
+
+  // Create an ACR factory for S-CSCF ACRs.
+  ACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the test.
-  ACR rf(NULL, 0, SCSCF, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
   invite._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;lr>\r\n";
   invite._to = "\"6505550001\" <sip:6505550001@homedomain>";   // Strip tag.
-  invite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\">\r\n";
+  invite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   invite._extra_hdrs += "Session-Expires: 600\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
   invite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
@@ -597,13 +735,13 @@ TEST_F(ACRTest, SCSCFTermCall)
   // Pass the request to the ACR as a received request.
   ts.sec = 1;
   ts.msec = 0;
-  rf.rx_request(parse_msg(invite.get()), ts);
+  acr->rx_request(parse_msg(invite.get()), ts);
 
   // Build a 100 Trying response and pass it to the ACR as a transmitted
   // response.
   SIPResponse r100trying(100, "INVITE");
   ts.msec = 5;
-  rf.tx_response(parse_msg(r100trying.get()), ts);
+  acr->tx_response(parse_msg(r100trying.get()), ts);
 
   // Update the message as if we're transmitting it to an AS, by replacing
   // the existing Route header with the usual two Route headers.
@@ -611,11 +749,11 @@ TEST_F(ACRTest, SCSCFTermCall)
 
   // Pass the request to the ACR as a transmitted request.
   ts.msec = 10;
-  rf.tx_request(parse_msg(invite.get()), ts);
+  acr->tx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR as a received response (from the AS).
   ts.msec = 15;
-  rf.rx_response(parse_msg(r100trying.get()), ts);
+  acr->rx_response(parse_msg(r100trying.get()), ts);
 
   // Update the INVITE request as it comes back from the AS - remove the first
   // Route header and change the RequestURI to do a redirect.
@@ -624,12 +762,12 @@ TEST_F(ACRTest, SCSCFTermCall)
 
   // Pass the request to the ACR as a received request.
   ts.msec = 20;
-  rf.rx_request(parse_msg(invite.get()), ts);
+  acr->rx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR again as a transmitted response,
   // this time to the target endpoint.
   ts.msec = 25;
-  rf.tx_response(parse_msg(r100trying.get()), ts);
+  acr->tx_response(parse_msg(r100trying.get()), ts);
 
   // Update the request as it is finally forwarded by the S-CSCF by adding
   // a Route header routing the request to the appropriate flow on the
@@ -639,16 +777,16 @@ TEST_F(ACRTest, SCSCFTermCall)
 
   // Pass the request to the ACR as a finally transmitted request.
   ts.msec = 30;
-  rf.tx_request(parse_msg(invite.get()), ts);
+  acr->tx_request(parse_msg(invite.get()), ts);
 
   // Pass the 100 Trying response to the ACR again as a received response,
   // this time from the target endpoint.
   ts.msec = 35;
-  rf.rx_response(parse_msg(r100trying.get()), ts);
+  acr->rx_response(parse_msg(r100trying.get()), ts);
 
   // Now build a 200 OK response.
   SIPResponse r200ok(200, "INVITE");
-  r200ok._extra_hdrs = "Contact: <sip:6505550001@10.83.18.50:12345;transport=TCP;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\">\r\n";
+  r200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
   r200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
   r200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
   r200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
@@ -729,20 +867,100 @@ TEST_F(ACRTest, SCSCFTermCall)
   // Pass the response to ACR as if it was making its way back through the
   // AS chain.
   ts.msec = 40;
-  rf.rx_response(parse_msg(r200ok.get()), ts);
+  acr->rx_response(parse_msg(r200ok.get()), ts);
   ts.msec = 50;
-  rf.tx_response(parse_msg(r200ok.get()), ts);
+  acr->tx_response(parse_msg(r200ok.get()), ts);
   ts.msec = 60;
-  rf.rx_response(parse_msg(r200ok.get()), ts);
-  rf.as_info("sip:as1.homedomain:5060;transport=TCP",
-             "sip:6505559999@homedomain",
+  acr->rx_response(parse_msg(r200ok.get()), ts);
+  acr->as_info("sip:as1.homedomain:5060;transport=TCP",
+               "sip:6505559999@homedomain",
              200);
   ts.msec = 70;
-  rf.tx_response(parse_msg(r200ok.get()), ts);
+  acr->tx_response(parse_msg(r200ok.get()), ts);
 
   // Build and checked the resulting Rf ACR message.
-  string rf_acr = rf.get_message(ts);
+  string rf_acr = acr->get_message(ts);
   EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_1.json"));
+
+  delete acr;
+
+  // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the reINVITE request.
+  SIPRequest reinvite("INVITE");
+  reinvite._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
+  reinvite._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;lr>\r\n";
+  reinvite._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reinvite._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
+  reinvite._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
+  reinvite._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  reinvite._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the reINVITE request to the ACR on its way through the S-CSCF.  We're
+  // assuming the AS didn't Record-Route itself.
+  ts.sec = 60;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(reinvite.get()), ts);
+  ts.msec = 5;
+  acr->tx_request(parse_msg(reinvite.get()), ts);
+
+  // Build a 200 OK response, and pass it to the ACR on the way through the S-CSCF.
+  // Now build a 200 OK response.
+  SIPResponse reinvite200ok(200, "INVITE");
+  reinvite200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
+  reinvite200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
+  reinvite200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
+  reinvite200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
+  reinvite200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  ts.msec = 10;
+  acr->rx_response(parse_msg(reinvite200ok.get()), ts);
+  ts.msec = 15;
+  acr->tx_response(parse_msg(reinvite200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscftermcall_interim.json"));
+  delete acr;
+
+  // Create an ACR instance for the ACR[STOP] triggered by a BYE.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the BYE request.
+  SIPRequest bye("BYE");
+  bye._requri = "sip:6505559999@10.83.18.50:12345;transport=TCP";
+  bye._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;lr>\r\n";
+  bye._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  bye._extra_hdrs += "P-Asserted-Identity: \"6505550000\" <sip:6505550000@homedomain>\r\n";
+  bye._extra_hdrs += "P-Asserted-Identity: <tel:6505550000>\r\n";
+  bye._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  bye._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the BYE request to the ACR on its way through the S-CSCF.  We're
+  // assuming the AS didn't Record-Route itself.
+  ts.sec = 120;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(bye.get()), ts);
+  ts.msec = 5;
+  acr->tx_request(parse_msg(bye.get()), ts);
+
+  // Build a 200 OK response, and pass it to the ACR on the way through the S-CSCF.
+  // Now build a 200 OK response.
+  SIPResponse bye200ok(200, "BYE");
+  bye200ok._extra_hdrs = "Contact: <sip:6505559999@10.83.18.50:12345;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-cdef12345678>\"\r\n";
+  bye200ok._extra_hdrs += "P-Asserted-Identity: \"6505550001\" <sip:6505550001@homedomain>\r\n";
+  bye200ok._extra_hdrs += "P-Asserted-Identity: <tel:6505550001>\r\n";
+  bye200ok._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain;term-ioi=homedomain\r\n";
+  bye200ok._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  ts.msec = 15;
+  acr->rx_response(parse_msg(bye200ok.get()), ts);
+  ts.msec = 20;
+  acr->tx_response(parse_msg(bye200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscftermcall_stop.json"));
+  delete acr;
 }
 
 
