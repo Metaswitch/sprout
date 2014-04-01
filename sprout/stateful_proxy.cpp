@@ -2359,7 +2359,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->orig_ioi = stack_data.default_home_domain;
+    pcv->orig_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply originating call services to the message
@@ -2458,7 +2458,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->term_ioi = stack_data.default_home_domain;
+    pcv->term_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply terminating call services to the message

@@ -2057,7 +2057,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!integrity.empty())
   {
     actual = get_headers(tdata->msg, "Authorization");
-    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", realm=\"homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
+    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
   }
 
   // Check P-Charging headers are added correctly

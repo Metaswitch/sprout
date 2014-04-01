@@ -317,6 +317,21 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   return id;
 }
 
+/// Extract the domain from a SIP URI.  If none is present, return the default
+/// home domain.
+pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
+{
+  pjsip_uri* uri = PJUtils::uri_from_string(uri_str, pool);
+  if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
+      PJSIP_URI_SCHEME_IS_SIPS(uri))
+  {
+    return ((pjsip_sip_uri*)uri)->host;
+  }
+  else
+  {
+    return stack_data.default_home_domain;
+  }
+}
 
 /// Determine the served user for originating requests.
 pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
@@ -380,7 +395,6 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   {
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
-    auth_hdr->credential.digest.realm = stack_data.default_home_domain;
     // Construct a default private identifier from the URI in the To header.
     LOG_DEBUG("Construct default private identity");
     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
