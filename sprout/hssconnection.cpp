@@ -183,7 +183,7 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 {
   std::string json_data;
 
-  HTTPCode rc = _http->get(path, json_data, "", trail);
+  HTTPCode rc = _http->send_get(path, json_data, "", trail);
   if (rc == HTTP_OK)
   {
     json_object = new Json::Value;
@@ -231,8 +231,9 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
                                            SAS::TrailId trail)
 {
   std::string raw_data;
+  std::map<std::string, std::string> unused_headers;
 
-  HTTPCode http_code = _http->send_put(path, body, raw_data, trail);
+  HTTPCode http_code = _http->send_put(path, unused_headers, raw_data, body, trail);
 
   if (http_code == HTTP_OK)
   {
@@ -250,7 +251,7 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 {
   std::string raw_data;
 
-  HTTPCode http_code = _http->get(path, raw_data, "", trail);
+  HTTPCode http_code = _http->send_get(path, raw_data, "", trail);
 
   if (http_code == HTTP_OK)
   {

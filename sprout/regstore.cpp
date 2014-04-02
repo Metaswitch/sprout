@@ -229,7 +229,8 @@ bool RegStore::set_aor_data(const std::string& aor_id,
         status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, 0);
       }
 
-      // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register.
+      // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register
+      // or update the stored timer id.
       if (status == HTTP_OK)
       {
         b->_timer_id = timer_id;

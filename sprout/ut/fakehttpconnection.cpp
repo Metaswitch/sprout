@@ -61,7 +61,7 @@ void FakeHttpConnection::flush_all()
   _db.clear();
 }
 
-long FakeHttpConnection::get(const std::string& uri, std::string& doc, const std::string& username, SAS::TrailId trail)
+long FakeHttpConnection::send_get(const std::string& uri, std::string& doc, const std::string& username, SAS::TrailId trail)
 {
   std::map<std::string, std::string>::iterator i = _db.find(uri);
   if (i != _db.end())

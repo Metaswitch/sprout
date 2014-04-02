@@ -81,18 +81,21 @@ HTTPCode FakeChronosConnection::send_post(std::string& post_identity,
                                           SAS::TrailId trail)
 {
   HTTPCode status = get_result(post_identity);
+
   post_identity = "post_identity";
   return status;
 }
 
-HTTPCode FakeChronosConnection::send_put(const std::string& put_identity,
+HTTPCode FakeChronosConnection::send_put(std::string& put_identity,
                                          uint32_t timer_interval,
                                          const std::string& callback_uri,
                                          const std::string& opaque_data,
                                          SAS::TrailId trail)
 {
+  HTTPCode status = get_result(put_identity);
 
-  return get_result(put_identity);
+  put_identity = "put_identity";
+  return status;
 }
 
 HTTPCode FakeChronosConnection::get_result(std::string identity)
