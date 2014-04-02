@@ -82,7 +82,8 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_f_a);
 
     // Add the P-Charging-Vector Id. The icid-value is the Call-ID, and the
-    // icid-generated-at is the bono domain
+    // icid-generated-at is the bono hostname - it must be unique to the node that
+    // generates it.
     pjsip_cid_hdr* call_id = (pjsip_cid_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg,
                                                                         &STR_CALL_ID,
                                                                         NULL);
@@ -92,7 +93,7 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
     pjsip_p_c_v_hdr* p_c_v = pjsip_p_c_v_hdr_create(tdata->pool);
 
     pj_strdup2(tdata->pool, &p_c_v->icid, c_id.c_str());
-    p_c_v->icid_gen_addr = stack_data.default_home_domain;
+    p_c_v->icid_gen_addr = stack_data.public_host;
 
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_c_v);
   }
