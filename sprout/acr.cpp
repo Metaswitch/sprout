@@ -1171,15 +1171,44 @@ void ACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
 
 void ACR::store_message_bodies(pjsip_msg* msg)
 {
-  pjsip_msg_body* body = msg->body;
+  pjsip_msg_body* msg_body = msg->body;
 
-  if ((body != NULL) &&
-      ((pj_stricmp(&body->content_type.type, &STR_APPLICATION) != 0) ||
-       (pj_stricmp(&body->content_type.subtype, &STR_SDP) != 0)))
+  if ((msg_body != NULL) &&
+      ((pj_stricmp(&msg_body->content_type.type, &STR_APPLICATION) != 0) ||
+       (pj_stricmp(&msg_body->content_type.subtype, &STR_SDP) != 0)))
   {
-    // @TODO - how to record all the message bodies, but avoid duplicates when
-    // simply forwarding requests or responses multiple times in S-CSCF case.
+    // Create a MessageBody structure encoding the required information about
+    // the message body.
+    MessageBody body;
+    body.type = PJUtils::pj_str_to_string(&msg_body->content_type.type)
+                + "/"
+                + PJUtils::pj_str_to_string(&msg_body->content_type.subtype);
+    body.length = msg_body->len;
+    pjsip_generic_string_hdr* cdisp_hdr = (pjsip_generic_string_hdr*)
+               pjsip_msg_find_hdr_by_name(msg, &STR_CONTENT_DISPOSITION, NULL);
+    if (cdisp_hdr != NULL)
+    {
+      // Get disposition from header.
+      body.disposition = PJUtils::pj_str_to_string(&cdisp_hdr->hvalue);
+    }
+    else
+    {
+      // Default disposition for non application/sdp bodies is "render"
+      body.disposition = "render";
+    }
+    if (((_initiator == Initiator::CALLING_PARTY) &&
+         (msg->type == PJSIP_REQUEST_MSG)) ||
+        ((_initiator == Initiator::CALLED_PARTY) &&
+         (msg->type == PJSIP_RESPONSE_MSG)))
+    {
+      body.originator = Originator::CALLING_PARTY;
+    }
+    else
+    {
+      body.originator = Originator::CALLED_PARTY;
+    }
 
+    _msg_bodies.push_back(body);
   }
 }
 
