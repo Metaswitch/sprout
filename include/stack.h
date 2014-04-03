@@ -79,8 +79,8 @@ struct stack_data_struct
 
   pj_str_t             local_host;
   pj_str_t             public_host;
-  std::unordered_set<std::string> home_domains;
   pj_str_t             default_home_domain;
+  std::unordered_set<std::string> home_domains;
   pj_str_t             sprout_cluster_domain;
   pj_str_t             cdf_domain;
 
@@ -144,7 +144,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int icscf_port,
                               const std::string& local_host,
                               const std::string& public_host,
-                              const std::string& home_domains,
+                              const std::string& home_domain,
+                              const std::string& additional_home_domains,
                               const std::string& sprout_domain,
                               const std::string& alias_hosts,
                               SIPResolver* sipresolver,
