@@ -869,6 +869,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
 
   // Build a set of home domains
+  stack_data.home_domains = std::unordered_set<std::string>();
   stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
   if (additional_home_domains != "")
   {
