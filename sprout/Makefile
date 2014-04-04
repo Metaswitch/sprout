@@ -58,6 +58,7 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   icscfproxy.cpp \
+                  icscfrouter.cpp \
                   scscfselector.cpp	\
                   acr.cpp \
                   signalhandler.cpp	\

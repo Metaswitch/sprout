@@ -46,6 +46,7 @@
 #include "scscfselector.h"
 #include "servercaps.h"
 #include "acr.h"
+#include "icscfrouter.h"
 #include "basicproxy.h"
 
 class ICSCFProxy : public BasicProxy
@@ -82,9 +83,7 @@ private:
   {
   public:
     /// Constructor.
-    UASTsx(HSSConnection* hss,
-           SCSCFSelector* scscf_selector,
-           BasicProxy* proxy);
+    UASTsx(BasicProxy* proxy);
 
     /// Destructor.
     ~UASTsx();
@@ -116,68 +115,15 @@ private:
     /// Attempts to retry the request to an alternative S-CSCF.
     bool retry_to_alternate_scscf(int rsp_status);
 
-    /// Performs a registration status query and finds a suitable S-CSCF
-    /// for the request.
-    int registration_status_query(const std::string& impi,
-                                  const std::string& impu,
-                                  const std::string& visited_network,
-                                  const std::string& auth_type,
-                                  std::string& scscf);
-
-    /// Performs a location status query and finds a suitable S-CSCF for the
-    /// request.
-    int location_query(const std::string& impu,
-                       bool originating,
-                       const std::string& auth_type,
-                       std::string& scscf);
-
-    /// Parses the HSS response.
-    int parse_hss_response(Json::Value& rsp, bool queried_caps);
-
-    /// Parses a set of capabilities in the HSS response.
-    bool parse_capabilities(Json::Value& caps, std::vector<int>& parsed_caps);
-
     /// Create an ACR if ACR generation is enabled.
     ACR* create_acr();
-
-    /// Homestead connection class for performing HSS queries.
-    HSSConnection* _hss;
-
-    /// S-CSCF selector used to select S-CSCFs from configuration.
-    SCSCFSelector* _scscf_selector;
 
     /// Defines the session case for the current transaction.
     typedef enum {REGISTER, ORIGINATING, TERMINATING} SessionCase;
     SessionCase _case;
 
-    /// Private user identity parsed from the original request.  This is
-    /// only set for REGISTER requests.
-    std::string _impi;
-
-    /// Public user identity parsed from the original request.
-    std::string _impu;
-
-    /// Visited network identification parsed from the original request.  This
-    /// is only set for REGISTER requests.
-    std::string _visited_network;
-
-    /// Authenticaton type for the current transaction.  Initially set to
-    /// REGISTRATION or DE-REGISTRATION for REGISTER requests and blank for
-    /// other requests.  Set to REGISTRATION_AND_CAPABILITIES when retrieving
-    /// capabilities to select an alternate S-CSCF.
-    std::string _auth_type;
-
-    /// Flag which indicates whether or not we have asked the HSS for
-    /// capabilities and got a successful response (even if there were no
-    /// capabilities specified for this subscriber).
-    bool _queried_caps;
-
-    /// Structure storing the most recent response from the HSS for this
-    /// transaction.
-    ServerCapabilities _hss_rsp;
-
-    /// The list of S-CSCFs already attempted for this request.
-    std::vector<std::string> _attempted_scscfs;
+    /// I-CSCF router object for the request.
+    ICSCFRouter* _router;
 
     /// The ACR for the request (if ACR generation is enabled).
     ACR* _acr;

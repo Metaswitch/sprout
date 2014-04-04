@@ -1909,7 +1909,9 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _victims(),
   _upstream_acr(acr),
   _downstream_acr(acr),
-  _in_dialog(false)
+  _in_dialog(false),
+  _icscf_router(NULL),
+  _icscf_acr(NULL)
 {
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
@@ -1975,6 +1977,25 @@ UASTransaction::~UASTransaction()
     }
   }
 
+  if (_icscf_acr != NULL)
+  {
+    // I-CSCF ACR has been created for this transaction, so send the message
+    // and delete the ACR.
+    pj_time_val ts;
+    pj_gettimeofday(&ts);
+    _icscf_acr->send_message(ts);
+
+    if (_downstream_acr == _icscf_acr)
+    {
+      // Downstream ACR was referencing the I-CSCF ACR, so reset it back to
+      // the same as the upstream ACR so it doesn't get reported or freed twice.
+      _downstream_acr = _upstream_acr;
+    }
+
+    delete _icscf_acr;
+    _icscf_acr = NULL;
+  }
+
   if ((_victims.empty()) && (_upstream_acr != NULL))
   {
     // This transaction has not been linked to any AS chains, so is still
@@ -1993,6 +2014,14 @@ UASTransaction::~UASTransaction()
     // Send the ACR for the upstream side.
     _upstream_acr->send_message(ts);
     delete _upstream_acr;
+    _upstream_acr = NULL;
+    _downstream_acr = NULL;
+  }
+
+  if (_icscf_router != NULL)
+  {
+    delete _icscf_router;
+    _icscf_router = NULL;
   }
 
   if (_req != NULL)
@@ -2216,43 +2245,89 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // ourselves rather than invoking an external I-CSCF.
         LOG_INFO("Sprout has I-CSCF function enabled");
 
+        if (_upstream_acr != NULL)
+        {
+          // Logically we are transitioning from S-CSCF context to I-CSCF
+          // context, so pass the request to the upstream ACR as if it is
+          // being transmitted.
+          pj_time_val ts;
+          pj_gettimeofday(&ts);
+          _upstream_acr->tx_request(_req->msg, ts);
+        }
+
+        // Allocate an I-CSCF ACR if ACRs are enabled.
+        _icscf_acr = (icscf_acr_factory != NULL) ?
+                        icscf_acr_factory->get_acr(trail(), CALLING_PARTY) :
+                        NULL;
+
+        if (_icscf_acr != NULL)
+        {
+          // Pass the request as a received request to the I-CSCF ACR.
+          pj_time_val ts;
+          pj_gettimeofday(&ts);
+          _icscf_acr->rx_request(_req->msg, ts);
+        }
+
+        // Create an I-CSCF router for the LIR query.
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
+        _icscf_router = (ICSCFRouter*)new ICSCFLIRouter(hss,
+                                                        scscf_selector,
+                                                        trail(),
+                                                        _icscf_acr,
+                                                        public_id,
+                                                        false);
 
-        Json::Value* location = NULL;
-        hss->get_location_data(public_id, false, "", location, trail());
+        pjsip_uri* scscf_uri = NULL;
+        int status_code;
 
-        if ((location == NULL) ||
-            (!location->isMember("result-code")) ||
-            ((location->get("result-code", "").asString() != "2001") &&
-             (location->get("result-code", "").asString() != "2002") &&
-             (location->get("result-code", "").asString() != "2003")))
+        if (_icscf_router != NULL)
         {
-          LOG_DEBUG("Get location data did not return valid rc");
-          send_response(PJSIP_SC_NOT_FOUND);
-          delete target;
-          return;
-        }
+          // Select a S-CSCF to route the call and convert it to a URI.
+          std::string server_name;
+          status_code = _icscf_router->get_scscf(server_name);
 
-        // Get the S-CSCF name from the location data or from the S-CSCF selector
-        std::string server_name = get_scscf_name(location);
-        if (server_name == "")
-        {
-          LOG_DEBUG("No valid S-CSCFs found");
-          send_response(PJSIP_SC_NOT_FOUND);
-          delete target;
-          return;
-        }
-
-        pjsip_uri* scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
-
-        if (PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
-        {
-          // Got a SIP URI - force loose-routing.
-          ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
+          if (status_code == PJSIP_SC_OK)
+          {
+            scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+            if ((scscf_uri == NULL) ||
+                (!PJSIP_URI_SCHEME_IS_SIP(scscf_uri)))
+            {
+              // Server name was invalid, so act as if no suitable S-CSCF was
+              // found.
+              LOG_DEBUG("Server name is invalid");
+              status_code = PJSIP_SC_NOT_FOUND;
+            }
+          }
         }
         else
         {
+          // Failed to create an ICSCF router, so reject the request with
+          // 500.
+          status_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+        }
+
+        if (status_code != PJSIP_SC_OK)
+        {
+          // The I-CSCF look-up failed to find a suitable S-CSCF for the
+          // terminating subscriber, so reject the request.
           LOG_DEBUG("No valid S-CSCFs found");
+
+          if (_icscf_acr != NULL)
+          {
+            // Pass the error response to the I-CSCF ACR and send the ACR.
+            _best_rsp->msg->line.status.code = status_code;
+            _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
+
+            pj_time_val ts;
+            pj_gettimeofday(&ts);
+            _icscf_acr->tx_response(_best_rsp->msg, ts);
+
+            _icscf_acr->send_message(ts);
+
+            delete _icscf_acr;
+            _icscf_acr = NULL;
+          }
+
           send_response(PJSIP_SC_NOT_FOUND);
           delete target;
           return;
@@ -2265,6 +2340,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         {
           // The terminating user is on this S-CSCF, so continue processing
           // locally by switching to the terminating AS chain.
+
+          if (_icscf_acr != NULL)
+          {
+            // We're switching back out of I-CSCF context, so pass the request
+            // to the ACR as if we are transmitting it.
+            pj_time_val ts;
+            pj_gettimeofday(&ts);
+            _icscf_acr->tx_request(_req->msg, ts);
+          }
+
           bool success = move_to_terminating_chain();
           if (!success)
           {
@@ -2279,9 +2364,18 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           // The S-CSCF is different, so route the call there.
            _as_chain_link.release();
 
+          if (_icscf_acr != NULL)
+          {
+            // In this case we need to reference the I-CSCF as the downstream
+            // ACR for this transaction, and keep a reference to it as an
+            // I-CSCF ACR in case we do any further routing look-ups.
+            _downstream_acr = _icscf_acr;
+          }
+
           delete target;
           target = new Target;
 
+          ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
           target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
 
           // The Request-URI should remain unchanged
@@ -2296,6 +2390,16 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // originating handling for this call), we're handling the
         // terminating half (i.e. it hasn't been ENUMed to go
         // elsewhere), and we don't yet have a terminating chain.
+
+        if (_upstream_acr != NULL)
+        {
+          // Logically we are transitioning from originating S-CSCF context to
+          // terminating S-CSCF context, so pass the request to the upstream
+          // ACR as if it is being transmitted.
+          pj_time_val ts;
+          pj_gettimeofday(&ts);
+          _upstream_acr->tx_request(_req->msg, ts);
+        }
 
         // Switch to terminating session state, set the served user to
         // the callee, and look up iFCs again.
@@ -2511,14 +2615,6 @@ void UASTransaction::common_start_of_terminating_processing()
 /// Move from originating to terminating handling.
 bool UASTransaction::move_to_terminating_chain()
 {
-  if (_upstream_acr != NULL)
-  {
-    // Pass the request to the upstream ACR as if it is being transmitted.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _upstream_acr->tx_request(_req->msg, ts);
-  }
-
   // Create new terminating chain.
   _as_chain_link.release();
   std::string served_user = ifc_handler->served_user_from_msg(SessionCase::Terminating, _req->msg, _req->pool);
@@ -2535,7 +2631,7 @@ bool UASTransaction::move_to_terminating_chain()
     if (success)
     {
       // Switch Rf context to the S-CSCF terminating side processing.
-      if (_upstream_acr != NULL)
+      if (cscf_acr_factory != NULL)
       {
         // Pass the request to the upstream ACR as if it is being transmitted.
         pj_time_val ts;
@@ -3001,6 +3097,16 @@ pj_status_t UASTransaction::handle_final_response()
     }
     else
     {
+      if ((_icscf_acr != NULL) &&
+          (_icscf_acr != _downstream_acr))
+      {
+        // Report the final response to the I-CSCF ACR.
+        pj_time_val ts;
+        pj_gettimeofday(&ts);
+        _icscf_acr->rx_response(best_rsp->msg, ts);
+        _icscf_acr->tx_response(best_rsp->msg, ts);
+      }
+
       // Send the best response back on the UAS transaction.
       if (_upstream_acr != NULL)
       {
@@ -4449,42 +4555,6 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   _victims.push_back(ret.as_chain());
   LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
   return ret;
-}
-
-// Return S-CSCF (either from HSS or scscf_selector), or an
-// empty string if no S-CSCFs are configured
-std::string UASTransaction::get_scscf_name(Json::Value* location)
-{
-  std::string server_name = "";
-
-  if (location->isMember("scscf"))
-  {
-    LOG_DEBUG("Subscriber had an S-CSCF");
-    server_name = location->get("scscf", "").asString();
-  }
-  else
-  {
-    // No S-CSCF provided, use the S-CSCF selector to choose one
-    std::vector<int> mandatory;
-    std::vector<int> optional;
-
-    Json::Value mandates = location->get("mandatory-capabilities", "[]");
-    for (size_t jj = 0; jj < mandates.size(); ++jj)
-    {
-      mandatory.push_back(mandates[(int)jj].asInt());
-    }
-
-    Json::Value options = location->get("optional-capabilities", "[]");
-    for (size_t jj = 0; jj < options.size(); ++jj)
-    {
-      optional.push_back(options[(int)jj].asInt());
-    }
-
-    server_name = scscf_selector->get_scscf(mandatory, optional, {});
-  }
-
-  delete location;
-  return server_name;
 }
 
 ///@}

@@ -62,6 +62,7 @@ class UACTransaction;
 #include "aschain.h"
 #include "quiescing_manager.h"
 #include "scscfselector.h"
+#include "icscfrouter.h"
 #include "acr.h"
 
 /// Short-lived data structure holding details of how we are to serve
@@ -213,7 +214,6 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
-  std::string get_scscf_name(Json::Value* location);
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
@@ -252,6 +252,15 @@ private:
   /// Indication of in-dialog transaction.  This is used to determine whether
   /// or not to send ACRs on 1xx responses.
   bool                 _in_dialog;
+
+  /// I-CSCF router instance if inline I-CSCF processing is performed in this
+  /// transaction, NULL otherwise.
+  ICSCFRouter*         _icscf_router;
+
+  /// Stores an I-CSCF ACR if inline I-CSCF processing was performed in this
+  /// transaction.
+  ACR*                 _icscf_acr;
+
 };
 
 // This is the data that is attached to the UAC transaction
