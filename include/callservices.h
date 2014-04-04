@@ -63,8 +63,6 @@ public:
   CallServices(XDMConnection* xdm_client);
   ~CallServices();
 
-  bool is_mmtel(std::string uri);
-
   class CallServiceBase
   {
   public:
@@ -129,9 +127,12 @@ public:
 
   static const int DEFAULT_MAX_FORWARDS = 70;
 
+  static bool is_mmtel(std::string uri);
+
 private:
+  static const std::string MMTEL_URI_PREFIX;
+
   XDMConnection* _xdmc;
-  std::string _mmtel_uri; //< URI of built-in MMTEL AS.
 
   simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 

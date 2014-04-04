@@ -134,6 +134,7 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               dns,                          // local host
                               dns,                          // public host
                               "woot.example.com",           // home domain
+                              "",                           // additional home domains
                               "all-the-sprouts",            // sprout cluster hostname
                               "thatone.zalpha.example.com,other.example.org,192.168.0.4",  // alias hosts
                               NULL,                         // SIPResolver
