@@ -435,7 +435,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
 
     case OPT_ADDITIONAL_HOME_DOMAINS:
       options->additional_home_domains = std::string(pj_optarg);
-      fprintf(stdout, "Additonal home domains set to %s\n", pj_optarg);
+      fprintf(stdout, "Additional home domains set to %s\n", pj_optarg);
       break;
 
     case 'c':

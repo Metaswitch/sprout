@@ -317,8 +317,8 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   return id;
 }
 
-/// Extract the domain from a SIP URI.  If none is present, return the default
-/// home domain.
+/// Extract the domain from a SIP URI, or if its another type of URI, return
+/// the default home domain.
 pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
 {
   pjsip_uri* uri = PJUtils::uri_from_string(uri_str, pool);
