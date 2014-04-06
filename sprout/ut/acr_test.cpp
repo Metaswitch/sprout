@@ -272,8 +272,8 @@ TEST_F(ACRTest, SCSCFRegister)
   ACR* acr;
   std::string acr_message;
 
-  // Create an ACR factory for S-CSCF ACRs.
-  ACRFactory f(NULL, SCSCF);
+  // Create a Ralf ACR factory for S-CSCF ACRs.
+  RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
   acr = f.get_acr(0, CALLING_PARTY);
@@ -318,8 +318,8 @@ TEST_F(ACRTest, SCSCFOrigCall)
   ACR* acr;
   std::string acr_message;
 
-  // Create an ACR factory for S-CSCF ACRs.
-  ACRFactory f(NULL, SCSCF);
+  // Create a Ralf ACR factory for S-CSCF ACRs.
+  RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the ACR[START] triggered by the INVITE.
   acr = f.get_acr(0, CALLING_PARTY);
@@ -643,8 +643,8 @@ TEST_F(ACRTest, SCSCFTermCall)
   ACR* acr;
   std::string acr_message;
 
-  // Create an ACR factory for S-CSCF ACRs.
-  ACRFactory f(NULL, SCSCF);
+  // Create a Ralf ACR factory for S-CSCF ACRs.
+  RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the test.
   acr = f.get_acr(0, CALLING_PARTY);
@@ -880,7 +880,7 @@ TEST_F(ACRTest, SCSCFTermCall)
 
   // Build and checked the resulting Rf ACR message.
   string rf_acr = acr->get_message(ts);
-  EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_1.json"));
+  EXPECT_TRUE(compare_acr(rf_acr, "acr_scscftermcall_start.json"));
 
   delete acr;
 

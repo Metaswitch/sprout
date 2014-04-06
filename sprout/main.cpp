@@ -1114,19 +1114,28 @@ int main(int argc, char *argv[])
     if (opt.scscf_enabled)
     {
       // Create ACRFactory instances for the S-CSCF and BGCF.
-      scscf_acr_factory = new ACRFactory(ralf_connection, SCSCF);
-      bgcf_acr_factory = new ACRFactory(ralf_connection, BGCF);
+      scscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF);
+      bgcf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF);
     }
     if (opt.icscf_enabled)
     {
       // Create ACRFactory instance for the I-CSCF.
-      icscf_acr_factory = new ACRFactory(ralf_connection, ICSCF);
+      icscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, ICSCF);
     }
     if (opt.pcscf_enabled)
     {
       // Create ACRFactory instance for the P-CSCF.
-      pcscf_acr_factory = new ACRFactory(ralf_connection, PCSCF);
+      pcscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF);
     }
+  }
+  else
+  {
+    // Ralf is not enabled, so create a null ACRFactory for all components.
+    ACRFactory* null_acr_factory = new ACRFactory();
+    scscf_acr_factory = null_acr_factory;
+    bgcf_acr_factory = null_acr_factory;
+    icscf_acr_factory = null_acr_factory;
+    pcscf_acr_factory = null_acr_factory;
   }
 
   if (opt.chronos_service != "")

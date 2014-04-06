@@ -53,7 +53,7 @@ extern "C" {
 #include "httpconnection.h"
 #include "servercaps.h"
 
-typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } RfNode;
+typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
 
 typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 
@@ -81,17 +81,20 @@ typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 ///         on the same Sprout instance that performed originating S-CSCF
 ///         processing.
 
+
+/// The ACR class is an null implementation of the class which also defines
+/// the interface.  Instances of this class are used when ACRs are disabled.
 class ACR
 {
 public:
-  /// Constructor.
-  ACR(HttpConnection* ralf,
-      SAS::TrailId trail,
-      RfNode node_functionality,
-      Initiator initiator);
+  /// Unspecified timestamp value.
+  static const pj_time_val unspec;
 
-  /// Destructor.
-  ~ACR();
+  /// Constructor.
+  ACR();
+
+  /// Destructor is virtual.
+  virtual ~ACR();
 
   /// Called with all requests received by this node for this SIP transaction.
   /// When acting as an S-CSCF this includes both the original request and
@@ -99,27 +102,27 @@ public:
   /// chain.
   /// @param  req             A pointer to the parsed SIP request message.
   /// @param  timestamp       Timestamp of the request receipt.
-  void rx_request(pjsip_msg* req, pj_time_val timestamp);
+  virtual void rx_request(pjsip_msg* req, pj_time_val timestamp=unspec);
 
   /// Called with the request as it is forwarded by this node.  When acting
   /// as an S-CSCF this includes when the request is forwarded to any ASs
   /// in the service chain.
   /// @param  req             A pointer to the parsed SIP request message.
   /// @param  timestamp       Timestamp of the request receipt.
-  void tx_request(pjsip_msg* req, pj_time_val timestamp);
+  virtual void tx_request(pjsip_msg* req, pj_time_val timestamp=unspec);
 
   /// Called with all responses as received by the node.  When acting as an
   /// S-CSCF, this includes all forwarded responses received from ASs
   /// invoked in the service chain.
   /// @param   rsp            A pointer to the parsed SIP response message.
   /// @param   timestamp      Timestamp of the response transmission.
-  void rx_response(pjsip_msg* rsp, pj_time_val timestamp);
+  virtual void rx_response(pjsip_msg* rsp, pj_time_val timestamp=unspec);
 
   /// Called with all responses transmitted by the node.  When acting as an
   /// S-CSCF, this includes all responses sent to ASs in the service chain.
   /// @param   rsp            A pointer to the parsed SIP response message.
   /// @param   timestamp      Timestamp of the response transmission.
-  void tx_response(pjsip_msg* rsp, pj_time_val timestamp);
+  virtual void tx_response(pjsip_msg* rsp, pj_time_val timestamp=unspec);
 
   /// Called when an AS has been invoked by an S-CSCF and the AS has sent a
   /// final response.
@@ -129,23 +132,113 @@ public:
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
-  void as_info(const std::string& uri,
+  virtual void as_info(const std::string& uri,
+                       const std::string& redirect_uri,
+                       int status_code);
+
+  /// Called by I-CSCF when server capabilities have been received from the
+  /// HSS.
+  /// @param   caps           Capabiliies as received from I-CSCF.
+  virtual void server_capabilities(const ServerCapabilities& caps);
+
+  /// Called when the ACR message should be triggered.  In general this will
+  /// be when the relevant transaction or AS chain has ended.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual void send_message(pj_time_val timestamp=unspec);
+
+  /// Returns the JSON encoded message in string form.
+  /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
+  virtual std::string get_message(pj_time_val timestamp=unspec);
+
+  /// Convert the ENUM node functionality to a displayable string.
+  static std::string node_name(Node node_functionality);
+};
+
+
+/// Factory class for creating null ACR instances.
+class ACRFactory
+{
+public:
+  /// Constructor.
+  ACRFactory();
+
+  /// Destructor.
+  virtual ~ACRFactory();
+
+  /// Get an ACR instance from the factory.
+  /// @param trail                SAS trail identifier to use for the ACR.
+  /// @param initiator            The initiator of the SIP transaction (calling
+  ///                             or called party).
+  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator);
+};
+
+
+/// Implementation of the ACR for IMS Rf billing.
+class RalfACR : public ACR
+{
+public:
+  /// Constructor.
+  RalfACR(HttpConnection* ralf,
+          SAS::TrailId trail,
+          Node node_functionality,
+          Initiator initiator);
+
+  /// Destructor.
+  ~RalfACR();
+
+  /// Called with all requests received by this node for this SIP transaction.
+  /// When acting as an S-CSCF this includes both the original request and
+  /// the request as subsequently forwarded by any ASs invoked in the service
+  /// chain.
+  /// @param  req             A pointer to the parsed SIP request message.
+  /// @param  timestamp       Timestamp of the request receipt.
+  virtual void rx_request(pjsip_msg* req, pj_time_val timestamp=unspec);
+
+  /// Called with the request as it is forwarded by this node.  When acting
+  /// as an S-CSCF this includes when the request is forwarded to any ASs
+  /// in the service chain.
+  /// @param  req             A pointer to the parsed SIP request message.
+  /// @param  timestamp       Timestamp of the request receipt.
+  virtual void tx_request(pjsip_msg* req, pj_time_val timestamp=unspec);
+
+  /// Called with all responses as received by the node.  When acting as an
+  /// S-CSCF, this includes all forwarded responses received from ASs
+  /// invoked in the service chain.
+  /// @param   rsp            A pointer to the parsed SIP response message.
+  /// @param   timestamp      Timestamp of the response transmission.
+  virtual void rx_response(pjsip_msg* rsp, pj_time_val timestamp=unspec);
+
+  /// Called with all responses transmitted by the node.  When acting as an
+  /// S-CSCF, this includes all responses sent to ASs in the service chain.
+  /// @param   rsp            A pointer to the parsed SIP response message.
+  /// @param   timestamp      Timestamp of the response transmission.
+  virtual void tx_response(pjsip_msg* rsp, pj_time_val timestamp=unspec);
+
+  /// Called when an AS has been invoked by an S-CSCF and the AS has sent a
+  /// final response.
+  /// @param   uri            The URI used to invoke the AS (from iFC).
+  /// @param   redirect_uri   The RequestURI from the request forwarded by the
+  ///                         AS if different from the RequestURI on the
+  ///                         request sent to the URI, empty otherwise.
+  /// @param   status_code    The status code from the final response from the
+  ///                         AS.
+  virtual void as_info(const std::string& uri,
                const std::string& redirect_uri,
                int status_code);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
   /// @param   caps           Capabiliies as received from I-CSCF.
-  void server_capabilities(const ServerCapabilities& caps);
+  virtual void server_capabilities(const ServerCapabilities& caps);
 
   /// Called when the Rf message should be triggered.  In general this will
   /// be when the relevant transaction or AS chain has ended.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  void send_message(pj_time_val timestamp);
+  virtual void send_message(pj_time_val timestamp=unspec);
 
   /// Returns the JSON encoded message in string form.
   /// @param   timestamp      Timestamp to be used as Event-Timestamp AVP.
-  std::string get_message(pj_time_val timestamp);
+  virtual std::string get_message(pj_time_val timestamp=unspec);
 
 private:
 
@@ -267,7 +360,7 @@ private:
 
   NodeRole _node_role;
 
-  RfNode _node_functionality;
+  Node _node_functionality;
 
   std::string _user_session_id;
 
@@ -322,33 +415,30 @@ private:
   std::string _instance_id;
 };
 
-/// Factory class for creating ACR instances with the appropriate settings.
-class ACRFactory
+
+/// Factory class for creating Ralf ACR instances with the appropriate settings.
+class RalfACRFactory : public ACRFactory
 {
 public:
   /// Constructor.
   /// @param ralf                 HttpConnection class set up to connect to
   ///                             Ralf cluster.
   /// @param node_functionality   Node-Functionality value to set in ACRs.
-  ACRFactory(HttpConnection* ralf,
-             RfNode node_functionality);
+  RalfACRFactory(HttpConnection* ralf,
+                 Node node_functionality);
 
   /// Destructor.
-  ~ACRFactory();
+  ~RalfACRFactory();
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  ACR* get_acr(SAS::TrailId trail,
-               Initiator initiator);
-
-  /// Convert the ENUM node functionality to a displayable string.
-  static std::string node_name(RfNode node_functionality);
+  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator);
 
 private:
   HttpConnection* _ralf;
-  RfNode _node_functionality;
+  Node _node_functionality;
 };
 
 #endif

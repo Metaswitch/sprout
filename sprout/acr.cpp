@@ -1,5 +1,5 @@
 /**
- * @file acr.cpp  The Rf Transaction class.
+ * @file acr.cpp  ACR class
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -41,10 +41,93 @@
 #include "custom_headers.h"
 #include "acr.h"
 
-ACR::ACR(HttpConnection* ralf,
-         SAS::TrailId trail,
-         RfNode node_functionality,
-         Initiator initiator) :
+static const pj_time_val unspec = {-1,0};
+
+ACR::ACR()
+{
+}
+
+ACR::~ACR()
+{
+}
+
+void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
+{
+}
+
+void ACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
+{
+}
+
+void ACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
+{
+}
+
+void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
+{
+}
+
+void ACR::as_info(const std::string& uri, const std::string& redirect_uri, int status_code)
+{
+}
+
+void ACR::server_capabilities(const ServerCapabilities& caps)
+{
+}
+
+void ACR::send_message(pj_time_val timestamp)
+{
+}
+
+std::string ACR::get_message(pj_time_val timestamp)
+{
+  return std::string();
+}
+
+std::string ACR::node_name(Node node_functionality)
+{
+  switch (node_functionality)
+  {
+    case SCSCF:
+      return "S-CSCF";
+
+    case PCSCF:
+      return "P-CSCF";
+
+    case ICSCF:
+      return "I-CSCF";
+
+    case BGCF:
+      return "BGCF";
+
+    case AS:
+      return "AS";
+
+    case IBCF:
+      return "IBCF";
+
+    default:
+      return "Unknown";
+  }
+}
+
+ACRFactory::ACRFactory()
+{
+}
+
+ACRFactory::~ACRFactory()
+{
+}
+
+ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator)
+{
+  return new ACR();
+}
+
+RalfACR::RalfACR(HttpConnection* ralf,
+                 SAS::TrailId trail,
+                 Node node_functionality,
+                 Initiator initiator) :
   _ralf(ralf),
   _trail(trail),
   _initiator(initiator),
@@ -59,16 +142,22 @@ ACR::ACR(HttpConnection* ralf,
   _req_timestamp.sec = 0;
   _rsp_timestamp.sec = 0;
 
-  LOG_DEBUG("Created %s ACR (%p)",
-            ACRFactory::node_name(_node_functionality).c_str(), this);
+  LOG_DEBUG("Created %s Ralf ACR (%p)",
+            ACR::node_name(_node_functionality).c_str(), this);
 }
 
-ACR::~ACR()
+RalfACR::~RalfACR()
 {
 }
 
-void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
+void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 {
+  if (timestamp.sec == -1)
+  {
+    // Timestamp is unspecified, so get the current time.
+    pj_gettimeofday(&timestamp);
+  }
+
   if (_first_req)
   {
     // This is the first time we have seen a request for this transaction,
@@ -334,8 +423,14 @@ void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 }
 
 /// Called with the request as it is forwarded by this node.
-void ACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
+void RalfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
 {
+  if (timestamp.sec == -1)
+  {
+    // Timestamp is unspecified, so get the current time.
+    pj_gettimeofday(&timestamp);
+  }
+
   // Store the contents of the top-most route header if present.
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
@@ -367,8 +462,14 @@ void ACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
 }
 
 /// Called with all non-100 responses as first received by the node.
-void ACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
+void RalfACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
+  if (timestamp.sec == -1)
+  {
+    // Timestamp is unspecified, so get the current time.
+    pj_gettimeofday(&timestamp);
+  }
+
   if (rsp->line.status.code >= PJSIP_SC_OK)
   {
     // This is a final response.
@@ -408,8 +509,14 @@ void ACR::rx_response(pjsip_msg* rsp, pj_time_val timestamp)
   _status_code = rsp->line.status.code;
 }
 
-void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
+void RalfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
+  if (timestamp.sec == -1)
+  {
+    // Timestamp is unspecified, so get the current time.
+    pj_gettimeofday(&timestamp);
+  }
+
   _rsp_timestamp = timestamp;
 
   // Store the charging function addresses if present.
@@ -445,9 +552,9 @@ void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
   }
 }
 
-void ACR::as_info(const std::string& uri,
-                  const std::string& redirect_uri,
-                  int status_code)
+void RalfACR::as_info(const std::string& uri,
+                      const std::string& redirect_uri,
+                      int status_code)
 {
   // Add an entry to the _as_information list.
   LOG_DEBUG("Storing AS information for AS %s", uri.c_str());
@@ -458,18 +565,18 @@ void ACR::as_info(const std::string& uri,
   _as_information.push_back(as_info);
 }
 
-void ACR::server_capabilities(const ServerCapabilities& caps)
+void RalfACR::server_capabilities(const ServerCapabilities& caps)
 {
   // Store the server capabilities.
   LOG_DEBUG("Storing Server-Capabilities");
   _server_caps = caps;
 }
 
-void ACR::send_message(pj_time_val timestamp)
+void RalfACR::send_message(pj_time_val timestamp)
 {
   // Encode and send the request using the Ralf HTTP connection.
-  LOG_VERBOSE("Sending %s ACR (%p)",
-              ACRFactory::node_name(_node_functionality).c_str(), this);
+  LOG_VERBOSE("Sending %s Ralf ACR (%p)",
+              ACR::node_name(_node_functionality).c_str(), this);
   std::string path = "/call-id/" + _user_session_id;
   std::map<std::string, std::string> headers;
   long rc = _ralf->send_post(path,
@@ -483,9 +590,15 @@ void ACR::send_message(pj_time_val timestamp)
   }
 }
 
-std::string ACR::get_message(pj_time_val timestamp)
+std::string RalfACR::get_message(pj_time_val timestamp)
 {
   LOG_DEBUG("Building message");
+
+  if (timestamp.sec == -1)
+  {
+    // Timestamp is unspecified, so get the current time.
+    pj_gettimeofday(&timestamp);
+  }
 
   Json::Value v;
 
@@ -826,7 +939,7 @@ std::string ACR::get_message(pj_time_val timestamp)
   return writer.write(v);
 }
 
-void ACR::encode_sdp_description(Json::Value& v, const MediaDescription& media)
+void RalfACR::encode_sdp_description(Json::Value& v, const MediaDescription& media)
 {
   // Split the offer and answer in to lines.
   std::vector<std::string> offer;
@@ -863,7 +976,7 @@ void ACR::encode_sdp_description(Json::Value& v, const MediaDescription& media)
                           media.answer.initiator_party);
 }
 
-void ACR::encode_media_components(Json::Value& v,
+void RalfACR::encode_media_components(Json::Value& v,
                                   const std::vector<std::string>& sdp,
                                   SDPType sdp_type,
                                   Initiator initiator_flag,
@@ -916,7 +1029,7 @@ void ACR::encode_media_components(Json::Value& v,
 
 /// Splits a block of SDP in to individual lines, removing any carriage
 /// return characters at the end of the lines if present.
-void ACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
+void RalfACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 {
   //std::string s = sdp;
 
@@ -957,7 +1070,7 @@ void ACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
   while (start_pos != std::string::npos);
 }
 
-void ACR::store_charging_addresses(pjsip_msg* msg)
+void RalfACR::store_charging_addresses(pjsip_msg* msg)
 {
   // Only store charging addresses for START or EVENT ACRs - they are not
   // needed for INTERIM or STOP ACRs.
@@ -993,7 +1106,7 @@ void ACR::store_charging_addresses(pjsip_msg* msg)
   }
 }
 
-void ACR::store_subscription_ids(pjsip_msg* msg)
+void RalfACR::store_subscription_ids(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -1007,7 +1120,7 @@ void ACR::store_subscription_ids(pjsip_msg* msg)
   LOG_DEBUG("Stored %d subscription identifiers", _subscription_ids.size());
 }
 
-ACR::SubscriptionId ACR::uri_to_subscription_id(pjsip_uri* uri)
+RalfACR::SubscriptionId RalfACR::uri_to_subscription_id(pjsip_uri* uri)
 {
   SubscriptionId id;
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
@@ -1027,7 +1140,7 @@ ACR::SubscriptionId ACR::uri_to_subscription_id(pjsip_uri* uri)
   return id;
 }
 
-void ACR::store_calling_party_addresses(pjsip_msg* msg)
+void RalfACR::store_calling_party_addresses(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -1041,13 +1154,13 @@ void ACR::store_calling_party_addresses(pjsip_msg* msg)
   }
 }
 
-void ACR::store_called_party_address(pjsip_msg* msg)
+void RalfACR::store_called_party_address(pjsip_msg* msg)
 {
   _called_party_address =
                PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
 }
 
-void ACR::store_called_asserted_ids(pjsip_msg* msg)
+void RalfACR::store_called_asserted_ids(pjsip_msg* msg)
 {
   pjsip_routing_hdr* pa_id = (pjsip_routing_hdr*)
                pjsip_msg_find_hdr_by_name(msg, &STR_P_ASSERTED_IDENTITY, NULL);
@@ -1061,7 +1174,7 @@ void ACR::store_called_asserted_ids(pjsip_msg* msg)
   }
 }
 
-void ACR::store_associated_uris(pjsip_msg* msg)
+void RalfACR::store_associated_uris(pjsip_msg* msg)
 {
   LOG_DEBUG("Store associated URIs");
   pjsip_routing_hdr* pau = (pjsip_routing_hdr*)
@@ -1076,7 +1189,7 @@ void ACR::store_associated_uris(pjsip_msg* msg)
   }
 }
 
-void ACR::store_charging_info(pjsip_msg* msg)
+void RalfACR::store_charging_info(pjsip_msg* msg)
 {
   pjsip_p_c_v_hdr* pcv_hdr = (pjsip_p_c_v_hdr*)
                              pjsip_msg_find_hdr_by_name(msg, &STR_P_C_V, NULL);
@@ -1099,7 +1212,7 @@ void ACR::store_charging_info(pjsip_msg* msg)
   }
 }
 
-void ACR::store_media_description(pjsip_msg* msg, MediaDescription& description)
+void RalfACR::store_media_description(pjsip_msg* msg, MediaDescription& description)
 {
   // If the message has an SDP body store it in the offer or answer slot.
   pjsip_msg_body* body = msg->body;
@@ -1128,7 +1241,7 @@ void ACR::store_media_description(pjsip_msg* msg, MediaDescription& description)
   }
 }
 
-void ACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
+void RalfACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
 {
   pjsip_msg_body* body = msg->body;
 
@@ -1169,7 +1282,7 @@ void ACR::store_media_components(pjsip_msg* msg, MediaComponents& components)
   }
 }
 
-void ACR::store_message_bodies(pjsip_msg* msg)
+void RalfACR::store_message_bodies(pjsip_msg* msg)
 {
   pjsip_msg_body* msg_body = msg->body;
 
@@ -1212,7 +1325,7 @@ void ACR::store_message_bodies(pjsip_msg* msg)
   }
 }
 
-void ACR::store_instance_id(pjsip_msg* msg)
+void RalfACR::store_instance_id(pjsip_msg* msg)
 {
   pjsip_contact_hdr* contact_hdr =
             (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
@@ -1234,7 +1347,7 @@ void ACR::store_instance_id(pjsip_msg* msg)
   }
 }
 
-std::string ACR::hdr_contents(pjsip_hdr* hdr)
+std::string RalfACR::hdr_contents(pjsip_hdr* hdr)
 {
   // Print the header using PJSIP print_on function.
   char buf[1000];
@@ -1248,53 +1361,27 @@ std::string ACR::hdr_contents(pjsip_hdr* hdr)
   return std::string(p);
 }
 
-/// ACRFactory Constructor.
-ACRFactory::ACRFactory(HttpConnection* ralf,
-                       RfNode node_functionality) :
+/// RalfACRFactory Constructor.
+RalfACRFactory::RalfACRFactory(HttpConnection* ralf,
+                               Node node_functionality) :
   _ralf(ralf),
   _node_functionality(node_functionality)
 {
-  LOG_DEBUG("Created ACR factory for node type %s",
-            node_name(_node_functionality).c_str());
+  LOG_DEBUG("Created RalfACR factory for node type %s",
+            ACR::node_name(_node_functionality).c_str());
 }
 
-/// ACRFactory Destructor.
-ACRFactory::~ACRFactory()
+/// RalfACRFactory Destructor.
+RalfACRFactory::~RalfACRFactory()
 {
 }
 
-/// Get an ACR instance from the factory.
-ACR* ACRFactory::get_acr(SAS::TrailId trail,
-                         Initiator initiator)
+/// Get an RalfACR instance from the factory.
+ACR* RalfACRFactory::get_acr(SAS::TrailId trail,
+                                 Initiator initiator)
 {
-  LOG_DEBUG("Create ACR for node type %s",
-            node_name(_node_functionality).c_str());
-  return new ACR(_ralf, trail, _node_functionality, initiator);
+  LOG_DEBUG("Create RalfACR for node type %s",
+            ACR::node_name(_node_functionality).c_str());
+  return (ACR*)new RalfACR(_ralf, trail, _node_functionality, initiator);
 }
 
-std::string ACRFactory::node_name(RfNode node_functionality)
-{
-  switch (node_functionality)
-  {
-    case SCSCF:
-      return "S-CSCF";
-
-    case PCSCF:
-      return "P-CSCF";
-
-    case ICSCF:
-      return "I-CSCF";
-
-    case BGCF:
-      return "BGCF";
-
-    case AS:
-      return "AS";
-
-    case IBCF:
-      return "IBCF";
-
-    default:
-      return "Unknown";
-  }
-}
