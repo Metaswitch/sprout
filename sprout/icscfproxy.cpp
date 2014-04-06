@@ -167,7 +167,8 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
       _impi = _impu.substr(4);
     }
 
-    // Get the visted network identification if present.
+    // Get the visted network identification if present.  If not, homestead will
+    // default it.
     pjsip_generic_string_hdr* vn_hdr =
          (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg,
                                                                &STR_P_V_N_I,
