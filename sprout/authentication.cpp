@@ -85,6 +85,11 @@ pjsip_module mod_auth =
   NULL,                               // on_tsx_state()
 };
 
+// Configuring PJSIP with a realm of "*" means that all realms are considered.
+const pj_str_t WILDCARD_REALM = pj_str("*");
+
+// Realm to use on AKA challenges.
+static pj_str_t aka_realm;
 
 // Connection to the HSS service for retrieving subscriber credentials.
 static HSSConnection* hss;
@@ -193,11 +198,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
   // memcached recovers.
   Json::Value* av = av_store->get_av(impi, nonce, trail);
 
-  // No point checking the return value of delete_av - there's no
-  // sensible recovery action we can take (and it logs internally if
-  // it fails).
-  av_store->delete_av(impi, nonce, trail);
-
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi, trail)))
   {
@@ -232,16 +232,35 @@ pj_status_t user_lookup(pj_pool_t *pool,
     }
     else if (av->isMember("digest"))
     {
-      // Digest authentication, so ha1 field is hashed password.
-      cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-      pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
-      LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
-
-      // Use realm from AV.
-      pj_strdup2(pool, &cred_info->realm, (*av)["digest"]["realm"].asCString());
-      status = PJ_SUCCESS;
+      if (pj_strcmp2(realm, (*av)["digest"]["realm"].asCString()) == 0)
+      {
+        // Digest authentication, so ha1 field is hashed password.
+        cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
+        pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
+        cred_info->realm = *realm;
+        LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
+        status = PJ_SUCCESS;
+      }
+      else
+      {
+        // These credentials are for a different realm, so no credentials were
+        // actually provided for us to check.
+        status = PJSIP_EAUTHNOAUTH;
+      }
     }
     delete av;
+  }
+
+  // Delete the AV from the store, unless the status indicates that these
+  // credentials weren't even for the right realm.  In that case, they weren't
+  // even trying to authenticate against us, so leave them around in case they
+  // do try against our realm later.
+  if (status != PJSIP_EAUTHNOAUTH)
+  {
+    // No point checking the return value of delete_av - there's no
+    // sensible recovery action we can take (and it logs internally if
+    // it fails).
+    av_store->delete_av(impi, nonce, trail);
   }
 
   return status;
@@ -318,7 +337,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       Json::Value& aka = (*av)["aka"];
 
       // Use default realm for AKA as not specified in the AV.
-      pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &auth_srv.realm);
+      pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &aka_realm);
       hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
       nonce = aka["challenge"].asString();
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
@@ -635,6 +654,7 @@ pj_status_t init_authentication(const std::string& realm_name,
 {
   pj_status_t status;
 
+  aka_realm = (realm_name != "") ? pj_strdup3(stack_data.pool, realm_name.c_str()) : stack_data.local_host;
   av_store = avstore;
   hss = hss_connection;
   chronos = chronos_connection;
@@ -645,10 +665,8 @@ pj_status_t init_authentication(const std::string& realm_name,
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_auth);
 
   // Initialize the authorization server.
-  pj_str_t realm = (realm_name != "") ? pj_strdup3(stack_data.pool, realm_name.c_str()) : stack_data.local_host;
-  LOG_STATUS("Initializing authentication server for realm %.*s", realm.slen, realm.ptr);
   pjsip_auth_srv_init_param params;
-  params.realm = &realm;
+  params.realm = &WILDCARD_REALM;
   params.lookup2 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);

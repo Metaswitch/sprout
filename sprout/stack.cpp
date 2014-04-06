@@ -780,6 +780,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
+                       const std::string& additional_home_domains,
                        const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
@@ -827,9 +828,19 @@ pj_status_t init_stack(const std::string& system_name,
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
-  stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
+  stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
+
+  // Build a set of home domains
+  stack_data.home_domains = std::unordered_set<std::string>();
+  stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
+  if (additional_home_domains != "")
+  {
+    std::list<std::string> domains;
+    Utils::split_string(additional_home_domains, ',', domains, 0, true);
+    stack_data.home_domains.insert(domains.begin(), domains.end());
+  }
 
   // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
   stack_data.addr_family = AF_INET;
