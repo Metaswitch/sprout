@@ -277,8 +277,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
-  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
-  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
@@ -302,6 +300,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
     // LCOV_EXCL_STOP
   }
+
+  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
@@ -353,6 +354,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     return;
   }
 
@@ -400,7 +402,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
-   LOG_ERROR("Error building SUBSCRIBE %d response %s", st_code,
+    LOG_ERROR("Error building SUBSCRIBE %d response %s", st_code,
               PJUtils::pj_status_to_string(status).c_str());
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
@@ -408,6 +410,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     delete aor_data;
     return;
     // LCOV_EXCL_STOP
