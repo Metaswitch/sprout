@@ -106,14 +106,8 @@ void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
 {
   pj_status_t status;
 
-  ACR* acr = (_acr_factory != NULL) ?
-                 _acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
-  if (acr != NULL)
-  {
-    // ACR generation is enabled, so pass the received request to the ACR for
-    // reporting.
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  }
+  ACR* acr = _acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
@@ -126,13 +120,8 @@ void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
     status = PJUtils::create_response(stack_data.endpt, rdata, status_code, NULL, &tdata);
     if (status == PJ_SUCCESS)
     {
-      if (acr != NULL)
-      {
-        // Pass the response to the ACR.
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        acr->tx_response(tdata->msg, ts);
-      }
+      // Pass the response to the ACR.
+      acr->tx_response(tdata->msg);
 
       status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
       if (status != PJ_SUCCESS)
@@ -144,14 +133,9 @@ void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
     }
   }
 
-  if (acr != NULL)
-  {
-    // Send the ACR and delete it.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-    delete acr;
-  }
+  // Send the ACR and delete it.
+  acr->send_message();
+  delete acr;
 }
 
 
@@ -177,15 +161,9 @@ ICSCFProxy::UASTsx::~UASTsx()
 
   delete _router;
 
-  if (_acr != NULL)
-  {
-    // Send the ACR and delete it.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _acr->send_message(ts);
-
-    delete _acr;
-  }
+  // Send the ACR and delete it.
+  _acr->send_message();
+  delete _acr;
 }
 
 
@@ -301,17 +279,14 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
                                               (_case == SessionCase::ORIGINATING));
   }
 
-  if (_acr != NULL)
-  {
-    // ACR generation is enabled, so pass the received request to the ACR.
-    _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  // Pass the received request to the ACR.
+  _acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
-    // Record whether or not this is an in-dialog request.  This is needed
-    // to determine whether or not to send interim ACRs on provisional
-    // responses.
-    _in_dialog = (rdata->msg_info.msg->line.req.method.id != PJSIP_BYE_METHOD) &&
-                 (rdata->msg_info.to->tag.slen != 0);
-  }
+  // Record whether or not this is an in-dialog request.  This is needed
+  // to determine whether or not to send interim ACRs on provisional
+  // responses.
+  _in_dialog = (rdata->msg_info.msg->line.req.method.id != PJSIP_BYE_METHOD) &&
+               (rdata->msg_info.to->tag.slen != 0);
 
   return status;
 }
@@ -323,20 +298,11 @@ void ICSCFProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
   // Pass the CANCEL to the BasicProxy code to handle.
   BasicProxy::UASTsx::process_cancel_request(rdata);
 
+  // Create and send an ACR for the CANCEL request.
   ACR* acr = create_acr();
-
-  if (acr != NULL)
-  {
-    // ACR generation is enabled, so send an ACR for the CANCEL
-    // request.
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-
-    delete acr;
-  }
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  acr->send_message();
+  delete acr;
 }
 
 
@@ -394,13 +360,8 @@ int ICSCFProxy::UASTsx::calculate_targets()
 void ICSCFProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
                                                 pjsip_rx_data *rdata)
 {
-  if (_acr != NULL)
-  {
-    // Pass the response to the ACR for reporting.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _acr->rx_response(rdata->msg_info.msg, ts);
-  }
+  // Pass the response to the ACR for reporting.
+  _acr->rx_response(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Pass the response on to the BasicProxy method.
   BasicProxy::UASTsx::on_new_client_response(uac_tsx, rdata);
@@ -433,23 +394,18 @@ void ICSCFProxy::UASTsx::on_final_response()
 /// interactions with the ACR if one is allocated.
 void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
 {
-  if (_acr != NULL)
+  _acr->tx_response(tdata->msg);
+
+  if ((_in_dialog) &&
+      (tdata->msg->line.status.code > 100) &&
+      (tdata->msg->line.status.code < 200))
   {
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _acr->tx_response(tdata->msg, ts);
+    // This is a provisional response to a mid-dialog message, so we
+    // should send an ACR now.
+    _acr->send_message();
 
-    if ((_in_dialog) &&
-        (tdata->msg->line.status.code > 100) &&
-        (tdata->msg->line.status.code < 200))
-    {
-      // This is a provisional response to a mid-dialog message, so we
-      // should send an ACR now.
-      _acr->send_message(ts);
-
-      // Don't delete the ACR as we will send another on any subsequent
-      // provisional responses, and also when the transaction completes.
-    }
+    // Don't delete the ACR as we will send another on any subsequent
+    // provisional responses, and also when the transaction completes.
   }
 }
 
@@ -458,18 +414,7 @@ void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
 /// Handles interactions with the ACR for the request if one is allocated.
 void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
 {
-  if (_acr != NULL)
-  {
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _acr->tx_request(tdata->msg, ts);
-
-    // TS 32.260 is a bit vague on this point, but it implies that an I-CSCF
-    // should generate an ACR[Event] both when the initial request is
-    // forwarded, and when the transaction completes.  We therefore send the
-    // ACR here, but leave it in place to send later as well.
-    _acr->send_message(ts);
-  }
+  _acr->tx_request(tdata->msg);
 }
 
 
@@ -555,17 +500,10 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
 }
 
 
-/// Create an ACR if ACR generation is enabled.
+/// Create an ACR.
 ACR* ICSCFProxy::UASTsx::create_acr()
 {
-  ACR* acr = NULL;
-
-  if (((ICSCFProxy*)_proxy)->_acr_factory != NULL)
-  {
-    acr = ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(_trail, CALLING_PARTY);
-  }
-
-  return acr;
+  return ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(_trail, CALLING_PARTY);
 }
 
 

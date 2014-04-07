@@ -483,7 +483,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
-  if ((acr == NULL) && (cscf_acr_factory != NULL))
+  if (acr == NULL)
   {
     // We haven't found an existing ACR for this transaction, so create a new
     // one.
@@ -492,10 +492,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Pass the received request to the ACR.
-  if (acr != NULL)
-  {
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  }
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // We now know various details of this transaction:
   LOG_DEBUG("Trust mode %s, serving state %s",
@@ -521,12 +518,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     trust->process_request(tdata);
 
-    if (acr != NULL)
-    {
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      acr->tx_request(tdata->msg, ts);
-    }
+    acr->tx_request(tdata->msg);
 
     status = PJUtils::send_request_stateless(tdata);
 
@@ -535,13 +527,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error forwarding request, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
-    if (acr != NULL)
-    {
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      acr->send_message(ts);
-      delete acr;
-    }
+    acr->send_message();
+    delete acr;
 
     return;
   }
@@ -557,6 +544,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // Delete the request since we're not forwarding it
     pjsip_tx_data_dec_ref(tdata);
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
+    delete acr;
     delete target;
     target = NULL;
     return;
@@ -633,21 +621,11 @@ void process_cancel_request(pjsip_rx_data* rdata)
   UASTransaction *uas_data = UASTransaction::get_from_tsx(invite_uas);
   uas_data->cancel_pending_uac_tsx(0, false);
 
-  ACR* acr = (cscf_acr_factory != NULL) ?
-             cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
-
-  if (acr != NULL)
-  {
-    // ACR generation is enabled, so send an ACR for the CANCEL
-    // request.
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-
-    delete acr;
-  }
+  // Create and send an ACR for the CANCEL request.
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  acr->send_message();
+  delete acr;
 
   // Unlock UAS tsx because it is locked in find_tsx()
   pj_grp_lock_release(invite_uas->grp_lock);
@@ -710,14 +688,8 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
   pj_status_t status;
 
-  ACR* acr = (cscf_acr_factory != NULL) ?
-             cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY) : NULL;
-  if (acr != NULL)
-  {
-    // ACR generation is enabled, so pass the received request to the ACR for
-    // reporting.
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  }
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
@@ -737,13 +709,8 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
     status = PJUtils::create_response(stack_data.endpt, rdata, status_code, status_text, &tdata);
     if (status == PJ_SUCCESS)
     {
-      if (acr != NULL)
-      {
-        // Pass the response to the ACR.
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        acr->tx_response(tdata->msg, ts);
-      }
+      // Pass the response to the ACR.
+      acr->tx_response(tdata->msg);
 
       status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
       if (status != PJ_SUCCESS)
@@ -755,14 +722,9 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
     }
   }
 
-  if (acr != NULL)
-  {
-    // Send the ACR and delete it.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-    delete acr;
-  }
+  // Send the ACR and delete it.
+  acr->send_message();
+  delete acr;
 }
 
 static SIPPeerType determine_source(pjsip_transport* transport, pj_sockaddr addr)
@@ -1598,23 +1560,17 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         }
 
         // We have added a BGCF generated route to the request, so we should
-        // switch ACR context for the downstream leg if ACRs are enabled.
-        if (bgcf_acr_factory != NULL)
+        // switch ACR context for the downstream leg.
+        if (_downstream_acr != _upstream_acr)
         {
-          if ((_downstream_acr != NULL) &&
-              (_downstream_acr != _upstream_acr))
-          {
-            // We've already set up a different downstream ACR to the upstream ACR
-            // so free it off.
-            delete _downstream_acr;
-          }
-          _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
-
-          // Pass the request to the downstream ACR as if it is being received.
-          pj_time_val ts;
-          pj_gettimeofday(&ts);
-          _downstream_acr->rx_request(msg, ts);
+          // We've already set up a different downstream ACR to the upstream ACR
+          // so free it off.
+          delete _downstream_acr;
         }
+        _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+
+        // Pass the request to the downstream ACR as if it is being received.
+        _downstream_acr->rx_request(msg);
       }
     }
 
@@ -1906,6 +1862,7 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _pending_destroy(false),
   _context_count(0),
   _as_chain_link(),
+  _as_chain_linked(false),
   _victims(),
   _upstream_acr(acr),
   _downstream_acr(acr),
@@ -1913,6 +1870,9 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _icscf_router(NULL),
   _icscf_acr(NULL)
 {
+  LOG_DEBUG("UASTransaction constructor (%p)", this);
+  LOG_DEBUG("ACR (%p)", acr);
+
   for (int ii = 0; ii < MAX_FORKING; ++ii)
   {
     _uac_data[ii] = NULL;
@@ -1950,7 +1910,7 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
 /// exit, it will have been released (and possibly destroyed).
 UASTransaction::~UASTransaction()
 {
-  LOG_DEBUG("UASTransaction destructor");
+  LOG_DEBUG("UASTransaction destructor (%p)", this);
 
   pj_assert(_context_count == 0);
 
@@ -1981,9 +1941,7 @@ UASTransaction::~UASTransaction()
   {
     // I-CSCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _icscf_acr->send_message(ts);
+    _icscf_acr->send_message();
 
     if (_downstream_acr == _icscf_acr)
     {
@@ -1996,23 +1954,20 @@ UASTransaction::~UASTransaction()
     _icscf_acr = NULL;
   }
 
-  if ((_victims.empty()) && (_upstream_acr != NULL))
+  if (!_as_chain_linked)
   {
     // This transaction has not been linked to any AS chains, so is still
     // in control of the ACR, so send it now.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-
     if (_downstream_acr != _upstream_acr)
     {
       // The downstream ACR is not the same as the upstream one, so send the
       // message and destroy the object.
-      _downstream_acr->send_message(ts);
+      _downstream_acr->send_message();
       delete _downstream_acr;
     }
 
     // Send the ACR for the upstream side.
-    _upstream_acr->send_message(ts);
+    _upstream_acr->send_message();
     delete _upstream_acr;
     _upstream_acr = NULL;
     _downstream_acr = NULL;
@@ -2163,6 +2118,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         return;
       };
 
+      // Flag that the transaction has been linked to an AS chain.
+      _as_chain_linked = true;
+
       if (_as_chain_link.is_set() &&
           _as_chain_link.session_case().is_originating())
       {
@@ -2245,28 +2203,14 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // ourselves rather than invoking an external I-CSCF.
         LOG_INFO("Sprout has I-CSCF function enabled");
 
-        if (_upstream_acr != NULL)
-        {
-          // Logically we are transitioning from S-CSCF context to I-CSCF
-          // context, so pass the request to the upstream ACR as if it is
-          // being transmitted.
-          pj_time_val ts;
-          pj_gettimeofday(&ts);
-          _upstream_acr->tx_request(_req->msg, ts);
-        }
+        // Logically we are transitioning from S-CSCF context to I-CSCF
+        // context, so pass the request to the upstream ACR as if it is
+        // being transmitted.
+        _upstream_acr->tx_request(_req->msg);
 
         // Allocate an I-CSCF ACR if ACRs are enabled.
-        _icscf_acr = (icscf_acr_factory != NULL) ?
-                        icscf_acr_factory->get_acr(trail(), CALLING_PARTY) :
-                        NULL;
-
-        if (_icscf_acr != NULL)
-        {
-          // Pass the request as a received request to the I-CSCF ACR.
-          pj_time_val ts;
-          pj_gettimeofday(&ts);
-          _icscf_acr->rx_request(_req->msg, ts);
-        }
+        _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+        _icscf_acr->rx_request(_req->msg);
 
         // Create an I-CSCF router for the LIR query.
         std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
@@ -2317,13 +2261,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             // Pass the error response to the I-CSCF ACR and send the ACR.
             _best_rsp->msg->line.status.code = status_code;
             _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
-
-            pj_time_val ts;
-            pj_gettimeofday(&ts);
-            _icscf_acr->tx_response(_best_rsp->msg, ts);
-
-            _icscf_acr->send_message(ts);
-
+            _icscf_acr->tx_response(_best_rsp->msg);
+            _icscf_acr->send_message();
             delete _icscf_acr;
             _icscf_acr = NULL;
           }
@@ -2341,14 +2280,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           // The terminating user is on this S-CSCF, so continue processing
           // locally by switching to the terminating AS chain.
 
-          if (_icscf_acr != NULL)
-          {
-            // We're switching back out of I-CSCF context, so pass the request
-            // to the ACR as if we are transmitting it.
-            pj_time_val ts;
-            pj_gettimeofday(&ts);
-            _icscf_acr->tx_request(_req->msg, ts);
-          }
+          // We're switching back out of I-CSCF context, so pass the request
+          // to the ACR as if we are transmitting it.
+          _icscf_acr->tx_request(_req->msg);
 
           bool success = move_to_terminating_chain();
           if (!success)
@@ -2391,15 +2325,10 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // terminating half (i.e. it hasn't been ENUMed to go
         // elsewhere), and we don't yet have a terminating chain.
 
-        if (_upstream_acr != NULL)
-        {
-          // Logically we are transitioning from originating S-CSCF context to
-          // terminating S-CSCF context, so pass the request to the upstream
-          // ACR as if it is being transmitted.
-          pj_time_val ts;
-          pj_gettimeofday(&ts);
-          _upstream_acr->tx_request(_req->msg, ts);
-        }
+        // Logically we are transitioning from originating S-CSCF context to
+        // terminating S-CSCF context, so pass the request to the upstream
+        // ACR as if it is being transmitted.
+        _upstream_acr->tx_request(_req->msg);
 
         // Switch to terminating session state, set the served user to
         // the callee, and look up iFCs again.
@@ -2542,7 +2471,15 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
       }
 
     }
+
   }
+
+  if (success)
+  {
+    // Flag that the transaction has been linked to an AS chain.
+    _as_chain_linked = true;
+  }
+
   return success;
 }
 
@@ -2630,20 +2567,13 @@ bool UASTransaction::move_to_terminating_chain()
 
     if (success)
     {
-      // Switch Rf context to the S-CSCF terminating side processing.
-      if (cscf_acr_factory != NULL)
-      {
-        // Pass the request to the upstream ACR as if it is being transmitted.
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        _upstream_acr->tx_request(_req->msg, ts);
-
-        // Create a new downstream ACR for the terminating side.
-        _downstream_acr = cscf_acr_factory->get_acr(trail(), CALLING_PARTY);
-
-        // Pass the request to the downstream ACR as if it is being received.
-        _downstream_acr->rx_request(_req->msg, ts);
-      }
+      // Switch Rf context to the S-CSCF terminating side processing, by
+      // passing the request to the upstream ACR as if it is being transmitted,
+      // then creating a new downstream ACR for the terminating side and passing
+      // the request to it as if it has been received.
+      _upstream_acr->tx_request(_req->msg);
+      _downstream_acr = cscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _downstream_acr->rx_request(_req->msg);
 
       // These headers name the originating user, so should not survive
       // the changearound to the terminating chain.
@@ -2651,6 +2581,7 @@ bool UASTransaction::move_to_terminating_chain()
 
       // Create the terminating chain.
       _as_chain_link = create_as_chain(SessionCase::Terminating, ifcs, served_user);
+      _as_chain_linked = true;
       common_start_of_terminating_processing();
     }
   }
@@ -2778,13 +2709,8 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
   {
     enter_context();
 
-    if (_downstream_acr != NULL)
-    {
-      // Pass the received response to the downstream ACR.
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _downstream_acr->rx_response(rdata->msg_info.msg, ts);
-    }
+    // Pass the received response to the downstream ACR.
+    _downstream_acr->rx_response(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
     pjsip_tx_data *tdata;
     pj_status_t status;
@@ -2845,9 +2771,7 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       // pass the received response (after trust boundary changes) to the
       // downstream ACR as a transmitted response and to the upstream ACR as
       // a received response.
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _downstream_acr->tx_response(tdata->msg, ts);
+      _downstream_acr->tx_response(tdata->msg);
 
       if ((_in_dialog) &&
           (status_code > 100) &&
@@ -2855,13 +2779,13 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       {
         // This is a provisional response to a mid-dialog message, so we
         // should send an ACR now.
-        _downstream_acr->send_message(ts);
+        _downstream_acr->send_message();
 
         // Don't delete the ACR as we will send another on any subsequent
         // provisional responses, and also when the transaction completes.
       }
 
-      _upstream_acr->rx_response(tdata->msg, ts);
+      _upstream_acr->rx_response(tdata->msg);
     }
 
     if (_num_targets > 1)
@@ -2872,22 +2796,17 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
         // Forward all provisional responses.
         LOG_DEBUG("%s - Forward 1xx response", uac_data->name());
 
-        if (_upstream_acr != NULL)
+        // Pass the response to the upstream ACR for reporting.
+        _upstream_acr->tx_response(tdata->msg);
+
+        if (_in_dialog)
         {
-          // Pass the response to the upstream ACR for reporting.
-          pj_time_val ts;
-          pj_gettimeofday(&ts);
-          _upstream_acr->tx_response(tdata->msg, ts);
+          // This is a provisional response to a mid-dialog message, so we
+          // should send an ACR now.
+          _upstream_acr->send_message();
 
-          if (_in_dialog)
-          {
-            // This is a provisional response to a mid-dialog message, so we
-            // should send an ACR now.
-            _upstream_acr->send_message(ts);
-
-            // Don't delete the ACR as we will send another on any subsequent
-            // provisional responses, and also when the transaction completes.
-          }
+          // Don't delete the ACR as we will send another on any subsequent
+          // provisional responses, and also when the transaction completes.
         }
 
         // Forward response with the UAS transaction
@@ -3101,19 +3020,14 @@ pj_status_t UASTransaction::handle_final_response()
           (_icscf_acr != _downstream_acr))
       {
         // Report the final response to the I-CSCF ACR.
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        _icscf_acr->rx_response(best_rsp->msg, ts);
-        _icscf_acr->tx_response(best_rsp->msg, ts);
+        _icscf_acr->rx_response(best_rsp->msg);
+        _icscf_acr->tx_response(best_rsp->msg);
       }
 
+      // Pass the final response to the upstream ACR.
+      _upstream_acr->tx_response(best_rsp->msg);
+
       // Send the best response back on the UAS transaction.
-      if (_upstream_acr != NULL)
-      {
-        pj_time_val ts;
-        pj_gettimeofday(&ts);
-        _upstream_acr->tx_response(best_rsp->msg, ts);
-      }
       _best_rsp = NULL;
       set_trail(best_rsp, trail());
       rc = pjsip_tsx_send_msg(_tsx, best_rsp);
@@ -3164,12 +3078,7 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
     set_trail(prov_rsp, trail());
-    if (_upstream_acr != NULL)
-    {
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _upstream_acr->tx_response(prov_rsp->msg, ts);
-    }
+    _upstream_acr->tx_response(prov_rsp->msg);
     return pjsip_tsx_send_msg(_tsx, prov_rsp);
   }
   else
@@ -3862,12 +3771,7 @@ void UACTransaction::send_request()
   if (status == PJ_SUCCESS)
   {
     LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
-    if (_uas_data->_downstream_acr != NULL)
-    {
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _uas_data->_downstream_acr->tx_request(_tdata->msg, ts);
-    }
+    _uas_data->_downstream_acr->tx_request(_tdata->msg);
     status = pjsip_tsx_send_msg(_tsx, _tdata);
   }
 
@@ -4511,7 +4415,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   else if (session_case == SessionCase::OriginatingCdiv)
   {
     // Originating-cdiv chain, so create a copy of the downstream ACR.
-    acr = (_downstream_acr != NULL) ? new ACR(*_downstream_acr) : NULL;
+    acr = new ACR(*_downstream_acr);
   }
 
   // Create the AsChain, and schedule its destruction.  AsChain
@@ -4553,7 +4457,7 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
                                                  ifcs,
                                                  acr);
   _victims.push_back(ret.as_chain());
-  LOG_DEBUG("Retrieved AsChain %s", ret.to_string().c_str());
+  LOG_DEBUG("UASTransaction %p linked to AsChain %s", this, ret.to_string().c_str());
   return ret;
 }
 

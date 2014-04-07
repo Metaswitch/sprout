@@ -73,7 +73,8 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -86,6 +87,7 @@ public:
   static void TearDownTestCase()
   {
     destroy_registrar();
+    delete _acr_factory; _acr_factory = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
@@ -129,6 +131,7 @@ protected:
   static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
   static IfcHandler* _ifc_handler;
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
 };
@@ -139,6 +142,7 @@ RegStore* RegistrarTest::_store;
 RegStore* RegistrarTest::_remote_store;
 AnalyticsLogger* RegistrarTest::_analytics;
 IfcHandler* RegistrarTest::_ifc_handler;
+ACRFactory* RegistrarTest::_acr_factory;
 FakeHSSConnection* RegistrarTest::_hss_connection;
 FakeChronosConnection* RegistrarTest::_chronos_connection;
 

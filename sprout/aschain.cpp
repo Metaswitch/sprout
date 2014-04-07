@@ -71,22 +71,21 @@ AsChain::AsChain(AsChainTable* as_chain_table,
 {
   LOG_DEBUG("Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
+
+  LOG_DEBUG("Attached ACR (%p) to chain", _acr);
 }
 
 
 AsChain::~AsChain()
 {
   LOG_DEBUG("Destroying AsChain %p", this);
+
   if (_acr != NULL)
   {
-    // Chain has an associated ACR, so send the message and destroy the ACR
-    // object.
-// LCOV_EXCL_START
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    _acr->send_message(ts);
+    // Send the ACR for this chain and destroy the ACR.
+    LOG_DEBUG("Sending ACR (%p) from AS chain", _acr);
+    _acr->send_message();
     delete _acr;
-// LCOV_EXCL_STOP
   }
 }
 

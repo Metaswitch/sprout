@@ -41,14 +41,16 @@
 #include "custom_headers.h"
 #include "acr.h"
 
-static const pj_time_val unspec = {-1,0};
+const pj_time_val ACR::unspec = {-1,0};
 
 ACR::ACR()
 {
+  LOG_DEBUG("Created Null ACR (%p)", this);
 }
 
 ACR::~ACR()
 {
+  LOG_DEBUG("Destroyed Null ACR (%p)", this);
 }
 
 void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)

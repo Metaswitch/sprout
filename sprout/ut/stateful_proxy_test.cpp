@@ -348,6 +348,7 @@ public:
     _icscf_uri_str = icscf_uri_str;
     _icscf = icscf_enabled;
     _scscf = scscf_enabled;
+    _acr_factory = new ACRFactory();
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
                                           _call_services,
@@ -363,9 +364,9 @@ public:
                                           _enum_service,
                                           _bgcf_service,
                                           _hss_connection,
-                                          NULL,
-                                          NULL,
-                                          NULL,
+                                          _acr_factory,
+                                          _acr_factory,
+                                          _acr_factory,
                                           _icscf_uri_str,
                                           &_quiescing_manager,
                                           _scscf_selector,
@@ -383,6 +384,7 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     destroy_stateful_proxy();
+    delete _acr_factory; _acr_factory = NULL;
     delete _store; _store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
@@ -461,6 +463,7 @@ protected:
   static EnumService* _enum_service;
   static BgcfService* _bgcf_service;
   static SCSCFSelector* _scscf_selector;
+  static ACRFactory* _acr_factory;
   static string _edge_upstream_proxy;
   static string _ibcf_trusted_hosts;
   static string _icscf_uri_str;
@@ -491,6 +494,7 @@ IfcHandler* StatefulProxyTestBase::_ifc_handler;
 EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
 SCSCFSelector* StatefulProxyTestBase::_scscf_selector;
+ACRFactory* StatefulProxyTestBase::_acr_factory;
 string StatefulProxyTestBase::_edge_upstream_proxy;
 string StatefulProxyTestBase::_ibcf_trusted_hosts;
 string StatefulProxyTestBase::_icscf_uri_str;
@@ -1894,7 +1898,8 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
 
   TargetList targets;
   UASTransaction* uastx = NULL;
-  UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, NULL, &uastx);
+  ACR* acr = _acr_factory->get_acr(0, CALLING_PARTY);
+  UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, acr, &uastx);
   uastx->proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 
   list<string> ret;

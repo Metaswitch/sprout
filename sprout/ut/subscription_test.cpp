@@ -72,7 +72,8 @@ public:
     _hss_connection = new FakeHSSConnection();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, NULL, _analytics);
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -82,6 +83,7 @@ public:
   static void TearDownTestCase()
   {
     destroy_subscription();
+    delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
     delete _remote_store; _remote_store = NULL;
@@ -110,6 +112,7 @@ protected:
   static RegStore* _store;
   static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
 
@@ -122,6 +125,7 @@ LocalStore* SubscriptionTest::_remote_data_store;
 RegStore* SubscriptionTest::_store;
 RegStore* SubscriptionTest::_remote_store;
 AnalyticsLogger* SubscriptionTest::_analytics;
+ACRFactory* SubscriptionTest::_acr_factory;
 FakeHSSConnection* SubscriptionTest::_hss_connection;
 FakeChronosConnection* SubscriptionTest::_chronos_connection;
 

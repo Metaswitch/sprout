@@ -81,11 +81,12 @@ public:
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
+    _acr_factory = new ACRFactory();
     pj_status_t ret = init_authentication("homedomain",
                                           _av_store,
                                           _hss_connection,
                                           _chronos_connection,
-                                          NULL,
+                                          _acr_factory,
                                           _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
@@ -93,6 +94,7 @@ public:
   static void TearDownTestCase()
   {
     destroy_authentication();
+    delete _acr_factory;
     delete _hss_connection;
     delete _chronos_connection;
     delete _analytics;
@@ -164,6 +166,7 @@ public:
 protected:
   static LocalStore* _local_data_store;
   static AvStore* _av_store;
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
@@ -171,6 +174,7 @@ protected:
 
 LocalStore* AuthenticationTest::_local_data_store;
 AvStore* AuthenticationTest::_av_store;
+ACRFactory* AuthenticationTest::_acr_factory;
 FakeHSSConnection* AuthenticationTest::_hss_connection;
 FakeChronosConnection* AuthenticationTest::_chronos_connection;
 AnalyticsLogger* AuthenticationTest::_analytics;

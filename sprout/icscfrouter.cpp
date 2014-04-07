@@ -83,19 +83,14 @@ int ICSCFRouter::get_scscf(std::string& scscf)
     // Do the HSS query.
     status_code = hss_query();
 
-    if (_acr != NULL)
-    {
-      // TS 32.260 table 5.2.1.1 says we should generate an ACR[Event] on
-      // completion of a Cx Query.  We therefore send the ACR here, but
-      // leave it in place so we will send another ACR when the transaction
-      // completes.  (Note that TS 32.260 isn't clear on whether this ACR
-      // should be generated if the Cx Query fails - we are sending on both
-      // success and failure, but that could be wrong.  Also, in the failure
-      // case we will not include a Server-Capabilities AVP.)
-      pj_time_val ts;
-      pj_gettimeofday(&ts);
-      _acr->send_message(ts);
-    }
+    // TS 32.260 table 5.2.1.1 says we should generate an ACR[Event] on
+    // completion of a Cx Query.  We therefore send the ACR here, but
+    // leave it in place so we will send another ACR when the transaction
+    // completes.  (Note that TS 32.260 isn't clear on whether this ACR
+    // should be generated if the Cx Query fails - we are sending on both
+    // success and failure, but that could be wrong.  Also, in the failure
+    // case we will not include a Server-Capabilities AVP.)
+    _acr->send_message();
   }
 
   if (status_code == PJSIP_SC_OK)

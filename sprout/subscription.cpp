@@ -277,13 +277,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
-  ACR* acr = NULL;
-
-  if (acr_factory != NULL)
-  {
-    acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  }
+  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
@@ -422,24 +417,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expiry);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
 
-  if (acr != NULL)
-  {
-    // Pass the response to the ACR.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->tx_response(tdata->msg, ts);
-  }
+  // Pass the response to the ACR.
+  acr->tx_response(tdata->msg);
 
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  if (acr != NULL)
-  {
-    // Send the ACR.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-  }
+  // Send the ACR and delete it.
+  acr->send_message();
+  delete acr;
 
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)

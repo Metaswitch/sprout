@@ -506,13 +506,9 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  // Also create an ACR for the message if ACR generation is enabled.
-  ACR* acr = NULL;
-  if (acr_factory != NULL)
-  {
-    acr = acr_factory->get_acr(trail, CALLING_PARTY);
-    acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
-  }
+  // Create an ACR for the message and pass the request to it.
+  ACR* acr = acr_factory->get_acr(trail, CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   pjsip_tx_data* tdata;
 
@@ -577,24 +573,13 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     }
   }
 
-  if (acr != NULL)
-  {
-    // Pass the response to the ACR for reporting.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->tx_response(tdata->msg, ts);
-  }
+  acr->tx_response(tdata->msg);
 
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
 
-  if (acr != NULL)
-  {
-    // Send the ACR.
-    pj_time_val ts;
-    pj_gettimeofday(&ts);
-    acr->send_message(ts);
-    delete acr;
-  }
+  // Send the ACR.
+  acr->send_message();
+  delete acr;
 
   return PJ_TRUE;
 }

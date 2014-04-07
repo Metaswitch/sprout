@@ -73,12 +73,13 @@ public:
 
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
 
     _icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                   stack_data.icscf_port,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
-                                  NULL,
+                                  _acr_factory,
                                   _scscf_selector);
 
     // Schedule timers.
@@ -91,6 +92,7 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _icscf_proxy; _icscf_proxy = NULL;
+    delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
@@ -277,12 +279,14 @@ public:
 
 
 protected:
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
   static ICSCFProxy* _icscf_proxy;
 
 };
 
+ACRFactory* ICSCFProxyTestBase::_acr_factory;
 FakeHSSConnection* ICSCFProxyTestBase::_hss_connection;
 SCSCFSelector* ICSCFProxyTestBase::_scscf_selector;
 ICSCFProxy* ICSCFProxyTestBase::_icscf_proxy;
