@@ -338,7 +338,9 @@ int ICSCFLIRouter::hss_query()
   {
     // HSS failed to respond or responded with invalid data, so reject the
     // request with a 480.
+    // LCOV_EXCL_START
     status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    // LCOV_EXCL_STOP
   }
   else
   {

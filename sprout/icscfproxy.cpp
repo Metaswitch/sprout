@@ -402,7 +402,9 @@ void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
   {
     // This is a provisional response to a mid-dialog message, so we
     // should send an ACR now.
+    // LCOV_EXCL_START
     _acr->send_message();
+    // LCOV_EXCL_STOP
 
     // Don't delete the ACR as we will send another on any subsequent
     // provisional responses, and also when the transaction completes.
