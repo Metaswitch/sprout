@@ -79,6 +79,7 @@ void ACR::server_capabilities(const ServerCapabilities& caps)
 
 void ACR::send_message(pj_time_val timestamp)
 {
+  LOG_DEBUG("Sending Null ACR (%p)", this);
 }
 
 std::string ACR::get_message(pj_time_val timestamp)

@@ -420,8 +420,11 @@ void process_tsx_request(pjsip_rx_data* rdata)
   else
   {
     // Process route information for routing proxy.
-    pjsip_route_hdr* hroute;
-    if (PJUtils::is_top_route_local(tdata->msg, &hroute))
+    pjsip_route_hdr* hroute = rdata->msg_info.route;
+
+    if ((hroute != NULL) &&
+        ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
+         (PJUtils::is_uri_local(hroute->name_addr.uri))))
     {
       // This is our own Route header, containing a SIP URI.  Check for an
       // ODI token.  We need to determine the session case: is
@@ -468,6 +471,14 @@ void process_tsx_request(pjsip_rx_data* rdata)
                 original_dialog.to_string().c_str());
       serving_state = ServingState(session_case, original_dialog);
     }
+    else if (hroute == NULL)
+    {
+      // No Route header on the request.  This probably shouldn't happen, but
+      // if it does we will treat it as a terminating request.
+      LOG_DEBUG("No Route header, so treat as terminating request");
+      serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
+    }
+
 
     // Do standard processing of Route headers.
     status = proxy_process_routing(tdata);
@@ -2095,9 +2106,12 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   // If we're a routing proxy, perform AS handling to pick the next hop.
   if (!target && !edge_proxy)
   {
-    if ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
-        (PJUtils::is_uri_local(_req->msg->line.req.uri)))
+    if ((serving_state.is_set()) &&
+        ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
+         (PJUtils::is_uri_local(_req->msg->line.req.uri))))
     {
+      // The serving state has been set up, and the request URI is targeted
+      // at a domain controlled by this system, so perform AS handling.
       if (stack_data.record_route_on_every_hop)
       {
         LOG_DEBUG("Single Record-Route - configured to do this on every hop");
@@ -2396,82 +2410,78 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
 
   std::string served_user;
   Ifcs ifcs;
-  if (serving_state.is_set())
+
+  if (serving_state.original_dialog().is_set())
   {
-    if (serving_state.original_dialog().is_set())
-    {
-      // Pick up existing AS chain.
-      _as_chain_link = serving_state.original_dialog();
-      LOG_DEBUG("Picking up original AS chain");
-      success = true;
+    // Pick up existing AS chain.
+    _as_chain_link = serving_state.original_dialog();
+    LOG_DEBUG("Picking up original AS chain");
+    success = true;
 
-      if ((serving_state.session_case() == SessionCase::Terminating) &&
-          (!_as_chain_link.matches_target(_req)))
+    if ((serving_state.session_case() == SessionCase::Terminating) &&
+        (!_as_chain_link.matches_target(_req)))
+    {
+      // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
+      // create new AS chain with session case orig-cdiv and the
+      // terminating user as served user.
+      LOG_INFO("Request-URI has changed, retargeting");
+
+      // We might not be the terminating server any more, so we
+      // should blank out the term_ioi parameter. If we are still
+      // the terminating server, we'll fill it back in when we go
+      // through handle_terminating.
+
+      // Note that there's no need to change orig_ioi - we don't
+      // actually become the originating server when we do this redirect.
+      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
+        pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
+      if (pcv)
       {
-        // AS is retargeting per 3GPP TS 24.229 s5.4.3.3 step 3, so
-        // create new AS chain with session case orig-cdiv and the
-        // terminating user as served user.
-        LOG_INFO("Request-URI has changed, retargeting");
-
-        // We might not be the terminating server any more, so we
-        // should blank out the term_ioi parameter. If we are still
-        // the terminating server, we'll fill it back in when we go
-        // through handle_terminating.
-
-        // Note that there's no need to change orig_ioi - we don't
-        // actually become the originating server when we do this redirect.
-        pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)
-          pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
-        if (pcv)
-        {
-          LOG_DEBUG("Blanking out term_ioi parameter due to redirect");
-          pcv->term_ioi = pj_str("");
-        }
-
-        served_user = _as_chain_link.served_user();
-
-        _as_chain_link.release();
-        success = lookup_ifcs(served_user, ifcs, trail());
-        if (success)
-        {
-          LOG_DEBUG("Creating originating CDIV AS chain");
-          _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
-          if (stack_data.record_route_on_diversion)
-          {
-            LOG_DEBUG("Single Record-Route - originating Cdiv");
-            routing_proxy_record_route();
-          }
-        }
+        LOG_DEBUG("Blanking out term_ioi parameter due to redirect");
+        pcv->term_ioi = pj_str("");
       }
-    }
-    else
-    {
-      // No existing AS chain - create new.
-      served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
-      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+
+      served_user = _as_chain_link.served_user();
+
+      _as_chain_link.release();
       success = lookup_ifcs(served_user, ifcs, trail());
       if (success)
       {
-        LOG_DEBUG("Successfully looked up iFCs");
-        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
-      }
-
-      if (serving_state.session_case() == SessionCase::Terminating)
-      {
-        common_start_of_terminating_processing();
-      }
-      else if (serving_state.session_case() == SessionCase::Originating)
-      {
-        // Processing at start of originating handling (not including CDiv)
-        if (stack_data.record_route_on_initiation_of_originating)
+        LOG_DEBUG("Creating originating CDIV AS chain");
+        _as_chain_link = create_as_chain(SessionCase::OriginatingCdiv, ifcs, served_user);
+        if (stack_data.record_route_on_diversion)
         {
-          LOG_DEBUG("Single Record-Route - initiation of originating handling");
+          LOG_DEBUG("Single Record-Route - originating Cdiv");
           routing_proxy_record_route();
         }
       }
-
+    }
+  }
+  else
+  {
+    // No existing AS chain - create new.
+    served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
+    LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+    success = lookup_ifcs(served_user, ifcs, trail());
+    if (success)
+    {
+      LOG_DEBUG("Successfully looked up iFCs");
+      _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
     }
 
+    if (serving_state.session_case() == SessionCase::Terminating)
+    {
+      common_start_of_terminating_processing();
+    }
+    else if (serving_state.session_case() == SessionCase::Originating)
+    {
+      // Processing at start of originating handling (not including CDiv)
+      if (stack_data.record_route_on_initiation_of_originating)
+      {
+        LOG_DEBUG("Single Record-Route - initiation of originating handling");
+        routing_proxy_record_route();
+      }
+    }
   }
 
   if (success)
