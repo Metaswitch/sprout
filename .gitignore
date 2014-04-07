@@ -11,3 +11,5 @@ on-eclipse-build.local.sh
 
 # Ignore ctags tag-file
 tags
+
+debian/copyright
