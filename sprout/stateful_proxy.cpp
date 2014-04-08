@@ -2754,6 +2754,14 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       proxy_process_register_response(rdata);
     }
 
+    if ((!edge_proxy) &&
+        (status_code >= PJSIP_SC_OK) &&
+        (_as_chain_link.is_set()))
+    {
+      // Pass the final response to the AS chain.
+      _as_chain_link.on_final_response(rdata);
+    }
+
     status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
     if (status != PJ_SUCCESS)
     {

@@ -145,6 +145,15 @@ private:
   AsChainTable* const _as_chain_table;
   std::atomic<int> _refs;
 
+  /// Structure recording information about invoked application servers.
+  typedef struct
+  {
+    std::string request_uri;
+    std::string as_uri;
+    int status_code;
+  } AsInformation;
+  std::vector<AsInformation> _as_info;
+
   /// ODI tokens, one for each step.
   std::vector<std::string> _odi_tokens;
 
@@ -267,6 +276,9 @@ public:
     _default_handling = false;
   }
 
+  /// Called on receipt of a final response from the AS.
+  void on_final_response(pjsip_rx_data* rdata);
+
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
     /// The request has been completely handled. Processing should
@@ -313,7 +325,7 @@ private:
   /// Returns the ODI token of the next AsChainLink in this chain.
   const std::string& next_odi_token() const
   {
-    return _as_chain->_odi_tokens[_index];
+    return _as_chain->_odi_tokens[_index + 1];
   }
 
   AsChain* _as_chain;

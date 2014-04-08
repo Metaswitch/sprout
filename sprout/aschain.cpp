@@ -61,6 +61,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _as_chain_table(as_chain_table),
   _refs(2),  // one for the chain being returned,
              // and one for the reference in the table.
+  _as_info(ifcs.size() + 1),
   _odi_tokens(),
   _session_case(session_case),
   _served_user(served_user),
@@ -71,7 +72,6 @@ AsChain::AsChain(AsChainTable* as_chain_table,
 {
   LOG_DEBUG("Creating AsChain %p and adding to map", this);
   _as_chain_table->register_(this, _odi_tokens);
-
   LOG_DEBUG("Attached ACR (%p) to chain", _acr);
 }
 
@@ -82,6 +82,18 @@ AsChain::~AsChain()
 
   if (_acr != NULL)
   {
+    // Apply application server information to the ACR.
+    for (size_t ii = 0; ii < _as_info.size() - 1; ++ii)
+    {
+      if (!_as_info[ii].as_uri.empty())
+      {
+        _acr->as_info(_as_info[ii].as_uri,
+                      (_as_info[ii+1].request_uri != _as_info[ii].request_uri) ?
+                            _as_info[ii+1].request_uri : "",
+                      _as_info[ii].status_code);
+      }
+    }
+
     // Send the ACR for this chain and destroy the ACR.
     LOG_DEBUG("Sending ACR (%p) from AS chain", _acr);
     _acr->send_message();
@@ -202,6 +214,10 @@ AsChainLink::on_initial_request(CallServices* call_services,
                                 // be freed by caller.
                                 Target** pre_target)
 {
+  // Store the RequestURI in the AsInformation structure for this link.
+  _as_chain->_as_info[_index].request_uri =
+        PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, tdata->msg->line.req.uri);
+
   if (complete())
   {
     LOG_DEBUG("No ASs left in chain");
@@ -221,6 +237,10 @@ AsChainLink::on_initial_request(CallServices* call_services,
   AsInvocation application_server = ifc.as_invocation();
   std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
 
+  // Store the application server name in the AsInformation structure for this
+  // link.
+  _as_chain->_as_info[_index].as_uri = application_server.server_name;
+
   if (call_services && call_services->is_mmtel(application_server.server_name))
   {
     // LCOV_EXCL_START No test coverage for MMTEL AS yet.
@@ -229,6 +249,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
       LOG_INFO("Invoke originating MMTEL services for %s", to_string().c_str());
       CallServices::Originating originating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       bool proceed = originating.on_initial_invite(tdata);
+      _as_chain->_as_info[_index].status_code = PJSIP_SC_OK;
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
     else
@@ -240,6 +261,7 @@ AsChainLink::on_initial_request(CallServices* call_services,
         new CallServices::Terminating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
       uas_data->register_proxy(terminating);
       bool proceed = terminating->on_initial_invite(tdata);
+      _as_chain->_as_info[_index].status_code = PJSIP_SC_OK;
       return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
     }
     // LCOV_EXCL_STOP
@@ -312,6 +334,12 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
 }
 
+void AsChainLink::on_final_response(pjsip_rx_data* rdata)
+{
+  // Store the status code returned by the AS.
+  _as_chain->_as_info[_index].status_code = rdata->msg_info.msg->line.status.code;
+}
+
 
 AsChainTable::AsChainTable()
 {
@@ -329,7 +357,7 @@ AsChainTable::~AsChainTable()
 /// point at the next step in each case.
 void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens)
 {
-  size_t len = as_chain->size();
+  size_t len = as_chain->size() + 1;
   pthread_mutex_lock(&_lock);
 
   for (size_t i = 0; i < len; i++)
@@ -337,7 +365,7 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
     std::string token;
     PJUtils::create_random_token(TOKEN_LENGTH, token);
     tokens.push_back(token);
-    _t2c_map[token] = AsChainLink(as_chain, i + 1);
+    _t2c_map[token] = AsChainLink(as_chain, i);
   }
 
   pthread_mutex_unlock(&_lock);
