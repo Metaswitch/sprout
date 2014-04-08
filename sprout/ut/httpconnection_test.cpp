@@ -61,16 +61,14 @@ using ::testing::MatchesRegex;
 class HttpConnectionTest : public BaseTest
 {
   LoadMonitor _lm;
-  LastValueCache _lvc;
   HttpConnection _http;
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
-    _lvc(num_known_stats, known_statnames, "6666", 10), // Short timeout to avoid shutdown delays.
     _http("cyrus",
           true,
           "connected_homers",
           &_lm,
-          &_lvc,
+          stack_data.stats_aggregator,
           SASEvent::HttpLogLevel::PROTOCOL)
   {
     fakecurl_responses.clear();
@@ -91,6 +89,12 @@ class HttpConnectionTest : public BaseTest
   {
     fakecurl_responses.clear();
     fakecurl_requests.clear();
+
+    // Destroy the LVC before calling cw_reset_time, otherwise ZeroMQ
+    // checks the wrong time against its timeout and the poll loop
+    // continues for several minutes.
+    delete stack_data.stats_aggregator;
+    stack_data.stats_aggregator = NULL;
     cwtest_reset_time();
   }
 };
