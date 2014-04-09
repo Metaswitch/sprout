@@ -115,7 +115,8 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.icscf_port = 5056;
   stack_data.local_host = pj_str("127.0.0.1");
   stack_data.public_host = pj_str("127.0.0.1");
-  stack_data.home_domain = pj_str("homedomain");
+  stack_data.home_domains.insert("homedomain");
+  stack_data.default_home_domain = pj_str("homedomain");
   stack_data.sprout_cluster_domain = pj_str("sprout.homedomain");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;
@@ -539,14 +540,14 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   {
     hss->set_impu_result(uri, "call", HSSConnection::STATE_REGISTERED, "");
   }
-  RegStore::AoR* aor = store->get_aor_data(uri);
+  RegStore::AoR* aor = store->get_aor_data(uri, 0);
   RegStore::AoR::Binding* binding = aor->get_binding(contact);
   binding->_uri = contact;
   binding->_cid = "1";
   binding->_cseq = 1;
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
-  bool ret = store->set_aor_data(uri, aor, false);
+  bool ret = store->set_aor_data(uri, aor, false, 0);
   delete aor;
   EXPECT_TRUE(ret);
 };

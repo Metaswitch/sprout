@@ -124,6 +124,21 @@ int ICSCFRouter::get_scscf(std::string& scscf)
     }
   }
 
+  if (status_code == PJSIP_SC_OK)
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    event.add_var_param(scscf);
+    event.add_var_param(_hss_rsp._scscf);
+    SAS::report_event(event);
+  }
+  else
+  {
+    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    std::string st_code = std::to_string(status_code);
+    event.add_var_param(st_code);
+    SAS::report_event(event);
+  }
+
   return status_code;
 }
 

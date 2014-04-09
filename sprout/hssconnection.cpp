@@ -44,7 +44,7 @@
 #include "utils.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "hssconnection.h"
 #include "accumulator.h"
@@ -65,10 +65,10 @@ HSSConnection::HSSConnection(const std::string& server,
                              LastValueCache *stats_aggregator) :
   _http(new HttpConnection(server,
                            false,
-                           SASEvent::TX_HSS_BASE,
                            "connected_homesteads",
                            load_monitor,
-                           stats_aggregator)),
+                           stats_aggregator,
+                           SASEvent::HttpLogLevel::PROTOCOL)),
   _latency_stat("hss_latency_us", stats_aggregator),
   _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
   _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
@@ -93,6 +93,11 @@ HTTPCode HSSConnection::get_digest_data(const std::string& private_user_identity
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_DIGEST, 0);
+  event.add_var_param(private_user_identity);
+  event.add_var_param(public_user_identity);
+  SAS::report_event(event);
 
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
@@ -125,6 +130,12 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_VECTOR, 0);
+  event.add_var_param(private_user_identity);
+  event.add_var_param(public_user_identity);
+  event.add_var_param(auth_type);
+  SAS::report_event(event);
 
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
@@ -372,6 +383,11 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_UPDATE_REG, 0);
+  event.add_var_param(public_user_identity);
+  event.add_var_param(private_user_identity);
+  SAS::report_event(event);
+
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
   if (!private_user_identity.empty())
   {
@@ -416,6 +432,10 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_GET_REG, 0);
+  event.add_var_param(public_user_identity);
+  SAS::report_event(event);
 
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
 
@@ -465,6 +485,11 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_AUTH_STATUS, 0);
+  event.add_var_param(private_user_identity);
+  event.add_var_param(public_user_identity);
+  SAS::report_event(event);
+
   std::string path = "/impi/" +
                      Utils::url_escape(private_user_identity) +
                      "/registration-status" +
@@ -501,6 +526,10 @@ HTTPCode HSSConnection::get_location_data(const std::string& public_user_identit
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+
+  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_LOCATION, 0);
+  event.add_var_param(public_user_identity);
+  SAS::report_event(event);
 
   std::string path = "/impu/" +
                      Utils::url_escape(public_user_identity) +

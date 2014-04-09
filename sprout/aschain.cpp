@@ -164,13 +164,10 @@ bool AsChain::matches_target(pjsip_tx_data* tdata) const
   return (orig_uri == msg_uri);
 }
 
-// LCOV_EXCL_START - we don't currently use this, but will do when we
-// fully fix issue #127
 SAS::TrailId AsChain::trail() const
 {
   return _trail;
 }
-// LCOV_EXCL_STOP
 
 /// Create a new AsChain and return a link pointing at the start of
 // it. Caller MUST eventually call both:
@@ -228,7 +225,8 @@ AsChainLink::on_initial_request(CallServices* call_services,
   if (!ifc.filter_matches(_as_chain->session_case(),
                           _as_chain->_is_registered,
                           false,
-                          tdata->msg))
+                          tdata->msg,
+                          trail()))
   {
     LOG_DEBUG("No match for %s", to_string().c_str());
     return AsChainLink::Disposition::Next;

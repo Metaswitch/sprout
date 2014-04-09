@@ -51,7 +51,7 @@ extern "C" {
 #include <string>
 
 #include "utils.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "pjutils.h"
 #include "stack.h"
 #include "memcachedstore.h"
@@ -198,7 +198,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                               RegStore::AoR* backup_aor,     ///<backup data if no entry in store
                               RegStore* backup_store,        ///<backup store to read from if no entry in store and no backup data
                               bool send_notify,              ///<whether to send notifies (only send when writing to the local store)
-                              std::string private_id)        ///<private id that the binding was registered with
+                              std::string private_id,        ///<private id that the binding was registered with
+                              SAS::TrailId trail)
 {
   // Get the call identifier and the cseq number from the respective headers.
   std::string cid = PJUtils::pj_str_to_string((const pj_str_t*)&rdata->msg_info.cid->id);
@@ -224,7 +225,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     delete aor_data;
 
     // Find the current bindings for the AoR.
-    aor_data = primary_store->get_aor_data(aor);
+    aor_data = primary_store->get_aor_data(aor, trail);
     LOG_DEBUG("Retrieved AoR data %p", aor_data);
 
     if (aor_data == NULL)
@@ -243,7 +244,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       if ((backup_aor == NULL) &&
           (backup_store != NULL))
       {
-        backup_aor = backup_store->get_aor_data(aor);
+        backup_aor = backup_store->get_aor_data(aor, trail);
         backup_aor_alloced = (backup_aor != NULL);
       }
 
@@ -393,7 +394,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data, send_notify, all_bindings_expired));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify, all_bindings_expired, trail));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
@@ -436,6 +437,7 @@ void process_register_request(pjsip_rx_data* rdata)
 {
   pj_status_t status;
   int st_code = PJSIP_SC_OK;
+  SAS::TrailId trail = get_trail(rdata);
 
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
@@ -447,6 +449,15 @@ void process_register_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     // LCOV_EXCL_START
     LOG_ERROR("Rejecting register request using non SIP URI");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    // Can't log the public ID as the REGISTER has failed too early
+    std::string public_id = "UNKNOWN";
+    std::string error_msg = "Rejecting register request using non SIP URI";
+    event.add_var_param(public_id);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                PJSIP_SC_NOT_FOUND,
@@ -471,7 +482,6 @@ void process_register_request(pjsip_rx_data* rdata)
 
   // Add SAS markers to the trail attached to the message so the trail
   // becomes searchable.
-  SAS::TrailId trail = get_trail(rdata);
   LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
   SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
@@ -513,6 +523,11 @@ void process_register_request(pjsip_rx_data* rdata)
     private_id_for_binding = private_id;
   }
 
+  SAS::Event event(trail, SASEvent::REGISTER_START, 0);
+  event.add_var_param(public_id);
+  event.add_var_param(private_id);
+  SAS::report_event(event);
+
   std::string regstate;
   HTTPCode http_code = hss->update_registration_state(public_id, private_id, HSSConnection::REG, regstate, ifc_map, uris, trail);
   if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
@@ -530,6 +545,13 @@ void process_register_request(pjsip_rx_data* rdata)
     }
 
     LOG_ERROR("Rejecting register request with invalid public/private identity");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Rejecting register request with invalid public/private identity";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                st_code,
@@ -552,7 +574,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
                                            is_initial_registration, NULL, remote_store,
-                                           true, private_id_for_binding);
+                                           true, private_id_for_binding, trail);
   if (aor_data != NULL)
   {
     // Log the bindings.
@@ -566,7 +588,8 @@ void process_register_request(pjsip_rx_data* rdata)
       bool ignored;
       RegStore::AoR* remote_aor_data = write_to_store(remote_store, aor, rdata, now,
                                                       tmp_expiry, ignored, aor_data,
-                                                      NULL, false, private_id_for_binding);
+                                                      NULL, false, private_id_for_binding,
+                                                      trail);
       delete remote_aor_data;
     }
   }
@@ -576,6 +599,13 @@ void process_register_request(pjsip_rx_data* rdata)
     // response.
     // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Unable to access Registration Store";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     // LCOV_EXCL_STOP
   }
 
@@ -585,8 +615,16 @@ void process_register_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     // LCOV_EXCL_START - don't know how to get PJSIP to fail to create a response
-    LOG_ERROR("Error building REGISTER %d response %s", st_code,
-              PJUtils::pj_status_to_string(status).c_str());
+    std::string error_msg = "Error building REGISTER " + std::to_string(status) +
+                            " response " + PJUtils::pj_status_to_string(status);
+
+    LOG_ERROR(error_msg.c_str());
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                PJSIP_SC_INTERNAL_SERVER_ERROR,
@@ -604,6 +642,13 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - we only reject REGISTER if something goes wrong, and
     // we aren't covering any of those paths so we can't hit this either
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "REGISTER failed with status code: " + std::to_string(st_code);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     delete acr;
     delete aor_data;
     return;
@@ -619,6 +664,13 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     // LCOV_EXCL_START - can't see how this could ever happen
     LOG_ERROR("Failed to add RFC 5626 headers");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Failed to add RFC 5636 headers";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete acr;
@@ -665,6 +717,12 @@ void process_register_request(pjsip_rx_data* rdata)
         // LCOV_EXCL_START hard to hit - needs bad data in the store
         LOG_WARNING("Badly formed contact URI %s for address of record %s",
                     binding->_uri.c_str(), aor.c_str());
+
+        SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+        event.add_var_param(public_id);
+        std::string error_msg = "Badly formed contact URI - " + binding->_uri;
+        event.add_var_param(error_msg);
+        SAS::report_event(event);
         // LCOV_EXCL_STOP
       }
     }

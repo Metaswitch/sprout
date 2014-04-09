@@ -342,7 +342,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
 
   // Set up the HSS response for the user registration status query using
   // a default private user identity.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -386,11 +386,11 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   // Set up the HSS response for the user registration status query using
   // a specified private user identity.
-  _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf2.homedomain:5058;transport=TCP\"}");
 
@@ -435,7 +435,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -459,7 +459,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
   // Set up the HSS response for the user registration status query using
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123, 345],"
                               " \"optional-capabilities\": [654]}");
@@ -507,12 +507,12 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   // Set up the HSS response for the user registration status query using
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
-  _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [654]}");
@@ -560,7 +560,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/7132565489%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -582,7 +582,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
   // Set up the HSS response for the user registration status query using
   // a default private user identity.  The response returns capabilities
   // rather than an S-CSCF name.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [765, 123, 345],"
                               " \"optional-capabilities\": [654]}");
@@ -608,7 +608,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -631,10 +631,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns scscf1 again.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -700,8 +700,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -723,10 +723,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns capabilities.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [345]}");
@@ -793,8 +793,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -817,7 +817,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns capabilities.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -861,7 +861,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -885,10 +885,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns capabilities.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [123]}");
@@ -973,8 +973,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -996,10 +996,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns no capabilities.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                               "{\"result-code\": 2001}");
 
   // Inject a REGISTER request.
@@ -1062,8 +1062,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -1127,7 +1127,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   // Don't set up a HSS response, so the query fail (this simulates an
   // HSS or Homestead timeout).
-  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                           HTTP_SERVER_UNAVAILABLE);
 
   // Inject a REGISTER request.
@@ -1151,10 +1151,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   // Return 403 on the request. The registration should fail
-  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                           HTTP_FORBIDDEN);
 
   // Inject a REGISTER request.
@@ -1177,15 +1177,15 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   // Set up HSS response for the user registration status query, with a
   // malformed JSON response (missing the final brace).
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [654],"
                               " \"optional-capabilities\": [123]");
-  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                           HTTP_OK);
 
   // Inject a REGISTER request.
@@ -1208,17 +1208,17 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   // Set up HSS response for the user registration status query, with a
   // well structured JSON response, but where the capabilities are not
   // integers.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [\"this\", \"should\", \"be\", \"a\", \"list\", \"of\", \"ints\"],"
                               " \"optional-capabilities\": [123]}");
-  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                           HTTP_OK);
 
   // Inject a REGISTER request.
@@ -1242,8 +1242,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
 
   delete tp;
 }
@@ -1265,10 +1265,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns scscf1 again.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                               "{\"result-code\": 2001,"
                               " \"mandatory-capabilities\": [123],"
                               " \"optional-capabilities\": [345]}");
@@ -1335,8 +1335,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -1356,10 +1356,10 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNotFound)
   // a default private user identity.  The first response (specifying
   // auth_type=REG) returns scscf1, the second response (specifying
   // auth_type=CAPAB) returns a 403.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB",
+  _hss_connection->set_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB",
                           HTTP_FORBIDDEN);
 
   // Inject a REGISTER request.
@@ -1403,8 +1403,8 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNotFound)
 
   free_txdata();
 
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
-  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=CAPAB");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+  _hss_connection->delete_rc("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=CAPAB");
 
   delete tp;
 }
@@ -2211,7 +2211,7 @@ TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
 
   // Set up the HSS response for the user registration status query using
   // a default private user identity.
-  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG",
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -2248,7 +2248,7 @@ TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
 
   // Tidy up.
   free_txdata();
-  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&auth-type=REG");
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
   delete tp; tp = NULL;
 }
 

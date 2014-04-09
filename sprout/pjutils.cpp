@@ -95,13 +95,18 @@ pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
-    if (pj_stricmp(&host_from_uri, &stack_data.home_domain)==0)
-    {
-      return PJ_TRUE;
-    }
+    std::string host = pj_str_to_string(&((pjsip_sip_uri*)uri)->host);
+    return is_home_domain(host);
   }
   return PJ_FALSE;
+}
+
+
+/// Utility to determine if this domain is a home domain
+pj_bool_t PJUtils::is_home_domain(const std::string& domain)
+{
+  return (stack_data.home_domains.find(domain) != stack_data.home_domains.end()) ?
+         PJ_TRUE : PJ_FALSE;
 }
 
 
@@ -312,6 +317,21 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   return id;
 }
 
+/// Extract the domain from a SIP URI, or if its another type of URI, return
+/// the default home domain.
+pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
+{
+  pjsip_uri* uri = PJUtils::uri_from_string(uri_str, pool);
+  if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
+      PJSIP_URI_SCHEME_IS_SIPS(uri))
+  {
+    return ((pjsip_sip_uri*)uri)->host;
+  }
+  else
+  {
+    return stack_data.default_home_domain;
+  }
+}
 
 /// Determine the served user for originating requests.
 pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
@@ -375,7 +395,6 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   {
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
-    auth_hdr->credential.digest.realm = stack_data.home_domain;
     // Construct a default private identifier from the URI in the To header.
     LOG_DEBUG("Construct default private identity");
     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
@@ -719,7 +738,10 @@ void PJUtils::resolve(const std::string& name,
 
 
 /// Resolves the next hop target of the SIP message
-void PJUtils::resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<AddrInfo>& servers)
+void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
+                               int retries,
+                               std::vector<AddrInfo>& servers,
+                               SAS::TrailId trail)
 {
   // Get the next hop URI from the message and parse out the destination, port
   // and transport.
@@ -747,7 +769,9 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata, int retries, std::vector<Ad
                                   port,
                                   transport,
                                   retries,
-                                  servers);
+                                  servers,
+                                  trail);
+
   LOG_INFO("Resolved destination URI %s to %d servers",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   (pjsip_uri*)next_hop).c_str(),
@@ -976,7 +1000,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport determined, so resolve the next hop for the message.
-    resolve_next_hop(tdata, retries, sss->servers);
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
 
     if (!sss->servers.empty())
     {
@@ -1118,7 +1142,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
   if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // No transport pre-selected so resolve the next hop to a set of servers.
-    resolve_next_hop(tdata, retries, sss->servers);
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
 
     if (!sss->servers.empty())
     {

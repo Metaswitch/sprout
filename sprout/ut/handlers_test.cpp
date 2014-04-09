@@ -70,7 +70,7 @@ class RegistrationTimeoutHandlersTest : public BaseTest
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
     chronos_config = new RegistrationTimeoutHandler::Config(store, store, fake_hss);
-    handler = new RegistrationTimeoutHandler(*req, chronos_config);
+    handler = new RegistrationTimeoutHandler(*req, chronos_config, 0);
   }
 
   void TearDown()
@@ -141,7 +141,7 @@ class DeregistrationHandlerTest : public BaseTest
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "registrations");
     deregistration_config = new DeregistrationHandler::Config(store, store, fake_hss, NULL);
-    handler = new DeregistrationHandler(*req, deregistration_config);
+    handler = new DeregistrationHandler(*req, deregistration_config, 0);
 
     stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
     // The expiry tests require pjsip, so initialise for this test
@@ -243,7 +243,7 @@ class AuthTimeoutTest : public BaseTest
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
     chronos_config = new AuthTimeoutHandler::Config(store, fake_hss);
-    handler = new AuthTimeoutHandler(*req, chronos_config);
+    handler = new AuthTimeoutHandler(*req, chronos_config, 0);
   }
 
   void TearDown()
@@ -263,11 +263,11 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
   Json::Value json("{}");
-  store->set_av("test@example.com", "abcdef", &json);
+  store->set_av("test@example.com", "abcdef", &json, 0);
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
-  ASSERT_EQ(NULL, store->get_av("test@example.com", "abcdef"));
+  ASSERT_EQ(NULL, store->get_av("test@example.com", "abcdef", 0));
 }
 
 TEST_F(AuthTimeoutTest, MainlineTest)

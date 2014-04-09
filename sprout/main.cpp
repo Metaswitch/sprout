@@ -88,6 +88,12 @@ extern "C" {
 #include "handlers.h"
 #include "httpstack.h"
 
+enum OptionTypes
+{
+  OPT_DEFAULT_SESSION_EXPIRES=256+1,
+  OPT_ADDITIONAL_HOME_DOMAINS
+};
+
 struct options
 {
   bool                   pcscf_enabled;
@@ -105,11 +111,11 @@ struct options
   int                    icscf_port;
   std::string            external_icscf_uri;
   int                    record_routing_model;
-#define OPT_DEFAULT_SESSION_EXPIRES (256+1)
   int                    default_session_expires;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
+  std::string            additional_home_domains;
   std::string            sprout_domain;
   std::string            alias_hosts;
   std::string            trusted_hosts;
@@ -173,6 +179,8 @@ static void usage(void)
        "                            hostname(s) or IP address(es).  If one name/address\n"
        "                            is specified it is used as both private and public names.\n"
        " -D, --domain <name>        Override the home domain name\n"
+       "     --additional-domains <names>\n"
+       "                            Comma-separated list of additional home domain names\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
@@ -188,7 +196,7 @@ static void usage(void)
        "                            Route calls to specified external I-CSCF\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
-       " -M, --memstore <config_file>"
+       " -M, --memstore <config_file>\n"
        "                            Enables local memcached store for registration state and\n"
        "                            specifies configuration file\n"
        "                            (otherwise uses local store)\n"
@@ -265,6 +273,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "webrtc-port",       required_argument, 0, 'w'},
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
+    { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
     { "sprout-domain",     required_argument, 0, 'c'},
     { "alias",             required_argument, 0, 'n'},
     { "routing-proxy",     required_argument, 0, 'r'},
@@ -426,6 +435,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'D':
       options->home_domain = std::string(pj_optarg);
       fprintf(stdout, "Override home domain set to %s\n", pj_optarg);
+      break;
+
+    case OPT_ADDITIONAL_HOME_DOMAINS:
+      options->additional_home_domains = std::string(pj_optarg);
+      fprintf(stdout, "Additional home domains set to %s\n", pj_optarg);
       break;
 
     case 'c':
@@ -1068,6 +1082,7 @@ int main(int argc, char *argv[])
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
+                      opt.additional_home_domains,
                       opt.sprout_domain,
                       opt.alias_hosts,
                       sip_resolver,
@@ -1360,11 +1375,15 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
+
     RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
     AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
     DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
-    HttpStack::ConfiguredHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
-    HttpStack::ConfiguredHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
+
+    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
+    // chronos requests, so use the ChronosHandlerFactory.
+    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
+    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
     HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
 
     try

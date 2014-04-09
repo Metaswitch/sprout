@@ -50,7 +50,7 @@ extern "C" {
 
 #include "log.h"
 #include "pjutils.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "analyticslogger.h"
 #include "constants.h"
 #include "basicproxy.h"
@@ -214,7 +214,8 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
       impi = impu.substr(4);
     }
 
-    // Get the visted network identification if present.
+    // Get the visted network identification if present.  If not, homestead will
+    // default it.
     pjsip_generic_string_hdr* vn_hdr =
          (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg,
                                                                &STR_P_V_N_I,
@@ -223,6 +224,11 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
     if (vn_hdr != NULL)
     {
       visited_network = PJUtils::pj_str_to_string(&vn_hdr->hvalue);
+    }
+    else if (PJSIP_URI_SCHEME_IS_SIP(to_uri) || PJSIP_URI_SCHEME_IS_SIPS(to_uri))
+    {
+      // Use the domain of the IMPU as the visited network.
+      _visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
     }
 
     // Work out what authorization type to use by looking at the expiry
@@ -439,6 +445,13 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
       // settings in Authorization header are immaterial).
       LOG_DEBUG("Attempt retry to alternate S-CSCF for REGISTER request");
       retry = true;
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      std::string method = "REGISTER";
+      event.add_var_param(method);
+      event.add_var_param(st_code);
+      SAS::report_event(event);
     }
   }
   else
@@ -451,6 +464,13 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
     {
       LOG_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
       retry = true;
+
+      std::string st_code = std::to_string(rsp_status);
+      SAS::Event event(trail(), SASEvent::SCSCF_RETRY, 0);
+      std::string method = "NON-REGISTER";
+      event.add_var_param(method);
+      event.add_var_param(st_code);
+      SAS::report_event(event);
     }
   }
 

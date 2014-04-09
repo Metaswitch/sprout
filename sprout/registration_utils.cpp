@@ -53,6 +53,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "log.h"
 #include <boost/lexical_cast.hpp>
+#include "sproutsasevent.h"
 
 #define MAX_SIP_MSG_SIZE 65535
 
@@ -125,6 +126,11 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
 
     LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
+
+    SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
+    event.add_var_param(served_user);
+    SAS::report_event(event);
+
     status = pjsip_endpt_create_request(stack_data.endpt,
                                &method,       // Method
                                &sprout_uri,     // Target
@@ -139,12 +145,12 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     assert(status == PJ_SUCCESS);
 
     // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list, trail);
 
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
   } else {
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list);
+    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 
@@ -163,7 +169,13 @@ static void send_register_cb(void* token, pjsip_event *event)
       ((tsx->status_code == 408) ||
        (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
   {
-    LOG_INFO("Third-party REGISTER transaction failed with code %d", tsx->status_code);
+    std::string error_msg = "Third-party REGISTER transaction failed with code " + std::to_string(tsx->status_code);
+    LOG_INFO(error_msg.c_str());
+
+    SAS::Event event(tsxdata->trail, SASEvent::REGISTER_AS_FAILED, 0);
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
     third_party_register_failed(tsxdata->public_id, tsxdata->trail);
   }
   delete tsxdata;
@@ -304,12 +316,12 @@ void notify_application_servers() {
   // TODO: implement as part of reg events package
 }
 
-static void expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id)
+static void expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
 {
   //We need the retry loop to handle the store's compare-and-swap.
   for (;;)  // LCOV_EXCL_LINE No UT for retry loop.
   {
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
     if (aor_data == NULL)
     {
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
@@ -326,7 +338,7 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    bool ok = store->set_aor_data(aor, aor_data, false);
+    bool ok = store->set_aor_data(aor, aor_data, false, trail);
     delete aor_data;
     if (ok)
     {
@@ -341,7 +353,7 @@ void RegistrationUtils::network_initiated_deregistration(RegStore *store,
                                                          const std::string& binding_id,
                                                          SAS::TrailId trail)
 {
-  expire_bindings(store, served_user, binding_id);
+  expire_bindings(store, served_user, binding_id, trail);
 
   // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
   // should be passed on the REGISTER message, so we don't need the binding ID.

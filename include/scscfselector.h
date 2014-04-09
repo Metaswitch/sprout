@@ -42,21 +42,22 @@
 #include <map>
 #include <functional>
 #include "updater.h"
+#include "sas.h"
 
 class SCSCFSelector
 {
 public:
   SCSCFSelector(std::string configuration = "./s-cscf.json");
   ~SCSCFSelector();
-  
+
   // Updates the scscf configuration
   void update_scscf();
 
-  // returns name of s-cscf with matching capabilities  
-  std::string get_scscf(const std::vector<int> &mandatory, 
-                        const std::vector<int> &optional, 
-                        const std::vector<std::string> &rejects);
-
+  // returns name of s-cscf with matching capabilities
+  std::string get_scscf(const std::vector<int> &mandatory,
+                        const std::vector<int> &optional,
+                        const std::vector<std::string> &rejects,
+                        SAS::TrailId trail);
 private:
   typedef struct scscf
   {
@@ -65,7 +66,7 @@ private:
     int weight;
     std::vector<int> capabilities;
   } scscf_t;
-    
+
   std::string _configuration;
   std::vector<scscf> _scscfs;
   Updater<void, SCSCFSelector>* _updater;
