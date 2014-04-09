@@ -89,13 +89,6 @@ class HttpConnectionTest : public BaseTest
   {
     fakecurl_responses.clear();
     fakecurl_requests.clear();
-
-    // Destroy the LVC before calling cw_reset_time, otherwise ZeroMQ
-    // checks the wrong time against its timeout and the poll loop
-    // continues for several minutes.
-    delete stack_data.stats_aggregator;
-    stack_data.stats_aggregator = NULL;
-    cwtest_reset_time();
   }
 };
 
@@ -143,7 +136,8 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   long ret = _http.get("/blah/blah/blah", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
 
-  // Wait a very short time.
+  // Wait a very short time. Note that this is reverted by the
+  // BaseTest destructor, which calls cwtest_reset_time().
   cwtest_advance_time_ms(10L);
 
   // Next request should be on same connection (it's possible but very
