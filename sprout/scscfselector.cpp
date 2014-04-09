@@ -1,5 +1,5 @@
 /**
-* @file scscfselector.cpp 
+* @file scscfselector.cpp
 *
 * Project Clearwater - IMS in the Cloud
 * Copyright (C) 2013 Metaswitch Networks Ltd
@@ -41,6 +41,8 @@
 
 #include "scscfselector.h"
 #include "log.h"
+#include "sas.h"
+#include "sproutsasevent.h"
 
 SCSCFSelector::SCSCFSelector(std::string configuration) :
   _configuration(configuration),
@@ -59,9 +61,9 @@ void SCSCFSelector::update_scscf()
   std::ifstream file;
 
   LOG_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
- 
+
   std::vector<scscf_t> new_scscfs;
- 
+
   file.open(_configuration.c_str());
   if (file.is_open())
   {
@@ -81,7 +83,7 @@ void SCSCFSelector::update_scscf()
       for (size_t ii = 0; ii < scscfs.size(); ++ii)
       {
         Json::Value scscf = scscfs[(int)ii];
-       
+
         if ((scscf["server"].isString()) &&
             (scscf["priority"].isInt()) &&
             (scscf["weight"].isInt()) &&
@@ -135,30 +137,49 @@ SCSCFSelector::~SCSCFSelector()
   _updater = NULL;
 }
 
-std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory, 
+std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
                                      const std::vector<int> &optional,
-                                     const std::vector<std::string> &rejects) 
+                                     const std::vector<std::string> &rejects,
+                                     SAS::TrailId trail)
 {
-  // There are no configured S-CSCFs. 
+  // There are no configured S-CSCFs.
   if (_scscfs.empty())
   {
+    SAS::Event event(trail, SASEvent::SCSCF_NONE_CONFIGURED, 0);
+    SAS::report_event(event);
+
     LOG_WARNING("There are no configured S-CSCFs");
     return std::string();
   }
- 
-  // There's at least one S-CSCF, so check if any match the capabilities requested
 
-  // Sort the mandatory capabilities, and remove duplicates. 
+  // There's at least one S-CSCF, so check if any match the capabilities requested
+  std::string reject_str;
+  for (std::vector<std::string>::const_iterator ii = rejects.begin(); ii != rejects.end(); ++ii)
+  {
+    reject_str = reject_str + *ii + ";";
+  }
+
+  // Sort the mandatory capabilities, and remove duplicates.
   std::vector<int> mandatory_cap = mandatory;
   std::sort(mandatory_cap.begin(), mandatory_cap.end());
   mandatory_cap.erase(unique(mandatory_cap.begin(), mandatory_cap.end()), mandatory_cap.end());
+  std::string mandatory_str;
+  for (std::vector<int>::const_iterator ii = mandatory_cap.begin(); ii != mandatory_cap.end(); ++ii)
+  {
+    mandatory_str = mandatory_str + std::to_string(*ii) + ";";
+  }
 
   // Sort the optional capabilities, and remove duplicates.
   std::vector<int> optional_cap = optional;
   std::sort(optional_cap.begin(), optional_cap.end());
   optional_cap.erase(unique(optional_cap.begin(), optional_cap.end()), optional_cap.end());
+  std::string optional_str;
+  for (std::vector<int>::const_iterator ii = optional_cap.begin(); ii != optional_cap.end(); ++ii)
+  {
+    optional_str = optional_str + std::to_string(*ii) + ";";
+  }
 
-  // Find all S-CSCFs that have all the mandatory capabilities, the highest possible number 
+  // Find all S-CSCFs that have all the mandatory capabilities, the highest possible number
   // of optional capabilities, and the highest priority (closest to 0).
   // Also sum up the weights of the valid S-CSCFs as part of the iteration
   std::vector<scscf> matches;
@@ -206,26 +227,45 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   }
 
   // If there are no matches, return an empty string (there will only be no matches
-  // if no S-CSCFs had all the requested mandatory capabilities). 
+  // if no S-CSCFs had all the requested mandatory capabilities).
   // If there's only one match, then return its name.
   if (matches.empty())
   {
     LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities");
+
+    SAS::Event event(trail, SASEvent::SCSCF_NONE_VALID, 0);
+    event.add_var_param(mandatory_str);
+    event.add_var_param(optional_str);
+    event.add_var_param(reject_str);
+    SAS::report_event(event);
+
     return std::string();
   }
   else if (matches.size() == 1)
   {
     LOG_DEBUG("Selected S-CSCF is %s",  matches[0].server.c_str());
+
+    SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
+    event.add_var_param(matches[0].server);
+    event.add_var_param(mandatory_str);
+    event.add_var_param(optional_str);
+    std::string priority_str = std::to_string(matches[0].priority);
+    std::string weight_str = std::to_string(matches[0].weight);
+    event.add_var_param(priority_str);
+    event.add_var_param(weight_str);
+    event.add_var_param(reject_str);
+    SAS::report_event(event);
+
     return matches[0].server.c_str();
   }
-  
+
   // There are multiple S-CSCFs that match on all mandatory capabilities, the highest number of optional
-  // capabilities, and the highest priority. Select one using a weighted random choice. 
+  // capabilities, and the highest priority. Select one using a weighted random choice.
   srand(time(NULL));
   int random;
   random = rand() % sum;
-  
-  int index = 0;    
+
+  int index = 0;
   int accumulator = matches[index].weight;
 
   while (accumulator <= random)
@@ -235,5 +275,17 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   }
 
   LOG_DEBUG("Selected S-CSCF is %s",  matches[index].server.c_str());
+
+  SAS::Event event(trail, SASEvent::SCSCF_SELECTED, 0);
+  event.add_var_param(matches[index].server);
+  event.add_var_param(mandatory_str);
+  event.add_var_param(optional_str);
+  std::string priority_str = std::to_string(matches[index].priority);
+  std::string weight_str = std::to_string(matches[index].weight);
+  event.add_var_param(priority_str);
+  event.add_var_param(weight_str);
+  event.add_var_param(reject_str);
+  SAS::report_event(event);
+
   return matches[index].server;
 }

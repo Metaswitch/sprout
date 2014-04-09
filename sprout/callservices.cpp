@@ -44,7 +44,7 @@
 #include "stack.h"
 #include "pjutils.h"
 #include "pjmedia.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "stateful_proxy.h"
 #include "callservices.h"
 #include "simservs.h"
@@ -61,10 +61,13 @@ using namespace rapidxml;
 #define PRIVACY_H_NONE     0x00000010
 #define PRIVACY_H_CRITICAL 0x00000020
 
+
+const std::string CallServices::MMTEL_URI_PREFIX = "sip:mmtel.";
+
+
 // Call Services constructor
 CallServices::CallServices(XDMConnection *xdm_client) : _xdmc(xdm_client)
 {
-  _mmtel_uri = "sip:mmtel." + std::string(stack_data.home_domain.ptr, stack_data.home_domain.slen);
 }
 
 
@@ -73,10 +76,12 @@ CallServices::~CallServices()
 }
 
 
-/// Is this the URI of the MMTEL "callservices" AS?
+/// Is this a URI of the MMTEL "callservices" AS?
+/// MMTEL AS URIs consist of the MMTEL URI prefix followed by a valid home domain.
 bool CallServices::is_mmtel(std::string uri)
 {
-  return (uri == _mmtel_uri);
+  return boost::starts_with(uri, MMTEL_URI_PREFIX) &&
+         PJUtils::is_home_domain(uri.substr(MMTEL_URI_PREFIX.length()));
 }
 
 

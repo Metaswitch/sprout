@@ -83,8 +83,12 @@ case "$1" in
         # bono can take a long time so we leave this decision up to the
         # management/orchestration layer.
         service $NAME stop || /bin/true
-        remove_user
-        remove_logging
+        if [ $1 != "upgrade" ]; then
+            # We shouldn't do this cleanup on upgrade - deleting the
+            # logs loses valuable information
+            remove_user
+            remove_logging
+        fi
         remove_section /etc/security/limits.conf $NAME
     ;;
 

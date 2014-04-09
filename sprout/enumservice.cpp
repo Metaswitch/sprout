@@ -47,7 +47,7 @@
 #include "dnsresolver.h"
 #include "utils.h"
 #include "log.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 
 
 const boost::regex EnumService::CHARS_TO_STRIP_FROM_UAS = boost::regex("([^0-9+]|(?<=.)[^0-9])");
@@ -293,7 +293,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   }
 
   // Log starting ENUM processing.
-  SAS::Event event(trail, SASEvent::ENUM_START, 1u);
+  SAS::Event event(trail, SASEvent::ENUM_START, 0);
   event.add_var_param(user);
   SAS::report_event(event);
 
@@ -373,7 +373,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   if (complete)
   {
     LOG_DEBUG("Enum lookup completes: %s", string.c_str());
-    SAS::Event event(trail, SASEvent::ENUM_COMPLETE, 1u);
+    SAS::Event event(trail, SASEvent::ENUM_COMPLETE, 0);
     event.add_var_param(user);
     event.add_var_param(string);
     SAS::report_event(event);
@@ -381,7 +381,7 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
   else
   {
     LOG_WARNING("Enum lookup did not complete for user %s", user.c_str());
-    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 1u);
+    SAS::Event event(trail, SASEvent::ENUM_INCOMPLETE, 0);
     event.add_var_param(user);
     SAS::report_event(event);
     // On failure, we must return an empty (rather than incomplete) string.
@@ -491,7 +491,7 @@ std::string DNSEnumService::Rule::replace(const std::string& string, SAS::TrailI
   // Perform the match and replace.
   std::string result = boost::regex_replace(string, _regex, _replace);
   // Log the results.
-  SAS::Event event(trail, SASEvent::ENUM_MATCH, 1u);
+  SAS::Event event(trail, SASEvent::ENUM_MATCH, 0);
   event.add_static_param(_terminal);
   event.add_var_param(string);
   event.add_var_param(_regex.str());

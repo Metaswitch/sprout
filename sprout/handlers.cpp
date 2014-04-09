@@ -51,11 +51,12 @@ extern "C" {
 static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
                                     bool& all_bindings_expired, std::string aor_id,
                                     RegStore* current_store, RegStore* remote_store,
-                                    RegStore::AoR** previous_aor_data)
+                                    RegStore::AoR** previous_aor_data,
+                                    SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
   delete *aor_data;
-  *aor_data = current_store->get_aor_data(aor_id);
+  *aor_data = current_store->get_aor_data(aor_id, trail);
   LOG_DEBUG("Retrieved AoR data %p", *aor_data);
 
   if (*aor_data == NULL)
@@ -74,7 +75,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
     if ((*previous_aor_data == NULL) &&
         (remote_store != NULL))
     {
-      *previous_aor_data = remote_store->get_aor_data(aor_id);
+      *previous_aor_data = remote_store->get_aor_data(aor_id, trail);
       previous_aor_data_alloced = true;
     }
 
@@ -110,7 +111,7 @@ void RegistrationTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
-    _req.send_reply(405);
+    send_http_reply(405);
     delete this;
     return;
   }
@@ -119,13 +120,24 @@ void RegistrationTimeoutHandler::run()
   if (rc != 200)
   {
     LOG_DEBUG("Unable to parse response from Chronos");
-    _req.send_reply(rc);
+    send_http_reply(rc);
     delete this;
     return;
   }
 
-  _req.send_reply(200);
+  send_http_reply(200);
+
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
+  calling_dn.add_var_param(_aor_id);
+  SAS::report_marker(calling_dn);
+
   handle_response();
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   delete this;
 }
 
@@ -133,21 +145,31 @@ void AuthTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
-    _req.send_reply(405);
+    send_http_reply(405);
     delete this;
     return;
   }
 
+  SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
+  SAS::report_marker(start_marker);
+  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
+  calling_dn.add_var_param(_impu);
+  SAS::report_marker(calling_dn);
+
   int rc = handle_response(_req.body());
+
+  SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
+  SAS::report_marker(end_marker);
+
   if (rc != 200)
   {
     LOG_DEBUG("Unable to handle callback from Chronos");
-    _req.send_reply(rc);
+    send_http_reply(rc);
     delete this;
     return;
   }
 
-  _req.send_reply(200);
+  send_http_reply(200);
   delete this;
 }
 
@@ -157,7 +179,7 @@ void DeregistrationHandler::run()
   if (_req.method() != htp_method_DELETE)
   {
     LOG_WARNING("HTTP method isn't delete");
-    _req.send_reply(405);
+    send_http_reply(405);
     delete this;
     return;
   }
@@ -168,7 +190,7 @@ void DeregistrationHandler::run()
   if (_notify != "true" && _notify != "false")
   {
     LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    _req.send_reply(400);
+    send_http_reply(400);
     delete this;
     return;
   }
@@ -179,13 +201,14 @@ void DeregistrationHandler::run()
   if (rc != 200)
   {
     LOG_WARNING("Request body is invalid, send %d", rc);
-    _req.send_reply(rc);
+    send_http_reply(rc);
     delete this;
     return;
   }
 
   rc = handle_request();
-  _req.send_reply(rc);
+
+  send_http_reply(rc);
   delete this;
 }
 //LCOV_EXCL_STOP
@@ -230,7 +253,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
   do
   {
     if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                                 aor_id, current_store, remote_store, &previous_aor_data))
+                                 aor_id, current_store, remote_store, &previous_aor_data, trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
@@ -393,7 +416,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
   do
   {
     if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                                 aor_id, current_store, remote_store, &previous_aor_data))
+                                 aor_id, current_store, remote_store, &previous_aor_data, trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
@@ -430,7 +453,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
     }
     // LCOV_EXCL_STOP
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired, trail()));
 
   if (private_id == "")
   {
@@ -499,7 +522,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
     return 400;
   }
 
-  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce);
+  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce, trail());
   bool success = false;
 
 
@@ -528,7 +551,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
 
     if (success)
     {
-      success = _cfg->_avstore->delete_av(_impi, _nonce);
+      success = _cfg->_avstore->delete_av(_impi, _nonce, trail());
     }
 
     delete json;

@@ -44,6 +44,26 @@
 #include "sipresolver.h"
 #include "avstore.h"
 
+/// Common factory for all handlers that deal with chronos timer pops. This is
+/// a subclass of ConfiguredHandlerFactory that requests HTTP flows to be
+/// logged at detail level.
+template<class H, class C>
+class ChronosHandlerFactory : public HttpStack::ConfiguredHandlerFactory<H, C>
+{
+public:
+  ChronosHandlerFactory(C* cfg) :
+    HttpStack::ConfiguredHandlerFactory<H, C>(cfg)
+  {}
+
+  virtual ~ChronosHandlerFactory() {}
+
+  SASEvent::HttpLogLevel sas_log_level(HttpStack::Request& req)
+  {
+    // Log all chronos flows at detail level.
+    return SASEvent::HttpLogLevel::DETAIL;
+  }
+};
+
 class RegistrationTimeoutHandler : public HttpStack::Handler
 {
 public:
@@ -57,7 +77,12 @@ public:
     HSSConnection* _hss;
   };
 
-  RegistrationTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  RegistrationTimeoutHandler(HttpStack::Request& req,
+                             const Config* cfg,
+                             SAS::TrailId trail) :
+    HttpStack::Handler(req, trail), _cfg(cfg)
+  {};
+
   void run();
 
 protected:
@@ -91,9 +116,11 @@ public:
   };
 
 
-  DeregistrationHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg)
-  {
-  };
+  DeregistrationHandler(HttpStack::Request& req,
+                        const Config* cfg,
+                        SAS::TrailId trail) :
+    HttpStack::Handler(req, trail), _cfg(cfg)
+  {};
 
   void run();
   int handle_request();
@@ -121,7 +148,12 @@ public:
     AvStore* _avstore;
     HSSConnection* _hss;
   };
-  AuthTimeoutHandler(HttpStack::Request& req, const Config* cfg) : HttpStack::Handler(req), _cfg(cfg) {};
+  AuthTimeoutHandler(HttpStack::Request& req,
+                     const Config* cfg,
+                     SAS::TrailId trail) :
+    HttpStack::Handler(req, trail), _cfg(cfg)
+  {};
+
   void run();
 protected:
   int handle_response(std::string body);

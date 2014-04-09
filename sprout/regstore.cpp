@@ -62,6 +62,7 @@ extern "C" {
 #include "stack.h"
 #include "pjutils.h"
 #include "chronosconnection.h"
+#include "sproutsasevent.h"
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
@@ -82,9 +83,9 @@ RegStore::~RegStore()
 /// an empty record if no data exists for the AoR.
 ///
 /// @param aor_id       The SIP Address of Record for the registration
-RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
+RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId trail)
 {
-  AoR* aor_data = _connector->get_aor_data(aor_id);
+  AoR* aor_data = _connector->get_aor_data(aor_id, trail);
 
   if (aor_data != NULL)
   {
@@ -96,14 +97,14 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id)
   return aor_data;
 }
 
-RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id)
+RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS::TrailId trail)
 {
   LOG_DEBUG("Get AoR data for %s", aor_id.c_str());
   AoR* aor_data = NULL;
 
   std::string data;
   uint64_t cas;
-  Store::Status status = _data_store->get_data("reg", aor_id, data, cas);
+  Store::Status status = _data_store->get_data("reg", aor_id, data, cas, trail);
 
   if (status == Store::Status::OK)
   {
@@ -111,12 +112,29 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id)
     aor_data = deserialize_aor(data);
     aor_data->_cas = cas;
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
+
+    SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
+    event.add_var_param(aor_id);
+    SAS::report_event(event);
   }
   else if (status == Store::Status::NOT_FOUND)
   {
     // Data store didn't find the record, so create a new blank record.
     aor_data = new AoR();
+
+    SAS::Event event(trail, SASEvent::REGSTORE_GET_NEW, 0);
+    event.add_var_param(aor_id);
+    SAS::report_event(event);
+
     LOG_DEBUG("Data store returned not found, so create new record, CAS = %ld", aor_data->_cas);
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    SAS::Event event(trail, SASEvent::REGSTORE_GET_FAILURE, 0);
+    event.add_var_param(aor_id);
+    SAS::report_event(event);
+    // LCOV_EXCL_STOP
   }
 
   return aor_data;
@@ -124,10 +142,11 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id)
 
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data,
-                            bool set_chronos)
+                            bool set_chronos,
+                            SAS::TrailId trail)
 {
   bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, unused);
+  return set_aor_data(aor_id, aor_data, set_chronos, unused, trail);
 }
 
 
@@ -146,7 +165,8 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data,
                             bool set_chronos,
-                            bool& all_bindings_expired)
+                            bool& all_bindings_expired,
+                            SAS::TrailId trail)
 {
   all_bindings_expired = false;
   // Expire any old bindings before writing to the server.  In theory, if
@@ -217,20 +237,44 @@ bool RegStore::set_aor_data(const std::string& aor_id,
     }
   }
 
-  return _connector->set_aor_data(aor_id, aor_data, max_expires - now);
+  return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
 }
 
 bool RegStore::Connector::set_aor_data(const std::string& aor_id,
                                        AoR* aor_data,
-                                       int expiry)
+                                       int expiry,
+                                       SAS::TrailId trail)
 {
   std::string data = serialize_aor(aor_data);
+
+  SAS::Event event(trail, SASEvent::REGSTORE_SET_START, 0);
+  event.add_var_param(aor_id);
+  SAS::report_event(event);
+
   Store::Status status = _data_store->set_data("reg",
                                                aor_id,
                                                data,
                                                aor_data->_cas,
-                                               expiry);
+                                               expiry,
+                                               trail);
+
   LOG_DEBUG("Data store set_data returned %d", status);
+
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event2(trail, SASEvent::REGSTORE_SET_SUCCESS, 0);
+    event2.add_var_param(aor_id);
+    SAS::report_event(event2);
+  }
+  else
+  {
+    // LCOV_EXCL_START
+    SAS::Event event2(trail, SASEvent::REGSTORE_SET_FAILURE, 0);
+    event2.add_var_param(aor_id);
+    SAS::report_event(event2);
+    // LCOV_EXCL_STOP
+  }
+
 
   return (status == Store::Status::OK);
 }

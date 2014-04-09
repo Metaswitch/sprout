@@ -43,7 +43,7 @@
 #include "utils.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "httpconnection.h"
 #include "xdmconnection.h"
 #include "accumulator.h"
@@ -54,10 +54,10 @@ XDMConnection::XDMConnection(const std::string& server,
                              LastValueCache* stats_aggregator) :
   _http(new HttpConnection(server,
                            true,
-                           SASEvent::TX_XDM_GET_BASE,
                            "connected_homers",
                            load_monitor,
-                           stats_aggregator)),
+                           stats_aggregator,
+                           SASEvent::HttpLogLevel::PROTOCOL)),
   _latency_stat("xdm_latency_us", stats_aggregator)
 {
 }
@@ -84,6 +84,10 @@ bool XDMConnection::get_simservs(const std::string& user,
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
+
+  SAS::Event event(trail, SASEvent::HTTP_HOMER_SIMSERVS, 0);
+  event.add_var_param(user);
+  SAS::report_event(event);
 
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
   HTTPCode http_code = _http->get(url, xml_data, user, trail);

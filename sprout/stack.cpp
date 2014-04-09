@@ -60,7 +60,8 @@ extern "C" {
 #include "pjutils.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "saslogger.h"
+#include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
 #include "zmq_lvc.h"
@@ -308,7 +309,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   set_trail(rdata, trail);
 
   // Log the message event.
-  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 1u);
+  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
   event.add_static_param(rdata->pkt_info.src_port);
   event.add_var_param(rdata->pkt_info.src_name);
@@ -325,7 +326,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   if (trail != 0)
   {
     // Log the message event.
-    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 1u);
+    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
     event.add_static_param(tdata->tp_info.dst_port);
     event.add_var_param(tdata->tp_info.dst_name);
@@ -770,43 +771,6 @@ pj_status_t init_pjsip()
 }
 
 
-// LCOV_EXCL_START
-void sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
-{
-  int level;
-  va_list args;
-
-  switch (sas_level) {
-    case SAS::LOG_LEVEL_DEBUG:
-      level = Log::DEBUG_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_VERBOSE:
-      level = Log::VERBOSE_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_INFO:
-      level = Log::INFO_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_STATUS:
-      level = Log::STATUS_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_WARNING:
-      level = Log::WARNING_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_ERROR:
-      level = Log::ERROR_LEVEL;
-      break;
-    default:
-      LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
-      level = Log::ERROR_LEVEL;
-    }
-
-  va_start(args, fmt);
-  Log::_write(level, module, line_number, fmt, args);
-  va_end(args);
-}
-// LCOV_EXCL_STOP
-
-
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -816,6 +780,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
+                       const std::string& additional_home_domains,
                        const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
@@ -863,9 +828,19 @@ pj_status_t init_stack(const std::string& system_name,
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
-  stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
+  stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
+
+  // Build a set of home domains
+  stack_data.home_domains = std::unordered_set<std::string>();
+  stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
+  if (additional_home_domains != "")
+  {
+    std::list<std::string> domains;
+    Utils::split_string(additional_home_domains, ',', domains, 0, true);
+    stack_data.home_domains.insert(domains.begin(), domains.end());
+  }
 
   // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
   stack_data.addr_family = AF_INET;
