@@ -46,6 +46,7 @@
 #include "fakelogger.hpp"
 
 #include "basetest.hpp"
+#include "test_interposer.hpp"
 
 using namespace std;
 
@@ -59,7 +60,12 @@ BaseTest::BaseTest()
 
 BaseTest::~BaseTest()
 {
+  // Destroy the LVC before calling cw_reset_time, otherwise ZeroMQ
+  // checks the wrong time against its timeout and the poll loop
+  // continues for several minutes.
   delete stack_data.stats_aggregator;
   stack_data.stats_aggregator = NULL;
+
+  cwtest_reset_time();
 }
 
