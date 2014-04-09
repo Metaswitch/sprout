@@ -228,7 +228,7 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
     else if (PJSIP_URI_SCHEME_IS_SIP(to_uri) || PJSIP_URI_SCHEME_IS_SIPS(to_uri))
     {
       // Use the domain of the IMPU as the visited network.
-      _visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
+      visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
     }
 
     // Work out what authorization type to use by looking at the expiry

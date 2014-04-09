@@ -48,7 +48,7 @@ extern "C" {
 
 
 #include "log.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "icscfrouter.h"
 
 
@@ -108,7 +108,8 @@ int ICSCFRouter::get_scscf(std::string& scscf)
       // We queried capabilities from the HSS, so select a suitable S-CSCF.
       scscf = _scscf_selector->get_scscf(_hss_rsp.mandatory_caps,
                                          _hss_rsp.optional_caps,
-                                         _attempted_scscfs);
+                                         _attempted_scscfs,
+                                         _trail);
     }
 
     if (!scscf.empty())
@@ -126,14 +127,14 @@ int ICSCFRouter::get_scscf(std::string& scscf)
 
   if (status_code == PJSIP_SC_OK)
   {
-    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_SUCCESS, 0);
+    SAS::Event event(_trail, SASEvent::SCSCF_SELECTION_SUCCESS, 0);
     event.add_var_param(scscf);
-    event.add_var_param(_hss_rsp._scscf);
+    event.add_var_param(_hss_rsp.scscf);
     SAS::report_event(event);
   }
   else
   {
-    SAS::Event event(trail(), SASEvent::SCSCF_SELECTION_FAILED, 0);
+    SAS::Event event(_trail, SASEvent::SCSCF_SELECTION_FAILED, 0);
     std::string st_code = std::to_string(status_code);
     event.add_var_param(st_code);
     SAS::report_event(event);

@@ -1105,10 +1105,10 @@ int main(int argc, char *argv[])
     // Create HttpConnection pool for Ralf Rf billing interface.
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
-                                         SASEvent::RALF_BASE,
                                          "connected_ralfs",
                                          load_monitor,
-                                         stack_data.stats_aggregator);
+                                         stack_data.stats_aggregator,
+                                         SASEvent::HttpLogLevel::PROTOCOL);
   }
 
   // Initialise the OPTIONS handling module.
