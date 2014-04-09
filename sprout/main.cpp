@@ -87,6 +87,12 @@ extern "C" {
 #include "handlers.h"
 #include "httpstack.h"
 
+enum OptionTypes
+{
+  OPT_DEFAULT_SESSION_EXPIRES=256+1,
+  OPT_ADDITIONAL_HOME_DOMAINS
+};
+
 struct options
 {
   bool                   pcscf_enabled;
@@ -104,11 +110,11 @@ struct options
   int                    icscf_port;
   std::string            external_icscf_uri;
   int                    record_routing_model;
-#define OPT_DEFAULT_SESSION_EXPIRES (256+1)
   int                    default_session_expires;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
+  std::string            additional_home_domains;
   std::string            sprout_domain;
   std::string            alias_hosts;
   std::string            trusted_hosts;
@@ -132,6 +138,7 @@ struct options
   std::string            http_address;
   int                    http_port;
   int                    http_threads;
+  std::string            billing_cdf;
   int                    worker_threads;
   pj_bool_t              log_to_file;
   std::string            log_directory;
@@ -170,6 +177,8 @@ static void usage(void)
        "                            hostname(s) or IP address(es).  If one name/address\n"
        "                            is specified it is used as both private and public names.\n"
        " -D, --domain <name>        Override the home domain name\n"
+       "     --additional-domains <names>\n"
+       "                            Comma-separated list of additional home domain names\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[:<recycle time>]]]\n"
@@ -185,7 +194,7 @@ static void usage(void)
        "                            Route calls to specified external I-CSCF\n"
        " -R, --realm <realm>        Use specified realm for authentication\n"
        "                            (if not specified, local host name is used)\n"
-       " -M, --memstore <config_file>"
+       " -M, --memstore <config_file>\n"
        "                            Enables local memcached store for registration state and\n"
        "                            specifies configuration file\n"
        "                            (otherwise uses local store)\n"
@@ -221,6 +230,7 @@ static void usage(void)
        " -o  --http_port <port>     Specify the HTTP bind port\n"
        " -q  --http_threads N       Number of HTTP threads (default: 1)\n"
        " -P, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
+       " -B, --billing-cdf <server> Billing CDF server\n"
        " -W, --worker_threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
@@ -260,6 +270,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "webrtc-port",       required_argument, 0, 'w'},
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
+    { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
     { "sprout-domain",     required_argument, 0, 'c'},
     { "alias",             required_argument, 0, 'n'},
     { "routing-proxy",     required_argument, 0, 'r'},
@@ -287,6 +298,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     { "http_address",      required_argument, 0, 'T'},
     { "http_port",         required_argument, 0, 'o'},
     { "http_threads",      required_argument, 0, 'q'},
+    { "billing-cdf",       required_argument, 0, 'B'},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
     { "interactive",       no_argument,       0, 't'},
@@ -298,7 +310,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int reg_max_expires;
 
   pj_optind = 0;
-  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:dth", long_opt, &opt_ind)) != -1)
+  while ((c = pj_getopt_long(argc, argv, "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:B:dth", long_opt, &opt_ind)) != -1)
   {
     switch (c)
     {
@@ -419,6 +431,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'D':
       options->home_domain = std::string(pj_optarg);
       fprintf(stdout, "Override home domain set to %s\n", pj_optarg);
+      break;
+
+    case OPT_ADDITIONAL_HOME_DOMAINS:
+      options->additional_home_domains = std::string(pj_optarg);
+      fprintf(stdout, "Additional home domains set to %s\n", pj_optarg);
       break;
 
     case 'c':
@@ -597,6 +614,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'q':
       options->http_threads = atoi(pj_optarg);
       fprintf(stdout, "Use %d HTTP threads\n", options->http_threads);
+      break;
+
+    case 'B':
+      options->billing_cdf = atoi(pj_optarg);
+      fprintf(stdout, "Use %s as billing cdf server\n", options->billing_cdf.c_str());
       break;
 
     case 'L':
@@ -785,6 +807,21 @@ public:
   }
 };
 
+void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+{
+  pj_thread_desc thread_desc;
+  pj_thread_t *thread = 0;
+
+  if (!pj_thread_is_registered())
+  {
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+
+    if (thread_reg_status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to register thread with pjsip");
+    }
+  }
+}
 
 /*
  * main()
@@ -862,6 +899,7 @@ int main(int argc, char *argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
+  opt.billing_cdf = "";
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1016,6 +1054,10 @@ int main(int argc, char *argv[])
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
+  // Create a DNS resolver and a SIP specific resolver.
+  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  sip_resolver = new SIPResolver(dns_resolver);
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
@@ -1026,24 +1068,23 @@ int main(int argc, char *argv[])
                       opt.local_host,
                       opt.public_host,
                       opt.home_domain,
+                      opt.additional_home_domains,
                       opt.sprout_domain,
                       opt.alias_hosts,
+                      sip_resolver,
                       opt.pjsip_threads,
                       opt.worker_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
-                      load_monitor);
+                      load_monitor,
+                      opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
-
-  // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
-  sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialise the OPTIONS handling module.
   status = init_options();
@@ -1059,9 +1100,11 @@ int main(int argc, char *argv[])
 
   if (opt.chronos_service != "")
   {
+    std::string port_str = std::to_string(opt.http_port);
+    std::string http_uri = opt.http_address + ":" + std::string(port_str);
     // Create a connection to Chronos.
     LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service);
+    chronos_connection = new ChronosConnection(opt.chronos_service, http_uri);
   }
 
   if (opt.scscf_enabled)
@@ -1124,7 +1167,7 @@ int main(int argc, char *argv[])
       // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
-      status = init_authentication(opt.auth_realm, av_store, hss_connection, analytics_logger);
+      status = init_authentication(opt.auth_realm, av_store, hss_connection, chronos_connection, analytics_logger);
     }
 
     // Create Enum and BGCF services required for S-CSCF.
@@ -1143,7 +1186,6 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
-                            sip_resolver,
                             ifc_handler,
                             opt.reg_max_expires);
 
@@ -1178,7 +1220,6 @@ int main(int argc, char *argv[])
                                  false,
                                  "",
                                  analytics_logger,
-                                 sip_resolver,
                                  enum_service,
                                  bgcf_service,
                                  hss_connection,
@@ -1210,7 +1251,6 @@ int main(int argc, char *argv[])
                                  opt.ibcf,
                                  opt.trusted_hosts,
                                  analytics_logger,
-                                 sip_resolver,
                                  NULL,
                                  NULL,
                                  NULL,
@@ -1244,7 +1284,6 @@ int main(int argc, char *argv[])
     // Launch I-CSCF proxy.
     icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                  stack_data.icscf_port,
-                                 sip_resolver,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
                                  scscf_selector);
@@ -1267,16 +1306,28 @@ int main(int argc, char *argv[])
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
-    ChronosHandler::Config chronos_config(local_reg_store, remote_reg_store, hss_connection);
-    HttpStack::ConfiguredHandlerFactory<ChronosHandler, ChronosHandler::Config> chronos_handler_factory(&chronos_config);
+
+    RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+    AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
+    DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+
+    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
+    // chronos requests, so use the ChronosHandlerFactory.
+    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
+    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
+    HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
       http_stack->register_handler("^/timers$",
-                                   &chronos_handler_factory);
-      http_stack->start();
+                                   &reg_timeout_handler_factory);
+      http_stack->register_handler("^/authentication-timeout$",
+                                   &auth_timeout_handler_factory);
+      http_stack->register_handler("^/registrations?*$",
+                                   &deregistration_handler_factory);
+      http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
     {

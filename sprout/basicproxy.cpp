@@ -54,19 +54,17 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "constants.h"
 #include "basicproxy.h"
 
 
 BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        std::string name,
-                       SIPResolver* sipresolver,
                        int priority,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
-  _sipresolver(sipresolver),
   _delay_trying(delay_trying)
 {
 }
@@ -294,8 +292,8 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
     LOG_DEBUG("Statelessly forwarding ACK");
     PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
-                                                NULL, NULL);
+    status = PJUtils::send_request_stateless(tdata);
+
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error forwarding request, %s",                         //LCOV_EXCL_LINE
@@ -819,17 +817,19 @@ pj_status_t BasicProxy::UASTsx::init_uac_transactions()
     if (status == PJ_SUCCESS)
     {
       // All the data structures, transactions and transmit data have
-      // been created, so start sending messages.
+      // been created, so start sending messages.  Increment the number of
+      // pending targets immediately as some targets may fail immediately.
+      _pending_targets += new_tsx.size();
       while (!new_tsx.empty())
       {
         UACTsx* uac_tsx = new_tsx.front();
         new_tsx.pop_front();
 
-        // Push this onto the array before sending the request (as the request could
-        // fail and try to delete the transaction from the array)
+        // Push this onto the array and increment the count of transactions
+        // before sending the request (as the request could fail and try to
+        // delete the transaction from the array).
         _uac_tsx.push_back(uac_tsx);
         uac_tsx->send_request();
-        ++_pending_targets;
       }
     }
     else
@@ -955,7 +955,7 @@ void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx)
     // UAC transaction has timed out or hit a transport error.  If
     // we've not received a response from on any other UAC
     // transactions then keep this as the best response.
-    LOG_DEBUG("%s - Forked request", uac_tsx->name());
+    LOG_DEBUG("%s - client transaction not responding", uac_tsx->name());
 
     if (--_pending_targets == 0)
     {
@@ -1264,8 +1264,8 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _uas_tsx(uas_tsx),
   _index(index),
   _tdata(NULL),
-  _transport(NULL),
-  _resolved(false),
+  _servers(),
+  _current_server(0),
   _pending_destroy(false),
   _context_count(0)
 {
@@ -1317,8 +1317,13 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 {
   pj_status_t status;
 
+  // Store the request and add a reference to the request so we can be sure it
+  // remains valid for retries.
   _tdata = tdata;
+  pjsip_tx_data_add_ref(_tdata);
 
+  // Create a PJSIP UAC transaction for the request and bind it to this
+  // object.
   status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
                                  tdata,
                                  _lock,
@@ -1377,22 +1382,35 @@ void BasicProxy::UACTsx::set_target(BasicProxy::Target* target)
   if (target->transport != NULL)
   {
     // The target includes a selected transport, so set the transport on
-    // the transaction.
-    _transport = target->transport;
+    // the request.
     LOG_DEBUG("Force request to use selected transport %.*s:%d to %.*s:%d",
-              _transport->local_name.host.slen,
-              _transport->local_name.host.ptr,
-              _transport->local_name.port,
-              _transport->remote_name.host.slen,
-              _transport->remote_name.host.ptr,
-              _transport->remote_name.port);
+              target->transport->local_name.host.slen,
+              target->transport->local_name.host.ptr,
+              target->transport->local_name.port,
+              target->transport->remote_name.host.slen,
+              target->transport->remote_name.host.ptr,
+              target->transport->remote_name.port);
     pjsip_tpselector tp_selector;
     tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-    tp_selector.u.transport = _transport;
-    pjsip_tsx_set_transport(_tsx, &tp_selector);
+    tp_selector.u.transport = target->transport;
+    pjsip_tx_data_set_transport(_tdata, &tp_selector);
+
+    _tdata->dest_info.addr.count = 1;
+    _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target->transport->key.type;
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target->transport->key.rem_addr, sizeof(pj_sockaddr));
+    _tdata->dest_info.addr.entry[0].addr_len =
+         (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+         sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+    _tdata->dest_info.cur_addr = 0;
 
     // Remove the reference to the transport added when it was chosen.
-    pjsip_transport_dec_ref(_transport);
+    pjsip_transport_dec_ref(target->transport);
+  }
+  else
+  {
+    // Resolve the next hop destination for this request to a set of target
+    // servers (IP address/port/transport tuples).
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
   }
 
   exit_context();
@@ -1409,12 +1427,25 @@ void BasicProxy::UACTsx::send_request()
   LOG_DEBUG("Sending request for %s",
             PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
 
-  if ((_transport == NULL) &&
-      (_proxy->_sipresolver != NULL))
+  if (_tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
   {
-    // Resolve the next hop destination for this request to an IP address.
-    LOG_DEBUG("Resolve next hop destination");                          //LCOV_EXCL_LINE
-    status = PJUtils::resolve_next_hop(_proxy->_sipresolver, _tdata, _ai); // LCOV_EXCL_LINE
+    // The transport has already been selected for this request, so
+    // add it to the transaction otherwise it will get overwritten.
+    LOG_DEBUG("Transport %s (%s) pre-selected for transaction",
+              _tdata->tp_sel.u.transport->obj_name,
+              _tdata->tp_sel.u.transport->info);
+    pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
+  }
+  else if (_current_server < (int)_servers.size())
+  {
+    // We have resolved servers to try, so set up the destination information
+    // in the request.
+    PJUtils::set_dest_info(_tdata, _servers[_current_server]);
+  }
+  else
+  {
+    // We failed to get any valid destination servers, so fail the transaction.
+    status = PJ_ENOTFOUND;
   }
 
   if (status == PJ_SUCCESS)
@@ -1424,24 +1455,24 @@ void BasicProxy::UACTsx::send_request()
 
   if (status != PJ_SUCCESS)
   {
-    // Failed to send the request.
-    LOG_DEBUG("Failed to send request");                                //LCOV_EXCL_LINE
+    // Failed to send the request.  This is an unexpected error rather than
+    // an indication that the selected destination is down, so we do not
+    // attempt a retry and do not blacklist the selected destination.
+    LOG_DEBUG("Failed to send request (%d %s)",                         //LCOV_EXCL_LINE
+              status, PJUtils::pj_status_to_string(status).c_str());    //LCOV_EXCL_LINE
     pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
 
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
-    // tell the UAS transaction, and we should blacklist the address.
-    _uas_tsx->on_client_not_responding(this);                           //LCOV_EXCL_LINE
-    if (_resolved)                                                      //LCOV_EXCL_LINE
+    // tell the UAS transaction.
+    if (_uas_tsx != NULL)                                               //LCOV_EXCL_LINE
     {
-      _proxy->_sipresolver->blacklist(_ai, 30);                         //LCOV_EXCL_LINE
+      _uas_tsx->on_client_not_responding(this);                         //LCOV_EXCL_LINE
     }
   }
-  _tdata = NULL;
 
   exit_context();
 }
-
 
 
 // Cancels the pending transaction, using the specified status code in the
@@ -1476,11 +1507,14 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
       }
       set_trail(cancel, get_trail(_tsx));
 
-      if (_tsx->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+      if (_tsx->transport != NULL)
       {
-        // The transaction being cancelled was forced to a particular transport,
+        // The transaction being cancelled has already selected a transport,
         // so make sure the CANCEL uses this transport as well.
-        pjsip_tx_data_set_transport(cancel, &_tsx->tp_sel);
+        pjsip_tpselector tp_selector;
+        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+        tp_selector.u.transport = _tsx->transport;
+        pjsip_tx_data_set_transport(cancel, &tp_selector);
       }
 
       LOG_DEBUG("Sending CANCEL request");
@@ -1509,36 +1543,71 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // Handle incoming responses (provided the UAS transaction hasn't
   // terminated or been cancelled).
   LOG_DEBUG("%s - uac_tsx = %p, uas_tsx = %p", name(), this, _uas_tsx);
-  if ((_uas_tsx != NULL) &&
-      (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG))
-  {
-    LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
-    pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
-    _uas_tsx->on_new_client_response(this, rdata);
-  }
 
-  // If UAC transaction is terminated because of a timeout, treat this as
-  // a 504 error.
-  if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
-      (_uas_tsx != NULL))
+  // Check that the event is on the current UAC transaction (we may have
+  // created a new one for a retry) and is still connected to the UAS
+  // transaction.
+  if ((event->body.tsx_state.tsx == _tsx) && (_uas_tsx != NULL))
   {
-    // UAC transaction has terminated while still connected to the UAS
-    // transaction.
-    LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
-              _tsx->obj_name);
-    if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+    bool retrying = false;
+
+    if (!_servers.empty())
     {
-      LOG_DEBUG("Timeout or transport error");
-      if (_resolved)
+      // Check to see if the destination server has failed so we can blacklist
+      // it and retry to an alternative if possible.
+      if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+          ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+           (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
       {
-        _proxy->_sipresolver->blacklist(_ai, 30);                       //LCOV_EXCL_LINE
+        // Either failed to connect to the selected server, or failed or get
+        // a response, so blacklist it.
+        LOG_DEBUG("Failed to connected to server or timed-out, so add to blacklist");
+        PJUtils::blacklist_server(_servers[_current_server]);
+
+        // Attempt a retry.
+        retrying = retry_request();
       }
-      _uas_tsx->on_client_not_responding(this);
+      else if ((_tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
+               (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
+      {
+        // The server returned a 5xx error.  We don't blacklist in this case
+        // as it may indicated a transient overload condition, but we can
+        // retry to an alternate server if one is available.
+        LOG_DEBUG("Server return 5xx error");
+        retrying = retry_request();
+      }
+    }
+
+    if (!retrying)
+    {
+      if (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG)
+      {
+        LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
+        pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
+        _uas_tsx->on_new_client_response(this, rdata);
+      }
+
+      // If UAC transaction is terminated because of a timeout, treat this as
+      // a 504 error.
+      if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+          (_uas_tsx != NULL))
+      {
+        // UAC transaction has terminated while still connected to the UAS
+        // transaction.
+        LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
+                  _tsx->obj_name);
+        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        {
+          LOG_DEBUG("Timeout or transport error");
+          _uas_tsx->on_client_not_responding(this);
+        }
+      }
     }
   }
 
-  if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
+  if ((event->body.tsx_state.tsx == _tsx) &&
+      (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
     LOG_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
     _proxy->unbind_transaction(_tsx);
@@ -1547,6 +1616,73 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   }
 
   exit_context();
+}
+
+
+// Attempt to retry the request to an alternate server.
+bool BasicProxy::UACTsx::retry_request()
+{
+  bool retrying = false;
+
+  // See if we have any more servers in the list returned by the resolver that
+  // we can try.
+  _current_server++;
+  if (_current_server < (int)_servers.size())
+  {
+    // More servers to try.  As per RFC3263, retries to an alternate server
+    // have to be a completely new transaction, presumably to avoid any
+    // possibility of mis-correlating a late response from the original server.
+    // We therefore have to allocate a new branch ID and transaction for the
+    // retry and connect it to this object.  We'll leave the old transaction
+    // connected to this object while PJSIP closes it down, but ignore any
+    // future events from it.
+    LOG_DEBUG("Attempt to retry request to alternate server");
+    pjsip_transaction* retry_tsx;
+    PJUtils::generate_new_branch_id(_tdata);
+    pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
+                                               _tdata,
+                                               _lock,
+                                               &retry_tsx);
+
+    if (status == PJ_SUCCESS)
+    {
+      // Set up the PJSIP transaction user module data to refer to the associated
+      // UACTsx object
+      LOG_DEBUG("Created transaction for retry, so send request");
+      _proxy->unbind_transaction(_tsx);
+      pjsip_transaction* original_tsx = _tsx;
+      _tsx = retry_tsx;
+      _proxy->bind_transaction(this, _tsx);
+
+      // Add the trail from the UAS transaction to the UAC transaction.
+      set_trail(_tsx, _uas_tsx->trail());
+
+      // Increment the reference count of the request as we are passing
+      // it to a new transaction.
+      pjsip_tx_data_add_ref(_tdata);
+
+      // Copy across the destination information for a retry and try to
+      // resend the request.
+      PJUtils::set_dest_info(_tdata, _servers[_current_server]);
+      status = pjsip_tsx_send_msg(_tsx, _tdata);
+
+      if (status == PJ_SUCCESS)
+      {
+        // Successfully sent the retry.
+        retrying = true;
+      }
+      else
+      {
+        // Failed to send, so revert to the original transaction to see it
+        // through to the end.
+        _proxy->unbind_transaction(_tsx);                               //LCOV_EXCL_LINE
+        _tsx = original_tsx;                                            //LCOV_EXCL_LINE
+        _proxy->bind_transaction(this, _tsx);                           //LCOV_EXCL_LINE
+      }
+    }
+  }
+
+  return retrying;
 }
 
 

@@ -110,7 +110,7 @@ extern "C" {
 #include "utils.h"
 #include "pjutils.h"
 #include "stack.h"
-#include "sasevent.h"
+#include "sproutsasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stateful_proxy.h"
@@ -134,8 +134,6 @@ extern "C" {
 static RegStore* store;
 static RegStore* remote_store;
 
-static SIPResolver* sipresolver;
-
 static CallServices* call_services_handler;
 static IfcHandler* ifc_handler;
 
@@ -147,7 +145,7 @@ static SCSCFSelector *scscf_selector;
 
 static bool edge_proxy;
 static pjsip_uri* upstream_proxy;
-static ConnectionPool* upstream_conn_pool;
+static ConnectionPool* upstream_conn_pool = NULL;
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
 static AsChainTable* as_chain_table;
@@ -503,8 +501,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, NULL);
 
     trust->process_request(tdata);
-    status = pjsip_endpt_send_request_stateless(stack_data.endpt, tdata,
-                                                NULL, NULL);
+
+    status = PJUtils::send_request_stateless(tdata);
+
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Error forwarding request, %s",
@@ -802,27 +801,14 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
   // proxy and stripping any loose routes that might have been added by the
-  // UA.  If the request URI is a SIP URI with a domain/host that is not
-  // the home domain, change it to use the home domain.
+  // UA.
   LOG_INFO("Route request to upstream proxy %.*s",
       ((pjsip_sip_uri*)upstream_proxy)->host.slen,
       ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
-  if ((PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
-      (!PJUtils::is_home_domain((pjsip_uri*)tdata->msg->line.req.uri)))
-  {
-    // Change host/domain in target to use home domain.
-    target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
-        tdata->msg->line.req.uri);
-    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.home_domain;
-  }
-  else
-  {
-    // Use request URI unchanged.
-    target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
-  }
+  target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
@@ -862,7 +848,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   }
 
   // Select a transport for the request.
-  target_p->transport = upstream_conn_pool->get_connection();
+  if (upstream_conn_pool != NULL)
+  {
+    target_p->transport = upstream_conn_pool->get_connection();
+  }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
@@ -1509,7 +1498,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain);
+      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
       {
@@ -1574,7 +1563,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
     // Look up the target in the registration data store.
     LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-    RegStore::AoR* aor_data = store->get_aor_data(aor);
+    RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
 
     // If we didn't get bindings from the local store and we have a remote
     // store, try the remote.
@@ -1583,7 +1572,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
          (aor_data->bindings().empty())))
     {
       delete aor_data;
-      aor_data = remote_store->get_aor_data(aor);
+      aor_data = remote_store->get_aor_data(aor, trail);
     }
 
     // Pick up to max_targets bindings to attempt to contact.  Since
@@ -2357,7 +2346,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->orig_ioi = stack_data.home_domain;
+    pcv->orig_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply originating call services to the message
@@ -2456,7 +2445,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->term_ioi = stack_data.home_domain;
+    pcv->term_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply terminating call services to the message
@@ -2501,10 +2490,11 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
 
   if (targets.size() == 0)
   {
-    // No targets found, so reject with a 404 error - reuse the best_rsp
-    // message.
-    LOG_INFO("Reject request with 404");
-    send_response(PJSIP_SC_NOT_FOUND);
+    // No targets found, so reject with a 480 error.
+    // There will only be no targets when the terminating user isn't
+    // registered or has no valid bindings.
+    LOG_INFO("Reject request with 480");
+    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
 
     return;
   }
@@ -3174,6 +3164,7 @@ void UASTransaction::cancel_pending_uac_tsx(int st_code, bool dissociate_uac)
 // This must be called before destroying either transaction.
 void UASTransaction::dissociate(UACTransaction* uac_data)
 {
+  LOG_DEBUG("Dissociate UAC transaction %p (%d)", uac_data, uac_data->_target);
   uac_data->_uas_data = NULL;
   _uac_data[uac_data->_target] = NULL;
 }
@@ -3340,11 +3331,14 @@ UACTransaction::UACTransaction(UASTransaction* uas_data,
   _from_store(false),
   _aor(),
   _binding_id(),
-  _transport(NULL),
-  _resolved(false),
+  _servers(),
+  _current_server(0),
   _pending_destroy(false),
   _context_count(0)
 {
+  // Add a reference to the request so we can be sure it remains valid for retries.
+  pjsip_tx_data_add_ref(_tdata);
+
   // Reference the transaction's group lock.
   _lock = tsx->grp_lock;
   pj_grp_lock_add_ref(tsx->grp_lock);
@@ -3443,15 +3437,15 @@ void UACTransaction::set_target(const struct Target& target)
   // double routing.
   if (target.upstream_route)
   {
-     LOG_DEBUG("Stripping loose routes from proxied message");
+    LOG_DEBUG("Stripping loose routes from proxied message");
 
-     // Tight loop to strip all route headers.
-     while (pjsip_msg_find_remove_hdr(_tdata->msg,
-                                      PJSIP_H_ROUTE,
-                                      NULL) != NULL)
-     {
-       // Tight loop.
-     };
+    // Tight loop to strip all route headers.
+    while (pjsip_msg_find_remove_hdr(_tdata->msg,
+                                     PJSIP_H_ROUTE,
+                                     NULL) != NULL)
+    {
+      // Tight loop.
+    };
   }
 
   // Store the liveness timeout.
@@ -3508,6 +3502,12 @@ void UACTransaction::set_target(const struct Target& target)
     // Remove the reference to the transport added when it was chosen.
     pjsip_transport_dec_ref(target.transport);
   }
+  else
+  {
+    // Resolve the next hop destination for this request to a set of servers.
+    LOG_DEBUG("Resolve next hop destination");
+    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
+  }
 
   exit_context();
 }
@@ -3528,33 +3528,39 @@ void UACTransaction::send_request()
               _tdata->tp_sel.u.transport->info);
     pjsip_tsx_set_transport(_tsx, &_tdata->tp_sel);
   }
-  else if (sipresolver != NULL)
+  else if (_current_server < (int)_servers.size())
   {
-    // Resolve the next hop destination for this request to an IP address.
-    LOG_DEBUG("Resolve next hop destination");
-    status = PJUtils::resolve_next_hop(sipresolver, _tdata, _ai);
-    // Set the resolved flag if the resolution was successful.
-    _resolved = (status == PJ_SUCCESS);
+    // We have resolved servers to try, so set up the destination information
+    // in the request.
+    PJUtils::set_dest_info(_tdata, _servers[_current_server]);
+  }
+  else
+  {
+    // The resolver is enabled, but we failed to get any valid destination
+    // servers, so fail the transaction.
+    status = PJ_ENOTFOUND;
   }
 
   if (status == PJ_SUCCESS)
   {
-    LOG_DEBUG("Sending request for %s", PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, _tdata->msg->line.req.uri).c_str());
     status = pjsip_tsx_send_msg(_tsx, _tdata);
   }
 
   if (status != PJ_SUCCESS)
   {
-    // Failed to send the request.
+    // Failed to send the request.  This is an unexpected error rather than
+    // an indication that the selected destination is down, so we do not
+    // attempt a retry and do not blacklist the selected destination.
+    LOG_DEBUG("Failed to send request (%d %s)",
+              status, PJUtils::pj_status_to_string(status).c_str());
     pjsip_tx_data_dec_ref(_tdata);
 
     // The UAC transaction will have been destroyed when it failed to send
     // the request, so there's no need to destroy it.  However, we do need to
-    // tell the UAS transaction, and we should blacklist the address.
-    _uas_data->on_client_not_responding(this);
-    if (_resolved)
+    // tell the UAS transaction.
+    if (_uas_data != NULL)
     {
-      sipresolver->blacklist(_ai, 30);
+      _uas_data->on_client_not_responding(this);
     }
   }
   else
@@ -3567,7 +3573,6 @@ void UACTransaction::send_request()
       pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
     }
   }
-  _tdata = NULL;
 
   exit_context();
 }
@@ -3596,15 +3601,21 @@ void UACTransaction::cancel_pending_tsx(int st_code)
       }
       set_trail(cancel, trail());
 
-      if (_tsx->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+      if (_tsx->transport != NULL)
       {
-        // The transaction being cancelled was forced to a particular transport,
+        // The transaction being cancelled has already selected a transport,
         // so make sure the CANCEL uses this transport as well.
-        pjsip_tx_data_set_transport(cancel, &_tsx->tp_sel);
+        pjsip_tpselector tp_selector;
+        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+        tp_selector.u.transport = _tsx->transport;
+        pjsip_tx_data_set_transport(cancel, &tp_selector);
       }
 
+      // Send CANCEL request using stateful sender.  The CANCEL should
+      // always chase the INVITE transaction, so don't retry any alternate
+      // targets.
       LOG_DEBUG("Sending CANCEL request");
-      pj_status_t status = PJUtils::send_request(stack_data.endpt, cancel);
+      pj_status_t status = PJUtils::send_request(cancel, 1);
 
       // We used to deregister the user here if we had
       // SIP_STATUS_FLOW_FAILED, but this is inappropriate - only one
@@ -3633,50 +3644,81 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
   // Handle incoming responses (provided the UAS transaction hasn't
   // terminated or been cancelled.
   LOG_DEBUG("%s - uac_data = %p, uas_data = %p", name(), this, _uas_data);
-  if ((_uas_data != NULL) &&
-      (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG))
+
+  // Check that the event is on the current UAC transaction (we may have
+  // created a new one for a retry) and is still connected to the UAS
+  // transaction.
+  if ((event->body.tsx_state.tsx == _tsx) && (_uas_data != NULL))
   {
-    LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
-    if (_liveness_timer.id == LIVENESS_TIMER)
+    bool retrying = false;
+
+    if (!_servers.empty())
     {
-      // The liveness timer is running on this transaction, so cancel it.
-      _liveness_timer.id = 0;
-      pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
-    }
-
-    pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
-    _uas_data->on_new_client_response(this, rdata);
-
-  }
-
-  // If UAC transaction is terminated because of a timeout, treat this as
-  // a 504 error.
-  if ((_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
-      (_uas_data != NULL))
-  {
-    // UAC transaction has terminated while still connected to the UAS
-    // transaction.
-    LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
-              _tsx->obj_name);
-    if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
-    {
-      if (_resolved)
+      // Check to see if the destination server has failed so we can blacklist
+      // it and retry to an alternative if possible.
+      if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+          ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+           (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
       {
-        // Blacklist the destination address/port/transport selected for this
-        // transaction so we don't repeatedly attempt to use it.
-        LOG_DEBUG("Blacklisting failed/uncontactable destination");
-        sipresolver->blacklist(_ai, 30);
+        // Either failed to connect to the selected server, or failed or get
+        // a response, so blacklist it.
+        LOG_DEBUG("Failed to connected to server, so add to blacklist");
+        PJUtils::blacklist_server(_servers[_current_server]);
+
+        // Attempt a retry.
+        retrying = retry_request();
       }
-      _uas_data->on_client_not_responding(this);
+      else if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
+               (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
+      {
+        // The server returned a 5xx error.  We don't blacklist in this case
+        // as it may indicated a transient overload condition, but we can
+        // retry to an alternate server if one is available.
+        retrying = retry_request();
+      }
     }
-    else
+
+    if (!retrying)
     {
-      _uas_data->dissociate(this);
+      if (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG)
+      {
+        LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
+        if (_liveness_timer.id == LIVENESS_TIMER)
+        {
+          // The liveness timer is running on this transaction, so cancel it.
+          _liveness_timer.id = 0;
+          pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
+        }
+
+        pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
+        _uas_data->on_new_client_response(this, rdata);
+      }
+
+      // If UAC transaction is terminated because of a timeout, treat this as
+      // a 504 error.
+      if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
+          (_uas_data != NULL))
+      {
+        // UAC transaction has terminated while still connected to the UAS
+        // transaction.
+        LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
+                  _tsx->obj_name);
+        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        {
+          LOG_DEBUG("Timeout or transport error");
+          _uas_data->on_client_not_responding(this);
+        }
+        else
+        {
+          _uas_data->dissociate(this);
+        }
+      }
     }
   }
 
-  if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
+  if ((event->body.tsx_state.tsx == _tsx) &&
+      (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
   {
     LOG_DEBUG("%s - UAC tsx destroyed", _tsx->obj_name);
     _tsx->mod_data[mod_tu.id] = NULL;
@@ -3685,6 +3727,70 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
   }
 
   exit_context();
+}
+
+
+// Attempt to retry the request to an alternate server.
+bool UACTransaction::retry_request()
+{
+  bool retrying = false;
+  _current_server++;
+  if (_current_server < (int)_servers.size())
+  {
+    // More servers to try.  As per RFC3263, retries to an alternate server
+    // have to be a completely new transaction, presumably to avoid any
+    // possibility of mis-correlating a late response from the original server.
+    // We therefore have to allocate a new branch ID and transaction for the
+    // retry and connect it to this object.  We'll leave the old transaction
+    // connected to this object while PJSIP closes it down, but ignore any
+    // future events from it.
+    LOG_DEBUG("Attempt to retry request to alternate server");
+    pjsip_transaction* retry_tsx;
+    PJUtils::generate_new_branch_id(_tdata);
+    pj_status_t status = pjsip_tsx_create_uac2(&mod_tu,
+                                               _tdata,
+                                               _lock,
+                                               &retry_tsx);
+
+    if (status == PJ_SUCCESS)
+    {
+      // Set up the PJSIP transaction user module data to refer to the associated
+      // UACTsx object
+      LOG_DEBUG("Created transaction for retry, so send request");
+      pjsip_transaction* original_tsx = _tsx;
+      _tsx = retry_tsx;
+      original_tsx->mod_data[mod_tu.id] = NULL;
+      _tsx->mod_data[mod_tu.id] = this;
+
+      // Add the trail from the UAS transaction to the UAC transaction.
+      set_trail(_tsx, _uas_data->trail());
+
+      // Increment the reference count of the request as we are passing
+      // it to a new transaction.
+      pjsip_tx_data_add_ref(_tdata);
+
+      // Copy across the destination information for a retry and try to
+      // resend the request.
+      PJUtils::set_dest_info(_tdata, _servers[_current_server]);
+      status = pjsip_tsx_send_msg(_tsx, _tdata);
+
+      if (status == PJ_SUCCESS)
+      {
+        // Successfully sent the retry.
+        retrying = true;
+      }
+      else
+      {
+        // Failed to send, so revert to the original transaction to see it
+        // through to the end.
+        _tsx->mod_data[mod_tu.id] = NULL;
+        _tsx = original_tsx;
+        _tsx->mod_data[mod_tu.id] = this;
+      }
+    }
+  }
+
+  return retrying;
 }
 
 
@@ -3773,7 +3879,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 pj_bool_t enable_ibcf,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
-                                SIPResolver* resolver,
                                 EnumService *enumService,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
@@ -3788,8 +3893,6 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   analytics_logger = analytics;
   store = registrar_store;
   remote_store = remote_reg_store;
-
-  sipresolver = resolver;
 
   call_services_handler = call_services;
   ifc_handler = ifc_handler_in;
@@ -3817,19 +3920,20 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     dialog_tracker = new DialogTracker(flow_table);
 
     // Create a connection pool to the upstream proxy.
-    pjsip_host_port pool_target;
-    pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
-    pool_target.port = upstream_proxy_port;
-    upstream_conn_pool = new ConnectionPool(&pool_target,
-                                            upstream_proxy_connections,
-                                            upstream_proxy_recycle,
-                                            stack_data.pool,
-                                            stack_data.endpt,
-                                            stack_data.pcscf_trusted_tcp_factory,
-                                            sipresolver,
-                                            stack_data.addr_family,
-                                            stack_data.stats_aggregator);
-    upstream_conn_pool->init();
+    if (upstream_proxy_connections > 0)
+    {
+      pjsip_host_port pool_target;
+      pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
+      pool_target.port = upstream_proxy_port;
+      upstream_conn_pool = new ConnectionPool(&pool_target,
+                                              upstream_proxy_connections,
+                                              upstream_proxy_recycle,
+                                              stack_data.pool,
+                                              stack_data.endpt,
+                                              stack_data.pcscf_trusted_tcp_factory,
+                                              stack_data.stats_aggregator);
+      upstream_conn_pool->init();
+    }
 
     ibcf = enable_ibcf;
     if (ibcf)
@@ -4128,7 +4232,7 @@ std::string UASTransaction::get_scscf_name(Json::Value* location)
       optional.push_back(options[(int)jj].asInt());
     }
 
-    server_name = scscf_selector->get_scscf(mandatory, optional, {});
+    server_name = scscf_selector->get_scscf(mandatory, optional, {}, trail());
   }
 
   delete location;

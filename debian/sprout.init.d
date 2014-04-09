@@ -177,6 +177,8 @@ do_start()
                      --record-routing-model $sprout_rr_level
                      --default-session-expires $default_session_expires
                      $authentication_arg
+                     -T $local_ip
+                     -o 9888
                      -a $log_directory
                      -F $log_directory
                      -L $log_level"
@@ -196,6 +198,8 @@ do_start()
         then
           DAEMON_ARGS="$DAEMON_ARGS --icscf $icscf"
         fi
+
+        [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
 
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2

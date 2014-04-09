@@ -61,7 +61,7 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    cwtest_add_host_mapping("sprout.example.com", "10.8.8.1");
+    add_host_mapping("sprout.example.com", "10.8.8.1");
 
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
@@ -235,7 +235,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);
 
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
   RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
@@ -248,7 +248,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
 
   // Add the AoR record to the store.
-  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true);
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
   delete aor_data1; aor_data1 = NULL;
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
@@ -344,7 +344,25 @@ TEST_F(SubscriptionTest, ErrorAssociatedUris)
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(403, out->line.status.code);
   EXPECT_EQ("Forbidden", str_pj(out->line.status.reason));
-  check_subscriptions("sip:6505550231@homedomain", 0u);
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+}
+
+/// Homestead fails associated URI request
+TEST_F(SubscriptionTest, AssociatedUrisTimeOut)
+{
+  SubscribeMessage msg;
+  msg._user = "6505550232";
+  _hss_connection->set_rc("/impu/sip%3A6505550232%40homedomain/reg-data",
+                          503);
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(503, out->line.status.code);
+  EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
+  check_subscriptions("sip:6505550232@homedomain", 0u);
+
+  _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }
 
 /// Register with non-primary P-Associated-URI
@@ -368,7 +386,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
   // Check that we registered the correct URI (0233, not 0234).
-  RegStore::AoR* aor_data = _store->get_aor_data(aor);
+  RegStore::AoR* aor_data = _store->get_aor_data(aor, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(expected, aor_data->_subscriptions.size());
   delete aor_data; aor_data = NULL;
@@ -380,8 +398,10 @@ void SubscriptionTest::check_standard_OK()
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  out = pop_txdata()->msg;
+
+  out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
-  free_txdata();
+  inject_msg(respond_to_current_txdata(200));
+  //free_txdata();
 }
 

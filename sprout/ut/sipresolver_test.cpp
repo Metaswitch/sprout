@@ -114,9 +114,9 @@ class SIPResolverTest : public ::testing::Test
 class RT
 {
 public:
-  RT(SIPResolver& resolver, const std::string& target) :
+  RT(SIPResolver& resolver, const std::string& name) :
     _resolver(resolver),
-    _target(target),
+    _name(name),
     _port(0),
     _transport(-1),
     _af(AF_INET)
@@ -143,13 +143,15 @@ public:
 
   std::string resolve()
   {
-    SCOPED_TRACE(_target);
-    AddrInfo ai;
+    SCOPED_TRACE(_name);
+    std::vector<AddrInfo> targets;
     std::string output;
-    if (_resolver.resolve(_target, _port, _transport, _af, ai))
+
+    _resolver.resolve(_name, _af, _port, _transport, 1, targets, 0);
+    if (!targets.empty())
     {
       // Successful, so render AddrInfo as a string.
-      output = addrinfo_to_string(ai);
+      output = addrinfo_to_string(targets[0]);
     }
     return output;
   }
@@ -189,7 +191,7 @@ private:
   SIPResolver& _resolver;
 
   /// Input parameters to request.
-  std::string _target;
+  std::string _name;
   int _port;
   int _transport;
   int _af;
@@ -236,7 +238,7 @@ TEST_F(SIPResolverTest, IPv6AddressResolution)
 TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
 {
   // Test selection of TCP transport and port using NAPTR and SRV records.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
@@ -255,7 +257,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
 TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
 {
   // Test selection of UDP transport and port using NAPTR and SRV records.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
@@ -274,7 +276,7 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
 TEST_F(SIPResolverTest, SimpleSRVTCPResolution)
 {
   // Test selection of TCP transport and port using SRV records only
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 0, 5054, "sprout-1.cw-ngv.com"));
   _dnsresolver.add_to_cache("_sip._tcp.sprout.cw-ngv.com", ns_t_srv, records);
 
@@ -290,7 +292,7 @@ TEST_F(SIPResolverTest, SimpleSRVTCPResolution)
 TEST_F(SIPResolverTest, SimpleSRVUDPResolution)
 {
   // Test selection of UDP transport and port using SRV records only
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(srv("_sip._udp.sprout.cw-ngv.com", 3600, 0, 0, 5054, "sprout-1.cw-ngv.com"));
   _dnsresolver.add_to_cache("_sip._udp.sprout.cw-ngv.com", ns_t_srv, records);
 
@@ -306,7 +308,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPResolution)
 TEST_F(SIPResolverTest, SimpleSRVUDPPreference)
 {
   // Test preference for UDP transport over TCP transport if both configure in SRV.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(srv("_sip._tcp.sprout.cw-ngv.com", 3600, 0, 0, 5054, "sprout-1.cw-ngv.com"));
   _dnsresolver.add_to_cache("_sip._tcp.sprout.cw-ngv.com", ns_t_srv, records);
 
@@ -325,7 +327,7 @@ TEST_F(SIPResolverTest, SimpleSRVUDPPreference)
 TEST_F(SIPResolverTest, SimpleAResolution)
 {
   // Test resolution using A records only.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
 
@@ -354,8 +356,8 @@ TEST_F(SIPResolverTest, SimpleAResolution)
 TEST_F(SIPResolverTest, Expiry)
 {
   cwtest_completely_control_time();
-  std::list<DnsRRecord*> udp_records;
-  std::list<DnsRRecord*> tcp_records;
+  std::vector<DnsRRecord*> udp_records;
+  std::vector<DnsRRecord*> tcp_records;
   udp_records.push_back(a("sprout.cw-ngv.com", 5, "3.0.0.1"));
   tcp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, udp_records);
@@ -381,8 +383,8 @@ TEST_F(SIPResolverTest, ExpiryNoInvalidRead)
 {
   cwtest_completely_control_time();
   // Test resolution using A records only.
-  std::list<DnsRRecord*> udp_records;
-  std::list<DnsRRecord*> tcp_records;
+  std::vector<DnsRRecord*> udp_records;
+  std::vector<DnsRRecord*> tcp_records;
   udp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
   tcp_records.push_back(a("sprout.cw-ngv.com", 2, "3.0.0.1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, udp_records);
@@ -398,7 +400,7 @@ TEST_F(SIPResolverTest, ExpiryNoInvalidRead)
 TEST_F(SIPResolverTest, SimpleAAAAResolution)
 {
   // Test resolution using AAAA records only.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(aaaa("sprout.cw-ngv.com", 3600, "3::1"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_aaaa, records);
 
@@ -424,7 +426,7 @@ TEST_F(SIPResolverTest, SimpleAAAAResolution)
 TEST_F(SIPResolverTest, NAPTROrderPreference)
 {
   // Test NAPTR selection according to order - select TCP as first in order.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout-1.cw-ngv.com", 3600, 1, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
   records.push_back(naptr("sprout-1.cw-ngv.com", 3600, 2, 0, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout-1.cw-ngv.com", ns_t_naptr, records);
@@ -457,7 +459,7 @@ TEST_F(SIPResolverTest, NAPTROrderPreference)
 TEST_F(SIPResolverTest, SRVPriority)
 {
   // Test SRV selection according to priority.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
@@ -487,7 +489,7 @@ TEST_F(SIPResolverTest, SRVPriority)
 TEST_F(SIPResolverTest, SRVWeight)
 {
   // Test SRV selection according to weight.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
@@ -530,7 +532,7 @@ TEST_F(SIPResolverTest, SRVWeight)
 TEST_F(SIPResolverTest, ARecordLoadBalancing)
 {
   // Test load balancing across multiple A records.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.1"));
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.2"));
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.3"));
@@ -558,10 +560,10 @@ TEST_F(SIPResolverTest, ARecordLoadBalancing)
   EXPECT_GT(250+5*14, counts["3.0.0.4:5060;transport=UDP"]);
 }
 
-TEST_F(SIPResolverTest, DISABLED_BlacklistSRVRecords)
+TEST_F(SIPResolverTest, BlacklistSRVRecords)
 {
   // Test blacklist of SRV selections.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2T", "", "_sip._tcp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
@@ -609,10 +611,10 @@ TEST_F(SIPResolverTest, DISABLED_BlacklistSRVRecords)
   EXPECT_GT(333+5*15, counts["3.0.0.3:5054;transport=TCP"]);
 }
 
-TEST_F(SIPResolverTest, DISABLED_BlacklistARecord)
+TEST_F(SIPResolverTest, BlacklistARecord)
 {
   // Test blacklisting of an A record.
-  std::list<DnsRRecord*> records;
+  std::vector<DnsRRecord*> records;
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.1"));
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.2"));
   records.push_back(a("sprout.cw-ngv.com", 3600, "3.0.0.3"));

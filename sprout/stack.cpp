@@ -60,7 +60,8 @@ extern "C" {
 #include "pjutils.h"
 #include "log.h"
 #include "sas.h"
-#include "sasevent.h"
+#include "saslogger.h"
+#include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
 #include "zmq_lvc.h"
@@ -308,7 +309,7 @@ static void sas_log_rx_msg(pjsip_rx_data* rdata)
   set_trail(rdata, trail);
 
   // Log the message event.
-  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 1u);
+  SAS::Event event(trail, SASEvent::RX_SIP_MSG, 0);
   event.add_static_param(pjsip_transport_get_type_from_flag(rdata->tp_info.transport->flag));
   event.add_static_param(rdata->pkt_info.src_port);
   event.add_var_param(rdata->pkt_info.src_name);
@@ -325,7 +326,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
   if (trail != 0)
   {
     // Log the message event.
-    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 1u);
+    SAS::Event event(trail, SASEvent::TX_SIP_MSG, 0);
     event.add_static_param(pjsip_transport_get_type_from_flag(tdata->tp_info.transport->flag));
     event.add_static_param(tdata->tp_info.dst_port);
     event.add_var_param(tdata->tp_info.dst_name);
@@ -770,43 +771,6 @@ pj_status_t init_pjsip()
 }
 
 
-// LCOV_EXCL_START
-void sas_write(SAS::log_level_t sas_level, const char *module, int line_number, const char *fmt, ...)
-{
-  int level;
-  va_list args;
-
-  switch (sas_level) {
-    case SAS::LOG_LEVEL_DEBUG:
-      level = Log::DEBUG_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_VERBOSE:
-      level = Log::VERBOSE_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_INFO:
-      level = Log::INFO_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_STATUS:
-      level = Log::STATUS_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_WARNING:
-      level = Log::WARNING_LEVEL;
-      break;
-    case SAS::LOG_LEVEL_ERROR:
-      level = Log::ERROR_LEVEL;
-      break;
-    default:
-      LOG_ERROR("Unknown SAS log level %d, treating as error level", sas_level);
-      level = Log::ERROR_LEVEL;
-    }
-
-  va_start(args, fmt);
-  Log::_write(level, module, line_number, fmt, args);
-  va_end(args);
-}
-// LCOV_EXCL_STOP
-
-
 pj_status_t init_stack(const std::string& system_name,
                        const std::string& sas_address,
                        int pcscf_trusted_port,
@@ -816,14 +780,17 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& local_host,
                        const std::string& public_host,
                        const std::string& home_domain,
+                       const std::string& additional_home_domains,
                        const std::string& sprout_cluster_domain,
                        const std::string& alias_hosts,
+                       SIPResolver* sipresolver,
                        int num_pjsip_threads,
                        int num_worker_threads,
                        int record_routing_model,
                        const int default_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
-                       LoadMonitor *load_monitor_arg)
+                       LoadMonitor *load_monitor_arg,
+                       const std::string& cdf_domain)
 {
   pj_status_t status;
   pj_sockaddr pri_addr;
@@ -844,11 +811,16 @@ pj_status_t init_stack(const std::string& system_name,
   char* home_domain_cstr = strdup(home_domain.c_str());
   char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
 
+  // This is only set on Bono nodes (it's the empty string otherwise)
+  char* cdf_domain_cstr = strdup(cdf_domain.c_str());
+
   // Copy port numbers to stack data.
   stack_data.pcscf_trusted_port = pcscf_trusted_port;
   stack_data.pcscf_untrusted_port = pcscf_untrusted_port;
   stack_data.scscf_port = scscf_port;
   stack_data.icscf_port = icscf_port;
+
+  stack_data.sipresolver = sipresolver;
 
   // Copy other functional options to stack data.
   stack_data.default_session_expires = default_session_expires;
@@ -856,8 +828,19 @@ pj_status_t init_stack(const std::string& system_name,
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
-  stack_data.home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
+  stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
   stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
+  stack_data.cdf_domain = pj_str(cdf_domain_cstr);
+
+  // Build a set of home domains
+  stack_data.home_domains = std::unordered_set<std::string>();
+  stack_data.home_domains.insert(PJUtils::pj_str_to_string(&stack_data.default_home_domain));
+  if (additional_home_domains != "")
+  {
+    std::list<std::string> domains;
+    Utils::split_string(additional_home_domains, ',', domains, 0, true);
+    stack_data.home_domains.insert(domains.begin(), domains.end());
+  }
 
   // Set up the default address family.  This is IPv4 unless our local host is an IPv6 address.
   stack_data.addr_family = AF_INET;
@@ -918,6 +901,9 @@ pj_status_t init_stack(const std::string& system_name,
   // Register the stack module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_stack);
   stack_data.module_id = mod_stack.id;
+
+  // Initialize the PJUtils module.
+  PJUtils::init();
 
   // Create listening transports for the ports whichtrusted and untrusted ports.
   stack_data.pcscf_trusted_tcp_factory = NULL;
@@ -1027,7 +1013,7 @@ pj_status_t init_stack(const std::string& system_name,
                stack_data.name[i].ptr);
   }
 
-  // Set up the Last Value Cache, accumulators and counters. 
+  // Set up the Last Value Cache, accumulators and counters.
   std::string zmq_port = SPROUT_ZMQ_PORT;
 
   if ((stack_data.pcscf_trusted_port != 0) &&
@@ -1150,6 +1136,7 @@ void stop_stack()
 // the transaction layer module, which terminates all transactions.
 void unregister_stack_modules(void)
 {
+  PJUtils::term();
   pjsip_tsx_layer_destroy();
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stack);
 }

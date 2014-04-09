@@ -68,7 +68,11 @@ static const char _b64[64] =
     '4', '5', '6', '7', '8', '9', '+', '/'
   };
 
+pj_status_t init();
+void term();
+
 pj_bool_t is_home_domain(const pjsip_uri* uri);
+pj_bool_t is_home_domain(const std::string& domain);
 pj_bool_t is_uri_local(const pjsip_uri* uri);
 
 pj_bool_t is_e164(const pj_str_t* user);
@@ -95,6 +99,8 @@ std::string public_id_from_uri(const pjsip_uri* uri);
 
 std::string default_private_id_from_uri(const pjsip_uri* uri);
 
+pj_str_t domain_from_uri(const std::string& uri_str, pj_pool_t* pool);
+
 pjsip_uri* orig_served_user(pjsip_msg* msg);
 
 pjsip_uri* term_served_user(pjsip_msg* msg);
@@ -107,7 +113,6 @@ void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
 void get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std::string& impu_out);
 
 pjsip_uri* next_hop(pjsip_msg* msg);
-pj_status_t resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* tdata, AddrInfo& ai);
 
 pj_bool_t is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* start, pjsip_route_hdr** hdr);
 
@@ -154,8 +159,30 @@ pj_status_t create_response_fwd(pjsip_endpoint *endpt,
                                 unsigned options,
                                 pjsip_tx_data **p_tdata);
 
-pj_status_t send_request(pjsip_endpoint* endpt,
-                         pjsip_tx_data* tdata);
+void resolve(const std::string& name,
+             int port,
+             int transport,
+             int retries,
+             std::vector<AddrInfo>& servers);
+
+void resolve_next_hop(pjsip_tx_data* tdata,
+                      int retries,
+                      std::vector<AddrInfo>& servers,
+                      SAS::TrailId trail);
+
+void blacklist_server(AddrInfo& server);
+
+void set_dest_info(pjsip_tx_data* tdata, const AddrInfo& ai);
+
+void generate_new_branch_id(pjsip_tx_data* tdata);
+
+pj_status_t send_request(pjsip_tx_data* tdata,
+                         int retries=0,
+                         void* token=NULL,
+                         pjsip_endpt_send_callback cb=NULL);
+
+pj_status_t send_request_stateless(pjsip_tx_data* tdata,
+                                   int retries=0);
 
 pj_status_t respond_stateless(pjsip_endpoint* endpt,
                               pjsip_rx_data* rdata,

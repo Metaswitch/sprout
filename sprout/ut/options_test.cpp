@@ -86,7 +86,7 @@ public:
   Message() :
     _method("OPTIONS"),
     _user("6505550231"),
-    _domain("local_ip")
+    _domain("127.0.0.1")
   {
   }
 
@@ -153,14 +153,6 @@ TEST_F(OptionsTest, LocalHost)
 {
   Message msg;
   msg._domain = "localhost";
-  pj_bool_t ret = inject_msg_direct(msg.get());
-  EXPECT_EQ(PJ_FALSE, ret);
-}
-
-TEST_F(OptionsTest, Loopback)
-{
-  Message msg;
-  msg._domain = "127.0.0.1";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }

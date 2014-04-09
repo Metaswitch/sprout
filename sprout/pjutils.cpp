@@ -51,19 +51,62 @@ extern "C" {
 #include "constants.h"
 #include "custom_headers.h"
 
+static const int DEFAULT_RETRIES = 5;
+static const int DEFAULT_BLACKLIST_DURATION = 30;
+
+static void on_tsx_state(pjsip_transaction*, pjsip_event*);
+
+/// Dummy transaction user module used for send_request method.
+static pjsip_module mod_sprout_util =
+{
+  NULL, NULL,                     // prev, next
+  { "mod-sprout-util", 15 },      // Name
+  -1,                             // Id
+  PJSIP_MOD_PRIORITY_APPLICATION, // Priority
+  NULL,                           // load()
+  NULL,                           // start()
+  NULL,                           // stop()
+  NULL,                           // unload()
+  NULL,                           // on_rx_request()
+  NULL,                           // on_rx_response()
+  NULL,                           // on_tx_request()
+  NULL,                           // on_tx_response()
+  &on_tsx_state,                  // on_tsx_state()
+};
+
+/// Initialization
+pj_status_t PJUtils::init()
+{
+  pj_status_t status = pjsip_endpt_register_module(stack_data.endpt, &mod_sprout_util);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
+  return status;
+}
+
+
+/// Termination
+void PJUtils::term()
+{
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_sprout_util);
+}
+
 
 /// Utility to determine if this URI belongs to the home domain.
 pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
 {
   if (PJSIP_URI_SCHEME_IS_SIP(uri))
   {
-    pj_str_t host_from_uri = ((pjsip_sip_uri*)uri)->host;
-    if (pj_stricmp(&host_from_uri, &stack_data.home_domain)==0)
-    {
-      return PJ_TRUE;
-    }
+    std::string host = pj_str_to_string(&((pjsip_sip_uri*)uri)->host);
+    return is_home_domain(host);
   }
   return PJ_FALSE;
+}
+
+
+/// Utility to determine if this domain is a home domain
+pj_bool_t PJUtils::is_home_domain(const std::string& domain)
+{
+  return (stack_data.home_domains.find(domain) != stack_data.home_domains.end()) ?
+         PJ_TRUE : PJ_FALSE;
 }
 
 
@@ -274,6 +317,21 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   return id;
 }
 
+/// Extract the domain from a SIP URI, or if its another type of URI, return
+/// the default home domain.
+pj_str_t PJUtils::domain_from_uri(const std::string& uri_str, pj_pool_t* pool)
+{
+  pjsip_uri* uri = PJUtils::uri_from_string(uri_str, pool);
+  if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
+      PJSIP_URI_SCHEME_IS_SIPS(uri))
+  {
+    return ((pjsip_sip_uri*)uri)->host;
+  }
+  else
+  {
+    return stack_data.default_home_domain;
+  }
+}
 
 /// Determine the served user for originating requests.
 pjsip_uri* PJUtils::orig_served_user(pjsip_msg* msg)
@@ -337,7 +395,6 @@ void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity
   {
     auth_hdr = pjsip_authorization_hdr_create(tdata->pool);
     auth_hdr->scheme = pj_str("Digest");
-    auth_hdr->credential.digest.realm = stack_data.home_domain;
     // Construct a default private identifier from the URI in the To header.
     LOG_DEBUG("Construct default private identity");
     pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(tdata->msg)->uri);
@@ -460,6 +517,7 @@ pj_bool_t PJUtils::is_next_route_local(const pjsip_msg* msg, pjsip_route_hdr* st
   }
   return rc;
 }
+
 
 /// Adds a Record-Route header to the message with the specified user name,
 /// host, port and transport.  If the user parameter is NULL the user field is
@@ -625,11 +683,11 @@ pj_status_t PJUtils::create_request_fwd(pjsip_endpoint* endpt,
                                         pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_request_fwd(endpt,
-                       rdata,
-                       uri,
-                       branch,
-                       options,
-                       p_tdata);
+                                                      rdata,
+                                                      uri,
+                                                      branch,
+                                                      options,
+                                                      p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -645,9 +703,9 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
                                          pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response_fwd(endpt,
-                       rdata,
-                       options,
-                       p_tdata);
+                                                       rdata,
+                                                       options,
+                                                       p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -657,49 +715,463 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
 }
 
 
-/// Dummy transaction user module used for send_request method.
-static pjsip_module mod_sprout_util =
+/// Resolves a destination.
+void PJUtils::resolve(const std::string& name,
+                      int port,
+                      int transport,
+                      int retries,
+                      std::vector<AddrInfo>& servers)
 {
-  NULL, NULL,                     // prev, next
-  { "mod-sprout-util", 15 },      // Name
-  -1,                             // Id
-  PJSIP_MOD_PRIORITY_APPLICATION, // Priority
-  NULL,                           // load()
-  NULL,                           // start()
-  NULL,                           // stop()
-  NULL,                           // unload()
-  NULL,                           // on_rx_request()
-  NULL,                           // on_rx_response()
-  NULL,                           // on_tx_request()
-  NULL,                           // on_tx_response()
-  NULL,                           // on_tsx_state()
-};
+  stack_data.sipresolver->resolve(name,
+                                  stack_data.addr_family,
+                                  port,
+                                  transport,
+                                  retries,
+                                  servers);
+}
 
-/// This provides function similar to the pjsip_endpt_send_request method
-/// but includes setting the SAS trail.  It does not support the timeout, token
-/// or callback options.
-pj_status_t PJUtils::send_request(pjsip_endpoint* endpt,
-                                  pjsip_tx_data* tdata)
+
+/// Resolves the next hop target of the SIP message
+void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
+                               int retries,
+                               std::vector<AddrInfo>& servers,
+                               SAS::TrailId trail)
 {
-  pjsip_transaction* tsx;
-  pj_status_t status;
-
-  status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
-  if (status != PJ_SUCCESS)
+  // Get the next hop URI from the message and parse out the destination, port
+  // and transport.
+  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
+  std::string name = std::string(next_hop->host.ptr, next_hop->host.slen);
+  int port = next_hop->port;
+  int transport = -1;
+  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
   {
-    pjsip_tx_data_dec_ref(tdata);
-    return status;
+    transport = IPPROTO_TCP;
+  }
+  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
+  {
+    transport = IPPROTO_UDP;
   }
 
-  pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+  if (retries == 0)
+  {
+    // Used default number of retries.
+    retries = DEFAULT_RETRIES;
+  }
 
-  // Set the trail ID in the transaction from the message.
-  set_trail(tsx, get_trail(tdata));
+  stack_data.sipresolver->resolve(name,
+                                  stack_data.addr_family,
+                                  port,
+                                  transport,
+                                  retries,
+                                  servers,
+                                  trail);
 
-  status = pjsip_tsx_send_msg(tsx, NULL);
+  LOG_INFO("Resolved destination URI %s to %d servers",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  (pjsip_uri*)next_hop).c_str(),
+           servers.size());
+}
+
+
+/// Blacklists the specified server so it will not be preferred in subsequent
+/// resolve calls.
+void PJUtils::blacklist_server(AddrInfo& server)
+{
+  stack_data.sipresolver->blacklist(server, DEFAULT_BLACKLIST_DURATION);
+}
+
+
+/// Substitutes the branch identifier in the top Via header with a new unique
+/// identifier.  This is used when forking requests and when retrying requests
+/// to alternate servers.  This code is taken from pjsip_generate_branch_id
+/// for the case when the branch ID is calculated from a GUID.
+void PJUtils::generate_new_branch_id(pjsip_tx_data* tdata)
+{
+  pjsip_via_hdr* via = (pjsip_via_hdr*)
+                             pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+  via->branch_param.ptr = (char*)
+                              pj_pool_alloc(tdata->pool, PJSIP_MAX_BRANCH_LEN);
+  via->branch_param.slen = PJSIP_RFC3261_BRANCH_LEN;
+  pj_memcpy(via->branch_param.ptr,
+            PJSIP_RFC3261_BRANCH_ID,
+            PJSIP_RFC3261_BRANCH_LEN);
+
+  pj_str_t tmp;
+  tmp.ptr = via->branch_param.ptr + PJSIP_RFC3261_BRANCH_LEN + 2;
+  // Add "Pj" between the RFC3261 prefix and the random string to be consistent
+  // with branch IDs generated by PJSIP.
+  *(tmp.ptr-2) = 'P';
+  *(tmp.ptr-1) = 'j';
+  pj_generate_unique_string(&tmp);
+
+  via->branch_param.slen = PJSIP_MAX_BRANCH_LEN;
+}
+
+
+/// Sets the dest_info structure in a pjsip_tx_data structure to the IP address,
+/// port and transport in the specified AddrInfo structure.
+void PJUtils::set_dest_info(pjsip_tx_data* tdata, const AddrInfo& ai)
+{
+  tdata->dest_info.cur_addr = 0;
+  tdata->dest_info.addr.count = 1;
+  tdata->dest_info.addr.entry[0].priority = 0;
+  tdata->dest_info.addr.entry[0].weight = 0;
+
+  if (ai.address.af == AF_INET)
+  {
+    // IPv4 address.
+    tdata->dest_info.addr.entry[0].type =
+                          (ai.transport == IPPROTO_TCP) ? PJSIP_TRANSPORT_TCP :
+                                                          PJSIP_TRANSPORT_UDP;
+    tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
+    tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
+    tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
+  }
+  else if (ai.address.af == AF_INET6)
+  {
+    // IPv6 address.
+    tdata->dest_info.addr.entry[0].type =
+                         (ai.transport == IPPROTO_TCP) ? PJSIP_TRANSPORT_TCP6 :
+                                                         PJSIP_TRANSPORT_UDP6;
+    tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
+    tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
+    memcpy((char*)&tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
+           (char*)&ai.address.addr.ipv6,
+           sizeof(pj_in6_addr));
+    tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
+    tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
+  }
+  pj_sockaddr_set_port(&tdata->dest_info.addr.entry[0].addr, ai.port);
+}
+
+
+struct StatefulSendState
+{
+  pjsip_tx_data* tdata;
+
+  std::vector<AddrInfo> servers;
+  int current_server;
+
+  void* user_token;
+  pjsip_endpt_send_callback user_cb;
+};
+
+
+static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
+{
+  StatefulSendState* sss;
+  bool retrying = false;
+
+  if ((mod_sprout_util.id < 0) ||
+      (event->type != PJSIP_EVENT_TSX_STATE))
+  {
+    return;
+  }
+
+  sss = (StatefulSendState*)tsx->mod_data[mod_sprout_util.id];
+
+  if (sss == NULL)
+  {
+    return;
+  }
+
+  if (!sss->servers.empty())
+  {
+    // The target for the request came from the resolver, so check to see
+    // if the request failed.
+    if ((tsx->state == PJSIP_TSX_STATE_COMPLETED) ||
+        (tsx->state == PJSIP_TSX_STATE_TERMINATED))
+    {
+      // Transaction has completed or terminated.  We need to look at both
+      // states as
+      // -  timeouts and transport errors cause an immediate transition
+      //    to terminated state, bypassing completed state
+      // -  a 5xx response causes a transition to completed state, with a
+      //    possible delay until the transition to terminated state (5 seconds
+      //    for UDP transport), which would needlessly delay any retry.
+      if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+          (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
+          (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500)))
+      {
+        // Either transaction failed on a timeout, transport error or received
+        // 5xx error, so blacklist the failed target.
+        LOG_DEBUG("Transaction failed with retriable error");
+        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        {
+          // Either the connection failed, or the server didn't respond within
+          // the timeout, so blacklist it.  We don't blacklist servers that
+          // return 5xx errors as this may indicate a transient overload.
+          PJUtils::blacklist_server(sss->servers[sss->current_server]);
+        }
+
+        // Can we do a retry?
+        ++sss->current_server;
+        if (sss->current_server < (int)sss->servers.size())
+        {
+          // More servers to try, so allocate a new branch ID and transaction.
+          LOG_DEBUG("Attempt to resend request to next destination server");
+          pjsip_tx_data* tdata = sss->tdata;
+          pjsip_transaction* retry_tsx;
+          PJUtils::generate_new_branch_id(tdata);
+          pj_status_t status = pjsip_tsx_create_uac(&mod_sprout_util,
+                                                    tdata,
+                                                    &retry_tsx);
+
+          if (status == PJ_SUCCESS)
+          {
+            // The new transaction has been set up.
+
+            // Set the trail ID in the transaction from the message.
+            set_trail(retry_tsx, get_trail(tdata));
+
+            // Set up the module data for the new transaction to reference
+            // the state information.
+            retry_tsx->mod_data[mod_sprout_util.id] = sss;
+
+            // Increment the reference count of the request as we are passing
+            // it to a new transaction.
+            pjsip_tx_data_add_ref(tdata);
+
+            // Copy across the destination information for a retry and try to
+            // resend the request.
+            PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
+            status = pjsip_tsx_send_msg(retry_tsx, tdata);
+
+            if (status == PJ_SUCCESS)
+            {
+              // Successfully sent a retry.  Make sure this callback isn't
+              // invoked again for the previous transaction.
+              tsx->mod_data[mod_sprout_util.id] = NULL;
+              retrying = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if ((!retrying) &&
+      (tsx->status_code >= 200))
+  {
+    // Call the user callback, if any, and prevent the callback to be called again
+    // by clearing the transaction's module_data.
+    LOG_DEBUG("Request transaction completed, status code = %d", tsx->status_code);
+    tsx->mod_data[mod_sprout_util.id] = NULL;
+
+    if (sss->user_cb != NULL)
+    {
+      (*sss->user_cb)(sss->user_token, event);
+    }
+
+    // The transaction has completed, so decrement our reference to the tx_data
+    // and free the state data.
+    pjsip_tx_data_dec_ref(sss->tdata);
+    delete sss;
+  }
+}
+
+
+/// This provides function similar to the pjsip_endpt_send_request method
+/// but includes setting the SAS trail.
+pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
+                                  int retries,
+                                  void* token,
+                                  pjsip_endpt_send_callback cb)
+{
+  pjsip_transaction* tsx;
+  pj_status_t status = PJ_SUCCESS;
+
+  LOG_DEBUG("Sending standalone request statefully");
+
+  // Allocate temporary storage for the request.
+  StatefulSendState* sss = new StatefulSendState;
+
+  // Store the user supplied callback and token.
+  sss->user_token = token;
+  sss->user_cb = cb;
+
+  if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
+  {
+    // No transport determined, so resolve the next hop for the message.
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+
+    if (!sss->servers.empty())
+    {
+      // Set up the destination information for the first server.
+      sss->current_server = 0;
+      set_dest_info(tdata, sss->servers[sss->current_server]);
+    }
+    else
+    {
+      // No servers found.
+      status = PJ_ENOTFOUND;
+    }
+  }
+
+  if (status == PJ_SUCCESS)
+  {
+    // We have servers to send the request to, so allocate a transaction.
+    status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
+
+    if (status == PJ_SUCCESS)
+    {
+      // Set the trail ID in the transaction from the message.
+      set_trail(tsx, get_trail(tdata));
+
+      // Set up the module data for the new transaction to reference
+      // the state information.
+      tsx->mod_data[mod_sprout_util.id] = sss;
+
+      if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+      {
+        // Transport has already been determined, so copy it across to the
+        // transaction.
+        LOG_DEBUG("Transport already determined");
+        pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+      }
+
+      // Store the message and add a reference to prevent the transaction layer
+      // freeing it.
+      sss->tdata = tdata;
+      pjsip_tx_data_add_ref(tdata);
+
+      LOG_DEBUG("Sending request");
+      status = pjsip_tsx_send_msg(tsx, tdata);
+    }
+  }
+
   if (status != PJ_SUCCESS)
   {
+    // The assumption here is that, if pjsip_tsx_send_msg returns an error
+    // the on_tsx_state callback will not get called, so it is safe to free
+    // off the state data and request here.  Also, this is an unexpected
+    // error rather than an indication that the destination server is down,
+    // so we don't blacklist.
+    LOG_ERROR("Failed to send request to %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                     PJUtils::next_hop(tdata->msg)).c_str());
     pjsip_tx_data_dec_ref(tdata);
+    delete sss;
+  }
+
+  return status;
+}
+
+
+/// Data structure used to hold temporary status when statelessly sending
+/// a request.
+struct StatelessSendState
+{
+  std::vector<AddrInfo> servers;
+  int current_server;
+};
+
+
+/// Callback used for PJUtils::send_request_stateless
+static void stateless_send_cb(pjsip_send_state *st,
+                              pj_ssize_t sent,
+                              pj_bool_t *cont)
+{
+  *cont = PJ_FALSE;
+  bool retrying = false;
+
+  StatelessSendState* sss = (StatelessSendState*)st->token;
+
+  if ((sent <= 0) &&
+      (!sss->servers.empty()))
+  {
+    // Request to a resolved server failed.  When sending statelessly
+    // this means we couldn't get a transport, so couldn't connect to the
+    // selected target, so we always blacklist.
+    PJUtils::blacklist_server(sss->servers[sss->current_server]);
+
+    // Can we do a retry?
+    pj_status_t status = PJ_ENOTFOUND;
+    ++sss->current_server;
+    if (sss->current_server < (int)sss->servers.size())
+    {
+      pjsip_tx_data* tdata = st->tdata;
+
+      // According to RFC3263 we should generate a new branch identifier for
+      // the message so there is no possibility of it being confused with
+      // previous attempts.  Not clear this is really necessary in this case,
+      // but just in case ...
+      PJUtils::generate_new_branch_id(tdata);
+
+      // Set up destination info for the new server and resend the request.
+      PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
+      status = pjsip_endpt_send_request_stateless(stack_data.endpt,
+                                                  tdata,
+                                                  (void*)sss,
+                                                  &stateless_send_cb);
+
+      if (status == PJ_SUCCESS)
+      {
+        // Add a reference to the tdata to stop PJSIP releasing it when we
+        // return the callback.
+        pjsip_tx_data_add_ref(tdata);
+        retrying = true;
+      }
+    }
+  }
+
+  if ((sent > 0) ||
+      (!retrying))
+  {
+    // Either the request was sent successfully, or we couldn't retry.
+    delete sss;
+  }
+}
+
+
+/// Sends a request statelessly, possibly retrying the specified number of
+/// times if the
+pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
+{
+  pj_status_t status = PJ_SUCCESS;
+  StatelessSendState* sss = new StatelessSendState;
+  sss->current_server = 0;
+
+  if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
+  {
+    // No transport pre-selected so resolve the next hop to a set of servers.
+    resolve_next_hop(tdata, retries, sss->servers, get_trail(tdata));
+
+    if (!sss->servers.empty())
+    {
+      // Select the next target set up the destination info in the tdata and
+      // send the request.
+      sss->current_server = 0;
+      set_dest_info(tdata, sss->servers[sss->current_server]);
+    }
+    else
+    {
+      // No servers found.
+      status = PJ_ENOTFOUND;
+    }
+  }
+
+  if (status == PJ_SUCCESS)
+  {
+    status = pjsip_endpt_send_request_stateless(stack_data.endpt,
+                                                tdata,
+                                                (void*)sss,
+                                                stateless_send_cb);
+  }
+
+  if (status != PJ_SUCCESS)
+  {
+    // The assumption is that if pjsip_endpt_send_request_stateless fails
+    // the callback is not called, so it is safe to free off the state data
+    // and the request here.  Also, this would be an unexpected error rather
+    // than an indication that the selected destination server is down, so we
+    // don't blacklist.
+    LOG_ERROR("Failed to send request to %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                     PJUtils::next_hop(tdata->msg)).c_str());
+    pjsip_tx_data_dec_ref(tdata);
+    delete sss;
   }
 
   return status;
@@ -849,23 +1321,7 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   {
     // Substitute the branch value in the top Via header with a unique
     // branch identifier.
-    pjsip_via_hdr* via = (pjsip_via_hdr*)
-                         pjsip_msg_find_hdr(cloned_tdata->msg, PJSIP_H_VIA, NULL);
-    via->branch_param.ptr = (char*)
-                            pj_pool_alloc(cloned_tdata->pool, PJSIP_MAX_BRANCH_LEN);
-    via->branch_param.slen = PJSIP_RFC3261_BRANCH_LEN;
-    pj_memcpy(via->branch_param.ptr,
-              PJSIP_RFC3261_BRANCH_ID, PJSIP_RFC3261_BRANCH_LEN);
-
-    pj_str_t tmp;
-    tmp.ptr = via->branch_param.ptr + PJSIP_RFC3261_BRANCH_LEN + 2;
-    // I have absolutely no idea what the following two lines do, but it
-    // doesn't seem to work without them!
-    *(tmp.ptr-2) = (pj_int8_t)(via->branch_param.slen+73);
-    *(tmp.ptr-1) = (pj_int8_t)(via->branch_param.slen+99);
-    pj_generate_unique_string( &tmp );
-
-    via->branch_param.slen = PJSIP_MAX_BRANCH_LEN;
+    generate_new_branch_id(cloned_tdata);
   }
 
   // If the original message already had a specified transport set this
@@ -973,94 +1429,5 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
       }
     }
   }
-}
-
-/// Resolves the next hop target of the SIP message and fills in the dest_info
-/// structure on the message.
-pj_status_t PJUtils::resolve_next_hop(SIPResolver* sipresolver, pjsip_tx_data* tdata, AddrInfo& ai)
-{
-  pj_status_t status = PJ_ENOTFOUND;
-
-  // Get the next hop URI from the message and parse out the destination, port
-  // and transport.
-  pjsip_sip_uri* next_hop = (pjsip_sip_uri*)PJUtils::next_hop(tdata->msg);
-  std::string target = std::string(next_hop->host.ptr, next_hop->host.slen);
-  int port = next_hop->port;
-  int transport = -1;
-  if (pj_stricmp2(&next_hop->transport_param, "TCP") == 0)
-  {
-    transport = IPPROTO_TCP;
-  }
-  else if (pj_stricmp2(&next_hop->transport_param, "UDP") == 0)
-  {
-    transport = IPPROTO_UDP;
-  }
-
-  if (sipresolver->resolve(target, port, transport, AF_INET, ai))
-  {
-    // Resolved the target successfully, so fill in dest_info on the tdata.
-    status = PJ_SUCCESS;
-    tdata->dest_info.cur_addr = 0;
-    tdata->dest_info.addr.count = 1;
-    tdata->dest_info.addr.entry[0].priority = 0;
-    tdata->dest_info.addr.entry[0].weight = 0;
-    pjsip_transport_type_e ipv4_transport = PJSIP_TRANSPORT_UNSPECIFIED;
-    pjsip_transport_type_e ipv6_transport = PJSIP_TRANSPORT_UNSPECIFIED;
-
-    if (ai.transport == IPPROTO_TCP)
-    {
-      ipv4_transport = PJSIP_TRANSPORT_TCP;
-      ipv6_transport = PJSIP_TRANSPORT_TCP6;
-    }
-    else if (ai.transport == IPPROTO_UDP)
-    {
-      ipv4_transport = PJSIP_TRANSPORT_UDP;
-      ipv6_transport = PJSIP_TRANSPORT_UDP6;
-    }
-    else
-    {
-      // Unknown transport returned from resolver.
-      LOG_ERROR("Unknown transport %d returned by resolver", ai.transport);
-      status = PJ_ENOTSUP;
-    }
-
-    if (ai.address.af == AF_INET)
-    {
-      // IPv4 address.
-      tdata->dest_info.addr.entry[0].type = ipv4_transport;
-      tdata->dest_info.addr.entry[0].addr.ipv4.sin_family = pj_AF_INET();
-      tdata->dest_info.addr.entry[0].addr.ipv4.sin_addr.s_addr = ai.address.addr.ipv4.s_addr;
-      tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in);
-    }
-    else if (ai.address.af == AF_INET6)
-    {
-      // IPv6 address.
-      tdata->dest_info.addr.entry[0].type = ipv6_transport;
-      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_family = pj_AF_INET6();
-      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_flowinfo = 0;
-      memcpy((char*)&tdata->dest_info.addr.entry[0].addr.ipv6.sin6_addr,
-             (char*)&ai.address.addr.ipv6,
-             sizeof(pj_in6_addr));
-      tdata->dest_info.addr.entry[0].addr.ipv6.sin6_scope_id = 0;
-      tdata->dest_info.addr.entry[0].addr_len = sizeof(pj_sockaddr_in6);
-    }
-    else
-    {
-      status = PJ_EAFNOTSUP;
-    }
-    pj_sockaddr_set_port(&tdata->dest_info.addr.entry[0].addr, ai.port);
-  }
-
-  // Set the resolved flag if the resolution was successful.
-  if (status == PJ_SUCCESS)
-  {
-    char buf[100];
-    LOG_DEBUG("Resolved to %s using transport %s",
-              pj_sockaddr_print(&tdata->dest_info.addr.entry[0].addr,
-                                buf, sizeof(buf), 1),
-              pjsip_transport_get_type_name(tdata->dest_info.addr.entry[0].type));
-  }
-
-  return status;
 }
 

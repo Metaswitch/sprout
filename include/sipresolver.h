@@ -38,6 +38,7 @@
 #define SIPRESOLVER_H__
 
 #include "baseresolver.h"
+#include "sas.h"
 
 class SIPResolver : public BaseResolver
 {
@@ -45,12 +46,15 @@ public:
   SIPResolver(DnsCachedResolver* dns_client);
   ~SIPResolver();
 
-  bool resolve(const std::string& target,
+  void resolve(const std::string& name,
+               int af,
                int port,
                int transport,
-               int af,
-               AddrInfo& ai);
+               int retries,
+               std::vector<AddrInfo>& targets,
+               SAS::TrailId trail = 0);
 
+  std::string get_transport_str(int transport);
 };
 
 #endif

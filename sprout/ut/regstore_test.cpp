@@ -40,8 +40,10 @@
 #include "gtest/gtest.h"
 #include <json/reader.h>
 
+#include "siptest.hpp"
 #include "stack.h"
 #include "utils.h"
+#include "pjutils.h"
 #include "sas.h"
 #include "localstore.h"
 #include "regstore.h"
@@ -53,9 +55,19 @@
 using namespace std;
 
 /// Fixture for RegStoreTest.
-class RegStoreTest : public ::testing::Test
+class RegStoreTest : public SipTest
 {
   FakeLogger _log;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
 
   RegStoreTest()
   {
@@ -63,6 +75,18 @@ class RegStoreTest : public ::testing::Test
 
   virtual ~RegStoreTest()
   {
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
+    // Stop and restart the layer just in case
+    //pjsip_tsx_layer_instance()->stop();
+    //pjsip_tsx_layer_instance()->start();
   }
 };
 
@@ -81,7 +105,7 @@ TEST_F(RegStoreTest, BindingTests)
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   EXPECT_EQ(0u, aor_data1->bindings().size());
   b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
@@ -95,14 +119,15 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_private_id = "5102175698@cw-ngv.com";
 
   // Add the AoR record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
   b1 = aor_data1->bindings().begin()->second;
@@ -114,11 +139,11 @@ TEST_F(RegStoreTest, BindingTests)
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
   b1 = aor_data1->bindings().begin()->second;
@@ -130,11 +155,11 @@ TEST_F(RegStoreTest, BindingTests)
 
   // Update AoR record again in the store and check it, this time using get_binding.
   b1->_cseq = 17040;
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(std::string("<sip:5102175698@192.91.191.29:59934;transport=tcp;ob>"), b1->_uri);
@@ -145,15 +170,15 @@ TEST_F(RegStoreTest, BindingTests)
   delete aor_data1; aor_data1 = NULL;
 
   // Remove a binding.
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   aor_data1->remove_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
   EXPECT_EQ(0u, aor_data1->bindings().size());
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(0u, aor_data1->bindings().size());
 
   delete aor_data1; aor_data1 = NULL;
@@ -178,7 +203,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
 
   // Get an initial empty AoR record and add a binding.
   now = time(NULL);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   EXPECT_EQ(0u, aor_data1->bindings().size());
   b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
@@ -192,14 +217,15 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_private_id = "5102175698@cw-ngv.com";
 
   // Add the AoR record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Get the AoR record from the store.
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"), aor_data1->bindings().begin()->first);
   b1 = aor_data1->bindings().begin()->second;
@@ -224,12 +250,12 @@ TEST_F(RegStoreTest, SubscriptionTests)
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Read the record back in and check the subscription is still in place.
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->subscriptions().size());
   EXPECT_EQ(std::string("1234"), aor_data1->subscriptions().begin()->first);
   s1 = aor_data1->get_subscription(std::string("1234"));
@@ -269,7 +295,7 @@ TEST_F(RegStoreTest, CopyTests)
 
   // Get an initial empty AoR record.
   now = time(NULL);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   ASSERT_TRUE(aor_data1 != NULL);
   EXPECT_EQ(0u, aor_data1->bindings().size());
   EXPECT_EQ(0u, aor_data1->subscriptions().size());
@@ -283,10 +309,11 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_expires = now + 300;
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
-  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_private_id = "5102175698@cw-ngv.com";
 
   // Add a subscription to the record.
   s1 = aor_data1->get_subscription("1234");
@@ -297,7 +324,7 @@ TEST_F(RegStoreTest, CopyTests)
   s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
   s1->_expires = now + 300;
 
   // Set the NOTIFY CSeq value to 1.
@@ -325,9 +352,6 @@ TEST_F(RegStoreTest, CopyTests)
 TEST_F(RegStoreTest, ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
-  init_pjsip_logging(99, false, "");
-  init_pjsip();
-
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
   RegStore::AoR::Binding* b2;
@@ -343,7 +367,7 @@ TEST_F(RegStoreTest, ExpiryTests)
 
   // Create an empty AoR record.
   now = time(NULL);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(0u, aor_data1->bindings().size());
   EXPECT_EQ(0u, aor_data1->subscriptions().size());
 
@@ -360,6 +384,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_private_id = "5102175698@cw-ngv.com";
   b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   EXPECT_EQ(2u, aor_data1->bindings().size());
   b2->_uri = std::string("<sip:5102175698@192.91.191.42:59934;transport=tcp;ob>");
@@ -371,6 +396,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b2->_params.push_back(std::make_pair("reg-id", "2"));
   b2->_params.push_back(std::make_pair("+sip.ice", ""));
+  b2->_private_id = "5102175699@cw-ngv.com";
 
   // Add a couple of subscriptions, one with expiry in 150 seconds, the next
   // with expiry in 300 seconds.
@@ -382,7 +408,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s1->_expires = now + 150;
   s2 = aor_data1->get_subscription("5678");
   EXPECT_EQ(2u, aor_data1->subscriptions().size());
@@ -392,18 +418,18 @@ TEST_F(RegStoreTest, ExpiryTests)
   s2->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
   s2->_to_tag = std::string("5678");
   s2->_cid = std::string("xyzabc@192.91.191.29");
-  s2->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s2->_route_uris.push_back(std::string("sip:abcdefgh@bono-1.cw-ngv.com;lr"));
   s2->_expires = now + 300;
 
   // Write the record to the store.
-  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false);
+  rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 
   // Advance the time by 101 seconds and read the record back from the store.
   // The first binding should have expired.
   cwtest_advance_time_ms(101000);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(2u, aor_data1->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
@@ -411,7 +437,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   // Advance the time by another 50 seconds and read the record back from the
   // store.  The first subscription should have expired.
   cwtest_advance_time_ms(50000);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(1u, aor_data1->bindings().size());
   EXPECT_EQ(1u, aor_data1->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
@@ -421,7 +447,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   // still has 99 seconds before it expires, all subscriptions implicitly
   // expire when the last binding expires.
   cwtest_advance_time_ms(100000);
-  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"));
+  aor_data1 = store->get_aor_data(std::string("5102175698@cw-ngv.com"), 0);
   EXPECT_EQ(0u, aor_data1->bindings().size());
   EXPECT_EQ(0u, aor_data1->subscriptions().size());
   delete aor_data1; aor_data1 = NULL;
@@ -429,7 +455,6 @@ TEST_F(RegStoreTest, ExpiryTests)
   delete store; store = NULL;
   delete datastore; datastore = NULL;
   delete chronos_connection; chronos_connection = NULL;
-  term_pjsip();
 }
 
 

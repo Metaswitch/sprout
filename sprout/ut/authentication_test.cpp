@@ -53,6 +53,7 @@ extern "C" {
 #include "authentication.h"
 #include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
+#include "fakechronosconnection.hpp"
 #include "md5.h"
 
 using namespace std;
@@ -76,10 +77,11 @@ public:
     _local_data_store = new LocalStore();
     _av_store = new AvStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
+    _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger("foo");
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_authentication("homedomain", _av_store, _hss_connection, _analytics);
+    pj_status_t ret = init_authentication("homedomain", _av_store, _hss_connection, _chronos_connection, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
   }
 
@@ -87,6 +89,7 @@ public:
   {
     destroy_authentication();
     delete _hss_connection;
+    delete _chronos_connection;
     delete _analytics;
     delete _av_store;
     delete _local_data_store;
@@ -157,12 +160,14 @@ protected:
   static LocalStore* _local_data_store;
   static AvStore* _av_store;
   static FakeHSSConnection* _hss_connection;
+  static FakeChronosConnection* _chronos_connection;
   static AnalyticsLogger* _analytics;
 };
 
 LocalStore* AuthenticationTest::_local_data_store;
 AvStore* AuthenticationTest::_av_store;
 FakeHSSConnection* AuthenticationTest::_hss_connection;
+FakeChronosConnection* AuthenticationTest::_chronos_connection;
 AnalyticsLogger* AuthenticationTest::_analytics;
 
 class AuthenticationMessage
@@ -575,6 +580,58 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
 
   // Expect no response, as the authentication module has let the request through.
   ASSERT_EQ(0, txdata_count());
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
+TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
+{
+  // Test a failed SIP Digest authentication flow where the response contains the wrong realm.
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Send in a REGISTER request with no authentication header.  This triggers
+  // Digest authentication.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = false;
+  inject_msg(msg1.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+
+  // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
+  std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
+  std::map<std::string, std::string> auth_params;
+  parse_www_authenticate(auth, auth_params);
+  EXPECT_NE("", auth_params["nonce"]);
+  EXPECT_EQ("auth", auth_params["qop"]);
+  EXPECT_EQ("MD5", auth_params["algorithm"]);
+  free_txdata();
+
+  // Send a new REGISTER request with an authentication header including the
+  // response but the wrong realm.
+  AuthenticationMessage msg2("REGISTER");
+  msg2._algorithm = "MD5";
+  msg2._key = "12345678123456781234567812345678";
+  msg2._nonce = auth_params["nonce"];
+  msg2._opaque = auth_params["opaque"];
+  msg2._nc = "00000001";
+  msg2._cnonce = "8765432187654321";
+  msg2._qop = "auth";
+  msg2._auth_realm = "otherdomain";
+  inject_msg(msg2.get());
+
+  // Check 401 Unauthorized response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
 
   _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }

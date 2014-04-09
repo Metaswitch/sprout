@@ -47,6 +47,7 @@
 #include "store.h"
 #include "regstore.h"
 #include "chronosconnection.h"
+#include "sas.h"
 
 class RegStore
 {
@@ -95,6 +96,8 @@ public:
       /// The timer ID provided by Chronos.
       std::string _timer_id;
 
+      /// The private ID this binding was registered with.
+      std::string _private_id;
     };
 
     /// @class RegStore::AoR::Subscription
@@ -202,6 +205,32 @@ public:
     friend class RegStore;
   };
 
+  /// Provides the interface to the data store. This is responsible for
+  /// updating and getting information from the underlying data store. The
+  /// classes that call this class are responsible for retrying the get/set
+  /// functions in case of failure.
+  class Connector
+  {
+    Connector(Store* data_store);
+
+    ~Connector();
+
+    AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
+
+    bool set_aor_data(const std::string& aor_id,
+                      AoR* aor_data,
+                      int expiry,
+                      SAS::TrailId trail);
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& s);
+
+    Store* _data_store;
+
+    /// RegStore is the only class that can use Connector
+    friend class RegStore;
+  };
+
   /// Constructor.
   RegStore(Store* data_store, ChronosConnection* chronos_connection);
 
@@ -212,14 +241,14 @@ public:
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
-  AoR* get_aor_data(const std::string& aor_id);
+  AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
 
   /// Update the data for a particular address of record.  Writes the data
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers);
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired, SAS::TrailId trail);
 
   // Send a SIP NOTIFY
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
@@ -228,12 +257,8 @@ private:
   int expire_bindings(AoR* aor_data, int now);
   void expire_subscriptions(AoR* aor_data, int now);
 
-  std::string serialize_aor(AoR* aor_data);
-
-  AoR* deserialize_aor(const std::string& s);
-
-  Store* _data_store;
   ChronosConnection* _chronos;
+  Connector* _connector;
 };
 
 #endif

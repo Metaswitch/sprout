@@ -73,7 +73,7 @@ public:
     _ifc_handler = new IfcHandler();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, NULL, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -81,8 +81,6 @@ public:
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
-
-
   }
 
   static void TearDownTestCase()
@@ -706,7 +704,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
                               "</ServiceProfile></IMSSubscription>");
 
   RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -715,7 +713,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::string regstate;
   _hss_connection->update_registration_state(user, "", HSSConnection::REG, regstate, ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], NULL, user, "*", 0);
+  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
@@ -730,7 +728,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
 
   free_txdata();
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -832,7 +830,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
                                 "</ServiceProfile></IMSSubscription>");
 
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, xml);
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", "NOT_REGISTERED", xml);
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_NOT_REGISTERED, xml);
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
@@ -851,7 +849,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   free_txdata();
 
   RegStore::AoR* aor_data;
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -869,7 +867,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
   inject_msg(respond_to_current_txdata(500));
 
   // Check that we deleted the binding
-  aor_data = _store->get_aor_data(user);
+  aor_data = _store->get_aor_data(user, 0);
   ASSERT_TRUE(aor_data != NULL);
   ASSERT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -1035,11 +1033,11 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
   free_txdata();
 
   // Check that we registered the correct URI (0233, not 0234).
-  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain");
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550233@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
-  aor_data = _store->get_aor_data("sip:6505550234@homedomain");
+  aor_data = _store->get_aor_data("sip:6505550234@homedomain", 0);
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
@@ -1155,7 +1153,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
 
   RegStore::AoR::Subscription* s1;
   int now = time(NULL);
-  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"));
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
 
   // Add a subscription
   s1 = aor_data1->get_subscription("1234");
@@ -1165,14 +1163,14 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
   s1->_to_tag = std::string("1234");
   s1->_cid = std::string("xyzabc@192.91.191.29");
-  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
   s1->_expires = now + 300;
 
   // Set the NOTIFY CSeq value to 1.
   aor_data1->_notify_cseq = 1;
 
   // Write the record back to the store.
-  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false);
+  pj_status_t rc = _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, false, 0);
   EXPECT_TRUE(rc);
   delete aor_data1; aor_data1 = NULL;
 

@@ -14,6 +14,8 @@ modules/cpp-common/src/dnscachedresolver.cpp
 modules/cpp-common/src/dnsparser.cpp
 modules/cpp-common/src/baseresolver.cpp
 modules/cpp-common/src/fakelogger.cpp
+modules/cpp-common/src/saslogger.cpp
+modules/cpp-common/test_utils/mock_sas.cpp
 
 stateful_proxy.cpp
 connection_pool.cpp
