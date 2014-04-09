@@ -911,6 +911,22 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  if (opt.daemon && opt.interactive)
+  {
+    LOG_ERROR("Cannot specify both --daemon and --interactive");
+    return 1;
+  }
+
+  if (opt.daemon)
+  {
+    int errnum = daemonize();
+    if (errnum != 0)
+    {
+      LOG_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
+      exit(0);
+    }
+  }
+
   Log::setLoggingLevel(opt.log_level);
   init_pjsip_logging(opt.log_level, opt.log_to_file, opt.log_directory);
 
@@ -932,11 +948,15 @@ int main(int argc, char *argv[])
 
   LOG_STATUS("Log level set to %d", opt.log_level);
 
-  if (opt.daemon && opt.interactive)
+  std::stringstream options_ss;
+  for(int i = 0; i < argc; ++i)
   {
-    LOG_ERROR("Cannot specify both --daemon and --interactive");
-    return 1;
+    options_ss << argv[i];
+    options_ss << " ";
   }
+  std::string options = "Command-line options were: " + options_ss.str();
+
+  LOG_INFO(options.c_str());
 
   if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
   {
@@ -1009,16 +1029,6 @@ int main(int argc, char *argv[])
       (opt.worker_threads == 1))
   {
     LOG_WARNING("Use multiple threads for good performance when using memstore and/or authentication");
-  }
-
-  if (opt.daemon)
-  {
-    int errnum = daemonize();
-    if (errnum != 0)
-    {
-      LOG_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
-      exit(0);
-    }
   }
 
   if ((opt.pcscf_enabled) && (opt.reg_max_expires != 0))
