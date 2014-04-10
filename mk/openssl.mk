@@ -20,7 +20,7 @@ openssl_test: ${OPENSSL_CONFIG_MARKER}
 openssl_clean: ${OPENSSL_CONFIG_MARKER}
 	make -C ${OPENSSL_DIR} clean
 
-openssl_distclean:
-	true
+openssl_distclean: openssl_clean
+	rm -f ${OPENSSL_CONFIG_MARKER}
 
 .PHONY: openssl openssl_test openssl_clean openssl_distclean
