@@ -115,8 +115,10 @@ TrustBoundary::TrustBoundary(std::string description,
   if ((_add_p_charging && !_strip_p_charging) ||
       (_add_p_charging_rsp && !_strip_request))
   {
+    // LCOV_EXCL_START
     LOG_ERROR("Trust boundary configured to add P-Charging headers without stripping existing ones, inconsistent configuration");
     _strip_p_charging = PJ_TRUE;
+    // LCOV_EXCL_STOP
   }
 }
 
