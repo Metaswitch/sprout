@@ -120,6 +120,8 @@ TEST_F(ChronosConnectionTest, SendPut)
   std::list<std::string> headers = {"Location: http://localhost:7253/timers/efgh"};
   fakecurl_responses["http://narcissus/timers/abcd"] = Response(headers);
 
+  // We expect Chronos to change the put identity to the value in the Location
+  // header.
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string put_identity = "abcd";
   HTTPCode status = _chronos.send_put(put_identity, 300, "/timers", opaque,  0);
