@@ -1559,13 +1559,14 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
         // We have added a BGCF generated route to the request, so we should
         // switch ACR context for the downstream leg.
+        _bgcf_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
         if (_downstream_acr != _upstream_acr)
         {
           // We've already set up a different downstream ACR to the upstream ACR
           // so free it off.
           delete _downstream_acr;
         }
-        _downstream_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+        _downstream_acr = _bgcf_acr;
 
         // Pass the request to the downstream ACR as if it is being received.
         _downstream_acr->rx_request(msg);
@@ -1866,7 +1867,8 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _downstream_acr(acr),
   _in_dialog(false),
   _icscf_router(NULL),
-  _icscf_acr(NULL)
+  _icscf_acr(NULL),
+  _bgcf_acr(NULL)
 {
   LOG_DEBUG("UASTransaction constructor (%p)", this);
   LOG_DEBUG("ACR (%p)", acr);
@@ -1950,6 +1952,23 @@ UASTransaction::~UASTransaction()
 
     delete _icscf_acr;
     _icscf_acr = NULL;
+  }
+
+  if (_bgcf_acr != NULL)
+  {
+    // BGCF ACR has been created for this transaction, so send the message
+    // and delete the ACR.
+    _bgcf_acr->send_message();
+
+    if (_downstream_acr == _bgcf_acr)
+    {
+      // Downstream ACR was referencing the BGCF ACR, so reset it back to
+      // the same as the upstream ACR so it doesn't get reported or freed twice.
+      _downstream_acr = _upstream_acr;
+    }
+
+    delete _bgcf_acr;
+    _bgcf_acr = NULL;
   }
 
   if (!_as_chain_linked)

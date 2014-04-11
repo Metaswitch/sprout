@@ -262,6 +262,9 @@ private:
   /// transaction.
   ACR*                 _icscf_acr;
 
+  /// Stores a BGCF ACR if BGCF processing was performed in this transaction.
+  ACR*                 _bgcf_acr;
+
 };
 
 // This is the data that is attached to the UAC transaction
