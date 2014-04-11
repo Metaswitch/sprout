@@ -183,7 +183,7 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 {
   std::string json_data;
 
-  HTTPCode rc = _http->get(path, json_data, "", trail);
+  HTTPCode rc = _http->send_get(path, json_data, "", trail);
   if (rc == HTTP_OK)
   {
     json_object = new Json::Value;
@@ -232,7 +232,7 @@ HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
 {
   std::string raw_data;
 
-  HTTPCode http_code = _http->send_put(path, body, raw_data, trail);
+  HTTPCode http_code = _http->send_put(path, raw_data, body, trail);
 
   if (http_code == HTTP_OK)
   {
@@ -250,7 +250,7 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 {
   std::string raw_data;
 
-  HTTPCode http_code = _http->get(path, raw_data, "", trail);
+  HTTPCode http_code = _http->send_get(path, raw_data, "", trail);
 
   if (http_code == HTTP_OK)
   {
@@ -338,47 +338,47 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 // this is HTTP_OK before relying on the output parameters.
 
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                            const std::string& private_user_identity,
-                                            const std::string& type,
-                                            std::map<std::string, Ifcs >& ifcs_map,
-                                            std::vector<std::string>& associated_uris,
-                                            SAS::TrailId trail)
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
+                                                  std::map<std::string, Ifcs >& ifcs_map,
+                                                  std::vector<std::string>& associated_uris,
+                                                  SAS::TrailId trail)
 {
   std::string unused;
   return update_registration_state(public_user_identity,
-                             private_user_identity,
-                             type,
-                             unused,
-                             ifcs_map,
-                             associated_uris,
-                             trail);
+                                   private_user_identity,
+                                   type,
+                                   unused,
+                                   ifcs_map,
+                                   associated_uris,
+                                   trail);
 }
 
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                            const std::string& private_user_identity,
-                                            const std::string& type,
-                                            SAS::TrailId trail)
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
+                                                  SAS::TrailId trail)
 {
   std::map<std::string, Ifcs > ifcs_map;
   std::vector<std::string> associated_uris;
   std::string unused;
   return update_registration_state(public_user_identity,
-                             private_user_identity,
-                             type,
-                             unused,
-                             ifcs_map,
-                             associated_uris,
-                             trail);
+                                   private_user_identity,
+                                   type,
+                                   unused,
+                                   ifcs_map,
+                                   associated_uris,
+                                   trail);
 }
 
 
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
-                                            const std::string& private_user_identity,
-                                            const std::string& type,
-                                            std::string& regstate,
-                                            std::map<std::string, Ifcs >& ifcs_map,
-                                            std::vector<std::string>& associated_uris,
-                                            SAS::TrailId trail)
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
+                                                  std::string& regstate,
+                                                  std::map<std::string, Ifcs >& ifcs_map,
+                                                  std::vector<std::string>& associated_uris,
+                                                  SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
   stopWatch.start();
