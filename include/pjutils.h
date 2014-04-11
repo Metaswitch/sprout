@@ -72,6 +72,7 @@ pj_status_t init();
 void term();
 
 pj_bool_t is_home_domain(const pjsip_uri* uri);
+pj_bool_t is_home_domain(const std::string& domain);
 pj_bool_t is_uri_local(const pjsip_uri* uri);
 
 pj_bool_t is_e164(const pj_str_t* user);
@@ -97,6 +98,8 @@ std::string aor_from_uri(const pjsip_sip_uri* uri);
 std::string public_id_from_uri(const pjsip_uri* uri);
 
 std::string default_private_id_from_uri(const pjsip_uri* uri);
+
+pj_str_t domain_from_uri(const std::string& uri_str, pj_pool_t* pool);
 
 pjsip_uri* orig_served_user(pjsip_msg* msg);
 

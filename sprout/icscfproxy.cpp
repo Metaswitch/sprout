@@ -167,7 +167,8 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
       _impi = _impu.substr(4);
     }
 
-    // Get the visted network identification if present.
+    // Get the visted network identification if present.  If not, homestead will
+    // default it.
     pjsip_generic_string_hdr* vn_hdr =
          (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg,
                                                                &STR_P_V_N_I,
@@ -176,6 +177,11 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata,
     if (vn_hdr != NULL)
     {
       _visited_network = PJUtils::pj_str_to_string(&vn_hdr->hvalue);
+    }
+    else if (PJSIP_URI_SCHEME_IS_SIP(to_uri) || PJSIP_URI_SCHEME_IS_SIPS(to_uri))
+    {
+      // Use the domain of the IMPU as the visited network.
+      _visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
     }
 
     // Work out what authorization type to use by looking at the expiry

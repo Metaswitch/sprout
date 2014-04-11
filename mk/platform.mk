@@ -85,8 +85,11 @@ TARGET_OBJS := $(patsubst %.cpp, ${OBJ_DIR}/%.o, ${TARGET_SOURCES} ${TARGET_SOUR
 TARGET_OBJS_TEST := $(patsubst %.cpp, ${OBJ_DIR_TEST}/%.o, ${TARGET_SOURCES} ${TARGET_SOURCES_TEST}) \
                     $(patsubst %,     ${OBJ_DIR_TEST}/%, $(TARGET_EXTRA_OBJS_TEST))
 
+#	We only want to do dependencies for standard test objects, not for the extra ones.
+TARGET_OBJS_DEPS := $(patsubst %.cpp, ${OBJ_DIR_TEST}/%.o, ${TARGET_SOURCES} ${TARGET_SOURCES_TEST})
+
 # The dependencies
-DEPS := $(patsubst %.o, %.depends, $(patsubst %.so, %.depends, ${TARGET_OBJS} ${TARGET_OBJS_TEST}))
+DEPS := $(patsubst %.o, %.depends, $(patsubst %.so, %.depends, ${TARGET_OBJS} ${TARGET_OBJS_DEPS}))
 
 # Build the production binary.
 .PHONY: build

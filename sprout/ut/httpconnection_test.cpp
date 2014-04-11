@@ -61,16 +61,14 @@ using ::testing::MatchesRegex;
 class HttpConnectionTest : public BaseTest
 {
   LoadMonitor _lm;
-  LastValueCache _lvc;
   HttpConnection _http;
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
-    _lvc(num_known_stats, known_statnames, "6666", 10), // Short timeout to avoid shutdown delays.
     _http("cyrus",
           true,
           "connected_homers",
           &_lm,
-          &_lvc,
+          stack_data.stats_aggregator,
           SASEvent::HttpLogLevel::PROTOCOL)
   {
     fakecurl_responses.clear();
@@ -91,7 +89,6 @@ class HttpConnectionTest : public BaseTest
   {
     fakecurl_responses.clear();
     fakecurl_requests.clear();
-    cwtest_reset_time();
   }
 };
 
@@ -138,7 +135,9 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   string output;
   long ret = _http.send_get("/blah/blah/blah", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
-  // Wait a very short time.
+
+  // Wait a very short time. Note that this is reverted by the
+  // BaseTest destructor, which calls cwtest_reset_time().
   cwtest_advance_time_ms(10L);
 
   // Next request should be on same connection (it's possible but very

@@ -801,27 +801,14 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
   // proxy and stripping any loose routes that might have been added by the
-  // UA.  If the request URI is a SIP URI with a domain/host that is not
-  // the home domain, change it to use the home domain.
+  // UA.
   LOG_INFO("Route request to upstream proxy %.*s",
       ((pjsip_sip_uri*)upstream_proxy)->host.slen,
       ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
-  if ((PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
-      (!PJUtils::is_home_domain((pjsip_uri*)tdata->msg->line.req.uri)))
-  {
-    // Change host/domain in target to use home domain.
-    target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
-        tdata->msg->line.req.uri);
-    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.home_domain;
-  }
-  else
-  {
-    // Use request URI unchanged.
-    target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
-  }
+  target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
@@ -2359,7 +2346,7 @@ AsChainLink::Disposition UASTransaction::handle_originating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->orig_ioi = stack_data.home_domain;
+    pcv->orig_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply originating call services to the message
@@ -2458,7 +2445,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
     pjsip_msg_find_hdr_by_name(_req->msg, &STR_P_C_V, NULL);
   if (pcv)
   {
-    pcv->term_ioi = stack_data.home_domain;
+    pcv->term_ioi = PJUtils::domain_from_uri(_as_chain_link.served_user(), _req->pool);
   }
 
   // Apply terminating call services to the message
