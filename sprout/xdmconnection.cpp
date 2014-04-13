@@ -90,7 +90,8 @@ bool XDMConnection::get_simservs(const std::string& user,
   SAS::report_event(event);
 
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
-  HTTPCode http_code = _http->get(url, xml_data, user, trail);
+
+  HTTPCode http_code = _http->send_get(url, xml_data, user, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))

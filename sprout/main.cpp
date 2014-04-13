@@ -173,6 +173,7 @@ struct options
     { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
+    { "ralf",              required_argument, 0, 'G'},
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
@@ -193,7 +194,7 @@ struct options
     { NULL,                0, 0, 0}
   };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
