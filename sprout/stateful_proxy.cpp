@@ -710,7 +710,8 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
               rdata->msg_info.msg->line.req.method.name.ptr, status_code);
     pjsip_tx_data* tdata;
 
-    // Use default status text except for cases where PJSIP doesn't
+    // Use default status text except for cases where PJSIP doesn't know
+    // about the status code.
     const pj_str_t* status_text = NULL;
     if (status_code == SIP_STATUS_FLOW_FAILED)
     {
@@ -2228,7 +2229,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // being transmitted.
         _upstream_acr->tx_request(_req->msg);
 
-        // Allocate an I-CSCF ACR if ACRs are enabled.
+        // Allocate an I-CSCF ACR.
         _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
         _icscf_acr->rx_request(_req->msg);
 
@@ -2276,16 +2277,13 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           // terminating subscriber, so reject the request.
           LOG_DEBUG("No valid S-CSCFs found");
 
-          if (_icscf_acr != NULL)
-          {
-            // Pass the error response to the I-CSCF ACR and send the ACR.
-            _best_rsp->msg->line.status.code = status_code;
-            _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
-            _icscf_acr->tx_response(_best_rsp->msg);
-            _icscf_acr->send_message();
-            delete _icscf_acr;
-            _icscf_acr = NULL;
-          }
+          // Pass the error response to the I-CSCF ACR and send the ACR.
+          _best_rsp->msg->line.status.code = status_code;
+          _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
+          _icscf_acr->tx_response(_best_rsp->msg);
+          _icscf_acr->send_message();
+          delete _icscf_acr;
+          _icscf_acr = NULL;
 
           send_response(PJSIP_SC_NOT_FOUND);
           delete target;

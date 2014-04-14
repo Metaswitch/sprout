@@ -585,6 +585,7 @@ void BasicProxy::UASTsx::process_tsx_request()
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
     LOG_DEBUG("Statelessly forwarding ACK");
+    PJUtils::mark_sas_call_branch_ids(_trail, PJSIP_MSG_CID_HDR(_req->msg), NULL);
     pj_status_t status = PJUtils::send_request_stateless(_req);
     if (status != PJ_SUCCESS)
     {

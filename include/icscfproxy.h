@@ -104,7 +104,7 @@ private:
   private:
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
-                                pjsip_rx_data *rdata);
+                                        pjsip_rx_data *rdata);
 
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);

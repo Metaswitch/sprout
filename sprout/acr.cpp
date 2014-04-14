@@ -45,12 +45,12 @@ const pj_time_val ACR::unspec = {-1,0};
 
 ACR::ACR()
 {
-  LOG_DEBUG("Created Null ACR (%p)", this);
+  LOG_DEBUG("Created ACR (%p)", this);
 }
 
 ACR::~ACR()
 {
-  LOG_DEBUG("Destroyed Null ACR (%p)", this);
+  LOG_DEBUG("Destroyed ACR (%p)", this);
 }
 
 void ACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
@@ -145,7 +145,7 @@ RalfACR::RalfACR(HttpConnection* ralf,
   _req_timestamp.sec = 0;
   _rsp_timestamp.sec = 0;
 
-  LOG_DEBUG("Created %s Ralf ACR (%p)",
+  LOG_DEBUG("Created %s Ralf ACR",
             ACR::node_name(_node_functionality).c_str(), this);
 }
 
@@ -225,7 +225,7 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     else
     {
       // All other node types only generate EVENTs.
-      LOG_DEBUG("Set record type for I-CSCF, IBCF, AS to EVENT_RECORD");
+      LOG_DEBUG("Set record type for I-CSCF, BGCF, IBCF, AS to EVENT_RECORD");
       _record_type = EVENT_RECORD;
     }
 
@@ -251,8 +251,8 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
     {
       // Check for expires values in Contact headers.  Set the default to
-      // -1, so if there are no expires values in the contact headers we
-      // won't include an Expires AVP.
+      // -1, so if there are no contact headers, or no expires values in the
+      // contact headers we won't include an Expires AVP.
       _expires = PJUtils::max_expires(req, -1);
     }
     else
@@ -547,7 +547,7 @@ void RalfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
   _status_code = rsp->line.status.code;
 
   if ((_record_type == START_RECORD) &&
-      (_status_code > 299))
+      (_status_code >= 300))
   {
     // Failed to start the session, so convert to an EVENT record.
     LOG_DEBUG("Failed to start session, change record type to EVENT_RECORD");
@@ -577,19 +577,24 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
-  // Encode and send the request using the Ralf HTTP connection.
-  LOG_VERBOSE("Sending %s Ralf ACR (%p)",
-              ACR::node_name(_node_functionality).c_str(), this);
-  std::string path = "/call-id/" + _user_session_id;
-  std::map<std::string, std::string> headers;
-  long rc = _ralf->send_post(path,
-                             get_message(timestamp),
-                             headers,
-                             _trail);
-
-  if (rc != HTTP_OK)
+  if ((!_ccfs.empty()) ||
+      (!_ecfs.empty()))
   {
-    LOG_ERROR("Ralf billing message failed, rc = %ld", rc);
+    // We have at least one valid destination CCF or ECF, so encode and send
+    // the request using the Ralf HTTP connection.
+    LOG_VERBOSE("Sending %s Ralf ACR (%p)",
+                ACR::node_name(_node_functionality).c_str(), this);
+    std::string path = "/call-id/" + _user_session_id;
+    std::map<std::string, std::string> headers;
+    long rc = _ralf->send_post(path,
+                               get_message(timestamp),
+                               headers,
+                               _trail);
+
+    if (rc != HTTP_OK)
+    {
+      LOG_ERROR("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    }
   }
 }
 
@@ -845,7 +850,8 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   }
   else if (_record_type == EVENT_RECORD)
   {
-    // Calculate the cause code to include on the request.
+    // Calculate the cause code to include on the request (see 7.2.35/TS 32.299
+    // for all the gory details).
     int cause_code = 0;
     if (_status_code == PJSIP_SC_OK)
     {
@@ -1034,8 +1040,6 @@ void RalfACR::encode_media_components(Json::Value& v,
 /// return characters at the end of the lines if present.
 void RalfACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 {
-  //std::string s = sdp;
-
   size_t start_pos = 0;
   size_t end_pos;
   size_t next_start_pos;
@@ -1063,7 +1067,7 @@ void RalfACR::split_sdp(const std::string& sdp, std::vector<std::string>& lines)
 
     if (end_pos > start_pos)
     {
-      // None blank line, so add it to output.
+      // Non-blank line, so add it to output.
       lines.push_back(sdp.substr(start_pos, end_pos - start_pos));
     }
 
