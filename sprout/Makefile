@@ -59,7 +59,9 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   icscfproxy.cpp \
+                  icscfrouter.cpp \
                   scscfselector.cpp	\
+                  acr.cpp \
                   signalhandler.cpp	\
                   subscription.cpp \
                   notify_utils.cpp \
@@ -114,6 +116,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        icscfproxy_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
+                       acr_test.cpp \
                        subscription_test.cpp \
                        chronosconnection_test.cpp \
                        handlers_test.cpp \

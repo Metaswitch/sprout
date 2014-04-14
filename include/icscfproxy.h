@@ -44,6 +44,9 @@
 
 #include "hssconnection.h"
 #include "scscfselector.h"
+#include "servercaps.h"
+#include "acr.h"
+#include "icscfrouter.h"
 #include "basicproxy.h"
 
 class ICSCFProxy : public BasicProxy
@@ -54,6 +57,7 @@ public:
              int port,
              int priority,
              HSSConnection* hss,
+             ACRFactory* acr_factory,
              SCSCFSelector* scscf_selector);
 
   /// Destructor.
@@ -63,8 +67,12 @@ protected:
   /// Process received requests not absorbed by transaction layer.
   virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);
 
-  /// Perform I-CSCF specific verification of incoming requests.
-  virtual pj_status_t verify_request(pjsip_rx_data *rdata);
+  /// Utility to verify incoming requests.
+  /// Return the SIP status code if verification failed.
+  virtual int verify_request(pjsip_rx_data* rdata);
+
+  /// Rejects a received request statelessly.
+  virtual void reject_request(pjsip_rx_data* rdata, int status_code);
 
   /// Create I-CSCF UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
@@ -75,97 +83,54 @@ private:
   {
   public:
     /// Constructor.
-    UASTsx(HSSConnection* hss,
-           SCSCFSelector* scscf_selector,
-           BasicProxy* proxy);
+    UASTsx(BasicProxy* proxy);
 
     /// Destructor.
     ~UASTsx();
 
     /// Initialise the UAS transaction.
-    virtual pj_status_t init(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
+    virtual pj_status_t init(pjsip_rx_data* rdata);
+
+    /// Handle a received CANCEL request.
+    virtual void process_cancel_request(pjsip_rx_data* rdata);
 
   protected:
     /// Calculate targets for incoming requests by querying HSS.
-    virtual int calculate_targets(pjsip_tx_data* tdata);
+    virtual int calculate_targets();
 
     /// Called when the final response has been determined.
     virtual void on_final_response();
 
   private:
+    /// Handles a response to an associated UACTsx.
+    virtual void on_new_client_response(UACTsx* uac_tsx,
+                                        pjsip_rx_data *rdata);
+
+    /// Notification that a response is being transmitted on this transaction.
+    virtual void on_tx_response(pjsip_tx_data* tdata);
+
+    /// Notification that a request is being transmitted to a client.
+    virtual void on_tx_client_request(pjsip_tx_data* tdata);
+
     /// Attempts to retry the request to an alternative S-CSCF.
-    bool retry_request(int rsp_status);
+    bool retry_to_alternate_scscf(int rsp_status);
 
-    /// Performs a registration status query and finds a suitable S-CSCF
-    /// for the request.
-    int registration_status_query(const std::string& impi,
-                                  const std::string& impu,
-                                  const std::string& visited_network,
-                                  const std::string& auth_type,
-                                  std::string& scscf);
-
-    /// Performs a location status query and finds a suitable S-CSCF for the
-    /// request.
-    int location_query(const std::string& impu,
-                       bool originating,
-                       const std::string& auth_type,
-                       std::string& scscf);
-
-    /// Parses the HSS response.
-    int parse_hss_response(Json::Value& rsp, bool queried_caps);
-
-    /// Parses a set of capabilities in the HSS response.
-    bool parse_capabilities(Json::Value& caps, std::vector<int>& parsed_caps);
-
-    /// Homestead connection class for performing HSS queries.
-    HSSConnection* _hss;
-
-    /// S-CSCF selector used to select S-CSCFs from configuration.
-    SCSCFSelector* _scscf_selector;
+    /// Create an ACR if ACR generation is enabled.
+    ACR* create_acr();
 
     /// Defines the session case for the current transaction.
     typedef enum {REGISTER, ORIGINATING, TERMINATING} SessionCase;
     SessionCase _case;
 
-    /// Private user identity parsed from the original request.  This is
-    /// only set for REGISTER requests.
-    std::string _impi;
+    /// I-CSCF router object for the request.
+    ICSCFRouter* _router;
 
-    /// Public user identity parsed from the original request.
-    std::string _impu;
+    /// The ACR for the request (if ACR generation is enabled).
+    ACR* _acr;
 
-    /// Visited network identification parsed from the original request.  This
-    /// is only set for REGISTER requests.
-    std::string _visited_network;
-
-    /// Authenticaton type for the current transaction.  Initially set to
-    /// REGISTRATION or DE-REGISTRATION for REGISTER requests and blank for
-    /// other requests.  Set to REGISTRATION_AND_CAPABILITIES when retrieving
-    /// capabilities to select an alternate S-CSCF.
-    std::string _auth_type;
-
-    /// Structure storing the most recent response from the HSS for this
-    /// transaction.
-    struct
-    {
-      /// The S-CSCF returned by the HSS.
-      std::string _scscf;
-
-      /// Flag which indicates whether or not we have asked the HSS for
-      /// capabilities and got a successful response (even if there were no
-      /// capabilities specified for this subscriber).
-      bool _queried_caps;
-
-      /// The list of mandatory capabilities returned by the HSS.
-      std::vector<int> _mandatory_caps;
-
-      /// The list of optional capabilities returned by the HSS.
-      std::vector<int> _optional_caps;
-
-    } _hss_rsp;
-
-    /// The list of S-CSCFs already attempted for this request.
-    std::vector<std::string> _attempted_scscfs;
+    /// Records whether or not the request is an in-dialog request.  This is
+    /// used when deciding whether to send ACRs on provisional responses.
+    bool _in_dialog;
   };
 
   /// Port for I-CSCF function.  This proxy will only process requests
@@ -178,6 +143,8 @@ private:
   /// S-CSCF selector used to select S-CSCFs from configuration.
   SCSCFSelector* _scscf_selector;
 
+  /// ACR factory for I-CSCF ACRs.
+  ACRFactory* _acr_factory;
 };
 
 

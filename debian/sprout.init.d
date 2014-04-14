@@ -131,6 +131,8 @@ get_settings()
           [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms $xdms_hostname"
         fi
 
+        [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
+
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
         [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
 
@@ -167,6 +169,7 @@ do_start()
                      --hss $hs_hostname
                      --chronos $chronos_hostname
                      $xdms_hostname_arg
+                     $ralf_arg
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg

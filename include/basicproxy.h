@@ -56,6 +56,7 @@ extern "C" {
 
 #include "stack.h"
 #include "pjmodule.h"
+#include "acr.h"
 
 
 /// Class implementing basic SIP proxy functionality.  Various methods in
@@ -109,24 +110,26 @@ protected:
     inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
     /// Initializes the UAS transaction.
-    virtual pj_status_t init(pjsip_rx_data* rdata, pjsip_tx_data* tdata);
-
-    /// Adds a target to the target list for this transaction.
-    virtual void add_target(BasicProxy::Target* target);
+    virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
     virtual void process_tsx_request();
 
-    /// Initializes UAC transactions to each of the specified targets.
-    /// @returns a status code indicating whether or not the operation succeeded.
-    virtual pj_status_t init_uac_transactions();
+    /// Handle a received CANCEL request.
+    virtual void process_cancel_request(pjsip_rx_data* rdata);
 
-    /// Handles a response to an associated UACTransaction.
+    /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_rx_data *rdata);
 
     /// Notification that a client transaction is not responding.
     virtual void on_client_not_responding(UACTsx* uac_tsx);
+
+    /// Notification that a response is being transmitted on this transaction.
+    virtual void on_tx_response(pjsip_tx_data* tdata);
+
+    /// Notification that a request is being transmitted to a client.
+    virtual void on_tx_client_request(pjsip_tx_data* tdata);
 
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UASTsx still
@@ -147,9 +150,23 @@ protected:
     void exit_context();
 
   protected:
+    /// Process route information in the request.
+    virtual int process_routing();
+
+    /// Create a PJSIP transaction for the request.
+    virtual pj_status_t create_pjsip_transaction(pjsip_rx_data* rdata);
+
+    /// Adds a target to the target list for this transaction.
+    virtual void add_target(BasicProxy::Target* target);
+
+    /// Initializes UAC transactions to each of the specified targets and
+    /// forwards the request.
+    /// @returns a status code indicating whether or not the operation succeeded.
+    virtual pj_status_t forward_request();
+
     /// Calculate targets for requests where Route headers do not determine
     /// the target.
-    virtual int calculate_targets(pjsip_tx_data* tdata);
+    virtual int calculate_targets();
 
     /// Called when the final response has been determined and should be sent
     /// back on the UAS transaction.
@@ -178,7 +195,7 @@ protected:
     virtual BasicProxy::UACTsx* create_uac_tsx(size_t index);
 
     /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
+    SAS::TrailId trail() const { return _trail; }
 
     /// Owning proxy object.
     BasicProxy* _proxy;
@@ -194,6 +211,9 @@ protected:
     /// PJSIP group lock used to protect all PJSIP UAS and UAC transactions
     /// involved in this proxied request.
     pj_grp_lock_t* _lock;
+
+    /// The trail identifier for the transaction/request.
+    SAS::TrailId _trail;
 
     /// Targets the request is forked to.
     std::list<Target*> _targets;
@@ -304,12 +324,11 @@ protected:
   virtual void on_cancel_request(pjsip_rx_data* rdata);
 
   /// Utility to verify incoming requests.
-  /// Return non-zero if verification failed.
-  virtual pj_status_t verify_request(pjsip_rx_data *rdata);
+  /// Return the SIP status code if verification failed.
+  virtual int verify_request(pjsip_rx_data* rdata);
 
-  /// Process route information in the request.
-  virtual int process_routing(pjsip_tx_data* tdata,
-                              BasicProxy::Target*& target);
+  /// Rejects a received request statelessly.
+  virtual void reject_request(pjsip_rx_data* rdata, int status_code);
 
   /// Utility method to create a UASTsx objects for incoming requests.
   virtual BasicProxy::UASTsx* create_uas_tsx();

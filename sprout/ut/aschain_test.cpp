@@ -116,15 +116,15 @@ Ifcs simple_ifcs(int count, ...)
 TEST_F(AsChainTest, Basics)
 {
   Ifcs ifcs1 = simple_ifcs(0);
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1, NULL);
   AsChainLink as_chain_link(&as_chain, 0u);
 
   Ifcs ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2, NULL);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
   Ifcs ifcs3 = simple_ifcs(2, "sip:pancommunicon.cw-ngv.com", "sip:mmtel.homedomain");
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3, NULL);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   EXPECT_THAT(as_chain_link.to_string(), testing::MatchesRegex("AsChain-orig\\[0x[0-9a-f]+\\]:1/0"));
@@ -147,15 +147,15 @@ TEST_F(AsChainTest, Basics)
 TEST_F(AsChainTest, AsInvocation)
 {
   Ifcs ifcs1 = simple_ifcs(0);
-  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1);
+  AsChain as_chain(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs1, NULL);
   AsChainLink as_chain_link(&as_chain, 0u);
 
   Ifcs ifcs2 = simple_ifcs(1, "sip:pancommunicon.cw-ngv.com");
-  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2);
+  AsChain as_chain2(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs2, NULL);
   AsChainLink as_chain_link2(&as_chain2, 0u);
 
   Ifcs ifcs3 = simple_ifcs(1, "::invalid:pancommunicon.cw-ngv.com");
-  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3);
+  AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3, NULL);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
   // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.

@@ -62,6 +62,10 @@ static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
+
+/// Factory for generating ACR messages for Rf billing.
+static ACRFactory* acr_factory;
+
 static AnalyticsLogger* analytics;
 
 /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
@@ -311,6 +315,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
 
@@ -365,6 +372,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     return;
   }
 
@@ -427,6 +435,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     delete aor_data;
     return;
     // LCOV_EXCL_STOP
@@ -436,8 +445,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expiry);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
 
+  // Pass the response to the ACR.
+  acr->tx_response(tdata->msg);
+
   // Send the response.
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  // Send the ACR and delete it.
+  acr->send_message();
+  delete acr;
 
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
@@ -537,6 +553,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 pj_status_t init_subscription(RegStore* registrar_store,
                               RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
+                              ACRFactory* rfacr_factory,
                               AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
@@ -544,6 +561,7 @@ pj_status_t init_subscription(RegStore* registrar_store,
   store = registrar_store;
   remote_store = remote_reg_store;
   hss = hss_connection;
+  acr_factory = rfacr_factory;
   analytics = analytics_logger;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_subscription);
