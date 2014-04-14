@@ -587,8 +587,8 @@ void RalfACR::send_message(pj_time_val timestamp)
     std::string path = "/call-id/" + _user_session_id;
     std::map<std::string, std::string> headers;
     long rc = _ralf->send_post(path,
-                               get_message(timestamp),
                                headers,
+                               get_message(timestamp),
                                _trail);
 
     if (rc != HTTP_OK)
