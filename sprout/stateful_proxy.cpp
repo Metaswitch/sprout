@@ -879,7 +879,25 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
-  target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
+
+  // Some trunks will send incoming requests directed at the IBCF node,
+  // rather than determining the correct domain for the subscriber first.
+  // In this case, we'll re-write the ReqURI to the default home domain.
+  if ((*trust == &TrustBoundary::INBOUND_TRUNK) &&
+      (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
+      (PJUtils::is_uri_local((pjsip_uri*)tdata->msg->line.req.uri)))
+
+  {
+    // Change host/domain in target to use home domain.
+    target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
+        tdata->msg->line.req.uri);
+    ((pjsip_sip_uri*)target_p->uri)->host = stack_data.default_home_domain;
+  }
+  else
+  {
+    // Use request URI unchanged.
+    target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
+  } 
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
