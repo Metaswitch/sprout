@@ -886,11 +886,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if ((*trust == &TrustBoundary::INBOUND_TRUNK) &&
       (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
       (PJUtils::is_uri_local((pjsip_uri*)tdata->msg->line.req.uri)))
-
   {
-    // Change host/domain in target to use home domain.
+    // Change host/domain in target to use default home domain.
     target_p->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool,
-        tdata->msg->line.req.uri);
+                                                tdata->msg->line.req.uri);
     ((pjsip_sip_uri*)target_p->uri)->host = stack_data.default_home_domain;
   }
   else
