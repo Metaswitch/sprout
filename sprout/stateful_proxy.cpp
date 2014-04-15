@@ -1057,7 +1057,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     bool trusted = false;
 
     // Only treat it as coming from an untrusted port if it comes from the standard 5060
-    if (rdata->tp_info.transport->local_name.port == 5060)
+    if (source_type != SIP_PEER_TRUSTED_PORT && rdata->tp_info.transport->local_name.port > 6500)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
