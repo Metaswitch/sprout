@@ -341,11 +341,19 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       ++_active_connections;
       increment_connection_count(tp);
 
-      // Compute a TTL for the connection.  To avoid all the recycling being
-      // sychronized we set the TTL to the specified average recycle time
-      // perturbed by a random factor.
-      int ttl = _recycle_period + (rand() % (2 * _recycle_margin)) - _recycle_margin;
-      _tp_hash[hash_slot].recycle_time = time(NULL) + ttl;
+      if (_recycle_period > 0)
+      {
+        // Compute a TTL for the connection.  To avoid all the recycling being
+        // sychronized we set the TTL to the specified average recycle time
+        // perturbed by a random factor.
+        int ttl = _recycle_period + (rand() % (2 * _recycle_margin)) - _recycle_margin;
+        _tp_hash[hash_slot].recycle_time = time(NULL) + ttl;
+      }
+      else
+      {
+        // Connection recycling is disabled.
+        _tp_hash[hash_slot].recycle_time = 0;
+      }
     }
     else if ((state == PJSIP_TP_STATE_DISCONNECTED) ||
              (state == PJSIP_TP_STATE_DESTROYED))
@@ -431,7 +439,9 @@ void ConnectionPool::recycle_connections()
         // This slot is empty, so try to populate it now.
         create_connection(ii);
       }
-      else if ((_tp_hash[ii].connected) && (now >= _tp_hash[ii].recycle_time))
+      else if ((_tp_hash[ii].connected) &&
+               (_tp_hash[ii].recycle_time != 0) &&
+               (now >= _tp_hash[ii].recycle_time))
       {
         // This slot is due to be recycled, so quiesce the existing
         // connection and create a new one.
