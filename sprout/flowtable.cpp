@@ -50,11 +50,12 @@ extern "C" {
 #include "pjutils.h"
 #include "stack.h"
 #include "flowtable.h"
-
+#include "connection_pool.h"
 
 FlowTable::FlowTable(QuiescingManager* qm, LastValueCache* lvc) :
   _tp2flow_map(),
   _tk2flow_map(),
+  _tc2flow_map(),
   _statistic("client_count", lvc),
   _quiescing(false),
   _qm(qm)
@@ -77,6 +78,10 @@ FlowTable::~FlowTable()
   pthread_mutex_destroy(&_flow_map_lock);
 }
 
+void FlowTable::update_c_map(pjsip_transport* conn, Flow* flow)
+{
+  _tc2flow_map.insert(std::make_pair(conn, flow));
+}
 
 /// Find or create a flow corresponding to the specified transport and remote
 /// IP address and port. This is a single method to ensure it is atomic.
@@ -157,6 +162,35 @@ Flow* FlowTable::find_flow(pjsip_transport* transport, const pj_sockaddr* raddr)
 }
 
 
+/// Find the flow corresponding to the specified transport and remote IP
+/// address and port.
+Flow* FlowTable::find_flow(pjsip_transport* transport)
+{
+  Flow* flow = NULL;
+
+  LOG_DEBUG("Find flow for transport %s (%d)",
+            transport->obj_name, transport->key.type);
+
+  pthread_mutex_lock(&_flow_map_lock);
+
+  std::map<pjsip_transport*, Flow*>::iterator i = _tc2flow_map.find(transport);
+
+  if (i != _tc2flow_map.end())
+  {
+    // Found a matching flow, so return this one.
+    flow = i->second;
+
+    // Increment the reference count on the flow.
+    flow->inc_ref();
+
+    LOG_DEBUG("Found flow record %p", flow);
+  }
+
+  pthread_mutex_unlock(&_flow_map_lock);
+
+  return flow;
+}
+
 /// Find the flow corresponding to the specified flow token.
 Flow* FlowTable::find_flow(const std::string& token)
 {
@@ -217,6 +251,12 @@ void FlowTable::remove_flow(Flow* flow)
   if (j != _tk2flow_map.end())
   {
     _tk2flow_map.erase(j);
+  }
+
+  std::map<pjsip_transport*, Flow*>::iterator k = _tc2flow_map.find(flow->_conn_pool->get_connection());
+  if (k != _tc2flow_map.end())
+  {
+    _tc2flow_map.erase(k);
   }
 
   report_flow_count();
@@ -302,6 +342,23 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
 
   // Start the timer as an idle timer.
   restart_timer(IDLE_TIMER, IDLE_TIMEOUT);
+
+  pjsip_host_port pool_target;
+
+  pool_target.host = pj_strdup3(stack_data.pool, "ec2-50-16-21-191.compute-1.amazonaws.com");
+  pool_target.port = 6004;
+
+  // TODO - Actually pass this in
+  //pool_target.host = pj_strdup3(stack_data.pool, stack_data.upstream_host.c_str());
+  //pool_target.port = stack_data.upstream_port;
+  _conn_pool = new ConnectionPool(&pool_target,
+                                  1,
+                                  0,
+                                  stack_data.pool,
+                                  stack_data.endpt,
+                                  stack_data.pcscf_trusted_tcp_factory,
+                                  stack_data.stats_aggregator);
+  _conn_pool->init();
 }
 
 
@@ -325,6 +382,8 @@ Flow::~Flow()
     pjsip_endpt_cancel_timer(stack_data.endpt, &_timer);
     _timer.id = 0;
   }
+
+  delete _conn_pool;
 
   pthread_mutex_destroy(&_flow_lock);
 }

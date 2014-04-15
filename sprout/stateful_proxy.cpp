@@ -867,7 +867,8 @@ static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip
 static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
                                  TrustBoundary **trust,
-                                 Target** target)
+                                 Target** target,
+                                 Flow* flow)
 {
   // Forward it to the upstream proxy to deal with.  We do this by creating
   // a target with the existing request URI and a path to the upstream
@@ -896,7 +897,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   {
     // Use request URI unchanged.
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
-  } 
+  }
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
@@ -935,11 +936,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     pj_list_insert_after(&upstream_uri->other_param, orig_param);
   }
 
-  // Select a transport for the request.
-  if (upstream_conn_pool != NULL)
-  {
-    target_p->transport = upstream_conn_pool->get_connection();
-  }
+  // Get the transport from the flow's connection. At the same time, populate
+  // the flow table map
+  target_p->transport = flow->_conn_pool->get_connection();
+  flow_table->update_c_map(flow->_conn_pool->get_connection(), flow);
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
@@ -1039,7 +1039,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     // Until we support routing, all REGISTER requests should be sent to the upstream sprout
     // for processing.
-    proxy_route_upstream(rdata, tdata, trust, target);
+    proxy_route_upstream(rdata, tdata, trust, target, src_flow);
 
     // Do standard route header processing for the request.  This may
     // remove the top route header if it corresponds to this node.
@@ -1056,11 +1056,13 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // (that is, a client flow).
     bool trusted = false;
 
-    if (source_type != SIP_PEER_TRUSTED_PORT)
+    // Only treat it as coming from an untrusted port if it comes from the standard 5060
+    if (rdata->tp_info.transport->local_name.port == 5060)
     {
       // Message received on untrusted port, so see if it came over a trunk
       // or on a known client flow.
       LOG_DEBUG("Message received on non-trusted port %d", rdata->tp_info.transport->local_name.port);
+
       if (source_type == SIP_PEER_CONFIGURED_TRUNK)
       {
         LOG_DEBUG("Message received on configured SIP trunk");
@@ -1115,6 +1117,13 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
             // No identities specified, so check there is valid default identity
             // and use it for the P-Asserted-Identity.
             LOG_DEBUG("Request has no P-Preferred-Identity headers, so check for default identity on flow");
+
+            // The default identity was never set as Perimeta changse the Path header -
+            // The default identity is set in the flow as the associated uri or
+            // the to header, but this is only done if it can get the flow token from
+            // the path header
+            trusted = true;
+
             std::string aid = src_flow->default_identity();
 
             if (aid.length() > 0)
@@ -1188,6 +1197,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
       // See if the message is destined for a client.
       pjsip_route_hdr* route_hdr;
+
       if ((PJUtils::is_top_route_local(tdata->msg, &route_hdr)) &&
           (((pjsip_sip_uri*)route_hdr->name_addr.uri)->user.slen > 0))
       {
@@ -1208,28 +1218,38 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           LOG_ERROR("Route header flow identifier failed to correlate");
           return SIP_STATUS_FLOW_FAILED;
         }
-
-        // This must be a request for a client, so make sure it is routed
-        // over the appropriate flow.
-        LOG_DEBUG("Inbound request for client with flow identifier in Route header");
-        pjsip_tpselector tp_selector;
-        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-        tp_selector.u.transport = tgt_flow->transport();
-        pjsip_tx_data_set_transport(tdata, &tp_selector);
-
-        tdata->dest_info.addr.count = 1;
-        tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)tgt_flow->transport()->key.type;
-        pj_memcpy(&tdata->dest_info.addr.entry[0].addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
-        tdata->dest_info.addr.entry[0].addr_len =
-             (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
-             sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
-        tdata->dest_info.cur_addr = 0;
-
-        *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
-
-        // If there is an authorization header remove it.
-        pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
       }
+      else
+      {
+        // Get the flow from the transport
+        tgt_flow = flow_table->find_flow(rdata->tp_info.transport);
+
+        if (tgt_flow == NULL)
+        {
+          LOG_ERROR("Transport flow identifier failed to correlate");
+          return SIP_STATUS_FLOW_FAILED;
+        }
+      }
+
+      // This must be a request for a client, so make sure it is routed
+      // over the appropriate flow.
+      LOG_DEBUG("Inbound request for client with flow identifier in Route header");
+      pjsip_tpselector tp_selector;
+      tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+      tp_selector.u.transport = tgt_flow->transport();
+      pjsip_tx_data_set_transport(tdata, &tp_selector);
+
+      tdata->dest_info.addr.count = 1;
+      tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)tgt_flow->transport()->key.type;
+      pj_memcpy(&tdata->dest_info.addr.entry[0].addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
+      tdata->dest_info.addr.entry[0].addr_len =
+           (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+           sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+      tdata->dest_info.cur_addr = 0;
+      *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
+
+      // If there is an authorization header remove it.
+      pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
     }
 
     if (!trusted)
@@ -1261,7 +1281,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
              PJUtils::is_uri_local(tdata->msg->line.req.uri))
     {
       // Route the request upstream to Sprout.
-      proxy_route_upstream(rdata, tdata, trust, target);
+      proxy_route_upstream(rdata, tdata, trust, target, src_flow);
     }
 
     // Work out the next hop target for the message.  This will either be the
@@ -4194,21 +4214,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
     // Create a dialog tracker to count dialogs on each flow
     dialog_tracker = new DialogTracker(flow_table);
 
-    // Create a connection pool to the upstream proxy.
-    if (upstream_proxy_connections > 0)
-    {
-      pjsip_host_port pool_target;
-      pool_target.host = pj_strdup3(stack_data.pool, upstream_proxy_arg.c_str());
-      pool_target.port = upstream_proxy_port;
-      upstream_conn_pool = new ConnectionPool(&pool_target,
-                                              upstream_proxy_connections,
-                                              upstream_proxy_recycle,
-                                              stack_data.pool,
-                                              stack_data.endpt,
-                                              stack_data.pcscf_trusted_tcp_factory,
-                                              stack_data.stats_aggregator);
-      upstream_conn_pool->init();
-    }
+    // Don't create a connection pool anymore - each flow will create
+    // its personal connection
 
     ibcf = enable_ibcf;
     if (ibcf)

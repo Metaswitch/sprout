@@ -54,6 +54,7 @@ extern "C" {
 #include "statistic.h"
 #include "stack.h"
 #include "quiescing_manager.h"
+#include "connection_pool.h"
 
 class FlowTable;
 
@@ -90,6 +91,8 @@ public:
                                          const pjsip_transport_state_info *info);
 
   static void on_timer_expiry(pj_timer_heap_t *th, pj_timer_entry *e);
+
+  ConnectionPool* _conn_pool;
 
   friend class FlowTable;
 
@@ -178,8 +181,12 @@ public:
   /// Find the flow corresponding to the specified flow token.
   Flow* find_flow(const std::string& token);
 
+  Flow* find_flow(pjsip_transport* transport);
+
   /// Removes a flow from the flow table.
   void remove_flow(Flow* flow);
+
+  void update_c_map(pjsip_transport*, Flow*);
 
   // Functions for quiescing a Bono.
   void check_quiescing_state();
@@ -232,13 +239,13 @@ private:
   pthread_mutex_t _flow_map_lock;
   std::map<FlowKey, Flow*> _tp2flow_map;        // map from transport addresses to flow
   std::map<std::string, Flow*> _tk2flow_map;    // map from token to flow
+  std::map<pjsip_transport*, Flow*> _tc2flow_map;    // map from token to flow
 
   // Statistics
   void report_flow_count();
   Statistic _statistic;
   bool _quiescing;
   QuiescingManager* _qm;
-
 };
 
 #endif
