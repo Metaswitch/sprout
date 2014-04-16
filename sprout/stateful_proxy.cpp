@@ -896,7 +896,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   {
     // Use request URI unchanged.
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
-  } 
+  }
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
@@ -1555,24 +1555,18 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       {
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
-          // Split the route into a host and (optional) port.
-          int port = 0;
-          std::vector<std::string> bgcf_route_elems;
-          Utils::split_string(*ii, ':', bgcf_route_elems, 2, true);
+          pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
 
-          if (bgcf_route_elems.size() > 1)
+          if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
-            port = atoi(bgcf_route_elems[1].c_str());
+            target.paths.push_back(route_uri);
           }
-
-          // BGCF configuration has a route to this destination, so translate to
-          // a URI.
-          pjsip_sip_uri* route_uri = pjsip_sip_uri_create(pool, false);
-          pj_strdup2(pool, &route_uri->host, bgcf_route_elems[0].c_str());
-          route_uri->port = port;
-          route_uri->transport_param = pj_str("TCP");
-          route_uri->lr_param = 1;
-          target.paths.push_back((pjsip_uri*)route_uri);
+          else
+          {
+            // One of the routes is an invalid SIP URI. Stop processing the entry
+            // and clear the target
+            target.paths.clear();
+          }
         }
 
         // We have added a BGCF generated route to the request, so we should

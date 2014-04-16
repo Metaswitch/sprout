@@ -1,8 +1,12 @@
 {
     "routes" : [
-        {   "name" : "Alameda PBX",
-            "domain" : "198.147.226.2",
-            "route" : "ec2-54-243-253-10.compute-1.amazonaws.com"
+        {   "name" : "Valid SIP URI with port and transport",
+            "domain" : "domainvalid",
+            "route" : ["sip:10.0.0.1:5060;transport=TCP"]
+        },
+        {   "name" : "Route includes an invalid SIP URI",
+            "domain" : "domainnotasipuri",
+            "route" : ["sip:10.0.0.1:5060","10.0.0.1:5060"]
         }
     ]
 }
