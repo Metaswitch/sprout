@@ -1604,6 +1604,28 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
+TEST_F(StatefulProxyTest, TestValidBGCFRoute)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainvalid";
+  add_host_mapping("domainvalid", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*10.0.0.1.*"), hdrs);
+}
+
+TEST_F(StatefulProxyTest, TestInvalidBGCFRoute)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipuri";
+  add_host_mapping("domainnotasipuri", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*bgcf@domainnotasipuri.*"), hdrs);
+}
+
 /// Test a forked flow - setup phase.
 void StatefulProxyTest::setupForkedFlow(SP::Message& msg)
 {
