@@ -96,6 +96,10 @@ static HSSConnection* hss;
 
 static ChronosConnection* chronos;
 
+// Factory for creating ACR messages for Rf billing.
+static ACRFactory* acr_factory;
+
+
 // AV store used to store Authentication Vectors while waiting for the
 // client to respond to a challenge.
 static AvStore* av_store;
@@ -574,6 +578,12 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
+  // Create an ACR for the message and pass the request to it.
+  ACR* acr = acr_factory->get_acr(trail, CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
+  pjsip_tx_data* tdata;
+
   if ((status == PJSIP_EAUTHNOAUTH) ||
       (status == PJSIP_EAUTHACCNOTFOUND))
   {
@@ -582,24 +592,20 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // challenge.
     LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
 
-    pjsip_tx_data* tdata;
     sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
+
     if (status != PJ_SUCCESS)
     {
-      LOG_ERROR("Error building challenge response, %s",           // LCOV_EXCL_LINE
-                PJUtils::pj_status_to_string(status).c_str());     // LCOV_EXCL_LINE
-      PJUtils::respond_stateless(stack_data.endpt,                 // LCOV_EXCL_LINE
-                                 rdata,                            // LCOV_EXCL_LINE
-                                 PJSIP_SC_INTERNAL_SERVER_ERROR,   // LCOV_EXCL_LINE
-                                 NULL,                             // LCOV_EXCL_LINE
-                                 NULL,                             // LCOV_EXCL_LINE
-                                 NULL);                            // LCOV_EXCL_LINE
-      return PJ_TRUE;                                              // LCOV_EXCL_LINE
+      // Failed to create a response.  This really shouldn't happen, but there
+      // is nothing else we can do.
+      // LCOV_EXCL_START
+      delete acr;
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
     }
 
     create_challenge(auth_hdr, resync, rdata, tdata);
-    status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
   }
   else
   {
@@ -633,14 +639,25 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // @TODO - need more diagnostics here so we can identify and flag
     // attacks.
 
-    // Reject the request.
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               sc,
-                               NULL,
-                               NULL,
-                               NULL);
+    status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // Failed to create a response.  This really shouldn't happen, but there
+      // is nothing else we can do.
+      // LCOV_EXCL_START
+      delete acr;
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
   }
+
+  acr->tx_response(tdata->msg);
+
+  status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  // Send the ACR.
+  acr->send_message();
+  delete acr;
 
   return PJ_TRUE;
 }
@@ -650,6 +667,7 @@ pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,
                                 HSSConnection* hss_connection,
                                 ChronosConnection* chronos_connection,
+                                ACRFactory* rfacr_factory,
                                 AnalyticsLogger* analytics_logger)
 {
   pj_status_t status;
@@ -658,6 +676,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   av_store = avstore;
   hss = hss_connection;
   chronos = chronos_connection;
+  acr_factory = rfacr_factory;
   analytics = analytics_logger;
 
   // Register the authentication module.  This needs to be in the stack

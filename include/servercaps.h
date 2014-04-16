@@ -1,8 +1,13 @@
 /**
- * @file registrar.h Initialization/termination functions for Sprout's Registrar module
+ * @file servercaps.h  Server Capabilities as returned by HSS.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
+ *
+ * Parts of this module were derived from GPL licensed PJSIP sample code
+ * with the following copyrights.
+ *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
+ *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,35 +39,23 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef __SERVERCAPS_H__
+#define __SERVERCAPS_H__
 
-#ifndef REGISTRAR_H__
-#define REGISTRAR_H__
+#include <string>
+#include <vector>
 
-extern "C" {
-#include <pjsip.h>
-}
+/// Structure storing server capabilities as returned by the HSS
+struct ServerCapabilities
+{
+  /// The S-CSCF returned by the HSS.
+  std::string scscf;
 
-#include "regstore.h"
-#include "hssconnection.h"
-#include "chronosconnection.h"
-#include "analyticslogger.h"
-#include "ifchandler.h"
-#include "acr.h"
+  /// The list of mandatory capabilities returned by the HSS.
+  std::vector<int> mandatory_caps;
 
-extern pjsip_module mod_registrar;
-
-void third_party_register_failed(const std::string& public_id,
-                                 SAS::TrailId trail);
-
-extern pj_status_t init_registrar(RegStore* registrar_store,
-                                  RegStore* remote_reg_store,
-                                  HSSConnection* hss_connection,
-                                  AnalyticsLogger* analytics_logger,
-                                  ACRFactory* rfacr_factory,
-                                  IfcHandler* ifchandler_ref,
-                                  int cfg_max_expires);
-
-
-extern void destroy_registrar();
+  /// The list of optional capabilities returned by the HSS.
+  std::vector<int> optional_caps;
+};
 
 #endif

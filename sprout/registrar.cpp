@@ -60,6 +60,7 @@ extern "C" {
 #include "registrar.h"
 #include "registration_utils.h"
 #include "constants.h"
+#include "custom_headers.h"
 #include "log.h"
 #include "notify_utils.h"
 
@@ -68,6 +69,10 @@ static RegStore* remote_store;
 
 // Connection to the HSS service for retrieving associated public URIs.
 static HSSConnection* hss;
+
+// Factory for create ACR messages for Rf billing flows.
+static ACRFactory* acr_factory;
+
 static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
@@ -463,6 +468,10 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  // Allocate an ACR for this transaction and pass the request to it.
+  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+
   // Canonicalize the public ID from the URI in the To header.
   std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
@@ -549,6 +558,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     return;
   }
 
@@ -621,6 +631,7 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL,
                                NULL);
+    delete acr;
     delete aor_data;
     return;
     // LCOV_EXCL_STOP
@@ -638,6 +649,7 @@ void process_register_request(pjsip_rx_data* rdata)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
+    delete acr;
     delete aor_data;
     return;
     // LCOV_EXCL_STOP
@@ -661,6 +673,7 @@ void process_register_request(pjsip_rx_data* rdata)
 
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+    delete acr;
     delete aor_data;
     return;
     // LCOV_EXCL_STOP
@@ -763,22 +776,27 @@ void process_register_request(pjsip_rx_data* rdata)
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
 
   // Add P-Associated-URI headers for all of the associated URIs.
-  static const pj_str_t p_associated_uri_hdr_name = pj_str("P-Associated-URI");
-  for (std::vector<std::string>::iterator it = uris.begin(); it != uris.end(); it++)
+  for (std::vector<std::string>::iterator it = uris.begin();
+       it != uris.end();
+       it++)
   {
-    pj_str_t tmp_associated_uri;
-    const pj_str_t* associated_uri = pj_cstr(&tmp_associated_uri, it->c_str());
-    pjsip_hdr* associated_uri_hdr =
-      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
-                                                  &p_associated_uri_hdr_name,
-                                                  associated_uri);
-    pjsip_msg_add_hdr(tdata->msg, associated_uri_hdr);
+    pjsip_routing_hdr* pau =
+                        identity_hdr_create(tdata->pool, STR_P_ASSOCIATED_URI);
+    pau->name_addr.uri = PJUtils::uri_from_string(*it, tdata->pool);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pau);
   }
+
+  // Pass the response to the ACR.
+  acr->tx_response(tdata->msg);
 
   // Send the response, but prevent the transmitted data from being freed, as we may need to inform the
   // ASes of the 200 OK response we sent.
   pjsip_tx_data_add_ref(tdata);
   status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
+
+  // Send the ACR and delete it.
+  acr->send_message();
+  delete acr;
 
   // TODO in sto397: we should do third-party registration once per
   // service profile (i.e. once per iFC, using an arbitrary public
@@ -857,6 +875,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            RegStore* remote_reg_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
+                           ACRFactory* rfacr_factory,
                            IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
@@ -868,6 +887,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
   analytics = analytics_logger;
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
+  acr_factory = rfacr_factory;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

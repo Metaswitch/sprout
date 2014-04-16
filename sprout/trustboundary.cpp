@@ -99,13 +99,27 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
   }
 }
 
-TrustBoundary::TrustBoundary(std::string description, pj_bool_t strip_request,
-                             pj_bool_t strip_response, pj_bool_t add_p_charging) :
+TrustBoundary::TrustBoundary(std::string description,
+                             pj_bool_t strip_request,
+                             pj_bool_t strip_response,
+                             pj_bool_t strip_p_charging,
+                             pj_bool_t add_p_charging,
+                             pj_bool_t add_p_charging_rsp) :
   _strip_request(strip_request),
   _strip_response(strip_response),
+  _strip_p_charging(strip_p_charging),
   _add_p_charging(add_p_charging),
+  _add_p_charging_rsp(add_p_charging_rsp),
   _description(description)
 {
+  if ((_add_p_charging && !_strip_p_charging) ||
+      (_add_p_charging_rsp && !_strip_request))
+  {
+    // LCOV_EXCL_START
+    LOG_ERROR("Trust boundary configured to add P-Charging headers without stripping existing ones, inconsistent configuration");
+    _strip_p_charging = PJ_TRUE;
+    // LCOV_EXCL_STOP
+  }
 }
 
 void TrustBoundary::process_request(pjsip_tx_data* tdata)
@@ -115,9 +129,11 @@ void TrustBoundary::process_request(pjsip_tx_data* tdata)
     proxy_strip_trusted(tdata);
   }
 
-  // Always strip the P-Charging headers
-  PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
-  PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
+  if (_strip_p_charging)
+  {
+    PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
+    PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
+  }
 
   if (_add_p_charging)
   {
@@ -132,9 +148,16 @@ void TrustBoundary::process_response(pjsip_tx_data* tdata)
     proxy_strip_trusted(tdata);
   }
 
-  // Always remove the P-Charging headers
-  PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
-  PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
+  if(_strip_p_charging)
+  {
+    PJUtils::remove_hdr(tdata->msg, &STR_P_C_V);
+    PJUtils::remove_hdr(tdata->msg, &STR_P_C_F_A);
+  }
+
+  if (_add_p_charging_rsp)
+  {
+    proxy_add_p_charging_header(tdata);
+  }
 }
 
 void TrustBoundary::process_stateless_message(pjsip_tx_data* tdata)
@@ -151,27 +174,27 @@ std::string TrustBoundary::to_string()
 }
 
 /// Trust boundary instance: no boundary;
-TrustBoundary TrustBoundary::TRUSTED("TRUSTED", false, false, false);
+TrustBoundary TrustBoundary::TRUSTED("TRUSTED", false, false, false, false, false);
 
 /// Trust boundary instance: from client to core.  Allow client to
 /// provide trusted data to the core, but don't allow it to see
 /// the core's internal data. I.e., strip from responses.
-TrustBoundary TrustBoundary::INBOUND_EDGE_CLIENT("INBOUND_EDGE_CLIENT", false, true, true);
+TrustBoundary TrustBoundary::INBOUND_EDGE_CLIENT("INBOUND_EDGE_CLIENT", false, true, true, true, false);
 
 /// Trust boundary instance: from core to client.  Allow client to
 /// provide trusted data to the core, but don't allow it to see
 /// the core's internal data. I.e., strip from requests.
-TrustBoundary TrustBoundary::OUTBOUND_EDGE_CLIENT("OUTBOUND_EDGE_CLIENT", true, false, false);
+TrustBoundary TrustBoundary::OUTBOUND_EDGE_CLIENT("OUTBOUND_EDGE_CLIENT", true, false, true, false, true);
 
 /// Trust boundary instance: edge processing, but we don't know which
 /// direction. Don't allow trusted data to pass in either direction.
-TrustBoundary TrustBoundary::UNKNOWN_EDGE_CLIENT("UNKNOWN_EDGE_CLIENT", true, true, false);
+TrustBoundary TrustBoundary::UNKNOWN_EDGE_CLIENT("UNKNOWN_EDGE_CLIENT", true, true, true, false, false);
 
 /// Trust boundary instance: from trunk to core.  Don't allow
 /// trusted data to pass in either direction.
-TrustBoundary TrustBoundary::INBOUND_TRUNK("INBOUND_TRUNK", true, true, true);
+TrustBoundary TrustBoundary::INBOUND_TRUNK("INBOUND_TRUNK", true, true, true, true, false);
 
 /// Trust boundary instance: from core to trunk.  Don't allow
 /// trusted data to pass in either direction.
-TrustBoundary TrustBoundary::OUTBOUND_TRUNK("OUTBOUND_TRUNK", true, true, false);
+TrustBoundary TrustBoundary::OUTBOUND_TRUNK("OUTBOUND_TRUNK", true, true, true, false, true);
 

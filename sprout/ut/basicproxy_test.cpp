@@ -195,17 +195,17 @@ private:
     }
 
   protected:
-    virtual int calculate_targets(pjsip_tx_data* tdata)
+    virtual int calculate_targets()
     {
       // Invoke the standard function first.
-      int status_code = BasicProxy::UASTsx::calculate_targets(tdata);
+      int status_code = BasicProxy::UASTsx::calculate_targets();
 
       if (status_code == PJSIP_SC_NOT_FOUND)
       {
         // No targets set up by default function, so see if any have been
         // manually configured in the test case
         LOG_DEBUG("Check for test targets");
-        std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)tdata->msg->line.req.uri);
+        std::string aor = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
         std::list<BasicProxyUT::TestTarget> test_targets = ((BasicProxyUT*)_proxy)->find_test_targets(aor);
         LOG_DEBUG("Found %d targets for %s", test_targets.size(), aor.c_str());
 
@@ -216,13 +216,13 @@ private:
           BasicProxy::Target* target = new BasicProxy::Target;
           if (tt._uri != "")
           {
-            target->uri = PJUtils::uri_from_string(tt._uri, tdata->pool);
+            target->uri = PJUtils::uri_from_string(tt._uri, _req->pool);
           }
           for (std::list<std::string>::const_iterator i = tt._paths.begin();
                i != tt._paths.end();
                ++i)
           {
-            target->paths.push_back(PJUtils::uri_from_string(*i, tdata->pool));
+            target->paths.push_back(PJUtils::uri_from_string(*i, _req->pool));
           }
           if (tt._transport != NULL)
           {

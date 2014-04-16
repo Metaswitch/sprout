@@ -60,6 +60,7 @@ extern "C" {
 
 #include "logger.h"
 #include "utils.h"
+#include "sasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stack.h"
@@ -128,6 +129,7 @@ struct options
   std::string            chronos_service;
   std::string            store_servers;
   std::string            remote_store_servers;
+  std::string            ralf_server;
   std::string            enum_server;
   std::string            enum_suffix;
   std::string            enum_file;
@@ -171,6 +173,7 @@ struct options
     { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
+    { "ralf",              required_argument, 0, 'G'},
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
@@ -191,7 +194,7 @@ struct options
     { NULL,                0, 0, 0}
   };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
@@ -226,7 +229,7 @@ static void usage(void)
        "                            Comma-separated list of additional home domain names\n"
        " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
        " -n, --alias <names>        Optional list of alias host names\n"
-       " -r, --routing-proxy <name>[,<port>[,<connections>[:<recycle time>]]]\n"
+       " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
        "                            as the upstream routing proxy.  Optionally specifies the port,\n"
        "                            the number of parallel connections to create, and how\n"
@@ -260,6 +263,7 @@ static void usage(void)
        "                            of originating processing and initiation of terminating\n"
        "                            processing (i.e. when it receives or sends to an I-CSCF).\n"
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
+       " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
@@ -573,6 +577,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       LOG_INFO("Chronos service set to %s", pj_optarg);
       break;
 
+    case 'G':
+      options->ralf_server = std::string(pj_optarg);
+      fprintf(stdout, "Ralf server set to %s\n", pj_optarg);
+      break;
+
     case 'E':
       options->enum_server = std::string(pj_optarg);
       LOG_INFO("ENUM server set to %s", pj_optarg);
@@ -652,7 +661,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'B':
-      options->billing_cdf = atoi(pj_optarg);
+      options->billing_cdf = std::string(pj_optarg);
       LOG_INFO("Use %s as billing cdf server", options->billing_cdf.c_str());
       break;
 
@@ -873,6 +882,11 @@ int main(int argc, char *argv[])
   SCSCFSelector* scscf_selector = NULL;
   ICSCFProxy* icscf_proxy = NULL;
   ChronosConnection* chronos_connection = NULL;
+  HttpConnection* ralf_connection = NULL;
+  ACRFactory* scscf_acr_factory = NULL;
+  ACRFactory* bgcf_acr_factory = NULL;
+  ACRFactory* icscf_acr_factory = NULL;
+  ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
 
   // Set up our exception signal handler for asserts and segfaults.
@@ -1126,6 +1140,17 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  if (opt.ralf_server != "")
+  {
+    // Create HttpConnection pool for Ralf Rf billing interface.
+    ralf_connection = new HttpConnection(opt.ralf_server,
+                                         false,
+                                         "connected_ralfs",
+                                         load_monitor,
+                                         stack_data.stats_aggregator,
+                                         SASEvent::HttpLogLevel::PROTOCOL);
+  }
+
   // Initialise the OPTIONS handling module.
   status = init_options();
 
@@ -1136,6 +1161,36 @@ int main(int argc, char *argv[])
     hss_connection = new HSSConnection(opt.hss_server,
                                        load_monitor,
                                        stack_data.stats_aggregator);
+  }
+
+  if (ralf_connection != NULL)
+  {
+    // Rf billing is enabled, so create ACR factories.
+    if (opt.scscf_enabled)
+    {
+      // Create ACRFactory instances for the S-CSCF and BGCF.
+      scscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF);
+      bgcf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF);
+    }
+    if (opt.icscf_enabled)
+    {
+      // Create ACRFactory instance for the I-CSCF.
+      icscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, ICSCF);
+    }
+    if (opt.pcscf_enabled)
+    {
+      // Create ACRFactory instance for the P-CSCF.
+      pcscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF);
+    }
+  }
+  else
+  {
+    // Ralf is not enabled, so create a null ACRFactory for all components.
+    ACRFactory* null_acr_factory = new ACRFactory();
+    scscf_acr_factory = null_acr_factory;
+    bgcf_acr_factory = null_acr_factory;
+    icscf_acr_factory = null_acr_factory;
+    pcscf_acr_factory = null_acr_factory;
   }
 
   if (opt.chronos_service != "")
@@ -1207,7 +1262,12 @@ int main(int argc, char *argv[])
       // relevant challenge is sent.
       LOG_STATUS("Initialise S-CSCF authentication module");
       av_store = new AvStore(local_data_store);
-      status = init_authentication(opt.auth_realm, av_store, hss_connection, chronos_connection, analytics_logger);
+      status = init_authentication(opt.auth_realm,
+                                   av_store,
+                                   hss_connection,
+                                   chronos_connection,
+                                   scscf_acr_factory,
+                                   analytics_logger);
     }
 
     // Create Enum and BGCF services required for S-CSCF.
@@ -1226,6 +1286,7 @@ int main(int argc, char *argv[])
                             remote_reg_store,
                             hss_connection,
                             analytics_logger,
+                            scscf_acr_factory,
                             ifc_handler,
                             opt.reg_max_expires);
 
@@ -1239,6 +1300,7 @@ int main(int argc, char *argv[])
     status = init_subscription(local_reg_store,
                                remote_reg_store,
                                hss_connection,
+                               scscf_acr_factory,
                                analytics_logger);
 
     if (status != PJ_SUCCESS)
@@ -1263,6 +1325,9 @@ int main(int argc, char *argv[])
                                  enum_service,
                                  bgcf_service,
                                  hss_connection,
+                                 scscf_acr_factory,
+                                 bgcf_acr_factory,
+                                 icscf_acr_factory,
                                  opt.external_icscf_uri,
                                  quiescing_mgr,
                                  scscf_selector,
@@ -1292,6 +1357,9 @@ int main(int argc, char *argv[])
                                  opt.trusted_hosts,
                                  analytics_logger,
                                  NULL,
+                                 NULL,
+                                 NULL,
+                                 pcscf_acr_factory,
                                  NULL,
                                  NULL,
                                  "",
@@ -1326,6 +1394,7 @@ int main(int argc, char *argv[])
                                  stack_data.icscf_port,
                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                  hss_connection,
+                                 icscf_acr_factory,
                                  scscf_selector);
 
     if (icscf_proxy == NULL)
@@ -1413,6 +1482,8 @@ int main(int argc, char *argv[])
     delete enum_service;
     delete bgcf_service;
     delete chronos_connection;
+    delete scscf_acr_factory;
+    delete bgcf_acr_factory;
   }
   if (opt.pcscf_enabled)
   {
@@ -1421,11 +1492,13 @@ int main(int argc, char *argv[])
       destroy_websockets();
     }
     destroy_stateful_proxy();
+    delete pcscf_acr_factory;
   }
   if (opt.icscf_enabled)
   {
     delete icscf_proxy;
     delete scscf_selector;
+    delete icscf_acr_factory;
   }
   destroy_options();
   destroy_stack();
@@ -1437,6 +1510,7 @@ int main(int argc, char *argv[])
   delete av_store;
   delete local_data_store;
   delete remote_data_store;
+  delete ralf_connection;
 
   delete sip_resolver;
   delete dns_resolver;

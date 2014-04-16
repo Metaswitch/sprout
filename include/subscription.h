@@ -1,5 +1,5 @@
 /**
- * @file subscription.h 
+ * @file subscription.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -45,12 +45,14 @@ extern "C" {
 #include "regstore.h"
 #include "hssconnection.h"
 #include "analyticslogger.h"
+#include "acr.h"
 
 extern pjsip_module mod_subscription;
 
 extern pj_status_t init_subscription(RegStore* registrar_store,
                                      RegStore* remote_reg_store,
                                      HSSConnection* hss_connection,
+                                     ACRFactory* rfacr_factory,
                                      AnalyticsLogger* analytics_logger);
 
 extern void destroy_subscription();

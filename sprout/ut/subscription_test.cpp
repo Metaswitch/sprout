@@ -72,7 +72,8 @@ public:
     _hss_connection = new FakeHSSConnection();
     delete _analytics->_logger;
     _analytics->_logger = NULL;
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _analytics);
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
@@ -82,6 +83,7 @@ public:
   static void TearDownTestCase()
   {
     destroy_subscription();
+    delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics; _analytics = NULL;
     delete _remote_store; _remote_store = NULL;
@@ -110,6 +112,7 @@ protected:
   static RegStore* _store;
   static RegStore* _remote_store;
   static AnalyticsLogger* _analytics;
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static FakeChronosConnection* _chronos_connection;
 
@@ -122,6 +125,7 @@ LocalStore* SubscriptionTest::_remote_data_store;
 RegStore* SubscriptionTest::_store;
 RegStore* SubscriptionTest::_remote_store;
 AnalyticsLogger* SubscriptionTest::_analytics;
+ACRFactory* SubscriptionTest::_acr_factory;
 FakeHSSConnection* SubscriptionTest::_hss_connection;
 FakeChronosConnection* SubscriptionTest::_chronos_connection;
 
@@ -180,6 +184,8 @@ string SubscribeMessage::get()
                    "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
+                   "P-Charging-Vector: icid-value=100\r\n"
+                   "P-Charging-Function-Addresses: ccf=1.2.3.4; ecf=5.6.7.8\r\n"
                    "%10$s"
                    "%11$s"
                    "%12$s"
@@ -398,7 +404,8 @@ void SubscriptionTest::check_standard_OK()
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-
+  EXPECT_EQ("P-Charging-Vector: icid-value=100", get_headers(out, "P-Charging-Vector"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   inject_msg(respond_to_current_txdata(200));

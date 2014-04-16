@@ -73,11 +73,13 @@ public:
 
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
 
     _icscf_proxy = new ICSCFProxy(stack_data.endpt,
                                   stack_data.icscf_port,
                                   PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                   _hss_connection,
+                                  _acr_factory,
                                   _scscf_selector);
 
     // Schedule timers.
@@ -90,6 +92,7 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _icscf_proxy; _icscf_proxy = NULL;
+    delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
@@ -192,7 +195,7 @@ public:
       }
 
       string requri = target;
-      string route = _route.empty() ? "" : _route.append("\r\n");
+      string route = _route.empty() ? "" : _route + "\r\n";
 
       int n = snprintf(buf, sizeof(buf),
                        "%1$s %9$s SIP/2.0\r\n"
@@ -276,12 +279,14 @@ public:
 
 
 protected:
+  static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
   static ICSCFProxy* _icscf_proxy;
 
 };
 
+ACRFactory* ICSCFProxyTestBase::_acr_factory;
 FakeHSSConnection* ICSCFProxyTestBase::_hss_connection;
 SCSCFSelector* ICSCFProxyTestBase::_scscf_selector;
 ICSCFProxy* ICSCFProxyTestBase::_icscf_proxy;
@@ -2322,3 +2327,66 @@ TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
   _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
   delete tp; tp = NULL;
 }
+
+
+TEST_F(ICSCFProxyTest, RequestErrors)
+{
+  // Tests various errors on requests.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE request with a tel: RequestURI
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._from = "alice";
+  msg1._to = "+2425551234";
+  msg1._todomain = "";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Check the 416 Unsupported URI Scheme response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(416).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  // Inject an INVITE request with Max-Forwards <= 1.
+  Message msg2;
+  msg2._method = "INVITE";
+  msg2._requri = "sip:bob@awaydomain";
+  msg2._from = "alice";
+  msg2._to = "bob";
+  msg2._todomain = "awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg2._forwards = 1;
+  inject_msg(msg2.get_request(), tp);
+
+  // Check the 483 Too Many Hops response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(483).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg2._method = "ACK";
+  inject_msg(msg2.get_request(), tp);
+
+  delete tp;
+}
+
+
