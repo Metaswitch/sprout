@@ -408,6 +408,7 @@ void SubscriptionTest::check_standard_OK()
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  EXPECT_EQ("Event: reg", get_headers(out, "Event"));
   inject_msg(respond_to_current_txdata(200));
   //free_txdata();
 }
