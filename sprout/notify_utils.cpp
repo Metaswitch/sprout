@@ -383,7 +383,7 @@ pj_status_t NotifyUtils::create_notify(
 
     // Add the Event header
     pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
-    event_hdr->event_type = pj_str("reg");
+    event_hdr->event_type = STR_REG;
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
 
     // complete body
