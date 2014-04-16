@@ -38,6 +38,8 @@ extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include "pjsip-simple/evsub.h"
+#include <pjsip-simple/evsub_msg.h>
 }
 
 #include <string>
@@ -378,6 +380,11 @@ pj_status_t NotifyUtils::create_notify(
                                                          (*tdata_notify)->pool);
       pj_list_push_back( &(*tdata_notify)->msg->hdr, route_hdr);
     }
+
+    // Add the Event header
+    pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
+    event_hdr->event_type = STR_REG;
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
 
     // complete body
     pjsip_msg_body *body2;
