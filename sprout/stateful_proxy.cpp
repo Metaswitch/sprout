@@ -896,7 +896,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   {
     // Use request URI unchanged.
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
-  } 
+  }
 
   // Route upstream.
   pjsip_routing_hdr* route_hdr;
@@ -1555,11 +1555,11 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
       {
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
-          pjsip_sip_uri* route_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*ii, pool);
+          pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
 
           if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
-            target.paths.push_back((pjsip_uri*)route_uri);
+            target.paths.push_back(route_uri);
           }
           else
           {
