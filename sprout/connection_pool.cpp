@@ -344,7 +344,7 @@ void ConnectionPool::transport_state_update(pjsip_transport* tp, pjsip_transport
       if (_recycle_period > 0)
       {
         // Compute a TTL for the connection.  To avoid all the recycling being
-        // sychronized we set the TTL to the specified average recycle time
+        // synchronized we set the TTL to the specified average recycle time
         // perturbed by a random factor.
         int ttl = _recycle_period + (rand() % (2 * _recycle_margin)) - _recycle_margin;
         _tp_hash[hash_slot].recycle_time = time(NULL) + ttl;
