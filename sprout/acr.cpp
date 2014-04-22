@@ -584,7 +584,7 @@ void RalfACR::send_message(pj_time_val timestamp)
     // the request using the Ralf HTTP connection.
     LOG_VERBOSE("Sending %s Ralf ACR (%p)",
                 ACR::node_name(_node_functionality).c_str(), this);
-    std::string path = "/call-id/" + _user_session_id;
+    std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
     std::map<std::string, std::string> headers;
     long rc = _ralf->send_post(path,
                                headers,
