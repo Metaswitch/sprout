@@ -589,7 +589,7 @@ void RalfACR::send_message(pj_time_val timestamp)
 
   if (rc != HTTP_OK)
   {
-    LOG_ERROR("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
   }
 }
 
