@@ -79,6 +79,9 @@ static AnalyticsLogger* analytics;
 
 static int max_expires;
 
+// Pre-constructed Service Route header added to REGISTER responses.
+static pjsip_routing_hdr* service_route;
+
 //
 // mod_registrar is the module to receive SIP REGISTER requests.  This
 // must get invoked before the proxy UA module.
@@ -750,29 +753,9 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
-  // Construct a Service-Route header pointing at the domain.  We don't
-  // care which sprout handles the subsequent requests as they all have access
-  // to all subscriber information.
-  pjsip_sip_uri* service_route_uri = pjsip_sip_uri_create(tdata->pool, false);
-  pj_strdup(tdata->pool,
-            &service_route_uri->host,
-            &stack_data.sprout_cluster_domain);
-  service_route_uri->port = stack_data.scscf_port;
-  service_route_uri->transport_param = pj_str("TCP");
-  service_route_uri->lr_param = 1;
-
-  // Add the orig parameter.  The UE must provide this back on future messages
-  // to ensure we perform originating processing.
-  pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-  pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
-  pj_strdup2(tdata->pool, &orig_param->value, "");
-  pj_list_insert_after(&service_route_uri->other_param, orig_param);
-
-  pjsip_route_hdr* service_route = pjsip_route_hdr_create(tdata->pool);
-  service_route->name = STR_SERVICE_ROUTE;
-  service_route->sname = pj_str("");
-  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
-
+  // Add the Service-Route header.  It is safe to use the header constructed
+  // from the global pool as that pool isn't destroyed until PJSIP has been
+  // stopped.
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
 
   // Add P-Associated-URI headers for all of the associated URIs.
@@ -888,6 +871,27 @@ pj_status_t init_registrar(RegStore* registrar_store,
   ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
+
+  // Construct a Service-Route header pointing at the S-CSCF ready to be added
+  // to REGISTER 200 OK response.
+  pjsip_sip_uri* service_route_uri = (pjsip_sip_uri*)
+                        pjsip_parse_uri(stack_data.pool,
+                                        stack_data.scscf_uri.ptr,
+                                        stack_data.scscf_uri.slen,
+                                        0);
+  service_route_uri->lr_param = 1;
+
+  // Add the orig parameter.  The UE must provide this back on future messages
+  // to ensure we perform originating processing.
+  pjsip_param *orig_param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
+  pj_strdup(stack_data.pool, &orig_param->name, &STR_ORIG);
+  pj_strdup2(stack_data.pool, &orig_param->value, "");
+  pj_list_insert_after(&service_route_uri->other_param, orig_param);
+
+  service_route = pjsip_route_hdr_create(stack_data.pool);
+  service_route->name = STR_SERVICE_ROUTE;
+  service_route->sname = pj_str("");
+  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

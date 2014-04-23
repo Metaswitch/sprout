@@ -117,14 +117,14 @@ void SipTest::SetUpTestCase(bool clear_host_mapping)
   stack_data.public_host = pj_str("127.0.0.1");
   stack_data.home_domains.insert("homedomain");
   stack_data.default_home_domain = pj_str("homedomain");
-  stack_data.sprout_cluster_domain = pj_str("sprout.homedomain");
+  stack_data.scscf_uri = pj_str("sip:sprout.homedomain:5058;transport=TCP");
   stack_data.cdf_domain = pj_str("cdfdomain");
   stack_data.name_cnt = 0;
   stack_data.name[stack_data.name_cnt] = stack_data.local_host;
   stack_data.name_cnt++;
   stack_data.name[stack_data.name_cnt] = stack_data.public_host;
   stack_data.name_cnt++;
-  stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
+  stack_data.name[stack_data.name_cnt] = pj_str("sprout.homedomain");
   stack_data.name_cnt++;
   stack_data.record_route_on_initiation_of_originating = true;
   stack_data.record_route_on_completion_of_terminating = true;

@@ -116,7 +116,7 @@ struct options
   std::string            public_host;
   std::string            home_domain;
   std::string            additional_home_domains;
-  std::string            sprout_domain;
+  std::string            scscf_uri;
   std::string            alias_hosts;
   std::string            trusted_hosts;
   pj_bool_t              auth_enabled;
@@ -227,7 +227,11 @@ static void usage(void)
        " -D, --domain <name>        Override the home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -c, --sprout-domain <name> Override the sprout cluster domain name\n"
+       " -c, --scscf-uri <name>     Override the Sprout S-CSCF cluster domain URI.  This URI\n"
+       "                            must route requests to the S-CSCF port on the Sprout\n"
+       "                            cluster, either by specifying the port explicitly or\n"
+       "                            using DNS SRV records to specify the port.  (If not\n"
+       "                            specified this defaults to sip:<localhost>:<scscf port>;transport=TCP)\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
@@ -483,8 +487,8 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'c':
-      options->sprout_domain = std::string(pj_optarg);
-      LOG_INFO("Override sprout cluster domain set to %s", pj_optarg);
+      options->scscf_uri = std::string(pj_optarg);
+      LOG_INFO("Override sprout cluster URI set to %s", pj_optarg);
       break;
 
     case 'n':
@@ -1123,7 +1127,7 @@ int main(int argc, char *argv[])
                       opt.public_host,
                       opt.home_domain,
                       opt.additional_home_domains,
-                      opt.sprout_domain,
+                      opt.scscf_uri,
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,

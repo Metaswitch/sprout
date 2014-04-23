@@ -118,10 +118,6 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
     pjsip_tx_data *tdata;
 
-    std::string sprout_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.sprout_cluster_domain),
-                                                        pj_strlen(&stack_data.sprout_cluster_domain))+">";
-    const pj_str_t sprout_uri = pj_str(const_cast<char *>(sprout_uri_string.c_str()));
-
     std::string served_user_uri_string = "<"+served_user+">";
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
 
@@ -133,7 +129,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     status = pjsip_endpt_create_request(stack_data.endpt,
                                &method,       // Method
-                               &sprout_uri,     // Target
+                               &stack_data.scscf_uri, // Target
                                &served_user_uri,      // From
                                &served_user_uri,      // To
                                &served_user_uri,      // Contact
@@ -195,18 +191,15 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   pj_str_t user_uri;
   pj_cstr(&user_uri, served_user.c_str());
-  std::string scscf_uri_string = "<sip:" + PJUtils::pj_str_to_string(&stack_data.sprout_cluster_domain) + ":" + boost::lexical_cast<std::string>(stack_data.scscf_port) + ">";
-  pj_str_t scscf_uri;
-  pj_cstr(&scscf_uri, scscf_uri_string.c_str());
   pj_str_t as_uri;
   pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
                                       &method,      // Method
                                       &as_uri,      // Target
-                                      &scscf_uri,   // From
+                                      &stack_data.scscf_uri,   // From
                                       &user_uri,    // To
-                                      &scscf_uri,   // Contact
+                                      &stack_data.scscf_uri,   // Contact
                                       NULL,         // Auto-generate Call-ID
                                       1,            // CSeq
                                       NULL,         // No body

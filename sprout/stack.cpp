@@ -782,7 +782,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& public_host,
                        const std::string& home_domain,
                        const std::string& additional_home_domains,
-                       const std::string& sprout_cluster_domain,
+                       const std::string& scscf_uri,
                        const std::string& alias_hosts,
                        SIPResolver* sipresolver,
                        int num_pjsip_threads,
@@ -810,7 +810,18 @@ pj_status_t init_stack(const std::string& system_name,
   char* local_host_cstr = strdup(local_host.c_str());
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());
-  char* sprout_cluster_domain_cstr = strdup(sprout_cluster_domain.c_str());
+  char* scscf_uri_cstr;
+  if (scscf_uri.empty())
+  {
+    // Create a default S-CSCF URI using the localhost and S-CSCF port.
+    std::string tmp_scscf_uri = "sip:" + local_host + ":" + std::to_string(scscf_port) + ";transport=TCP";
+    scscf_uri_cstr = strdup(tmp_scscf_uri.c_str());
+  }
+  else
+  {
+    // Use the specified URI.
+    scscf_uri_cstr = strdup(scscf_uri.c_str());
+  }
 
   // This is only set on Bono nodes (it's the empty string otherwise)
   char* cdf_domain_cstr = strdup(cdf_domain.c_str());
@@ -830,7 +841,7 @@ pj_status_t init_stack(const std::string& system_name,
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();
   stack_data.public_host = (public_host != "") ? pj_str(public_host_cstr) : stack_data.local_host;
   stack_data.default_home_domain = (home_domain != "") ? pj_str(home_domain_cstr) : stack_data.local_host;
-  stack_data.sprout_cluster_domain = (sprout_cluster_domain != "") ? pj_str(sprout_cluster_domain_cstr) : stack_data.local_host;
+  stack_data.scscf_uri = pj_str(scscf_uri_cstr);
   stack_data.cdf_domain = pj_str(cdf_domain_cstr);
 
   // Build a set of home domains
@@ -960,11 +971,17 @@ pj_status_t init_stack(const std::string& system_name,
     stack_data.name_cnt++;
   }
 
-  if ((scscf_port != 0) || (icscf_port != 0))
+  if ((scscf_port != 0) &&
+      (!scscf_uri.empty()))
   {
-    // S/I-CSCF enabled, so add sprout cluster domain name to hostnames.
-    stack_data.name[stack_data.name_cnt] = stack_data.sprout_cluster_domain;
-    stack_data.name_cnt++;
+    // S-CSCF enabled with a specified URI, so add host name from the URI to hostnames.
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(scscf_uri,
+                                                                  stack_data.pool);
+    if (uri != NULL)
+    {
+      stack_data.name[stack_data.name_cnt] = uri->host;
+      stack_data.name_cnt++;
+    }
   }
 
   if (pj_gethostip(pj_AF_INET(), &pri_addr) == PJ_SUCCESS)

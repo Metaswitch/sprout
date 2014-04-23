@@ -160,6 +160,13 @@ static bool ibcf = false;
 static bool icscf = false;
 static bool scscf = false;
 
+// Pre-built Record-Route header added to requests handled by the S-CSCF.
+static pjsip_rr_hdr* scscf_rr;
+
+// S-CSCF domain name.
+static pj_str_t scscf_domain_name;
+
+
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 
 //
@@ -799,7 +806,19 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
 
 void UASTransaction::routing_proxy_record_route()
 {
-  PJUtils::add_record_route(_req, "TCP", stack_data.scscf_port, NULL, stack_data.sprout_cluster_domain);
+  pjsip_rr_hdr* top_rr = (pjsip_rr_hdr*)
+                   pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
+
+  if ((top_rr == NULL) ||
+      (pjsip_uri_cmp(PJSIP_URI_IN_ROUTING_HDR,
+                     top_rr->name_addr.uri,
+                     scscf_rr->name_addr.uri) != PJ_SUCCESS))
+  {
+    // The S-CSCF URI is not in the top Record-Route header, so add the
+    // pre-built header.  It is safe to do this using the header built in the
+    // global pool as that isn't freed until PJSIP is terminated.
+    pjsip_msg_insert_first_hdr(_req->msg, (pjsip_hdr*)scscf_rr);
+  }
 }
 
 /// Checks for double Record-Routing and removes superfluous Route header to
@@ -2253,7 +2272,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
                                                         public_id,
                                                         false);
 
-        pjsip_uri* scscf_uri = NULL;
+        pjsip_sip_uri* scscf_uri = NULL;
         int status_code;
 
         if (_icscf_router != NULL)
@@ -2264,7 +2283,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
           if (status_code == PJSIP_SC_OK)
           {
-            scscf_uri = PJUtils::uri_from_string(server_name, _req->pool, PJ_FALSE);
+            scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(server_name,
+                                                                 _req->pool,
+                                                                 PJ_FALSE);
             if ((scscf_uri == NULL) ||
                 (!PJSIP_URI_SCHEME_IS_SIP(scscf_uri)))
             {
@@ -2301,10 +2322,11 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
 
-        pj_str_t host_from_uri = ((pjsip_sip_uri*)scscf_uri)->host;
-
-        // Check whether the returned S-CSCF is this S-CSCF.
-        if (pj_stricmp(&host_from_uri, &stack_data.sprout_cluster_domain)==0)
+        // Check whether the returned S-CSCF is this S-CSCF.  Check the host
+        // name and the port returned on the LIR, but ignore transport and
+        // other URI parameters.
+        if ((pj_stricmp(&scscf_uri->host, &scscf_domain_name) == 0) &&
+            (scscf_uri->port == stack_data.scscf_port))
         {
           // The terminating user is on this S-CSCF, so continue processing
           // locally by switching to the terminating AS chain.
@@ -2338,8 +2360,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           delete target;
           target = new Target;
 
-          ((pjsip_sip_uri*)scscf_uri)->lr_param = 1;
-          target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, scscf_uri));
+          scscf_uri->lr_param = 1;
+          target->paths.push_back((pjsip_uri*)
+                           pjsip_uri_clone(_req->pool, (pjsip_uri*)scscf_uri));
 
           // The Request-URI should remain unchanged
           target->uri = _req->msg->line.req.uri;
@@ -4231,8 +4254,21 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   }
   else
   {
-    // Routing proxy (Sprout).
+    // Routing proxy (Sprout - S-CSCF and I-CSCF).
     as_chain_table = new AsChainTable;
+
+    // Build a Record-Route header with the S-CSCF URI
+    scscf_rr = pjsip_rr_hdr_create(stack_data.pool);
+    scscf_rr->name_addr.uri = (pjsip_uri*)pjsip_parse_uri(stack_data.pool,
+                                                          stack_data.scscf_uri.ptr,
+                                                          stack_data.scscf_uri.slen,
+                                                          0);
+    ((pjsip_sip_uri*)scscf_rr->name_addr.uri)->lr_param = PJ_TRUE;
+
+    // Extract the S-CSCF domain name which is used to determine whether
+    // the S-CSCF name returned in an I-CSCF LIR is targeted at this Sprout
+    // cluster.
+    scscf_domain_name = ((pjsip_sip_uri*)scscf_rr->name_addr.uri)->host;
   }
 
   enum_service = enumService;
