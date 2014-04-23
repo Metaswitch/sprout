@@ -121,13 +121,14 @@ TEST_F(CustomHeadersTest, PChargingVector)
     written = hdr->vptr->print_on(hdr, buf, i);
     i++;
   }
-  EXPECT_EQ(written, 138);
-  EXPECT_STREQ("P-Charging-Vector: icid-value=4815162542;orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
+  EXPECT_EQ(written, 140);
+  EXPECT_STREQ("P-Charging-Vector: icid-value=\"4815162542\";orig-ioi=homedomain;term-ioi=remotedomain;icid-generated-at=edge.proxy.net;other-param=test-value", buf);
 }
 
 TEST_F(CustomHeadersTest, PChargingVectorQuotedIcidValue)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+
              "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
              "Max-Forwards: 63\n"
              "From: <sip:6505551234@homedomain>;tag=1234\n"
@@ -139,6 +140,7 @@ TEST_F(CustomHeadersTest, PChargingVectorQuotedIcidValue)
              "Content-Length: 0\n\n");
 
   pjsip_rx_data* rdata = build_rxdata(str);
+
   parse_rxdata(rdata);
 
   pj_str_t header_name = pj_str("P-Charging-Vector");
@@ -147,16 +149,16 @@ TEST_F(CustomHeadersTest, PChargingVectorQuotedIcidValue)
                                                           NULL);
   EXPECT_NE(hdr, (pjsip_hdr*)NULL);
 
-  // We have a P-CV header, check it was filled out correctly and the quotes weren't stripped
+  // We have a P-CV header, check it was filled out correctly and the quotes were stripped
   pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)hdr;
 
-  EXPECT_PJEQ(pcv->icid, "\"4815162542\"");
+  EXPECT_PJEQ(pcv->icid, "4815162542");
   EXPECT_PJEQ(pcv->orig_ioi, "homedomain");
   EXPECT_PJEQ(pcv->term_ioi, "remotedomain");
   EXPECT_PJEQ(pcv->icid_gen_addr, "edge.proxy.net");
   EXPECT_EQ(1u, pj_list_size(&pcv->other_param));
 
-  // Test the icid-value keeps its quotes after printing.
+  // Test the icid-value has its quotes replaced after printing.
   char buf[1024];
   hdr = (pjsip_hdr*)pcv;
   int written = hdr->vptr->print_on(hdr, buf, 0);
