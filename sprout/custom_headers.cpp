@@ -345,8 +345,7 @@ pjsip_hdr* parse_hdr_p_associated_uri(pjsip_parse_ctx *ctx)
     {
       pj_scan_get_char(scanner);    // Consume ;
       pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
-      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value,
-                            PJSIP_PARSE_REMOVE_QUOTE);
+      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
       pj_list_insert_before(&hdr->other_param, p);
     }
 
