@@ -100,7 +100,7 @@ pjsip_hdr* parse_hdr_session_expires(pjsip_parse_ctx* ctx)
   pj_scanner* scanner = ctx->scanner;
   pjsip_session_expires_hdr* hdr = pjsip_session_expires_hdr_create(pool);
   const pjsip_parser_const_t* pc = pjsip_parser_const();
-  
+
   // Parse the expiry number
   pj_str_t int_str;
   pj_scan_get(scanner, &pc->pjsip_DIGIT_SPEC, &int_str);
@@ -194,7 +194,7 @@ int pjsip_session_expires_hdr_print_on(void* h, char* buf, pj_size_t len)
     {
       return -1;
     }
-    
+
     // Fill it in
     *p++ = ';';
     pj_memcpy(p, "refresher=", 10);
@@ -493,6 +493,7 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   // Parse the required icid-value parameter first.
   pjsip_parse_param_imp(scanner, pool, &name, &value,
                         PJSIP_PARSE_REMOVE_QUOTE);
+
   if (!pj_stricmp2(&name, "icid-value")) {
     hdr->icid = value;
   } else {
@@ -607,7 +608,8 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   int needed = 0;
   needed += hdr->name.slen; // Header name
   needed += 2;              // : and space
-  needed += 11;              // icid-value=
+  needed += 11;             // icid-value=
+  needed += 2;              // Quote the icid-value
   needed += hdr->icid.slen; // <icid>
   needed += 1;              // ;
   if (hdr->orig_ioi.slen) {
@@ -636,8 +638,10 @@ int pjsip_p_c_v_hdr_print_on(void* h, char* buf, pj_size_t len)
   *p++ = ' ';
   pj_memcpy(p, "icid-value=", 11);
   p += 11;
+  *p++ = '"';
   pj_memcpy(p, hdr->icid.ptr, hdr->icid.slen);
   p += hdr->icid.slen;
+  *p++ = '"';
   if (hdr->orig_ioi.slen) {
     *p++ = ';';
     pj_memcpy(p, "orig-ioi=", 9);
