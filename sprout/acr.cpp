@@ -577,8 +577,7 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
-  // We have at least one valid destination CCF or ECF, so encode and send
-  // the request using the Ralf HTTP connection.
+  // Encode and send the request using the Ralf HTTP connection.
   LOG_VERBOSE("Sending %s Ralf ACR (%p)",
               ACR::node_name(_node_functionality).c_str(), this);
   std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
