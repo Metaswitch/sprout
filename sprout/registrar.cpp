@@ -753,10 +753,13 @@ void process_register_request(pjsip_rx_data* rdata)
     path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
-  // Add the Service-Route header.  It is safe to use the header constructed
-  // from the global pool as that pool isn't destroyed until PJSIP has been
-  // stopped.
-  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)service_route);
+  // Add the Service-Route header.  It isn't safe to do this with the
+  // pre-built header from the global pool because the chaining data
+  // structures in the header may get overwritten, but it is safe to do a
+  // shallow clone.
+  pjsip_hdr* clone = (pjsip_hdr*)
+                          pjsip_hdr_shallow_clone(tdata->pool, service_route);
+  pjsip_msg_insert_first_hdr(tdata->msg, clone);
 
   // Add P-Associated-URI headers for all of the associated URIs.
   for (std::vector<std::string>::iterator it = uris.begin();

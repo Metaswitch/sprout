@@ -815,9 +815,11 @@ void UASTransaction::routing_proxy_record_route()
                      scscf_rr->name_addr.uri) != PJ_SUCCESS))
   {
     // The S-CSCF URI is not in the top Record-Route header, so add the
-    // pre-built header.  It is safe to do this using the header built in the
-    // global pool as that isn't freed until PJSIP is terminated.
-    pjsip_msg_insert_first_hdr(_req->msg, (pjsip_hdr*)scscf_rr);
+    // pre-built header.  It is not safe to do this with the pre-built header
+    // from the global pool because the chaining data structures in the
+    // header may get overwritten, but it is safe to do a shallow clone.
+    pjsip_hdr* clone = (pjsip_hdr*)pjsip_hdr_shallow_clone(_req->pool, scscf_rr);
+    pjsip_msg_insert_first_hdr(_req->msg, clone);
   }
 }
 
@@ -2029,7 +2031,7 @@ UASTransaction::~UASTransaction()
 
   if (_req != NULL)
   {
-    LOG_DEBUG("Free original request");
+    LOG_DEBUG("Free original request (%p)", _req);
     pjsip_tx_data_dec_ref(_req);
     _req = NULL;
   }
