@@ -158,7 +158,7 @@ struct options
     { "localhost",         required_argument, 0, 'l'},
     { "domain",            required_argument, 0, 'D'},
     { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-    { "sprout-domain",     required_argument, 0, 'c'},
+    { "scscf_uri",         required_argument, 0, 'c'},
     { "alias",             required_argument, 0, 'n'},
     { "routing-proxy",     required_argument, 0, 'r'},
     { "ibcf",              required_argument, 0, 'I'},
