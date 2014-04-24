@@ -112,67 +112,71 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
 
   LOG_DEBUG("Statelessly forwarding late response");
 
-  // Create response to be forwarded upstream (Via will be stripped here)
-  status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  // Only forward responses to INVITES
+  if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
   {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
-    // LCOV_EXCL_STOP
-  }
+    // Create response to be forwarded upstream (Via will be stripped here)
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
 
-  // Get topmost Via header
-  hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
-  if (hvia == NULL)
-  {
-    // Invalid response! Just drop it
-    pjsip_tx_data_dec_ref(tdata);
-    return PJ_TRUE;
-  }
+    // Get topmost Via header
+    hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+    if (hvia == NULL)
+    {
+      // Invalid response! Just drop it
+      pjsip_tx_data_dec_ref(tdata);
+      return PJ_TRUE;
+    }
 
-  // Calculate the address to forward the response
-  pj_bzero(&res_addr, sizeof(res_addr));
-  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
-  res_addr.dst_host.flag =
+    // Calculate the address to forward the response
+    pj_bzero(&res_addr, sizeof(res_addr));
+    res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
+    res_addr.dst_host.flag =
                      pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
-  // Destination address is Via's received param
-  res_addr.dst_host.addr.host = hvia->recvd_param;
-  if (res_addr.dst_host.addr.host.slen == 0)
-  {
-    // Someone has messed up our Via header!
-    res_addr.dst_host.addr.host = hvia->sent_by.host;
-  }
+    // Destination address is Via's received param
+    res_addr.dst_host.addr.host = hvia->recvd_param;
+    if (res_addr.dst_host.addr.host.slen == 0)
+    {
+      // Someone has messed up our Via header!
+      res_addr.dst_host.addr.host = hvia->sent_by.host;
+    }
 
-  // Destination port is the rport
-  if (hvia->rport_param != 0 && hvia->rport_param != -1)
-  {
-    res_addr.dst_host.addr.port = hvia->rport_param;
-  }
+    // Destination port is the rport
+    if (hvia->rport_param != 0 && hvia->rport_param != -1)
+    {
+      res_addr.dst_host.addr.port = hvia->rport_param;
+    }
 
-  if (res_addr.dst_host.addr.port == 0)
-  {
-    // Ugh, original sender didn't put rport!
-    // At best, can only send the response to the port in Via.
-    res_addr.dst_host.addr.port = hvia->sent_by.port;
-  }
+    if (res_addr.dst_host.addr.port == 0)
+    {
+      // Ugh, original sender didn't put rport!
+      // At best, can only send the response to the port in Via.
+      res_addr.dst_host.addr.port = hvia->sent_by.port;
+    }
 
-  // Report SIP call and branch ID markers on the trail to make sure it gets
-  // associated with the INVITE transaction at SAS.
-  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
+    // Report SIP call and branch ID markers on the trail to make sure it gets
+    // associated with the INVITE transaction at SAS.
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 
-  // Forward response
-  status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
+    // Forward response
+    status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
 
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error forwarding response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
-    // LCOV_EXCL_STOP
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error forwarding response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
   }
 
   return PJ_TRUE;

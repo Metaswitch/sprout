@@ -2243,6 +2243,21 @@ TEST_F(BasicProxyTest, ResponseErrors)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // Resend the 200 OK response, but change the CSEQ method to REGISTER, so the
+  // proxy will not stateless forward it.
+  rsp_tdata = create_response(invite_tdata, 200, NULL);
+  pjsip_cseq_hdr* cseq = (pjsip_cseq_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                                             PJSIP_H_CSEQ,
+                                                             NULL);
+  cseq->method.id = PJSIP_REGISTER_METHOD;
+  cseq->method.name = pj_str("REGISTER");
+
+  pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
+  pjsip_tx_data_dec_ref(rsp_tdata);
+  inject_msg(std::string(buf));
+  printf(std::string(buf).c_str());
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
 }
 
