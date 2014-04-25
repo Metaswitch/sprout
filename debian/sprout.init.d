@@ -159,7 +159,6 @@ do_start()
         DAEMON_ARGS="
                      --domain $home_domain
                      --localhost $local_ip
-                     --alias $sprout_hostname,$alias_list
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
@@ -181,6 +180,9 @@ do_start()
                      -a $log_directory
                      -F $log_directory
                      -L $log_level"
+
+        # Add alias host names if any are defined.
+        [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias $alias_list"
 
         if [ ! -z $reg_max_expires ]
         then
