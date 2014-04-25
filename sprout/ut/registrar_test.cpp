@@ -63,6 +63,8 @@ public:
   {
     SipTest::SetUpTestCase();
 
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _remote_data_store = new LocalStore();
@@ -76,7 +78,6 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);

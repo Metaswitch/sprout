@@ -314,21 +314,18 @@ pj_status_t create_request_from_subscription(
   pj_cstr(&uri, subscription->_req_uri.c_str());
   pj_cstr(&cid, subscription->_cid.c_str());
 
-  std::string sprout_uri_string = "<sip:"+std::string(pj_strbuf(&stack_data.sprout_cluster_domain),
-                                                        pj_strlen(&stack_data.sprout_cluster_domain))+">";
-  const pj_str_t sprout_uri = pj_str(const_cast<char *>(sprout_uri_string.c_str()));
-
   LOG_DEBUG("Create NOTIFY request");
   pj_status_t status = pjsip_endpt_create_request(stack_data.endpt,
                                                   pjsip_get_notify_method(),
                                                   &uri,
                                                   &from,
                                                   &to,
-                                                  &sprout_uri,
+                                                  &stack_data.scscf_uri,
                                                   &cid,
                                                   cseq,
                                                   body,
                                                   p_tdata);
+
   return status;
 }
 

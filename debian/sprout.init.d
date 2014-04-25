@@ -134,8 +134,6 @@ get_settings()
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
-        [ -z "$icscf_uri" ] || icscf_uri_arg="--external-icscf $icscf_uri"
-
 }
 
 #
@@ -161,8 +159,6 @@ do_start()
         DAEMON_ARGS="
                      --domain $home_domain
                      --localhost $local_ip
-                     --sprout-domain $sprout_hostname
-                     --alias $sprout_hostname,$alias_list
                      --realm $home_domain
                      --memstore /etc/clearwater/cluster_settings
                      $remote_memstore_arg
@@ -173,7 +169,6 @@ do_start()
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
-                     $icscf_uri_arg
                      --sas $sas_server,$NAME@$public_hostname
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
@@ -186,6 +181,9 @@ do_start()
                      -F $log_directory
                      -L $log_level"
 
+        # Add alias host names if any are defined.
+        [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias $alias_list"
+
         if [ ! -z $reg_max_expires ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
@@ -194,11 +192,23 @@ do_start()
         # Only add the icscf and scscf arguments if they're not 0
         if [ ! -z $scscf ] && [ ! $scscf = 0 ]
         then
+          # S-CSCF function is enabled, so add S-CSCF specific parameters
           DAEMON_ARGS="$DAEMON_ARGS --scscf $scscf"
+
+          [ -z "$icscf_uri" ] || DAEMON_ARGS="$DAEMON_ARGS --external-icscf $icscf_uri"
+
+          if [ -n "$scscf_uri" ]
+          then
+            DAEMON_ARGS="$DAEMON_ARGS --scscf_uri $scscf_uri"
+          else
+            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf_uri sip:$sprout_hostname:$scscf;transport=TCP"
+          fi
+
         fi
 
         if [ ! -z $icscf ] && [ ! $icscf = 0 ]
         then
+          # I-CSCF function is enabled
           DAEMON_ARGS="$DAEMON_ARGS --icscf $icscf"
         fi
 

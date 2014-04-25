@@ -75,7 +75,7 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
-    stack_data.sprout_cluster_domain = pj_str("all.the.sprout.nodes");
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
   }

@@ -529,24 +529,6 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
                                const char* user,
                                const pj_str_t& host)
 {
-  pjsip_rr_hdr* top_rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_RECORD_ROUTE, NULL);
-  if (top_rr_hdr != NULL && PJSIP_URI_SCHEME_IS_SIP(top_rr_hdr->name_addr.uri))
-  {
-    pjsip_sip_uri* top_rr_uri = (pjsip_sip_uri*)top_rr_hdr->name_addr.uri;
-    pj_str_t top_host = top_rr_uri->host;
-    pj_str_t top_user = top_rr_uri->user;
-    pj_str_t top_transport = top_rr_uri->transport_param;
-    int top_port = top_rr_uri->port;
-    if ((pj_strcmp2(&top_user, user) == 0) &&
-        (pj_strcmp(&top_host, &host) == 0) &&
-        (pj_strcmp2(&top_transport, transport) == 0) &&
-        (port == top_port))
-    {
-      LOG_DEBUG("Top Record-Route header is already identical to the one we're adding; doing nothing");
-      return;
-    }
-  }
-
   pjsip_rr_hdr* rr = pjsip_rr_hdr_create(tdata->pool);
   pjsip_sip_uri* uri = pjsip_sip_uri_create(tdata->pool, PJ_FALSE);
   uri->host = host;

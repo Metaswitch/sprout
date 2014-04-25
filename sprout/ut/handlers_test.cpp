@@ -143,7 +143,7 @@ class DeregistrationHandlerTest : public BaseTest
     deregistration_config = new DeregistrationHandler::Config(store, store, fake_hss, NULL);
     handler = new DeregistrationHandler(*req, deregistration_config, 0);
 
-    stack_data.sprout_cluster_domain = pj_str("all.the.sprouts");
+    stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
     // The expiry tests require pjsip, so initialise for this test
     init_pjsip_logging(99, false, "");
     init_pjsip();
