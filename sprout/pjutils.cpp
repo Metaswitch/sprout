@@ -215,7 +215,7 @@ pjsip_uri* PJUtils::uri_from_string(const std::string& uri_s,
 
 std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
 {
-  return (pjstr != NULL) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
+  return ((pjstr != NULL) && (pj_strlen(pjstr) > 0)) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
 }
 
 
@@ -1039,8 +1039,14 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
-    pjsip_tx_data_dec_ref(tdata);
-    delete sss;
+
+    // Only free the state data if there are no more references to it
+    pj_status_t dec_status = pjsip_tx_data_dec_ref(tdata);
+
+    if (dec_status == PJSIP_EBUFDESTROYED)
+    {
+      delete sss;
+    }
   }
 
   return status;
@@ -1089,6 +1095,7 @@ static void stateless_send_cb(pjsip_send_state *st,
 
       // Set up destination info for the new server and resend the request.
       PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
+      pjsip_tx_data_add_ref(tdata);
       status = pjsip_endpt_send_request_stateless(stack_data.endpt,
                                                   tdata,
                                                   (void*)sss,
@@ -1100,6 +1107,10 @@ static void stateless_send_cb(pjsip_send_state *st,
         // return the callback.
         pjsip_tx_data_add_ref(tdata);
         retrying = true;
+      }
+      else
+      {
+        pjsip_tx_data_dec_ref(tdata);
       }
     }
   }
