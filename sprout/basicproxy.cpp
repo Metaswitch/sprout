@@ -419,6 +419,7 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _context_count(0)
 {
   // Don't do any set-up that could fail in here - do that in the init method.
+  _trying_timer.id = 0;
 }
 
 
@@ -427,6 +428,8 @@ BasicProxy::UASTsx::~UASTsx()
   LOG_DEBUG("BasicProxy::UASTsx destructor (%p)", this);
 
   pj_assert(_context_count == 0);
+
+  cancel_trying_timer();
 
   if (_tsx != NULL)
   {
@@ -530,19 +533,25 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
                                 NULL,
                                 &_best_rsp);
 
+    // initialise deferred trying timer
+    pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+
     if ((rdata->msg_info.msg->line.req.method.id == PJSIP_INVITE_METHOD) &&
         (!_proxy->_delay_trying))
     {
       // INVITE request and delay_trying is not enabled, so send the trying
       // response immediately.
       LOG_DEBUG("Send immediate 100 Trying response");
-      PJUtils::respond_stateful(stack_data.endpt,
-                                _tsx,
-                                rdata,
-                                100,
-                                NULL,
-                                NULL,
-                                NULL);
+      send_trying(rdata);
+    }
+    else if (!_proxy->_delay_trying)
+    {
+      // capture the rdata for deferral and schedule trying timer
+      pjsip_rx_data_clone(rdata, 0, &(_defer_rdata));
+      _trying_timer.id = TRYING_TIMER;
+      pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
+                           (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
+      pjsip_endpt_schedule_timer(stack_data.endpt, &(_trying_timer), &delay);
     }
   }
   else
@@ -1122,6 +1131,9 @@ void BasicProxy::UASTsx::on_final_response()
 /// Sends a response using the buffer saved off for the best response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
+  // cancel any outstanding deferred trying responses
+  cancel_trying_timer();
+
   if ((st_code >= 100) && (st_code < 200))
   {
     // Send a provisional response.
@@ -1355,6 +1367,45 @@ void BasicProxy::UASTsx::exit_context()
   }
 }
 
+// Sends a 100 Trying response to the given rdata, in this transaction.
+// @Returns whether or not the send was a success.
+pj_status_t BasicProxy::UASTsx::send_trying(pjsip_rx_data* rdata)
+{
+  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
+}
+
+void BasicProxy::UASTsx::cancel_trying_timer()
+{
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    // The deferred trying timer is running, so cancel it.
+    _trying_timer.id = 0;
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+}
+
+/// Handle the trying timer expiring on this transaction.
+void BasicProxy::UASTsx::trying_timer_expired()
+{
+  enter_context();
+
+  send_trying(_defer_rdata);
+  pjsip_rx_data_free_cloned(_defer_rdata);
+
+  _trying_timer.id = 0;
+  exit_context();
+}
+
+/// Static method called by PJSIP when a trying timer expires.  The instance
+/// is stored in the user_data field of the timer entry.
+void BasicProxy::UASTsx::trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
+{
+  if (entry->id == TRYING_TIMER)
+  {
+    ((BasicProxy::UASTsx*)entry->user_data)->trying_timer_expired();
+  }
+}
 
 /// UACTsx constructor
 BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,

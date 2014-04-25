@@ -165,6 +165,9 @@ public:
   inline SAS::TrailId trail() { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
   inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
+  void trying_timer_expired();
+  static void trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
+
   // Enters/exits this UASTransaction's context.  This takes a group lock,
   // single-threading any processing on this UASTransaction and associated
   // UACTransactions.  While in the UASTransaction's context, it will not be
@@ -214,6 +217,8 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
+
+  void cancel_trying_timer();
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
   pjsip_transaction*   _tsx;
@@ -265,6 +270,10 @@ private:
   /// Stores a BGCF ACR if BGCF processing was performed in this transaction.
   ACR*                 _bgcf_acr;
 
+public:
+  pj_timer_entry       _trying_timer;
+  static const int     TRYING_TIMER = 1;
+  pjsip_rx_data*        _defer_rdata;
 };
 
 // This is the data that is attached to the UAC transaction

@@ -149,6 +149,16 @@ protected:
     /// must not assume that the transaction still exists.
     void exit_context();
 
+    void trying_timer_expired();
+    static void trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry);
+    void cancel_trying_timer();
+    pj_status_t send_trying(pjsip_rx_data* rdata);
+
+    pj_timer_entry       _trying_timer;
+    static const int TRYING_TIMER = 1;
+    /// Stores a copy of the rdata for deferred Trying responses
+    pjsip_rx_data*        _defer_rdata;
+
   protected:
     /// Process route information in the request.
     virtual int process_routing();

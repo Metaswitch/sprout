@@ -565,16 +565,27 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if ((!edge_proxy) &&
-      (uas_data->method() == PJSIP_INVITE_METHOD))
+  if (!edge_proxy)
   {
-    // If running in routing proxy mode send the 100 Trying response before
-    // applying services and routing the request as both may involve
-    // interacting with external databases.  When running in access proxy
-    // mode we hold off sending the 100 Trying until we've received one from
-    // upstream so we can be sure we could route a subsequent CANCEL to the
-    // right place.
-    uas_data->send_trying(rdata);
+    if (uas_data->method() == PJSIP_INVITE_METHOD)
+    {
+      // If running in routing proxy mode send the 100 Trying response before
+      // applying services and routing the request as both may involve
+      // interacting with external databases.  When running in access proxy
+      // mode we hold off sending the 100 Trying until we've received one from
+      // upstream so we can be sure we could route a subsequent CANCEL to the
+      // right place.
+      uas_data->send_trying(rdata);
+    }
+    else
+    {
+      // capture the rdata for deferral and schedule trying timer
+      pjsip_rx_data_clone(rdata, 0, &(uas_data->_defer_rdata));
+      uas_data->_trying_timer.id = uas_data->TRYING_TIMER;
+      pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
+                           (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
+      pjsip_endpt_schedule_timer(stack_data.endpt, &(uas_data->_trying_timer), &delay);
+    }
   }
 
   // Perform common initial processing.  This will delete the
@@ -1434,6 +1445,17 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+void UASTransaction::cancel_trying_timer()
+{
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    // The deferred trying timer is running, so cancel it.
+    _trying_timer.id = 0;
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+}
+
 // Gets the subscriber's associated URIs and iFCs for each URI from
 // the HSS. Returns true on success, false on failure.
 
@@ -1915,6 +1937,10 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
 
   _tsx->mod_data[mod_tu.id] = this;
 
+  // initialise deferred trying timer
+  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+  _trying_timer.id = 0;
+
   // Record whether or not this is an in-dialog request.  This is needed
   // to determine whether or not to send interim ACRs on provisional
   // responses.
@@ -1941,6 +1967,8 @@ UASTransaction::~UASTransaction()
     // pending UAC transactions they should be cancelled.
     cancel_pending_uac_tsx(0, true);
   }
+
+  cancel_trying_timer();
 
   // Disconnect all UAC transactions from the UAS transaction.
   LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
@@ -3109,6 +3137,9 @@ pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
 // @Returns whether or not the send was a success.
 pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 {
+  // cancel any outstanding deferred trying responses
+  cancel_trying_timer();
+
   if ((st_code >= 100) && (st_code < 200))
   {
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
@@ -4088,6 +4119,28 @@ void UACTransaction::liveness_timer_callback(pj_timer_heap_t *timer_heap, struct
   }
 }
 
+/// Handle the trying timer expiring on this transaction.
+void UASTransaction::trying_timer_expired()
+{
+  enter_context();
+
+  send_trying(_defer_rdata);
+  pjsip_rx_data_free_cloned(_defer_rdata);
+
+  _trying_timer.id = 0;
+
+  exit_context();
+}
+
+/// Static method called by PJSIP when a trying timer expires.  The instance
+/// is stored in the user_data field of the timer entry.
+void UASTransaction::trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
+{
+  if (entry->id == TRYING_TIMER)
+  {
+    ((UASTransaction*)entry->user_data)->trying_timer_expired();
+  }
+}
 
 // Enters this transaction's context.  While in the transaction's
 // context, processing on this and associated transactions will be
