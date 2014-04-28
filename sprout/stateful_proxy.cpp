@@ -1447,6 +1447,8 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 void UASTransaction::cancel_trying_timer()
 {
+  pthread_mutex_lock(&_trying_timer_lock);
+
   if (_trying_timer.id == TRYING_TIMER)
   {
     // The deferred trying timer is running, so cancel it.
@@ -1454,6 +1456,8 @@ void UASTransaction::cancel_trying_timer()
     pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
     pjsip_rx_data_free_cloned(_defer_rdata);
   }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
 }
 
 // Gets the subscriber's associated URIs and iFCs for each URI from
@@ -1938,6 +1942,7 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
   _tsx->mod_data[mod_tu.id] = this;
 
   // initialise deferred trying timer
+  pthread_mutex_init(&_trying_timer_lock, NULL);
   pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
   _trying_timer.id = 0;
 
@@ -1969,6 +1974,7 @@ UASTransaction::~UASTransaction()
   }
 
   cancel_trying_timer();
+  pthread_mutex_destroy(&_trying_timer_lock);
 
   // Disconnect all UAC transactions from the UAS transaction.
   LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
@@ -4123,12 +4129,17 @@ void UACTransaction::liveness_timer_callback(pj_timer_heap_t *timer_heap, struct
 void UASTransaction::trying_timer_expired()
 {
   enter_context();
+  pthread_mutex_lock(&_trying_timer_lock);
 
-  send_trying(_defer_rdata);
-  pjsip_rx_data_free_cloned(_defer_rdata);
+  // verify that the timer has not been cancelled halfway through expiry
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    send_trying(_defer_rdata);
+    _trying_timer.id = 0;
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
 
-  _trying_timer.id = 0;
-
+  pthread_mutex_unlock(&_trying_timer_lock);
   exit_context();
 }
 

@@ -419,7 +419,6 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _context_count(0)
 {
   // Don't do any set-up that could fail in here - do that in the init method.
-  _trying_timer.id = 0;
 }
 
 
@@ -430,6 +429,7 @@ BasicProxy::UASTsx::~UASTsx()
   pj_assert(_context_count == 0);
 
   cancel_trying_timer();
+  pthread_mutex_destroy(&_trying_timer_lock);
 
   if (_tsx != NULL)
   {
@@ -494,6 +494,11 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 
   _trail = get_trail(rdata);
 
+  // initialise deferred trying timer
+  pthread_mutex_init(&_trying_timer_lock, NULL);
+  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+  _trying_timer.id = 0;
+
   // Do any start of transaction logging operations.
   on_tsx_start(rdata);
 
@@ -533,20 +538,18 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
                                 NULL,
                                 &_best_rsp);
 
-    // initialise deferred trying timer
-    pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
-
+    // If delay_trying is enabled, then don't send a 100 Trying now.
     if ((rdata->msg_info.msg->line.req.method.id == PJSIP_INVITE_METHOD) &&
         (!_proxy->_delay_trying))
     {
-      // INVITE request and delay_trying is not enabled, so send the trying
-      // response immediately.
+      // If the request is an INVITE then send the 100 Trying straight away.
       LOG_DEBUG("Send immediate 100 Trying response");
       send_trying(rdata);
     }
     else if (!_proxy->_delay_trying)
     {
-      // capture the rdata for deferral and schedule trying timer
+      // Send the 100 Trying after 3.5 secs if a final response hasn't been
+      // sent.
       pjsip_rx_data_clone(rdata, 0, &(_defer_rdata));
       _trying_timer.id = TRYING_TIMER;
       pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
@@ -948,8 +951,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
     pj_status_t status;
     int status_code = rdata->msg_info.msg->line.status.code;
 
-    if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
-        (status_code == 100) &&
+    if ((status_code == 100) &&
         (!_proxy->_delay_trying))
     {
       // Delay trying is disabled, so we will already have sent a locally
@@ -972,9 +974,10 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
     }
 
     if ((status_code > 100) &&
-        (status_code < 199))
+        (status_code < 199) &&
+        (_tsx->method.id == PJSIP_INVITE_METHOD))
     {
-      // Forward all provisional responses.
+      // Forward all provisional responses to INVITEs.
       LOG_DEBUG("%s - Forward 1xx response", uac_tsx->name());
 
       // Forward response with the UAS transaction
@@ -1376,6 +1379,8 @@ pj_status_t BasicProxy::UASTsx::send_trying(pjsip_rx_data* rdata)
 
 void BasicProxy::UASTsx::cancel_trying_timer()
 {
+  pthread_mutex_lock(&_trying_timer_lock);
+
   if (_trying_timer.id == TRYING_TIMER)
   {
     // The deferred trying timer is running, so cancel it.
@@ -1383,17 +1388,24 @@ void BasicProxy::UASTsx::cancel_trying_timer()
     pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
     pjsip_rx_data_free_cloned(_defer_rdata);
   }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
 }
 
 /// Handle the trying timer expiring on this transaction.
 void BasicProxy::UASTsx::trying_timer_expired()
 {
   enter_context();
+  pthread_mutex_lock(&_trying_timer_lock);
 
-  send_trying(_defer_rdata);
-  pjsip_rx_data_free_cloned(_defer_rdata);
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    send_trying(_defer_rdata);
+    _trying_timer.id = 0;
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
 
-  _trying_timer.id = 0;
+  pthread_mutex_unlock(&_trying_timer_lock);
   exit_context();
 }
 

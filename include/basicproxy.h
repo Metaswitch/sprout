@@ -155,9 +155,10 @@ protected:
     pj_status_t send_trying(pjsip_rx_data* rdata);
 
     pj_timer_entry       _trying_timer;
-    static const int TRYING_TIMER = 1;
+    static const int     TRYING_TIMER = 1;
     /// Stores a copy of the rdata for deferred Trying responses
-    pjsip_rx_data*        _defer_rdata;
+    pjsip_rx_data*       _defer_rdata;
+    pthread_mutex_t      _trying_timer_lock;
 
   protected:
     /// Process route information in the request.
