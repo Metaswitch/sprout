@@ -448,11 +448,50 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     return PJ_FALSE;
   }
 
+  // Authentication isn't required for emergency registrations. An emergency
+  // registration is one where each Contact header contains 'sos' as the SIP
+  // URI parameter.
+  bool emergency_reg = false;
+
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    pjsip_sip_uri* uri = (contact_hdr->uri != NULL) ?
+                     (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
+
+    if ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+       ( pjsip_param_find(&uri->other_param, &STR_SOS) != NULL))
+    {
+      emergency_reg = true;
+    }
+    else
+    {
+      emergency_reg = false;
+      break;
+    }
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
+  if (emergency_reg)
+  {
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
+    std::string error_msg = "Request is an emergency REGISTER";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    return PJ_FALSE;
+  }
+
   // Check to see if the request has already been integrity protected?
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
- if ((auth_hdr != NULL) &&
+  if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen == 0))
   {
     // There is an authorization header with no challenge response, so check
