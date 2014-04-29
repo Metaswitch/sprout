@@ -2243,6 +2243,20 @@ TEST_F(BasicProxyTest, ResponseErrors)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // Resend the 200 OK response, but change the CSEQ method to REGISTER, so the
+  // proxy will not stateless forward it.
+  rsp_tdata = create_response(invite_tdata, 200, NULL);
+  pjsip_cseq_hdr* cseq = (pjsip_cseq_hdr*)pjsip_msg_find_hdr(rsp_tdata->msg,
+                                                             PJSIP_H_CSEQ,
+                                                             NULL);
+  cseq->method.id = PJSIP_REGISTER_METHOD;
+  cseq->method.name = pj_str("REGISTER");
+
+  pjsip_msg_print(rsp_tdata->msg, buf, sizeof(buf));
+  pjsip_tx_data_dec_ref(rsp_tdata);
+  inject_msg(std::string(buf));
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
 }
 
@@ -2728,4 +2742,102 @@ TEST_F(BasicProxyTest, RetryFailed)
   delete tp;
 }
 
+TEST_F(BasicProxyTest, NonInvite100Trying)
+{
+  // Tests 100 Trying for non-INVITEs.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header not referencing this node or the
+  // home domain.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Check the forwarded REGISTER.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("REGISTER").matches(tdata->msg);
+
+  // Check the RequestURI has not been altered.
+  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+
+  // Check the Route header has not been removed.
+  string route = get_headers(tdata->msg, "Route");
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>", route);
+
+  // Check no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  EXPECT_EQ("", rr);
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  Message msg2;
+  msg2._method = "REGISTER";
+  msg2._requri = "sip:bob@awaydomain";
+  msg2._from = "alice";
+  msg2._to = "bob";
+  msg2._todomain = "awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg2.get_request(), tp);
+
+  // Check the forwarded REGISTER.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata1 = pop_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata1);
+  ReqMatcher("REGISTER").matches(tdata1->msg);
+
+  // Check the RequestURI has not been altered.
+  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata1->msg->line.req.uri));
+
+  // Check the Route header has not been removed.
+  route = get_headers(tdata1->msg, "Route");
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>", route);
+
+  // Check no Record-Route headers have been added.
+  rr = get_headers(tdata1->msg, "Record-Route");
+  EXPECT_EQ("", rr);
+
+  // Advance time, and check the 100 Trying was created
+  cwtest_advance_time_ms(4000);
+  poll();
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata2 = current_txdata();
+  RespMatcher(100).matches(tdata2->msg);
+  tp->expect_target(tdata2);
+  free_txdata();
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_txdata(tdata1, 200, ""));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata2 = current_txdata();
+  tp->expect_target(tdata2);
+  RespMatcher(200).matches(tdata2->msg);
+  free_txdata();
+
+  delete tp;
+}
 

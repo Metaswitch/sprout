@@ -112,67 +112,71 @@ pj_bool_t BasicProxy::on_rx_response(pjsip_rx_data *rdata)
 
   LOG_DEBUG("Statelessly forwarding late response");
 
-  // Create response to be forwarded upstream (Via will be stripped here)
-  status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  // Only forward responses to INVITES
+  if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
   {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
-    // LCOV_EXCL_STOP
-  }
+    // Create response to be forwarded upstream (Via will be stripped here)
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
 
-  // Get topmost Via header
-  hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
-  if (hvia == NULL)
-  {
-    // Invalid response! Just drop it
-    pjsip_tx_data_dec_ref(tdata);
-    return PJ_TRUE;
-  }
+    // Get topmost Via header
+    hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+    if (hvia == NULL)
+    {
+      // Invalid response! Just drop it
+      pjsip_tx_data_dec_ref(tdata);
+      return PJ_TRUE;
+    }
 
-  // Calculate the address to forward the response
-  pj_bzero(&res_addr, sizeof(res_addr));
-  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
-  res_addr.dst_host.flag =
+    // Calculate the address to forward the response
+    pj_bzero(&res_addr, sizeof(res_addr));
+    res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
+    res_addr.dst_host.flag =
                      pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
-  // Destination address is Via's received param
-  res_addr.dst_host.addr.host = hvia->recvd_param;
-  if (res_addr.dst_host.addr.host.slen == 0)
-  {
-    // Someone has messed up our Via header!
-    res_addr.dst_host.addr.host = hvia->sent_by.host;
-  }
+    // Destination address is Via's received param
+    res_addr.dst_host.addr.host = hvia->recvd_param;
+    if (res_addr.dst_host.addr.host.slen == 0)
+    {
+      // Someone has messed up our Via header!
+      res_addr.dst_host.addr.host = hvia->sent_by.host;
+    }
 
-  // Destination port is the rport
-  if (hvia->rport_param != 0 && hvia->rport_param != -1)
-  {
-    res_addr.dst_host.addr.port = hvia->rport_param;
-  }
+    // Destination port is the rport
+    if (hvia->rport_param != 0 && hvia->rport_param != -1)
+    {
+      res_addr.dst_host.addr.port = hvia->rport_param;
+    }
 
-  if (res_addr.dst_host.addr.port == 0)
-  {
-    // Ugh, original sender didn't put rport!
-    // At best, can only send the response to the port in Via.
-    res_addr.dst_host.addr.port = hvia->sent_by.port;
-  }
+    if (res_addr.dst_host.addr.port == 0)
+    {
+      // Ugh, original sender didn't put rport!
+      // At best, can only send the response to the port in Via.
+      res_addr.dst_host.addr.port = hvia->sent_by.port;
+    }
 
-  // Report SIP call and branch ID markers on the trail to make sure it gets
-  // associated with the INVITE transaction at SAS.
-  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
+    // Report SIP call and branch ID markers on the trail to make sure it gets
+    // associated with the INVITE transaction at SAS.
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 
-  // Forward response
-  status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
+    // Forward response
+    status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
 
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error forwarding response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
-    // LCOV_EXCL_STOP
+    if (status != PJ_SUCCESS)
+    {
+      // LCOV_EXCL_START
+      LOG_ERROR("Error forwarding response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+      // LCOV_EXCL_STOP
+    }
   }
 
   return PJ_TRUE;
@@ -424,6 +428,9 @@ BasicProxy::UASTsx::~UASTsx()
 
   pj_assert(_context_count == 0);
 
+  cancel_trying_timer();
+  pthread_mutex_destroy(&_trying_timer_lock);
+
   if (_tsx != NULL)
   {
     // LCOV_EXCL_START
@@ -487,6 +494,11 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 
   _trail = get_trail(rdata);
 
+  // initialise deferred trying timer
+  pthread_mutex_init(&_trying_timer_lock, NULL);
+  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+  _trying_timer.id = 0;
+
   // Do any start of transaction logging operations.
   on_tsx_start(rdata);
 
@@ -526,19 +538,23 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
                                 NULL,
                                 &_best_rsp);
 
+    // If delay_trying is enabled, then don't send a 100 Trying now.
     if ((rdata->msg_info.msg->line.req.method.id == PJSIP_INVITE_METHOD) &&
         (!_proxy->_delay_trying))
     {
-      // INVITE request and delay_trying is not enabled, so send the trying
-      // response immediately.
+      // If the request is an INVITE then send the 100 Trying straight away.
       LOG_DEBUG("Send immediate 100 Trying response");
-      PJUtils::respond_stateful(stack_data.endpt,
-                                _tsx,
-                                rdata,
-                                100,
-                                NULL,
-                                NULL,
-                                NULL);
+      send_trying(rdata);
+    }
+    else if (!_proxy->_delay_trying)
+    {
+      // Send the 100 Trying after 3.5 secs if a final response hasn't been
+      // sent.
+      pjsip_rx_data_clone(rdata, 0, &(_defer_rdata));
+      _trying_timer.id = TRYING_TIMER;
+      pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
+                           (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
+      pjsip_endpt_schedule_timer(stack_data.endpt, &(_trying_timer), &delay);
     }
   }
   else
@@ -935,8 +951,7 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
     pj_status_t status;
     int status_code = rdata->msg_info.msg->line.status.code;
 
-    if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
-        (status_code == 100) &&
+    if ((status_code == 100) &&
         (!_proxy->_delay_trying))
     {
       // Delay trying is disabled, so we will already have sent a locally
@@ -959,9 +974,10 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
     }
 
     if ((status_code > 100) &&
-        (status_code < 199))
+        (status_code < 199) &&
+        (_tsx->method.id == PJSIP_INVITE_METHOD))
     {
-      // Forward all provisional responses.
+      // Forward all provisional responses to INVITEs.
       LOG_DEBUG("%s - Forward 1xx response", uac_tsx->name());
 
       // Forward response with the UAS transaction
@@ -1118,6 +1134,9 @@ void BasicProxy::UASTsx::on_final_response()
 /// Sends a response using the buffer saved off for the best response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
+  // cancel any outstanding deferred trying responses
+  cancel_trying_timer();
+
   if ((st_code >= 100) && (st_code < 200))
   {
     // Send a provisional response.
@@ -1351,6 +1370,54 @@ void BasicProxy::UASTsx::exit_context()
   }
 }
 
+// Sends a 100 Trying response to the given rdata, in this transaction.
+// @Returns whether or not the send was a success.
+pj_status_t BasicProxy::UASTsx::send_trying(pjsip_rx_data* rdata)
+{
+  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
+}
+
+void BasicProxy::UASTsx::cancel_trying_timer()
+{
+  pthread_mutex_lock(&_trying_timer_lock);
+
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    // The deferred trying timer is running, so cancel it.
+    _trying_timer.id = 0;
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
+}
+
+/// Handle the trying timer expiring on this transaction.
+void BasicProxy::UASTsx::trying_timer_expired()
+{
+  enter_context();
+  pthread_mutex_lock(&_trying_timer_lock);
+
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    send_trying(_defer_rdata);
+    _trying_timer.id = 0;
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
+  exit_context();
+}
+
+/// Static method called by PJSIP when a trying timer expires.  The instance
+/// is stored in the user_data field of the timer entry.
+void BasicProxy::UASTsx::trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
+{
+  if (entry->id == TRYING_TIMER)
+  {
+    ((BasicProxy::UASTsx*)entry->user_data)->trying_timer_expired();
+  }
+}
 
 /// UACTsx constructor
 BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,

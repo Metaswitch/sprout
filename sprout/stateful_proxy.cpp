@@ -279,67 +279,71 @@ static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata)
   pjsip_via_hdr *hvia;
   pj_status_t status;
 
-  // Create response to be forwarded upstream (Via will be stripped here)
-  status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  // Only forward responses to INVITES
+  if (rdata->msg_info.cseq->method.id == PJSIP_INVITE_METHOD)
   {
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
-  }
+    // Create response to be forwarded upstream (Via will be stripped here)
+    status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Error creating response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+    }
 
-  // Get topmost Via header
-  hvia = (pjsip_via_hdr*) pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
-  if (hvia == NULL)
-  {
-    // Invalid response! Just drop it
-    pjsip_tx_data_dec_ref(tdata);
-    return PJ_TRUE;
-  }
+    // Get topmost Via header
+    hvia = (pjsip_via_hdr*) pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+    if (hvia == NULL)
+    {
+      // Invalid response! Just drop it
+      pjsip_tx_data_dec_ref(tdata);
+      return PJ_TRUE;
+    }
 
-  // Calculate the address to forward the response
-  pj_bzero(&res_addr, sizeof(res_addr));
-  res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
-  res_addr.dst_host.flag =
+    // Calculate the address to forward the response
+    pj_bzero(&res_addr, sizeof(res_addr));
+    res_addr.dst_host.type = pjsip_transport_get_type_from_name(&hvia->transport);
+    res_addr.dst_host.flag =
     pjsip_transport_get_flag_from_type(res_addr.dst_host.type);
 
-  // Destination address is Via's received param
-  res_addr.dst_host.addr.host = hvia->recvd_param;
-  if (res_addr.dst_host.addr.host.slen == 0)
-  {
-    // Someone has messed up our Via header!
-    res_addr.dst_host.addr.host = hvia->sent_by.host;
-  }
+    // Destination address is Via's received param
+    res_addr.dst_host.addr.host = hvia->recvd_param;
+    if (res_addr.dst_host.addr.host.slen == 0)
+    {
+      // Someone has messed up our Via header!
+      res_addr.dst_host.addr.host = hvia->sent_by.host;
+    }
 
-  // Destination port is the rport
-  if (hvia->rport_param != 0 && hvia->rport_param != -1)
-  {
-    res_addr.dst_host.addr.port = hvia->rport_param;
-  }
+    // Destination port is the rport
+    if (hvia->rport_param != 0 && hvia->rport_param != -1)
+    {
+      res_addr.dst_host.addr.port = hvia->rport_param;
+    }
 
-  if (res_addr.dst_host.addr.port == 0)
-  {
-    // Ugh, original sender didn't put rport!
-    // At best, can only send the response to the port in Via.
-    res_addr.dst_host.addr.port = hvia->sent_by.port;
-  }
+    if (res_addr.dst_host.addr.port == 0)
+    {
+      // Ugh, original sender didn't put rport!
+      // At best, can only send the response to the port in Via.
+      res_addr.dst_host.addr.port = hvia->sent_by.port;
+    }
 
-  // Report SIP call and branch ID markers on the trail to make sure it gets
-  // associated with the INVITE transaction at SAS.
-  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
+    // Report SIP call and branch ID markers on the trail to make sure it gets
+    // associated with the INVITE transaction at SAS.
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), rdata->msg_info.cid, rdata->msg_info.msg);
 
-  // We don't know the transaction, so be pessimistic and strip
-  // everything.
-  TrustBoundary::process_stateless_message(tdata);
+    // We don't know the transaction, so be pessimistic and strip
+    // everything.
+    TrustBoundary::process_stateless_message(tdata);
 
-  // Forward response
-  status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata,
-                                     NULL, NULL);
-  if (status != PJ_SUCCESS)
-  {
-    LOG_ERROR("Error forwarding response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    return PJ_TRUE;
+    // Forward response
+    status = pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata,
+                                       NULL, NULL);
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Error forwarding response, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      return PJ_TRUE;
+    }
   }
 
   return PJ_TRUE;
@@ -568,16 +572,27 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  if ((!edge_proxy) &&
-      (uas_data->method() == PJSIP_INVITE_METHOD))
+  if (!edge_proxy)
   {
-    // If running in routing proxy mode send the 100 Trying response before
-    // applying services and routing the request as both may involve
-    // interacting with external databases.  When running in access proxy
-    // mode we hold off sending the 100 Trying until we've received one from
-    // upstream so we can be sure we could route a subsequent CANCEL to the
-    // right place.
-    uas_data->send_trying(rdata);
+    if (uas_data->method() == PJSIP_INVITE_METHOD)
+    {
+      // If running in routing proxy mode send the 100 Trying response before
+      // applying services and routing the request as both may involve
+      // interacting with external databases.  When running in access proxy
+      // mode we hold off sending the 100 Trying until we've received one from
+      // upstream so we can be sure we could route a subsequent CANCEL to the
+      // right place.
+      uas_data->send_trying(rdata);
+    }
+    else
+    {
+      // capture the rdata for deferral and schedule trying timer
+      pjsip_rx_data_clone(rdata, 0, &(uas_data->_defer_rdata));
+      uas_data->_trying_timer.id = uas_data->TRYING_TIMER;
+      pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
+                           (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
+      pjsip_endpt_schedule_timer(stack_data.endpt, &(uas_data->_trying_timer), &delay);
+    }
   }
 
   // Perform common initial processing.  This will delete the
@@ -1451,6 +1466,21 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 
 ///@}
 
+void UASTransaction::cancel_trying_timer()
+{
+  pthread_mutex_lock(&_trying_timer_lock);
+
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    // The deferred trying timer is running, so cancel it.
+    _trying_timer.id = 0;
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
+}
+
 // Gets the subscriber's associated URIs and iFCs for each URI from
 // the HSS. Returns true on success, false on failure.
 
@@ -1932,6 +1962,11 @@ UASTransaction::UASTransaction(pjsip_transaction* tsx,
 
   _tsx->mod_data[mod_tu.id] = this;
 
+  // initialise deferred trying timer
+  pthread_mutex_init(&_trying_timer_lock, NULL);
+  pj_timer_entry_init(&_trying_timer, 0, (void*)this, &trying_timer_callback);
+  _trying_timer.id = 0;
+
   // Record whether or not this is an in-dialog request.  This is needed
   // to determine whether or not to send interim ACRs on provisional
   // responses.
@@ -1958,6 +1993,9 @@ UASTransaction::~UASTransaction()
     // pending UAC transactions they should be cancelled.
     cancel_pending_uac_tsx(0, true);
   }
+
+  cancel_trying_timer();
+  pthread_mutex_destroy(&_trying_timer_lock);
 
   // Disconnect all UAC transactions from the UAS transaction.
   LOG_DEBUG("Disconnect UAC transactions from UAS transaction");
@@ -3130,6 +3168,9 @@ pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
 // @Returns whether or not the send was a success.
 pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 {
+  // cancel any outstanding deferred trying responses
+  cancel_trying_timer();
+
   if ((st_code >= 100) && (st_code < 200))
   {
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
@@ -4109,6 +4150,33 @@ void UACTransaction::liveness_timer_callback(pj_timer_heap_t *timer_heap, struct
   }
 }
 
+/// Handle the trying timer expiring on this transaction.
+void UASTransaction::trying_timer_expired()
+{
+  enter_context();
+  pthread_mutex_lock(&_trying_timer_lock);
+
+  // verify that the timer has not been cancelled halfway through expiry
+  if (_trying_timer.id == TRYING_TIMER)
+  {
+    send_trying(_defer_rdata);
+    _trying_timer.id = 0;
+    pjsip_rx_data_free_cloned(_defer_rdata);
+  }
+
+  pthread_mutex_unlock(&_trying_timer_lock);
+  exit_context();
+}
+
+/// Static method called by PJSIP when a trying timer expires.  The instance
+/// is stored in the user_data field of the timer entry.
+void UASTransaction::trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
+{
+  if (entry->id == TRYING_TIMER)
+  {
+    ((UASTransaction*)entry->user_data)->trying_timer_expired();
+  }
+}
 
 // Enters this transaction's context.  While in the transaction's
 // context, processing on this and associated transactions will be
