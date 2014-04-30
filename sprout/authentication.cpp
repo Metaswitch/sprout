@@ -458,17 +458,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   while (contact_hdr != NULL)
   {
-    pjsip_sip_uri* uri = (contact_hdr->uri != NULL) ?
-                     (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
+    emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
 
-    if ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-       ( pjsip_param_find(&uri->other_param, &STR_SOS) != NULL))
+    if (!emergency_reg)
     {
-      emergency_reg = true;
-    }
-    else
-    {
-      emergency_reg = false;
       break;
     }
 

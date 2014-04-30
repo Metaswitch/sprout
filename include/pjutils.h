@@ -212,6 +212,8 @@ std::string get_header_value(pjsip_hdr*);
 
 void mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, pjsip_msg* msg);
 
+bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
+
 } // namespace PJUtils
 
 #endif
