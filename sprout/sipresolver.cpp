@@ -74,7 +74,7 @@ void SIPResolver::resolve(const std::string& name,
                           std::vector<AddrInfo>& targets,
                           SAS::TrailId trail)
 {
-  int dummy_ttl;
+  int dummy_ttl = 0;
   targets.clear();
 
   // First determine the transport following the process in RFC3263 section
