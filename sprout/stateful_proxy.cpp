@@ -159,6 +159,7 @@ static pjsip_uri* icscf_uri = NULL;
 static bool ibcf = false;
 static bool icscf = false;
 static bool scscf = false;
+static bool allow_emergency_reg = false;
 
 // Pre-built Record-Route header added to requests handled by the S-CSCF.
 static pjsip_rr_hdr* scscf_rr;
@@ -1000,6 +1001,31 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
   if (tdata->msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
+    bool is_emergency_reg = false;
+
+    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                  pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL);
+
+    while (contact_hdr != NULL)
+    {
+      is_emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
+
+      if (is_emergency_reg)
+      {
+        break;
+      }
+
+      contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(tdata->msg,
+                                                            PJSIP_H_CONTACT,
+                                                            contact_hdr->next);
+    }
+
+    if (!allow_emergency_reg && is_emergency_reg)
+    {
+      LOG_DEBUG("Rejecting emergency REGISTER request");
+      return PJSIP_SC_SERVICE_UNAVAILABLE;
+    }
+
     if (source_type == SIP_PEER_TRUSTED_PORT)
     {
       LOG_WARNING("Rejecting REGISTER request received from within the trust domain");
@@ -4244,7 +4270,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,
                                 bool icscf_enabled,
-                                bool scscf_enabled)
+                                bool scscf_enabled,
+                                bool emerg_reg_accepted)
 {
   pj_status_t status;
 
@@ -4257,6 +4284,7 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
 
   icscf = icscf_enabled;
   scscf = scscf_enabled;
+  allow_emergency_reg = emerg_reg_accepted;
 
   cscf_acr_factory = cscf_rfacr_factory;
   bgcf_acr_factory = bgcf_rfacr_factory;
@@ -4393,6 +4421,7 @@ void destroy_stateful_proxy()
   ibcf = false;
   icscf = false;
   scscf = false;
+  allow_emergency_reg = false;
 
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_stateful_proxy);
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_tu);

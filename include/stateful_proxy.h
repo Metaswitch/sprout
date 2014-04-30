@@ -362,7 +362,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 QuiescingManager* quiescing_manager,
                                 SCSCFSelector *scscfSelector,
                                 bool icscf_enabled,
-                                bool scscf_enabled);
+                                bool scscf_enabled,
+                                bool emerg_reg_accepted);
 
 void destroy_stateful_proxy();
 

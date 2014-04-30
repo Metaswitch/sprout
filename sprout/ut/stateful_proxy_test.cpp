@@ -319,7 +319,8 @@ public:
                             bool ifcs,
                             bool icscf_enabled = false,
                             bool scscf_enabled = false,
-                            const string& icscf_uri_str = "")
+                            const string& icscf_uri_str = "",
+                            bool emerg_reg_enabled = false)
   {
     SipTest::SetUpTestCase(false);
 
@@ -348,6 +349,7 @@ public:
     _icscf_uri_str = icscf_uri_str;
     _icscf = icscf_enabled;
     _scscf = scscf_enabled;
+    _emerg_reg = emerg_reg_enabled;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
@@ -371,7 +373,8 @@ public:
                                           &_quiescing_manager,
                                           _scscf_selector,
                                           _icscf,
-                                          _scscf);
+                                          _scscf,
+                                          _emerg_reg);
     ASSERT_EQ(PJ_SUCCESS, ret) << PjStatus(ret);
 
     // Schedule timers.
@@ -469,6 +472,7 @@ protected:
   static string _icscf_uri_str;
   static bool _icscf;
   static bool _scscf;
+  static bool _emerg_reg;
 
   void doTestHeaders(TransportFlow* tpA,
                      bool tpAset,
@@ -500,6 +504,7 @@ string StatefulProxyTestBase::_ibcf_trusted_hosts;
 string StatefulProxyTestBase::_icscf_uri_str;
 bool StatefulProxyTestBase::_icscf;
 bool StatefulProxyTestBase::_scscf;
+bool StatefulProxyTestBase::_emerg_reg;
 QuiescingManager StatefulProxyTestBase::_quiescing_manager;
 
 class StatefulProxyTest : public StatefulProxyTestBase
@@ -2985,6 +2990,29 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
   doTestHeaders(&tp, true, _tp_default, false, msg, "", false, true, false, true, false);
 }
 
+// Test flows into Bono (P-CSCF) of emergency register.
+TEST_F(StatefulEdgeProxyTest, TestBonoEmergencyRegister)
+{
+  SCOPED_TRACE("");
+
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+
+  // Attempt to emergency register a client with the edge proxy.
+  Message msg;
+  msg._method = "REGISTER";
+  msg._to = msg._from;
+  msg._via = tp.to_string(false);
+  msg._extra = "Contact: <sip:wuntootreefower@";
+  msg._extra.append(tp.to_string(true)).append(";sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+
+  inject_msg(msg.get_request(), &tp);
+
+  // REGISTER rejected with a 503
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(503).matches(tdata->msg);
+  free_txdata();
+}
 
 // Test flows into IBCF, in particular for header stripping.
 TEST_F(StatefulTrunkProxyTest, TestMainlineHeadersIbcfTrustedIn)
