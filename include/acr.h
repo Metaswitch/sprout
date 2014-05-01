@@ -247,7 +247,7 @@ private:
                  INTERIM_RECORD=3,
                  STOP_RECORD=4 } RecordType;
 
-  typedef enum { END_USER_E164=0, END_USER_SIP_URI=1 } SubscriptionIdType;
+  typedef enum { END_USER_E164=0, END_USER_SIP_URI=2 } SubscriptionIdType;
 
   typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
 

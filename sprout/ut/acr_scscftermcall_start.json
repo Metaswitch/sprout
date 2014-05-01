@@ -228,7 +228,7 @@
       "Subscription-Id": [
         {
           "Subscription-Id-Data": "sip:6505550001@homedomain",
-          "Subscription-Id-Type": 1
+          "Subscription-Id-Type": 2
         },
         {
           "Subscription-Id-Data": "6505550001",
