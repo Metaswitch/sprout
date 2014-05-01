@@ -282,11 +282,25 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
     while (contact != NULL)
     {
+      // Calculate the expiry period for the updated binding.
+      expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+                max_expires;
+      if (expiry > max_expires)
+      {
+        // Expiry is too long, set it to the maximum.
+        expiry = max_expires;
+      }
+
       if (contact->star)
       {
         // Wildcard contact, which can only be used to clear all bindings for
-        // the AoR.
-        aor_data->clear();
+        // the AoR (and only if the expiry is 0).
+        if (expiry == 0)
+        {
+          aor_data->clear();
+        }
+
         break;
       }
 
@@ -364,17 +378,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_private_id = private_id;
-
-          // Calculate the expiry period for the updated binding.
-          expiry = (contact->expires != -1) ? contact->expires :
-                   (expires != NULL) ? expires->ivalue :
-                   max_expires;
-          if (expiry > max_expires)
-          {
-            // Expiry is too long, set it to the maximum.
-            expiry = max_expires;
-          }
-
           binding->_expires = now + expiry;
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
