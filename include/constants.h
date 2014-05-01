@@ -97,7 +97,4 @@ const pj_str_t SIP_REASON_FLOW_FAILED = pj_str((char*)"Flow failed");
 const pj_str_t SIP_REASON_ENUM_FAILED = pj_str((char*)"ENUM translation failed");
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str((char*)"Off-net calling not allowed");
 
-#define DEFAULT_HANDLING_SESSION_CONTINUED 0
-#define DEFAULT_HANDLING_SESSION_TERMINATED 1
-
 #endif /* CONSTANTS_H_ */
