@@ -70,7 +70,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _ifcs(ifcs),
   _acr(acr)
 {
-  LOG_DEBUG("Creating AsChain %p and adding to map", this);
+  LOG_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   LOG_DEBUG("Attached ACR (%p) to chain", _acr);
 }
