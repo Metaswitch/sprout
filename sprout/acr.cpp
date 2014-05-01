@@ -747,7 +747,11 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     {
       as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
     }
-    as["Status-Code"] = Json::Value(i->status_code);
+    if (i->status_code != PJSIP_SC_OK)
+    {
+      // Add Status-Code AVP if AS responded with non 200 OK status code.
+      as["Status-Code"] = Json::Value(i->status_code);
+    }
   }
 
   // Add a single Inter-Operator-Identifier AVP group.  (According to 7.2.77 of

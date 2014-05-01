@@ -10,8 +10,7 @@
             "Application-Provided-Called-Party-Address": [
               "sip:6505559999@homedomain"
             ],
-            "Application-Server": "sip:as1.homedomain:5060;transport=TCP",
-            "Status-Code": 200
+            "Application-Server": "sip:as1.homedomain:5060;transport=TCP"
           }
         ],
         "Called-Asserted-Identity": [
