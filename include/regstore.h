@@ -98,6 +98,9 @@ public:
 
       /// The private ID this binding was registered with.
       std::string _private_id;
+
+      /// Whether this is an emergency registration.
+      bool _emergency_registration;
     };
 
     /// @class RegStore::AoR::Subscription

@@ -400,6 +400,7 @@ std::string RegStore::Connector::serialize_aor(AoR* aor_data)
     }
     oss << b->_timer_id << '\0';
     oss << b->_private_id << '\0';
+    oss.write((const char *)&b->_emergency_registration, sizeof(int));
   }
 
   int num_subscriptions = aor_data->subscriptions().size();
@@ -489,6 +490,7 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
     }
     getline(iss, b->_timer_id, '\0');
     getline(iss, b->_private_id, '\0');
+    iss.read((char *)&b->_emergency_registration, sizeof(int));
   }
 
   int num_subscriptions;
