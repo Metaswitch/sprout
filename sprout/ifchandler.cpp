@@ -685,7 +685,12 @@ AsInvocation Ifc::as_invocation() const
   // though, and that's not easy in the current architecture.
 
   std::string default_handling = get_first_node_value(as, "DefaultHandling");
-  if (default_handling == "1")
+  if (default_handling == "0")
+  {
+    // DefaultHandling is present and set to 0, which is SESSION_CONTINUED.
+    as_invocation.default_handling = SESSION_CONTINUED;
+  }
+  else if (default_handling == "1")
   {
     // DefaultHandling is present and set to 1, which is SESSION_TERMINATED.
     as_invocation.default_handling = SESSION_TERMINATED;
@@ -694,6 +699,8 @@ AsInvocation Ifc::as_invocation() const
   {
     // If the DefaultHandling attribute isn't present, or is malformed, default
     // to SESSION_CONTINUED.
+    LOG_WARNING("Badly formed DefaultHandling element in IFC (%s), defaulting to SESSION_CONTINUED",
+                default_handling.c_str());
     as_invocation.default_handling = SESSION_CONTINUED;
   }
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
