@@ -224,7 +224,8 @@ void RegistrationTimeoutHandler::handle_response()
     // about failures in this case.
     if (_cfg->_remote_store != NULL)
     {
-      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, false);
+      bool ignored;
+      RegStore::AoR* remote_aor_data = set_aor_data(_cfg->_remote_store, _aor_id, aor_data, NULL, false, ignored);
       delete remote_aor_data;
     }
 
@@ -245,7 +246,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
                                                         RegStore::AoR* previous_aor_data,
                                                         RegStore* remote_store,
                                                         bool is_primary,
-                                                        bool all_bindings_expired)
+                                                        bool& all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;

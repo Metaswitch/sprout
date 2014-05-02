@@ -93,7 +93,7 @@ protected:
                               RegStore::AoR* previous_aor_data,
                               RegStore* remote_store,
                               bool update_chronos,
-                              bool all_bindings_expired);
+                              bool& all_bindings_expired);
 
 protected:
   const Config* _cfg;
