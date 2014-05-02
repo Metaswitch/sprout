@@ -62,7 +62,7 @@ extern "C" {
 struct ThirdPartyRegData
 {
   std::string public_id;
-  bool default_handling;
+  DefaultHandling default_handling;
   SAS::TrailId trail;
 };
 
@@ -161,7 +161,7 @@ static void send_register_cb(void* token, pjsip_event *event)
   ThirdPartyRegData* tsxdata = (ThirdPartyRegData*)token;
   pjsip_transaction* tsx = event->body.tsx_state.tsx;
 
-  if ((tsxdata->default_handling == DEFAULT_HANDLING_SESSION_TERMINATED) &&
+  if ((tsxdata->default_handling == SESSION_TERMINATED) &&
       ((tsx->status_code == 408) ||
        (PJSIP_IS_STATUS_IN_CLASS(tsx->status_code, 500))))
   {

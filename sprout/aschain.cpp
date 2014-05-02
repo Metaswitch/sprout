@@ -70,7 +70,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _ifcs(ifcs),
   _acr(acr)
 {
-  LOG_DEBUG("Creating AsChain %p and adding to map", this);
+  LOG_DEBUG("Creating AsChain %p with %d IFC and adding to map", this, ifcs.size());
   _as_chain_table->register_(this, _odi_tokens);
   LOG_DEBUG("Attached ACR (%p) to chain", _acr);
 }
@@ -332,10 +332,19 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
 }
 
-void AsChainLink::on_final_response(pjsip_rx_data* rdata)
+void AsChainLink::on_response(pjsip_rx_data* rdata)
 {
-  // Store the status code returned by the AS.
-  _as_chain->_as_info[_index].status_code = rdata->msg_info.msg->line.status.code;
+  if (rdata->msg_info.msg->line.status.code == PJSIP_SC_TRYING)
+  {
+    // The AS has returned a 100 Trying response, which means it must be
+    // viewed as responsive.
+    _responsive = true;
+  }
+  else if (rdata->msg_info.msg->line.status.code >= PJSIP_SC_OK)
+  {
+    // Store the status code returned by the AS.
+    _as_chain->_as_info[_index].status_code = rdata->msg_info.msg->line.status.code;
+  }
 }
 
 

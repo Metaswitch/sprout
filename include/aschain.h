@@ -178,7 +178,9 @@ class AsChainLink
 public:
   AsChainLink() :
     _as_chain(NULL),
-    _index(0u)
+    _index(0u),
+    _responsive(false),
+    _default_handling(SESSION_CONTINUED)
   {
   }
 
@@ -259,25 +261,15 @@ public:
     return _as_chain->matches_target(tdata);
   }
 
-  /// Returns default handling for this chain link.  If false, errors or
-  /// timeouts from the AS result in the transaction failing.  If true,
-  /// timeout or 5xx errors from the AS result in the transaction continuing
-  /// with the next AS in the chain.
-  bool default_handling() const
+  /// Returns whether or not processing of the AS chain should continue on
+  /// a timeout or 5xx error from the AS.
+  bool continue_session() const
   {
-    return _default_handling;
+    return (_default_handling == SESSION_CONTINUED) && (!_responsive);
   }
 
-  /// Resets the default handling.  This should be called when the AS
-  /// responds with a 100 Trying response as this indicates the AS has
-  /// received and is processing the transaction.
-  void reset_default_handling()
-  {
-    _default_handling = false;
-  }
-
-  /// Called on receipt of a final response from the AS.
-  void on_final_response(pjsip_rx_data* rdata);
+  /// Called on receipt of all responses from the AS.
+  void on_response(pjsip_rx_data* rdata);
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
@@ -318,7 +310,9 @@ private:
 
   AsChainLink(AsChain* as_chain, size_t index) :
     _as_chain(as_chain),
-    _index(index)
+    _index(index),
+    _responsive(false),
+    _default_handling(SESSION_CONTINUED)
   {
   }
 
@@ -328,9 +322,19 @@ private:
     return _as_chain->_odi_tokens[_index + 1];
   }
 
+  /// Pointer to the owning AsChain object.
   AsChain* _as_chain;
+
+  /// The index of this link in the AsChain.
   size_t _index;
-  bool _default_handling;
+
+  /// Indicates whether or not the AS is responsive (ie. whether it has
+  /// returned a 100 Trying response or forwarded the request back to the
+  /// S-CSCF.
+  bool _responsive;
+
+  /// The configured Default Handling configured on the relevant iFC.
+  DefaultHandling _default_handling;
 
   /// Application server timeouts (in seconds).
   static const int AS_TIMEOUT_CONTINUE = 2;
