@@ -114,12 +114,14 @@ void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
        ++i)
   {
     RegStore::AoR::Binding* binding = i->second;
-    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s",
+    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
               binding->_cid.c_str(), binding->_cseq,
-              binding->_timer_id.c_str());
+              binding->_timer_id.c_str(),
+              binding->_private_id.c_str(),
+              (binding->_emergency_registration ? "true" : "false"));
   }
 }
 
@@ -156,6 +158,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
       id = id + ":" + PJUtils::pj_str_to_string(reg_id);
     }
   }
+
   return id;
 }
 
@@ -315,10 +318,16 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         // it is present.  If not the contact URI is used instead.
         std::string contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
         std::string binding_id = get_binding_id(contact);
+
         if (binding_id == "")
         {
           binding_id = contact_uri;
         }
+        else if (PJUtils::is_emergency_registration(contact))
+        {
+          binding_id = "sos" + binding_id;
+        }
+
         LOG_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
@@ -352,6 +361,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding->_path_headers.clear();
           pjsip_generic_string_hdr* path_hdr =
             (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+
           while (path_hdr)
           {
             std::string path = PJUtils::pj_str_to_string(&path_hdr->hvalue);
@@ -369,6 +379,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding->_priority = contact->q1000;
           binding->_params.clear();
           pjsip_param* p = contact->other_param.next;
+
           while ((p != NULL) && (p != &contact->other_param))
           {
             std::string pname = PJUtils::pj_str_to_string(&p->name);
@@ -379,6 +390,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           binding->_private_id = private_id;
           binding->_expires = now + expiry;
+          binding->_emergency_registration = PJUtils::is_emergency_registration(contact);
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
