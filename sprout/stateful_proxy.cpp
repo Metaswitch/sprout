@@ -2999,7 +2999,7 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
         (_as_chain_link.is_set()))
     {
       // Pass the response to the AS chain.
-      _as_chain_link.on_not_responding(rdata);
+      _as_chain_link.on_not_responding();
     }
 
     if (_num_targets > 1)

@@ -273,7 +273,7 @@ public:
   void on_response(pjsip_rx_data* rdata);
 
   /// Called if the AS is not responding.
-  void on_not_responding(pjsip_rx_data* rdata);
+  void on_not_responding();
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {

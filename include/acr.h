@@ -132,9 +132,12 @@ public:
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
+  /// @param   timeout        true if the AS timed out without returning a
+  ///                         final response.
   virtual void as_info(const std::string& uri,
                        const std::string& redirect_uri,
-                       int status_code);
+                       int status_code,
+                       bool timeout);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
@@ -225,9 +228,9 @@ public:
   /// @param   timeout        true if the AS timed out without returning a
   ///                         final response.
   virtual void as_info(const std::string& uri,
-               const std::string& redirect_uri,
-               int status_code,
-               bool timeout);
+                       const std::string& redirect_uri,
+                       int status_code,
+                       bool timeout);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
