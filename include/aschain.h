@@ -151,6 +151,7 @@ private:
     std::string request_uri;
     std::string as_uri;
     int status_code;
+    bool timeout;
   } AsInformation;
   std::vector<AsInformation> _as_info;
 
@@ -268,8 +269,11 @@ public:
     return (_default_handling == SESSION_CONTINUED) && (!_responsive);
   }
 
-  /// Called on receipt of all responses from the AS.
+  /// Called on receipt of each response from the AS.
   void on_response(pjsip_rx_data* rdata);
+
+  /// Called if the AS is not responding.
+  void on_not_responding(pjsip_rx_data* rdata);
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {

@@ -222,9 +222,12 @@ public:
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
+  /// @param   timeout        true if the AS timed out without returning a
+  ///                         final response.
   virtual void as_info(const std::string& uri,
                const std::string& redirect_uri,
-               int status_code);
+               int status_code,
+               bool timeout);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
@@ -255,6 +258,8 @@ private:
 
   typedef enum { CALLING_PARTY=0, CALLED_PARTY=1 } Originator;
 
+  typedef enum { STATUS_CODE_NONE=-1, STATUS_CODE_4XX=0, STATUS_CODE_5XX=1, STATUS_CODE_TIMEOUT=2 } StatusCode;
+
   struct SubscriptionId
   {
     SubscriptionIdType type;
@@ -265,7 +270,7 @@ private:
   {
     std::string uri;
     std::string redirect_uri;
-    int status_code;
+    StatusCode status_code;
   };
 
   struct MediaComponents

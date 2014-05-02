@@ -69,7 +69,7 @@ void ACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 {
 }
 
-void ACR::as_info(const std::string& uri, const std::string& redirect_uri, int status_code)
+void ACR::as_info(const std::string& uri, const std::string& redirect_uri, int status_code, bool timeout)
 {
 }
 
@@ -557,14 +557,33 @@ void RalfACR::tx_response(pjsip_msg* rsp, pj_time_val timestamp)
 
 void RalfACR::as_info(const std::string& uri,
                       const std::string& redirect_uri,
-                      int status_code)
+                      int status_code,
+                      bool timeout)
 {
   // Add an entry to the _as_information list.
   LOG_DEBUG("Storing AS information for AS %s", uri.c_str());
   ASInformation as_info;
   as_info.uri = uri;
   as_info.redirect_uri = redirect_uri;
-  as_info.status_code = status_code;
+  if (timeout)
+  {
+    as_info.status_code = STATUS_CODE_TIMEOUT;
+  }
+  else if ((status_code >= 400) &&
+           (status_code <= 499))
+  {
+    as_info.status_code = STATUS_CODE_4XX;
+  }
+  else if (status_code >= 500)
+  {
+    // TS 32.299 doesn't specify what to do with 6xx errors, so we choose to
+    // report as 5xx.
+    as_info.status_code = STATUS_CODE_5XX;
+  }
+  else
+  {
+    as_info.status_code = STATUS_CODE_NONE;
+  }
   _as_information.push_back(as_info);
 }
 
@@ -747,9 +766,8 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     {
       as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
     }
-    if (i->status_code != PJSIP_SC_OK)
+    if (i->status_code != STATUS_CODE_NONE)
     {
-      // Add Status-Code AVP if AS responded with non 200 OK status code.
       as["Status-Code"] = Json::Value(i->status_code);
     }
   }
