@@ -324,7 +324,7 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
       // We only use this when doing some network-initiated deregistrations;
       // when the user deregisters all bindings another code path clears them
       LOG_INFO("Clearing all bindings!");
-      aor_data->clear();
+      aor_data->clear(false);
     } else {
       aor_data->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
                                             // initiated deregistration of a

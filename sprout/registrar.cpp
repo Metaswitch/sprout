@@ -225,6 +225,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   bool is_initial_registration = true;
   std::map<std::string, RegStore::AoR::Binding> bindings;
   bool all_bindings_expired = false;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -298,10 +299,15 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       if (contact->star)
       {
         // Wildcard contact, which can only be used to clear all bindings for
-        // the AoR (and only if the expiry is 0).
+        // the AoR (and only if the expiry is 0). It won't clear any emergency
+        // bindings
         if (expiry == 0)
         {
-          aor_data->clear();
+          aor_data->clear(false);
+        }
+        else
+        {
+          LOG_ERROR("Attempted to deregister all binding, but expiry value wasn't 0");
         }
 
         break;
@@ -389,8 +395,18 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_private_id = private_id;
-          binding->_expires = now + expiry;
           binding->_emergency_registration = PJUtils::is_emergency_registration(contact);
+
+          // If the new expiry is less than the current expiry, and it's an emergency registration,
+          // don't update the expiry time
+          if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
+          {
+            LOG_DEBUG("Don't reduce expiry time for an emergency registration");
+          }
+          else
+          {
+            binding->_expires = now + expiry;
+          }
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
@@ -448,6 +464,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   }
 
   out_is_initial_registration = is_initial_registration;
+
   return aor_data;
 }
 
@@ -588,6 +605,55 @@ void process_register_request(pjsip_rx_data* rdata)
   int now = time(NULL);
   int expiry = 0;
   bool is_initial_registration;
+
+  // Loop through each contact header. If every registration is an emergency
+  // registration and its expiry is 0 then reject with a 501.
+  // If there are valid registration updates to make then attempt to write to
+  // store, which also stops emergency registrations from being deregistered.
+  bool reject_with_501 = false;
+
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
+    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
+             (expires != NULL) ? expires->ivalue :
+              max_expires;
+
+    reject_with_501 = PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0);
+
+    if (!reject_with_501)
+    {
+      break;
+    }
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
+  if (reject_with_501)
+  {
+    LOG_ERROR("Rejecting register request as attempting to deregister an emergency registration");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Rejecting deregister request for emergency registrations";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_IMPLEMENTED,
+                               NULL,
+                               NULL,
+                               NULL);
+    delete acr;
+    return;
+  }
+
 
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
