@@ -547,7 +547,8 @@ TEST_F(ACRTest, SCSCFOrigCall)
   acr->rx_response(parse_msg(invite200ok.get()), ts);
   acr->as_info("sip:as1.homedomain:5060;transport=TCP",
                "sip:6505559999@homedomain",
-               200);
+               200,
+               false);
   ts.msec = 70;
   acr->tx_response(parse_msg(invite200ok.get()), ts);
 
@@ -874,7 +875,8 @@ TEST_F(ACRTest, SCSCFTermCall)
   acr->rx_response(parse_msg(r200ok.get()), ts);
   acr->as_info("sip:as1.homedomain:5060;transport=TCP",
                "sip:6505559999@homedomain",
-             200);
+               200,
+               false);
   ts.msec = 70;
   acr->tx_response(parse_msg(r200ok.get()), ts);
 

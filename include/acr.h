@@ -132,9 +132,12 @@ public:
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
+  /// @param   timeout        true if the AS timed out without returning a
+  ///                         final response.
   virtual void as_info(const std::string& uri,
                        const std::string& redirect_uri,
-                       int status_code);
+                       int status_code,
+                       bool timeout);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
@@ -222,9 +225,12 @@ public:
   ///                         request sent to the URI, empty otherwise.
   /// @param   status_code    The status code from the final response from the
   ///                         AS.
+  /// @param   timeout        true if the AS timed out without returning a
+  ///                         final response.
   virtual void as_info(const std::string& uri,
-               const std::string& redirect_uri,
-               int status_code);
+                       const std::string& redirect_uri,
+                       int status_code,
+                       bool timeout);
 
   /// Called by I-CSCF when server capabilities have been received from the
   /// HSS.
@@ -247,13 +253,22 @@ private:
                  INTERIM_RECORD=3,
                  STOP_RECORD=4 } RecordType;
 
-  typedef enum { END_USER_E164=0, END_USER_SIP_URI=1 } SubscriptionIdType;
+  typedef enum { END_USER_E164=0,
+                 END_USER_IMSI=1,
+                 END_USER_SIP_URI=2,
+                 END_USER_NAI=3,
+                 END_USER_PRIVATE=4 } SubscriptionIdType;
 
   typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
 
   typedef enum { SDP_OFFER=0, SDP_ANSWER=1 } SDPType;
 
   typedef enum { CALLING_PARTY=0, CALLED_PARTY=1 } Originator;
+
+  typedef enum { STATUS_CODE_NONE=-1,
+                 STATUS_CODE_4XX=0,
+                 STATUS_CODE_5XX=1,
+                 STATUS_CODE_TIMEOUT=2 } StatusCode;
 
   struct SubscriptionId
   {
@@ -265,7 +280,7 @@ private:
   {
     std::string uri;
     std::string redirect_uri;
-    int status_code;
+    StatusCode status_code;
   };
 
   struct MediaComponents

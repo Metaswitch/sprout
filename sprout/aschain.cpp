@@ -90,7 +90,8 @@ AsChain::~AsChain()
         _acr->as_info(_as_info[ii].as_uri,
                       (_as_info[ii+1].request_uri != _as_info[ii].request_uri) ?
                             _as_info[ii+1].request_uri : "",
-                      _as_info[ii].status_code);
+                      _as_info[ii].status_code,
+                      _as_info[ii].timeout);
       }
     }
 
@@ -345,6 +346,13 @@ void AsChainLink::on_response(pjsip_rx_data* rdata)
     // Store the status code returned by the AS.
     _as_chain->_as_info[_index].status_code = rdata->msg_info.msg->line.status.code;
   }
+}
+
+
+void AsChainLink::on_not_responding()
+{
+  // Store the status code returned by the AS.
+  _as_chain->_as_info[_index].timeout = true;
 }
 
 
