@@ -50,6 +50,8 @@
 
 using namespace std;
 using testing::MatchesRegex;
+using testing::HasSubstr;
+using testing::Not;
 
 /// Fixture for SubscriptionTest.
 class SubscriptionTest : public SipTest
@@ -235,6 +237,20 @@ TEST_F(SubscriptionTest, NotOurs)
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
 
+TEST_F(SubscriptionTest, EmergencySubscription)
+{
+  SubscribeMessage msg;
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(489, out->line.status.code);
+  EXPECT_EQ("Bad Event", str_pj(out->line.status.reason));
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
 /// Simple correct example
 TEST_F(SubscriptionTest, SimpleMainline)
 {
@@ -252,6 +268,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
   b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
   _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
@@ -389,6 +406,64 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
   check_subscriptions("sip:6505550233@homedomain", 1u);
 }
 
+/// Test that a NOTIFy doesn't include any emergency bindings
+TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
+{
+  // Get an initial empty AoR record and add a standard and an emergency binding.
+  int now = time(NULL);
+
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;sos;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
+  b1->_params.push_back(std::make_pair("reg-id", "1"));
+  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_emergency_registration = true;
+
+  RegStore::AoR::Binding* b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b2->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b2->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b2->_cseq = 17038;
+  b2->_expires = now + 300;
+  b2->_priority = 0;
+  b2->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
+  b2->_params.push_back(std::make_pair("reg-id", "1"));
+  b2->_params.push_back(std::make_pair("+sip.ice", ""));
+  b2->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
+  delete aor_data1; aor_data1 = NULL;
+
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+
+  // The NOTIFY should only contain the non-emergency binding
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  char buf[16384];
+  int n = out->body->print_body(out->body, buf, sizeof(buf));
+  string body(buf, n);
+  EXPECT_THAT(body, HasSubstr("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>"));
+  EXPECT_THAT(body, Not(HasSubstr("sos")));
+  inject_msg(respond_to_current_txdata(200));
+
+  check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
 void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
 {
   // Check that we registered the correct URI (0233, not 0234).
@@ -410,6 +485,5 @@ void SubscriptionTest::check_standard_OK()
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
   inject_msg(respond_to_current_txdata(200));
-  //free_txdata();
 }
 

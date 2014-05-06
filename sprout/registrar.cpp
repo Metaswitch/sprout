@@ -410,7 +410,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
-          if (expiry != 0)
+          if (expiry != 0 && !binding->_emergency_registration)
           {
             bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
           }

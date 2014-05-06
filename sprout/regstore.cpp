@@ -308,7 +308,11 @@ int RegStore::expire_bindings(AoR* aor_data,
            j != aor_data->_subscriptions.end();
           ++j)
       {
-        send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+        // Don't send a notification when an emergency registration expires
+        if (!b->_emergency_registration)
+        {
+          send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+        }
       }
 
       // If a timer id is present, then delete it. If the timer id is empty (because a
