@@ -442,7 +442,8 @@ void RalfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
     _route_hdr_transmitted = hdr_contents((pjsip_hdr*)route_hdr);
   }
 
-  if (_node_role == NODE_ROLE_ORIGINATING)
+  if ((_method != "REGISTER") &&
+      (_node_role == NODE_ROLE_ORIGINATING))
   {
     // In the originating case, the called party address is taken from the
     // RequestURI when the request is transmitted.
@@ -666,15 +667,21 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   LOG_DEBUG("Adding Service-Information AVP group");
   Json::Value& si = e["Service-Information"];
 
-  // Add Subscription-Id AVPs.
-  LOG_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
-  for (std::list<SubscriptionId>::const_iterator i = _subscription_ids.begin();
-       i != _subscription_ids.end();
-       ++i)
+  if ((_node_functionality == PCSCF) ||
+      (_node_functionality == SCSCF) ||
+      (_node_functionality == IBCF))
   {
-    Json::Value& sub = si["Subscription-Id"].append(Json::Value());
-    sub["Subscription-Id-Type"] = Json::Value(i->type);
-    sub["Subscription-Id-Data"] = Json::Value(i->id);
+    // Add Subscription-Id AVPs on P-CSCF/S-CSCF/IBCF ACRs (should be omitted
+    // on I-CSCF and BGCF).
+    LOG_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
+    for (std::list<SubscriptionId>::const_iterator i = _subscription_ids.begin();
+         i != _subscription_ids.end();
+         ++i)
+    {
+      Json::Value& sub = si["Subscription-Id"].append(Json::Value());
+      sub["Subscription-Id-Type"] = Json::Value(i->type);
+      sub["Subscription-Id-Data"] = Json::Value(i->id);
+    }
   }
 
   // Add IMS-Information AVP group.
@@ -714,30 +721,40 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     ii["Called-Party-Address"] = Json::Value(_called_party_address);
   }
 
-  // Add the Requested-Party-Address AVP.  This is only present if different
-  // from the called party address.
-  if (_requested_party_address != _called_party_address)
+  if (_node_functionality == SCSCF)
   {
-    LOG_DEBUG("Adding Requested-Party-Address AVP");
-    ii["Requested-Party-Address"] = Json::Value(_requested_party_address);
+    // Add the Requested-Party-Address AVP.  This is only present if different
+    // from the called party address.
+    if (_requested_party_address != _called_party_address)
+    {
+      LOG_DEBUG("Adding Requested-Party-Address AVP");
+      ii["Requested-Party-Address"] = Json::Value(_requested_party_address);
+    }
   }
 
-  // Add the Called-Asserted-Identity AVPs.
-  LOG_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
-  for (std::list<std::string>::const_iterator i = _called_asserted_ids.begin();
-       i != _called_asserted_ids.end();
-       ++i)
+  if ((_node_functionality == PCSCF) ||
+      (_node_functionality == SCSCF))
   {
-    ii["Called-Asserted-Identity"].append(Json::Value(*i));
+    // Add the Called-Asserted-Identity AVPs.
+    LOG_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
+    for (std::list<std::string>::const_iterator i = _called_asserted_ids.begin();
+         i != _called_asserted_ids.end();
+         ++i)
+    {
+      ii["Called-Asserted-Identity"].append(Json::Value(*i));
+    }
   }
 
-  // Add the Associated-URI AVPs.
-  LOG_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
-  for (std::list<std::string>::const_iterator i = _associated_uris.begin();
-       i != _associated_uris.end();
-       ++i)
+  if (_node_functionality != BGCF)
   {
-    ii["Associated-URI"].append(Json::Value(*i));
+    // Add the Associated-URI AVPs.
+    LOG_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
+    for (std::list<std::string>::const_iterator i = _associated_uris.begin();
+         i != _associated_uris.end();
+         ++i)
+    {
+      ii["Associated-URI"].append(Json::Value(*i));
+    }
   }
 
   // Add the Time-Stamps AVP group.
@@ -754,21 +771,24 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::UInt)_rsp_timestamp.msec);
   }
 
-  // Add the Application-Server-Information AVPs.
-  LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
-  for (std::list<ASInformation>::const_iterator i = _as_information.begin();
-       i != _as_information.end();
-       ++i)
+  if (_node_functionality == SCSCF)
   {
-    Json::Value& as = ii["Application-Server-Information"].append(Json::Value());
-    as["Application-Server"] = Json::Value(i->uri);
-    if (!i->redirect_uri.empty())
+    // Add the Application-Server-Information AVPs.
+    LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
+    for (std::list<ASInformation>::const_iterator i = _as_information.begin();
+         i != _as_information.end();
+         ++i)
     {
-      as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
-    }
-    if (i->status_code != STATUS_CODE_NONE)
-    {
-      as["Status-Code"] = Json::Value(i->status_code);
+      Json::Value& as = ii["Application-Server-Information"].append(Json::Value());
+      as["Application-Server"] = Json::Value(i->uri);
+      if (!i->redirect_uri.empty())
+      {
+        as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
+      }
+      if (i->status_code != STATUS_CODE_NONE)
+      {
+        as["Status-Code"] = Json::Value(i->status_code);
+      }
     }
   }
 
@@ -801,24 +821,6 @@ std::string RalfACR::get_message(pj_time_val timestamp)
 
   ii["IMS-Charging-Identifier"] = Json::Value(_icid);
 
-  // Add Early-Media-Description AVPs.
-  LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
-  for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
-       i != _early_media.end();
-       ++i)
-  {
-    Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
-    em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
-                               Json::Value((Json::UInt)i->offer_timestamp.sec);
-    em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
-                              Json::Value((Json::UInt)i->answer_timestamp.sec);
-    encode_sdp_description(em, i->media);
-  }
-
-  // Add SDP related AVPs to IMS-Information AVP.
-  LOG_DEBUG("Adding Media AVPs");
-  encode_sdp_description(ii, _media);
-
   // Add the Server-Capabilities AVP if I-CSCF.
   if (_node_functionality == ICSCF)
   {
@@ -838,24 +840,62 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     }
     if (!_server_caps.scscf.empty())
     {
+      // Note that the Server-Name in Server-Capabilities is an array AVP
+      // according to 6.3.4/TS 29.229.
       server_caps["Server-Name"].append(Json::Value(_server_caps.scscf));
     }
   }
 
-  // Add Message-Body AVPs.
-  LOG_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
-  for (std::list<MessageBody>::const_iterator i = _msg_bodies.begin();
-       i != _msg_bodies.end();
-       ++i)
+  // Add media and message body related AVPs on P-CSCF/S-CSCF/IBCF ACRs.  Note
+  // that according to TS 32.260, a BGCF should include early media AVPs if
+  // it has the information, but since a BGCF does not have to record route
+  // itself, it may not have the information.  We therefore choose not to
+  // include early media on BGCF ACRs.
+  if ((_node_functionality == SCSCF) ||
+      (_node_functionality == PCSCF) ||
+      (_node_functionality == IBCF))
   {
-    Json::Value& body = ii["Message-Body"].append(Json::Value());
-    body["Content-Type"] = Json::Value(i->type);
-    body["Content-Length"] = Json::Value(i->length);
-    if (!i->disposition.empty())
+    // Add Early-Media-Description AVPs to Start and Event ACRs.
+    if ((_record_type == START_RECORD) ||
+        (_record_type == EVENT_RECORD))
     {
-      body["Content-Disposition"] = Json::Value(i->disposition);
+      LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
+      for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
+           i != _early_media.end();
+           ++i)
+      {
+        Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
+        em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
+                                 Json::Value((Json::UInt)i->offer_timestamp.sec);
+        em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
+                                Json::Value((Json::UInt)i->answer_timestamp.sec);
+        encode_sdp_description(em, i->media);
+      }
     }
-    body["Originator"] = Json::Value(i->originator);
+
+    if ((_record_type == START_RECORD) ||
+        (_record_type == INTERIM_RECORD))
+    {
+      // Add SDP related AVPs to Start and Interim ACRs.
+      LOG_DEBUG("Adding Media AVPs");
+      encode_sdp_description(ii, _media);
+    }
+
+    // Add Message-Body AVPs.
+    LOG_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
+    for (std::list<MessageBody>::const_iterator i = _msg_bodies.begin();
+         i != _msg_bodies.end();
+         ++i)
+    {
+      Json::Value& body = ii["Message-Body"].append(Json::Value());
+      body["Content-Type"] = Json::Value(i->type);
+      body["Content-Length"] = Json::Value(i->length);
+      if (!i->disposition.empty())
+      {
+        body["Content-Disposition"] = Json::Value(i->disposition);
+      }
+      body["Originator"] = Json::Value(i->originator);
+    }
   }
 
   // Add Cause-Code AVP if STOP or EVENT message.
@@ -865,7 +905,8 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     LOG_DEBUG("Adding Cause-Code(0) AVP to ACR[Stop]");
     ii["Cause-Code"] = Json::Value(0);
   }
-  else if (_record_type == EVENT_RECORD)
+  else if ((_record_type == EVENT_RECORD) &&
+           (_status_code != 0))
   {
     // Calculate the cause code to include on the request (see 7.2.35/TS 32.299
     // for all the gory details).
