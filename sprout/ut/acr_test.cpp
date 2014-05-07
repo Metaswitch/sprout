@@ -124,7 +124,7 @@ protected:
     if (!rc)
     {
       Json::FastWriter writer;
-      printf("JSON comparison failed\n%s\n%s\n",
+      printf("JSON comparison failed\nReceived\n%s\nExpected\n%s\n",
              json_output.toStyledString().c_str(),
              json_expected.toStyledString().c_str());
     }
@@ -965,4 +965,67 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 }
 
+TEST_F(ACRTest, ICSCFRegister)
+{
+  // Tests mainline Rf message generation for a successful registration transaction
+  // at the I-CSCF.
+  pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
 
+  // Create a Ralf ACR factory for I-CSCF ACRs.
+  RalfACRFactory f(NULL, ICSCF);
+
+  // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
+  acr = f.get_acr(0, CALLING_PARTY);
+
+  // Build the original REGISTER request.
+  SIPRequest reg("REGISTER");
+  reg._requri = "sip:homedomain";
+  reg._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  reg._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reg._extra_hdrs += "Expires: 300\r\n";
+  reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  reg._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+
+  // Pass the request to the ACR as a received request.
+  ts.sec = 1;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(reg.get()), ts);
+
+  // The I-CSCF now does a UAR query to the HSS and should received back a
+  // server capabilities structure, which it adds to the ACR.
+  ServerCapabilities caps;
+  caps.scscf = "sip:scscf1.homedomain";
+  caps.mandatory_caps.push_back(10);
+  caps.mandatory_caps.push_back(20);
+  caps.optional_caps.push_back(30);
+  acr->server_capabilities(caps);
+
+  // I-CSCF sends an ACR immediately after the UAR query completes.
+  ts.msec = 10;
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_icscfregister_caps.json"));
+
+  // I-CSCF updates the request URI of the REGISTER and forwards it to the
+  // assigned S-CSCF.
+  reg._requri = caps.scscf;
+  acr->tx_request(parse_msg(reg.get()), ts);
+
+  // Now build a 200 OK response.
+  SIPResponse reg200ok(200, "REGISTER");
+  reg200ok._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;expires=300;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  reg200ok._extra_hdrs = "P-Associated-URI: <sip:6505550000@homedomain>, <tel:6505550000>\r\n";
+
+  // Pass the response to ACR as a received and transmitted response.
+  ts.msec = 25;
+  acr->rx_response(parse_msg(reg200ok.get()), ts);
+  acr->tx_response(parse_msg(reg200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_icscfregister_final.json"));
+  delete acr;
+}
