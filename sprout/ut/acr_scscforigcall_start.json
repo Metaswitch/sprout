@@ -10,8 +10,7 @@
             "Application-Provided-Called-Party-Address": [
               "sip:6505559999@homedomain"
             ],
-            "Application-Server": "sip:as1.homedomain:5060;transport=TCP",
-            "Status-Code": 200
+            "Application-Server": "sip:as1.homedomain:5060;transport=TCP"
           }
         ],
         "Called-Asserted-Identity": [
@@ -229,7 +228,7 @@
       "Subscription-Id": [
         {
           "Subscription-Id-Data": "sip:6505550000@homedomain",
-          "Subscription-Id-Type": 1
+          "Subscription-Id-Type": 2
         },
         {
           "Subscription-Id-Data": "6505550000",

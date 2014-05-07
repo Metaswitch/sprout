@@ -51,13 +51,15 @@ extern "C" {
 
 #include "sas.h"
 
+typedef enum {SESSION_CONTINUED=0, SESSION_TERMINATED=1} DefaultHandling;
+
 /// An invocation of an AS - the result of a matching iFC.
 //
 // Has no dependency on the iFCs used to create it.
 struct AsInvocation
 {
   std::string server_name;
-  bool default_handling;
+  DefaultHandling default_handling;
   std::string service_info;
   bool include_register_request;
   bool include_register_response;

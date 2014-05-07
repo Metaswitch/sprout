@@ -74,6 +74,7 @@ void SIPResolver::resolve(const std::string& name,
                           std::vector<AddrInfo>& targets,
                           SAS::TrailId trail)
 {
+  int dummy_ttl = 0;
   targets.clear();
 
   // First determine the transport following the process in RFC3263 section
@@ -149,7 +150,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      NAPTRReplacement* naptr = _naptr_cache->get(name);
+      NAPTRReplacement* naptr = _naptr_cache->get(name, dummy_ttl);
 
       if (naptr != NULL)
       {
@@ -287,7 +288,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      srv_resolve(srv_name, af, transport, retries, targets, trail);
+      srv_resolve(srv_name, af, transport, retries, targets, dummy_ttl, trail);
     }
     else
     {
@@ -305,7 +306,7 @@ void SIPResolver::resolve(const std::string& name,
         SAS::report_event(event);
       }
 
-      a_resolve(a_name, af, port, transport, retries, targets, trail);
+      a_resolve(a_name, af, port, transport, retries, targets, dummy_ttl, trail);
     }
   }
 }

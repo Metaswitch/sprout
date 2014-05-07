@@ -34,7 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <boost/lexical_cast.hpp>
 #include <boost/regex.hpp>
 #include <cassert>
 
@@ -164,7 +163,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     SAS::report_event(event);
 
     throw ifc_error(error_msg);
- }
+  }
 
   // Now interpret the node depending on its class.
   bool ret = false;
@@ -341,7 +340,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
     std::string hostport = PJUtils::pj_str_to_string(&req_uri->host);
     if (req_uri->port != 0)
     {
-      hostport += ":" + boost::lexical_cast<std::string>(req_uri->port);
+      hostport += ":" + std::to_string(req_uri->port);
     }
 
     req_uri_regex = boost::regex(get_text_or_cdata(node), boost::regex_constants::no_except);
@@ -685,7 +684,25 @@ AsInvocation Ifc::as_invocation() const
   // That means each AsInvocation would have to belong to a pool,
   // though, and that's not easy in the current architecture.
 
-  as_invocation.default_handling = boost::lexical_cast<bool>(get_first_node_value(as, "DefaultHandling"));
+  std::string default_handling = get_first_node_value(as, "DefaultHandling");
+  if (default_handling == "0")
+  {
+    // DefaultHandling is present and set to 0, which is SESSION_CONTINUED.
+    as_invocation.default_handling = SESSION_CONTINUED;
+  }
+  else if (default_handling == "1")
+  {
+    // DefaultHandling is present and set to 1, which is SESSION_TERMINATED.
+    as_invocation.default_handling = SESSION_TERMINATED;
+  }
+  else
+  {
+    // If the DefaultHandling attribute isn't present, or is malformed, default
+    // to SESSION_CONTINUED.
+    LOG_WARNING("Badly formed DefaultHandling element in IFC (%s), defaulting to SESSION_CONTINUED",
+                default_handling.c_str());
+    as_invocation.default_handling = SESSION_CONTINUED;
+  }
   as_invocation.service_info = get_first_node_value(as, "ServiceInfo");
 
   xml_node<>* as_ext = as->first_node("Extension");
@@ -878,8 +895,7 @@ static long parse_integer(xml_node<>* node, std::string description, long min_va
   if ((n < min_value) || (n > max_value))
   {
     throw ifc_error(description + " out of allowable range " +
-                    boost::lexical_cast<std::string>(min_value) + ".." +
-                    boost::lexical_cast<std::string>(max_value));
+                    std::to_string(min_value) + ".." + std::to_string(max_value));
   }
 
   return n;
