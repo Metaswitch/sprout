@@ -610,7 +610,8 @@ void process_register_request(pjsip_rx_data* rdata)
   // registration and its expiry is 0 then reject with a 501.
   // If there are valid registration updates to make then attempt to write to
   // store, which also stops emergency registrations from being deregistered.
-  bool reject_with_501 = false;
+  bool reject_with_501 = true;
+  bool any_emergency_registrations = false;
 
   pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
                  pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
@@ -622,8 +623,10 @@ void process_register_request(pjsip_rx_data* rdata)
              (expires != NULL) ? expires->ivalue :
               max_expires;
 
-    reject_with_501 = PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0);
-
+    reject_with_501 = (reject_with_501 &&
+                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
+    any_emergency_registrations = (any_emergency_registrations ||
+                                  PJUtils::is_emergency_registration(contact_hdr));
     if (!reject_with_501)
     {
       break;
@@ -869,16 +872,20 @@ void process_register_request(pjsip_rx_data* rdata)
   // service profile (i.e. once per iFC, using an arbitrary public
   // ID). hss->get_subscription_data should be enhanced to provide an
   // appropriate data structure (representing the ServiceProfile
-  // nodes) and we should loop through that.
+  // nodes) and we should loop through that. Don't send any register that
+  // contained emergency registrations to the application servers.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id],
-                                                       store,
-                                                       rdata,
-                                                       tdata,
-                                                       expiry,
-                                                       is_initial_registration,
-                                                       public_id,
-                                                       trail);
+  if (!any_emergency_registrations)
+  {
+    RegistrationUtils::register_with_application_servers(ifc_map[public_id],
+                                                         store,
+                                                         rdata,
+                                                         tdata,
+                                                         expiry,
+                                                         is_initial_registration,
+                                                         public_id,
+                                                         trail);
+  }
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);
