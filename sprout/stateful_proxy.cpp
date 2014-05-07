@@ -2805,19 +2805,19 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
     int status_code = rdata->msg_info.msg->line.status.code;
 
     if ((!edge_proxy) &&
+        (_as_chain_link.is_set()))
+    {
+      // Pass the response to the AS chain.
+      _as_chain_link.on_response(rdata);
+    }
+
+    if ((!edge_proxy) &&
         (method() == PJSIP_INVITE_METHOD) &&
         (status_code == 100))
     {
       // In routing proxy mode, don't forward 100 response for INVITE as it has
       // already been sent.
       LOG_DEBUG("%s - Discard 100/INVITE response", uac_data->name());
-
-      if (_as_chain_link.is_set())
-      {
-        // Received a 100 Trying response from the application server, so
-        // turn off default handling.
-        _as_chain_link.reset_default_handling();
-      }
 
       exit_context();
       return;
@@ -2830,14 +2830,6 @@ void UASTransaction::on_new_client_response(UACTransaction* uac_data, pjsip_rx_d
       // Pass the REGISTER response to the access proxy code to see if
       // the associated client flow has been authenticated.
       proxy_process_register_response(rdata);
-    }
-
-    if ((!edge_proxy) &&
-        (status_code >= PJSIP_SC_OK) &&
-        (_as_chain_link.is_set()))
-    {
-      // Pass the final response to the AS chain.
-      _as_chain_link.on_final_response(rdata);
     }
 
     status = PJUtils::create_response_fwd(stack_data.endpt, rdata, 0, &tdata);
@@ -3003,6 +2995,13 @@ void UASTransaction::on_client_not_responding(UACTransaction* uac_data)
   {
     enter_context();
 
+    if ((!edge_proxy) &&
+        (_as_chain_link.is_set()))
+    {
+      // Pass the response to the AS chain.
+      _as_chain_link.on_not_responding();
+    }
+
     if (_num_targets > 1)
     {
       // UAC transaction has timed out or hit a transport error.  If
@@ -3093,13 +3092,14 @@ pj_status_t UASTransaction::handle_final_response()
     int st_code = best_rsp->msg->line.status.code;
 
     if (((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
-         ((st_code >= 500) && (st_code < 600))) &&
+         (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
         (_as_chain_link.is_set()) &&
-        (!_as_chain_link.complete()) &&
-        (_as_chain_link.default_handling()))
+        (_as_chain_link.continue_session()) &&
+        (!_as_chain_link.complete()))
     {
-      // Default handling was set to continue, and the status code is a
-      // failure that triggers default handling.
+      // The AS either timed out or returned a 5xx error, and the conditions
+      // for continuing the session with the next application server have been
+      // met.
       LOG_DEBUG("Trigger default_handling=CONTINUE processing");
 
       // Reset the best response to a 408 response to use if none of the targets responds.
