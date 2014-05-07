@@ -855,18 +855,22 @@ std::string RalfACR::get_message(pj_time_val timestamp)
       (_node_functionality == PCSCF) ||
       (_node_functionality == IBCF))
   {
-    // Add Early-Media-Description AVPs.
-    LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
-    for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
-         i != _early_media.end();
-         ++i)
+    // Add Early-Media-Description AVPs to Start and Event ACRs.
+    if ((_record_type == START_RECORD) ||
+        (_record_type == EVENT_RECORD))
     {
-      Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
-      em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
-                               Json::Value((Json::UInt)i->offer_timestamp.sec);
-      em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
-                              Json::Value((Json::UInt)i->answer_timestamp.sec);
-      encode_sdp_description(em, i->media);
+      LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
+      for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
+           i != _early_media.end();
+           ++i)
+      {
+        Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
+        em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
+                                 Json::Value((Json::UInt)i->offer_timestamp.sec);
+        em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
+                                Json::Value((Json::UInt)i->answer_timestamp.sec);
+        encode_sdp_description(em, i->media);
+      }
     }
 
     if ((_record_type == START_RECORD) ||
