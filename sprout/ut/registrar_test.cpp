@@ -222,7 +222,6 @@ string Message::get()
                    /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                    /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 13 */ _cseq.c_str()
-
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -267,7 +266,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -288,7 +287,7 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -326,7 +325,7 @@ TEST_F(RegistrarTest, SimpleMainlineExpiresParameter)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -362,7 +361,7 @@ TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -395,9 +394,8 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   // Expires timer for first contact may have ticked down, so give it some leeway.
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
-  //          get_headers(out, "Contact"));
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
@@ -413,8 +411,8 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
@@ -431,9 +429,9 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
@@ -448,9 +446,9 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
@@ -466,17 +464,30 @@ TEST_F(RegistrarTest, MultipleRegistrations)
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
   EXPECT_THAT(get_headers(out, "Contact"),
-              MatchesRegex("Contact: sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
-                           "Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
+              MatchesRegex("Contact: <sip:eeeebbbbaaaa11119c661a7acf228ed7@10.114.61.111:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-a55444444440>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=(300|[1-2][0-9][0-9]|[1-9][0-9]|[1-9]);\\+sip.ice;reg-id=1"));
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 
-  // Registration of star clears all bindings.
+  // Registration of star but with a non zero expiry means the request is rejected with a 400.
   msg = msg0;
+  msg._contact = "*";
+  msg._contact_instance = "";
+  msg._contact_params = "";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(400, out->line.status.code);
+  EXPECT_EQ("Bad Request", str_pj(out->line.status.reason));
+  free_txdata();
+
+  // Registration of star with expiry = 0 clears all bindings.
+  msg = msg0;
+  msg._expires = "Expires: 0";
   msg._contact = "*";
   msg._contact_instance = "";
   msg._contact_params = "";
@@ -504,7 +515,7 @@ TEST_F(RegistrarTest, NoPath)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));
   EXPECT_EQ("", get_headers(out, "Require")); // because we have no path
   EXPECT_EQ("", get_headers(out, "Path"));
@@ -555,7 +566,7 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -620,7 +631,7 @@ TEST_F(RegistrarTest, AppServersWithOneBody)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -681,7 +692,7 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -740,7 +751,7 @@ TEST_F(RegistrarTest, AppServersPassthrough)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -1170,7 +1181,7 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -1227,7 +1238,7 @@ TEST_F(RegistrarTest, AppServersWithSDPIFCs)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -1274,7 +1285,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -1291,7 +1302,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
             get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
@@ -1300,3 +1311,270 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   free_txdata();
 }
 
+
+// Test that an emergency registration is successful, and creates an emergency binding
+TEST_F(RegistrarTest, MainlineEmergencyRegistration)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Make a emergency registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+}
+
+
+// Test that an emergency registration is successful, and creates an emergency binding.
+// The Contact header doesn't include a +sip_instance, so the binding id is the contact URI containing 'sos'
+TEST_F(RegistrarTest, MainlineEmergencyRegistrationNoSipInstance)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Make a emergency registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._contact_instance = "";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+}
+
+
+// Test that an emergency registration can't be deregistered
+TEST_F(RegistrarTest, EmergencyDeregistration)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Make a emergency registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+
+  // Attempt to deregister a single emergency binding
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._cseq = "16568";
+  msg._contact_params = ";expires=0;+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+
+  // This should be rejected with a 501
+  out = current_txdata()->msg;
+  EXPECT_EQ(501, out->line.status.code);
+  EXPECT_EQ("Not Implemented", str_pj(out->line.status.reason));
+  free_txdata();
+
+  // Attempt to reduce the expiry time of an emergency binding.
+  msg._expires = "Expires: 100";
+  msg._cseq = "16569";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._contact_params = ";expires=100;+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+
+  // Emergency binding isn't changed
+  out = current_txdata()->msg;
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+
+
+// Test multiple emergency and standard registrations.
+TEST_F(RegistrarTest, NultipleEmergencyRegistrations)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Make a standard registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be one binding, and it isn't an emergency registration
+  RegStore::AoR* aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_FALSE(aor_data->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+
+  // Make an emergency registration
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  inject_msg(msg.get());
+
+  // Check the 200 OK - the contact header should contain the sos URI parameter
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be two bindings. The emergency binding should have 'sos' prepended to its key.
+  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(2u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+
+  // Make an emergency registration
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._contact_instance = "";
+  inject_msg(msg.get());
+
+  // Check the 200 OK - the contact header should contain the sos URI parameter
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;\\+sip.ice;reg-id=1\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be three bindings.
+  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(3u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+
+  // Attempt to deregister all bindings
+  msg._expires = "Expires: 0";
+  msg._contact = "*";
+  msg._contact_instance = "";
+  msg._contact_params = "";
+  inject_msg(msg.get());
+
+  // Check the 200 OK. The emergency bindings shouldn't have been deregistered, but the standard one has
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_THAT(get_headers(out, "Contact"),
+              MatchesRegex("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;\\+sip.ice;reg-id=1\r\n"
+                           "Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;\\+sip.ice;reg-id=1;\\+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\""));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be two emergency bindings
+  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(2u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  EXPECT_TRUE(aor_data->get_binding(std::string("sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+
+  // Wait 5 mins and the emergency bindings should have expired
+  cwtest_advance_time_ms(300100);
+  aor_data = _store->get_aor_data("sip:6505550231@homedomain", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(0u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
+}

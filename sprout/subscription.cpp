@@ -249,7 +249,11 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       {
         std::string id = i->first;
         RegStore::AoR::Binding bind = *(i->second);
-        bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
+
+        if (!bind._emergency_registration)
+        {
+          bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
+        }
       }
 
       if (update_notify)
@@ -297,11 +301,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START
     LOG_ERROR("Rejecting subscribe request using non SIP URI");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string pub_id = "UNKNOWN";
     std::string error_msg = "Subscribe failed as using non SIP URI";
-    event.add_var_param(pub_id);
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
@@ -313,6 +315,46 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL);
     return;
     // LCOV_EXCL_STOP
+  }
+
+  bool emergency_subscription = false;
+
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    emergency_subscription = PJUtils::is_emergency_registration(contact_hdr);
+
+    if (!emergency_subscription)
+    {
+      break;
+    }
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
+  if (emergency_subscription)
+  {
+    // Reject a subscription with a Contact header containing a contact address
+    // that's been registered for emergency service.
+    LOG_ERROR("Rejecting subscribe request from emergency registration");
+
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+    // Can't log the public ID as the subscribe has failed too early
+    std::string error_msg = "Subscribe failed as using emergency registration";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_BAD_EVENT,
+                               NULL,
+                               NULL,
+                               NULL);
+    return;
   }
 
   ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);

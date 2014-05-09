@@ -91,7 +91,8 @@ extern "C" {
 enum OptionTypes
 {
   OPT_DEFAULT_SESSION_EXPIRES=256+1,
-  OPT_ADDITIONAL_HOME_DOMAINS
+  OPT_ADDITIONAL_HOME_DOMAINS,
+  OPT_EMERGENCY_REG_ACCEPTED
 };
 
 struct options
@@ -141,6 +142,7 @@ struct options
   int                    http_port;
   int                    http_threads;
   std::string            billing_cdf;
+  pj_bool_t              emerg_reg_accepted;
   int                    worker_threads;
   pj_bool_t              log_to_file;
   std::string            log_directory;
@@ -169,7 +171,7 @@ struct options
     { "remote-memstore",   required_argument, 0, 'm'},
     { "sas",               required_argument, 0, 'S'},
     { "hss",               required_argument, 0, 'H'},
-    { "record-routing-model",          required_argument, 0, 'C'},
+    { "record-routing-model", required_argument, 0, 'C'},
     { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
     { "xdms",              required_argument, 0, 'X'},
     { "chronos",           required_argument, 0, 'K'},
@@ -187,6 +189,7 @@ struct options
     { "http_port",         required_argument, 0, 'o'},
     { "http_threads",      required_argument, 0, 'q'},
     { "billing-cdf",       required_argument, 0, 'B'},
+    { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
     { "interactive",       no_argument,       0, 't'},
@@ -288,6 +291,12 @@ static void usage(void)
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
        " -A, --authentication       Enable authentication\n"
+       "     --allow-emergency-registration\n"
+       "                            Allow the P-CSCF to acccept emergency registrations.\n"
+       "                            Only valid if -p/pcscf is specified.\n"
+       "                            WARNING: If this is enabled, all emergency registrations are accepted,\n"
+       "                            but they are not policed.\n"
+       "                            This parameter is only intended to be enabled during testing.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -683,6 +692,11 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
               options->default_session_expires);
       break;
 
+    case OPT_EMERGENCY_REG_ACCEPTED:
+      options->emerg_reg_accepted = PJ_TRUE;
+      LOG_INFO("Emergency registrations accepted");
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -941,6 +955,7 @@ int main(int argc, char *argv[])
   opt.http_port = 9888;
   opt.http_threads = 1;
   opt.billing_cdf = "";
+  opt.emerg_reg_accepted = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1336,7 +1351,8 @@ int main(int argc, char *argv[])
                                  quiescing_mgr,
                                  scscf_selector,
                                  opt.icscf_enabled,
-                                 opt.scscf_enabled);
+                                 opt.scscf_enabled,
+                                 false);
 
     if (status != PJ_SUCCESS)
     {
@@ -1370,7 +1386,8 @@ int main(int argc, char *argv[])
                                  quiescing_mgr,
                                  NULL,
                                  opt.icscf_enabled,
-                                 opt.scscf_enabled);
+                                 opt.scscf_enabled,
+                                 opt.emerg_reg_accepted);
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Failed to enable P-CSCF edge proxy");

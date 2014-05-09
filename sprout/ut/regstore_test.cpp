@@ -120,6 +120,7 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
   b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
@@ -218,6 +219,7 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
   b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
   rc = store->set_aor_data(std::string("5102175698@cw-ngv.com"), aor_data1, false, 0);
@@ -314,6 +316,7 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
   b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
 
   // Add a subscription to the record.
   s1 = aor_data1->get_subscription("1234");
@@ -385,6 +388,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b1->_params.push_back(std::make_pair("reg-id", "1"));
   b1->_params.push_back(std::make_pair("+sip.ice", ""));
   b1->_private_id = "5102175698@cw-ngv.com";
+  b1->_emergency_registration = false;
   b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
   EXPECT_EQ(2u, aor_data1->bindings().size());
   b2->_uri = std::string("<sip:5102175698@192.91.191.42:59934;transport=tcp;ob>");
@@ -397,6 +401,7 @@ TEST_F(RegStoreTest, ExpiryTests)
   b2->_params.push_back(std::make_pair("reg-id", "2"));
   b2->_params.push_back(std::make_pair("+sip.ice", ""));
   b2->_private_id = "5102175699@cw-ngv.com";
+  b2->_emergency_registration = false;
 
   // Add a couple of subscriptions, one with expiry in 150 seconds, the next
   // with expiry in 300 seconds.

@@ -547,6 +547,7 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   binding->_cseq = 1;
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
+  binding->_emergency_registration = false;
   bool ret = store->set_aor_data(uri, aor, false, 0);
   delete aor;
   EXPECT_TRUE(ret);

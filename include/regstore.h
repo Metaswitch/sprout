@@ -98,6 +98,9 @@ public:
 
       /// The private ID this binding was registered with.
       std::string _private_id;
+
+      /// Whether this is an emergency registration.
+      bool _emergency_registration;
     };
 
     /// @class RegStore::AoR::Subscription
@@ -150,7 +153,7 @@ public:
     void common_constructor(const AoR& other);
 
     /// Clear all the bindings and subscriptions from this object.
-    void clear();
+    void clear(bool clear_emergency_bindings);
 
     /// Retrieve a binding by Binding ID, creating an empty one if necessary.
     /// The created binding is completely empty, even the Contact URI field.

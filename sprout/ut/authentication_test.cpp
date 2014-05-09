@@ -199,6 +199,8 @@ public:
   string _integ_prot;
   string _auts;
   string _key;
+  bool _sos;
+  string _extra_contact;
 
   AuthenticationMessage(std::string method) :
     _method(method),
@@ -216,7 +218,9 @@ public:
     _opaque(""),
     _integ_prot(""),
     _auts(""),
-    _key("")
+    _key(""),
+    _sos(false),
+    _extra_contact("")
   {
   }
 
@@ -319,15 +323,18 @@ string AuthenticationMessage::get()
                    "Expires: 300\r\n"
                    "Allow: INVITE, ACK, CANCEL, OPTIONS, BYE, REFER, NOTIFY, MESSAGE, SUBSCRIBE, INFO\r\n"
                    "User-Agent: X-Lite release 5.0.0 stamp 67284\r\n"
-                   "Contact: <sip:%2$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP>\r\n"
+                   "Contact: <sip:%2$s@uac.example.com:5060;rinstance=f0b20987985b61df;transport=TCP%4$s>\r\n"
+                   "%5$s"
                    "Route: <sip:sprout.ut.cw-ngv.com;transport=tcp;lr>\r\n"
-                   "%4$s"
+                   "%6$s"
                    "Content-Length: 0\r\n"
                    "\r\n",
                    /*  1 */ _method.c_str(),
                    /*  2 */ _user.c_str(),
                    /*  3 */ _domain.c_str(),
-                   /*  4 */ _auth_hdr ?
+                   /*  4 */ (_sos) ? ";sos" : "",
+                   /*  5 */ _extra_contact.empty() ? "" : _extra_contact.append("\r\n").c_str(),
+                   /*  6 */ _auth_hdr ?
                               string("Authorization: Digest ")
                                 .append((!_auth_user.empty()) ? string("username=\"").append(_auth_user).append("\", ") : "")
                                 .append((!_auth_realm.empty()) ? string("realm=\"").append(_auth_realm).append("\", ") : "")
@@ -381,6 +388,17 @@ TEST_F(AuthenticationTest, NoAuthorizationNonReg)
 }
 
 
+TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
+{
+  // Test that the authentication module lets through emergency REGISTER requests
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = false;
+  msg._sos = true;
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+
 TEST_F(AuthenticationTest, IntegrityProtected)
 {
   // Test that the authentication module lets through REGISTER requests
@@ -407,6 +425,30 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   msg3._integ_prot = "ip-assoc-yes";
   ret = inject_msg_direct(msg3.get());
   EXPECT_EQ(PJ_FALSE, ret);
+}
+
+
+// Tests that authentication is needed on registers that have at least one non
+// emergency contact
+TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
+{
+  _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                              "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
+
+  // Test that the authentication is required for REGISTER requests with one non-emergency contact
+  AuthenticationMessage msg("REGISTER");
+  msg._auth_hdr = false;
+  msg._sos = true;
+  msg._extra_contact = "Contact: <sip:6505550001@uac.example.com:5060;rinstance=a0b20987985b61df;transport=TCP>";
+  inject_msg_direct(msg.get());
+
+  // Expect a 401 Not Authorized response.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+  RespMatcher(401).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
 }
 
 

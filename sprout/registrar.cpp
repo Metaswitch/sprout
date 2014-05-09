@@ -114,12 +114,14 @@ void log_bindings(const std::string& aor_name, RegStore::AoR* aor_data)
        ++i)
   {
     RegStore::AoR::Binding* binding = i->second;
-    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s",
+    LOG_DEBUG("  %s URI=%s expires=%d q=%d from=%s cseq=%d timer=%s private_id=%s emergency_registration=%s",
               i->first.c_str(),
               binding->_uri.c_str(),
               binding->_expires, binding->_priority,
               binding->_cid.c_str(), binding->_cseq,
-              binding->_timer_id.c_str());
+              binding->_timer_id.c_str(),
+              binding->_private_id.c_str(),
+              (binding->_emergency_registration ? "true" : "false"));
   }
 }
 
@@ -151,11 +153,19 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     // string.
     id = PJUtils::pj_str_to_string(instance);
     id = id.substr(1, id.size() - 2); // Strip quotes
+
     if (reg_id != NULL)
     {
       id = id + ":" + PJUtils::pj_str_to_string(reg_id);
     }
+
+    if (PJUtils::is_emergency_registration(contact))
+    {
+      id = "sos" + id;
+    }
+
   }
+
   return id;
 }
 
@@ -220,8 +230,9 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
-  std::map<std::string, RegStore::AoR::Binding> bindings;
+  std::map<std::string, RegStore::AoR::Binding> bindings_for_notify;
   bool all_bindings_expired = false;
+
   do
   {
     // delete NULL is safe, so we can do this on every iteration.
@@ -280,13 +291,25 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
     while (contact != NULL)
     {
+      // Calculate the expiry period for the updated binding.
+      expiry = (contact->expires != -1) ? contact->expires :
+               (expires != NULL) ? expires->ivalue :
+                max_expires;
+      if (expiry > max_expires)
+      {
+        // Expiry is too long, set it to the maximum.
+        expiry = max_expires;
+      }
+
       if (contact->star)
       {
         // Wildcard contact, which can only be used to clear all bindings for
-        // the AoR.
-        aor_data->clear();
+        // the AoR (and only if the expiry is 0). It won't clear any emergency
+        // bindings
+        aor_data->clear(false);
         break;
       }
 
@@ -301,10 +324,12 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         // it is present.  If not the contact URI is used instead.
         std::string contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
         std::string binding_id = get_binding_id(contact);
+
         if (binding_id == "")
         {
           binding_id = contact_uri;
         }
+
         LOG_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
 
         // Find the appropriate binding in the bindings list for this AoR.
@@ -315,7 +340,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
-          binding->_uri = contact_uri;
+          binding->_uri = "<" + contact_uri + ">";
 
           if (cid != binding->_cid)
           {
@@ -338,6 +363,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding->_path_headers.clear();
           pjsip_generic_string_hdr* path_hdr =
             (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+
           while (path_hdr)
           {
             std::string path = PJUtils::pj_str_to_string(&path_hdr->hvalue);
@@ -355,6 +381,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           binding->_priority = contact->q1000;
           binding->_params.clear();
           pjsip_param* p = contact->other_param.next;
+
           while ((p != NULL) && (p != &contact->other_param))
           {
             std::string pname = PJUtils::pj_str_to_string(&p->name);
@@ -364,24 +391,24 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           }
 
           binding->_private_id = private_id;
+          binding->_emergency_registration = PJUtils::is_emergency_registration(contact);
 
-          // Calculate the expiry period for the updated binding.
-          expiry = (contact->expires != -1) ? contact->expires :
-                   (expires != NULL) ? expires->ivalue :
-                   max_expires;
-          if (expiry > max_expires)
+          // If the new expiry is less than the current expiry, and it's an emergency registration,
+          // don't update the expiry time
+          if ((binding->_expires >= now + expiry) && (binding->_emergency_registration))
           {
-            // Expiry is too long, set it to the maximum.
-            expiry = max_expires;
+            LOG_DEBUG("Don't reduce expiry time for an emergency registration");
           }
-
-          binding->_expires = now + expiry;
+          else
+          {
+            binding->_expires = now + expiry;
+          }
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
-          if (expiry != 0)
+          if ((expiry != 0) && (!binding->_emergency_registration))
           {
-            bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
+            bindings_for_notify.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
           }
 
           if (analytics != NULL)
@@ -417,8 +444,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       {
         pjsip_tx_data* tdata_notify;
 
-        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor, aor_data->_notify_cseq, bindings,
-                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
+        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor,
+                                                        aor_data->_notify_cseq, bindings_for_notify,
+                                                        NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
+                                                        NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
         {
           status = PJUtils::send_request(tdata_notify);
@@ -433,6 +462,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   }
 
   out_is_initial_registration = is_initial_registration;
+
   return aor_data;
 }
 
@@ -573,6 +603,80 @@ void process_register_request(pjsip_rx_data* rdata)
   int now = time(NULL);
   int expiry = 0;
   bool is_initial_registration;
+
+  // Loop through each contact header. If every registration is an emergency
+  // registration and its expiry is 0 then reject with a 501.
+  // If there are valid registration updates to make then attempt to write to
+  // store, which also stops emergency registrations from being deregistered.
+  bool reject_with_501 = true;
+  bool any_emergency_registrations = false;
+  bool reject_with_400 = false;
+  pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                 pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
+
+  while (contact_hdr != NULL)
+  {
+    pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_EXPIRES, NULL);
+    expiry = (contact_hdr->expires != -1) ? contact_hdr->expires :
+             (expires != NULL) ? expires->ivalue :
+              max_expires;
+
+    if ((contact_hdr->star) && (expiry != 0))
+    {
+      // Wildcard contact, which can only be used if the expiry is 0
+      LOG_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
+      reject_with_400 = true;
+      break;
+    }
+
+    reject_with_501 = (reject_with_501 &&
+                       PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
+    any_emergency_registrations = (any_emergency_registrations ||
+                                  PJUtils::is_emergency_registration(contact_hdr));
+
+    contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
+                                                          PJSIP_H_CONTACT,
+                                                          contact_hdr->next);
+  }
+
+  if (reject_with_400)
+  {
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Rejecting register request with invalid contact header";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_BAD_REQUEST,
+                               NULL,
+                               NULL,
+                               NULL);
+    delete acr;
+    return;
+  }
+
+  if (reject_with_501)
+  {
+    LOG_ERROR("Rejecting register request as attempting to deregister an emergency registration");
+
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Rejecting deregister request for emergency registrations";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_NOT_IMPLEMENTED,
+                               NULL,
+                               NULL,
+                               NULL);
+    delete acr;
+    return;
+  }
+
 
   // Write to the local store, checking the remote store if there is no entry locally.
   RegStore::AoR* aor_data = write_to_store(store, aor, rdata, now, expiry,
@@ -788,16 +892,20 @@ void process_register_request(pjsip_rx_data* rdata)
   // service profile (i.e. once per iFC, using an arbitrary public
   // ID). hss->get_subscription_data should be enhanced to provide an
   // appropriate data structure (representing the ServiceProfile
-  // nodes) and we should loop through that.
+  // nodes) and we should loop through that. Don't send any register that
+  // contained emergency registrations to the application servers.
 
-  RegistrationUtils::register_with_application_servers(ifc_map[public_id],
-                                                       store,
-                                                       rdata,
-                                                       tdata,
-                                                       expiry,
-                                                       is_initial_registration,
-                                                       public_id,
-                                                       trail);
+  if (!any_emergency_registrations)
+  {
+    RegistrationUtils::register_with_application_servers(ifc_map[public_id],
+                                                         store,
+                                                         rdata,
+                                                         tdata,
+                                                         expiry,
+                                                         is_initial_registration,
+                                                         public_id,
+                                                         trail);
+  }
 
   // Now we can free the tdata.
   pjsip_tx_data_dec_ref(tdata);

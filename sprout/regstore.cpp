@@ -308,7 +308,11 @@ int RegStore::expire_bindings(AoR* aor_data,
            j != aor_data->_subscriptions.end();
           ++j)
       {
-        send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+        // Don't send a notification when an emergency registration expires
+        if (!b->_emergency_registration)
+        {
+          send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+        }
       }
 
       // If a timer id is present, then delete it. If the timer id is empty (because a
@@ -400,6 +404,7 @@ std::string RegStore::Connector::serialize_aor(AoR* aor_data)
     }
     oss << b->_timer_id << '\0';
     oss << b->_private_id << '\0';
+    oss.write((const char *)&b->_emergency_registration, sizeof(int));
   }
 
   int num_subscriptions = aor_data->subscriptions().size();
@@ -463,6 +468,7 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
     getline(iss, b->_cid, '\0');
     iss.read((char *)&b->_cseq, sizeof(int));
     iss.read((char *)&b->_expires, sizeof(int));
+
     iss.read((char *)&b->_priority, sizeof(int));
 
     int num_params;
@@ -489,6 +495,7 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
     }
     getline(iss, b->_timer_id, '\0');
     getline(iss, b->_private_id, '\0');
+    iss.read((char *)&b->_emergency_registration, sizeof(int));
   }
 
   int num_subscriptions;
@@ -544,7 +551,7 @@ RegStore::AoR::AoR() :
 /// Destructor.
 RegStore::AoR::~AoR()
 {
-  clear();
+  clear(true);
 }
 
 
@@ -559,7 +566,7 @@ RegStore::AoR& RegStore::AoR::operator= (AoR const& other)
 {
   if (this != &other)
   {
-    clear();
+    clear(true);
     common_constructor(other);
   }
 
@@ -590,15 +597,27 @@ void RegStore::AoR::common_constructor(const AoR& other)
 
 
 /// Clear all the bindings and subscriptions from this object.
-void RegStore::AoR::clear()
+void RegStore::AoR::clear(bool clear_emergency_bindings)
 {
   for (Bindings::iterator i = _bindings.begin();
        i != _bindings.end();
-       ++i)
+       )
   {
-    delete i->second;
+    if ((clear_emergency_bindings) || (!i->second->_emergency_registration))
+    {
+      delete i->second;
+      _bindings.erase(i++);
+    }
+    else
+    {
+      ++i;
+    }
   }
-  _bindings.clear();
+
+  if (clear_emergency_bindings)
+  {
+    _bindings.clear();
+  }
 
   for (Subscriptions::iterator i = _subscriptions.begin();
        i != _subscriptions.end();
@@ -606,6 +625,7 @@ void RegStore::AoR::clear()
   {
     delete i->second;
   }
+
   _subscriptions.clear();
 }
 
@@ -625,6 +645,7 @@ RegStore::AoR::Binding* RegStore::AoR::get_binding(const std::string& binding_id
   {
     // No existing binding with this id, so create a new one.
     b = new Binding;
+    b->_expires = 0;
     _bindings.insert(std::make_pair(binding_id, b));
   }
   return b;
