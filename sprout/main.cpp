@@ -293,6 +293,7 @@ static void usage(void)
        " -A, --authentication       Enable authentication\n"
        "     --allow-emergency-registration\n"
        "                            Allow the P-CSCF to acccept emergency registrations.\n"
+       "                            Only valid if -p/pcscf is specified.\n"
        "                            WARNING: If this is enabled, all emergency registrations are accepted,\n"
        "                            but they are not policed.\n"
        "                            This parameter is only intended to be enabled during testing.\n"

@@ -1436,6 +1436,6 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
                      (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
 
   return ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-          ( pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
+          (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
 }
 

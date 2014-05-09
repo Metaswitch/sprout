@@ -1006,15 +1006,9 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
                   pjsip_msg_find_hdr(tdata->msg, PJSIP_H_CONTACT, NULL);
 
-    while (contact_hdr != NULL)
+    while ((contact_hdr != NULL) && (!is_emergency_reg))
     {
       is_emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
-
-      if (is_emergency_reg)
-      {
-        break;
-      }
-
       contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(tdata->msg,
                                                             PJSIP_H_CONTACT,
                                                             contact_hdr->next);

@@ -67,6 +67,7 @@ extern "C" {
 // stack below the transaction layer.
 //
 static pj_bool_t authenticate_rx_request(pjsip_rx_data *rdata);
+void log_sas_auth_not_needed_event(SAS::TrailId trail, std::string error_msg, int instance_id=0);
 
 pjsip_module mod_auth =
 {
@@ -428,10 +429,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
     // Request not received on S-CSCF port, so don't authenticate it.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
     std::string error_msg = "Request wasn't received on S-CSCF port";
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
+    log_sas_auth_not_needed_event(trail, error_msg);
 
     return PJ_FALSE;
   }
@@ -440,10 +439,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   {
     // Non-REGISTER request, so don't do authentication as it must have come
     // from an authenticated or trusted source.
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
     std::string error_msg = "Request wasn't a REGISTER";
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
+    log_sas_auth_not_needed_event(trail, error_msg);
 
     return PJ_FALSE;
   }
@@ -451,20 +448,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   // Authentication isn't required for emergency registrations. An emergency
   // registration is one where each Contact header contains 'sos' as the SIP
   // URI parameter.
-  bool emergency_reg = false;
+  bool emergency_reg = true;
 
   pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
                  pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
-  while (contact_hdr != NULL)
+  while ((contact_hdr != NULL) && (emergency_reg))
   {
     emergency_reg = PJUtils::is_emergency_registration(contact_hdr);
-
-    if (!emergency_reg)
-    {
-      break;
-    }
-
     contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
                                                           PJSIP_H_CONTACT,
                                                           contact_hdr->next);
@@ -472,10 +463,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   if (emergency_reg)
   {
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
     std::string error_msg = "Request is an emergency REGISTER";
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
+    log_sas_auth_not_needed_event(trail, error_msg);
 
     return PJ_FALSE;
   }
@@ -504,10 +493,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // Request is already integrity protected, so let it through.
       LOG_INFO("Request integrity protected by edge proxy");
 
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, 0);
       std::string error_msg = "Request integrity protected by edge proxy";
-      event.add_var_param(error_msg);
-      SAS::report_event(event);
+      log_sas_auth_not_needed_event(trail, error_msg);
 
       return PJ_FALSE;
     }
@@ -729,5 +716,12 @@ pj_status_t init_authentication(const std::string& realm_name,
 void destroy_authentication()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_auth);
+}
+
+void log_sas_auth_not_needed_event(SAS::TrailId trail, std::string error_msg, int instance_id)
+{
+  SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, instance_id);
+  event.add_var_param(error_msg);
+  SAS::report_event(event);
 }
 

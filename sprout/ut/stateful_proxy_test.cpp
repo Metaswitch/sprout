@@ -582,6 +582,31 @@ protected:
   SP::Message doInviteEdge(string token);
 };
 
+class StatefulEdgeProxyAcceptRegisterTest : public StatefulProxyTestBase
+{
+public:
+  static void SetUpTestCase()
+  {
+    StatefulProxyTestBase::SetUpTestCase("upstreamnode", "", false, false, false, "", true);
+    add_host_mapping("upstreamnode", "10.6.6.8");
+  }
+
+  static void TearDownTestCase()
+  {
+    StatefulProxyTestBase::TearDownTestCase();
+  }
+
+  StatefulEdgeProxyAcceptRegisterTest()
+  {
+  }
+
+  ~StatefulEdgeProxyAcceptRegisterTest()
+  {
+  }
+
+protected:
+};
+
 class StatefulTrunkProxyTest : public StatefulProxyTestBase
 {
 public:
@@ -2023,6 +2048,39 @@ TEST_F(StatefulProxyTest, TestSimpleMultipart)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
+// Test emergency registrations receive calls.
+TEST_F(StatefulProxyTest, TestReceiveCallToEmergencyBinding)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob");
+  Message msg;
+
+  pjsip_msg* out;
+
+  // Send INVITE
+  inject_msg(msg.get_request());
+  ASSERT_EQ(3, txdata_count());
+
+  // 100 Trying goes back
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  free_txdata();
+
+  // Collect INVITEs
+  for (int i = 0; i < 2; i++)
+  {
+    out = current_txdata()->msg;
+    ReqMatcher req("INVITE");
+    req.matches(out);
+    _uris.push_back(req.uri());
+    _tdata[req.uri()] = pop_txdata();
+  }
+
+  EXPECT_TRUE(_tdata.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob") != _tdata.end());
+  EXPECT_TRUE(_tdata.find("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;sos;ob") != _tdata.end());
+}
+
 /// Register a client with the edge proxy, returning the flow token.
 void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport to register on
                                            string& xoToken, //^ out: token (parsed from Path)
@@ -2991,7 +3049,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
 }
 
 // Test flows into Bono (P-CSCF) of emergency register.
-TEST_F(StatefulEdgeProxyTest, TestBonoEmergencyRegister)
+TEST_F(StatefulEdgeProxyTest, TestBonoEmergencyRejectRegister)
 {
   SCOPED_TRACE("");
 
@@ -3011,6 +3069,39 @@ TEST_F(StatefulEdgeProxyTest, TestBonoEmergencyRegister)
   ASSERT_EQ(1, txdata_count());
   pjsip_tx_data* tdata = current_txdata();
   RespMatcher(503).matches(tdata->msg);
+  free_txdata();
+}
+
+// Test flows into Bono (P-CSCF) of emergency register.
+TEST_F(StatefulEdgeProxyAcceptRegisterTest, TestBonoEmergencyAcceptRegister)
+{
+  SCOPED_TRACE("");
+
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+
+  // Attempt to emergency register a client with the edge proxy.
+  Message msg;
+  msg._method = "REGISTER";
+  msg._to = msg._from;
+  msg._via = tp.to_string(false);
+  msg._extra = "Contact: <sip:wuntootreefower@";
+  msg._extra.append(tp.to_string(true)).append(";sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+
+  inject_msg(msg.get_request(), &tp);
+
+  // REGISTER rejected with a 503
+  ASSERT_EQ(1, txdata_count());
+
+
+  // Check that we generate a flow token and pass it through. We don't
+  // check the value of the flow token (it's opaque) - just its
+  // effect.
+
+  // Is the right kind and method.
+  ReqMatcher r1("REGISTER");
+  pjsip_tx_data* tdata = current_txdata();
+  r1.matches(tdata->msg);
+
   free_txdata();
 }
 

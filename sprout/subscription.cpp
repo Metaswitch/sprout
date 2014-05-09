@@ -301,11 +301,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START
     LOG_ERROR("Rejecting subscribe request using non SIP URI");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string pub_id = "UNKNOWN";
     std::string error_msg = "Subscribe failed as using non SIP URI";
-    event.add_var_param(pub_id);
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
@@ -344,11 +342,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // that's been registered for emergency service.
     LOG_ERROR("Rejecting subscribe request from emergency registration");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string pub_id = "UNKNOWN";
     std::string error_msg = "Subscribe failed as using emergency registration";
-    event.add_var_param(pub_id);
     event.add_var_param(error_msg);
     SAS::report_event(event);
 

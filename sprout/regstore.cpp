@@ -599,33 +599,24 @@ void RegStore::AoR::common_constructor(const AoR& other)
 /// Clear all the bindings and subscriptions from this object.
 void RegStore::AoR::clear(bool clear_emergency_bindings)
 {
-  if (clear_emergency_bindings)
+  for (Bindings::iterator i = _bindings.begin();
+       i != _bindings.end();
+       )
   {
-    for (Bindings::iterator i = _bindings.begin();
-         i != _bindings.end();
-         ++i)
+    if ((clear_emergency_bindings) || (!i->second->_emergency_registration))
     {
       delete i->second;
+      _bindings.erase(i++);
     }
-
-    _bindings.clear();
-  }
-  else
-  {
-    for (Bindings::iterator i = _bindings.begin();
-         i != _bindings.end();
-         )
+    else
     {
-      if (!i->second->_emergency_registration)
-      {
-        delete i->second;
-        _bindings.erase(i++);
-      }
-      else
-      {
-        ++i;
-      }
+      ++i;
     }
+  }
+
+  if (clear_emergency_bindings)
+  {
+    _bindings.clear();
   }
 
   for (Subscriptions::iterator i = _subscriptions.begin();

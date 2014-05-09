@@ -199,7 +199,7 @@ public:
   string _integ_prot;
   string _auts;
   string _key;
-  string _sos;
+  bool _sos;
   string _extra_contact;
 
   AuthenticationMessage(std::string method) :
@@ -219,7 +219,7 @@ public:
     _integ_prot(""),
     _auts(""),
     _key(""),
-    _sos(""),
+    _sos(false),
     _extra_contact("")
   {
   }
@@ -332,7 +332,7 @@ string AuthenticationMessage::get()
                    /*  1 */ _method.c_str(),
                    /*  2 */ _user.c_str(),
                    /*  3 */ _domain.c_str(),
-                   /*  4 */ _sos.c_str(),
+                   /*  4 */ (_sos) ? ";sos" : "",
                    /*  5 */ _extra_contact.empty() ? "" : _extra_contact.append("\r\n").c_str(),
                    /*  6 */ _auth_hdr ?
                               string("Authorization: Digest ")
@@ -393,7 +393,7 @@ TEST_F(AuthenticationTest, NoAuthorizationEmergencyReg)
   // Test that the authentication module lets through emergency REGISTER requests
   AuthenticationMessage msg("REGISTER");
   msg._auth_hdr = false;
-  msg._sos = ";sos";
+  msg._sos = true;
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
@@ -428,15 +428,17 @@ TEST_F(AuthenticationTest, IntegrityProtected)
 }
 
 
+// Tests that authentication is needed on registers that have at least one non
+// emergency contact
 TEST_F(AuthenticationTest, AuthorizationEmergencyReg)
 {
   _hss_connection->set_result("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
                               "{\"digest\":{\"realm\":\"homedomain\",\"qop\":\"auth\",\"ha1\":\"12345678123456781234567812345678\"}}");
 
-  // Test that the authentication is required for REGISTER requests
+  // Test that the authentication is required for REGISTER requests with one non-emergency contact
   AuthenticationMessage msg("REGISTER");
   msg._auth_hdr = false;
-  msg._sos = ";sos";
+  msg._sos = true;
   msg._extra_contact = "Contact: <sip:6505550001@uac.example.com:5060;rinstance=a0b20987985b61df;transport=TCP>";
   inject_msg_direct(msg.get());
 

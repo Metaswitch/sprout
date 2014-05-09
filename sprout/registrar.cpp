@@ -153,10 +153,17 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     // string.
     id = PJUtils::pj_str_to_string(instance);
     id = id.substr(1, id.size() - 2); // Strip quotes
+
     if (reg_id != NULL)
     {
       id = id + ":" + PJUtils::pj_str_to_string(reg_id);
     }
+
+    if (PJUtils::is_emergency_registration(contact))
+    {
+      id = "sos" + id;
+    }
+
   }
 
   return id;
@@ -223,7 +230,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   RegStore::AoR* aor_data = NULL;
   bool backup_aor_alloced = false;
   bool is_initial_registration = true;
-  std::map<std::string, RegStore::AoR::Binding> bindings;
+  std::map<std::string, RegStore::AoR::Binding> bindings_for_notify;
   bool all_bindings_expired = false;
 
   do
@@ -284,6 +291,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // the contact header in the SIP message, pjsip parses them to separate
     // contact header structures.
     pjsip_contact_hdr* contact = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);
+
     while (contact != NULL)
     {
       // Calculate the expiry period for the updated binding.
@@ -301,15 +309,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         // Wildcard contact, which can only be used to clear all bindings for
         // the AoR (and only if the expiry is 0). It won't clear any emergency
         // bindings
-        if (expiry == 0)
-        {
-          aor_data->clear(false);
-        }
-        else
-        {
-          LOG_ERROR("Attempted to deregister all binding, but expiry value wasn't 0");
-        }
-
+        aor_data->clear(false);
         break;
       }
 
@@ -329,10 +329,6 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           binding_id = contact_uri;
         }
-        else if (PJUtils::is_emergency_registration(contact))
-        {
-          binding_id = "sos" + binding_id;
-        }
 
         LOG_DEBUG(". Binding identifier for contact = %s", binding_id.c_str());
 
@@ -344,7 +340,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
-          binding->_uri = contact_uri;
+          binding->_uri = "<" + contact_uri + ">";
 
           if (cid != binding->_cid)
           {
@@ -410,9 +406,9 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
           // If this is a de-registration, don't send NOTIFYs, as this is covered in
           // expire_bindings which is called when the aor_data is saved.
-          if (expiry != 0 && !binding->_emergency_registration)
+          if ((expiry != 0) && (!binding->_emergency_registration))
           {
-            bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
+            bindings_for_notify.insert(std::pair<std::string, RegStore::AoR::Binding>(binding_id, *binding));
           }
 
           if (analytics != NULL)
@@ -448,8 +444,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
       {
         pjsip_tx_data* tdata_notify;
 
-        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor, aor_data->_notify_cseq, bindings,
-                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, contact_event);
+        pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor,
+                                                        aor_data->_notify_cseq, bindings_for_notify,
+                                                        NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
+                                                        NotifyUtils::ACTIVE, contact_event);
         if (status == PJ_SUCCESS)
         {
           status = PJUtils::send_request(tdata_notify);
@@ -612,7 +610,7 @@ void process_register_request(pjsip_rx_data* rdata)
   // store, which also stops emergency registrations from being deregistered.
   bool reject_with_501 = true;
   bool any_emergency_registrations = false;
-
+  bool reject_with_400 = false;
   pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
                  pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_CONTACT, NULL);
 
@@ -623,18 +621,40 @@ void process_register_request(pjsip_rx_data* rdata)
              (expires != NULL) ? expires->ivalue :
               max_expires;
 
+    if ((contact_hdr->star) && (expiry != 0))
+    {
+      // Wildcard contact, which can only be used if the expiry is 0
+      LOG_ERROR("Attempted to deregister all bindings, but expiry value wasn't 0");
+      reject_with_400 = true;
+      break;
+    }
+
     reject_with_501 = (reject_with_501 &&
                        PJUtils::is_emergency_registration(contact_hdr) && (expiry == 0));
     any_emergency_registrations = (any_emergency_registrations ||
                                   PJUtils::is_emergency_registration(contact_hdr));
-    if (!reject_with_501)
-    {
-      break;
-    }
 
     contact_hdr = (pjsip_contact_hdr*) pjsip_msg_find_hdr(rdata->msg_info.msg,
                                                           PJSIP_H_CONTACT,
                                                           contact_hdr->next);
+  }
+
+  if (reject_with_400)
+  {
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    event.add_var_param(public_id);
+    std::string error_msg = "Rejecting register request with invalid contact header";
+    event.add_var_param(error_msg);
+    SAS::report_event(event);
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_BAD_REQUEST,
+                               NULL,
+                               NULL,
+                               NULL);
+    delete acr;
+    return;
   }
 
   if (reject_with_501)
