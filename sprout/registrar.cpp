@@ -795,7 +795,8 @@ void process_register_request(pjsip_rx_data* rdata)
     RegStore::AoR::Binding* binding = i->second;
     if (binding->_expires > now)
     {
-      // The binding hasn't expired.
+      // The binding hasn't expired.  Parse the Contact URI from the store,
+      // making sure it is formatted as a name-address.
       pjsip_uri* uri = PJUtils::uri_from_string(binding->_uri, tdata->pool, PJ_TRUE);
       if (uri != NULL)
       {
