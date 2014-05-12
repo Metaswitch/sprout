@@ -227,6 +227,8 @@ string Message::get()
   EXPECT_LT(n, (int)sizeof(buf));
 
   string ret(buf, n);
+
+  LOG_DEBUG("REGISTER message\n%s", ret.c_str());
   // cout << ret <<endl;
   return ret;
 }
@@ -1457,7 +1459,7 @@ TEST_F(RegistrarTest, EmergencyDeregistration)
 
 
 // Test multiple emergency and standard registrations.
-TEST_F(RegistrarTest, NultipleEmergencyRegistrations)
+TEST_F(RegistrarTest, MultipleEmergencyRegistrations)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
@@ -1578,3 +1580,27 @@ TEST_F(RegistrarTest, NultipleEmergencyRegistrations)
   EXPECT_EQ(0u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
 }
+
+
+/// Simple correct example with rinstance parameter in Contact URI
+TEST_F(RegistrarTest, RinstanceParameter)
+{
+  Message msg;
+  msg._contact = "sip:6505550138@172.18.42.27:46826;transport=tcp;rinstance=7690e89fc4105d1e";
+  msg._contact_instance = "";
+  msg._contact_params = ";Expires=390";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:6505550138@172.18.42.27:46826;transport=tcp;rinstance=7690e89fc4105d1e>;expires=300",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+

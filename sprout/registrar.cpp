@@ -796,7 +796,7 @@ void process_register_request(pjsip_rx_data* rdata)
     if (binding->_expires > now)
     {
       // The binding hasn't expired.
-      pjsip_uri* uri = PJUtils::uri_from_string(binding->_uri, tdata->pool);
+      pjsip_uri* uri = PJUtils::uri_from_string(binding->_uri, tdata->pool, PJ_TRUE);
       if (uri != NULL)
       {
         // Contact URI is well formed, so include this in the response.
