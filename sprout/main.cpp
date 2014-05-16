@@ -134,6 +134,8 @@ struct options
   std::string            enum_server;
   std::string            enum_suffix;
   std::string            enum_file;
+  bool                   enforce_user_phone;
+  bool                   enforce_global_only_lookups;
   pj_bool_t              analytics_enabled;
   std::string            analytics_directory;
   int                    reg_max_expires;
@@ -179,6 +181,8 @@ struct options
     { "enum",              required_argument, 0, 'E'},
     { "enum-suffix",       required_argument, 0, 'x'},
     { "enum-file",         required_argument, 0, 'f'},
+    { "enforce-user-phone", no_argument,      0, 'u'},
+    { "enforce-global-only-lookups", no_argument, 0, 'g'},
     { "reg-max-expires",   required_argument, 0, 'e'},
     { "pjsip-threads",     required_argument, 0, 'P'},
     { "worker-threads",    required_argument, 0, 'W'},
@@ -197,7 +201,7 @@ struct options
     { NULL,                0, 0, 0}
   };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
@@ -277,6 +281,11 @@ static void usage(void)
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
        " -f, --enum-file <file>     JSON ENUM config file (can't be enabled at same time as\n"
        "                            -E)\n"
+       " -u, --enforce-user-phone   Controls whether ENUM lookups are only done on SIP URIs if they\n"
+       "                            contain the SIP URI parameter user=phone (defaults to false)\n"
+       " -g, --enforce-global-only-lookups\n"
+       "                            Controls whether ENUM lookups are only done when the URI\n"
+       "                            contains a global number (defaults to false)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
@@ -608,6 +617,16 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     case 'f':
       options->enum_file = std::string(pj_optarg);
       LOG_INFO("ENUM file set to %s", pj_optarg);
+      break;
+
+    case 'u':
+      options->enforce_user_phone = true;
+      LOG_INFO("ENUM lookups only done on SIP URIs containing user=phone");
+      break;
+
+    case 'g':
+      options->enforce_global_only_lookups = true;
+      LOG_INFO("ENUM lookups only done on URIs containing a global number");
       break;
 
     case 'e':
@@ -942,6 +961,8 @@ int main(int argc, char *argv[])
   opt.external_icscf_uri = "";
   opt.auth_enabled = PJ_FALSE;
   opt.enum_suffix = ".e164.arpa";
+  opt.enforce_user_phone = false;
+  opt.enforce_global_only_lookups = false;
   opt.reg_max_expires = 300;
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
