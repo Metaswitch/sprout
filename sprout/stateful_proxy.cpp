@@ -140,6 +140,8 @@ static IfcHandler* ifc_handler;
 static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
+bool user_phone = false;
+bool global_only_lookups = false;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
@@ -4255,6 +4257,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
+                                bool enforce_user_phone,
+                                bool enforce_global_only_lookups,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
@@ -4364,6 +4368,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   }
 
   enum_service = enumService;
+  user_phone = enforce_user_phone;
+  global_only_lookups = enforce_global_only_lookups;
   bgcf_service = bgcfService;
   hss = hss_connection;
   scscf_selector = scscfSelector;
