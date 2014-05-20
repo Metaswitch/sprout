@@ -1439,3 +1439,7 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
           (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
 }
 
+bool PJUtils::is_sip_uri_phone_number(pjsip_sip_uri* uri)
+{
+  return ((uri != NULL) && (pj_strcmp2(&uri->user_param, "phone") == 0));
+}

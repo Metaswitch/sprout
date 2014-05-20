@@ -241,6 +241,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 static int compare_sip_sc(int sc1, int sc2);
 static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_bool_t is_user_numeric(const std::string& user);
+static pj_bool_t is_user_global(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -1806,20 +1807,43 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trail)
 {
   pj_status_t status = PJ_SUCCESS;
+  std::string user;
+  bool tel_uri = false;
+  bool sip_uri = false;
   std::string uri;
 
+  // Determine whether we have a SIP URI or a tel URI
   if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    if (is_user_numeric(user))
+    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+    sip_uri = true;
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
+  {
+    user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
+    tel_uri = true;
+  }
+
+  // Check whether we have a global number or whether we allow
+  // ENUM lookups for local numbers
+  if (is_user_global(user) || !global_only_lookups)
+  {
+    // Perform an ENUM lookup if we have a tel URI, or if we have
+    // a SIP URI which is being treated as a phone number
+    if (tel_uri ||
+        (sip_uri &&
+         (!user_phone || PJUtils::is_sip_uri_phone_number((pjsip_sip_uri*)tdata->msg->line.req.uri)) &&
+         is_user_numeric(user)))
     {
+      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
-  else
+  else if (tel_uri ||
+           (sip_uri && PJUtils::is_sip_uri_phone_number((pjsip_sip_uri*)tdata->msg->line.req.uri)))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
-    uri = enum_service->lookup_uri_from_user(user, trail);
+    LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
+    status = PJ_EINVAL;
   }
 
   if (!uri.empty())
@@ -4503,6 +4527,18 @@ static pj_bool_t is_user_numeric(const std::string& user)
     }
   }
   return PJ_TRUE;
+}
+
+// Determines whether a user string represents a global number.
+//
+// @returns PJ_TRUE if so, PJ_FALSE if not.
+static pj_bool_t is_user_global(const std::string& user)
+{
+  if (user.size() > 0 && user[0] == '+')
+  {
+    return PJ_TRUE;
+  }
+  return PJ_FALSE;
 }
 
 /// Adds a Path header when functioning as an edge proxy.
