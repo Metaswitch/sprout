@@ -4666,6 +4666,7 @@ TEST_F(IscTest, AsOriginatedTerm)
   doAsOriginated(msg, false);
 }
 
+
 // Test call-diversion AS flow.
 TEST_F(IscTest, Cdiv)
 {
@@ -4817,7 +4818,6 @@ TEST_F(IscTest, Cdiv)
   free_txdata();
 }
 
-
 // Test that ENUM lookups and appropriate URI translation is done before any terminating services are applied.
 TEST_F(IscTest, BothEndsWithEnumRewrite)
 {
@@ -4894,7 +4894,6 @@ TEST_F(IscTest, BothEndsWithEnumRewrite)
 
   free_txdata();
 }
-
 
 // Test that ENUM lookups are not done if we are only doing
 // terminating processing.
