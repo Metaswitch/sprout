@@ -491,7 +491,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
       serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
     }
 
-
     // Do standard processing of Route headers.
     status = proxy_process_routing(tdata);
 
@@ -2213,12 +2212,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   // If we're a routing proxy, perform AS handling to pick the next hop.
   if (!target && !edge_proxy)
   {
-    if ((serving_state.is_set()) &&
-        ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
-         (PJUtils::is_uri_local(_req->msg->line.req.uri))))
+    if (serving_state.is_set())
     {
-      // The serving state has been set up, and the request URI is targeted
-      // at a domain controlled by this system, so perform AS handling.
+      // The serving state has been set up, so perform AS handling.
       if (stack_data.record_route_on_every_hop)
       {
         LOG_DEBUG("Single Record-Route - configured to do this on every hop");
@@ -2237,10 +2233,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         send_response(PJSIP_SC_NOT_FOUND);
         // target is not set, so just return
         return;
-      };
-
-      // Flag that the transaction has been linked to an AS chain.
-      _as_chain_linked = true;
+      }
 
       if (_as_chain_link.is_set() &&
           _as_chain_link.session_case().is_originating())
@@ -2464,6 +2457,13 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
       }
+      else if ((disposition == AsChainLink::Disposition::Complete) &&
+               !_as_chain_link.is_set() &&
+               !PJUtils::is_home_domain(_req->msg->line.req.uri))
+      {
+        LOG_DEBUG("Record-Route for the BGCF case");
+        routing_proxy_record_route();
+      }
 
       if (_as_chain_link.is_set() &&
           _as_chain_link.session_case().is_terminating())
@@ -2484,18 +2484,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             LOG_DEBUG("Single Record-Route - end of terminating handling");
           }
         }
-      }
-    }
-    else
-    {
-      routing_proxy_record_route();
-      LOG_DEBUG("Single Record-Route for the BGCF case");
-      // Request is not targeted at this domain.  If the serving state is set
-      // we need to release the original dialog as otherwise we may leak an
-      // AsChain.
-      if (serving_state.is_set())
-      {
-        serving_state.original_dialog().release();
       }
     }
   }
@@ -2569,30 +2557,33 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
   {
     // No existing AS chain - create new.
     served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
-    LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
-    success = lookup_ifcs(served_user, ifcs, trail());
-    if (success)
+    if (!served_user.empty())
     {
-      LOG_DEBUG("Successfully looked up iFCs");
-      _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
-    }
-
-    if (serving_state.session_case() == SessionCase::Terminating)
-    {
-      common_start_of_terminating_processing();
-    }
-    else if (serving_state.session_case() == SessionCase::Originating)
-    {
-      // Processing at start of originating handling (not including CDiv)
-      if (stack_data.record_route_on_initiation_of_originating)
+      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+      success = lookup_ifcs(served_user, ifcs, trail());
+      if (success)
       {
-        LOG_DEBUG("Single Record-Route - initiation of originating handling");
-        routing_proxy_record_route();
+        LOG_DEBUG("Successfully looked up iFCs");
+        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
+      }
+  
+      if (serving_state.session_case() == SessionCase::Terminating)
+      {
+        common_start_of_terminating_processing();
+      }
+      else if (serving_state.session_case() == SessionCase::Originating)
+      {
+        // Processing at start of originating handling (not including CDiv)
+        if (stack_data.record_route_on_initiation_of_originating)
+        {
+          LOG_DEBUG("Single Record-Route - initiation of originating handling");
+          routing_proxy_record_route();
+        }
       }
     }
   }
 
-  if (success)
+  if (_as_chain_link.is_set())
   {
     // Flag that the transaction has been linked to an AS chain.
     _as_chain_linked = true;
