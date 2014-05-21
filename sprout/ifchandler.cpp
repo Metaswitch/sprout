@@ -868,7 +868,7 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
   }
   else
   {
-    LOG_DEBUG("Served user URI \"%s\" is missing or not locally hosted", uri);
+    LOG_DEBUG("URI is not locally hosted");
   }
 
   return user;
