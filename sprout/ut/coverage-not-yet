@@ -17,6 +17,11 @@ modules/cpp-common/src/fakelogger.cpp
 modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/test_utils/mock_sas.cpp
 
+# We don't fully exercise rapidjson
+modules/rapidjson/include/rapidjson/allocators.h
+modules/rapidjson/include/rapidjson/internal/stack.h
+modules/rapidjson/include/rapidjson/writer.h
+
 stateful_proxy.cpp
 connection_pool.cpp
 pjutils.cpp
