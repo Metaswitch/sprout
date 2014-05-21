@@ -688,8 +688,9 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -1414,12 +1415,12 @@ static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 // Process route information in the request
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 {
-  pjsip_sip_uri *target;
+  pjsip_uri *target;
   pjsip_route_hdr *hroute;
 
   // RFC 3261 Section 16.4 Route Information Preprocessing
 
-  target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+  target = tdata->msg->line.req.uri;
 
   // The proxy MUST inspect the Request-URI of the request.  If the
   // Request-URI of the request contains a value this proxy previously
@@ -1463,7 +1464,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
       // - remove the Route header,
       // - proceed as if it received this modified request.
       tdata->msg->line.req.uri = hroute->name_addr.uri;
-      target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+      target = tdata->msg->line.req.uri;
       pj_list_erase(hroute);
     }
   }
@@ -1813,6 +1814,12 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
     {
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
+  }
+  // TODO - only needed until ENUM changes are in!
+  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
+  {
+    std::string user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
+    uri = enum_service->lookup_uri_from_user(user, trail);
   }
   else
   {
@@ -2204,8 +2211,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   if (!target && !edge_proxy)
   {
     if ((serving_state.is_set()) &&
-        ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
-         (PJUtils::is_uri_local(_req->msg->line.req.uri))))
+        ((PJUtils::is_home_domain(_req->msg->line.req.uri)  ||
+         (PJUtils::is_uri_local(_req->msg->line.req.uri))   ||
+         (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri)))) )
     {
       // The serving state has been set up, and the request URI is targeted
       // at a domain controlled by this system, so perform AS handling.
@@ -2251,8 +2259,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             routing_proxy_record_route();
           }
 
+          // TODO - only needed until ENUM changes are in!
           if ((enum_service) &&
-              (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+              ((PJUtils::is_home_domain(_req->msg->line.req.uri)) || (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri)) )&&
               (!is_uri_routeable(_req->msg->line.req.uri)))
           {
             // We've finished originating handling, and the request is
@@ -2717,7 +2726,7 @@ AsChainLink::Disposition UASTransaction::handle_terminating(Target** target) // 
     return AsChainLink::Disposition::Complete;
   }
 
-  if (!PJUtils::is_home_domain(_req->msg->line.req.uri))
+  if (!PJUtils::is_home_domain(_req->msg->line.req.uri) && !PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri))
   {
     LOG_WARNING("In handle_terminating despite the request not being targeted at our domain");
     return AsChainLink::Disposition::Complete;
