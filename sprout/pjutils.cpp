@@ -98,6 +98,7 @@ pj_bool_t PJUtils::is_home_domain(const pjsip_uri* uri)
     std::string host = pj_str_to_string(&((pjsip_sip_uri*)uri)->host);
     return is_home_domain(host);
   }
+
   return PJ_FALSE;
 }
 
@@ -138,7 +139,7 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
 
 
 /// Utility to determine if a user field contains a valid E.164 number
-pj_bool_t PJUtils::is_e164(const pj_str_t* user)
+/*pj_bool_t PJUtils::is_e164(const pj_str_t* user)
 {
   if ((user->slen < 1) || (user->ptr[0] != '+'))
   {
@@ -166,8 +167,13 @@ pj_bool_t PJUtils::is_e164(const pjsip_uri* uri)
   {
     return PJUtils::is_e164(&((pjsip_sip_uri*)uri)->user);
   }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    return PJUtils::is_e164(&((pjsip_tel_uri*)uri)->number);
+  }
+
   return PJ_FALSE;
-}
+}*/
 
 
 pj_str_t PJUtils::uri_to_pj_str(pjsip_uri_context_e context,
@@ -308,12 +314,17 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
       id = PJUtils::pj_str_to_string(&sip_uri->host);
     }
   }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number) + "@" + PJUtils::pj_str_to_string(&stack_data.default_home_domain);
+  }
   else
   {
     const pj_str_t* scheme = pjsip_uri_get_scheme(uri);
     LOG_WARNING("Unsupported scheme \"%.*s\" in To header when determining private ID - ignoring",
                 scheme->slen, scheme->ptr);
   }
+
   return id;
 }
 
@@ -1432,10 +1443,20 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
 
 bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 {
-  pjsip_sip_uri* uri = (contact_hdr->uri != NULL) ?
-                     (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
+  pjsip_uri* uri = (contact_hdr->uri != NULL) ? (pjsip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
 
-  return ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-          (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
+  if (uri != NULL)
+  {
+    if (PJSIP_URI_SCHEME_IS_SIP(uri))
+    {
+      return (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_SOS) != NULL);
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+    {
+      return (pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_SOS) != NULL);
+    }
+  }
+
+  return false;
 }
 

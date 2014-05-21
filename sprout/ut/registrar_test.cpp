@@ -80,6 +80,7 @@ public:
     ASSERT_EQ(PJ_SUCCESS, ret);
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
     _chronos_connection->set_result("", HTTP_OK);
     _chronos_connection->set_result("post_identity", HTTP_OK);
@@ -162,6 +163,7 @@ public:
   string _path;
   string _auth;
   string _cseq;
+  string _scheme;
 
   Message() :
     _method("REGISTER"),
@@ -173,7 +175,8 @@ public:
     _expires(""),
     _path("Path: sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob"),
     _auth(""),
-    _cseq("16567")
+    _cseq("16567"),
+    _scheme("sip")
   {
   }
 
@@ -189,9 +192,9 @@ string Message::get()
                    "%10$s"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
-                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                    "Supported: outbound, path\r\n"
-                   "To: <sip:%2$s@%3$s>\r\n"
+                   "To: <%2$s>\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
                    "CSeq: %13$s %1$s\r\n"
@@ -210,7 +213,7 @@ string Message::get()
                    "\r\n"
                    "%6$s",
                    /*  1 */ _method.c_str(),
-                   /*  2 */ _user.c_str(),
+                   /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
@@ -229,7 +232,6 @@ string Message::get()
   string ret(buf, n);
 
   LOG_DEBUG("REGISTER message\n%s", ret.c_str());
-  // cout << ret <<endl;
   return ret;
 }
 
@@ -250,13 +252,24 @@ TEST_F(RegistrarTest, NotOurs)
   EXPECT_EQ(PJ_FALSE, ret);
 }
 
+TEST_F(RegistrarTest, BadScheme)
+{
+  Message msg;
+  msg._scheme = "sips";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(404, out->line.status.code);
+  EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
+}
+
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
   // We have a private ID in this test, so set up the expect response
   // to the query.
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
-
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
@@ -273,6 +286,33 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+
+/// Simple correct example with Authorization header
+TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._scheme = "tel";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
@@ -593,6 +633,74 @@ TEST_F(RegistrarTest, AppServersWithMultipartBody)
   free_txdata();
 }
 
+// Generate a REGISTER flow to app servers from the iFC.
+// First case - REGISTER is generated with a multipart body
+TEST_F(RegistrarTest, AppServersWithMultipartBodyWithTelURI)
+{
+  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>tel:6505550231</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "    <SPT>\n"
+                              "      <ConditionNegated>0</ConditionNegated>\n"
+                              "      <Group>0</Group>\n"
+                              "      <Method>REGISTER</Method>\n"
+                              "      <Extension></Extension>\n"
+                              "    </SPT>\n"
+                              "  </TriggerPoint>\n"
+                              "  <ApplicationServer>\n"
+                              "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "    <DefaultHandling>0</DefaultHandling>\n"
+                              "    <ServiceInfo>banana</ServiceInfo>\n"
+                              "      <Extension><IncludeRegisterRequest/><IncludeRegisterResponse/></Extension>\n"
+                              "  </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  SCOPED_TRACE("REGISTER (1)");
+  Message msg;
+  msg._expires = "Expires: 800";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._scheme = "tel";
+  SCOPED_TRACE("REGISTER (about to inject)");
+  inject_msg(msg.get());
+  SCOPED_TRACE("REGISTER (injected)");
+  ASSERT_EQ(2, txdata_count());
+  SCOPED_TRACE("REGISTER (200 OK)");
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  SCOPED_TRACE("REGISTER (forwarded)");
+  // INVITE passed on to AS
+  SCOPED_TRACE("REGISTER (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("REGISTER");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  pj_str_t multipart = pj_str("multipart");
+  pj_str_t mixed = pj_str("mixed");
+  EXPECT_EQ(0, pj_strcmp(&multipart, &out->body->content_type.type));
+  EXPECT_EQ(0, pj_strcmp(&mixed, &out->body->content_type.subtype));
+
+  tpAS.expect_target(current_txdata(), false);
+  inject_msg(respond_to_current_txdata(200));
+
+  free_txdata();
+}
+
 /// Second case - REGISTER is generated with a non-multipart body
 TEST_F(RegistrarTest, AppServersWithOneBody)
 {
@@ -861,7 +969,6 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
 
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
-
   SCOPED_TRACE("REGISTER (1)");
   Message msg;
   msg._expires = "Expires: 800";
@@ -911,8 +1018,7 @@ TEST_F(RegistrarTest, AppServersInitialRegistration)
 TEST_F(RegistrarTest, AppServersInitialRegistrationFailure)
 {
   std::string user = "sip:6505550231@homedomain";
-
-  std::string xml =                                ("<IMSSubscription><ServiceProfile>\n"
+  std::string xml =            ("<IMSSubscription><ServiceProfile>\n"
                                 "<PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>"
                                 "  <InitialFilterCriteria>\n"
                                 "    <Priority>1</Priority>\n"
@@ -1104,8 +1210,35 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
+
   EXPECT_EQ("P-Associated-URI: <sip:6505550233@homedomain>\r\n"
             "P-Associated-URI: <sip:6505550234@homedomain>",
+            get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+
+/// Multiple P-Associated-URIs
+TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
+{
+  Message msg;
+  msg._user = "6505550233";
+  msg._scheme = "tel";
+  _hss_connection->set_impu_result("tel:6505550233", "reg", HSSConnection::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>tel:6505550233</Identity></PublicIdentity>\n"
+                              "  <PublicIdentity><Identity>tel:6505550234</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+
+  EXPECT_EQ("P-Associated-URI: <tel:6505550233>\r\n"
+            "P-Associated-URI: <tel:6505550234>",
             get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
@@ -1116,6 +1249,7 @@ TEST_F(RegistrarTest, NonPrimaryAssociatedUri)
 {
   Message msg;
   msg._user = "6505550234";
+
   _hss_connection->set_impu_result("sip:6505550234@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550233@homedomain</Identity></PublicIdentity>\n"
@@ -1205,7 +1339,7 @@ TEST_F(RegistrarTest, AppServersWithNoExtension)
 /// Test for issue 358 - IFCs match on SDP but REGISTER doesn't have any - should be no match
 TEST_F(RegistrarTest, AppServersWithSDPIFCs)
 {
-    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -1313,6 +1447,71 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   free_txdata();
 }
 
+/// Simple correct example with a subscription
+TEST_F(RegistrarTest, RegistrationWithSubscriptionWithTelURI)
+{
+  // We have a private ID in this test, so set up the expect response to the query.
+  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  RegStore::AoR::Subscription* s1;
+  int now = time(NULL);
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("tel:6505550231"), 0);
+
+  // Add a subscription
+  s1 = aor_data1->get_subscription("1234");
+  s1->_req_uri = std::string("sip:6505550231@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:6505550231@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("sip:abcdefgh@bono1.homedomain;lr"));
+  s1->_expires = now + 300;
+
+  // Set the NOTIFY CSeq value to 1.
+  aor_data1->_notify_cseq = 1;
+
+  // Write the record back to the store.
+  pj_status_t rc = _store->set_aor_data(std::string("tel:6505550231"), aor_data1, false, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._scheme = "tel";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // Register again with an updated cseq
+  msg._cseq = "16568";
+  inject_msg(msg.get());
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
 
 // Test that an emergency registration is successful, and creates an emergency binding
 TEST_F(RegistrarTest, MainlineEmergencyRegistration)
@@ -1349,6 +1548,41 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistration)
   delete aor_data; aor_data = NULL;
 }
 
+// Test that an emergency registration is successful, and creates an emergency binding
+TEST_F(RegistrarTest, MainlineEmergencyRegistrationWithTelURI)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  // Make a emergency registration
+  Message msg;
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact = "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob";
+  msg._scheme = "tel";
+  inject_msg(msg.get());
+
+  // Check the 200 OK
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;sos;ob>;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+
+  // There should be one binding, and it is an emergency registration. The emergency binding should have 'sos' prepended to its key.
+  RegStore::AoR* aor_data = _store->get_aor_data("tel:6505550231", 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(1u, aor_data->_bindings.size());
+  EXPECT_TRUE(aor_data->get_binding(std::string("sos<urn:uuid:00000000-0000-0000-0000-b665231f1213>:1"))->_emergency_registration);
+  delete aor_data; aor_data = NULL;
+}
 
 // Test that an emergency registration is successful, and creates an emergency binding.
 // The Contact header doesn't include a +sip_instance, so the binding id is the contact URI containing 'sos'

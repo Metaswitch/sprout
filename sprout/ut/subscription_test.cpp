@@ -80,6 +80,7 @@ public:
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
   }
 
   static void TearDownTestCase()
@@ -146,6 +147,7 @@ public:
   string _route;
   string _auth;
   string _record_route;
+  string _scheme;
 
 
   SubscribeMessage() :
@@ -158,7 +160,8 @@ public:
     _expires(""),
     _route(""),
     _auth(""),
-    _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>")
+    _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>"),
+    _scheme("sip")
   {
   }
 
@@ -174,8 +177,8 @@ string SubscribeMessage::get()
                    "%8$s"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
-                   "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "To: <sip:%2$s@%3$s>\r\n"
+                   "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
+                   "To: <%2$s>\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
                    "CSeq: 16567 %1$s\r\n"
@@ -198,7 +201,7 @@ string SubscribeMessage::get()
                    "%6$s",
 
                    /*  1 */ _method.c_str(),
-                   /*  2 */ _user.c_str(),
+                   /*  2 */ (_scheme == "tel") ? string(_scheme).append(":").append(_user).c_str() : string(_scheme).append(":").append(_user).append("@").append(_domain).c_str(),
                    /*  3 */ _domain.c_str(),
                    /*  4 */ _content_type.empty() ? "" : string("Content-Type: ").append(_content_type).append("\r\n").c_str(),
                    /*  5 */ (int)_body.length(),
@@ -235,6 +238,18 @@ TEST_F(SubscriptionTest, NotOurs)
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+TEST_F(SubscriptionTest, BadScheme)
+{
+  SubscribeMessage msg;
+  msg._scheme = "sips";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(404, out->line.status.code);
+  EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
 }
 
 TEST_F(SubscriptionTest, EmergencySubscription)
@@ -280,6 +295,38 @@ TEST_F(SubscriptionTest, SimpleMainline)
   inject_msg(msg.get());
   check_standard_OK();
   check_subscriptions("sip:6505550231@homedomain", 1u);
+}
+
+/// Simple correct example
+TEST_F(SubscriptionTest, SimpleMainlineWithURI)
+{
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("tel:6505550231"), 0);
+  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
+  b1->_params.push_back(std::make_pair("reg-id", "1"));
+  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  _store->set_aor_data(std::string("tel:6505550231"), aor_data1, true, 0);
+  delete aor_data1; aor_data1 = NULL;
+
+  check_subscriptions("tel:6505550231", 0u);
+
+  SubscribeMessage msg;
+  msg._scheme = "tel";
+  inject_msg(msg.get());
+  check_standard_OK();
+  check_subscriptions("tel:6505550231", 1u);
 }
 
 // Test the Event Header

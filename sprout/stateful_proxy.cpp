@@ -921,6 +921,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // Some trunks will send incoming requests directed at the IBCF node,
   // rather than determining the correct domain for the subscriber first.
   // In this case, we'll re-write the ReqURI to the default home domain.
+  // As this is routing to a node, it must be a SIP URI.
   if ((*trust == &TrustBoundary::INBOUND_TRUNK) &&
       (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri)) &&
       (PJUtils::is_uri_local((pjsip_uri*)tdata->msg->line.req.uri)))
@@ -1325,6 +1326,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // URI in the top route header, or the request URI.
     pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
 
+    // This also needs to be a SIP URI
     if ((ibcf) &&
         (tgt_flow == NULL) &&
         (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
@@ -1591,6 +1593,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 {
   // RFC 3261 Section 16.5 Determining Request Targets
 
+  // At this point the req URI must be a SIP URI
   pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
 
   // If the Request-URI of the request contains an maddr parameter, the
@@ -1815,7 +1818,6 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
-  // TODO - only needed until ENUM changes are in!
   else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
   {
     std::string user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
@@ -2259,7 +2261,6 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
             routing_proxy_record_route();
           }
 
-          // TODO - only needed until ENUM changes are in!
           if ((enum_service) &&
               ((PJUtils::is_home_domain(_req->msg->line.req.uri)) || (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri)) )&&
               (!is_uri_routeable(_req->msg->line.req.uri)))
@@ -3644,6 +3645,7 @@ void UASTransaction::update_history_info_reason(pjsip_uri* history_info_uri, int
   static const pj_str_t STR_CAUSE = pj_str("cause");
   static const pj_str_t STR_TEXT = pj_str("text");
 
+  // Always SIP
   if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
   {
     // Set up the Reason parameter - this is always "SIP".
