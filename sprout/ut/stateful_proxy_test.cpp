@@ -364,6 +364,8 @@ public:
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
+                                          false,
+                                          false,
                                           _bgcf_service,
                                           _hss_connection,
                                           _acr_factory,
@@ -1634,6 +1636,24 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
 
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(StatefulProxyTest, TestEnumTelURI)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._toscheme = "tel";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   // Skip the ACK and BYE on this request by setting the last

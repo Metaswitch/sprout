@@ -4418,6 +4418,18 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   return PJ_SUCCESS;
 }
 
+#ifdef UNIT_TEST
+// These setter functions are for unit test purposes only
+void set_user_phone(bool enforce_user_phone)
+{
+  user_phone = enforce_user_phone;
+}
+
+void set_global_only_lookups(bool enforce_global_only_lookups)
+{
+  global_only_lookups = enforce_global_only_lookups;
+}
+#endif
 
 void destroy_stateful_proxy()
 {

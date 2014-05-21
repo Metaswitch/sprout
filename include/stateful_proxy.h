@@ -367,6 +367,9 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted);
 
+void set_user_phone(bool enforce_user_phone);
+void set_global_only_lookups(bool enforce_global_only_lookups);
+
 void destroy_stateful_proxy();
 
 enum SIPPeerType
