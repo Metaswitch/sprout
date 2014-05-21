@@ -1460,10 +1460,23 @@ TEST_F(StatefulProxyTest, TestBadScheme)
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
+  msg._toscheme = "sips";
+  doFastFailureFlow(msg, 416);  // bad scheme
+}
+
+TEST_F(StatefulProxyTest, TestSimpleTelURI)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  Message msg;
   msg._toscheme = "tel";
   msg._to = "+16505551234";
+  msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
-  doFastFailureFlow(msg, 416);  // bad scheme
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestNoMoreForwards)

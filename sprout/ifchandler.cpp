@@ -866,6 +866,10 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    user = PJUtils::public_id_from_uri(uri);
+  }
   else
   {
     LOG_DEBUG("URI is not locally hosted");
