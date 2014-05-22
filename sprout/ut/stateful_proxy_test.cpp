@@ -6187,7 +6187,7 @@ TEST_F(IscTest, TerminatingDiversionExternal)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6327,7 +6327,7 @@ TEST_F(IscTest, OriginatingExternal)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6460,7 +6460,7 @@ TEST_F(IscTest, TerminatingDiversionExternalOrigCdiv)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6504,7 +6504,7 @@ TEST_F(IscTest, TerminatingDiversionExternalOrigCdiv)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567891"); // Must differ from previous branch

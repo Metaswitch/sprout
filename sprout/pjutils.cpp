@@ -314,7 +314,7 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
       id = PJUtils::pj_str_to_string(&sip_uri->host);
     }
   }
-  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
     id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number) + "@" + PJUtils::pj_str_to_string(&stack_data.default_home_domain);
   }

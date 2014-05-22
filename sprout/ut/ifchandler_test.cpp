@@ -213,6 +213,12 @@ TEST_F(IfcHandlerTest, ServedUser)
   parse_rxdata(rdata);
   EXPECT_EQ("sip:billy-bob@homedomain", IfcHandler::served_user_from_msg(SessionCase::Originating, rdata->msg_info.msg, rdata->tp_info.pool));
   EXPECT_EQ("sip:5755550099@127.0.0.1", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
+
+  // TEL uri in INVITE
+  str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", "tel:5755550099"), "$2", "");
+  rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  EXPECT_EQ("tel:5755550099", IfcHandler::served_user_from_msg(SessionCase::Terminating, rdata->msg_info.msg, rdata->tp_info.pool));
 }
 
 /// Test an iFC.
@@ -1378,6 +1384,69 @@ TEST_F(IfcHandlerTest, ReqURIMatch)
          true,
          SessionCase::Originating,
          true);
+}
+
+TEST_F(IfcHandlerTest, ReqURIMatchTelURI)
+{
+  string str0("INVITE tel:5755550033 SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+             "Max-Forwards: 69\n"
+             "From: <sip:5755550033@homedomain>;tag=13919SIPpTag0011234\n"
+             "To: <tel:5755550033>\n"
+             "Contact: <sip:5755550018@10.16.62.109:58309;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 4 INVITE\n"
+             "Route: <sip:127.0.0.1;transport=TCP;lr;orig>\n"
+             "Call-Info    : foo,\n"
+             "               bar\n"
+             "Accept: baz\n"
+             "Accept: quux, foo\n"
+             "Content-Type: application/sdp\n"
+             "Content-Length: 242\n\n"
+             "o=jdoe 2890844526 2890842807 IN IP4 10.47.16.5\n"
+             "s=SDP Seminar\n"
+             "b=X-YZ:128\n"
+             "a=recvonly\n"
+             "c=IN IP4 224.2.17.12\n"
+             "t=2873397496 2873404696\n"
+             "m=audio 49170/5 RTP/AVP 0\n"
+             "m=video 51372 RTP/AVP 99\n"
+             "b=Z-YZ:126\n"
+             "c=IN IP4 225.2.17.14\n"
+             "einvalidline\n"
+             "a=rtpmap:99 h263-1998/90000\n");
+
+  string str = boost::replace_all_copy(boost::replace_all_copy(str0, "$1", ""), "$2", "");
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+  pjsip_msg* msg = rdata->msg_info.msg;
+
+  doBaseTest("",
+             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+             "<ServiceProfile>\n"
+             "  <InitialFilterCriteria>\n"
+             "    <Priority>1</Priority>\n"
+             "  <TriggerPoint>\n"
+             "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+             "    <SPT>\n"
+             "      <ConditionNegated>0</ConditionNegated>\n"
+             "      <Group>0</Group>\n"
+             "      <RequestURI>5755550033</RequestURI>\n"
+             "      <Extension></Extension>\n"
+             "    </SPT>\n"
+             "  </TriggerPoint>\n"
+             "  <ApplicationServer>\n"
+             "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+             "    <DefaultHandling>0</DefaultHandling>\n"
+             "  </ApplicationServer>\n"
+             "  </InitialFilterCriteria>\n"
+             "</ServiceProfile>",
+             msg,
+             "sip:5755550033@homedomain",
+             true,
+             SessionCase::Originating,
+             true,
+             false);
 }
 
 TEST_F(IfcHandlerTest, ReqURINoMatch)
