@@ -1656,14 +1656,15 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
-TEST_F(StatefulProxyTest, TestEnumTelURI)
+TEST_F(StatefulProxyTest, TestEnumUserPhone)
 {
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
+  set_user_phone(true);
   Message msg;
   msg._to = "+15108580271";
-  msg._toscheme = "tel";
+  msg._requri = "sip:+15108580271@homedomain;user=phone";
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -1672,6 +1673,81 @@ TEST_F(StatefulProxyTest, TestEnumTelURI)
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(StatefulProxyTest, TestEnumNoUserPhone)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_user_phone(true);
+  Message msg;
+  msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSlowFailureFlow(msg, 404);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalNumber)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSlowFailureFlow(msg, 404);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalTelURI)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "16505551234";
+  msg._toscheme = "tel";
+  msg._todomain = "";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSlowFailureFlow(msg, 484);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalSIPURINumber)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "15108580271";
+  msg._requri = "sip:15108580271@homedomain;user=phone";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSlowFailureFlow(msg, 484);
 }
 
 TEST_F(StatefulProxyTest, TestValidBGCFRoute)
