@@ -374,6 +374,16 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
 
   // 6. Proxy-Authorization.  Not checked in the BasicProxy.
 
+  // Check that non-ACK request has not been received on a shutting down
+  // transport.  If it has then we won't be able to send a transaction
+  // response, so it is better to reject immediately.
+  if ((rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD) &&
+      (rdata->tp_info.transport != NULL) &&
+      (rdata->tp_info.transport->is_shutdown))
+  {
+    return PJSIP_SC_SERVICE_UNAVAILABLE;
+  }
+
   return PJSIP_SC_OK;
 }
 

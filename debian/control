@@ -32,7 +32,7 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout (= ${binary:Version})
-Recommends: gdb, sprout-libs-dbg
+Recommends: gdb, sprout-libs-dbg, chronos-dbg
 Description: Debugging symbols for sprout, the SIP Router
 
 Package: bono

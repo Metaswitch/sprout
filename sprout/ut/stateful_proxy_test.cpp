@@ -1532,6 +1532,47 @@ TEST_F(StatefulProxyTest, TestNoMoreForwards2)
   doFastFailureFlow(msg, 483); // too many hops
 }
 
+TEST_F(StatefulProxyTest, TestTransportShutdown)
+{
+  SCOPED_TRACE("");
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject an INVITE request on a transport which is shutting down.  It is safe
+  // to call pjsip_transport_shutdown on a TCP transport as the TransportFlow
+  // keeps a reference to the transport so it won't actually be destroyed until
+  // the TransportFlow is destroyed.
+  pjsip_transport_shutdown(tp->transport());
+
+  Message msg;
+  msg._method = "INVITE";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg.get_request(), tp);
+
+  // Check the 504 Service Unavailable response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(503).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), tp);
+
+  delete tp;
+}
+
 /// This proxy really doesn't support anything - beware!
 TEST_F(StatefulProxyTest, TestProxyRequire)
 {
@@ -6063,6 +6104,479 @@ TEST_F(IscTest, SimpleOptionsAccept)
   msg._cseq++;
   free_txdata();
 }
+
+
+// Test terminating call-diversion AS flow to external URI.
+// Repros https://github.com/Metaswitch/sprout/issues/519.
+TEST_F(IscTest, TerminatingDiversionExternal)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>1</SessionCase>  <!-- terminating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  // ---------- AS1 turns it around
+  // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
+  const pj_str_t STR_VIA = pj_str("Via");
+  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr->transport = pj_str("FAKE_UDP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK1234567890");
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  ((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("ut.cw-ngv.com");
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed externally
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpExternal.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  // ---------- Externally accepted with 200.
+  string fresp = respond_to_txdata(current_txdata(), 200);
+  free_txdata();
+  inject_msg(fresp, &tpExternal);
+
+  // 200 OK goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+
+  // ---------- AS1 forwards 200 (stripping via)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 200 OK goes back to bono
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+}
+
+
+// Test originating AS handling for request to external URI.
+TEST_F(IscTest, OriginatingExternal)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <SessionCase>0</SessionCase>  <!-- originating-registered -->
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345";
+  msg._to = "6505551234@ut.cw-ngv.com";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@ut.cw-ngv.com";
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as originating AS for Alice)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
+
+  // ---------- AS1 turns it around
+  // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
+  const pj_str_t STR_VIA = pj_str("Via");
+  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr->transport = pj_str("FAKE_UDP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK1234567890");
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed externally
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpExternal.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  // ---------- Externally accepted with 200.
+  string fresp = respond_to_txdata(current_txdata(), 200);
+  free_txdata();
+  inject_msg(fresp, &tpExternal);
+
+  // 200 OK goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+
+  // ---------- AS1 forwards 200 (stripping via)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 200 OK goes back to bono
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+}
+
+
+// Test terminating call-diversion AS flow to external URI, with orig-cdiv enabled too.
+TEST_F(IscTest, TerminatingDiversionExternalOrigCdiv)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>INVITE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as terminating AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  ReqMatcher r1("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  // ---------- AS1 turns it around
+  // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
+  const pj_str_t STR_VIA = pj_str("Via");
+  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr->transport = pj_str("FAKE_UDP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK1234567890");
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  ((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("ut2.cw-ngv.com");
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed on to AS1 (as originating-cdiv AS for Bob)
+  SCOPED_TRACE("INVITE (S)");
+  out = current_txdata()->msg;
+  r1 = ReqMatcher("INVITE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpAS.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@ut2.cw-ngv.com", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
+
+  // ---------- AS1 turns it around
+  // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
+  via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr->transport = pj_str("FAKE_UDP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK1234567891"); // Must differ from previous branch
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  ((pjsip_sip_uri*)out->line.req.uri)->host = pj_str("ut.cw-ngv.com");
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 100 Trying goes back to AS1
+  out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed externally
+  SCOPED_TRACE("INVITE (2)");
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+
+  tpExternal.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  // ---------- Externally accepted with 200.
+  string fresp = respond_to_txdata(current_txdata(), 200);
+  free_txdata();
+  inject_msg(fresp, &tpExternal);
+
+  // 200 OK goes back to AS1 (orig-cdiv)
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+
+  // ---------- AS1 forwards 200 (stripping via)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 200 OK goes back to AS1 (terminating)
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+
+  // ---------- AS1 forwards 200 (stripping via)
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // 200 OK goes back to bono
+  out = current_txdata()->msg;
+  RespMatcher(200).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  msg.set_route(out);
+  free_txdata();
+}
+
 
 TEST_F(ExternalIcscfTest, TestOriginating)
 {

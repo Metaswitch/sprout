@@ -2112,6 +2112,33 @@ TEST_F(BasicProxyTest, RequestErrors)
   msg2._method = "ACK";
   inject_msg(msg2.get_request(), tp);
 
+  // Inject an INVITE request on a transport which is shutting down.  It is safe
+  // to call pjsip_transport_shutdown on a TCP transport as the TransportFlow
+  // keeps a reference to the transport so it won't actually be destroyed until
+  // the TransportFlow is destroyed.
+  pjsip_transport_shutdown(tp->transport());
+
+  Message msg3;
+  msg3._method = "INVITE";
+  msg3._requri = "sip:bob@awaydomain";
+  msg3._from = "alice";
+  msg3._to = "bob";
+  msg3._todomain = "awaydomain";
+  msg3._via = tp->to_string(false);
+  msg3._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg3.get_request(), tp);
+
+  // Check the 504 Service Unavailable response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(503).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg3._method = "ACK";
+  inject_msg(msg3.get_request(), tp);
+
   delete tp;
 }
 
