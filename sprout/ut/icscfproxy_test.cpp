@@ -2347,7 +2347,6 @@ TEST_F(ICSCFProxyTest, RequestErrors)
   msg1._toscheme = "sips";
   msg1._from = "alice";
   msg1._to = "+2425551234";
-//  msg1._todomain = "";
   msg1._via = tp->to_string(false);
   msg1._route = "Route: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);

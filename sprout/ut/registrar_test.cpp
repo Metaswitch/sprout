@@ -270,6 +270,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   // We have a private ID in this test, so set up the expect response
   // to the query.
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
   Message msg;
   msg._expires = "Expires: 300";
   msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
@@ -290,7 +291,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
   free_txdata();
 }
 
-/// Simple correct example with Authorization header
+/// Simple correct example with Authorization header and Tel URIs
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
 {
   // We have a private ID in this test, so set up the expect response
@@ -317,7 +318,7 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
   free_txdata();
 }
 
-/// Simple correct example with Authorization header
+/// Simple correct example with Authorization header and Tel URIs
 TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURIInContact)
 {
   // We have a private ID in this test, so set up the expect response
@@ -1247,7 +1248,7 @@ TEST_F(RegistrarTest, MultipleAssociatedUris)
   free_txdata();
 }
 
-/// Multiple P-Associated-URIs
+/// Multiple P-Associated-URIs with Tel URIs
 TEST_F(RegistrarTest, MultipleAssociatedUrisWithTelURI)
 {
   Message msg;
@@ -1476,7 +1477,7 @@ TEST_F(RegistrarTest, RegistrationWithSubscription)
   free_txdata();
 }
 
-/// Simple correct example with a subscription
+/// Simple correct example with a subscription and Tel URIs
 TEST_F(RegistrarTest, RegistrationWithSubscriptionWithTelURI)
 {
   // We have a private ID in this test, so set up the expect response to the query.
@@ -1577,7 +1578,7 @@ TEST_F(RegistrarTest, MainlineEmergencyRegistration)
   delete aor_data; aor_data = NULL;
 }
 
-// Test that an emergency registration is successful, and creates an emergency binding
+// Test that an emergency registration is successful, and creates an emergency binding, with Tel URIs
 TEST_F(RegistrarTest, MainlineEmergencyRegistrationWithTelURI)
 {
   // We have a private ID in this test, so set up the expect response

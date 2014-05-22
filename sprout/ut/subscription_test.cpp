@@ -297,8 +297,8 @@ TEST_F(SubscriptionTest, SimpleMainline)
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
-/// Simple correct example
-TEST_F(SubscriptionTest, SimpleMainlineWithURI)
+/// Simple correct example with Tel URIs
+TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
 {
   // Get an initial empty AoR record and add a binding.
   int now = time(NULL);

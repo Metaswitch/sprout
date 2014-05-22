@@ -1477,43 +1477,6 @@ TEST_F(StatefulProxyTest, TestSimpleTelURI)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
-/*TEST_F(StatefulProxyTest, TestSimpleTelURI2)
-{
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  SCOPED_TRACE("");
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("tel:+16505551234", "call", HSSConnection::STATE_REGISTERED, "<IMSSubscription><ServiceProfile>\n"
-                                "<PublicIdentity><Identity>tel:+16505551234</Identity></PublicIdentity>"
-                                "  <InitialFilterCriteria>\n"
-                                "    <Priority>1</Priority>\n"
-                                "    <TriggerPoint>\n"
-                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                                "    <SPT>\n"
-                                "      <ConditionNegated>0</ConditionNegated>\n"
-                                "      <Group>0</Group>\n"
-                                "      <Method>INVITE</Method>\n"
-                                "      <Extension></Extension>\n"
-                                "    </SPT>\n"
-                                "  </TriggerPoint>\n"
-                                "  <ApplicationServer>\n"
-                                "    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                                "    <DefaultHandling>0</DefaultHandling>\n"
-                                "  </ApplicationServer>\n"
-                                "  </InitialFilterCriteria>\n"
-                                "</ServiceProfile></IMSSubscription>");
-  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  Message msg;
-  msg._toscheme = "tel";
-  msg._to = "+16505551234";
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._todomain = "";
-  list<HeaderMatcher> hdrs;
-//  doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
-
-  doTestHeaders(_tp_default, false, _tp_default, false, msg, "Route: <sip:homedomain;orig>", true, true, true, false, true);
-}*/
-
 TEST_F(StatefulProxyTest, TestNoMoreForwards)
 {
   SCOPED_TRACE("");

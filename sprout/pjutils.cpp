@@ -138,44 +138,6 @@ pj_bool_t PJUtils::is_uri_local(const pjsip_uri* uri)
 }
 
 
-/// Utility to determine if a user field contains a valid E.164 number
-/*pj_bool_t PJUtils::is_e164(const pj_str_t* user)
-{
-  if ((user->slen < 1) || (user->ptr[0] != '+'))
-  {
-    // Field is too short to contain a valid E.164 number, or does not
-    // start with a +.
-    return PJ_FALSE;
-  }
-
-  for (int ii = 1; ii < user->slen; ++ii)
-  {
-    if ((user->ptr[ii] < '0') || (user->ptr[ii] > '9'))
-    {
-      return PJ_FALSE;
-    }
-  }
-
-  return PJ_TRUE;
-}
-
-
-/// Utility to determine if URI contains a valid E.164 number
-pj_bool_t PJUtils::is_e164(const pjsip_uri* uri)
-{
-  if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    return PJUtils::is_e164(&((pjsip_sip_uri*)uri)->user);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-  {
-    return PJUtils::is_e164(&((pjsip_tel_uri*)uri)->number);
-  }
-
-  return PJ_FALSE;
-}*/
-
-
 pj_str_t PJUtils::uri_to_pj_str(pjsip_uri_context_e context,
                                 const pjsip_uri* uri,
                                 pj_pool_t* pool)
@@ -316,7 +278,8 @@ std::string PJUtils::default_private_id_from_uri(const pjsip_uri* uri)
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
-    id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number) + "@" + PJUtils::pj_str_to_string(&stack_data.default_home_domain);
+    id = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number) +
+               "@" + PJUtils::pj_str_to_string(&stack_data.default_home_domain);
   }
   else
   {

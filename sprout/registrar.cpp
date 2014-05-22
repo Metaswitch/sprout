@@ -506,7 +506,6 @@ void process_register_request(pjsip_rx_data* rdata)
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
-  //std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   std::string public_id = PJUtils::public_id_from_uri(uri);
 
   LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
