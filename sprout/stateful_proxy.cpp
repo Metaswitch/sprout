@@ -2325,33 +2325,19 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
           if (status != PJ_SUCCESS)
           {
-            // We've finished originating handling, and the request is
-            // targeted at this domain, but the URI is not currently
-            // routeable, so do an ENUM lookup to translate it to a
-            // routeable URI.
+            // An error occurred during URI translation.  This doesn't happen if
+            // there is no match, only if the URI is invalid or there is a match
+            // but there is an error performing the defined mapping.  We therefore
+            // reject the request.
+            disposition = AsChainLink::Disposition::Stop;
 
-            // This may mean it is no longer targeted at
-            // this domain, so we need to recheck this below before
-            // starting terminating handling.
-            LOG_DEBUG("Translating URI");
-            status = translate_request_uri(_req, trail());
-
-            if (status != PJ_SUCCESS)
+            if (status == PJ_EUNKNOWN)
             {
-              // An error occurred during URI translation.  This doesn't happen if
-              // there is no match, only if the URI is invalid or there is a match
-              // but there is an error performing the defined mapping.  We therefore
-              // reject the request.
-              disposition = AsChainLink::Disposition::Stop;
-
-              if (status == PJ_EUNKNOWN)
-              {
-                send_response(PJSIP_SC_ADDRESS_INCOMPLETE, &SIP_REASON_ADDR_INCOMPLETE);
-              }
-              else
-              {
-                send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-              }
+              send_response(PJSIP_SC_ADDRESS_INCOMPLETE, &SIP_REASON_ADDR_INCOMPLETE);
+            }
+            else
+            {
+              send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
             }
           }
         }
