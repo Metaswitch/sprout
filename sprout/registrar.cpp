@@ -779,6 +779,7 @@ void process_register_request(pjsip_rx_data* rdata)
     SAS::report_event(event);
 
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+    pjsip_tx_data_invalidate_msg(tdata);
     status = pjsip_endpt_send_response2(stack_data.endpt, rdata, tdata, NULL, NULL);
     delete acr;
     delete aor_data;
