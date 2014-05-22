@@ -352,7 +352,9 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
 
   // 2. URI scheme.
   // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -371,6 +373,16 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
   // classes may implement checks on this.
 
   // 6. Proxy-Authorization.  Not checked in the BasicProxy.
+
+  // Check that non-ACK request has not been received on a shutting down
+  // transport.  If it has then we won't be able to send a transaction
+  // response, so it is better to reject immediately.
+  if ((rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD) &&
+      (rdata->tp_info.transport != NULL) &&
+      (rdata->tp_info.transport->is_shutdown))
+  {
+    return PJSIP_SC_SERVICE_UNAVAILABLE;
+  }
 
   return PJSIP_SC_OK;
 }

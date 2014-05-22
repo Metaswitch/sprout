@@ -197,7 +197,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                        NULL;
 
       if ((uri != NULL) &&
-          (PJSIP_URI_SCHEME_IS_SIP(uri)))
+          ((PJSIP_URI_SCHEME_IS_SIP(uri)) || (PJSIP_URI_SCHEME_IS_TEL(uri))))
       {
         contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
       }
@@ -293,17 +293,16 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
 
-  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
-    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
     // whether 404 is the right status code - it says 404 should be used if
     // the AoR isn't valid for the domain in the RequestURI).
-    // LCOV_EXCL_START
-    LOG_ERROR("Rejecting subscribe request using non SIP URI");
+    LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string error_msg = "Subscribe failed as using non SIP URI";
+    std::string error_msg = "Subscribe failed as using invalid URI Scheme";
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
@@ -314,7 +313,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     return;
-    // LCOV_EXCL_STOP
   }
 
   bool emergency_subscription = false;
@@ -361,7 +359,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
-  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  std::string public_id = PJUtils::public_id_from_uri(uri);
 
   LOG_DEBUG("Process SUBSCRIBE for public ID %s", public_id.c_str());
 

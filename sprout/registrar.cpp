@@ -135,6 +135,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
   pj_str_t *reg_id = NULL;
 
   pjsip_param *p = contact->other_param.next;
+
   while ((p != NULL) && (p != &contact->other_param))
   {
     if (pj_stricmp(&p->name, &STR_SIP_INSTANCE) == 0)
@@ -147,6 +148,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     }
     p = p->next;
   }
+
   if (instance != NULL)
   {
     // The contact a +sip.instance parameters, so form a suitable binding
@@ -318,7 +320,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                            NULL;
 
       if ((uri != NULL) &&
-          (PJSIP_URI_SCHEME_IS_SIP(uri)))
+          ((PJSIP_URI_SCHEME_IS_SIP(uri)) || (PJSIP_URI_SCHEME_IS_TEL(uri))))
       {
         // The binding identifier is based on the +sip.instance parameter if
         // it is present.  If not the contact URI is used instead.
@@ -475,18 +477,17 @@ void process_register_request(pjsip_rx_data* rdata)
   // Get the URI from the To header and check it is a SIP or SIPS URI.
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
 
-  if (!PJSIP_URI_SCHEME_IS_SIP(uri))
+  if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
-    // Reject a non-SIP/SIPS URI with 404 Not Found (RFC3261 isn't clear
+    // Reject a non-SIP/TEL URI with 404 Not Found (RFC3261 isn't clear
     // whether 404 is the right status code - it says 404 should be used if
     // the AoR isn't valid for the domain in the RequestURI).
-    // LCOV_EXCL_START
-    LOG_ERROR("Rejecting register request using non SIP URI");
+    LOG_ERROR("Rejecting register request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
     // Can't log the public ID as the REGISTER has failed too early
     std::string public_id = "UNKNOWN";
-    std::string error_msg = "Rejecting register request using non SIP URI";
+    std::string error_msg = "Rejecting register request using invalid URI scheme";
     event.add_var_param(public_id);
     event.add_var_param(error_msg);
     SAS::report_event(event);
@@ -498,7 +499,6 @@ void process_register_request(pjsip_rx_data* rdata)
                                NULL,
                                NULL);
     return;
-    // LCOV_EXCL_STOP
   }
 
   // Allocate an ACR for this transaction and pass the request to it.
@@ -506,7 +506,8 @@ void process_register_request(pjsip_rx_data* rdata)
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
-  std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  std::string public_id = PJUtils::public_id_from_uri(uri);
+
   LOG_DEBUG("Process REGISTER for public ID %s", public_id.c_str());
 
   // Get the call identifier and the cseq number from the respective headers.
