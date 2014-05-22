@@ -1635,8 +1635,9 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain(req_uri)) &&
-      (!PJUtils::is_uri_local(req_uri)))
+  if (((!PJUtils::is_home_domain(req_uri)) &&
+       (!PJUtils::is_uri_local(req_uri))) ||
+       (PJUtils::is_uri_phone_number(req_uri)))
   {
     if (sip_uri)
     {
@@ -1653,7 +1654,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain;
-      if (sip_uri)
+      if (!PJUtils::is_uri_phone_number(req_uri))
       {
         domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
       }
@@ -1712,7 +1713,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
   }
 
-  if ((sip_uri) && (store) && (hss) && is_user_registered(public_id))
+  if ((!PJUtils::is_uri_phone_number(req_uri)) && (store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
@@ -1847,20 +1848,16 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
 {
   pj_status_t status = PJ_SUCCESS;
   std::string user;
-  bool tel_uri = false;
-  bool sip_uri = false;
   std::string uri;
 
   // Determine whether we have a SIP URI or a tel URI
   if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
   {
     user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    sip_uri = true;
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
   {
     user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
-    tel_uri = true;
   }
 
   // Check whether we have a global number or whether we allow
@@ -1869,17 +1866,15 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
   {
     // Perform an ENUM lookup if we have a tel URI, or if we have
     // a SIP URI which is being treated as a phone number
-    if (tel_uri ||
-        (sip_uri &&
-         (!user_phone || PJUtils::is_sip_uri_phone_number((pjsip_sip_uri*)tdata->msg->line.req.uri)) &&
+    if ((PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri)) ||
+        ((!user_phone || PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) &&
          is_user_numeric(user)))
     {
       LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
-  else if (tel_uri ||
-           (sip_uri && PJUtils::is_sip_uri_phone_number((pjsip_sip_uri*)tdata->msg->line.req.uri)))
+  else if (PJUtils::is_uri_phone_number(tdata->msg->line.req.uri))
   {
     LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
     status = PJ_EUNKNOWN;
