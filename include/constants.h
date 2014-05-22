@@ -98,6 +98,6 @@ const int SIP_STATUS_FLOW_FAILED = 430;
 const pj_str_t SIP_REASON_FLOW_FAILED = pj_str((char*)"Flow failed");
 const pj_str_t SIP_REASON_ENUM_FAILED = pj_str((char*)"ENUM translation failed");
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str((char*)"Off-net calling not allowed");
-const pj_str_t SIP_REASON_ADDR_INCOMPLETE = pj_str((char*)"Address Incompleted");
+const pj_str_t SIP_REASON_ADDR_INCOMPLETE = pj_str((char*)"Address Incomplete");
 
 #endif /* CONSTANTS_H_ */

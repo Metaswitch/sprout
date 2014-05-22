@@ -367,8 +367,10 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 bool scscf_enabled,
                                 bool emerg_reg_accepted);
 
+#ifdef UNIT_TEST
 void set_user_phone(bool enforce_user_phone);
 void set_global_only_lookups(bool enforce_global_only_lookups);
+#endif
 
 void destroy_stateful_proxy();
 

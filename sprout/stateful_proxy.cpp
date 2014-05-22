@@ -140,8 +140,8 @@ static IfcHandler* ifc_handler;
 static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
-bool user_phone = false;
-bool global_only_lookups = false;
+static bool user_phone = false;
+static bool global_only_lookups = false;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
