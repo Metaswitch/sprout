@@ -1866,9 +1866,8 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
   {
     // Perform an ENUM lookup if we have a tel URI, or if we have
     // a SIP URI which is being treated as a phone number
-    if ((PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri)) ||
-        ((!user_phone || PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) &&
-         is_user_numeric(user)))
+    if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
+        (!user_phone && is_user_numeric(user)))
     {
       LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);

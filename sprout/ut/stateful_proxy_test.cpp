@@ -1729,8 +1729,6 @@ TEST_F(StatefulProxyTest, TestEnumNoUserPhone)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1747,8 +1745,6 @@ TEST_F(StatefulProxyTest, TestEnumLocalNumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSlowFailureFlow(msg, 404);
 }
 
@@ -1767,8 +1763,6 @@ TEST_F(StatefulProxyTest, TestEnumLocalTelURI)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSlowFailureFlow(msg, 484);
 }
 
@@ -1786,8 +1780,6 @@ TEST_F(StatefulProxyTest, TestEnumLocalSIPURINumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
   doSlowFailureFlow(msg, 484);
 }
 
