@@ -415,6 +415,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
     tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
+    pjsip_tx_data_invalidate_msg(tdata);
   }
 }
 

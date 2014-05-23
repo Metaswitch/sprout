@@ -1156,6 +1156,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     on_tx_response(prov_rsp);
     pjsip_tsx_send_msg(_tsx, prov_rsp);
@@ -1169,6 +1170,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     best_rsp->msg->line.status.code = st_code;
     best_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(best_rsp);
     set_trail(best_rsp, trail());
     on_tx_response(best_rsp);
     pjsip_tsx_send_msg(_tsx, best_rsp);

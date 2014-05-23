@@ -649,3 +649,27 @@ TEST_F(SIPResolverTest, BlacklistARecord)
   EXPECT_GT(333+5*15, counts["3.0.0.4:5060;transport=UDP"]);
 }
 
+// Test receiving a NAPTR response that doesn't contain a SIP service
+// Repros https://github.com/Metaswitch/homestead/issues/94
+TEST_F(SIPResolverTest, NoMatchingNAPTR)
+{
+  // Add a NAPTR record for an invalid service.  This should be ignored.
+  std::vector<DnsRRecord*> records;
+  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "BAD", "", "bad.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
+
+  // Add SRV and A record so that if the NAPTR wasn't ignored, we'd resolve to 3.0.0.1.
+  records.push_back(srv("bad.sprout.cw-ngv.com", 3600, 0, 0, 5054, "bad.sprout.cw-ngv.com"));
+  _dnsresolver.add_to_cache("bad.sprout.cw-ngv.com", ns_t_srv, records);
+  records.push_back(a("bad.sprout.cw-ngv.com", 3600, "3.0.0.1"));
+  _dnsresolver.add_to_cache("bad.sprout.cw-ngv.com", ns_t_a, records);
+
+  // Add a default A record that we should resolve to instead (4.0.0.1).
+  records.push_back(a("sprout.cw-ngv.com", 3600, "4.0.0.1"));
+  _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_a, records);
+
+  LOG_DEBUG("Cache status\n%s", _dnsresolver.display_cache().c_str());
+
+  EXPECT_EQ("4.0.0.1:5060;transport=UDP",
+            RT(_sipresolver, "sprout.cw-ngv.com").resolve());
+}

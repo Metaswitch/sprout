@@ -2434,6 +2434,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         // Pass the error response to the I-CSCF ACR and send the ACR.
         _best_rsp->msg->line.status.code = status_code;
         _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
+        pjsip_tx_data_invalidate_msg(_best_rsp);
         _icscf_acr->tx_response(_best_rsp->msg);
         _icscf_acr->send_message();
         delete _icscf_acr;
@@ -3183,6 +3184,7 @@ pj_status_t UASTransaction::handle_final_response()
 
       // Reset the best response to a 408 response to use if none of the targets responds.
       _best_rsp->msg->line.status.code = PJSIP_SC_REQUEST_TIMEOUT;
+      pjsip_tx_data_invalidate_msg(_best_rsp);
 
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
@@ -3255,6 +3257,7 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     _upstream_acr->tx_response(prov_rsp->msg);
     return pjsip_tsx_send_msg(_tsx, prov_rsp);
@@ -3263,6 +3266,7 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
   {
     _best_rsp->msg->line.status.code = st_code;
     _best_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(_best_rsp);
     return handle_final_response();
   }
 }
