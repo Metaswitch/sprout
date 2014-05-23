@@ -364,6 +364,8 @@ public:
                                           _ibcf_trusted_hosts.c_str(),
                                           _analytics,
                                           _enum_service,
+                                          false,
+                                          false,
                                           _bgcf_service,
                                           _hss_connection,
                                           _acr_factory,
@@ -1458,10 +1460,23 @@ TEST_F(StatefulProxyTest, TestBadScheme)
   SCOPED_TRACE("");
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
+  msg._toscheme = "sips";
+  doFastFailureFlow(msg, 416);  // bad scheme
+}
+
+TEST_F(StatefulProxyTest, TestSimpleTelURI)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  Message msg;
   msg._toscheme = "tel";
   msg._to = "+16505551234";
+  msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
-  doFastFailureFlow(msg, 416);  // bad scheme
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(StatefulProxyTest, TestNoMoreForwards)
@@ -1680,6 +1695,92 @@ TEST_F(StatefulProxyTest, TestEnumExternalOffNetDialingAllowed)
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(StatefulProxyTest, TestEnumUserPhone)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_user_phone(true);
+  Message msg;
+  msg._to = "+15108580271";
+  msg._requri = "sip:+15108580271@homedomain;user=phone";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(StatefulProxyTest, TestEnumNoUserPhone)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_user_phone(true);
+  Message msg;
+  msg._to = "+15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalNumber)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "15108580271";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalTelURI)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "16505551234";
+  msg._toscheme = "tel";
+  msg._todomain = "";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 484);
+}
+
+TEST_F(StatefulProxyTest, TestEnumLocalSIPURINumber)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "15108580271";
+  msg._requri = "sip:15108580271@homedomain;user=phone";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 484);
 }
 
 TEST_F(StatefulProxyTest, TestValidBGCFRoute)
@@ -6137,7 +6238,7 @@ TEST_F(IscTest, TerminatingDiversionExternal)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6277,7 +6378,7 @@ TEST_F(IscTest, OriginatingExternal)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6410,7 +6511,7 @@ TEST_F(IscTest, TerminatingDiversionExternalOrigCdiv)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567890");
@@ -6454,7 +6555,7 @@ TEST_F(IscTest, TerminatingDiversionExternalOrigCdiv)
   }
   via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
-  via_hdr->sent_by.host = pj_str("1.2.3.4"); 
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
   via_hdr->branch_param = pj_str("z9hG4bK1234567891"); // Must differ from previous branch

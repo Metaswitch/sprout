@@ -653,7 +653,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     if (analytics != NULL)
     {
       analytics->auth_failure(PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username),
-                              PJUtils::aor_from_uri((pjsip_sip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
+                              PJUtils::public_id_from_uri((pjsip_uri*)pjsip_uri_get_uri(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri)));
     }
 
     // @TODO - need more diagnostics here so we can identify and flag

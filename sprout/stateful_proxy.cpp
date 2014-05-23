@@ -140,6 +140,8 @@ static IfcHandler* ifc_handler;
 static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
+static bool user_phone = false;
+static bool global_only_lookups = false;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
@@ -239,6 +241,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 static int compare_sip_sc(int sc1, int sc2);
 static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_bool_t is_user_numeric(const std::string& user);
+static pj_bool_t is_user_global(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -687,8 +690,9 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -1423,12 +1427,12 @@ static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 // Process route information in the request
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 {
-  pjsip_sip_uri *target;
+  pjsip_uri *target;
   pjsip_route_hdr *hroute;
 
   // RFC 3261 Section 16.4 Route Information Preprocessing
 
-  target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+  target = tdata->msg->line.req.uri;
 
   // The proxy MUST inspect the Request-URI of the request.  If the
   // Request-URI of the request contains a value this proxy previously
@@ -1472,7 +1476,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
       // - remove the Route header,
       // - proceed as if it received this modified request.
       tdata->msg->line.req.uri = hroute->name_addr.uri;
-      target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+      target = tdata->msg->line.req.uri;
       pj_list_erase(hroute);
     }
   }
@@ -1597,18 +1601,32 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
                                              int max_targets,
                                              SAS::TrailId trail)
 {
+  bool sip_uri = false;
+  bool tel_uri = false;
+
   // RFC 3261 Section 16.5 Determining Request Targets
 
-  pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
+  pjsip_uri* req_uri = (pjsip_uri*)msg->line.req.uri;
+
+  if (PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri))
+  {
+    sip_uri = true;
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))
+  {
+    tel_uri = true;
+  }
 
   // If the Request-URI of the request contains an maddr parameter, the
   // Request-URI MUST be placed into the target set as the only target
   // URI, and the proxy MUST proceed to Section 16.6.
-  if (req_uri->maddr_param.slen)
+  if (sip_uri && ((pjsip_sip_uri*)req_uri)->maddr_param.slen)
   {
-    LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
+    LOG_INFO("Route request to maddr %.*s",
+             ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
+             ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     Target target;
-    target.uri = (pjsip_uri*)req_uri;
+    target.uri = req_uri;
     targets.push_back(target);
     return;
   }
@@ -1617,18 +1635,31 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
-      (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
+  if (((!PJUtils::is_home_domain(req_uri)) &&
+       (!PJUtils::is_uri_local(req_uri))) ||
+       (PJUtils::is_uri_phone_number(req_uri)))
   {
-    LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
+    if (sip_uri)
+    {
+      LOG_INFO("Route request to domain %.*s",
+               ((pjsip_sip_uri*)req_uri)->host.slen,
+               ((pjsip_sip_uri*)req_uri)->host.ptr);
+    }
+
     Target target;
-    target.uri = (pjsip_uri*)req_uri;
+    target.uri = req_uri;
 
     if ((bgcf_service) &&
-        (PJSIP_URI_SCHEME_IS_SIP(req_uri)))
+        (sip_uri || tel_uri))
     {
       // See if we have a configured route to the destination.
-      std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+      std::string domain;
+
+      if (!PJUtils::is_uri_phone_number(req_uri))
+      {
+        domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+      }
+
       std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
@@ -1636,15 +1667,16 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
           pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
-
           if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
+            LOG_DEBUG("Adding route: %s", (*ii).c_str());
             target.paths.push_back(route_uri);
           }
           else
           {
             // One of the routes is an invalid SIP URI. Stop processing the entry
             // and clear the target
+            LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
             target.paths.clear();
           }
         }
@@ -1678,8 +1710,13 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // is_user_registered() checks on Homestead to see whether the user
   // is registered - if not, we don't need to use the memcached store
   // to look up their bindings.
-  std::string public_id = PJUtils::aor_from_uri(req_uri);
-  if ((store) && (hss) && is_user_registered(public_id))
+  std::string public_id;
+  if (sip_uri)
+  {
+    public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
+  }
+
+  if ((!PJUtils::is_uri_phone_number(req_uri)) && (store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
@@ -1813,20 +1850,36 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trail)
 {
   pj_status_t status = PJ_SUCCESS;
+  std::string user;
   std::string uri;
 
+  // Determine whether we have a SIP URI or a tel URI
   if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    if (is_user_numeric(user))
+    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
+  {
+    user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
+  }
+
+  // Check whether we have a global number or whether we allow
+  // ENUM lookups for local numbers
+  if (is_user_global(user) || !global_only_lookups)
+  {
+    // Perform an ENUM lookup if we have a tel URI, or if we have
+    // a SIP URI which is being treated as a phone number
+    if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
+        (!user_phone && is_user_numeric(user)))
     {
+      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
-  else
+  else if (PJUtils::is_uri_phone_number(tdata->msg->line.req.uri))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
-    uri = enum_service->lookup_uri_from_user(user, trail);
+    LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
+    status = PJ_EUNKNOWN;
   }
 
   if (!uri.empty())
@@ -2253,7 +2306,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         }
 
         if ((enum_service) &&
-            (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+            ((PJUtils::is_home_domain(_req->msg->line.req.uri)) || (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri))) &&
             (!is_uri_routeable(_req->msg->line.req.uri)))
         {
           // We've finished originating handling, and the request is
@@ -2270,11 +2323,19 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           if (status != PJ_SUCCESS)
           {
             // An error occurred during URI translation.  This doesn't happen if
-            // there is no match, only if there is a match but there is an error
-            // performing the defined mapping.  We therefore reject the request
-            // with the not found status code and a specific reason phrase.
-            send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+            // there is no match, only if the URI is invalid or there is a match
+            // but there is an error performing the defined mapping.  We therefore
+            // reject the request.
             disposition = AsChainLink::Disposition::Stop;
+
+            if (status == PJ_EUNKNOWN)
+            {
+              send_response(PJSIP_SC_ADDRESS_INCOMPLETE, &SIP_REASON_ADDR_INCOMPLETE);
+            }
+            else
+            {
+              send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
+            }
           }
         }
       }
@@ -2564,7 +2625,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         LOG_DEBUG("Successfully looked up iFCs");
         _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
       }
-  
+
       if (serving_state.session_case() == SessionCase::Terminating)
       {
         common_start_of_terminating_processing();
@@ -4257,6 +4318,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
+                                bool enforce_user_phone,
+                                bool enforce_global_only_lookups,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
@@ -4366,6 +4429,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   }
 
   enum_service = enumService;
+  user_phone = enforce_user_phone;
+  global_only_lookups = enforce_global_only_lookups;
   bgcf_service = bgcfService;
   hss = hss_connection;
   scscf_selector = scscfSelector;
@@ -4390,6 +4455,18 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   return PJ_SUCCESS;
 }
 
+#ifdef UNIT_TEST
+// These setter functions are for unit test purposes only
+void set_user_phone(bool enforce_user_phone)
+{
+  user_phone = enforce_user_phone;
+}
+
+void set_global_only_lookups(bool enforce_global_only_lookups)
+{
+  global_only_lookups = enforce_global_only_lookups;
+}
+#endif
 
 void destroy_stateful_proxy()
 {
@@ -4499,6 +4576,19 @@ static pj_bool_t is_user_numeric(const std::string& user)
     }
   }
   return PJ_TRUE;
+}
+
+// Determines whether a user string represents a global number.
+//
+// @returns PJ_TRUE if so, PJ_FALSE if not.
+static pj_bool_t is_user_global(const std::string& user)
+{
+  if (user.size() > 0 && user[0] == '+')
+  {
+    return PJ_TRUE;
+  }
+
+  return PJ_FALSE;
 }
 
 /// Adds a Path header when functioning as an edge proxy.
