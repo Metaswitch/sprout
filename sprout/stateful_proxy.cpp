@@ -1654,10 +1654,12 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     {
       // See if we have a configured route to the destination.
       std::string domain;
+
       if (!PJUtils::is_uri_phone_number(req_uri))
       {
         domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
       }
+
       std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
@@ -1665,15 +1667,16 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
           pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
-
           if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
+            LOG_DEBUG("Adding route: %s", (*ii).c_str());
             target.paths.push_back(route_uri);
           }
           else
           {
             // One of the routes is an invalid SIP URI. Stop processing the entry
             // and clear the target
+            LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
             target.paths.clear();
           }
         }
@@ -4580,6 +4583,7 @@ static pj_bool_t is_user_global(const std::string& user)
   {
     return PJ_TRUE;
   }
+
   return PJ_FALSE;
 }
 

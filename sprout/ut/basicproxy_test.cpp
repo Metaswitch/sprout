@@ -691,53 +691,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  // Inject a request with two Route headers, the first refering to the
-  // home domain and the second refering to an external domain.
-  Message msg2;
-  msg2._method = "INVITE";
-  msg2._requri = "sip:bob@awaydomain";
-  msg2._from = "alice";
-  msg2._to = "bob";
-  msg2._todomain = "awaydomain";
-  msg2._via = tp->to_string(false);
-  msg2._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
-  inject_msg(msg2.get_request(), tp);
-
-  // Expecting 100 Trying and forwarded INVITE
-
-  // Check the 100 Trying.
-  ASSERT_EQ(2, txdata_count());
-  tdata = current_txdata();
-  RespMatcher(100).matches(tdata->msg);
-  tp->expect_target(tdata);
-  free_txdata();
-  // Request is forwarded to the node in the second Route header.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.20.1", 5060, tdata);
-  ReqMatcher("INVITE").matches(tdata->msg);
-
-  // Check the RequestURI has not been altered.
-  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
-
-  // Check the first Route header has been removed, but the second remains.
-  route = get_headers(tdata->msg, "Route");
-  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>", route);
-
-  // Check no Record-Route headers have been added.
-  rr = get_headers(tdata->msg, "Record-Route");
-  EXPECT_EQ("", rr);
-
-  // Send a 200 OK response.
-  inject_msg(respond_to_current_txdata(200));
-
-  // Check the response is forwarded back to the source.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  tp->expect_target(tdata);
-  RespMatcher(200).matches(tdata->msg);
-  free_txdata();
-
   delete tp;
 }
 
