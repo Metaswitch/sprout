@@ -1412,3 +1412,10 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
   return ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
           (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
 }
+
+bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
+{
+  return ((uri != NULL) &&
+          ((PJSIP_URI_SCHEME_IS_TEL(uri) ||
+           (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
+}

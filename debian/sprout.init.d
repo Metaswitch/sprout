@@ -134,6 +134,9 @@ get_settings()
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
+
+        [ "$enforce_user_phone" != "Y" ] || user_phone_arg="--enforce-user-phone"
+        [ "$enforce_global_only_lookups" != "Y" ] || global_only_lookups_arg="--enforce-global-only-lookups"
 }
 
 #
@@ -175,6 +178,8 @@ do_start()
                      --record-routing-model $sprout_rr_level
                      --default-session-expires $default_session_expires
                      $authentication_arg
+                     $user_phone_arg
+                     $global_only_lookups_arg
                      -T $local_ip
                      -o 9888
                      -a $log_directory
