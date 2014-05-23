@@ -876,8 +876,9 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
     uri = PJUtils::term_served_user(msg);
   }
 
-  if ((PJUtils::is_home_domain(uri)) ||
-      (PJUtils::is_uri_local(uri)))
+  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+     ((PJUtils::is_home_domain(uri)) ||
+      (PJUtils::is_uri_local(uri))))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
   }

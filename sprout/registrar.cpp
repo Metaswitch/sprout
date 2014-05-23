@@ -320,7 +320,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                            NULL;
 
       if ((uri != NULL) &&
-          ((PJSIP_URI_SCHEME_IS_SIP(uri)) || (PJSIP_URI_SCHEME_IS_TEL(uri))))
+          (PJSIP_URI_SCHEME_IS_SIP(uri)))
       {
         // The binding identifier is based on the +sip.instance parameter if
         // it is present.  If not the contact URI is used instead.

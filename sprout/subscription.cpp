@@ -197,7 +197,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                        NULL;
 
       if ((uri != NULL) &&
-          ((PJSIP_URI_SCHEME_IS_SIP(uri)) || (PJSIP_URI_SCHEME_IS_TEL(uri))))
+          (PJSIP_URI_SCHEME_IS_SIP(uri)))
       {
         contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
       }

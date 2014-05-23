@@ -1406,20 +1406,9 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
 
 bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 {
-  pjsip_uri* uri = (contact_hdr->uri != NULL) ? (pjsip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
-
-  if (uri != NULL)
-  {
-    if (PJSIP_URI_SCHEME_IS_SIP(uri))
-    {
-      return (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_SOS) != NULL);
-    }
-    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
-    {
-      return (pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_SOS) != NULL);
-    }
-  }
-
-  return false;
+  // Contact header must be a SIP URI
+  pjsip_sip_uri* uri = (contact_hdr->uri != NULL) ?
+                     (pjsip_sip_uri*)pjsip_uri_get_uri(contact_hdr->uri) : NULL;
+  return ((uri != NULL) && (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+          (pjsip_param_find(&uri->other_param, &STR_SOS) != NULL));
 }
-

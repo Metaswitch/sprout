@@ -318,35 +318,6 @@ TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURI)
   free_txdata();
 }
 
-/// Simple correct example with Authorization header and Tel URIs
-TEST_F(RegistrarTest, SimpleMainlineAuthHeaderWithTelURIInContact)
-{
-  // We have a private ID in this test, so set up the expect response
-  // to the query.
-  _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
-  Message msg;
-  msg._expires = "Expires: 300";
-  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
-  msg._contact = "tel:1231231231";
-  msg._contact_instance = "";
-  msg._contact_params = "";
-  msg._scheme = "tel";
-  inject_msg(msg.get());
-  ASSERT_EQ(1, txdata_count());
-  pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
-  EXPECT_EQ(200, out->line.status.code);
-  EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <tel:1231231231>;expires=300",
-            get_headers(out, "Contact"));  // that's a bit odd; we glom together the params
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <tel:6505550231>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
-  free_txdata();
-}
-
 /// Simple correct example with Expires header
 TEST_F(RegistrarTest, SimpleMainlineExpiresHeader)
 {
