@@ -514,6 +514,7 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
           _best_rsp->msg->line.status.reason =
                        *pjsip_get_status_text(_best_rsp->msg->line.status.code);
         }
+        pjsip_tx_data_invalidate_msg(_best_rsp);
       }
     }
   }

@@ -333,14 +333,30 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
   else if (strcmp("RequestURI", name) == 0)
   {
     boost::regex req_uri_regex;
-    pjsip_sip_uri* req_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+    std::string test_string;
 
-    // Just comparing against the hostport part of the Req URI, as per Table F.1
-    // of 3GPP TS 29.228.
-    std::string hostport = PJUtils::pj_str_to_string(&req_uri->host);
-    if (req_uri->port != 0)
+    if (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))
     {
-      hostport += ":" + std::to_string(req_uri->port);
+      pjsip_tel_uri* req_uri =  (pjsip_tel_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+
+      // Match against the telephone-subscriber part of the Req URI, as per Table F.1
+      // of 3GPP TS 29.228.
+      test_string = PJUtils::pj_str_to_string(&req_uri->number);
+    }
+    else
+    {
+      pjsip_sip_uri* req_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(msg->line.req.uri);
+
+      // Compare against the hostport part of the Req URI, as per Table F.1
+      // of 3GPP TS 29.228.
+      std::string hostport = PJUtils::pj_str_to_string(&req_uri->host);
+
+      if (req_uri->port != 0)
+      {
+        hostport += ":" + std::to_string(req_uri->port);
+      }
+
+      test_string = hostport;
     }
 
     req_uri_regex = boost::regex(get_text_or_cdata(node), boost::regex_constants::no_except);
@@ -355,8 +371,7 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
 
       throw ifc_error(error_msg);
     }
-
-    ret = boost::regex_search(hostport, req_uri_regex);
+    ret = boost::regex_search(test_string, req_uri_regex);
   }
   else if (strcmp("SessionDescription", name) == 0)
   {
@@ -861,10 +876,15 @@ std::string IfcHandler::served_user_from_msg(const SessionCase& session_case,
     uri = PJUtils::term_served_user(msg);
   }
 
-  if ((PJUtils::is_home_domain(uri)) ||
-      (PJUtils::is_uri_local(uri)))
+  if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+     ((PJUtils::is_home_domain(uri)) ||
+      (PJUtils::is_uri_local(uri))))
   {
     user = PJUtils::aor_from_uri((pjsip_sip_uri*)uri);
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    user = PJUtils::public_id_from_uri(uri);
   }
   else
   {

@@ -46,3 +46,6 @@
 [submodule "modules/gcovr"]
 	path = modules/gcovr
 	url = git@github.com:gcovr/gcovr.git
+[submodule "modules/rapidjson"]
+	path = modules/rapidjson
+	url = git@github.com:zvelo/rapidjson.git

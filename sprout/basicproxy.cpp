@@ -351,8 +351,9 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -1152,6 +1153,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     on_tx_response(prov_rsp);
     pjsip_tsx_send_msg(_tsx, prov_rsp);
@@ -1165,6 +1167,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     best_rsp->msg->line.status.code = st_code;
     best_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(best_rsp);
     set_trail(best_rsp, trail());
     on_tx_response(best_rsp);
     pjsip_tsx_send_msg(_tsx, best_rsp);

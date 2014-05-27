@@ -89,6 +89,7 @@ const pj_str_t STR_CCF = pj_str((char*)"ccf");
 const pj_str_t STR_CONTENT_DISPOSITION = pj_str((char*)"Content-Disposition");
 const pj_str_t STR_REG = pj_str((char*)"reg");
 const pj_str_t STR_SOS = pj_str((char*)"sos");
+const pj_str_t STR_USER = pj_str((char*)"user");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
@@ -97,5 +98,6 @@ const int SIP_STATUS_FLOW_FAILED = 430;
 const pj_str_t SIP_REASON_FLOW_FAILED = pj_str((char*)"Flow failed");
 const pj_str_t SIP_REASON_ENUM_FAILED = pj_str((char*)"ENUM translation failed");
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str((char*)"Off-net calling not allowed");
+const pj_str_t SIP_REASON_ADDR_INCOMPLETE = pj_str((char*)"Address Incomplete");
 
 #endif /* CONSTANTS_H_ */
