@@ -214,6 +214,8 @@ void mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* cid_hdr, 
 
 bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
 
+bool is_uri_phone_number(pjsip_uri* uri);
+
 } // namespace PJUtils
 
 #endif
