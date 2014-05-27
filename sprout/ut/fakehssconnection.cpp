@@ -92,60 +92,20 @@ void FakeHSSConnection::delete_result(const std::string& url)
   _results.erase(UrlBody(url, ""));
 }
 
-long FakeHSSConnection::put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail)
-{
-  return FakeHSSConnection::get_xml_object(path,
-                                           body,
-                                           root,
-                                           trail);
-}
-
-
-void FakeHSSConnection::set_rc(const std::string& url,
-                               long rc)
-{
-  _rcs[url] = rc;
-}
-
-
-void FakeHSSConnection::delete_rc(const std::string& url)
-{
-  _rcs.erase(url);
-}
-
-
-long FakeHSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& object,
-                                        SAS::TrailId trail)
+long FakeHSSConnection::put_object(const std::string& path, const std::string& req_body, std::string& rsp_body, SAS::TrailId trail)
 {
   HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
+  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, req_body));
 
   if (i != _results.end())
   {
-    object = new Json::Value;
-    Json::Reader reader;
-    LOG_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
-    bool parsingSuccessful = reader.parse(i->second, *object);
-    if (parsingSuccessful)
-    {
-      http_code = HTTP_OK;
-    }
-    else
-    {
-      // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
-                path.c_str(),
-                i->second.c_str(),
-                reader.getFormatedErrorMessages().c_str());
-      delete object;
-      object = NULL;
-    }
+    http_code = HTTP_OK;
+    rsp_body = i->second;
   }
   else
   {
-    LOG_DEBUG("Failed to find JSON result for URL %s", path.c_str());
+    LOG_DEBUG("Failed to find result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);
@@ -157,48 +117,35 @@ long FakeHSSConnection::get_json_object(const std::string& path,
   return http_code;
 }
 
-long FakeHSSConnection::get_xml_object(const std::string& path,
-                                       rapidxml::xml_document<>*& root,
-                                       SAS::TrailId trail)
+
+void FakeHSSConnection::set_rc(const std::string& url, long rc)
 {
-  return get_xml_object(path, "", root, trail);
+  _rcs[url] = rc;
 }
 
-long FakeHSSConnection::get_xml_object(const std::string& path,
-                                       std::string body,
-                                       rapidxml::xml_document<>*& root,
-                                       SAS::TrailId trail)
+
+void FakeHSSConnection::delete_rc(const std::string& url)
+{
+  _rcs.erase(url);
+}
+
+
+long FakeHSSConnection::get_object(const std::string& path,
+                                   std::string& rsp_body,
+                                   SAS::TrailId trail)
 {
   HTTPCode http_code = HTTP_NOT_FOUND;
 
-  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, body));
+  std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
 
   if (i != _results.end())
   {
-    root = new rapidxml::xml_document<>;
-    try
-    {
-      root->parse<0>(root->allocate_string(i->second.c_str()));
-      http_code = HTTP_OK;
-    }
-    catch (rapidxml::parse_error& err)
-    {
-      // report to the user the failure and their locations in the document.
-      printf("Failed to parse Homestead response:\n %s\n %s\n %s\n",
-             path.c_str(),
-             i->second.c_str(),
-             err.what());
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
-                path.c_str(),
-                i->second.c_str(),
-                err.what());
-      delete root;
-      root = NULL;
-    }
+    http_code = HTTP_OK;
+    rsp_body = i->second;
   }
   else
   {
-    LOG_ERROR("Failed to find XML result for URL %s", path.c_str());
+    LOG_DEBUG("Failed to find result for URL %s", path.c_str());
   }
 
   std::map<std::string, long>::const_iterator i2 = _rcs.find(path);

@@ -107,16 +107,37 @@ HTTPCode HSSConnection::get_digest_data(const std::string& private_user_identity
     path += "?public_id=" + Utils::url_escape(public_user_identity);
   }
 
-  HTTPCode rc = get_json_object(path, digest_data, trail);
+  std::string rsp_body;
+  HTTPCode http_code = get_object(path, rsp_body, trail);
 
-  unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
+  if (http_code != HTTP_SERVER_UNAVAILABLE)
   {
-    _latency_stat.accumulate(latency_us);
-    _digest_latency_stat.accumulate(latency_us);
+    unsigned long latency_us = 0;
+    if (stopWatch.read(latency_us))
+    {
+      _latency_stat.accumulate(latency_us);
+      _digest_latency_stat.accumulate(latency_us);
+    }
   }
 
-  return rc;
+  if (http_code != HTTP_OK)
+  {
+    LOG_ERROR("Could not get digest data from HSS (GET %s) %d",
+              path.c_str(), http_code);
+  }
+  else
+  {
+    std::string error;
+    digest_data = parse_json(rsp_body, error);
+    if (digest_data == NULL)
+    {
+      LOG_ERROR("Failed to parse MAR query (GET %s) response - %s\n%s",
+                path.c_str(), error.c_str(), rsp_body.c_str());
+      http_code = HTTP_SERVER_ERROR;
+    }
+  }
+
+  return http_code;
 }
 
 
@@ -157,55 +178,60 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
     path += "autn=" + Utils::url_escape(autn);
   }
 
-  HTTPCode rc = get_json_object(path, av, trail);
+  std::string rsp_body;
+  HTTPCode http_code = get_object(path, rsp_body, trail);
 
-  unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
+  if (http_code != HTTP_SERVER_UNAVAILABLE)
   {
-    _latency_stat.accumulate(latency_us);
-    _digest_latency_stat.accumulate(latency_us);
-  }
-
-  if (av == NULL)
-  {
-    LOG_ERROR("Failed to get Authentication Vector for %s",
-              private_user_identity.c_str());
-  }
-
-  return rc;
-}
-
-
-/// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
-HTTPCode HSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& json_object,
-                                        SAS::TrailId trail)
-{
-  std::string json_data;
-
-  HTTPCode rc = _http->send_get(path, json_data, "", trail);
-  if (rc == HTTP_OK)
-  {
-    json_object = new Json::Value;
-    Json::Reader reader;
-    bool parsingSuccessful = reader.parse(json_data, *json_object);
-    if (!parsingSuccessful)
+    unsigned long latency_us = 0;
+    if (stopWatch.read(latency_us))
     {
-      // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), json_data.c_str(), reader.getFormatedErrorMessages().c_str());
-      delete json_object;
-      json_object = NULL;
+      _latency_stat.accumulate(latency_us);
+      _digest_latency_stat.accumulate(latency_us);
     }
+  }
+
+  if (http_code != HTTP_OK)
+  {
+    LOG_ERROR("Could not get Authentication Vector from HSS (GET %s) %d",
+              path.c_str(), http_code);
   }
   else
   {
+    std::string error;
+    av = parse_json(rsp_body, error);
+    if (av == NULL)
+    {
+      LOG_ERROR("Failed to parse MAR query (GET %s) response - %s\n%s",
+                path.c_str(), error.c_str(), rsp_body.c_str());
+      http_code = HTTP_SERVER_ERROR;
+    }
+  }
+
+  return http_code;
+}
+
+
+/// Parses a JSON object returned from Homestead.
+Json::Value* HSSConnection::parse_json(const std::string& raw_data, std::string& error)
+{
+  Json::Value* json_object = new Json::Value;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(raw_data, *json_object);
+  if (!parsingSuccessful)
+  {
+    // report to the user the failure and their locations in the document.
+    error = reader.getFormattedErrorMessages();
+    delete json_object;
     json_object = NULL;
   }
 
-  return rc;
+  return json_object;
 }
 
-rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const std::string& url = "")
+
+/// Parses an XML object returned from Homestead.
+rapidxml::xml_document<>* HSSConnection::parse_xml(const std::string& raw_data, std::string& error)
 {
   rapidxml::xml_document<>* root = new rapidxml::xml_document<>;
   try
@@ -215,7 +241,7 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
   catch (rapidxml::parse_error& err)
   {
     // report to the user the failure and their locations in the document.
-    LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n", url.c_str(), raw_data.c_str(), err.what());
+    error = err.what();
     delete root;
     root = NULL;
   }
@@ -223,40 +249,23 @@ rapidxml::xml_document<>* HSSConnection::parse_xml(std::string raw_data, const s
 }
 
 
-/// Make a PUT to the server and store off the XML response. Caller is
-/// responsible for deleting the filled-in "root" pointer.
-HTTPCode HSSConnection::put_for_xml_object(const std::string& path,
-                                           std::string body,
-                                           rapidxml::xml_document<>*& root,
-                                           SAS::TrailId trail)
+/// Retrieve an object from a path on the server.
+HTTPCode HSSConnection::get_object(const std::string& path,
+                                   std::string& rsp_body,
+                                   SAS::TrailId trail)
 {
-  std::string raw_data;
-
-  HTTPCode http_code = _http->send_put(path, raw_data, body, trail);
-
-  if (http_code == HTTP_OK)
-  {
-    root = parse_xml(raw_data, path);
-  }
-
+  HTTPCode http_code = _http->send_get(path, rsp_body, "", trail);
   return http_code;
 }
 
 
-/// Retrieve an XML object from a path on the server. Caller is responsible for deleting.
-HTTPCode HSSConnection::get_xml_object(const std::string& path,
-                                       rapidxml::xml_document<>*& root,
-                                       SAS::TrailId trail)
+/// Make a PUT to the server and return the response body.
+HTTPCode HSSConnection::put_object(const std::string& path,
+                                   const std::string& req_body,
+                                   std::string& rsp_body,
+                                   SAS::TrailId trail)
 {
-  std::string raw_data;
-
-  HTTPCode http_code = _http->send_get(path, raw_data, "", trail);
-
-  if (http_code == HTTP_OK)
-  {
-    root = parse_xml(raw_data, path);
-  }
-
+  HTTPCode http_code = _http->send_put(path, rsp_body, req_body, trail);
   return http_code;
 }
 
@@ -265,14 +274,16 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
                           std::vector<std::string>& associated_uris,
-                          bool allowNoIMS)
+                          bool allowNoIMS,
+                          std::string& error)
 {
+
   rapidxml::xml_node<>* sp = NULL;
 
   if (!root.get())
   {
-    // If get_xml_object has not returned a document, there must have been a parsing error.
-    LOG_ERROR("Malformed HSS XML - document couldn't be parsed");
+    // If parse_xml has not returned a document, there must have been a parsing error.
+    error = "document couldn't be parsed";
     return false;
   }
 
@@ -280,7 +291,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 
   if (!cw)
   {
-    LOG_ERROR("Malformed Homestead XML - no ClearwaterRegData element");
+    error = "no ClearwaterRegData element";
     return false;
   }
 
@@ -288,7 +299,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 
   if (!reg)
   {
-    LOG_ERROR("Malformed Homestead XML - no RegistrationState element");
+    error = "no RegistrationState element";
     return false;
   }
 
@@ -304,7 +315,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 
   if (!imss)
   {
-    LOG_ERROR("Malformed HSS XML - no IMSSubscription element");
+    error = "no IMSSubscription element";
     return false;
   }
 
@@ -399,12 +410,13 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
 
-  rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = put_for_xml_object(path, "{\"reqtype\": \""+type+"\"}", root_underlying_ptr, trail);
-  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
-  unsigned long latency_us = 0;
+  std::string body = "{\"reqtype\": \""+type+"\"}";
+  std::string rsp_body;
+  HTTPCode http_code = put_object(path, body, rsp_body, trail);
 
-  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+  if (http_code != HTTP_SERVER_UNAVAILABLE)
+  {
+    unsigned long latency_us = 0;
     if (stopWatch.read(latency_us))
     {
       _latency_stat.accumulate(latency_us);
@@ -414,19 +426,52 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
 
   if (http_code != HTTP_OK)
   {
-    // If get_xml_object has returned a HTTP error code, we have either not found
+    // If put_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
-    LOG_ERROR("Could not get subscriber data from HSS");
-    return http_code;
+    LOG_ERROR("Could not put subscriber data to HSS (PUT %s body=\"%s\") %d",
+              path.c_str(), body.c_str(), http_code);
+  }
+  else
+  {
+    rapidxml::xml_document<>* root_underlying_ptr = NULL;
+
+    std::string error;
+    root_underlying_ptr = parse_xml(rsp_body, error);
+
+    if (root_underlying_ptr != NULL)
+    {
+      // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+      // to it, so we want to delete the underlying document when they all go out
+      // of scope.
+      std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+
+      // Decode the XML.
+      http_code = decode_homestead_xml(root, regstate, ifcs_map, associated_uris, false, error) ? HTTP_OK : HTTP_SERVER_ERROR;
+    }
+    else
+    {
+      // Failed to parse the XML at all.
+      http_code = HTTP_SERVER_ERROR;
+    }
+
+    if (http_code != HTTP_OK)
+    {
+      LOG_ERROR("Malformed XML in response to PUT %s body=\"%s\" - %s\n%s",
+                path.c_str(), body.c_str(), error.c_str(), rsp_body.c_str());
+    }
   }
 
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, false) ? HTTP_OK : HTTP_SERVER_ERROR;
+  // Return whether the XML was successfully decoded. The XML can be decoded and
+  // not return any IFCs (when the subscriber isn't registered), so a successful
+  // response shouldn't be taken as a guarantee of IFCs.
+  return http_code;
 }
+
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
-                                              std::map<std::string, Ifcs >& ifcs_map,
+                                              std::map<std::string, Ifcs>& ifcs_map,
                                               std::vector<std::string>& associated_uris,
                                               SAS::TrailId trail)
 {
@@ -440,17 +485,13 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   std::string path = "/impu/" + Utils::url_escape(public_user_identity) + "/reg-data";
 
   LOG_DEBUG("Making Homestead request for %s", path.c_str());
-  rapidxml::xml_document<>* root_underlying_ptr = NULL;
-  HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
+  std::string rsp_body;
+  HTTPCode http_code = get_object(path, rsp_body, trail);
 
 
-  // Needs to be a shared pointer - multiple Ifcs objects will need a reference
-  // to it, so we want to delete the underlying document when they all go out
-  // of scope.
-  std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
-  unsigned long latency_us = 0;
-
-  if (http_code != HTTP_SERVER_UNAVAILABLE) {
+  if (http_code != HTTP_SERVER_UNAVAILABLE)
+  {
+    unsigned long latency_us = 0;
     if (stopWatch.read(latency_us))
     {
       _latency_stat.accumulate(latency_us);
@@ -460,17 +501,46 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
 
   if (http_code != HTTP_OK)
   {
-    // If get_xml_object has returned a HTTP error code, we have either not found
+    // If get_object has returned a HTTP error code, we have either not found
     // the subscriber on the HSS or been unable to communicate with
     // the HSS successfully. In either case we should fail.
-    LOG_ERROR("Could not get subscriber data from HSS");
-    return http_code;
+    LOG_ERROR("Could not get subscriber data from HSS (GET %s) %d",
+              path.c_str(), http_code);
+  }
+  else
+  {
+    rapidxml::xml_document<>* root_underlying_ptr = NULL;
+
+    std::string error;
+    root_underlying_ptr = parse_xml(rsp_body, error);
+
+    if (root_underlying_ptr != NULL)
+    {
+      // Needs to be a shared pointer - multiple Ifcs objects will need a reference
+      // to it, so we want to delete the underlying document when they all go out
+      // of scope.
+      std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+
+      // Decode the XML.
+      http_code = decode_homestead_xml(root, regstate, ifcs_map, associated_uris, true, error) ? HTTP_OK : HTTP_SERVER_ERROR;
+    }
+    else
+    {
+      // Failed to parse the XML at all.
+      http_code = HTTP_SERVER_ERROR;
+    }
+
+    if (http_code != HTTP_OK)
+    {
+      LOG_ERROR("Malformed XML in response to GET %s - %s\n%s",
+                path.c_str(), error.c_str(), rsp_body.c_str());
+    }
   }
 
   // Return whether the XML was successfully decoded. The XML can be decoded and
   // not return any IFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of IFCs.
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, true) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return http_code;
 }
 
 
@@ -505,13 +575,31 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
     path += "&auth-type=" + Utils::url_escape(auth_type);
   }
 
-  HTTPCode rc = get_json_object(path, user_auth_status, trail);
+  std::string rsp_body;
+  HTTPCode rc = get_object(path, rsp_body, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _user_auth_latency_stat.accumulate(latency_us);
+  }
+
+  if (rc != HTTP_OK)
+  {
+    LOG_ERROR("Error response to UAS query (GET %s) - %d", path.c_str(), rc);
+    user_auth_status = NULL;
+  }
+  else
+  {
+    std::string error;
+    user_auth_status = parse_json(rsp_body, error);
+    if (user_auth_status == NULL)
+    {
+      LOG_ERROR("Failed to parse UAS query (GET %s) response - %s\n%s",
+                path.c_str(), error.c_str(), rsp_body.c_str());
+      rc = HTTP_BAD_RESULT;
+    }
   }
 
   return rc;
@@ -545,13 +633,31 @@ HTTPCode HSSConnection::get_location_data(const std::string& public_user_identit
     path += prefix + "auth-type=" + Utils::url_escape(auth_type);
   }
 
-  HTTPCode rc = get_json_object(path, location_data, trail);
+  std::string rsp_body;
+  HTTPCode rc = get_object(path, rsp_body, trail);
 
   unsigned long latency_us = 0;
   if (stopWatch.read(latency_us))
   {
     _latency_stat.accumulate(latency_us);
     _location_latency_stat.accumulate(latency_us);
+  }
+
+  if (rc != HTTP_OK)
+  {
+    LOG_ERROR("Error response to LIR query (GET %s) - %d", path.c_str(), rc);
+    location_data = NULL;
+  }
+  else
+  {
+    std::string error;
+    location_data = parse_json(rsp_body, error);
+    if (location_data == NULL)
+    {
+      LOG_ERROR("Failed to parse LIR query (GET %s) response - %s\n%s",
+                path.c_str(), error.c_str(), rsp_body.c_str());
+      rc = HTTP_BAD_RESULT;
+    }
   }
 
   return rc;

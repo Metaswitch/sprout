@@ -57,10 +57,8 @@ public:
   void delete_rc(const std::string& url);
 
 private:
-  long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
-  long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
-  long get_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
-  long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  long get_object(const std::string& path, std::string& rsp_body, SAS::TrailId trail);
+  long put_object(const std::string& path, const std::string& req_body, std::string& rsp_body, SAS::TrailId trail);
 
   // Map of URL/body pair to result
   typedef std::pair<std::string, std::string> UrlBody;
