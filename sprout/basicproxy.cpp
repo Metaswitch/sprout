@@ -1145,9 +1145,6 @@ void BasicProxy::UASTsx::on_final_response()
 /// Sends a response using the buffer saved off for the best response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
-  // cancel any outstanding deferred trying responses
-  cancel_trying_timer();
-
   if ((st_code >= 100) && (st_code < 200))
   {
     // Send a provisional response.
@@ -1411,8 +1408,11 @@ void BasicProxy::UASTsx::trying_timer_expired()
   enter_context();
   pthread_mutex_lock(&_trying_timer_lock);
 
-  if (_trying_timer.id == TRYING_TIMER)
+  if ((_trying_timer.id == TRYING_TIMER) &&
+      (_tsx->state == PJSIP_TSX_STATE_TRYING))
   {
+    // Transaction is still in Trying state, so send a 100 Trying response
+    // now.
     send_trying(_defer_rdata);
     _trying_timer.id = 0;
     pjsip_rx_data_free_cloned(_defer_rdata);
