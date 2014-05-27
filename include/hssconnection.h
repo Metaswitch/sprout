@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #ifndef HSSCONNECTION_H__
 #define HSSCONNECTION_H__
 
@@ -121,9 +118,10 @@ public:
   static const std::string STATE_NOT_REGISTERED;
 
 private:
-  virtual long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
-  virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
-  virtual long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
+  rapidxml::xml_document<>* parse_xml(const std::string& raw_data, std::string& error);
+  Json::Value* parse_json(const std::string& raw_data, std::string& error);
+  virtual long get_object(const std::string& path, std::string& rsp_body, SAS::TrailId trail);
+  virtual long put_object(const std::string& path, const std::string& req_body, std::string& rsp_body, SAS::TrailId trail);
 
   HttpConnection* _http;
   StatisticAccumulator _latency_stat;

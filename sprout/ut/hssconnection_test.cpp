@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
 
 #include <string>
 #include "gtest/gtest.h"
@@ -194,7 +192,7 @@ TEST_F(HssConnectionTest, CorruptDigest)
   Json::Value* actual;
   _hss.get_digest_data("privid_corrupt", "pubid42", actual, 0);
   ASSERT_TRUE(actual == NULL);
-  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+  EXPECT_TRUE(_log.contains("Failed to parse MAR query"));
   delete actual;
 }
 
@@ -254,7 +252,7 @@ TEST_F(HssConnectionTest, BadXML)
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+  EXPECT_TRUE(_log.contains("Malformed XML in response to PUT"));
 }
 
 
@@ -265,7 +263,7 @@ TEST_F(HssConnectionTest, BadXML2)
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
+  EXPECT_TRUE(_log.contains("Malformed XML in response to PUT"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
@@ -275,7 +273,7 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+  EXPECT_TRUE(_log.contains("Malformed XML in response to PUT"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
@@ -285,7 +283,7 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+  EXPECT_TRUE(_log.contains("Malformed XML in response to PUT"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
@@ -295,7 +293,7 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
+  EXPECT_TRUE(_log.contains("Malformed XML in response to PUT"));
 }
 
 
