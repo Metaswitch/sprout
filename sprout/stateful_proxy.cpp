@@ -3199,8 +3199,6 @@ pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
 pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 {
   // cancel any outstanding deferred trying responses
-  cancel_trying_timer();
-
   if ((st_code >= 100) && (st_code < 200))
   {
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
@@ -4186,9 +4184,11 @@ void UASTransaction::trying_timer_expired()
   enter_context();
   pthread_mutex_lock(&_trying_timer_lock);
 
-  // verify that the timer has not been cancelled halfway through expiry
-  if (_trying_timer.id == TRYING_TIMER)
+  if ((_trying_timer.id == TRYING_TIMER) &&
+      (_tsx->state == PJSIP_TSX_STATE_TRYING))
   {
+    // Transaction is still in Trying state, so send a 100 Trying response
+    // now.
     send_trying(_defer_rdata);
     _trying_timer.id = 0;
     pjsip_rx_data_free_cloned(_defer_rdata);
