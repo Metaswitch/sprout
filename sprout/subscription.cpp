@@ -527,7 +527,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) &&
       ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))))
+       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
+      (PJUtils::check_route_headers(rdata)))
   {
     // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
     // whether it should be processed by this module or passed up to an AS.
