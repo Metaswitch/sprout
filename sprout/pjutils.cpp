@@ -1420,7 +1420,7 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
            (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
 }
 
-// Return true if there are no route header, or there is exactly one,
+// Return true if there are no route headers, or there is exactly one,
 // which is local
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
 {
