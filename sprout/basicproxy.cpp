@@ -351,8 +351,9 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -371,6 +372,16 @@ int BasicProxy::verify_request(pjsip_rx_data *rdata)
   // classes may implement checks on this.
 
   // 6. Proxy-Authorization.  Not checked in the BasicProxy.
+
+  // Check that non-ACK request has not been received on a shutting down
+  // transport.  If it has then we won't be able to send a transaction
+  // response, so it is better to reject immediately.
+  if ((rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD) &&
+      (rdata->tp_info.transport != NULL) &&
+      (rdata->tp_info.transport->is_shutdown))
+  {
+    return PJSIP_SC_SERVICE_UNAVAILABLE;
+  }
 
   return PJSIP_SC_OK;
 }
@@ -1134,9 +1145,6 @@ void BasicProxy::UASTsx::on_final_response()
 /// Sends a response using the buffer saved off for the best response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
-  // cancel any outstanding deferred trying responses
-  cancel_trying_timer();
-
   if ((st_code >= 100) && (st_code < 200))
   {
     // Send a provisional response.
@@ -1145,6 +1153,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     on_tx_response(prov_rsp);
     pjsip_tsx_send_msg(_tsx, prov_rsp);
@@ -1158,6 +1167,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     best_rsp->msg->line.status.code = st_code;
     best_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(best_rsp);
     set_trail(best_rsp, trail());
     on_tx_response(best_rsp);
     pjsip_tsx_send_msg(_tsx, best_rsp);
@@ -1398,8 +1408,11 @@ void BasicProxy::UASTsx::trying_timer_expired()
   enter_context();
   pthread_mutex_lock(&_trying_timer_lock);
 
-  if (_trying_timer.id == TRYING_TIMER)
+  if ((_trying_timer.id == TRYING_TIMER) &&
+      (_tsx->state == PJSIP_TSX_STATE_TRYING))
   {
+    // Transaction is still in Trying state, so send a 100 Trying response
+    // now.
     send_trying(_defer_rdata);
     _trying_timer.id = 0;
     pjsip_rx_data_free_cloned(_defer_rdata);

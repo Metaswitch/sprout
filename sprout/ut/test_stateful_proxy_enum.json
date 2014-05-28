@@ -19,7 +19,11 @@
         {   "name" : "Clearwater internal numbers - rewritten",
             "prefix" : "111555",
             "regex"  : "!^111(.*)$!sip:650\\1@homedomain!"
-        }, 
+        },
+        {   "name" : "Clearwater Tel URI",
+            "prefix" : "16505551234",
+            "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
         {   "name" : "NANP => Alameda PBX",
             "prefix" : "",
             "regex"  : "!(^.*$)!sip:\\1@198.147.226.2!"

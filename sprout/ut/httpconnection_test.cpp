@@ -192,6 +192,13 @@ TEST_F(HttpConnectionTest, DeleteBody)
   EXPECT_EQ(200, ret);
 }
 
+TEST_F(HttpConnectionTest, DeleteBodyWithResponse)
+{
+  std::string response;
+  long ret = _http.send_delete("/delete_id", 0, "body", response);
+  EXPECT_EQ(200, ret);
+}
+
 TEST_F(HttpConnectionTest, SASCorrelationHeader)
 {
   mock_sas_collect_messages(true);

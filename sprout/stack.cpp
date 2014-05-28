@@ -370,11 +370,10 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
                                (pjsip_hdr*)retry_after,
                                NULL);
 
-    // If the sprout/bono is overloaded, then close the connection (if it's TCP).
-    if ((rdata->tp_info.transport->flag & PJSIP_TRANSPORT_DATAGRAM) == 0)
-    {
-      pjsip_transport_shutdown(rdata->tp_info.transport);
-    }
+    // We no longer terminate TCP connections on overload as the shutdown has
+    // to wait for existing transactions to end and therefore it takes too
+    // long to get feedback to the downstream node.  We expect downstream nodes
+    // to rebalance load if possible triggered by receipt of the 503 responses.
 
     overload_counter->increment();
     return PJ_TRUE;

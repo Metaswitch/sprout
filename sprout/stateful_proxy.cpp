@@ -140,6 +140,8 @@ static IfcHandler* ifc_handler;
 static AnalyticsLogger* analytics_logger;
 
 static EnumService *enum_service;
+static bool user_phone = false;
+static bool global_only_lookups = false;
 static BgcfService *bgcf_service;
 static SCSCFSelector *scscf_selector;
 
@@ -239,6 +241,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 static int compare_sip_sc(int sc1, int sc2);
 static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_bool_t is_user_numeric(const std::string& user);
+static pj_bool_t is_user_global(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -491,7 +494,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
       serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
     }
 
-
     // Do standard processing of Route headers.
     status = proxy_process_routing(tdata);
 
@@ -688,8 +690,9 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
   // This would have been checked by transport layer.
 
   // 2. URI scheme.
-  // We only want to support "sip:" URI scheme for this simple proxy.
-  if (!PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri))
+  // We support "sip:" and "tel:" URI schemes in this simple proxy.
+  if (!(PJSIP_URI_SCHEME_IS_SIP(rdata->msg_info.msg->line.req.uri) ||
+        PJSIP_URI_SCHEME_IS_TEL(rdata->msg_info.msg->line.req.uri)))
   {
     return PJSIP_SC_UNSUPPORTED_URI_SCHEME;
   }
@@ -713,6 +716,16 @@ static int proxy_verify_request(pjsip_rx_data *rdata)
 
   // 6. Proxy-Authorization.
   // Nah, we don't require any authorization with this sample.
+
+  // Check that non-ACK request has not been received on a shutting down
+  // transport.  If it has then we won't be able to send a transaction
+  // response, so it is better to reject immediately.
+  if ((rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD) &&
+      (rdata->tp_info.transport != NULL) &&
+      (rdata->tp_info.transport->is_shutdown))
+  {
+    return PJSIP_SC_SERVICE_UNAVAILABLE;
+  }
 
   return PJSIP_SC_OK;
 }
@@ -1414,12 +1427,12 @@ static bool ibcf_trusted_peer(const pj_sockaddr& addr)
 // Process route information in the request
 static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
 {
-  pjsip_sip_uri *target;
+  pjsip_uri *target;
   pjsip_route_hdr *hroute;
 
   // RFC 3261 Section 16.4 Route Information Preprocessing
 
-  target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+  target = tdata->msg->line.req.uri;
 
   // The proxy MUST inspect the Request-URI of the request.  If the
   // Request-URI of the request contains a value this proxy previously
@@ -1463,7 +1476,7 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
       // - remove the Route header,
       // - proceed as if it received this modified request.
       tdata->msg->line.req.uri = hroute->name_addr.uri;
-      target = (pjsip_sip_uri*) tdata->msg->line.req.uri;
+      target = tdata->msg->line.req.uri;
       pj_list_erase(hroute);
     }
   }
@@ -1588,18 +1601,32 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
                                              int max_targets,
                                              SAS::TrailId trail)
 {
+  bool sip_uri = false;
+  bool tel_uri = false;
+
   // RFC 3261 Section 16.5 Determining Request Targets
 
-  pjsip_sip_uri* req_uri = (pjsip_sip_uri*)msg->line.req.uri;
+  pjsip_uri* req_uri = (pjsip_uri*)msg->line.req.uri;
+
+  if (PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri))
+  {
+    sip_uri = true;
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))
+  {
+    tel_uri = true;
+  }
 
   // If the Request-URI of the request contains an maddr parameter, the
   // Request-URI MUST be placed into the target set as the only target
   // URI, and the proxy MUST proceed to Section 16.6.
-  if (req_uri->maddr_param.slen)
+  if (sip_uri && ((pjsip_sip_uri*)req_uri)->maddr_param.slen)
   {
-    LOG_INFO("Route request to maddr %.*s", req_uri->maddr_param.slen, req_uri->maddr_param.ptr);
+    LOG_INFO("Route request to maddr %.*s",
+             ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
+             ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
     Target target;
-    target.uri = (pjsip_uri*)req_uri;
+    target.uri = req_uri;
     targets.push_back(target);
     return;
   }
@@ -1608,18 +1635,31 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain((pjsip_uri*)req_uri)) &&
-      (!PJUtils::is_uri_local((pjsip_uri*)req_uri)))
+  if (((!PJUtils::is_home_domain(req_uri)) &&
+       (!PJUtils::is_uri_local(req_uri))) ||
+       (PJUtils::is_uri_phone_number(req_uri)))
   {
-    LOG_INFO("Route request to domain %.*s", req_uri->host.slen, req_uri->host.ptr);
+    if (sip_uri)
+    {
+      LOG_INFO("Route request to domain %.*s",
+               ((pjsip_sip_uri*)req_uri)->host.slen,
+               ((pjsip_sip_uri*)req_uri)->host.ptr);
+    }
+
     Target target;
-    target.uri = (pjsip_uri*)req_uri;
+    target.uri = req_uri;
 
     if ((bgcf_service) &&
-        (PJSIP_URI_SCHEME_IS_SIP(req_uri)))
+        (sip_uri || tel_uri))
     {
       // See if we have a configured route to the destination.
-      std::string domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+      std::string domain;
+
+      if (!PJUtils::is_uri_phone_number(req_uri))
+      {
+        domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+      }
+
       std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
 
       if (!bgcf_route.empty())
@@ -1627,15 +1667,16 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
           pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
-
           if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
+            LOG_DEBUG("Adding route: %s", (*ii).c_str());
             target.paths.push_back(route_uri);
           }
           else
           {
             // One of the routes is an invalid SIP URI. Stop processing the entry
             // and clear the target
+            LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
             target.paths.clear();
           }
         }
@@ -1669,8 +1710,13 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // is_user_registered() checks on Homestead to see whether the user
   // is registered - if not, we don't need to use the memcached store
   // to look up their bindings.
-  std::string public_id = PJUtils::aor_from_uri(req_uri);
-  if ((store) && (hss) && is_user_registered(public_id))
+  std::string public_id;
+  if (sip_uri)
+  {
+    public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
+  }
+
+  if ((!PJUtils::is_uri_phone_number(req_uri)) && (store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
@@ -1804,20 +1850,36 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trail)
 {
   pj_status_t status = PJ_SUCCESS;
+  std::string user;
   std::string uri;
 
+  // Determine whether we have a SIP URI or a tel URI
   if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-    if (is_user_numeric(user))
+    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
+  {
+    user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
+  }
+
+  // Check whether we have a global number or whether we allow
+  // ENUM lookups for local numbers
+  if (is_user_global(user) || !global_only_lookups)
+  {
+    // Perform an ENUM lookup if we have a tel URI, or if we have
+    // a SIP URI which is being treated as a phone number
+    if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
+        (!user_phone && is_user_numeric(user)))
     {
+      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);
     }
   }
-  else
+  else if (PJUtils::is_uri_phone_number(tdata->msg->line.req.uri))
   {
-    std::string user = PJUtils::pj_str_to_string(&((pjsip_other_uri*)tdata->msg->line.req.uri)->content);
-    uri = enum_service->lookup_uri_from_user(user, trail);
+    LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
+    status = PJ_EUNKNOWN;
   }
 
   if (!uri.empty())
@@ -2201,250 +2263,201 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   _trust->process_request(_req);
 
   // If we're a routing proxy, perform AS handling to pick the next hop.
-  if (!target && !edge_proxy)
+  if (!target && !edge_proxy && serving_state.is_set())
   {
-    if ((serving_state.is_set()) &&
-        ((PJUtils::is_home_domain(_req->msg->line.req.uri)) ||
-         (PJUtils::is_uri_local(_req->msg->line.req.uri))))
+    // The serving state has been set up, so perform AS handling.
+    if (stack_data.record_route_on_every_hop)
     {
-      // The serving state has been set up, and the request URI is targeted
-      // at a domain controlled by this system, so perform AS handling.
-      if (stack_data.record_route_on_every_hop)
+      LOG_DEBUG("Single Record-Route - configured to do this on every hop");
+      routing_proxy_record_route();
+    }
+
+    // Pick up the AS chain from the ODI, or do the iFC lookups
+    // necessary to create a new AS chain. If creating a new AS
+    // chain, and configured to Record-Route on initiation of
+    // originating or terminating (but not on every hop), also Record-Routes.
+    bool rc = find_as_chain(serving_state);
+
+    if (!rc)
+    {
+      LOG_INFO("Reject request with 404 due to failed iFC lookup");
+      send_response(PJSIP_SC_NOT_FOUND);
+      // target is not set, so just return
+      return;
+    }
+
+    if (_as_chain_link.is_set() &&
+        _as_chain_link.session_case().is_originating())
+    {
+      LOG_DEBUG("Performing originating call processing");
+
+      // Do originating handling (including AS handling and setting
+      // orig-ioi).
+      disposition = handle_originating(&target);
+
+      if (disposition == AsChainLink::Disposition::Complete)
       {
-        LOG_DEBUG("Single Record-Route - configured to do this on every hop");
-        routing_proxy_record_route();
-      }
+        // Processing at end of originating handling
 
-      // Pick up the AS chain from the ODI, or do the iFC lookups
-      // necessary to create a new AS chain. If creating a new AS
-      // chain, and configured to Record-Route on initiation of
-      // originating or terminating (but not on every hop), also Record-Routes.
-      bool rc = find_as_chain(serving_state);
-
-      if (!rc)
-      {
-        LOG_INFO("Reject request with 404 due to failed iFC lookup");
-        send_response(PJSIP_SC_NOT_FOUND);
-        // target is not set, so just return
-        return;
-      };
-
-      // Flag that the transaction has been linked to an AS chain.
-      _as_chain_linked = true;
-
-      if (_as_chain_link.is_set() &&
-          _as_chain_link.session_case().is_originating())
-      {
-        LOG_DEBUG("Performing originating call processing");
-
-        // Do originating handling (including AS handling and setting
-        // orig-ioi).
-        disposition = handle_originating(&target);
-
-        if (disposition == AsChainLink::Disposition::Complete)
+        if (stack_data.record_route_on_completion_of_originating)
         {
-          // Processing at end of originating handling
+          LOG_DEBUG("Single Record-Route - end of originating handling");
+          routing_proxy_record_route();
+        }
 
-          if (stack_data.record_route_on_completion_of_originating)
+        if ((enum_service) &&
+            ((PJUtils::is_home_domain(_req->msg->line.req.uri)) || (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri))) &&
+            (!is_uri_routeable(_req->msg->line.req.uri)))
+        {
+          // We've finished originating handling, and the request is
+          // targeted at this domain, but the URI is not currently
+          // routeable, so do an ENUM lookup to translate it to a
+          // routeable URI.
+
+          // This may mean it is no longer targeted at
+          // this domain, so we need to recheck this below before
+          // starting terminating handling.
+          LOG_DEBUG("Translating URI");
+          status = translate_request_uri(_req, trail());
+
+          if (status != PJ_SUCCESS)
           {
-            LOG_DEBUG("Single Record-Route - end of originating handling");
-            routing_proxy_record_route();
-          }
+            // An error occurred during URI translation.  This doesn't happen if
+            // there is no match, only if the URI is invalid or there is a match
+            // but there is an error performing the defined mapping.  We therefore
+            // reject the request.
+            disposition = AsChainLink::Disposition::Stop;
 
-          if ((enum_service) &&
-              (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-              (!is_uri_routeable(_req->msg->line.req.uri)))
-          {
-            // We've finished originating handling, and the request is
-            // targeted at this domain, but the URI is not currently
-            // routeable, so do an ENUM lookup to translate it to a
-            // routeable URI.
-
-            // This may mean it is no longer targeted at
-            // this domain, so we need to recheck this below before
-            // starting terminating handling.
-            LOG_DEBUG("Translating URI");
-            status = translate_request_uri(_req, trail());
-
-            if (status != PJ_SUCCESS)
+            if (status == PJ_EUNKNOWN)
             {
-              // An error occurred during URI translation.  This doesn't happen if
-              // there is no match, only if there is a match but there is an error
-              // performing the defined mapping.  We therefore reject the request
-              // with the not found status code and a specific reason phrase.
+              send_response(PJSIP_SC_ADDRESS_INCOMPLETE, &SIP_REASON_ADDR_INCOMPLETE);
+            }
+            else
+            {
               send_response(PJSIP_SC_NOT_FOUND, &SIP_REASON_ENUM_FAILED);
-              disposition = AsChainLink::Disposition::Stop;
             }
           }
         }
       }
+    }
 
-      if ((_as_chain_link.is_set()) &&
-          (_as_chain_link.session_case().is_originating()) &&
-          (disposition == AsChainLink::Disposition::Complete) &&
-          (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-          (icscf_uri))
+    if ((_as_chain_link.is_set()) &&
+        (_as_chain_link.session_case().is_originating()) &&
+        (disposition == AsChainLink::Disposition::Complete) &&
+        (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+        (icscf_uri))
+    {
+      // We've completed the originating half, the destination is local and
+      // we have an external I-CSCF configured.  Route the call there.
+      LOG_INFO("Invoking I-CSCF %s",
+               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+
+      // Release any existing AS chain to avoid leaking it.
+      _as_chain_link.release();
+
+      // Start defining the new target.
+      delete target;
+      target = new Target;
+
+      // Set the I-CSCF URI as the topmost route header.
+      target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
+
+      // The Request-URI should remain unchanged
+      target->uri = _req->msg->line.req.uri;
+    }
+    else if ((_as_chain_link.is_set()) &&
+             (_as_chain_link.session_case().is_originating()) &&
+             (disposition == AsChainLink::Disposition::Complete) &&
+             (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+             (icscf))
+    {
+      // We've completed the originating half, the destination is local and
+      // I-CSCF function is enabled.  In this case we should do the LIR lookup
+      // ourselves rather than invoking an external I-CSCF.
+      LOG_INFO("Sprout has I-CSCF function enabled");
+
+      // Logically we are transitioning from S-CSCF context to I-CSCF
+      // context, so pass the request to the upstream ACR as if it is
+      // being transmitted.
+      _upstream_acr->tx_request(_req->msg);
+
+      // Allocate an I-CSCF ACR.
+      _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _icscf_acr->rx_request(_req->msg);
+
+      // Create an I-CSCF router for the LIR query.
+      std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
+      _icscf_router = (ICSCFRouter*)new ICSCFLIRouter(hss,
+                                                      scscf_selector,
+                                                      trail(),
+                                                      _icscf_acr,
+                                                      public_id,
+                                                      false);
+
+      pjsip_sip_uri* scscf_uri = NULL;
+      int status_code;
+
+      if (_icscf_router != NULL)
       {
-        // We've completed the originating half, the destination is local and
-        // we have an external I-CSCF configured.  Route the call there.
-        LOG_INFO("Invoking I-CSCF %s",
-                 PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+        // Select a S-CSCF to route the call and convert it to a URI.
+        std::string server_name;
+        status_code = _icscf_router->get_scscf(server_name);
 
-        // Release any existing AS chain to avoid leaking it.
-        _as_chain_link.release();
+        if (status_code == PJSIP_SC_OK)
+        {
+          scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(server_name,
+                                                               _req->pool,
+                                                               PJ_FALSE);
+          if ((scscf_uri == NULL) ||
+              (!PJSIP_URI_SCHEME_IS_SIP(scscf_uri)))
+          {
+            // Server name was invalid, so act as if no suitable S-CSCF was
+            // found.
+            LOG_DEBUG("Server name is invalid");
+            status_code = PJSIP_SC_NOT_FOUND;
+          }
+        }
+      }
+      else
+      {
+        // Failed to create an ICSCF router, so reject the request with
+        // 500.
+        status_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
+      }
 
-        // Start defining the new target.
+      if (status_code != PJSIP_SC_OK)
+      {
+        // The I-CSCF look-up failed to find a suitable S-CSCF for the
+        // terminating subscriber, so reject the request.
+        LOG_DEBUG("No valid S-CSCFs found");
+
+        // Pass the error response to the I-CSCF ACR and send the ACR.
+        _best_rsp->msg->line.status.code = status_code;
+        _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
+        pjsip_tx_data_invalidate_msg(_best_rsp);
+        _icscf_acr->tx_response(_best_rsp->msg);
+        _icscf_acr->send_message();
+        delete _icscf_acr;
+        _icscf_acr = NULL;
+
+        send_response(PJSIP_SC_NOT_FOUND);
         delete target;
-        target = new Target;
-
-        // Set the I-CSCF URI as the topmost route header.
-        target->paths.push_back((pjsip_uri*)pjsip_uri_clone(_req->pool, icscf_uri));
-
-        // The Request-URI should remain unchanged
-        target->uri = _req->msg->line.req.uri;
+        return;
       }
-      else if ((_as_chain_link.is_set()) &&
-               (_as_chain_link.session_case().is_originating()) &&
-               (disposition == AsChainLink::Disposition::Complete) &&
-               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-               (icscf))
+
+      // Check whether the returned S-CSCF is this S-CSCF.  Check the host
+      // name and the port returned on the LIR, but ignore transport and
+      // other URI parameters.
+      if ((pj_stricmp(&scscf_uri->host, &scscf_domain_name) == 0) &&
+          (scscf_uri->port == stack_data.scscf_port))
       {
-        // We've completed the originating half, the destination is local and
-        // I-CSCF function is enabled.  In this case we should do the LIR lookup
-        // ourselves rather than invoking an external I-CSCF.
-        LOG_INFO("Sprout has I-CSCF function enabled");
+        // The terminating user is on this S-CSCF, so continue processing
+        // locally by switching to the terminating AS chain.
 
-        // Logically we are transitioning from S-CSCF context to I-CSCF
-        // context, so pass the request to the upstream ACR as if it is
-        // being transmitted.
-        _upstream_acr->tx_request(_req->msg);
+        // We're switching back out of I-CSCF context, so pass the request
+        // to the ACR as if we are transmitting it.
+        _icscf_acr->tx_request(_req->msg);
 
-        // Allocate an I-CSCF ACR.
-        _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
-        _icscf_acr->rx_request(_req->msg);
-
-        // Create an I-CSCF router for the LIR query.
-        std::string public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)_req->msg->line.req.uri);
-        _icscf_router = (ICSCFRouter*)new ICSCFLIRouter(hss,
-                                                        scscf_selector,
-                                                        trail(),
-                                                        _icscf_acr,
-                                                        public_id,
-                                                        false);
-
-        pjsip_sip_uri* scscf_uri = NULL;
-        int status_code;
-
-        if (_icscf_router != NULL)
-        {
-          // Select a S-CSCF to route the call and convert it to a URI.
-          std::string server_name;
-          status_code = _icscf_router->get_scscf(server_name);
-
-          if (status_code == PJSIP_SC_OK)
-          {
-            scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(server_name,
-                                                                 _req->pool,
-                                                                 PJ_FALSE);
-            if ((scscf_uri == NULL) ||
-                (!PJSIP_URI_SCHEME_IS_SIP(scscf_uri)))
-            {
-              // Server name was invalid, so act as if no suitable S-CSCF was
-              // found.
-              LOG_DEBUG("Server name is invalid");
-              status_code = PJSIP_SC_NOT_FOUND;
-            }
-          }
-        }
-        else
-        {
-          // Failed to create an ICSCF router, so reject the request with
-          // 500.
-          status_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
-        }
-
-        if (status_code != PJSIP_SC_OK)
-        {
-          // The I-CSCF look-up failed to find a suitable S-CSCF for the
-          // terminating subscriber, so reject the request.
-          LOG_DEBUG("No valid S-CSCFs found");
-
-          // Pass the error response to the I-CSCF ACR and send the ACR.
-          _best_rsp->msg->line.status.code = status_code;
-          _best_rsp->msg->line.status.reason = *pjsip_get_status_text(status_code);
-          _icscf_acr->tx_response(_best_rsp->msg);
-          _icscf_acr->send_message();
-          delete _icscf_acr;
-          _icscf_acr = NULL;
-
-          send_response(PJSIP_SC_NOT_FOUND);
-          delete target;
-          return;
-        }
-
-        // Check whether the returned S-CSCF is this S-CSCF.  Check the host
-        // name and the port returned on the LIR, but ignore transport and
-        // other URI parameters.
-        if ((pj_stricmp(&scscf_uri->host, &scscf_domain_name) == 0) &&
-            (scscf_uri->port == stack_data.scscf_port))
-        {
-          // The terminating user is on this S-CSCF, so continue processing
-          // locally by switching to the terminating AS chain.
-
-          // We're switching back out of I-CSCF context, so pass the request
-          // to the ACR as if we are transmitting it.
-          _icscf_acr->tx_request(_req->msg);
-
-          bool success = move_to_terminating_chain();
-          if (!success)
-          {
-            LOG_INFO("Reject request with 404 due to failed move to terminating chain");
-            send_response(PJSIP_SC_NOT_FOUND);
-            delete target;
-            return;
-          }
-        }
-        else
-        {
-          // The S-CSCF is different, so route the call there.
-           _as_chain_link.release();
-
-          if (_icscf_acr != NULL)
-          {
-            // In this case we need to reference the I-CSCF as the downstream
-            // ACR for this transaction, and keep a reference to it as an
-            // I-CSCF ACR in case we do any further routing look-ups.
-            _downstream_acr = _icscf_acr;
-          }
-
-          delete target;
-          target = new Target;
-
-          scscf_uri->lr_param = 1;
-          target->paths.push_back((pjsip_uri*)
-                           pjsip_uri_clone(_req->pool, (pjsip_uri*)scscf_uri));
-
-          // The Request-URI should remain unchanged
-          target->uri = _req->msg->line.req.uri;
-        }
-      }
-      else if (disposition == AsChainLink::Disposition::Complete &&
-               (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
-               !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
-      {
-        // We've completed the originating half (or we're not doing
-        // originating handling for this call), we're handling the
-        // terminating half (i.e. it hasn't been ENUMed to go
-        // elsewhere), and we don't yet have a terminating chain.
-
-        // Logically we are transitioning from originating S-CSCF context to
-        // terminating S-CSCF context, so pass the request to the upstream
-        // ACR as if it is being transmitted.
-        _upstream_acr->tx_request(_req->msg);
-
-        // Switch to terminating session state, set the served user to
-        // the callee, and look up iFCs again.
-        LOG_DEBUG("Originating AS chain complete, move to terminating chain");
         bool success = move_to_terminating_chain();
         if (!success)
         {
@@ -2454,38 +2467,82 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
           return;
         }
       }
-
-      if (_as_chain_link.is_set() &&
-          _as_chain_link.session_case().is_terminating())
+      else
       {
-        // Do terminating handling (including AS handling and setting
-        // orig-ioi).
+        // The S-CSCF is different, so route the call there.
+         _as_chain_link.release();
 
-        LOG_DEBUG("Terminating half");
-        disposition = handle_terminating(&target);
-
-        if (disposition == AsChainLink::Disposition::Complete)
+        if (_icscf_acr != NULL)
         {
-          // Processing at end of terminating handling
-
-          if (stack_data.record_route_on_completion_of_terminating)
-          {
-            routing_proxy_record_route();
-            LOG_DEBUG("Single Record-Route - end of terminating handling");
-          }
+          // In this case we need to reference the I-CSCF as the downstream
+          // ACR for this transaction, and keep a reference to it as an
+          // I-CSCF ACR in case we do any further routing look-ups.
+          _downstream_acr = _icscf_acr;
         }
+
+        delete target;
+        target = new Target;
+
+        scscf_uri->lr_param = 1;
+        target->paths.push_back((pjsip_uri*)
+                         pjsip_uri_clone(_req->pool, (pjsip_uri*)scscf_uri));
+
+        // The Request-URI should remain unchanged
+        target->uri = _req->msg->line.req.uri;
       }
     }
-    else
+    else if (disposition == AsChainLink::Disposition::Complete &&
+             (PJUtils::is_home_domain(_req->msg->line.req.uri)) &&
+             !(_as_chain_link.is_set() && _as_chain_link.session_case().is_terminating()))
     {
-      routing_proxy_record_route();
-      LOG_DEBUG("Single Record-Route for the BGCF case");
-      // Request is not targeted at this domain.  If the serving state is set
-      // we need to release the original dialog as otherwise we may leak an
-      // AsChain.
-      if (serving_state.is_set())
+      // We've completed the originating half (or we're not doing
+      // originating handling for this call), we're handling the
+      // terminating half (i.e. it hasn't been ENUMed to go
+      // elsewhere), and we don't yet have a terminating chain.
+
+      // Logically we are transitioning from originating S-CSCF context to
+      // terminating S-CSCF context, so pass the request to the upstream
+      // ACR as if it is being transmitted.
+      _upstream_acr->tx_request(_req->msg);
+
+      // Switch to terminating session state, set the served user to
+      // the callee, and look up iFCs again.
+      LOG_DEBUG("Originating AS chain complete, move to terminating chain");
+      bool success = move_to_terminating_chain();
+      if (!success)
       {
-        serving_state.original_dialog().release();
+        LOG_INFO("Reject request with 404 due to failed move to terminating chain");
+        send_response(PJSIP_SC_NOT_FOUND);
+        delete target;
+        return;
+      }
+    }
+    else if ((disposition == AsChainLink::Disposition::Complete) &&
+             !_as_chain_link.is_set() &&
+             !PJUtils::is_home_domain(_req->msg->line.req.uri))
+    {
+      LOG_DEBUG("Record-Route for the BGCF case");
+      routing_proxy_record_route();
+    }
+
+    if (_as_chain_link.is_set() &&
+        _as_chain_link.session_case().is_terminating())
+    {
+      // Do terminating handling (including AS handling and setting
+      // orig-ioi).
+
+      LOG_DEBUG("Terminating half");
+      disposition = handle_terminating(&target);
+
+      if (disposition == AsChainLink::Disposition::Complete)
+      {
+        // Processing at end of terminating handling
+
+        if (stack_data.record_route_on_completion_of_terminating)
+        {
+          routing_proxy_record_route();
+          LOG_DEBUG("Single Record-Route - end of terminating handling");
+        }
       }
     }
   }
@@ -2559,30 +2616,33 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
   {
     // No existing AS chain - create new.
     served_user = ifc_handler->served_user_from_msg(serving_state.session_case(), _req->msg, _req->pool);
-    LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
-    success = lookup_ifcs(served_user, ifcs, trail());
-    if (success)
+    if (!served_user.empty())
     {
-      LOG_DEBUG("Successfully looked up iFCs");
-      _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
-    }
-
-    if (serving_state.session_case() == SessionCase::Terminating)
-    {
-      common_start_of_terminating_processing();
-    }
-    else if (serving_state.session_case() == SessionCase::Originating)
-    {
-      // Processing at start of originating handling (not including CDiv)
-      if (stack_data.record_route_on_initiation_of_originating)
+      LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
+      success = lookup_ifcs(served_user, ifcs, trail());
+      if (success)
       {
-        LOG_DEBUG("Single Record-Route - initiation of originating handling");
-        routing_proxy_record_route();
+        LOG_DEBUG("Successfully looked up iFCs");
+        _as_chain_link = create_as_chain(serving_state.session_case(), ifcs, served_user);
+      }
+
+      if (serving_state.session_case() == SessionCase::Terminating)
+      {
+        common_start_of_terminating_processing();
+      }
+      else if (serving_state.session_case() == SessionCase::Originating)
+      {
+        // Processing at start of originating handling (not including CDiv)
+        if (stack_data.record_route_on_initiation_of_originating)
+        {
+          LOG_DEBUG("Single Record-Route - initiation of originating handling");
+          routing_proxy_record_route();
+        }
       }
     }
   }
 
-  if (success)
+  if (_as_chain_link.is_set())
   {
     // Flag that the transaction has been linked to an AS chain.
     _as_chain_linked = true;
@@ -3124,6 +3184,7 @@ pj_status_t UASTransaction::handle_final_response()
 
       // Reset the best response to a 408 response to use if none of the targets responds.
       _best_rsp->msg->line.status.code = PJSIP_SC_REQUEST_TIMEOUT;
+      pjsip_tx_data_invalidate_msg(_best_rsp);
 
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
@@ -3189,13 +3250,12 @@ pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
 pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
 {
   // cancel any outstanding deferred trying responses
-  cancel_trying_timer();
-
   if ((st_code >= 100) && (st_code < 200))
   {
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     _upstream_acr->tx_response(prov_rsp->msg);
     return pjsip_tsx_send_msg(_tsx, prov_rsp);
@@ -3204,6 +3264,7 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
   {
     _best_rsp->msg->line.status.code = st_code;
     _best_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+    pjsip_tx_data_invalidate_msg(_best_rsp);
     return handle_final_response();
   }
 }
@@ -4176,9 +4237,11 @@ void UASTransaction::trying_timer_expired()
   enter_context();
   pthread_mutex_lock(&_trying_timer_lock);
 
-  // verify that the timer has not been cancelled halfway through expiry
-  if (_trying_timer.id == TRYING_TIMER)
+  if ((_trying_timer.id == TRYING_TIMER) &&
+      (_tsx->state == PJSIP_TSX_STATE_TRYING))
   {
+    // Transaction is still in Trying state, so send a 100 Trying response
+    // now.
     send_trying(_defer_rdata);
     _trying_timer.id = 0;
     pjsip_rx_data_free_cloned(_defer_rdata);
@@ -4255,6 +4318,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 const std::string& ibcf_trusted_hosts,
                                 AnalyticsLogger* analytics,
                                 EnumService *enumService,
+                                bool enforce_user_phone,
+                                bool enforce_global_only_lookups,
                                 BgcfService *bgcfService,
                                 HSSConnection* hss_connection,
                                 ACRFactory* cscf_rfacr_factory,
@@ -4364,6 +4429,8 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   }
 
   enum_service = enumService;
+  user_phone = enforce_user_phone;
+  global_only_lookups = enforce_global_only_lookups;
   bgcf_service = bgcfService;
   hss = hss_connection;
   scscf_selector = scscfSelector;
@@ -4388,6 +4455,18 @@ pj_status_t init_stateful_proxy(RegStore* registrar_store,
   return PJ_SUCCESS;
 }
 
+#ifdef UNIT_TEST
+// These setter functions are for unit test purposes only
+void set_user_phone(bool enforce_user_phone)
+{
+  user_phone = enforce_user_phone;
+}
+
+void set_global_only_lookups(bool enforce_global_only_lookups)
+{
+  global_only_lookups = enforce_global_only_lookups;
+}
+#endif
 
 void destroy_stateful_proxy()
 {
@@ -4497,6 +4576,19 @@ static pj_bool_t is_user_numeric(const std::string& user)
     }
   }
   return PJ_TRUE;
+}
+
+// Determines whether a user string represents a global number.
+//
+// @returns PJ_TRUE if so, PJ_FALSE if not.
+static pj_bool_t is_user_global(const std::string& user)
+{
+  if (user.size() > 0 && user[0] == '+')
+  {
+    return PJ_TRUE;
+  }
+
+  return PJ_FALSE;
 }
 
 /// Adds a Path header when functioning as an edge proxy.
