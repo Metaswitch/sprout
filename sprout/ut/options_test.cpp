@@ -164,7 +164,27 @@ TEST_F(OptionsTest, LocalHost)
 TEST_F(OptionsTest, RouteHeader)
 {
   Message msg;
+  msg._route = "Route: <sip:notthehomedomain;transport=UDP;lr>";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(OptionsTest, RouteHeaderMatchingLocalDomain)
+{
+  Message msg;
   msg._route = "Route: <sip:homedomain;transport=UDP;lr>";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  free_txdata();
+}
+
+TEST_F(OptionsTest, MultipleRouteHeaders)
+{
+  Message msg;
+  msg._route = "Route: <sip:homedomain;transport=UDP;lr>\r\nRoute: <sip:homedomain2;transport=UDP;lr>";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }

@@ -958,7 +958,8 @@ pj_bool_t registrar_on_rx_request(pjsip_rx_data *rdata)
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
       (rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) &&
       ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))))
+       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
+      (PJUtils::check_route_headers(rdata)))
   {
     // REGISTER request targeted at the home domain or specifically at this node.
     process_register_request(rdata);

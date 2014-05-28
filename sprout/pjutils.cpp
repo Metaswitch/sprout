@@ -1419,3 +1419,22 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
           ((PJSIP_URI_SCHEME_IS_TEL(uri) ||
            (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
 }
+
+// Return true if there are no route header, or there is exactly one,
+// which is local
+bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
+{
+  // Get all the route headers
+  int count = 0;
+  bool local = true;
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+
+  while (route_hdr != NULL)
+  {
+    count++;
+    local = (is_uri_local(route_hdr->name_addr.uri)) || (is_home_domain(route_hdr->name_addr.uri));
+    route_hdr = (pjsip_route_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, route_hdr->next);
+  }
+
+  return (count < 2 && local);
+}

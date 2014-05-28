@@ -216,6 +216,8 @@ bool is_emergency_registration(pjsip_contact_hdr* contact_hdr);
 
 bool is_uri_phone_number(pjsip_uri* uri);
 
+bool check_route_headers(pjsip_rx_data* rdata);
+
 } // namespace PJUtils
 
 #endif

@@ -164,6 +164,7 @@ public:
   string _auth;
   string _cseq;
   string _scheme;
+  string _route;
 
   Message() :
     _method("REGISTER"),
@@ -176,7 +177,8 @@ public:
     _path("Path: sip:GgAAAAAAAACYyAW4z38AABcUwStNKgAAa3WOL+1v72nFJg==@ec2-107-22-156-220.compute-1.amazonaws.com:5060;lr;ob"),
     _auth(""),
     _cseq("16567"),
-    _scheme("sip")
+    _scheme("sip"),
+    _route("homedomain")
   {
   }
 
@@ -202,7 +204,7 @@ string Message::get()
                    "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
                    "%11$s"
                    "Contact: %8$s%7$s%9$s\r\n"
-                   "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
+                   "Route: <sip:%14$s;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
                    "P-Charging-Vector: icid-value=100\r\n"
@@ -224,7 +226,8 @@ string Message::get()
                    /* 10 */ _path.empty() ? "" : string(_path).append("\r\n").c_str(),
                    /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                    /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
-                   /* 13 */ _cseq.c_str()
+                   /* 13 */ _cseq.c_str(),
+                   /* 14 */ _route.c_str()
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -248,6 +251,14 @@ TEST_F(RegistrarTest, NotOurs)
 {
   Message msg;
   msg._domain = "not-us.example.org";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+}
+
+TEST_F(RegistrarTest, RouteHeaderNotMatching)
+{
+  Message msg;
+  msg._domain = "notthehomedomain";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }

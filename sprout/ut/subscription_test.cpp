@@ -149,7 +149,6 @@ public:
   string _record_route;
   string _scheme;
 
-
   SubscribeMessage() :
     _method("SUBSCRIBE"),
     _user("6505550231"),
@@ -158,7 +157,7 @@ public:
     _event("Event: reg"),
     _accepts("Accept: application/reginfo+xml"),
     _expires(""),
-    _route(""),
+    _route("homedomain"),
     _auth(""),
     _record_route("Record-Route: <sip:sprout.example.com;transport=tcp;lr>"),
     _scheme("sip")
@@ -174,7 +173,6 @@ string SubscribeMessage::get()
 
   int n = snprintf(buf, sizeof(buf),
                    "%1$s sip:%3$s SIP/2.0\r\n"
-                   "%8$s"
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
@@ -186,7 +184,7 @@ string SubscribeMessage::get()
                    "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
                    "%9$s"
                    "Contact: %7$s\r\n"
-                   "Route: <sip:sprout.example.com;transport=tcp;lr>\r\n"
+                   "Route: <sip:%8$s;transport=tcp;lr>\r\n"
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
                    "P-Charging-Vector: icid-value=100\r\n"
@@ -207,7 +205,7 @@ string SubscribeMessage::get()
                    /*  5 */ (int)_body.length(),
                    /*  6 */ _body.c_str(),
                    /*  7 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
-                   /*  8 */ _route.empty() ? "" : string(_route).append("\r\n").c_str(),
+                   /*  8 */ _route.c_str(),
                    /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                    /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 11 */ _event.empty() ? "" : string(_event).append("\r\n").c_str(),
@@ -235,6 +233,15 @@ TEST_F(SubscriptionTest, NotOurs)
 {
   SubscribeMessage msg;
   msg._domain = "not-us.example.org";
+  pj_bool_t ret = inject_msg_direct(msg.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  check_subscriptions("sip:6505550231@homedomain", 0u);
+}
+
+TEST_F(SubscriptionTest, RouteHeaderNotMatching)
+{
+  SubscribeMessage msg;
+  msg._route = "notthehomedomain";
   pj_bool_t ret = inject_msg_direct(msg.get());
   EXPECT_EQ(PJ_FALSE, ret);
   check_subscriptions("sip:6505550231@homedomain", 0u);
