@@ -1067,9 +1067,12 @@ static void stateless_send_cb(pjsip_send_state *st,
       // but just in case ...
       PJUtils::generate_new_branch_id(tdata);
 
+      // Add a reference to the tdata to stop PJSIP releasing it when we
+      // return the callback.
+      pjsip_tx_data_add_ref(tdata);
+
       // Set up destination info for the new server and resend the request.
       PJUtils::set_dest_info(tdata, sss->servers[sss->current_server]);
-      pjsip_tx_data_add_ref(tdata);
       status = pjsip_endpt_send_request_stateless(stack_data.endpt,
                                                   tdata,
                                                   (void*)sss,
@@ -1077,9 +1080,6 @@ static void stateless_send_cb(pjsip_send_state *st,
 
       if (status == PJ_SUCCESS)
       {
-        // Add a reference to the tdata to stop PJSIP releasing it when we
-        // return the callback.
-        pjsip_tx_data_add_ref(tdata);
         retrying = true;
       }
       else
