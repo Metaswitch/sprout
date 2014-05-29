@@ -197,11 +197,13 @@ pj_status_t user_lookup(pj_pool_t *pool,
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
   // Get the Authentication Vector from the store. We should
-  // immediately clear the AV, to avoid replay attacks. This is true
-  // even if the get fails and av is NULL - someone could still be
-  // snooping traffic, see the nonce, and try and reuse it when
-  // memcached recovers.
+  // immediately clear the AV, to avoid replay attacks.
   Json::Value* av = av_store->get_av(impi, nonce, trail);
+
+  if (av == NULL)
+  {
+    LOG_WARNING("Received an authentication request for %s with nonce %s, but no matching AV found", impi.c_str(), nonce.c_str());
+  }
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi, trail)))
@@ -253,19 +255,20 @@ pj_status_t user_lookup(pj_pool_t *pool,
         status = PJSIP_EAUTHNOAUTH;
       }
     }
-    delete av;
-  }
 
-  // Delete the AV from the store, unless the status indicates that these
-  // credentials weren't even for the right realm.  In that case, they weren't
-  // even trying to authenticate against us, so leave them around in case they
-  // do try against our realm later.
-  if (status != PJSIP_EAUTHNOAUTH)
-  {
-    // No point checking the return value of delete_av - there's no
-    // sensible recovery action we can take (and it logs internally if
-    // it fails).
-    av_store->delete_av(impi, nonce, trail);
+    // Delete the AV from the store, unless the status indicates that these
+    // credentials weren't even for the right realm.  In that case, they weren't
+    // even trying to authenticate against us, so leave them around in case they
+    // do try against our realm later.
+    if (status != PJSIP_EAUTHNOAUTH)
+    {
+      bool rc = av_store->delete_av(impi, nonce, trail);
+      if (!rc) {
+        LOG_ERROR("Tried to delete AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
+      }
+    }
+
+    delete av;
   }
 
   return status;

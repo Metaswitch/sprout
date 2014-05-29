@@ -553,6 +553,10 @@ int AuthTimeoutHandler::handle_response(std::string body)
     if (success)
     {
       success = _cfg->_avstore->delete_av(_impi, _nonce, trail());
+      if (!success) {
+        LOG_ERROR("Tried to delete AV for %s/%s based on a Chronos timer pop, but failed", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+      }
+
     }
 
     delete json;
