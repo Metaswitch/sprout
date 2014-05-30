@@ -49,9 +49,8 @@ extern "C" {
 #include "registration_utils.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
-                                    bool& all_bindings_expired, std::string aor_id,
-                                    RegStore* current_store, RegStore* remote_store,
-                                    RegStore::AoR** previous_aor_data,
+                                    std::string aor_id, RegStore* current_store,
+                                    RegStore* remote_store, RegStore::AoR** previous_aor_data,
                                     SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
@@ -103,6 +102,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
       //LCOV_EXCL_STOP
     }
   }
+
   return true;
 }
 
@@ -111,13 +111,14 @@ void RegistrationTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
-    send_http_reply(405);
+    send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
   }
 
-  int rc = parse_response(_req.body());
-  if (rc != 200)
+  HTTPCode rc = parse_response(_req.body());
+
+  if (rc != HTTP_OK)
   {
     LOG_DEBUG("Unable to parse response from Chronos");
     send_http_reply(rc);
@@ -125,7 +126,7 @@ void RegistrationTimeoutHandler::run()
     return;
   }
 
-  send_http_reply(200);
+  send_http_reply(HTTP_OK);
 
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
@@ -145,7 +146,7 @@ void AuthTimeoutHandler::run()
 {
   if (_req.method() != htp_method_POST)
   {
-    send_http_reply(405);
+    send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
   }
@@ -156,12 +157,12 @@ void AuthTimeoutHandler::run()
   calling_dn.add_var_param(_impu);
   SAS::report_marker(calling_dn);
 
-  int rc = handle_response(_req.body());
+  HTTPCode rc = handle_response(_req.body());
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  if (rc != 200)
+  if (rc != HTTP_OK)
   {
     LOG_DEBUG("Unable to handle callback from Chronos");
     send_http_reply(rc);
@@ -169,7 +170,7 @@ void AuthTimeoutHandler::run()
     return;
   }
 
-  send_http_reply(200);
+  send_http_reply(HTTP_OK);
   delete this;
 }
 
@@ -179,7 +180,7 @@ void DeregistrationHandler::run()
   if (_req.method() != htp_method_DELETE)
   {
     LOG_WARNING("HTTP method isn't delete");
-    send_http_reply(405);
+    send_http_reply(HTTP_BADMETHOD);
     delete this;
     return;
   }
@@ -190,15 +191,15 @@ void DeregistrationHandler::run()
   if (_notify != "true" && _notify != "false")
   {
     LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    send_http_reply(400);
+    send_http_reply(HTTP_BAD_RESULT);
     delete this;
     return;
   }
 
   // Parse the JSON body
-  int rc = parse_request(_req.body());
+  HTTPCode rc = parse_request(_req.body());
 
-  if (rc != 200)
+  if (rc != HTTP_OK)
   {
     LOG_WARNING("Request body is invalid, send %d", rc);
     send_http_reply(rc);
@@ -231,10 +232,8 @@ void RegistrationTimeoutHandler::handle_response()
 
     if (all_bindings_expired)
     {
-      //LCOV_EXCL_START
       LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
-      //LCOV_EXCL_STOP
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, trail());
     }
   }
 
@@ -253,15 +252,15 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                                 aor_id, current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
+                                 current_store, remote_store, &previous_aor_data, trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired, trail()));
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -273,7 +272,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-int RegistrationTimeoutHandler::parse_response(std::string body)
+HTTPCode RegistrationTimeoutHandler::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -284,7 +283,7 @@ int RegistrationTimeoutHandler::parse_response(std::string body)
   {
     LOG_WARNING("Failed to read opaque data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("aor_id")) &&
@@ -295,7 +294,7 @@ int RegistrationTimeoutHandler::parse_response(std::string body)
   else
   {
     LOG_WARNING("AoR ID not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("binding_id")) &&
@@ -306,14 +305,14 @@ int RegistrationTimeoutHandler::parse_response(std::string body)
   else
   {
     LOG_WARNING("Binding ID not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
-  return 200;
+  return HTTP_OK;
 }
 
 // Retrieve the aors and any private IDs from the request body
-int DeregistrationHandler::parse_request(std::string body)
+HTTPCode DeregistrationHandler::parse_request(std::string body)
 {
   Json::Value json_body;
   Json::Reader reader;
@@ -323,7 +322,7 @@ int DeregistrationHandler::parse_request(std::string body)
   {
     LOG_WARNING("Failed to read data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("registrations")) &&
@@ -352,7 +351,7 @@ int DeregistrationHandler::parse_request(std::string body)
       else
       {
         LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
-        return 400;
+        return HTTP_BAD_RESULT;
       }
 
       _bindings.insert(std::make_pair(primary_impu, impi));
@@ -361,14 +360,14 @@ int DeregistrationHandler::parse_request(std::string body)
   else
   {
     LOG_WARNING("Registrations not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   LOG_DEBUG("HTTP request successfully parsed");
-  return 200;
+  return HTTP_OK;
 }
 
-int DeregistrationHandler::handle_request()
+HTTPCode DeregistrationHandler::handle_request()
 {
   for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
   {
@@ -393,14 +392,14 @@ int DeregistrationHandler::handle_request()
       // LCOV_EXCL_START - local store (used in testing) never fails
       LOG_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
       delete aor_data;
-      return 500;
+      return HTTP_SERVER_ERROR;
       // LCOV_EXCL_STOP
     }
 
     delete aor_data;
   }
 
-  return 200;
+  return HTTP_OK;
 }
 
 RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
@@ -416,43 +415,52 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, all_bindings_expired,
-                                 aor_id, current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
+                                 current_store, remote_store, &previous_aor_data, trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
 
-    // LCOV_EXCL_START - local store (used in testing) never fails
+    std::vector<std::string> binding_ids;
+
     for (RegStore::AoR::Bindings::const_iterator i = aor_data->bindings().begin();
          i != aor_data->bindings().end();
          ++i)
     {
-      RegStore::AoR::Binding* b = i->second;
-      std::string b_id = i->first;
+      binding_ids.push_back(i->first);
+    }
+
+    for (std::vector<std::string>::const_iterator i = binding_ids.begin();
+         i != binding_ids.end();
+         ++i)
+    {
+      std::string b_id = *i;
+      RegStore::AoR::Binding* b = aor_data->get_binding(b_id);
 
       if (private_id == "" || private_id == b->_private_id)
       {
         // Update the cseq
         aor_data->_notify_cseq++;
 
-        // The binding has expired, so remove it. Send a SIP NOTIFY for this binding
-        // if there are any subscriptions
+        // The binding matches the private id, or no private id was supplied.
+        // Send a SIP NOTIFY for this binding if there are any subscriptions
         if (_notify == "true" && is_primary)
         {
           for (RegStore::AoR::Subscriptions::const_iterator j = aor_data->subscriptions().begin();
               j != aor_data->subscriptions().end();
                ++j)
           {
+            // LCOV_EXCL_START
             current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+            // LCOV_EXCL_STOP
           }
         }
 
         aor_data->remove_binding(b_id);
       }
     }
-    // LCOV_EXCL_STOP
   }
   while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired, trail()));
 
@@ -476,7 +484,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
   return aor_data;
 }
 
-int AuthTimeoutHandler::handle_response(std::string body)
+HTTPCode AuthTimeoutHandler::handle_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -487,7 +495,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
   {
     LOG_ERROR("Failed to read opaque data, %s",
               reader.getFormattedErrorMessages().c_str());
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("impi")) &&
@@ -498,7 +506,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPI not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("impu")) &&
@@ -509,7 +517,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPU not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   if ((json_body.isMember("nonce")) &&
@@ -520,7 +528,7 @@ int AuthTimeoutHandler::handle_response(std::string body)
   else
   {
     LOG_ERROR("Nonce not available in JSON");
-    return 400;
+    return HTTP_BAD_RESULT;
   }
 
   Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce, trail());
@@ -557,5 +565,5 @@ int AuthTimeoutHandler::handle_response(std::string body)
 
     delete json;
   }
-  return success ? 200 : 500;
+  return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

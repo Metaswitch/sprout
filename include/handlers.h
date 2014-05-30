@@ -87,7 +87,7 @@ public:
 
 protected:
   void handle_response();
-  int parse_response(std::string body);
+  HTTPCode parse_response(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
                               RegStore::AoR* previous_aor_data,
@@ -123,8 +123,8 @@ public:
   {};
 
   void run();
-  int handle_request();
-  int parse_request(std::string body);
+  HTTPCode handle_request();
+  HTTPCode parse_request(std::string body);
   RegStore::AoR* set_aor_data(RegStore* current_store,
                               std::string aor_id,
                               std::string private_id,
@@ -156,7 +156,7 @@ public:
 
   void run();
 protected:
-  int handle_response(std::string body);
+  HTTPCode handle_response(std::string body);
   const Config* _cfg;
   std::string _impi;
   std::string _impu;
