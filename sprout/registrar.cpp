@@ -426,7 +426,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
     // Finally, update the cseq
     aor_data->_notify_cseq++;
   }
-  while (!primary_store->set_aor_data(aor, aor_data, send_notify, all_bindings_expired, trail));
+  while (!primary_store->set_aor_data(aor, aor_data, send_notify, trail, all_bindings_expired));
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)

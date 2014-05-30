@@ -251,7 +251,7 @@ public:
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
   bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail);
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, bool& all_bindings_expired, SAS::TrailId trail);
+  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail, bool& all_bindings_expired);
 
   // Send a SIP NOTIFY
   void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
