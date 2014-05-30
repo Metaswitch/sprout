@@ -233,7 +233,7 @@ void RegistrationTimeoutHandler::handle_response()
     if (all_bindings_expired)
     {
       LOG_DEBUG("All bindings have expired based on a Chronos callback - triggering deregistration at the HSS");
-      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, trail());
+      _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
 
@@ -260,7 +260,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
       // LCOV_EXCL_STOP
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired, trail()));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -429,6 +429,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
          i != aor_data->bindings().end();
          ++i)
     {
+      // Get a list of the bindings to iterate over
       binding_ids.push_back(i->first);
     }
 
@@ -462,7 +463,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
       }
     }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, all_bindings_expired, trail()));
+  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
 
   if (private_id == "")
   {

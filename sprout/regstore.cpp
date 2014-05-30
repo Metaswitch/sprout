@@ -146,7 +146,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
                             SAS::TrailId trail)
 {
   bool unused;
-  return set_aor_data(aor_id, aor_data, set_chronos, unused, trail);
+  return set_aor_data(aor_id, aor_data, set_chronos, trail, unused);
 }
 
 
@@ -165,8 +165,8 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 bool RegStore::set_aor_data(const std::string& aor_id,
                             AoR* aor_data,
                             bool set_chronos,
-                            bool& all_bindings_expired,
-                            SAS::TrailId trail)
+                            SAS::TrailId trail,
+                            bool& all_bindings_expired)
 {
   all_bindings_expired = false;
   // Expire any old bindings before writing to the server.  In theory, if
