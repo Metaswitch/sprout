@@ -90,6 +90,8 @@ const pj_str_t STR_CONTENT_DISPOSITION = pj_str((char*)"Content-Disposition");
 const pj_str_t STR_REG = pj_str((char*)"reg");
 const pj_str_t STR_SOS = pj_str((char*)"sos");
 const pj_str_t STR_USER = pj_str((char*)"user");
+const pj_str_t STR_PROXY_ORIG = pj_str((char*)"proxy-orig");
+const pj_str_t STR_PROXY_TERM = pj_str((char*)"proxy-term");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
