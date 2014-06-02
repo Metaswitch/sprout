@@ -49,7 +49,7 @@ std::string SessionCase::to_string() const
   return _name;
 }
 
-SessionCase SessionCase::Originating("orig");
-SessionCase SessionCase::Terminating("term");
-SessionCase SessionCase::OriginatingCdiv("orig-cdiv");
+const SessionCase SessionCase::Originating("orig");
+const SessionCase SessionCase::Terminating("term");
+const SessionCase SessionCase::OriginatingCdiv("orig-cdiv");
 

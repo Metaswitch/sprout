@@ -1640,7 +1640,7 @@ TEST_F(StatefulProxyTest, TestExternalRecordRoute)
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"));
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-term>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
@@ -4507,12 +4507,12 @@ TEST_F(IscTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-term>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig>"), true);
   free_txdata();
 }
 
@@ -4533,13 +4533,13 @@ TEST_F(IscTest, RecordRoutingTestStartAndEnd)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-term>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig;proxy-term>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig>"), true);
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
 }
@@ -4549,7 +4549,12 @@ TEST_F(IscTest, RecordRoutingTestStartAndEnd)
 // hop, it does.
 TEST_F(IscTest, RecordRoutingTestEachHop)
 {
+  // Simulate record-routing model 3, which sets all the record-routing flags. 
+  stack_data.record_route_on_initiation_of_terminating = true;
+  stack_data.record_route_on_completion_of_originating = true;
+  stack_data.record_route_on_diversion = true;
   stack_data.record_route_on_every_hop = true;
+
   // Expect 9 Record-Routes:
   // - between the endpoint and AS1
   // - AS1's Record-Route
@@ -4565,15 +4570,19 @@ TEST_F(IscTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
-  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-term>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-term>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig;proxy-term>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), true);
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig>"), true);
+
+  stack_data.record_route_on_initiation_of_terminating = false;
+  stack_data.record_route_on_completion_of_originating = false;
+  stack_data.record_route_on_diversion = false;
   stack_data.record_route_on_every_hop = false;
 }
 
@@ -4582,7 +4591,7 @@ TEST_F(IscTest, RecordRoutingTestEachHop)
 TEST_F(IscTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
-  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), false);
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig;proxy-term>"), false);
 }
 
 // Test that even when Sprout is configured to Record-Route itself on each
@@ -4592,7 +4601,7 @@ TEST_F(IscTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
-  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"), false);
+  doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;proxy-orig;proxy-term>"), false);
   stack_data.record_route_on_every_hop = false;
 }
 

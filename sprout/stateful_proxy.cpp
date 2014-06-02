@@ -833,7 +833,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   return trusted;
 }
 
-void UASTransaction::routing_proxy_record_route()
+void UASTransaction::routing_proxy_record_route(const SessionCase& role)
 {
   pjsip_rr_hdr* top_rr = (pjsip_rr_hdr*)
                    pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
@@ -846,9 +846,28 @@ void UASTransaction::routing_proxy_record_route()
     // The S-CSCF URI is not in the top Record-Route header, so add the
     // pre-built header.  It is not safe to do this with the pre-built header
     // from the global pool because the chaining data structures in the
-    // header may get overwritten, but it is safe to do a shallow clone.
-    pjsip_hdr* clone = (pjsip_hdr*)pjsip_hdr_shallow_clone(_req->pool, scscf_rr);
+    // header may get overwritten. Also a shallow clone is not safe as we need
+    // to mutate the URI parameters.
+    pjsip_hdr* clone = (pjsip_hdr*)pjsip_hdr_clone(_req->pool, scscf_rr);
     pjsip_msg_insert_first_hdr(_req->msg, clone);
+  }
+
+  // By this point we know the top route header refers to this node. Add a
+  // proxy-orig or proxy-term parameter indicating which role the node is 
+  // performing.
+  top_rr = (pjsip_rr_hdr*)
+                   pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
+  pjsip_param* uri_params = 
+                   &((pjsip_sip_uri*)(top_rr->name_addr.uri))->other_param;
+
+  if ((role == SessionCase::Originating) ||
+      (role == SessionCase::OriginatingCdiv))
+  {
+    PJUtils::put_unary_param(uri_params, &STR_PROXY_ORIG, _req->pool);
+  }
+  else if (role == SessionCase::Terminating)
+  {
+    PJUtils::put_unary_param(uri_params, &STR_PROXY_TERM, _req->pool);
   }
 }
 
@@ -2269,7 +2288,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     if (stack_data.record_route_on_every_hop)
     {
       LOG_DEBUG("Single Record-Route - configured to do this on every hop");
-      routing_proxy_record_route();
+      routing_proxy_record_route(serving_state.session_case());
     }
 
     // Pick up the AS chain from the ODI, or do the iFC lookups
@@ -2302,7 +2321,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         if (stack_data.record_route_on_completion_of_originating)
         {
           LOG_DEBUG("Single Record-Route - end of originating handling");
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
         }
 
         if ((enum_service) &&
@@ -2522,7 +2541,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
              !PJUtils::is_home_domain(_req->msg->line.req.uri))
     {
       LOG_DEBUG("Record-Route for the BGCF case");
-      routing_proxy_record_route();
+      routing_proxy_record_route(serving_state.session_case());
     }
 
     if (_as_chain_link.is_set() &&
@@ -2540,7 +2559,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
         if (stack_data.record_route_on_completion_of_terminating)
         {
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
           LOG_DEBUG("Single Record-Route - end of terminating handling");
         }
       }
@@ -2607,7 +2626,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Single Record-Route - originating Cdiv");
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
         }
       }
     }
@@ -2636,7 +2655,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
         }
       }
     }
@@ -2713,7 +2732,7 @@ void UASTransaction::common_start_of_terminating_processing()
   if (stack_data.record_route_on_initiation_of_terminating)
   {
     LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-    routing_proxy_record_route();
+    routing_proxy_record_route(SessionCase::Terminating);
   }
 }
 
