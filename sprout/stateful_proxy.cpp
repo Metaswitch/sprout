@@ -833,7 +833,8 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   return trusted;
 }
 
-void UASTransaction::routing_proxy_record_route(const SessionCase& role)
+void UASTransaction::routing_proxy_record_route(const SessionCase& role,
+                                                bool charge_this_hop)
 {
   pjsip_rr_hdr* top_rr = (pjsip_rr_hdr*)
                    pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
@@ -852,22 +853,25 @@ void UASTransaction::routing_proxy_record_route(const SessionCase& role)
     pjsip_msg_insert_first_hdr(_req->msg, clone);
   }
 
-  // By this point we know the top route header refers to this node. Add a
-  // proxy-orig or proxy-term parameter indicating which role the node is 
-  // performing.
-  top_rr = (pjsip_rr_hdr*)
-                   pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
-  pjsip_param* uri_params = 
-                   &((pjsip_sip_uri*)(top_rr->name_addr.uri))->other_param;
+  if (charge_this_hop)
+  {
+    // Charge subsequent in-dialog transactions processed on this hop.  By this
+    // point we know the top route header refers to this node. Add a charge-orig
+    // or charge-term parameter indicating which role the node is performing.
+    top_rr = (pjsip_rr_hdr*)
+                     pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
+    pjsip_param* uri_params = 
+                     &((pjsip_sip_uri*)(top_rr->name_addr.uri))->other_param;
 
-  if ((role == SessionCase::Originating) ||
-      (role == SessionCase::OriginatingCdiv))
-  {
-    PJUtils::put_unary_param(uri_params, &STR_PROXY_ORIG, _req->pool);
-  }
-  else if (role == SessionCase::Terminating)
-  {
-    PJUtils::put_unary_param(uri_params, &STR_PROXY_TERM, _req->pool);
+    if ((role == SessionCase::Originating) ||
+        (role == SessionCase::OriginatingCdiv))
+    {
+      PJUtils::put_unary_param(uri_params, &STR_CHARGE_ORIG, _req->pool);
+    }
+    else if (role == SessionCase::Terminating)
+    {
+      PJUtils::put_unary_param(uri_params, &STR_CHARGE_TERM, _req->pool);
+    }
   }
 }
 
@@ -2288,7 +2292,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
     if (stack_data.record_route_on_every_hop)
     {
       LOG_DEBUG("Single Record-Route - configured to do this on every hop");
-      routing_proxy_record_route(serving_state.session_case());
+      routing_proxy_record_route(serving_state.session_case(), false);
     }
 
     // Pick up the AS chain from the ODI, or do the iFC lookups
@@ -2321,7 +2325,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         if (stack_data.record_route_on_completion_of_originating)
         {
           LOG_DEBUG("Single Record-Route - end of originating handling");
-          routing_proxy_record_route(serving_state.session_case());
+          routing_proxy_record_route(serving_state.session_case(), false);
         }
 
         if ((enum_service) &&
@@ -2541,7 +2545,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
              !PJUtils::is_home_domain(_req->msg->line.req.uri))
     {
       LOG_DEBUG("Record-Route for the BGCF case");
-      routing_proxy_record_route(serving_state.session_case());
+      routing_proxy_record_route(serving_state.session_case(), false);
     }
 
     if (_as_chain_link.is_set() &&
@@ -2559,7 +2563,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
         if (stack_data.record_route_on_completion_of_terminating)
         {
-          routing_proxy_record_route(serving_state.session_case());
+          routing_proxy_record_route(serving_state.session_case(), true);
           LOG_DEBUG("Single Record-Route - end of terminating handling");
         }
       }
@@ -2626,7 +2630,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Single Record-Route - originating Cdiv");
-          routing_proxy_record_route(serving_state.session_case());
+          routing_proxy_record_route(serving_state.session_case(), false);
         }
       }
     }
@@ -2655,7 +2659,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          routing_proxy_record_route(serving_state.session_case());
+          routing_proxy_record_route(serving_state.session_case(), true);
         }
       }
     }
@@ -2732,7 +2736,7 @@ void UASTransaction::common_start_of_terminating_processing()
   if (stack_data.record_route_on_initiation_of_terminating)
   {
     LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-    routing_proxy_record_route(SessionCase::Terminating);
+    routing_proxy_record_route(SessionCase::Terminating, false);
   }
 }
 

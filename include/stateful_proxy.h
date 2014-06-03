@@ -210,7 +210,9 @@ private:
   bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
   bool is_user_registered(std::string public_id);
 
-  void routing_proxy_record_route(const SessionCase& session_case);
+  void routing_proxy_record_route(const SessionCase& session_case,
+                                  bool charge_this_hop);
+
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
                                const TrustBoundary* trust,
