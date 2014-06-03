@@ -513,7 +513,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // We haven't found an existing ACR for this transaction, so create a new
     // one.
     LOG_DEBUG("Create new ACR for this transaction");
-    acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+    acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                    CALLING_PARTY,
+                                    ACR::requested_node_role(rdata->msg_info.msg));
   }
 
   // Pass the received request to the ACR.
@@ -658,7 +660,9 @@ void process_cancel_request(pjsip_rx_data* rdata)
   uas_data->cancel_pending_uac_tsx(0, false);
 
   // Create and send an ACR for the CANCEL request.
-  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                       CALLING_PARTY,
+                                       ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -735,7 +739,9 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
   pj_status_t status;
 
-  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                       CALLING_PARTY,
+                                       ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1706,7 +1712,9 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
         // We have added a BGCF generated route to the request, so we should
         // switch ACR context for the downstream leg.
-        _bgcf_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+        _bgcf_acr = bgcf_acr_factory->get_acr(trail,
+                                              CALLING_PARTY,
+                                              ACR::requested_node_role(msg));
         if (_downstream_acr != _upstream_acr)
         {
           // We've already set up a different downstream ACR to the upstream ACR
@@ -2405,7 +2413,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       _upstream_acr->tx_request(_req->msg);
 
       // Allocate an I-CSCF ACR.
-      _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _icscf_acr = icscf_acr_factory->get_acr(trail(),
+                                              CALLING_PARTY,
+                                              ACR::requested_node_role(_req->msg));
       _icscf_acr->rx_request(_req->msg);
 
       // Create an I-CSCF router for the LIR query.
@@ -2763,7 +2773,9 @@ bool UASTransaction::move_to_terminating_chain()
       // then creating a new downstream ACR for the terminating side and passing
       // the request to it as if it has been received.
       _upstream_acr->tx_request(_req->msg);
-      _downstream_acr = cscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _downstream_acr = cscf_acr_factory->get_acr(trail(),
+                                                  CALLING_PARTY,
+                                                  ACR::requested_node_role(_req->msg));
       _downstream_acr->rx_request(_req->msg);
 
       // These headers name the originating user, so should not survive

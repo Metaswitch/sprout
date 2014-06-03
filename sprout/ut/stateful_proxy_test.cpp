@@ -2092,7 +2092,7 @@ list<string> StatefulProxyTest::doProxyCalculateTargets(int max_targets)
 
   TargetList targets;
   UASTransaction* uastx = NULL;
-  ACR* acr = _acr_factory->get_acr(0, CALLING_PARTY);
+  ACR* acr = _acr_factory->get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
   UASTransaction::create(rdata, NULL, &TrustBoundary::TRUSTED, acr, &uastx);
   uastx->proxy_calculate_targets(rdata->msg_info.msg, stack_data.pool, &TrustBoundary::TRUSTED, targets, max_targets, 1L);
 

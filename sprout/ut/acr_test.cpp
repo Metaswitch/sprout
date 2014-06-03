@@ -276,7 +276,7 @@ TEST_F(ACRTest, SCSCFRegister)
   RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest reg("REGISTER");
@@ -322,7 +322,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the ACR[START] triggered by the INVITE.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -558,7 +558,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   delete acr;
 
   // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
 
   // Build the reINVITE request.
   SIPRequest reinvite("INVITE");
@@ -597,7 +597,7 @@ TEST_F(ACRTest, SCSCFOrigCall)
   delete acr;
 
   // Create an ACR instance for the ACR[STOP] triggered by a BYE.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
 
   // Build the BYE request.
   SIPRequest bye("BYE");
@@ -648,7 +648,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   RalfACRFactory f(NULL, SCSCF);
 
   // Create an ACR instance for the test.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
 
   // Build the original INVITE request.
   SIPRequest invite("INVITE");
@@ -887,7 +887,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 
   // Create an ACR instance for the ACR[INTERIM] triggered by a reINVITE.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
 
   // Build the reINVITE request.
   SIPRequest reinvite("INVITE");
@@ -926,7 +926,7 @@ TEST_F(ACRTest, SCSCFTermCall)
   delete acr;
 
   // Create an ACR instance for the ACR[STOP] triggered by a BYE.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_TERMINATING);
 
   // Build the BYE request.
   SIPRequest bye("BYE");
@@ -977,7 +977,7 @@ TEST_F(ACRTest, ICSCFRegister)
   RalfACRFactory f(NULL, ICSCF);
 
   // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
-  acr = f.get_acr(0, CALLING_PARTY);
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
 
   // Build the original REGISTER request.
   SIPRequest reg("REGISTER");
