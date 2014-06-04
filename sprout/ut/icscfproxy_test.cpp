@@ -2402,24 +2402,51 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
                               "{\"result-code\": 2001,"
-                              " \"scscf\": \"BANG!\"}");
+                              " \"scscf\": \"INVALID!\"}");
 
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.
   Message msg1;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expect 484 Address Incomplete response.
-  ASSERT_EQ(1, txdata_count());
+  // Should have a 100 Trying and a 484 address incomplete.
+  ASSERT_EQ(2, txdata_count());
 
-  // Check the response.
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 484 Address Incomplete.
+  tdata = current_txdata();
+  RespMatcher(484).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Now try again, but configure a tel URI.  This should fail in the same way
+  // as it's not routable.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"tel:2015551234\"}");
+
+  msg1._unique += 1; // We want a new call-ID and branch parameter.
+  inject_msg(msg1.get_request(), tp);
+
+  // Should have a 100 Trying and a 484 address incomplete.
+  ASSERT_EQ(2, txdata_count());
+
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 484 Address Incomplete.
   tdata = current_txdata();
   RespMatcher(484).matches(tdata->msg);
   tp->expect_target(tdata);
