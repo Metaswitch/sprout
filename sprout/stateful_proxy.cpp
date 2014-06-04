@@ -398,6 +398,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
   Target *target = NULL;
   ACR* acr = NULL;
+  bool in_dialog;
 
   // Verify incoming request.
   int status_code = proxy_verify_request(rdata);
@@ -416,6 +417,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // If the request has a To: header it's in-dialog.
+  in_dialog = (rdata->msg_info.to->tag.slen != 0);
+
   if (edge_proxy)
   {
     // Process access proxy routing.  This also does IBCF function if enabled.
@@ -427,8 +431,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
       // Delete the request since we're not forwarding it
       pjsip_tx_data_dec_ref(tdata);
-      delete target;
-      target = NULL;
+      delete target; target = NULL;
       return;
     }
   }
@@ -437,61 +440,70 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // Process route information for routing proxy.
     pjsip_route_hdr* hroute = rdata->msg_info.route;
 
-    if ((hroute != NULL) &&
-        ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-         (PJUtils::is_uri_local(hroute->name_addr.uri))))
+    if (!in_dialog)
     {
-      // This is our own Route header, containing a SIP URI.  Check for an
-      // ODI token.  We need to determine the session case: is
-      // this an originating request or not - see 3GPP TS 24.229
-      // s5.4.3.1, s5.4.1.2.2F and the behaviour of
-      // proxy_calculate_targets as an access proxy.
-      pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
-      pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
-      const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
+      LOG_DEBUG("Initial (not in-dialog) request for routing proxy");
 
-      AsChainLink original_dialog;
-      if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
+      if ((hroute != NULL) &&
+          ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
+           (PJUtils::is_uri_local(hroute->name_addr.uri))))
       {
-        // This is one of our original dialog identifier (ODI) tokens.
-        // See 3GPP TS 24.229 s5.4.3.4.
-        std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
-                                            uri->user.slen - STR_ODI_PREFIX.slen);
-        original_dialog = as_chain_table->lookup(odi_token);
+        // This is our own Route header, containing a SIP URI.  Check for an
+        // ODI token.  We need to determine the session case: is
+        // this an originating request or not - see 3GPP TS 24.229
+        // s5.4.3.1, s5.4.1.2.2F and the behaviour of
+        // proxy_calculate_targets as an access proxy.
+        pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
+        pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+        const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
-        if (original_dialog.is_set())
+        AsChainLink original_dialog;
+        if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
         {
-          LOG_INFO("Original dialog for %.*s found: %s",
-                   uri->user.slen, uri->user.ptr,
-                   original_dialog.to_string().c_str());
-          session_case = &original_dialog.session_case();
-          acr = original_dialog.acr();
-          LOG_DEBUG("Retrieved ACR %p for existing AS chain", acr);
+          // This is one of our original dialog identifier (ODI) tokens.
+          // See 3GPP TS 24.229 s5.4.3.4.
+          std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
+                                              uri->user.slen - STR_ODI_PREFIX.slen);
+          original_dialog = as_chain_table->lookup(odi_token);
+
+          if (original_dialog.is_set())
+          {
+            LOG_INFO("Original dialog for %.*s found: %s",
+                     uri->user.slen, uri->user.ptr,
+                     original_dialog.to_string().c_str());
+            session_case = &original_dialog.session_case();
+            acr = original_dialog.acr();
+            LOG_DEBUG("Retrieved ACR %p for existing AS chain", acr);
+          }
+          else
+          {
+            // We're in the middle of an AS chain, but we've lost our
+            // reference to the rest of the chain. We must not carry on
+            // - fail the request with a suitable error code.
+            LOG_ERROR("Original dialog lookup for %.*s not found",
+                      uri->user.slen, uri->user.ptr);
+            pjsip_tx_data_dec_ref(tdata);
+            reject_request(rdata, PJSIP_SC_BAD_REQUEST);
+            return;
+          }
         }
-        else
-        {
-          // We're in the middle of an AS chain, but we've lost our
-          // reference to the rest of the chain. We must not carry on
-          // - fail the request with a suitable error code.
-          LOG_ERROR("Original dialog lookup for %.*s not found",
-                    uri->user.slen, uri->user.ptr);
-          pjsip_tx_data_dec_ref(tdata);
-          reject_request(rdata, PJSIP_SC_BAD_REQUEST);
-          return;
-        }
+
+        LOG_DEBUG("Got our Route header, session case %s, OD=%s",
+                  session_case->to_string().c_str(),
+                  original_dialog.to_string().c_str());
+        serving_state = ServingState(session_case, original_dialog);
       }
-
-      LOG_DEBUG("Got our Route header, session case %s, OD=%s",
-                session_case->to_string().c_str(),
-                original_dialog.to_string().c_str());
-      serving_state = ServingState(session_case, original_dialog);
+      else if (hroute == NULL)
+      {
+        // No Route header on the request.  This probably shouldn't happen, but
+        // if it does we will treat it as a terminating request.
+        LOG_DEBUG("No Route header, so treat as terminating request");
+        serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
+      }
     }
-    else if (hroute == NULL)
+    else
     {
-      // No Route header on the request.  This probably shouldn't happen, but
-      // if it does we will treat it as a terminating request.
-      LOG_DEBUG("No Route header, so treat as terminating request");
-      serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
+      LOG_DEBUG("In-dialog request for routing proxy");
     }
 
     // Do standard processing of Route headers.
@@ -502,8 +514,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error processing route, %s",
                 PJUtils::pj_status_to_string(status).c_str());
 
-      delete target;
-      target = NULL;
+      delete target; target = NULL;
       return;
     }
   }
@@ -534,8 +545,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
     // Any calculated target is going to be ignored, so clean up.
-    delete target;
-    target = NULL;
+    delete target; target = NULL;
 
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.  There's no need to
@@ -572,8 +582,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     pjsip_tx_data_dec_ref(tdata);
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     delete acr;
-    delete target;
-    target = NULL;
+    delete target; target = NULL;
     return;
   }
 
@@ -604,7 +613,14 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // target if specified.
   if (!edge_proxy)
   {
-    uas_data->routing_proxy_handle_non_cancel(serving_state);
+    if (!in_dialog)
+    {
+      uas_data->routing_proxy_handle_initial_non_cancel(serving_state);
+    }
+    else
+    {
+      uas_data->routing_proxy_handle_subsequent_non_cancel();
+    }
   }
   else
   {
@@ -2306,7 +2322,7 @@ void UASTransaction::access_proxy_handle_non_cancel(Target* target)
 }
 
 /// Handle an initial non-CANCEL message as a routing proxy.
-void UASTransaction::routing_proxy_handle_non_cancel(const ServingState& serving_state)
+void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState& serving_state)
 {
   assert(!edge_proxy);
 
@@ -2613,6 +2629,16 @@ void UASTransaction::routing_proxy_handle_non_cancel(const ServingState& serving
   delete target;
 }
 
+void UASTransaction::routing_proxy_handle_subsequent_non_cancel()
+{
+  assert(!edge_proxy);
+
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
+
+  // Perform common outgoing processing.
+  handle_outgoing_non_cancel(NULL);
+}
 
 // Find the AS chain for this transaction, or create a new one.
 bool UASTransaction::find_as_chain(const ServingState& serving_state)
@@ -3248,7 +3274,7 @@ pj_status_t UASTransaction::handle_final_response()
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
                                  _as_chain_link.next());
-      routing_proxy_handle_non_cancel(serving_state);
+      routing_proxy_handle_initial_non_cancel(serving_state);
     }
     else
     {
@@ -3722,7 +3748,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
     // Kick off outgoing processing for the new request.  Continue the
     // existing AsChain. This will trigger orig-cdiv handling.
-    routing_proxy_handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
+    routing_proxy_handle_initial_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
   }
   else
   {
