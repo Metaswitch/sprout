@@ -2457,7 +2457,7 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
         if (stack_data.record_route_on_completion_of_originating)
         {
           LOG_DEBUG("Single Record-Route - end of originating handling");
-          routing_proxy_record_route(serving_state.session_case(), false);
+          routing_proxy_record_route(_as_chain_link.session_case(), false);
         }
 
         if ((enum_service) &&
@@ -2697,8 +2697,8 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
 
         if (stack_data.record_route_on_completion_of_terminating)
         {
-          routing_proxy_record_route(serving_state.session_case(), true);
           LOG_DEBUG("Single Record-Route - end of terminating handling");
+          routing_proxy_record_route(_as_chain_link.session_case(), true);
         }
       }
     }
