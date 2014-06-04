@@ -602,7 +602,14 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   // Perform common initial processing.  This will delete the
   // target if specified.
-  uas_data->handle_non_cancel(serving_state, target);
+  if (!edge_proxy)
+  {
+    uas_data->routing_proxy_handle_non_cancel(serving_state);
+  }
+  else
+  {
+    uas_data->access_proxy_handle_non_cancel(target);
+  }
 
   uas_data->exit_context();
 }
@@ -866,7 +873,7 @@ void UASTransaction::routing_proxy_record_route(const SessionCase& role,
     // or charge-term parameter indicating which role the node is performing.
     top_rr = (pjsip_rr_hdr*)
                      pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
-    pjsip_param* uri_params = 
+    pjsip_param* uri_params =
                      &((pjsip_sip_uri*)(top_rr->name_addr.uri))->other_param;
 
     if ((role == SessionCase::Originating) ||
@@ -2284,19 +2291,36 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAS) ? (UASTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-/// Handle a non-CANCEL message.
-void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target *target)
+// Handle a non-CANCEL message as an access proxy.
+void UASTransaction::access_proxy_handle_non_cancel(Target* target)
 {
+  assert(edge_proxy);
+
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
+
+  // Perform common outgoing processing.
+  handle_outgoing_non_cancel(target);
+
+  delete target;
+}
+
+/// Handle an initial non-CANCEL message as a routing proxy.
+void UASTransaction::routing_proxy_handle_non_cancel(const ServingState& serving_state)
+{
+  assert(!edge_proxy);
+
+  Target* target = NULL;
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
 
-  // If we're a routing proxy, perform AS handling to pick the next hop.
-  if (!target && !edge_proxy && serving_state.is_set())
+  if (serving_state.is_set())
   {
-    // The serving state has been set up, so perform AS handling.
+    // Perform AS handling to pick the next hop.  The serving state has been set
+    // up, so perform AS handling.
     if (stack_data.record_route_on_every_hop)
     {
       LOG_DEBUG("Single Record-Route - configured to do this on every hop");
@@ -3224,7 +3248,7 @@ pj_status_t UASTransaction::handle_final_response()
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
                                  _as_chain_link.next());
-      handle_non_cancel(serving_state, NULL);
+      routing_proxy_handle_non_cancel(serving_state);
     }
     else
     {
@@ -3698,7 +3722,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
     // Kick off outgoing processing for the new request.  Continue the
     // existing AsChain. This will trigger orig-cdiv handling.
-    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link), NULL);
+    routing_proxy_handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
   }
   else
   {

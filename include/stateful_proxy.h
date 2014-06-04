@@ -147,7 +147,8 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  void handle_non_cancel(const ServingState& serving_state, Target*);
+  void routing_proxy_handle_non_cancel(const ServingState& serving_state);
+  void access_proxy_handle_non_cancel(Target* target);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
