@@ -2452,6 +2452,28 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
+  // Finally use a SIPS uri.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sips:scscf1.homedomain:5058;transport=TCP\"}");
+
+  msg1._unique += 1; // We want a new call-ID and branch parameter.
+  inject_msg(msg1.get_request(), tp);
+
+  ASSERT_EQ(2, txdata_count());
+
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 484 Address Incomplete.
+  tdata = current_txdata();
+  RespMatcher(484).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
   _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
 
   delete tp;
