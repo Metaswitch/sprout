@@ -398,6 +398,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
   Target *target = NULL;
   ACR* acr = NULL;
+  ACR* downstream_acr = NULL;
   bool in_dialog;
 
   // Verify incoming request.
@@ -434,6 +435,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
       delete target; target = NULL;
       return;
     }
+
+    acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                    CALLING_PARTY,
+                                    ACR::requested_node_role(rdata->msg_info.msg));
   }
   else
   {
@@ -500,10 +505,72 @@ void process_tsx_request(pjsip_rx_data* rdata)
         LOG_DEBUG("No Route header, so treat as terminating request");
         serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
       }
+
+      if (acr == NULL)
+      {
+        // We haven't found an existing ACR for this transaction, so create a
+        // new one.
+        acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                        CALLING_PARTY,
+                                        ACR::requested_node_role(rdata->msg_info.msg));
+      }
     }
     else
     {
       LOG_DEBUG("In-dialog request for routing proxy");
+
+      if ((hroute != NULL) &&
+          ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
+           (PJUtils::is_uri_local(hroute->name_addr.uri))))
+      {
+        // Found our own route header - use it's parameters to determine how to
+        // chanrge this request.
+        //
+        // For in-dialog requests at a routing proxy we only do charging at two
+        // points:
+        // 1.  The point at which we started doing originating processing on the
+        //     initial request.
+        // 2.  The point active which we finished terminating processing on the
+        //     initial request.
+        pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
+        bool charge_orig = (pjsip_param_find(&uri->other_param, &STR_CHARGE_ORIG) != NULL);
+        bool charge_term = (pjsip_param_find(&uri->other_param, &STR_CHARGE_TERM) != NULL);
+
+        // Create the necessary ACRs.
+        if (charge_orig && charge_term)
+        {
+          // We need to do billing for both both originating and terminating
+          // node roles. Currently we (incorrectly) assume that all requests
+          // were initiated by the calling party, so the `orig` ACR comes
+          // first, and the `term` ACR is the downstream one.
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_ORIGINATING);
+          downstream_acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                                     CALLING_PARTY,
+                                                     NODE_ROLE_TERMINATING);
+        }
+        else if (charge_orig)
+        {
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_ORIGINATING);
+        }
+        else if (charge_term)
+        {
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_TERMINATING);
+        }
+      }
+
+      // We haven't got an ACR (either because the route header was not ours,
+      // or it did not indicate that willing was required).  Create a dummy
+      // ACR.
+      if (acr == NULL)
+      {
+        acr = new ACR();
+      }
     }
 
     // Do standard processing of Route headers.
@@ -515,18 +582,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
                 PJUtils::pj_status_to_string(status).c_str());
 
       delete target; target = NULL;
+      delete acr; acr = NULL;
+      delete downstream_acr; downstream_acr = NULL;
       return;
     }
-  }
-
-  if (acr == NULL)
-  {
-    // We haven't found an existing ACR for this transaction, so create a new
-    // one.
-    LOG_DEBUG("Create new ACR for this transaction");
-    acr = cscf_acr_factory->get_acr(get_trail(rdata),
-                                    CALLING_PARTY,
-                                    ACR::requested_node_role(rdata->msg_info.msg));
   }
 
   // Pass the received request to the ACR.
@@ -544,9 +603,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // it will not be received by on_rx_request() callback.
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
-    // Any calculated target is going to be ignored, so clean up.
-    delete target; target = NULL;
-
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
@@ -555,7 +611,15 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     trust->process_request(tdata);
 
+    // About to send the request to notify the ACR. Also, if we have a
+    // downstream ACR, simulate it being received and sent by that ACR.
     acr->tx_request(tdata->msg);
+
+    if (downstream_acr != NULL)
+    {
+      downstream_acr->rx_request(tdata->msg);
+      downstream_acr->tx_request(tdata->msg);
+    }
 
     status = PJUtils::send_request_stateless(tdata);
 
@@ -564,15 +628,25 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error forwarding request, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
-    acr->send_message();
-    delete acr;
 
+    // Send Rf messages and clean up the ACRs.
+    acr->send_message();
+    delete acr; acr = NULL;
+
+    if (downstream_acr)
+    {
+      downstream_acr->send_message();
+      delete downstream_acr; downstream_acr = NULL;
+    }
+
+    delete target; target = NULL;
     return;
   }
 
   // Create the transaction.  This implicitly enters its context, so we're
   // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, acr, &uas_data);
+
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to create UAS transaction, %s",
@@ -581,10 +655,14 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // Delete the request since we're not forwarding it
     pjsip_tx_data_dec_ref(tdata);
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
-    delete acr;
+    delete acr; acr = NULL;
+    delete downstream_acr; downstream_acr = NULL;
     delete target; target = NULL;
     return;
   }
+
+  // UASTrancation has taken ownership of the ACR.
+  acr = NULL;
 
   if (!edge_proxy)
   {
@@ -619,7 +697,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
     }
     else
     {
-      uas_data->routing_proxy_handle_subsequent_non_cancel();
+      uas_data->routing_proxy_handle_subsequent_non_cancel(downstream_acr);
+
+      // Previous function took ownership of the ACR.
+      downstream_acr = NULL;
     }
   }
   else
@@ -628,6 +709,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   uas_data->exit_context();
+
+  delete acr; acr = NULL;
+  delete downstream_acr; downstream_acr = NULL;
 }
 
 
@@ -2629,12 +2713,32 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
   delete target;
 }
 
-void UASTransaction::routing_proxy_handle_subsequent_non_cancel()
+// Handle a subsequent (in-dialog) request as a routing proxy.
+// @param downstream_acr  ACR representing the downstream half of the
+//                        transaction. If this is NULL, the upstream ACR will
+//                        be used. This function takes ownership of the ACR.
+void UASTransaction::routing_proxy_handle_subsequent_non_cancel(ACR* downstream_acr)
 {
   assert(!edge_proxy);
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
+
+  if ((downstream_acr != NULL) && (_downstream_acr == _upstream_acr))
+  {
+    // We don't yet have a distinct downstream ACR so use the one that has been
+    // passed to us.  Store it, and simulate the message being sent from the
+    // upstream ACR and received by the downstream one.
+    LOG_DEBUG("Switch to downstream ACR");
+    _downstream_acr = downstream_acr;
+    _upstream_acr->tx_request(_req->msg);
+    _downstream_acr->rx_request(_req->msg);
+  }
+  else
+  {
+    // Not storing the downstream ACR so free it.
+    delete downstream_acr; downstream_acr = NULL;
+  }
 
   // Perform common outgoing processing.
   handle_outgoing_non_cancel(NULL);
