@@ -58,7 +58,7 @@ public:
               ACR* acr);
   virtual ~ICSCFRouter();
 
-  int get_scscf(std::string& scscf);
+  int get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_uri);
 
 protected:
   /// Do the HSS query.  This must be implemented by the request-type specific

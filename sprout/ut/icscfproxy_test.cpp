@@ -2424,7 +2424,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
 
   // Deal with the 484 Address Incomplete.
   tdata = current_txdata();
-  RespMatcher(484).matches(tdata->msg);
+  RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
 
@@ -2448,7 +2448,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
 
   // Deal with the 484 Address Incomplete.
   tdata = current_txdata();
-  RespMatcher(484).matches(tdata->msg);
+  RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
 
@@ -2470,7 +2470,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
 
   // Deal with the 484 Address Incomplete.
   tdata = current_txdata();
-  RespMatcher(484).matches(tdata->msg);
+  RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
 

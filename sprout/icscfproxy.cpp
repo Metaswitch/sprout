@@ -315,56 +315,44 @@ void ICSCFProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
 /// Calculate targets for incoming requests by querying HSS.
 int ICSCFProxy::UASTsx::calculate_targets()
 {
+  pjsip_sip_uri* scscf_sip_uri;
+
   // Invoke the router to select an S-CSCF.
-  std::string scscf;
-  int status_code = _router->get_scscf(scscf);
+  int status_code = _router->get_scscf(_req->pool, scscf_sip_uri);
 
   if (status_code == PJSIP_SC_OK)
   {
-    pjsip_uri* scscf_uri = PJUtils::uri_from_string(scscf, _req->pool);
+    // Found a suitable S-CSCF.
 
-    if ((scscf_uri != NULL) && PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
+    if (_case == SessionCase::REGISTER)
     {
-      // Found a suitable S-CSCF.
-      pjsip_sip_uri* scscf_sip_uri = (pjsip_sip_uri*)scscf_uri;
+      // REGISTER request, so add a target with this S-CSCF as the Request-URI.
+      Target* target = new Target;
+      target->uri = (pjsip_uri*)scscf_sip_uri;
+      add_target(target);
 
-      if (_case == SessionCase::REGISTER)
-      {
-        // REGISTER request, so add a target with this S-CSCF as the Request-URI.
-        LOG_DEBUG("Route REGISTER to S-CSCF %s", scscf.c_str());
-        Target* target = new Target;
-        target->uri = scscf_uri;
-        add_target(target);
-
-        // Don't add a P-User-Database header - as per 5.3.1.2/TS24.229 Note 3
-        // this can only be added if we have local configuration that the S-CSCF
-        // can process P-User-Database.
-      }
-      else
-      {
-        // Non-register request, so add a Route header for the destination S-CSCF.
-        LOG_DEBUG("Route Non-REGISTER to S-CSCF %s", scscf.c_str());
-        Target* target = new Target;
-        scscf_sip_uri->lr_param = 1;
-        if (_case == SessionCase::ORIGINATING)
-        {
-          // Add the "orig" parameter.
-          pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-          pj_strdup(_req->pool, &p->name, &STR_ORIG);
-          p->value.slen = 0;
-          pj_list_insert_after(&scscf_sip_uri->other_param, p);
-        }
-        target->paths.push_back((pjsip_uri*)scscf_sip_uri);
-        add_target(target);
-
-        // Remove the P-Profile-Key header if present.
-        PJUtils::remove_hdr(_req->msg, &STR_P_PROFILE_KEY);
-      }
+      // Don't add a P-User-Database header - as per 5.3.1.2/TS24.229 Note 3
+      // this can only be added if we have local configuration that the S-CSCF
+      // can process P-User-Database.
     }
     else
     {
-      LOG_WARNING("Invalid SCSCF URI: %s", scscf.c_str());
-      status_code = PJSIP_SC_ADDRESS_INCOMPLETE;
+      // Non-register request, so add a Route header for the destination S-CSCF.
+      Target* target = new Target;
+      scscf_sip_uri->lr_param = 1;
+      if (_case == SessionCase::ORIGINATING)
+      {
+        // Add the "orig" parameter.
+        pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+        pj_strdup(_req->pool, &p->name, &STR_ORIG);
+        p->value.slen = 0;
+        pj_list_insert_after(&scscf_sip_uri->other_param, p);
+      }
+      target->paths.push_back((pjsip_uri*)scscf_sip_uri);
+      add_target(target);
+
+      // Remove the P-Profile-Key header if present.
+      PJUtils::remove_hdr(_req->msg, &STR_P_PROFILE_KEY);
     }
   }
 

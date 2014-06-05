@@ -50,6 +50,7 @@ extern "C" {
 #include "log.h"
 #include "sproutsasevent.h"
 #include "icscfrouter.h"
+#include "pjutils.h"
 
 
 ICSCFRouter::ICSCFRouter(HSSConnection* hss,
@@ -74,9 +75,10 @@ ICSCFRouter::~ICSCFRouter()
 
 /// Selects the appropriate S-CSCF for the request, performing an HSS query
 /// if required.
-int ICSCFRouter::get_scscf(std::string& scscf)
+int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
 {
   int status_code = PJSIP_SC_OK;
+  std::string scscf;
 
   if (!_queried_caps)
   {
@@ -102,6 +104,7 @@ int ICSCFRouter::get_scscf(std::string& scscf)
       // The HSS returned a S-CSCF name and it's not one we have tried
       // already.
       scscf = _hss_rsp.scscf;
+      LOG_DEBUG("SCSCF specified by HSS: %s", scscf.c_str());
     }
     else if (_queried_caps)
     {
@@ -110,12 +113,26 @@ int ICSCFRouter::get_scscf(std::string& scscf)
                                          _hss_rsp.optional_caps,
                                          _attempted_scscfs,
                                          _trail);
+      LOG_DEBUG("SCSCF selected: %s", scscf.c_str());
     }
 
     if (!scscf.empty())
     {
       // Found an S-CSCF to try, so add it to the list of attempted S-CSCFs.
       _attempted_scscfs.push_back(scscf);
+
+      // Check that the returned scscf is a valid SIP URI.
+      pjsip_uri* scscf_uri = PJUtils::uri_from_string(scscf, pool);
+
+      if ((scscf_uri != NULL) && PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
+      {
+        scscf_sip_uri = (pjsip_sip_uri*)scscf_uri;
+      }
+      else
+      {
+        LOG_WARNING("Invalid SCSCF URI %s", scscf.c_str());
+        status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+      }
     }
     else
     {
@@ -127,6 +144,7 @@ int ICSCFRouter::get_scscf(std::string& scscf)
 
   if (status_code == PJSIP_SC_OK)
   {
+    LOG_DEBUG("Route Non-REGISTER to S-CSCF %s", scscf.c_str());
     SAS::Event event(_trail, SASEvent::SCSCF_SELECTION_SUCCESS, 0);
     event.add_var_param(scscf);
     event.add_var_param(_hss_rsp.scscf);
