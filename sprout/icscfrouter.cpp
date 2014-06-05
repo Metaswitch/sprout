@@ -150,7 +150,6 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
 
   if (status_code == PJSIP_SC_OK)
   {
-    LOG_DEBUG("Route Non-REGISTER to S-CSCF %s", scscf.c_str());
     SAS::Event event(_trail, SASEvent::SCSCF_SELECTION_SUCCESS, 0);
     event.add_var_param(scscf);
     event.add_var_param(_hss_rsp.scscf);
