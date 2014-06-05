@@ -75,10 +75,16 @@ ICSCFRouter::~ICSCFRouter()
 
 /// Selects the appropriate S-CSCF for the request, performing an HSS query
 /// if required.
+///
+/// @param pool          Pool to parse the SCSCF URI into.  This must be valid
+///                      for at least as long as the returned SCSCF URI.
+/// @param scscf_sip_uri Output parameter holding the parsed SCSCF URI.  This
+///                      is onle valid if the function returns PJSIP_SC_OK.
 int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
 {
   int status_code = PJSIP_SC_OK;
   std::string scscf;
+  scscf_sip_uri = NULL;
 
   if (!_queried_caps)
   {
