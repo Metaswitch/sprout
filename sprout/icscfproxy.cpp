@@ -327,6 +327,7 @@ int ICSCFProxy::UASTsx::calculate_targets()
     if (_case == SessionCase::REGISTER)
     {
       // REGISTER request, so add a target with this S-CSCF as the Request-URI.
+      LOG_DEBUG("Found SCSCF for REGISTER");
       Target* target = new Target;
       target->uri = (pjsip_uri*)scscf_sip_uri;
       add_target(target);
@@ -338,6 +339,7 @@ int ICSCFProxy::UASTsx::calculate_targets()
     else
     {
       // Non-register request, so add a Route header for the destination S-CSCF.
+      LOG_DEBUG("Found SCSCF for non-REGISTER");
       Target* target = new Target;
       scscf_sip_uri->lr_param = 1;
       if (_case == SessionCase::ORIGINATING)
