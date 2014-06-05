@@ -2413,7 +2413,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   msg1._route = "Route: <sip:homedomain;orig>";
   inject_msg(msg1.get_request(), tp);
 
-  // Should have a 100 Trying and a 484 address incomplete.
+  // Should have a 100 Trying and a 480 Temporarily Unavailable.
   ASSERT_EQ(2, txdata_count());
 
   // Deal with the 100 Trying.
@@ -2422,7 +2422,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
-  // Deal with the 484 Address Incomplete.
+  // Deal with the 480 Temporarily Unavailable.
   tdata = current_txdata();
   RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -2437,7 +2437,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   msg1._unique += 1; // We want a new call-ID and branch parameter.
   inject_msg(msg1.get_request(), tp);
 
-  // Should have a 100 Trying and a 484 address incomplete.
+  // Should have a 100 Trying and a 480 Temporarily Unavailable.
   ASSERT_EQ(2, txdata_count());
 
   // Deal with the 100 Trying.
@@ -2446,7 +2446,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
-  // Deal with the 484 Address Incomplete.
+  // Deal with the 480 Temporarily Unavailable.
   tdata = current_txdata();
   RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -2468,7 +2468,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
   tp->expect_target(tdata);
   free_txdata();
 
-  // Deal with the 484 Address Incomplete.
+  // Deal with the 480 Temporarily Unavailable.
   tdata = current_txdata();
   RespMatcher(480).matches(tdata->msg);
   tp->expect_target(tdata);
