@@ -120,7 +120,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
 
   void check_subscriptions(std::string aor, uint32_t expected);
-  void check_standard_OK();
+  void check_OK_and_NOTIFY();
 };
 
 LocalStore* SubscriptionTest::_local_data_store;
@@ -300,7 +300,7 @@ TEST_F(SubscriptionTest, SimpleMainline)
 
   SubscribeMessage msg;
   inject_msg(msg.get());
-  check_standard_OK();
+  check_OK_and_NOTIFY();
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
 
@@ -332,7 +332,7 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   SubscribeMessage msg;
   msg._scheme = "tel";
   inject_msg(msg.get());
-  check_standard_OK();
+  check_OK_and_NOTIFY();
   check_subscriptions("tel:6505550231", 1u);
 }
 
@@ -376,7 +376,7 @@ TEST_F(SubscriptionTest, EmptyAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "";
   inject_msg(msg.get());
-  check_standard_OK();
+  check_OK_and_NOTIFY();
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -405,7 +405,7 @@ TEST_F(SubscriptionTest, CorrectAcceptsHeader)
   SubscribeMessage msg;
   msg._accepts = "Accept: otherstuff,application/reginfo+xml";
   inject_msg(msg.get());
-  check_standard_OK();
+  check_OK_and_NOTIFY();
 
   check_subscriptions("sip:6505550231@homedomain", 1u);
 }
@@ -456,7 +456,7 @@ TEST_F(SubscriptionTest, NonPrimaryAssociatedUri)
                               "</ServiceProfile></IMSSubscription>");
 
   inject_msg(msg.get());
-  check_standard_OK();
+  check_OK_and_NOTIFY();
   check_subscriptions("sip:6505550233@homedomain", 1u);
 }
 
@@ -527,17 +527,19 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
   delete aor_data; aor_data = NULL;
 }
 
-void SubscriptionTest::check_standard_OK()
+void SubscriptionTest::check_OK_and_NOTIFY()
 {
   ASSERT_EQ(2, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
+  EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   inject_msg(respond_to_current_txdata(200));
 }
 
