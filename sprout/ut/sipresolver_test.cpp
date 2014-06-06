@@ -256,9 +256,9 @@ TEST_F(SIPResolverTest, SimpleNAPTRSRVTCPResolution)
 
 TEST_F(SIPResolverTest, SimpleNAPTRSRVUDPResolution)
 {
-  // Test selection of UDP transport and port using NAPTR and SRV records.
+  // Test selection of UDP transport and port using NAPTR and SRV records (with lowercase s).
   std::vector<DnsRRecord*> records;
-  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "S", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
+  records.push_back(naptr("sprout.cw-ngv.com", 3600, 0, 0, "s", "SIP+D2U", "", "_sip._udp.sprout.cw-ngv.com"));
   _dnsresolver.add_to_cache("sprout.cw-ngv.com", ns_t_naptr, records);
 
   records.push_back(srv("_sip._udp.sprout.cw-ngv.com", 3600, 0, 0, 5054, "sprout-1.cw-ngv.com"));

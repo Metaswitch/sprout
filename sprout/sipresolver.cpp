@@ -157,7 +157,7 @@ void SIPResolver::resolve(const std::string& name,
         // NAPTR resolved to a supported service
         LOG_DEBUG("NAPTR resolved to transport %d", naptr->transport);
         transport = naptr->transport;
-        if (naptr->flags == "S")
+        if (strcasecmp(naptr->flags.c_str(), "S") == 0)
         {
           // Do an SRV lookup with the replacement domain from the NAPTR lookup.
           srv_name = naptr->replacement;
