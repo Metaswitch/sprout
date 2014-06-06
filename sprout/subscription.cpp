@@ -356,7 +356,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
   }
 
-  ACR* acr = acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = acr_factory->get_acr(get_trail(rdata),
+                                  CALLING_PARTY,
+                                  ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.

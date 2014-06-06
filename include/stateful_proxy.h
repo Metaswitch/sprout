@@ -147,7 +147,9 @@ public:
                             UASTransaction** uas_data_ptr);
   static UASTransaction* get_from_tsx(pjsip_transaction* tsx);
 
-  void handle_non_cancel(const ServingState& serving_state, Target*);
+  void routing_proxy_handle_initial_non_cancel(const ServingState& serving_state);
+  void routing_proxy_handle_subsequent_non_cancel(ACR* downstream_acr);
+  void access_proxy_handle_non_cancel(Target* target);
 
   void on_new_client_response(UACTransaction* uac_data, pjsip_rx_data *rdata);
   void on_client_not_responding(UACTransaction* uac_data);
@@ -210,7 +212,8 @@ private:
   bool get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail);
   bool is_user_registered(std::string public_id);
 
-  void routing_proxy_record_route();
+  void routing_proxy_record_route(const SessionCase& session_case);
+
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
                                const TrustBoundary* trust,

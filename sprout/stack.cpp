@@ -874,18 +874,23 @@ pj_status_t init_stack(const std::string& system_name,
     switch (record_routing_model)
     {
     case 1:
-        stack_data.record_route_on_initiation_of_originating = true;
-        stack_data.record_route_on_completion_of_terminating = true;
-        break;
+      stack_data.record_route_on_initiation_of_originating = true;
+      stack_data.record_route_on_completion_of_terminating = true;
+      break;
     case 2:
-        stack_data.record_route_on_initiation_of_originating = true;
-        stack_data.record_route_on_initiation_of_terminating = true;
-        stack_data.record_route_on_completion_of_originating = true;
-        stack_data.record_route_on_completion_of_terminating = true;
-        stack_data.record_route_on_diversion = true;
-        break;
+      stack_data.record_route_on_initiation_of_originating = true;
+      stack_data.record_route_on_initiation_of_terminating = true;
+      stack_data.record_route_on_completion_of_originating = true;
+      stack_data.record_route_on_completion_of_terminating = true;
+      stack_data.record_route_on_diversion = true;
+      break;
     case 3:
       stack_data.record_route_on_every_hop = true;
+      stack_data.record_route_on_initiation_of_originating = true;
+      stack_data.record_route_on_initiation_of_terminating = true;
+      stack_data.record_route_on_completion_of_originating = true;
+      stack_data.record_route_on_completion_of_terminating = true;
+      stack_data.record_route_on_diversion = true;
       break;
     default:
       LOG_ERROR("Record-Route setting should be 1, 2, or 3, is %d. Defaulting to Record-Route on every hop.", record_routing_model);

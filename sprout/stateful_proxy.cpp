@@ -398,6 +398,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   TrustBoundary* trust = &TrustBoundary::TRUSTED;
   Target *target = NULL;
   ACR* acr = NULL;
+  ACR* downstream_acr = NULL;
+  bool in_dialog;
 
   // Verify incoming request.
   int status_code = proxy_verify_request(rdata);
@@ -416,6 +418,9 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // If the request has a tag in the To header it's in-dialog.
+  in_dialog = (rdata->msg_info.to->tag.slen != 0);
+
   if (edge_proxy)
   {
     // Process access proxy routing.  This also does IBCF function if enabled.
@@ -427,71 +432,145 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
       // Delete the request since we're not forwarding it
       pjsip_tx_data_dec_ref(tdata);
-      delete target;
-      target = NULL;
+      delete target; target = NULL;
       return;
     }
+
+    acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                    CALLING_PARTY,
+                                    ACR::requested_node_role(rdata->msg_info.msg));
   }
   else
   {
     // Process route information for routing proxy.
     pjsip_route_hdr* hroute = rdata->msg_info.route;
 
-    if ((hroute != NULL) &&
-        ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
-         (PJUtils::is_uri_local(hroute->name_addr.uri))))
+    if (!in_dialog)
     {
-      // This is our own Route header, containing a SIP URI.  Check for an
-      // ODI token.  We need to determine the session case: is
-      // this an originating request or not - see 3GPP TS 24.229
-      // s5.4.3.1, s5.4.1.2.2F and the behaviour of
-      // proxy_calculate_targets as an access proxy.
-      pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
-      pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
-      const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
+      LOG_DEBUG("Initial (not in-dialog) request for routing proxy");
 
-      AsChainLink original_dialog;
-      if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
+      if ((hroute != NULL) &&
+          ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
+           (PJUtils::is_uri_local(hroute->name_addr.uri))))
       {
-        // This is one of our original dialog identifier (ODI) tokens.
-        // See 3GPP TS 24.229 s5.4.3.4.
-        std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
-                                            uri->user.slen - STR_ODI_PREFIX.slen);
-        original_dialog = as_chain_table->lookup(odi_token);
+        // This is our own Route header, containing a SIP URI.  Check for an
+        // ODI token.  We need to determine the session case: is
+        // this an originating request or not - see 3GPP TS 24.229
+        // s5.4.3.1, s5.4.1.2.2F and the behaviour of
+        // proxy_calculate_targets as an access proxy.
+        pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
+        pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+        const SessionCase* session_case = (orig_param != NULL) ? &SessionCase::Originating : &SessionCase::Terminating;
 
-        if (original_dialog.is_set())
+        AsChainLink original_dialog;
+        if (pj_strncmp(&uri->user, &STR_ODI_PREFIX, STR_ODI_PREFIX.slen) == 0)
         {
-          LOG_INFO("Original dialog for %.*s found: %s",
-                   uri->user.slen, uri->user.ptr,
-                   original_dialog.to_string().c_str());
-          session_case = &original_dialog.session_case();
-          acr = original_dialog.acr();
-          LOG_DEBUG("Retrieved ACR %p for existing AS chain", acr);
+          // This is one of our original dialog identifier (ODI) tokens.
+          // See 3GPP TS 24.229 s5.4.3.4.
+          std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
+                                              uri->user.slen - STR_ODI_PREFIX.slen);
+          original_dialog = as_chain_table->lookup(odi_token);
+
+          if (original_dialog.is_set())
+          {
+            LOG_INFO("Original dialog for %.*s found: %s",
+                     uri->user.slen, uri->user.ptr,
+                     original_dialog.to_string().c_str());
+            session_case = &original_dialog.session_case();
+            acr = original_dialog.acr();
+            LOG_DEBUG("Retrieved ACR %p for existing AS chain", acr);
+          }
+          else
+          {
+            // We're in the middle of an AS chain, but we've lost our
+            // reference to the rest of the chain. We must not carry on
+            // - fail the request with a suitable error code.
+            LOG_ERROR("Original dialog lookup for %.*s not found",
+                      uri->user.slen, uri->user.ptr);
+            pjsip_tx_data_dec_ref(tdata);
+            reject_request(rdata, PJSIP_SC_BAD_REQUEST);
+            return;
+          }
         }
-        else
+
+        LOG_DEBUG("Got our Route header, session case %s, OD=%s",
+                  session_case->to_string().c_str(),
+                  original_dialog.to_string().c_str());
+        serving_state = ServingState(session_case, original_dialog);
+      }
+      else if (hroute == NULL)
+      {
+        // No Route header on the request.  This probably shouldn't happen, but
+        // if it does we will treat it as a terminating request.
+        LOG_DEBUG("No Route header, so treat as terminating request");
+        serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
+      }
+
+      if (acr == NULL)
+      {
+        // We haven't found an existing ACR for this transaction, so create a
+        // new one.
+        acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                        CALLING_PARTY,
+                                        ACR::requested_node_role(rdata->msg_info.msg));
+      }
+    }
+    else
+    {
+      LOG_DEBUG("In-dialog request for routing proxy");
+
+      if ((hroute != NULL) &&
+          ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
+           (PJUtils::is_uri_local(hroute->name_addr.uri))))
+      {
+        // Found our own route header - use it's parameters to determine how to
+        // charge this request.
+        //
+        // For in-dialog requests at a routing proxy we only do charging at two
+        // points:
+        // 1.  The point at which we started doing originating processing on the
+        //     initial request.
+        // 2.  The point active which we finished terminating processing on the
+        //     initial request.
+        pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
+        bool charge_orig = (pjsip_param_find(&uri->other_param, &STR_CHARGE_ORIG) != NULL);
+        bool charge_term = (pjsip_param_find(&uri->other_param, &STR_CHARGE_TERM) != NULL);
+
+        // Create the necessary ACRs.
+        if (charge_orig && charge_term)
         {
-          // We're in the middle of an AS chain, but we've lost our
-          // reference to the rest of the chain. We must not carry on
-          // - fail the request with a suitable error code.
-          LOG_ERROR("Original dialog lookup for %.*s not found",
-                    uri->user.slen, uri->user.ptr);
-          pjsip_tx_data_dec_ref(tdata);
-          reject_request(rdata, PJSIP_SC_BAD_REQUEST);
-          return;
+          // We need to do billing for both both originating and terminating
+          // node roles. Currently we (incorrectly) assume that all requests
+          // were initiated by the calling party, so the `orig` ACR comes
+          // first, and the `term` ACR is the downstream one.
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_ORIGINATING);
+          downstream_acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                                     CALLING_PARTY,
+                                                     NODE_ROLE_TERMINATING);
+        }
+        else if (charge_orig)
+        {
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_ORIGINATING);
+        }
+        else if (charge_term)
+        {
+          acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                          CALLING_PARTY,
+                                          NODE_ROLE_TERMINATING);
         }
       }
 
-      LOG_DEBUG("Got our Route header, session case %s, OD=%s",
-                session_case->to_string().c_str(),
-                original_dialog.to_string().c_str());
-      serving_state = ServingState(session_case, original_dialog);
-    }
-    else if (hroute == NULL)
-    {
-      // No Route header on the request.  This probably shouldn't happen, but
-      // if it does we will treat it as a terminating request.
-      LOG_DEBUG("No Route header, so treat as terminating request");
-      serving_state = ServingState(&SessionCase::Terminating, AsChainLink());
+      // We haven't got an ACR (either because the route header was not ours,
+      // or it did not indicate that willing was required).  Create a dummy
+      // ACR.
+      if (acr == NULL)
+      {
+        acr = new ACR();
+      }
     }
 
     // Do standard processing of Route headers.
@@ -502,18 +581,11 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error processing route, %s",
                 PJUtils::pj_status_to_string(status).c_str());
 
-      delete target;
-      target = NULL;
+      delete target; target = NULL;
+      delete acr; acr = NULL;
+      delete downstream_acr; downstream_acr = NULL;
       return;
     }
-  }
-
-  if (acr == NULL)
-  {
-    // We haven't found an existing ACR for this transaction, so create a new
-    // one.
-    LOG_DEBUG("Create new ACR for this transaction");
-    acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
   }
 
   // Pass the received request to the ACR.
@@ -531,10 +603,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // it will not be received by on_rx_request() callback.
   if (tdata->msg->line.req.method.id == PJSIP_ACK_METHOD)
   {
-    // Any calculated target is going to be ignored, so clean up.
-    delete target;
-    target = NULL;
-
     // Report a SIP call ID marker on the trail to make sure it gets
     // associated with the INVITE transaction at SAS.  There's no need to
     // report the branch IDs as they won't be used for correlation.
@@ -543,7 +611,15 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     trust->process_request(tdata);
 
+    // About to send the request to notify the ACR. Also, if we have a
+    // downstream ACR, simulate it being received and sent by that ACR.
     acr->tx_request(tdata->msg);
+
+    if (downstream_acr != NULL)
+    {
+      downstream_acr->rx_request(tdata->msg);
+      downstream_acr->tx_request(tdata->msg);
+    }
 
     status = PJUtils::send_request_stateless(tdata);
 
@@ -552,15 +628,25 @@ void process_tsx_request(pjsip_rx_data* rdata)
       LOG_ERROR("Error forwarding request, %s",
                 PJUtils::pj_status_to_string(status).c_str());
     }
-    acr->send_message();
-    delete acr;
 
+    // Send Rf messages and clean up the ACRs.
+    acr->send_message();
+    delete acr; acr = NULL;
+
+    if (downstream_acr)
+    {
+      downstream_acr->send_message();
+      delete downstream_acr; downstream_acr = NULL;
+    }
+
+    delete target; target = NULL;
     return;
   }
 
   // Create the transaction.  This implicitly enters its context, so we're
   // safe to operate on it (and have to exit its context below).
   status = UASTransaction::create(rdata, tdata, trust, acr, &uas_data);
+
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Failed to create UAS transaction, %s",
@@ -569,11 +655,14 @@ void process_tsx_request(pjsip_rx_data* rdata)
     // Delete the request since we're not forwarding it
     pjsip_tx_data_dec_ref(tdata);
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
-    delete acr;
-    delete target;
-    target = NULL;
+    delete acr; acr = NULL;
+    delete downstream_acr; downstream_acr = NULL;
+    delete target; target = NULL;
     return;
   }
+
+  // UASTrancation has taken ownership of the ACR.
+  acr = NULL;
 
   if (!edge_proxy)
   {
@@ -600,9 +689,29 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
   // Perform common initial processing.  This will delete the
   // target if specified.
-  uas_data->handle_non_cancel(serving_state, target);
+  if (!edge_proxy)
+  {
+    if (!in_dialog)
+    {
+      uas_data->routing_proxy_handle_initial_non_cancel(serving_state);
+    }
+    else
+    {
+      uas_data->routing_proxy_handle_subsequent_non_cancel(downstream_acr);
+
+      // Previous function took ownership of the ACR.
+      downstream_acr = NULL;
+    }
+  }
+  else
+  {
+    uas_data->access_proxy_handle_non_cancel(target);
+  }
 
   uas_data->exit_context();
+
+  delete acr; acr = NULL;
+  delete downstream_acr; downstream_acr = NULL;
 }
 
 
@@ -658,7 +767,9 @@ void process_cancel_request(pjsip_rx_data* rdata)
   uas_data->cancel_pending_uac_tsx(0, false);
 
   // Create and send an ACR for the CANCEL request.
-  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                       CALLING_PARTY,
+                                       ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -735,7 +846,9 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
 {
   pj_status_t status;
 
-  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
+                                       CALLING_PARTY,
+                                       ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -833,7 +946,7 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata)
   return trusted;
 }
 
-void UASTransaction::routing_proxy_record_route()
+void UASTransaction::routing_proxy_record_route(const SessionCase& role)
 {
   pjsip_rr_hdr* top_rr = (pjsip_rr_hdr*)
                    pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
@@ -846,9 +959,28 @@ void UASTransaction::routing_proxy_record_route()
     // The S-CSCF URI is not in the top Record-Route header, so add the
     // pre-built header.  It is not safe to do this with the pre-built header
     // from the global pool because the chaining data structures in the
-    // header may get overwritten, but it is safe to do a shallow clone.
-    pjsip_hdr* clone = (pjsip_hdr*)pjsip_hdr_shallow_clone(_req->pool, scscf_rr);
+    // header may get overwritten. Also a shallow clone is not safe as we need
+    // to mutate the URI parameters.
+    pjsip_hdr* clone = (pjsip_hdr*)pjsip_hdr_clone(_req->pool, scscf_rr);
     pjsip_msg_insert_first_hdr(_req->msg, clone);
+  }
+
+  // Charge subsequent in-dialog transactions processed on this hop.  By this
+  // point we know the top route header refers to this node. Add a charge-orig
+  // or charge-term parameter indicating which role the node is performing.
+  top_rr = (pjsip_rr_hdr*)
+                   pjsip_msg_find_hdr(_req->msg, PJSIP_H_RECORD_ROUTE, NULL);
+  pjsip_param* uri_params =
+                   &((pjsip_sip_uri*)(top_rr->name_addr.uri))->other_param;
+
+  if ((role == SessionCase::Originating) ||
+      (role == SessionCase::OriginatingCdiv))
+  {
+    PJUtils::put_unary_param(uri_params, &STR_CHARGE_ORIG, _req->pool);
+  }
+  else if (role == SessionCase::Terminating)
+  {
+    PJUtils::put_unary_param(uri_params, &STR_CHARGE_TERM, _req->pool);
   }
 }
 
@@ -1683,7 +1815,9 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 
         // We have added a BGCF generated route to the request, so we should
         // switch ACR context for the downstream leg.
-        _bgcf_acr = bgcf_acr_factory->get_acr(trail, CALLING_PARTY);
+        _bgcf_acr = bgcf_acr_factory->get_acr(trail,
+                                              CALLING_PARTY,
+                                              ACR::requested_node_role(msg));
         if (_downstream_acr != _upstream_acr)
         {
           // We've already set up a different downstream ACR to the upstream ACR
@@ -2253,23 +2387,40 @@ UASTransaction* UASTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAS) ? (UASTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-/// Handle a non-CANCEL message.
-void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target *target)
+// Handle a non-CANCEL message as an access proxy.
+void UASTransaction::access_proxy_handle_non_cancel(Target* target)
 {
+  assert(edge_proxy);
+
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
+
+  // Perform common outgoing processing.
+  handle_outgoing_non_cancel(target);
+
+  delete target;
+}
+
+/// Handle an initial non-CANCEL message as a routing proxy.
+void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState& serving_state)
+{
+  assert(!edge_proxy);
+
+  Target* target = NULL;
   AsChainLink::Disposition disposition = AsChainLink::Disposition::Complete;
   pj_status_t status;
 
   // Strip any untrusted headers as required, so we don't pass them on.
   _trust->process_request(_req);
 
-  // If we're a routing proxy, perform AS handling to pick the next hop.
-  if (!target && !edge_proxy && serving_state.is_set())
+  if (serving_state.is_set())
   {
-    // The serving state has been set up, so perform AS handling.
+    // Perform AS handling to pick the next hop.  The serving state has been set
+    // up, so perform AS handling.
     if (stack_data.record_route_on_every_hop)
     {
       LOG_DEBUG("Single Record-Route - configured to do this on every hop");
-      routing_proxy_record_route();
+      routing_proxy_record_route(serving_state.session_case());
     }
 
     // Pick up the AS chain from the ODI, or do the iFC lookups
@@ -2302,7 +2453,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         if (stack_data.record_route_on_completion_of_originating)
         {
           LOG_DEBUG("Single Record-Route - end of originating handling");
-          routing_proxy_record_route();
+          routing_proxy_record_route(_as_chain_link.session_case());
         }
 
         if ((enum_service) &&
@@ -2382,7 +2533,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       _upstream_acr->tx_request(_req->msg);
 
       // Allocate an I-CSCF ACR.
-      _icscf_acr = icscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _icscf_acr = icscf_acr_factory->get_acr(trail(),
+                                              CALLING_PARTY,
+                                              ACR::requested_node_role(_req->msg));
       _icscf_acr->rx_request(_req->msg);
 
       // Create an I-CSCF router for the LIR query.
@@ -2506,7 +2659,7 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
              !PJUtils::is_home_domain(_req->msg->line.req.uri))
     {
       LOG_DEBUG("Record-Route for the BGCF case");
-      routing_proxy_record_route();
+      routing_proxy_record_route(serving_state.session_case());
     }
 
     if (_as_chain_link.is_set() &&
@@ -2524,8 +2677,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
 
         if (stack_data.record_route_on_completion_of_terminating)
         {
-          routing_proxy_record_route();
           LOG_DEBUG("Single Record-Route - end of terminating handling");
+          routing_proxy_record_route(_as_chain_link.session_case());
         }
       }
     }
@@ -2540,6 +2693,36 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
   delete target;
 }
 
+// Handle a subsequent (in-dialog) request as a routing proxy.
+// @param downstream_acr  ACR representing the downstream half of the
+//                        transaction. If this is NULL, the upstream ACR will
+//                        be used. This function takes ownership of the ACR.
+void UASTransaction::routing_proxy_handle_subsequent_non_cancel(ACR* downstream_acr)
+{
+  assert(!edge_proxy);
+
+  // Strip any untrusted headers as required, so we don't pass them on.
+  _trust->process_request(_req);
+
+  if ((downstream_acr != NULL) && (_downstream_acr == _upstream_acr))
+  {
+    // We don't yet have a distinct downstream ACR so use the one that has been
+    // passed to us.  Store it, and simulate the message being sent from the
+    // upstream ACR and received by the downstream one.
+    LOG_DEBUG("Switch to downstream ACR");
+    _downstream_acr = downstream_acr;
+    _upstream_acr->tx_request(_req->msg);
+    _downstream_acr->rx_request(_req->msg);
+  }
+  else
+  {
+    // Not storing the downstream ACR so free it.
+    delete downstream_acr; downstream_acr = NULL;
+  }
+
+  // Perform common outgoing processing.
+  handle_outgoing_non_cancel(NULL);
+}
 
 // Find the AS chain for this transaction, or create a new one.
 bool UASTransaction::find_as_chain(const ServingState& serving_state)
@@ -2591,7 +2774,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Single Record-Route - originating Cdiv");
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
         }
       }
     }
@@ -2620,7 +2803,7 @@ bool UASTransaction::find_as_chain(const ServingState& serving_state)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          routing_proxy_record_route();
+          routing_proxy_record_route(serving_state.session_case());
         }
       }
     }
@@ -2697,7 +2880,7 @@ void UASTransaction::common_start_of_terminating_processing()
   if (stack_data.record_route_on_initiation_of_terminating)
   {
     LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-    routing_proxy_record_route();
+    routing_proxy_record_route(SessionCase::Terminating);
   }
 }
 
@@ -2724,7 +2907,9 @@ bool UASTransaction::move_to_terminating_chain()
       // then creating a new downstream ACR for the terminating side and passing
       // the request to it as if it has been received.
       _upstream_acr->tx_request(_req->msg);
-      _downstream_acr = cscf_acr_factory->get_acr(trail(), CALLING_PARTY);
+      _downstream_acr = cscf_acr_factory->get_acr(trail(),
+                                                  CALLING_PARTY,
+                                                  ACR::requested_node_role(_req->msg));
       _downstream_acr->rx_request(_req->msg);
 
       // These headers name the originating user, so should not survive
@@ -3173,7 +3358,7 @@ pj_status_t UASTransaction::handle_final_response()
       // Redirect the dialog to the next AS in the chain.
       ServingState serving_state(&_as_chain_link.session_case(),
                                  _as_chain_link.next());
-      handle_non_cancel(serving_state, NULL);
+      routing_proxy_handle_initial_non_cancel(serving_state);
     }
     else
     {
@@ -3647,7 +3832,7 @@ bool UASTransaction::redirect_int(pjsip_uri* target, int code)
 
     // Kick off outgoing processing for the new request.  Continue the
     // existing AsChain. This will trigger orig-cdiv handling.
-    handle_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link), NULL);
+    routing_proxy_handle_initial_non_cancel(ServingState(&SessionCase::Terminating, _as_chain_link));
   }
   else
   {

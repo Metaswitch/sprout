@@ -106,7 +106,9 @@ void ICSCFProxy::reject_request(pjsip_rx_data* rdata, int status_code)
 {
   pj_status_t status;
 
-  ACR* acr = _acr_factory->get_acr(get_trail(rdata), CALLING_PARTY);
+  ACR* acr = _acr_factory->get_acr(get_trail(rdata),
+                                   CALLING_PARTY,
+                                   ACR::requested_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -176,7 +178,7 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
   pjsip_msg* msg = rdata->msg_info.msg;
 
   // Create an ACR if ACR generation is enabled.
-  _acr = create_acr();
+  _acr = create_acr(rdata);
 
   // Parse interesting parameters from the request for the later lookups.
   if (msg->line.req.method.id == PJSIP_REGISTER_METHOD)
@@ -305,7 +307,7 @@ void ICSCFProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
   BasicProxy::UASTsx::process_cancel_request(rdata);
 
   // Create and send an ACR for the CANCEL request.
-  ACR* acr = create_acr();
+  ACR* acr = create_acr(rdata);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -524,9 +526,12 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
 
 
 /// Create an ACR.
-ACR* ICSCFProxy::UASTsx::create_acr()
+ACR* ICSCFProxy::UASTsx::create_acr(pjsip_rx_data* rdata)
 {
-  return ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(_trail, CALLING_PARTY);
+  NodeRole role = ACR::requested_node_role(rdata->msg_info.msg);
+  return ((ICSCFProxy*)_proxy)->_acr_factory->get_acr(_trail,
+                                                      CALLING_PARTY,
+                                                      role);
 }
 
 

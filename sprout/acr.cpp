@@ -114,6 +114,50 @@ std::string ACR::node_name(Node node_functionality)
   }
 }
 
+std::string ACR::node_role_str(NodeRole role)
+{
+  switch (role)
+  {
+    case NODE_ROLE_ORIGINATING:
+      return "Originating";
+
+    case NODE_ROLE_TERMINATING:
+      return "Terminating";
+
+    default:
+      return "Unknown";
+  }
+}
+
+NodeRole ACR::requested_node_role(pjsip_msg *req)
+{
+  NodeRole role;
+
+  // Determine whether this an originating or terminating request by looking for
+  // the `orig` parameter in the top route header.  REGISTERs, are neither, but
+  // originating makes most sense as they only correspond to the user that
+  // generates them.
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
+                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  if ((route_hdr != NULL) &&
+      (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
+                        &STR_ORIG) != NULL))
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else
+  {
+    role = NODE_ROLE_TERMINATING;
+  }
+
+  return role;
+}
+
 ACRFactory::ACRFactory()
 {
 }
@@ -122,7 +166,7 @@ ACRFactory::~ACRFactory()
 {
 }
 
-ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator)
+ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role)
 {
   return new ACR();
 }
@@ -130,13 +174,15 @@ ACR* ACRFactory::get_acr(SAS::TrailId trail, Initiator initiator)
 RalfACR::RalfACR(HttpConnection* ralf,
                  SAS::TrailId trail,
                  Node node_functionality,
-                 Initiator initiator) :
+                 Initiator initiator,
+                 NodeRole role) :
   _ralf(ralf),
   _trail(trail),
   _initiator(initiator),
   _first_req(true),
   _first_rsp(true),
   _interim_interval(0),
+  _node_role(role),
   _node_functionality(node_functionality),
   _user_session_id(),
   _status_code(0)
@@ -305,23 +351,6 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
     if (route_hdr != NULL)
     {
       _route_hdr_received = hdr_contents((pjsip_hdr*)route_hdr);
-    }
-
-    // Determine whether this an originating or terminating request.  REGISTERs,
-    // are neither, but since it's a mandatory field, we'll plump for originating.
-    if ((route_hdr != NULL) &&
-        (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
-                          &STR_ORIG) != NULL))
-    {
-      _node_role = NODE_ROLE_ORIGINATING;
-    }
-    else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-    {
-      _node_role = NODE_ROLE_ORIGINATING;
-    }
-    else
-    {
-      _node_role = NODE_ROLE_TERMINATING;
     }
 
     if (_node_role == NODE_ROLE_ORIGINATING)
@@ -1443,10 +1472,13 @@ RalfACRFactory::~RalfACRFactory()
 
 /// Get an RalfACR instance from the factory.
 ACR* RalfACRFactory::get_acr(SAS::TrailId trail,
-                                 Initiator initiator)
+                             Initiator initiator,
+                             NodeRole role)
 {
-  LOG_DEBUG("Create RalfACR for node type %s",
-            ACR::node_name(_node_functionality).c_str());
-  return (ACR*)new RalfACR(_ralf, trail, _node_functionality, initiator);
+  LOG_DEBUG("Create RalfACR for node type %s with role %s",
+            ACR::node_name(_node_functionality).c_str(),
+            ACR::node_role_str(role).c_str());
+
+  return (ACR*)new RalfACR(_ralf, trail, _node_functionality, initiator, role);
 }
 
