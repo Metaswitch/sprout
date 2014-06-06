@@ -1640,7 +1640,7 @@ TEST_F(StatefulProxyTest, TestExternalRecordRoute)
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>"));
+  hdrs.push_back(HeaderMatcher("Record-Route", "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-term>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*"), hdrs);
 }
 
@@ -4536,7 +4536,7 @@ TEST_F(IscTest, RecordRoutingTestStartAndEnd)
   doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-term>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-orig;charge-term>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
                        "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-orig>"), true);
@@ -4572,11 +4572,11 @@ TEST_F(IscTest, RecordRoutingTestEachHop)
   // split originating and terminating handling like that yet.
   doFourAppServerFlow(("Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-term>\r\n"
                        "Record-Route: <sip:6.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-term>\r\n"
                        "Record-Route: <sip:5.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-orig;charge-term>\r\n"
                        "Record-Route: <sip:4.2.3.4>\r\n"
-                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr>\r\n"
+                       "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-orig>\r\n"
                        "Record-Route: <sip:1.2.3.4>\r\n"
                        "Record-Route: <sip:sprout.homedomain:5058;transport=TCP;lr;charge-orig>"), true);
 
