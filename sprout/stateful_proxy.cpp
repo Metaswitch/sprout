@@ -2394,29 +2394,13 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
                                                       public_id,
                                                       false);
 
-      pjsip_sip_uri* scscf_uri = NULL;
+      pjsip_sip_uri* scscf_sip_uri = NULL;
       int status_code;
 
       if (_icscf_router != NULL)
       {
-        // Select a S-CSCF to route the call and convert it to a URI.
-        std::string server_name;
-        status_code = _icscf_router->get_scscf(server_name);
-
-        if (status_code == PJSIP_SC_OK)
-        {
-          scscf_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(server_name,
-                                                               _req->pool,
-                                                               PJ_FALSE);
-          if ((scscf_uri == NULL) ||
-              (!PJSIP_URI_SCHEME_IS_SIP(scscf_uri)))
-          {
-            // Server name was invalid, so act as if no suitable S-CSCF was
-            // found.
-            LOG_DEBUG("Server name is invalid");
-            status_code = PJSIP_SC_NOT_FOUND;
-          }
-        }
+        // Select a S-CSCF to route the call to.
+        status_code = _icscf_router->get_scscf(_req->pool, scscf_sip_uri);
       }
       else
       {
@@ -2448,8 +2432,8 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
       // Check whether the returned S-CSCF is this S-CSCF.  Check the host
       // name and the port returned on the LIR, but ignore transport and
       // other URI parameters.
-      if ((pj_stricmp(&scscf_uri->host, &scscf_domain_name) == 0) &&
-          (scscf_uri->port == stack_data.scscf_port))
+      if ((pj_stricmp(&scscf_sip_uri->host, &scscf_domain_name) == 0) &&
+          (scscf_sip_uri->port == stack_data.scscf_port))
       {
         // The terminating user is on this S-CSCF, so continue processing
         // locally by switching to the terminating AS chain.
@@ -2483,9 +2467,9 @@ void UASTransaction::handle_non_cancel(const ServingState& serving_state, Target
         delete target;
         target = new Target;
 
-        scscf_uri->lr_param = 1;
+        scscf_sip_uri->lr_param = 1;
         target->paths.push_back((pjsip_uri*)
-                         pjsip_uri_clone(_req->pool, (pjsip_uri*)scscf_uri));
+                         pjsip_uri_clone(_req->pool, (pjsip_uri*)scscf_sip_uri));
 
         // The Request-URI should remain unchanged
         target->uri = _req->msg->line.req.uri;

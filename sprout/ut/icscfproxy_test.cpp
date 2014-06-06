@@ -2389,3 +2389,92 @@ TEST_F(ICSCFProxyTest, RequestErrors)
 }
 
 
+TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the originating location query.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"INVALID!\"}");
+
+  // Inject a INVITE request with orig in the Route header and a P-Served-User
+  // header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._via = tp->to_string(false);
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain;orig>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Should have a 100 Trying and a 480 Temporarily Unavailable.
+  ASSERT_EQ(2, txdata_count());
+
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 480 Temporarily Unavailable.
+  tdata = current_txdata();
+  RespMatcher(480).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Now try again, but configure a tel URI.  This should fail in the same way
+  // as it's not routable.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"tel:2015551234\"}");
+
+  msg1._unique += 1; // We want a new call-ID and branch parameter.
+  inject_msg(msg1.get_request(), tp);
+
+  // Should have a 100 Trying and a 480 Temporarily Unavailable.
+  ASSERT_EQ(2, txdata_count());
+
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 480 Temporarily Unavailable.
+  tdata = current_txdata();
+  RespMatcher(480).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Finally use a SIPS uri.
+  _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sips:scscf1.homedomain:5058;transport=TCP\"}");
+
+  msg1._unique += 1; // We want a new call-ID and branch parameter.
+  inject_msg(msg1.get_request(), tp);
+
+  ASSERT_EQ(2, txdata_count());
+
+  // Deal with the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Deal with the 480 Temporarily Unavailable.
+  tdata = current_txdata();
+  RespMatcher(480).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/sip%3A6505551000%40homedomain/location?originating=true");
+
+  delete tp;
+}
