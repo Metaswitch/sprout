@@ -418,7 +418,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // If the request has a To: header it's in-dialog.
+  // If the request has a tag in the To header it's in-dialog.
   in_dialog = (rdata->msg_info.to->tag.slen != 0);
 
   if (edge_proxy)
@@ -524,7 +524,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
            (PJUtils::is_uri_local(hroute->name_addr.uri))))
       {
         // Found our own route header - use it's parameters to determine how to
-        // chanrge this request.
+        // charge this request.
         //
         // For in-dialog requests at a routing proxy we only do charging at two
         // points:
