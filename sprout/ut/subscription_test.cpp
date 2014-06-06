@@ -534,12 +534,28 @@ void SubscriptionTest::check_OK_and_NOTIFY()
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex("From: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+
+  // Pull out the to tag on the OK - check later that this matches the from tag on the Notify
+  std::vector<std::string> to_params;
+  Utils::split_string(get_headers(out, "To"), ';', to_params, 0, true);
+  std::string to_tag = "No to tag in 200 OK";
+
+  for (unsigned ii = 0; ii < to_params.size(); ii++)
+  {
+    if (to_params[ii].find("tag=") != string::npos)
+    {
+      to_tag = string(".*").append(to_params[ii]);
+    }
+  }
+
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
+  EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(to_tag));
+
   inject_msg(respond_to_current_txdata(200));
 }
 

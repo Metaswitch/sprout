@@ -498,9 +498,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
                                                         PJSIP_H_TO,
                                                         NULL);
-  pj_str_t to_tag;
-  pj_cstr(&to_tag, subscription_id.c_str());
-  pj_strdup(tdata->pool, &to->tag, &to_tag);
+  pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
 
   // Pass the response to the ACR.
   acr->tx_response(tdata->msg);
