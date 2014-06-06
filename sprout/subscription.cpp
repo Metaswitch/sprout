@@ -128,6 +128,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
                                          pjsip_tx_data** tdata_notify, ///<tdata to construct a SIP NOTIFY from
                                          RegStore::AoR** aor_data,     ///<aor_data to write to
                                          bool update_notify,           ///<whether to generate a SIP NOTIFY
+                                         std::string& subscription_id,
                                          SAS::TrailId trail)
 {
   // Parse the headers
@@ -202,7 +203,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
         contact_uri = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, uri);
       }
 
-      std::string subscription_id = PJUtils::pj_str_to_string(&to->tag);
+      subscription_id = PJUtils::pj_str_to_string(&to->tag);
 
       if (subscription_id == "")
       {
@@ -428,7 +429,12 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Write to the local store, checking the remote store if there is no entry locally. If the write to the local store succeeds, then write to the remote store.
   pjsip_tx_data* tdata_notify = NULL;
   RegStore::AoR* aor_data = NULL;
-  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata, now, NULL, remote_store, &tdata_notify, &aor_data, true, trail);
+  std::string subscription_id;
+  pj_status_t notify_status = write_subscriptions_to_store(store, aor, rdata,
+                                                           now, NULL, remote_store,
+                                                           &tdata_notify, &aor_data,
+                                                           true, subscription_id,
+                                                           trail);
 
   if (aor_data != NULL)
   {
@@ -440,7 +446,10 @@ void process_subscription_request(pjsip_rx_data* rdata)
     if (remote_store != NULL)
     {
       RegStore::AoR* remote_aor_data = NULL;
-      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL, &tdata_notify, &remote_aor_data, false, trail);
+      std::string ignore;
+      write_subscriptions_to_store(remote_store, aor, rdata, now, aor_data, NULL,
+                                   &tdata_notify, &remote_aor_data, false, ignore,
+                                   trail);
       delete remote_aor_data;
     }
   }
@@ -484,6 +493,12 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Add expires headers
   pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expiry);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
+
+  // Add the to tag to the response
+  pjsip_to_hdr *to = (pjsip_to_hdr*) pjsip_msg_find_hdr(tdata->msg,
+                                                        PJSIP_H_TO,
+                                                        NULL);
+  pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
 
   // Pass the response to the ACR.
   acr->tx_response(tdata->msg);
