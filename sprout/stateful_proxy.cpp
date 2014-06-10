@@ -585,12 +585,11 @@ void process_tsx_request(pjsip_rx_data* rdata)
       // mode we hold off sending the 100 Trying until we've received one from
       // upstream so we can be sure we could route a subsequent CANCEL to the
       // right place.
-      uas_data->send_trying(rdata);
+      uas_data->send_response(100);
     }
     else
     {
-      // capture the rdata for deferral and schedule trying timer
-      pjsip_rx_data_clone(rdata, 0, &(uas_data->_defer_rdata));
+      // schedule trying timer
       uas_data->_trying_timer.id = uas_data->TRYING_TIMER;
       pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
                            (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
@@ -1508,7 +1507,6 @@ void UASTransaction::cancel_trying_timer()
     // The deferred trying timer is running, so cancel it.
     _trying_timer.id = 0;
     pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
-    pjsip_rx_data_free_cloned(_defer_rdata);
   }
 
   pthread_mutex_unlock(&_trying_timer_lock);
@@ -2094,6 +2092,7 @@ UASTransaction::~UASTransaction()
   {
     // I-CSCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
+    LOG_DEBUG("I-CSCF ACR = %p", _icscf_acr);
     _icscf_acr->send_message();
 
     if (_downstream_acr == _icscf_acr)
@@ -2111,6 +2110,7 @@ UASTransaction::~UASTransaction()
   {
     // BGCF ACR has been created for this transaction, so send the message
     // and delete the ACR.
+    LOG_DEBUG("BGCF ACR = %p", _bgcf_acr);
     _bgcf_acr->send_message();
 
     if (_downstream_acr == _bgcf_acr)
@@ -2123,6 +2123,9 @@ UASTransaction::~UASTransaction()
     delete _bgcf_acr;
     _bgcf_acr = NULL;
   }
+
+  LOG_DEBUG("Transaction is%s linked to an AS chain", _as_chain_linked ? "" : " not");
+  LOG_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
 
   if (!_as_chain_linked)
   {
@@ -3237,14 +3240,6 @@ void UASTransaction::register_proxy(CallServices::Terminating* proxy)
 }
 
 
-// Sends a 100 Trying response to the given rdata, in this transaction.
-// @Returns whether or not the send was a success.
-pj_status_t UASTransaction::send_trying(pjsip_rx_data* rdata)
-{
-  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
-}
-
-
 // Sends a response using the buffer saved off for the best response.
 // @Returns whether or not the send was a success.
 pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
@@ -4008,6 +4003,11 @@ void UACTransaction::cancel_pending_tsx(int st_code)
         pjsip_hdr* reason_hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool, &reason_name, &reason_val);
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);
       }
+      if (trail() == 0)
+      {
+        LOG_ERROR("Sending CANCEL request with no SAS trail");
+      }
+
       set_trail(cancel, trail());
 
       if (_tsx->transport != NULL)
@@ -4242,9 +4242,8 @@ void UASTransaction::trying_timer_expired()
   {
     // Transaction is still in Trying state, so send a 100 Trying response
     // now.
-    send_trying(_defer_rdata);
+    send_response(100);
     _trying_timer.id = 0;
-    pjsip_rx_data_free_cloned(_defer_rdata);
   }
 
   pthread_mutex_unlock(&_trying_timer_lock);

@@ -170,13 +170,13 @@ ICSCFProxy::UASTsx::~UASTsx()
 /// Initialise the UAS transaction object.
 pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
+  // Create an ACR if ACR generation is enabled.
+  _acr = create_acr();
+
   // Do the BasicProxy initialization first.
   pj_status_t status = BasicProxy::UASTsx::init(rdata);
 
   pjsip_msg* msg = rdata->msg_info.msg;
-
-  // Create an ACR if ACR generation is enabled.
-  _acr = create_acr();
 
   // Parse interesting parameters from the request for the later lookups.
   if (msg->line.req.method.id == PJSIP_REGISTER_METHOD)
@@ -483,6 +483,7 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
     {
       // We found a suitable alternate S-CSCF and have programmed it as a
       // target, so action the retry.
+      LOG_INFO("I-CSCF retrying request to alternate S-CSCF");
       forward_request();
     }
     else

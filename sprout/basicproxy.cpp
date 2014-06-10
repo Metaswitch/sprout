@@ -555,13 +555,12 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
     {
       // If the request is an INVITE then send the 100 Trying straight away.
       LOG_DEBUG("Send immediate 100 Trying response");
-      send_trying(rdata);
+      send_response(100);
     }
     else if (!_proxy->_delay_trying)
     {
       // Send the 100 Trying after 3.5 secs if a final response hasn't been
       // sent.
-      pjsip_rx_data_clone(rdata, 0, &(_defer_rdata));
       _trying_timer.id = TRYING_TIMER;
       pj_time_val delay = {(PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) / 1000,
                            (PJSIP_T2_TIMEOUT - PJSIP_T1_TIMEOUT) % 1000 };
@@ -1104,7 +1103,7 @@ void BasicProxy::UASTsx::on_tsx_state(pjsip_event* event)
     {
       // INVITE transaction has been terminated.  If there are any
       // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, PJ_TRUE);
+      cancel_pending_uac_tsx(0, true);
     }
     _proxy->unbind_transaction(_tsx);
     _tsx = NULL;
@@ -1380,13 +1379,6 @@ void BasicProxy::UASTsx::exit_context()
   }
 }
 
-// Sends a 100 Trying response to the given rdata, in this transaction.
-// @Returns whether or not the send was a success.
-pj_status_t BasicProxy::UASTsx::send_trying(pjsip_rx_data* rdata)
-{
-  return PJUtils::respond_stateful(stack_data.endpt, _tsx, rdata, 100, NULL, NULL, NULL);
-}
-
 void BasicProxy::UASTsx::cancel_trying_timer()
 {
   pthread_mutex_lock(&_trying_timer_lock);
@@ -1396,7 +1388,6 @@ void BasicProxy::UASTsx::cancel_trying_timer()
     // The deferred trying timer is running, so cancel it.
     _trying_timer.id = 0;
     pjsip_endpt_cancel_timer(stack_data.endpt, &_trying_timer);
-    pjsip_rx_data_free_cloned(_defer_rdata);
   }
 
   pthread_mutex_unlock(&_trying_timer_lock);
@@ -1413,9 +1404,8 @@ void BasicProxy::UASTsx::trying_timer_expired()
   {
     // Transaction is still in Trying state, so send a 100 Trying response
     // now.
-    send_trying(_defer_rdata);
+    send_response(100);
     _trying_timer.id = 0;
-    pjsip_rx_data_free_cloned(_defer_rdata);
   }
 
   pthread_mutex_unlock(&_trying_timer_lock);
@@ -1683,6 +1673,10 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
                                                            &reason_val);//LCOV_EXCL_LINE
         pjsip_msg_add_hdr(cancel->msg, reason_hdr);                     //LCOV_EXCL_LINE
       }
+      if (get_trail(_tsx) == 0)
+      {
+        LOG_ERROR("Sending CANCEL request with no SAS trail");
+      }
       set_trail(cancel, get_trail(_tsx));
 
       if (_tsx->transport != NULL)
@@ -1847,15 +1841,21 @@ bool BasicProxy::UACTsx::retry_request()
       if (status == PJ_SUCCESS)
       {
         // Successfully sent the retry.
+        LOG_INFO("Retrying request to alternate target");
         retrying = true;
       }
       else
       {
         // Failed to send, so revert to the original transaction to see it
-        // through to the end.
-        _proxy->unbind_transaction(_tsx);                               //LCOV_EXCL_LINE
-        _tsx = original_tsx;                                            //LCOV_EXCL_LINE
-        _proxy->bind_transaction(this, _tsx);                           //LCOV_EXCL_LINE
+        // through to the end.  Must decrement the reference count on the
+        // request as pjsip_tsx_send_msg won't do it if it fails.
+        // LCOV_EXCL_START
+        LOG_INFO("Failed to send retry");
+        pjsip_tx_data_add_ref(_tdata);
+        _proxy->unbind_transaction(_tsx);
+        _tsx = original_tsx;
+        _proxy->bind_transaction(this, _tsx);
+        // LCOV_EXCL_STOP
       }
     }
   }
