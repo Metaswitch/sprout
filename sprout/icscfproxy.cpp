@@ -180,9 +180,6 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
 
   pjsip_msg* msg = rdata->msg_info.msg;
 
-  // Create an ACR if ACR generation is enabled.
-  _acr = create_acr(rdata);
-
   // Parse interesting parameters from the request for the later lookups.
   if (msg->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
