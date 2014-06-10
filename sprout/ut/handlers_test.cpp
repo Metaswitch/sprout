@@ -54,7 +54,7 @@ class RegistrationTimeoutHandlersTest : public BaseTest
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
   RegStore* store;
-  HSSConnection* fake_hss;
+  FakeHSSConnection* fake_hss;
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
@@ -149,7 +149,7 @@ class DeregistrationHandlerTest : public BaseTest
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
   RegStore* store;
-  HSSConnection* fake_hss;
+  FakeHSSConnection* fake_hss;
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
@@ -273,7 +273,7 @@ class AuthTimeoutTest : public BaseTest
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
   AvStore* store;
-  HSSConnection* fake_hss;
+  FakeHSSConnection* fake_hss;
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
@@ -305,15 +305,18 @@ class AuthTimeoutTest : public BaseTest
 
 };
 
+// This tests the case where the AV record is still in memcached, but the Chronos timer has popped.
+// The subscriber's registration state is updated, and the record is deleted from the AV store.
 TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
-  std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   Json::Value json("{}");
-  store->set_av("test@example.com", "abcdef", &json, 0);
+  store->set_av("6505550231@homedomain", "abcdef", &json, 0);
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
-  ASSERT_EQ(NULL, store->get_av("test@example.com", "abcdef", 0));
+  ASSERT_EQ(NULL, store->get_av("6505550231@homedomain", "abcdef", 0));
 }
 
 TEST_F(AuthTimeoutTest, MainlineTest)
