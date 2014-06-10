@@ -1438,3 +1438,17 @@ bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
 
   return (count < 2 && local);
 }
+
+void PJUtils::put_unary_param(pjsip_param* params_list,
+                              const pj_str_t* name,
+                              pj_pool_t* pool)
+{
+  pjsip_param* param = pjsip_param_find(params_list, name);
+
+  if (param == NULL)
+  {
+    param = PJ_POOL_ZALLOC_T(pool, pjsip_param);
+    param->name = *name;
+    pj_list_push_back(params_list, param);
+  }
+}

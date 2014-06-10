@@ -50,9 +50,9 @@ class SessionCase
 public:
   std::string to_string() const;
 
-  static SessionCase Originating;
-  static SessionCase Terminating;
-  static SessionCase OriginatingCdiv;
+  const static SessionCase Originating;
+  const static SessionCase Terminating;
+  const static SessionCase OriginatingCdiv;
 
   inline bool is_originating() const
   {

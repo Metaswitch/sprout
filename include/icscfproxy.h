@@ -116,7 +116,7 @@ private:
     bool retry_to_alternate_scscf(int rsp_status);
 
     /// Create an ACR if ACR generation is enabled.
-    ACR* create_acr();
+    ACR* create_acr(pjsip_rx_data* rdata);
 
     /// Defines the session case for the current transaction.
     typedef enum {REGISTER, ORIGINATING, TERMINATING} SessionCase;

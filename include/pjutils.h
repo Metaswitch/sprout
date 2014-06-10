@@ -218,6 +218,10 @@ bool is_uri_phone_number(pjsip_uri* uri);
 
 bool check_route_headers(pjsip_rx_data* rdata);
 
+void put_unary_param(pjsip_param* params_list,
+                     const pj_str_t* name,
+                     pj_pool_t* pool); 
+
 } // namespace PJUtils
 
 #endif

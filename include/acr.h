@@ -57,6 +57,8 @@ typedef enum { SCSCF=0, PCSCF=1, ICSCF=2, BGCF=5, AS=6, IBCF=7 } Node;
 
 typedef enum { CALLED_PARTY=0, CALLING_PARTY=1 } Initiator;
 
+typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
+
 /// Class tracking state required for Rf ACR messages.  An instance of this
 /// class is created for each SIP transaction that requires accounting, and
 /// the class is passed messages and other data during processing of the
@@ -155,6 +157,13 @@ public:
 
   /// Convert the ENUM node functionality to a displayable string.
   static std::string node_name(Node node_functionality);
+
+  /// Convert the ENUM node role to a displayable string.
+  static std::string node_role_str(NodeRole role);
+
+  /// For a given message, calculate the role the message is requesting the
+  /// node carry out.
+  static NodeRole requested_node_role(pjsip_msg* msg);
 };
 
 
@@ -172,7 +181,7 @@ public:
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator);
+  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
 };
 
 
@@ -184,7 +193,8 @@ public:
   RalfACR(HttpConnection* ralf,
           SAS::TrailId trail,
           Node node_functionality,
-          Initiator initiator);
+          Initiator initiator,
+          NodeRole role);
 
   /// Destructor.
   ~RalfACR();
@@ -258,8 +268,6 @@ private:
                  END_USER_SIP_URI=2,
                  END_USER_NAI=3,
                  END_USER_PRIVATE=4 } SubscriptionIdType;
-
-  typedef enum { NODE_ROLE_ORIGINATING=0, NODE_ROLE_TERMINATING=1 } NodeRole;
 
   typedef enum { SDP_OFFER=0, SDP_ANSWER=1 } SDPType;
 
@@ -449,7 +457,9 @@ public:
   /// @param trail                SAS trail identifier to use for the ACR.
   /// @param initiator            The initiator of the SIP transaction (calling
   ///                             or called party).
-  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator);
+  /// @param role                 The role that this node is playing
+  ///                             (originating or terminating).
+  virtual ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
 
 private:
   HttpConnection* _ralf;
