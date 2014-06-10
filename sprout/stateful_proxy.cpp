@@ -4360,7 +4360,9 @@ bool UACTransaction::retry_request()
       else
       {
         // Failed to send, so revert to the original transaction to see it
-        // through to the end.
+        // through to the end.  Must decrement the reference count on the
+        // request as pjsip_tsx_send_msg won't do it if it fails.
+        pjsip_tx_data_dec_ref(_tdata);
         _tsx->mod_data[mod_tu.id] = NULL;
         _tsx = original_tsx;
         _tsx->mod_data[mod_tu.id] = this;

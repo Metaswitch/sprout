@@ -1851,7 +1851,7 @@ bool BasicProxy::UACTsx::retry_request()
         // request as pjsip_tsx_send_msg won't do it if it fails.
         // LCOV_EXCL_START
         LOG_INFO("Failed to send retry");
-        pjsip_tx_data_add_ref(_tdata);
+        pjsip_tx_data_dec_ref(_tdata);
         _proxy->unbind_transaction(_tsx);
         _tsx = original_tsx;
         _proxy->bind_transaction(this, _tsx);
