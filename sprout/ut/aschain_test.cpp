@@ -199,7 +199,7 @@ TEST_F(AsChainTest, AsInvocation)
   std::list<pjsip_uri*>::iterator it = target->paths.begin();
   EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
   ++it;
-  EXPECT_EQ("sip:odi_" + as_chain_link2.next_odi_token() + "@127.0.0.1:5058;lr", str_uri(*it));
+  EXPECT_EQ("sip:odi_" + as_chain_link2.next_odi_token() + "@127.0.0.1:5058;lr;orig", str_uri(*it));
   EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
   EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
             get_headers(tdata->msg, "Route"));
