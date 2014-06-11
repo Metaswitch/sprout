@@ -534,7 +534,7 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
 
   Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce, trail());
   bool success = false;
-
+  HTTPCode hss_query = HTTP_OK;
 
   if (json == NULL)
   {
@@ -557,14 +557,15 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     // If either of these operations fail, we return a 500 Internal
     // Server Error - this will trigger Chronos to try a different
     // Sprout, which may have better connectivity to Homestead or Memcached.
-    success = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
+    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
 
-    if (success)
+    if (hss_query == HTTP_OK)
     {
       success = _cfg->_avstore->delete_av(_impi, _nonce, trail());
     }
 
     delete json;
   }
+
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

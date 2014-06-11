@@ -63,10 +63,6 @@ public:
                 LastValueCache *stats_aggregator);
   ~HSSConnection();
 
-  HTTPCode get_digest_data(const std::string& private_user_id,
-                           const std::string& public_user_id,
-                           Json::Value*& object,
-                           SAS::TrailId trail);
   HTTPCode get_auth_vector(const std::string& private_user_id,
                            const std::string& public_user_id,
                            const std::string& auth_type,

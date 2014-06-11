@@ -398,10 +398,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // We failed to get the list of associated URIs.  This indicates that the
     // HSS is unavailable, the public identity doesn't exist or the public
     // identity doesn't belong to the private identity.
-    st_code = PJSIP_SC_SERVICE_UNAVAILABLE;
 
-    // If the client shouldn't retry (when the subscriber isn't present in the HSS)
-    // reject with a 403, otherwise reject with a 503.
+    // The client shouldn't retry when the subscriber isn't present in the
+    // HSS; reject with a 403 in this case.
+    //
+    // The client should retry on timeout but no other Clearwater nodes should
+    // (as Sprout will already have retried on timeout). Reject with a 504
+    // (503 is used for overload).
+    st_code = PJSIP_SC_SERVER_TIMEOUT;
+
     if (http_code == HTTP_NOT_FOUND)
     {
       st_code = PJSIP_SC_FORBIDDEN;
