@@ -414,15 +414,15 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     // a 4xx error to the client.
     if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
     {
-      LOG_DEBUG("A downstream node is overloaded/unresponsive, so unable to get the AV");
       error_msg = "Downstream node is overloaded or unresponsive, unable to get Authentication vector";
+      LOG_DEBUG(error_msg.c_str());
       tdata->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVER_TIMEOUT);
     }
     else
     {
-      LOG_DEBUG("Failed to get the AV");
       error_msg = "Failed to get Authentication vector";
+      LOG_DEBUG(error_msg.c_str());
       tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
     }
