@@ -44,6 +44,8 @@
 #include "aschain.h"
 #include "ifchandler.h"
 
+const int AsChainLink::AS_TIMEOUT_CONTINUE;
+const int AsChainLink::AS_TIMEOUT_TERMINATE;
 
 /// Create an AsChain.
 //
@@ -192,14 +194,8 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
 // step-by-step details.
 //
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChainLink::Disposition
-AsChainLink::on_initial_request(CallServices* call_services,
-                                UASTransaction* uas_data,
-                                pjsip_tx_data* tdata,
-                                // OUT: target to use, if disposition
-                                // is Skip. Dynamically allocated, to
-                                // be freed by caller.
-                                Target** pre_target)
+AsChainLink::Disposition AsChainLink::on_initial_request(pjsip_tx_data* tdata,
+                                                         std::string& server_name)
 {
   // Store the RequestURI in the AsInformation structure for this link.
   _as_chain->_as_info[_index].request_uri =
@@ -223,117 +219,31 @@ AsChainLink::on_initial_request(CallServices* call_services,
   }
 
   AsInvocation application_server = ifc.as_invocation();
-  std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) + next_odi_token();
+  server_name = application_server.server_name;
 
   // Store the application server name in the AsInformation structure for this
   // link.
-  _as_chain->_as_info[_index].as_uri = application_server.server_name;
+  _as_chain->_as_info[_index].as_uri = server_name;
 
-  if (call_services && call_services->is_mmtel(application_server.server_name))
-  {
-    // LCOV_EXCL_START No test coverage for MMTEL AS yet.
-    if (_as_chain->_session_case.is_originating())
-    {
-      LOG_INFO("Invoke originating MMTEL services for %s", to_string().c_str());
-      CallServices::Originating originating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
-      bool proceed = originating.on_initial_invite(tdata);
-      _as_chain->_as_info[_index].status_code = PJSIP_SC_OK;
-      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
-    }
-    else
-    {
-      // MMTEL terminating call services need to insert themselves into
-      // the signalling path.
-      LOG_INFO("Invoke terminating MMTEL services for %s", to_string().c_str());
-      CallServices::Terminating* terminating =
-        new CallServices::Terminating(call_services, uas_data, tdata->msg, _as_chain->_served_user);
-      uas_data->register_proxy(terminating);
-      bool proceed = terminating->on_initial_invite(tdata);
-      _as_chain->_as_info[_index].status_code = PJSIP_SC_OK;
-      return proceed ? AsChainLink::Disposition::Next : AsChainLink::Disposition::Stop;
-    }
-    // LCOV_EXCL_STOP
-  }
-  else
-  {
-    std::string as_uri_str = application_server.server_name;
+  // Store the default handling as we may need it later.
+  _default_handling = application_server.default_handling;
 
-    // Store the default handling as we may need it later.
-    _default_handling = application_server.default_handling;
-
-    // @@@ KSW This parsing, and ensuring it succeeds, should happen in ifchandler,
-    // except that ifchandler doesn't have a handy pool to use.
-    pjsip_sip_uri* as_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(as_uri_str, tdata->pool);
-    LOG_INFO("Invoking external AS %s with token %s for %s",
-             PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)as_uri).c_str(),
-             odi_value.c_str(),
-             to_string().c_str());
-
-    // Set P-Served-User, including session case and registration
-    // state, per RFC5502 and the extension in 3GPP TS 24.229
-    // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
-    // step 5 s5.4.3.3 step 4c.
-    std::string psu_string = "<" + _as_chain->_served_user +
-                             ">;sescase=" + _as_chain->_session_case.to_string();
-    if (_as_chain->_session_case != SessionCase::OriginatingCdiv)
-    {
-      psu_string.append(";regstate=");
-      psu_string.append(_as_chain->_is_registered ? "reg" : "unreg");
-    }
-    pj_str_t psu_str = pj_strdup3(tdata->pool, psu_string.c_str());
-    PJUtils::set_generic_header(tdata, &STR_P_SERVED_USER, &psu_str);
-
-    // Start defining the new target.
-    Target* as_target = new Target;
-
-    // Set the liveness timeout value based on the default handling defined
-    // on the application server.  (Don't use ?: as it hits a GCC bug in
-    // UT builds.)
-    if (_default_handling)
-    {
-      as_target->liveness_timeout = AS_TIMEOUT_CONTINUE;
-    }
-    else
-    {
-      as_target->liveness_timeout = AS_TIMEOUT_TERMINATE;
-    }
-
-    // Request-URI should remain unchanged
-    as_target->uri = tdata->msg->line.req.uri;
-
-    // Set the AS URI as the topmost route header.  Set loose-route,
-    // otherwise the headers get mucked up.
-    as_uri->lr_param = 1;
-    as_target->paths.push_back((pjsip_uri*)as_uri);
-
-    // Insert route header below it with an ODI in it.
-    pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
-    pj_strdup2(tdata->pool, &self_uri->user, odi_value.c_str());
-    self_uri->host = stack_data.local_host;
-    self_uri->port = stack_data.scscf_port;
-    self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
-    self_uri->lr_param = 1;
-
-    as_target->paths.push_back((pjsip_uri*)self_uri);
-
-    // Stop processing the chain and send the request out to the AS.
-    *pre_target = as_target;
-    return AsChainLink::Disposition::Skip;
-  }
+  return AsChainLink::Disposition::Skip;
 }
 
-void AsChainLink::on_response(pjsip_rx_data* rdata)
+
+void AsChainLink::on_response(int status_code)
 {
-  if (rdata->msg_info.msg->line.status.code == PJSIP_SC_TRYING)
+  if (status_code == PJSIP_SC_TRYING)
   {
     // The AS has returned a 100 Trying response, which means it must be
     // viewed as responsive.
     _responsive = true;
   }
-  else if (rdata->msg_info.msg->line.status.code >= PJSIP_SC_OK)
+  else if (status_code >= PJSIP_SC_OK)
   {
     // Store the status code returned by the AS.
-    _as_chain->_as_info[_index].status_code = rdata->msg_info.msg->line.status.code;
+    _as_chain->_as_info[_index].status_code = status_code;
   }
 }
 

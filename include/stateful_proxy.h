@@ -201,11 +201,12 @@ private:
   AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
   bool find_as_chain(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(Target** pre_target);
+  AsChainLink::Disposition handle_originating(Target*& target);
   void common_start_of_terminating_processing();
   bool move_to_terminating_chain();
-  AsChainLink::Disposition handle_terminating(Target** pre_target);
-  void handle_outgoing_non_cancel(Target* pre_target);
+  AsChainLink::Disposition handle_terminating(Target*& target);
+  AsChainLink::Disposition apply_services(Target*& target);
+  void handle_outgoing_non_cancel(Target* target);
 
   bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
