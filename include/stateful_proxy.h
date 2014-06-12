@@ -242,9 +242,9 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
-  AsChainLink          _as_chain_link; //< Set if transaction is currently being controlled by an AS chain.
-  bool                 _as_chain_linked; //< Set if transaction has ever been linked to an AS chain.
-  std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
+  std::list<AsChainLink> _as_chain_links; //< References to the AsChains this transaction is associated with.
+                                          //< The last in the list is the chain currently controlling the
+                                          //< transaction.
   std::map<std::string, HSSCallInformation> cached_hss_data; // Maps public IDs to their associated URIs and IFC
 
   /// Pointer to ACR used for the upstream side of the transaction.  NULL if

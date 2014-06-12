@@ -59,8 +59,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
                  Ifcs& ifcs,
                  ACR* acr) :
   _as_chain_table(as_chain_table),
-  _refs(2),  // one for the chain being returned,
-             // and one for the reference in the table.
+  _refs(1),  // for the initial chain link being returned
   _as_info(ifcs.size() + 1),
   _odi_tokens(),
   _session_case(session_case),
@@ -100,15 +99,8 @@ AsChain::~AsChain()
     _acr->send_message();
     delete _acr;
   }
-}
 
-
-/// Remove AsChain from the AsChainTable, as soon as practical.
-void AsChain::request_destroy()
-{
-  LOG_DEBUG("Removing AsChain %p from map", this);
   _as_chain_table->unregister(_odi_tokens);
-  dec_ref();
 }
 
 
@@ -171,11 +163,8 @@ SAS::TrailId AsChain::trail() const
 }
 
 /// Create a new AsChain and return a link pointing at the start of
-// it. Caller MUST eventually call both:
-//
-// * release() when it is finished with the link, and
-// * as_chain()->request_destroy() when it is finished with the
-//   underlying chain.
+// it. Caller MUST eventually call release() when it is finished with the
+// AsChainLink.
 //
 // Ownership of `ifcs` passes to this object.
 AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,

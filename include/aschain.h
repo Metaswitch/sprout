@@ -98,12 +98,9 @@ class AsChainTable;
 //
 // References are released by AsChainLink::release().
 //
-// AsChain objects are destroyed by AsChain::request_destroy().
-//
 class AsChain
 {
 public:
-  void request_destroy();
 
 private:
   friend class AsChainLink;
