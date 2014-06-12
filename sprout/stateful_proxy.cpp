@@ -482,8 +482,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
           }
           else
           {
-            LOG_WARNING("Original dialog lookup for %.*s not found, treating as a new dialog",
-                        uri->user.slen, uri->user.ptr);
+            // The ODI token is invalid or expired.  Treat call as OOTB.
+            SAS::Event event(get_trail(rdata), SASEvent::SCSCF_ODI_INVALID, 0);
+            event.add_var_param(PJUtils::pj_str_to_string(&uri->user));
+            SAS::report_event(event);
           }
         }
 
