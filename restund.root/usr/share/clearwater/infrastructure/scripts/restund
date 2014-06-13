@@ -7,8 +7,7 @@
 bracketed_ip=$(python /usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
 
 # Set up local_ipv*, defaulting the entry that is not applicable.
-# Note that is_address_ipv6.py is backwards in that it returns 0 for false - hence the '!'.
-if ! /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
+if /usr/share/clearwater/bin/is_address_ipv6.py $local_ip
 then
   local_ipv4=127.0.0.1
   local_ipv6=$local_ip
@@ -18,8 +17,7 @@ else
 fi
 
 # Set up public_ipv4 if we're using an IPv4 address, or default it if not.
-# Note that is_address_ipv6.py is backwards in that it returns 0 for false - hence the '!'.
-if ! /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
+if /usr/share/clearwater/bin/is_address_ipv6.py $public_ip
 then
   public_ipv4=127.0.0.1
 else
