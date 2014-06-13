@@ -925,6 +925,7 @@ int main(int argc, char *argv[])
   ACRFactory* icscf_acr_factory = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
+  AccessLogger* access_logger = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -1017,6 +1018,9 @@ int main(int argc, char *argv[])
       prog_name = slash_ptr + 1;
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
+
+    LOG_STATUS("Access logging enabled to %s", opt.log_directory.c_str());
+    access_logger = new AccessLogger(opt.log_directory);
   }
 
   LOG_STATUS("Log level set to %d", opt.log_level);
@@ -1475,7 +1479,7 @@ int main(int argc, char *argv[])
     try
     {
       http_stack->initialize();
-      http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, NULL);
+      http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
       http_stack->register_handler("^/timers$",
                                    &reg_timeout_handler_factory);
       http_stack->register_handler("^/authentication-timeout$",
