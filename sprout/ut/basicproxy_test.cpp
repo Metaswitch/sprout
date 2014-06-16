@@ -279,8 +279,6 @@ public:
 
   BasicProxyTestBase()
   {
-    Log::setLoggingLevel(-1); // cover out-of-range log levels
-    Log::setLoggingLevel(99);
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
   }
 

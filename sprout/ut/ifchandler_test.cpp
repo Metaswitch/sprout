@@ -497,8 +497,7 @@ TEST_F(IfcHandlerTest, MethodMatch)
 
 TEST_F(IfcHandlerTest, NoTrigger)
 {
-  CapturingTestLogger log;
-  Log::setLoggingLevel(5);
+  CapturingTestLogger log(5);
   doTest("",
          "",
          true,

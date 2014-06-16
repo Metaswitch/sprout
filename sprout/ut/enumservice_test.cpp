@@ -56,7 +56,6 @@ class EnumServiceTest : public ::testing::Test
 {
   EnumServiceTest()
   {
-    Log::setLoggingLevel(99);
     FakeDNSResolver::reset();
     FakeDNSResolverFactory::_expected_server.af = AF_INET;
     FakeDNSResolverFactory::_expected_server.addr.ipv4.s_addr = htonl(0x7f000001);

@@ -57,7 +57,6 @@ class StackTest : public ::testing::Test
 {
   StackTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~StackTest()

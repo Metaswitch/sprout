@@ -98,7 +98,6 @@ public:
 
   ICSCFProxyTestBase()
   {
-    Log::setLoggingLevel(99);
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _hss_connection->flush_all();
   }

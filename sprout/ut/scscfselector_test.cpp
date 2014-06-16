@@ -56,7 +56,6 @@ class SCSCFSelectorTest : public ::testing::Test
 {
   SCSCFSelectorTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~SCSCFSelectorTest()
@@ -92,7 +91,7 @@ private:
 
 TEST_F(SCSCFSelectorTest, ValidConfig)
 {
-  CapturingTestLogger log;
+  CapturingTestLogger log(5);
   // Parse a valid file. There should be no warnings in the logs. If this
   // test fails, so will the Select* tests below
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));

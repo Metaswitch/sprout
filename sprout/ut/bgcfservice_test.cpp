@@ -56,7 +56,6 @@ class BgcfServiceTest : public ::testing::Test
 {
   BgcfServiceTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~BgcfServiceTest()

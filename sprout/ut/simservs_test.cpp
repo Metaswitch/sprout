@@ -55,7 +55,6 @@ class SimServsTest : public ::testing::Test
 
   SimServsTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~SimServsTest()

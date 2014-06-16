@@ -60,7 +60,6 @@ class SIPResolverTest : public ::testing::Test
     _dnsresolver("0.0.0.0"),
     _sipresolver(&_dnsresolver)
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~SIPResolverTest()
