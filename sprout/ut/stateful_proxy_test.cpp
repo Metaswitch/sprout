@@ -76,11 +76,11 @@ namespace SP
     string _content_type;
     string _body;
     string _extra;
-    string _branch;
     int _forwards;
     int _unique; //< unique to this dialog; inserted into Call-ID
     bool _first_hop;
     string _via;
+    string _branch;
     string _route;
     int _cseq;
 
@@ -96,7 +96,7 @@ namespace SP
       _forwards(68),
       _first_hop(false),
       _via("10.83.18.38:36530"),
-      _branch("Pjmo1aimuq33BAI4rjhgQgBr4sY%11$04dSPI"),
+      _branch(""),
       _cseq(16567)
     {
       static int unique = 1042;
@@ -138,6 +138,9 @@ namespace SP
       string route = _route;
       route = route.empty() ? "" : route.append("\r\n");
 
+      // Default branch parameter if it's not supplied.
+      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
+
       int n = snprintf(buf, sizeof(buf),
                        "%1$s %9$s SIP/2.0\r\n"
                        "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
@@ -170,7 +173,7 @@ namespace SP
                        /* 13 */ _via.c_str(),
                        /* 14 */ route.c_str(),
                        /* 15 */ _cseq,
-                       /* 16 */ _branch.c_str()
+                       /* 16 */ branch.c_str()
         );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -183,6 +186,9 @@ namespace SP
     string get_response()
     {
       char buf[16384];
+
+      // Default branch parameter if it's not supplied.
+      std::string branch = _branch.empty() ? "Pjmo1aimuq33BAI4rjhgQgBr4sY" + std::to_string(_unique) : _branch;
 
       int n = snprintf(buf, sizeof(buf),
                        "SIP/2.0 %9$s\r\n"
@@ -213,7 +219,7 @@ namespace SP
                        /* 12 */ _first_hop ? "" : "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n",
                        /* 13 */ _cseq,
                        /* 14 */ _via.c_str(),
-                       /* 15 */ _branch.c_str()
+                       /* 15 */ branch.c_str()
         );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -4553,7 +4559,7 @@ TEST_F(IscTest, RecordRoutingTestStartAndEnd)
 // hop, it does.
 TEST_F(IscTest, RecordRoutingTestEachHop)
 {
-  // Simulate record-routing model 3, which sets all the record-routing flags. 
+  // Simulate record-routing model 3, which sets all the record-routing flags.
   stack_data.record_route_on_initiation_of_terminating = true;
   stack_data.record_route_on_completion_of_originating = true;
   stack_data.record_route_on_diversion = true;
@@ -6656,7 +6662,7 @@ TEST_F(IscTest, OriginatingTerminatingAS)
 }
 
 
-// Test local call with both originating and terminating ASs where terminating UE times out
+// Test local call with both originating and terminating ASs where terminating UE doesn't respond.
 TEST_F(IscTest, OriginatingTerminatingASTimeout)
 {
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -6678,7 +6684,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
                                     </SPT>
                                   </TriggerPoint>
                                   <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
@@ -6698,19 +6704,17 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
                                     </SPT>
                                   </TriggerPoint>
                                   <ApplicationServer>
-                                    <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>
+                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
                                     <DefaultHandling>0</DefaultHandling>
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
 
-  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
+  msg._branch = "1111111111";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._route = "Route: <sip:homedomain;orig>";
@@ -6740,7 +6744,10 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
 
-  // ---------- AS1 turns it around
+  // AS1 sends an immediate 100 Trying
+  inject_msg(respond_to_current_txdata(100), &tpAS);
+
+  // ---------- AS1 turns INVITE around
   // (acting as routing B2BUA by adding a Via, and removing the top Route.)
   const pj_str_t STR_VIA = pj_str("Via");
   pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
@@ -6753,7 +6760,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
-  via_hdr->branch_param = pj_str("z9hG4bK1234567890");
+  via_hdr->branch_param = pj_str("z9hG4bK2222222222");
   pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
   const pj_str_t STR_ROUTE = pj_str("Route");
   pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
@@ -6780,11 +6787,14 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   tpAS.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
-  // ---------- AS1 turns it around
+  // AS1 sends an immediate 100 Trying
+  inject_msg(respond_to_current_txdata(100), &tpAS);
+
+  // ---------- AS1 turns INVITE around
   // (acting as routing B2BUA by adding a Via, and removing the top Route.)
   via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
   if (via_hdr)
@@ -6796,7 +6806,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
   via_hdr->rport_param = 0;
-  via_hdr->branch_param = pj_str("z9hG4bK1234567891"); // Must differ from previous branch
+  via_hdr->branch_param = pj_str("z9hG4bK3333333333"); // Must differ from previous branch
   pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
   hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   if (hdr)
@@ -6813,7 +6823,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   msg.set_route(out);
   free_txdata();
 
-  // INVITE passed to terminating UE which doesn't response
+  // INVITE passed to terminating UE
   SCOPED_TRACE("INVITE (2)");
   out = current_txdata()->msg;
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
@@ -6821,18 +6831,20 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
+  // Save the request for later.
+  pjsip_tx_data* target_rq = pop_txdata();
+
   // The terminating UE doesn't respond so eventually the transaction will time
   // out.  To force this to happen in the right way, we send a CANCEL chasing
   // the original transaction (which is what Bono will do if the transaction
   // times out).
-  // Send a CANCEL from the caller
   msg._method = "CANCEL";
   msg._via = "10.99.88.11:12345";
+  msg._branch = "1111111111";
   msg._to = "6505551234@homedomain";
   msg._todomain = "";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._requri = "sip:6505551234@homedomain";
-  msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
 
   // CANCEL gets OK'd
@@ -6840,86 +6852,338 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   RespMatcher(200).matches(current_txdata()->msg);
   free_txdata();
 
-  // The CANCEL is forwarded to AS1
-  ReqMatcher c2("CANCEL");
+  // The CANCEL is forwarded to AS1 (as originating AS)
   ReqMatcher("CANCEL").matches(current_txdata()->msg);
 
   // AS1 responds to the CANCEL.
-  string fresp = respond_to_txdata(current_txdata(), 200);
+  inject_msg(respond_to_current_txdata(200), &tpAS);
   free_txdata();
-  inject_msg(fresp, &tpAS);
 
   // AS1 forwards the CANCEL back to Sprout.
+  msg._branch = "2222222222";
   inject_msg(msg.get_request(), &tpAS);
 
-
-
-  // Respond from target 2 to CANCEL
-  inject_msg(respond_to_current_txdata(200));
-  // Nothing happens yet
-  ASSERT_EQ(0, txdata_count());
-
-  // Respond from target 2 to INVITE
-  SCOPED_TRACE("");
-  inject_msg(respond_to_txdata(_tdata[_uris[2]], 487));
+  // CANCEL gets OK'd
   ASSERT_EQ(2, txdata_count());
-
-  // Acknowledges cancel from target 2
-  ReqMatcher a2("ACK");
-  a2.matches(current_txdata()->msg);
-  EXPECT_THAT(a2.uri(), StrEq(_uris[2]));
+  RespMatcher(200).matches(current_txdata()->msg);
   free_txdata();
 
-  // Finally, pass cancel response back to initial INVITE
+  // The CANCEL is forwarded to AS1 (as terminating AS)
+  ReqMatcher("CANCEL").matches(current_txdata()->msg);
+
+  // AS2 responds to the CANCEL.
+  inject_msg(respond_to_current_txdata(200), &tpAS);
+  free_txdata();
+
+  // AS1 forwards the CANCEL back to Sprout.
+  msg._branch = "3333333333";
+  inject_msg(msg.get_request(), &tpAS);
+
+  // CANCEL gets OK'd
+  ASSERT_EQ(2, txdata_count());
+  RespMatcher(200).matches(current_txdata()->msg);
+  free_txdata();
+
+  // The CANCEL is forwarded to the terminating UE
+  ReqMatcher("CANCEL").matches(current_txdata()->msg);
+
+  // UE responds to the CANCEL.
+  inject_msg(respond_to_current_txdata(200), &tpAS);
+  free_txdata();
+
+  // UE sends a 487 response which is ACKed and forwarded to AS1 (as terminating AS)
+  inject_msg(respond_to_txdata(target_rq, 487));
+  ASSERT_EQ(2, txdata_count());
+  ReqMatcher("ACK").matches(current_txdata()->msg);
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(487).matches(current_txdata()->msg);
+
+  // AS1 ACKs the response and forwards it back to Sprout removing the top Via header.
+  msg._method = "ACK";
+  msg._branch = "3333333333";
+  inject_msg(msg.get_request(), &tpAS);
+  out = current_txdata()->msg;
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // Sprout ACKs the response and forwards it to AS1 (as originating AS).
+  ASSERT_EQ(2, txdata_count());
+  ReqMatcher("ACK").matches(current_txdata()->msg);
+  free_txdata();
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(487).matches(current_txdata()->msg);
+
+  // AS1 ACKs the response and forwards it back to Sprout removing the top Via header.
+  msg._method = "ACK";
+  msg._branch = "2222222222";
+  inject_msg(msg.get_request(), &tpAS);
+  out = current_txdata()->msg;
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (hdr)
+  {
+    pj_list_erase(hdr);
+  }
+  inject_msg(out, &tpAS);
+  free_txdata();
+
+  // Sprout ACKs the response and forwards it back to the originating UE.
+  ASSERT_EQ(2, txdata_count());
+  ReqMatcher("ACK").matches(current_txdata()->msg);
+  free_txdata();
   ASSERT_EQ(1, txdata_count());
   RespMatcher(487).matches(current_txdata()->msg);
   free_txdata();
 
+  // UE ACKs the response.
+  msg._method = "ACK";
+  msg._branch = "2222222222";
+  inject_msg(msg.get_request(), &tpAS);
+
+}
 
 
+// Test local MESSAGE request with both originating and terminating ASs where terminating UE doesn't respond.
+TEST_F(IscTest, OriginatingTerminatingMessageASTimeout)
+{
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::TCP, stack_data.scscf_port, "1.2.3.4", 56789);
 
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>MESSAGE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                R"(<IMSSubscription><ServiceProfile>
+                                <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
+                                  <InitialFilterCriteria>
+                                    <Priority>1</Priority>
+                                    <TriggerPoint>
+                                    <ConditionTypeCNF>0</ConditionTypeCNF>
+                                    <SPT>
+                                      <ConditionNegated>0</ConditionNegated>
+                                      <Group>0</Group>
+                                      <Method>MESSAGE</Method>
+                                      <Extension></Extension>
+                                    </SPT>
+                                  </TriggerPoint>
+                                  <ApplicationServer>
+                                    <ServerName>sip:1.2.3.4:56789;transport=TCP</ServerName>
+                                    <DefaultHandling>0</DefaultHandling>
+                                  </ApplicationServer>
+                                  </InitialFilterCriteria>
+                                </ServiceProfile></IMSSubscription>)");
 
+  // ---------- Send MESSAGE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._via = "10.99.88.11:12345";
+  msg._branch = "1111111111";
+  msg._to = "6505551234@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505551234@homedomain";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
 
+  // MESSAGE passed on to AS1 (as originating AS for 6505551000)
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* message_txdata = pop_txdata();
+  pjsip_msg* out = message_txdata->msg;
+  ReqMatcher r1("MESSAGE");
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS.expect_target(message_txdata, false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
 
-  string fresp = respond_to_txdata(current_txdata(), 200);
+  // AS1 sends an immediate 100 Trying response.  This isn't realistic as the
+  // response should be delayed by 3.5 seconds, but it stops the script
+  // having to handle MESSAGE retransmits.
+  inject_msg(respond_to_txdata(message_txdata, 100), &tpAS);
+
+  // Sprout forwards the 100 Trying back to the originating UE.  This is a bug!
+  ASSERT_EQ(1, txdata_count());
   free_txdata();
-  inject_msg(fresp, &tpBono);
 
-  // 200 OK goes back to AS1
-  out = current_txdata()->msg;
-  RespMatcher(200).matches(out);
-  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  // Advance time by a second so we have good enough control over the order
+  // the transactions time out.
+  cwtest_advance_time_ms(1000L);
 
-  // ---------- AS1 forwards 200 (stripping via)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  // ---------- AS1 turns MESSAGE around
+  // (acting as routing B2BUA by adding a Via, and removing the top Route.)
+  const pj_str_t STR_VIA = pj_str("Via");
+  pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(message_txdata->pool);
+  via_hdr->transport = pj_str("TCP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK2222222222");
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  const pj_str_t STR_ROUTE = pj_str("Route");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   if (hdr)
   {
     pj_list_erase(hdr);
   }
   inject_msg(out, &tpAS);
+  pjsip_tx_data_dec_ref(message_txdata);
+
+  // MESSAGE passed on to AS1 (as terminating AS for 6505551234)
+  ASSERT_EQ(1, txdata_count());
+  message_txdata = pop_txdata();
+  out = message_txdata->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpAS.expect_target(message_txdata, false);
+  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_THAT(get_headers(out, "Route"),
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr>"));
+  EXPECT_THAT(get_headers(out, "P-Served-User"),
+              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+
+  // AS1 sends an immediate 100 Trying response.  This isn't realistic as the
+  // response should be delayed by 3.5 seconds, but it stops the script
+  // having to handle MESSAGE retransmits.
+  inject_msg(respond_to_txdata(message_txdata, 100), &tpAS);
+
+  // Sprout forwards the 100 Trying back to AS1.  This is a bug!
+  ASSERT_EQ(1, txdata_count());
   free_txdata();
 
-  // 200 OK goes back to AS1 (terminating)
-  out = current_txdata()->msg;
-  RespMatcher(200).matches(out);
-  tpAS.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  // Advance time by a second so we have good enough control over the order
+  // the transactions time out.
+  cwtest_advance_time_ms(1000L);
 
-  // ---------- AS1 forwards 200 (stripping via)
-  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  // ---------- AS1 turns MESSAGE around
+  // (acting as routing B2BUA by adding a Via, and removing the top Route.)
+  via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_VIA, NULL);
+  if (via_hdr)
+  {
+    via_hdr->rport_param = via_hdr->sent_by.port;
+  }
+  via_hdr = pjsip_via_hdr_create(message_txdata->pool);
+  via_hdr->transport = pj_str("TCP");
+  via_hdr->sent_by.host = pj_str("1.2.3.4");
+  via_hdr->sent_by.port = 56789;
+  via_hdr->rport_param = 0;
+  via_hdr->branch_param = pj_str("z9hG4bK3333333333"); // Must differ from previous branch
+  pjsip_msg_insert_first_hdr(out, (pjsip_hdr*)via_hdr);
+  hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(out, &STR_ROUTE, NULL);
   if (hdr)
   {
     pj_list_erase(hdr);
   }
   inject_msg(out, &tpAS);
+  pjsip_tx_data_dec_ref(message_txdata);
+
+  // MESSAGE passed to terminating UE
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(r1.matches(out));
+  tpBono.expect_target(current_txdata(), false);
+  EXPECT_EQ("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", r1.uri());
+  EXPECT_EQ("", get_headers(out, "Route"));
+
+  // UE sends an immediate 100 Trying response.  This isn't realistic as the
+  // response should be delayed by 3.5 seconds, but it stops the script
+  // having to handle MESSAGE retransmits.
+  inject_msg(respond_to_current_txdata(100), &tpBono);
+
+  // Sprout forwards the 100 Trying back to AS1.  This is a bug!
+  ASSERT_EQ(1, txdata_count());
   free_txdata();
 
-  // 200 OK goes back to bono
-  out = current_txdata()->msg;
-  RespMatcher(200).matches(out);
-  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
-  msg.set_route(out);
+  // Advance the time so the delayed 100 Trying responses are sent by Sprout
+  // (should happen 3.5 seconds after the MESSAGE was first received, so we'll
+  // advance to just over that time).
+  cwtest_advance_time_ms(1550L);
+  poll();
+#if 0
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(100).matches(current_txdata()->msg);
+  tpBono.expect_target(current_txdata(), true);
+  free_txdata();
+#endif
+
+  cwtest_advance_time_ms(1000L);
+  poll();
+#if 0
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(100).matches(current_txdata()->msg);
+  tpAS.expect_target(current_txdata(), true);
+  free_txdata();
+#endif
+
+  cwtest_advance_time_ms(1000L);
+  poll();
+#if 0
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(100).matches(current_txdata()->msg);
+  tpAS.expect_target(current_txdata(), true);
+  free_txdata();
+#endif
+
+  // Now advance the time so the first transaction times out.  This should
+  // happen 64*T1=32 seconds after the initial request.  Since we've already
+  // advanced time by just over 5.5 seconds, we just need to advance by
+  // another 26.5 seconds.
+  cwtest_advance_time_ms(26500L);
+  poll();
+
+  // Sprout should send a 408 response on the original transaction.
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(408).matches(current_txdata()->msg);
+  tpBono.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // Advance the time by another second so the second hop transaction times out.
+  cwtest_advance_time_ms(1000L);
+  poll();
+
+  // Sprout should send a 408 response to AS1.
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(408).matches(current_txdata()->msg);
+  tpAS.expect_target(current_txdata(), true);
+  free_txdata();
+
+  // Advance the time by another second so the third hop transaction times out.
+  cwtest_advance_time_ms(1000L);
+  poll();
+
+  // Sprout should send a 408 response to AS1.
+  ASSERT_EQ(1, txdata_count());
+  RespMatcher(408).matches(current_txdata()->msg);
+  tpAS.expect_target(current_txdata(), true);
   free_txdata();
 }
 
