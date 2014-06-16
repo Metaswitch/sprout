@@ -228,7 +228,40 @@ AsChainLink::Disposition AsChainLink::on_initial_request(pjsip_tx_data* tdata,
   // Store the default handling as we may need it later.
   _default_handling = application_server.default_handling;
 
+<<<<<<< HEAD
   return AsChainLink::Disposition::Skip;
+=======
+    // Request-URI should remain unchanged
+    as_target->uri = tdata->msg->line.req.uri;
+
+    // Set the AS URI as the topmost route header.  Set loose-route,
+    // otherwise the headers get mucked up.
+    as_uri->lr_param = 1;
+    as_target->paths.push_back((pjsip_uri*)as_uri);
+
+    // Insert route header below it with an ODI in it.
+    pjsip_sip_uri* self_uri = pjsip_sip_uri_create(tdata->pool, false);  // sip: not sips:
+    pj_strdup2(tdata->pool, &self_uri->user, odi_value.c_str());
+    self_uri->host = stack_data.local_host;
+    self_uri->port = stack_data.scscf_port;
+    self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
+    self_uri->lr_param = 1;
+
+    if (_as_chain->_session_case.is_originating())
+    {
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(tdata->pool, &orig_param->value, "");
+      pj_list_insert_after(&self_uri->other_param, orig_param);
+    }
+
+    as_target->paths.push_back((pjsip_uri*)self_uri);
+
+    // Stop processing the chain and send the request out to the AS.
+    *pre_target = as_target;
+    return AsChainLink::Disposition::Skip;
+  }
+>>>>>>> e4be0e931945d8684e5ff492c847b5a553f37d72
 }
 
 
