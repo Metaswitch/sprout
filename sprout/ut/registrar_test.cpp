@@ -57,8 +57,6 @@ class RegistrarTest : public SipTest
 {
 public:
 
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -73,7 +71,6 @@ public:
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
-    delete _analytics->_logger;
     _analytics->_logger = NULL;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, _ifc_handler, 300);
@@ -103,7 +100,7 @@ public:
 
   RegistrarTest() : SipTest(&mod_registrar)
   {
-    _analytics->_logger = &_log;
+    _analytics->_logger = &PrintingTestLogger::DEFAULT;
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
   }

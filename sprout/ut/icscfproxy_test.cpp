@@ -60,8 +60,6 @@ using testing::Not;
 class ICSCFProxyTestBase : public SipTest
 {
 public:
-  FakeLogger _log;
-
   /// TX data for testing.  Will be cleaned up.  Each message in a
   /// forked flow has its URI stored in _uris, and its txdata stored
   /// in _tdata against that URI.
@@ -101,7 +99,7 @@ public:
   ICSCFProxyTestBase()
   {
     Log::setLoggingLevel(99);
-    _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _hss_connection->flush_all();
   }
 

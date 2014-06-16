@@ -303,7 +303,6 @@ private:
 class StatefulProxyTestBase : public SipTest
 {
 public:
-  FakeLogger _log;
   static QuiescingManager _quiescing_manager;
 
 
@@ -328,7 +327,6 @@ public:
     _local_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
     _analytics->_logger = NULL;
     _call_services = NULL;
     _hss_connection = new FakeHSSConnection();
@@ -406,9 +404,8 @@ public:
 
   StatefulProxyTestBase()
   {
-    Log::setLoggingLevel(99);
-    _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
-    _analytics->_logger = &_log;
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
+    _analytics->_logger = &PrintingTestLogger::DEFAULT;
     _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {

@@ -50,8 +50,6 @@ using namespace std;
 class OptionsTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

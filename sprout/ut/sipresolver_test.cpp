@@ -51,7 +51,6 @@ using namespace std;
 /// Fixture for SIPResolverTest.
 class SIPResolverTest : public ::testing::Test
 {
-  FakeLogger _log;
   DnsCachedResolver _dnsresolver;
   SIPResolver _sipresolver;
 

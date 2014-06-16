@@ -244,7 +244,6 @@ private:
   // The DNS resolver.
   static DnsCachedResolver _dnsresolver;
 
-  static FakeLogger* _log;
 };
 
 /// Helper to print pj_status_t to ostream.

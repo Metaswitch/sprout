@@ -52,7 +52,6 @@ using namespace std;
 class DialogTrackerTest : public SipTest
 {
 public:
-  FakeLogger _log;
   static DialogTracker* dialog_tracker;
   static FlowTable* ft;
   static QuiescingManager* qm;

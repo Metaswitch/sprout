@@ -57,9 +57,6 @@ using testing::Not;
 class SubscriptionTest : public SipTest
 {
 public:
-
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -72,7 +69,6 @@ public:
     _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger("foo");
     _hss_connection = new FakeHSSConnection();
-    delete _analytics->_logger;
     _analytics->_logger = NULL;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
@@ -99,7 +95,7 @@ public:
 
   SubscriptionTest() : SipTest(&mod_subscription)
   {
-    _analytics->_logger = &_log;
+    _analytics->_logger = &PrintingTestLogger::DEFAULT;
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
   }

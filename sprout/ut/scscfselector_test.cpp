@@ -54,8 +54,6 @@ using namespace std;
 /// Fixture for SCSCFSelectorTest.
 class SCSCFSelectorTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   SCSCFSelectorTest()
   {
     Log::setLoggingLevel(99);
@@ -94,13 +92,14 @@ private:
 
 TEST_F(SCSCFSelectorTest, ValidConfig)
 {
+  CapturingTestLogger log;
   // Parse a valid file. There should be no warnings in the logs. If this
   // test fails, so will the Select* tests below
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf.json"));
-  EXPECT_FALSE(_log.contains("Failed to read S-CSCF configuration data"));
-  EXPECT_FALSE(_log.contains("Badly formed S-CSCF entry"));
-  EXPECT_FALSE(_log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
-  EXPECT_FALSE(_log.contains("Failed to read S-CSCF configuration data"));
+  EXPECT_FALSE(log.contains("Failed to read S-CSCF configuration data"));
+  EXPECT_FALSE(log.contains("Badly formed S-CSCF entry"));
+  EXPECT_FALSE(log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
+  EXPECT_FALSE(log.contains("Failed to read S-CSCF configuration data"));
 }
 
 TEST_F(SCSCFSelectorTest, SelectMandatoryCapabilities)
@@ -161,8 +160,9 @@ TEST_F(SCSCFSelectorTest, RejectSCSCFs)
 
 TEST_F(SCSCFSelectorTest, ParseError)
 {
+  CapturingTestLogger log;
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_parse_error.json"));
-  EXPECT_TRUE(_log.contains("Failed to read S-CSCF configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read S-CSCF configuration data"));
 
   // Check that no S-CSCF is returned
   ST({}, {}, {}, "").test(scscf_);
@@ -170,8 +170,9 @@ TEST_F(SCSCFSelectorTest, ParseError)
 
 TEST_F(SCSCFSelectorTest, MissingParts)
 {
+  CapturingTestLogger log;
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_missing_parts.json"));
-  EXPECT_TRUE(_log.contains("Badly formed S-CSCF entry"));
+  EXPECT_TRUE(log.contains("Badly formed S-CSCF entry"));
 
   // Check that only one S-CSCF returned (with low priority), as the others couldn't
   // be parsed
@@ -180,8 +181,9 @@ TEST_F(SCSCFSelectorTest, MissingParts)
 
 TEST_F(SCSCFSelectorTest, MissingBlock)
 {
+  CapturingTestLogger log;
   SCSCFSelector scscf_(string(UT_DIR).append("/test_scscf_missing_block.json"));
-  EXPECT_TRUE(_log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
+  EXPECT_TRUE(log.contains("Badly formed S-CSCF configuration file - missing s-cscfs object"));
 
   // Check that no S-CSCF is returned
   ST({}, {}, {}, "").test(scscf_);
@@ -189,8 +191,9 @@ TEST_F(SCSCFSelectorTest, MissingBlock)
 
 TEST_F(SCSCFSelectorTest, MissingFile)
 {
+  CapturingTestLogger log;
   SCSCFSelector scscf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(_log.contains("Failed to read S-CSCF configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read S-CSCF configuration data"));
 
   // Check that no S-CSCF is returned
   ST({}, {}, {}, "").test(scscf_);

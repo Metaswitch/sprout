@@ -51,8 +51,6 @@ using namespace std;
 class CustomHeadersTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

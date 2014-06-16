@@ -191,11 +191,13 @@ TEST_F(HssConnectionTest, SimpleDigest)
 
 TEST_F(HssConnectionTest, CorruptDigest)
 {
+  CapturingTestLogger log;
   Json::Value* actual;
   _hss.get_digest_data("privid_corrupt", "pubid42", actual, 0);
   ASSERT_TRUE(actual == NULL);
-  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+  EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
   delete actual;
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
@@ -249,65 +251,77 @@ TEST_F(HssConnectionTest, SimpleIfc)
 
 TEST_F(HssConnectionTest, BadXML)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Failed to parse Homestead response"));
+  EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 
 TEST_F(HssConnectionTest, BadXML2)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
+  EXPECT_TRUE(log.contains("Malformed HSS XML"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+  EXPECT_TRUE(log.contains("Malformed Homestead XML"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed Homestead XML"));
+  EXPECT_TRUE(log.contains("Malformed Homestead XML"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("Malformed HSS XML"));
+  EXPECT_TRUE(log.contains("Malformed HSS XML"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 
 TEST_F(HssConnectionTest, ServerFailure)
 {
+  CapturingTestLogger log;
   std::vector<std::string> uris;
   std::map<std::string, Ifcs> ifcs_map;
   std::string regstate;
   _hss.update_registration_state("pubid44", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_EQ("", regstate);
   EXPECT_TRUE(uris.empty());
-  EXPECT_TRUE(_log.contains("http://narcissus/impu/pubid44/reg-data failed"));
+  EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, SimpleUserAuth)

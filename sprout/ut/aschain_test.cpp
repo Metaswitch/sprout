@@ -57,7 +57,6 @@ using testing::MatchesRegex;
 class AsChainTest : public SipTest
 {
 public:
-  FakeLogger _log;
   AsChainTable* _as_chain_table;
 
   static void SetUpTestCase()

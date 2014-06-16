@@ -102,8 +102,6 @@ SipTest* SipTest::_current_instance;
 /// Automatically run once, before the first test.
 void SipTest::SetUpTestCase(bool clear_host_mapping)
 {
-  _log = new FakeLogger();
-
   // Add the required records to the cache.
   add_host_mapping("sprout.homedomain", "127.0.0.1");
   add_host_mapping("homedomain", "10.6.6.1");
@@ -183,7 +181,6 @@ void SipTest::TearDownTestCase()
 }
 
 
-FakeLogger* SipTest::_log;
 DnsCachedResolver SipTest::_dnsresolver("0.0.0.0");
 std::map<int, pjsip_transport*> SipTest::TransportFlow::_udp_transports;
 std::map<int, pjsip_tpfactory*> SipTest::TransportFlow::_tcp_factories;

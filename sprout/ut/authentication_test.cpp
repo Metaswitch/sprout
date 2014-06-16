@@ -68,8 +68,6 @@ using testing::Not;
 class AuthenticationTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -79,7 +77,6 @@ public:
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
     _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
     _analytics->_logger = NULL;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_authentication("homedomain",
@@ -106,7 +103,7 @@ public:
 
   AuthenticationTest() : SipTest(&mod_auth)
   {
-    _analytics->_logger = &_log;
+    _analytics->_logger = &PrintingTestLogger::DEFAULT;
   }
 
   ~AuthenticationTest()

@@ -57,8 +57,6 @@ using namespace std;
 /// Fixture for RegStoreTest.
 class RegStoreTest : public SipTest
 {
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

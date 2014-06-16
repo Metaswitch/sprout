@@ -52,7 +52,6 @@ using namespace std;
 class FlowTest : public SipTest
 {
 public:
-  FakeLogger _log;
   static FlowTable* ft;
   static QuiescingManager* qm;
   Flow* flow;

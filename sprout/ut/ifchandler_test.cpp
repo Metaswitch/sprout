@@ -54,7 +54,6 @@ using namespace std;
 class IfcHandlerTest : public SipTest
 {
 public:
-  FakeLogger _log;
   static FakeChronosConnection* _chronos_connection;
   static FakeHSSConnection* _hss_connection;
   static LocalStore* _local_data_store;
@@ -302,6 +301,7 @@ TEST_F(IfcHandlerTest, ProfilePart)
 
 TEST_F(IfcHandlerTest, NoIfc)
 {
+  CapturingTestLogger log;
   doBaseTest("",
              "",
              TEST_MSG,
@@ -310,7 +310,7 @@ TEST_F(IfcHandlerTest, NoIfc)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("No ServiceProfile node in iFC!"));
+  EXPECT_TRUE(log.contains("No ServiceProfile node in iFC!"));
 }
 
 TEST_F(IfcHandlerTest, NoPriority)
@@ -335,6 +335,7 @@ TEST_F(IfcHandlerTest, NoPriority)
 
 TEST_F(IfcHandlerTest, GarbagePriority)
 {
+  CapturingTestLogger log;
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
              "<ServiceProfile>\n"
@@ -352,11 +353,12 @@ TEST_F(IfcHandlerTest, GarbagePriority)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("Can't parse iFC priority as integer"));
+  EXPECT_TRUE(log.contains("Can't parse iFC priority as integer"));
 }
 
 TEST_F(IfcHandlerTest, NoAS)
 {
+  CapturingTestLogger log;
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
              "<ServiceProfile>\n"
@@ -374,11 +376,12 @@ TEST_F(IfcHandlerTest, NoAS)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("missing ApplicationServer element"));
+  EXPECT_TRUE(log.contains("missing ApplicationServer element"));
 }
 
 TEST_F(IfcHandlerTest, NoServerName1)
 {
+  CapturingTestLogger log;
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
              "<ServiceProfile>\n"
@@ -396,11 +399,12 @@ TEST_F(IfcHandlerTest, NoServerName1)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("has no ServerName"));
+  EXPECT_TRUE(log.contains("has no ServerName"));
 }
 
 TEST_F(IfcHandlerTest, NoServerName2)
 {
+  CapturingTestLogger log;
   doBaseTest("",
              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
              "<ServiceProfile>\n"
@@ -417,7 +421,7 @@ TEST_F(IfcHandlerTest, NoServerName2)
              SessionCase::Originating,
              false,
              false);
-  EXPECT_TRUE(_log.contains("has no ServerName"));
+  EXPECT_TRUE(log.contains("has no ServerName"));
 }
 
 TEST_F(IfcHandlerTest, ThirdPartyRegistration)
@@ -493,13 +497,14 @@ TEST_F(IfcHandlerTest, MethodMatch)
 
 TEST_F(IfcHandlerTest, NoTrigger)
 {
+  CapturingTestLogger log;
   Log::setLoggingLevel(5);
   doTest("",
          "",
          true,
          SessionCase::Originating,
          true);
-  EXPECT_TRUE(_log.contains("has no trigger point"));
+  EXPECT_TRUE(log.contains("has no trigger point"));
 }
 
 TEST_F(IfcHandlerTest, NoSPT)
@@ -526,6 +531,7 @@ TEST_F(IfcHandlerTest, NoSPTNeg)
 
 TEST_F(IfcHandlerTest, NoClass1)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -538,11 +544,12 @@ TEST_F(IfcHandlerTest, NoClass1)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Missing class"));
+  EXPECT_TRUE(log.contains("Missing class"));
 }
 
 TEST_F(IfcHandlerTest, NoClass2)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -554,11 +561,12 @@ TEST_F(IfcHandlerTest, NoClass2)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Missing class"));
+  EXPECT_TRUE(log.contains("Missing class"));
 }
 
 TEST_F(IfcHandlerTest, NoType)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <SPT>\n"
@@ -571,11 +579,12 @@ TEST_F(IfcHandlerTest, NoType)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Missing mandatory value for ConditionTypeCNF"));
+  EXPECT_TRUE(log.contains("Missing mandatory value for ConditionTypeCNF"));
 }
 
 TEST_F(IfcHandlerTest, Unimplemented)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -589,8 +598,8 @@ TEST_F(IfcHandlerTest, Unimplemented)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Unimplemented"));
-  EXPECT_TRUE(_log.contains("SuperDuperNewThingy"));
+  EXPECT_TRUE(log.contains("Unimplemented"));
+  EXPECT_TRUE(log.contains("SuperDuperNewThingy"));
 }
 
 TEST_F(IfcHandlerTest, MethodCase)
@@ -728,6 +737,7 @@ TEST_F(IfcHandlerTest, SesCase4)
 
 TEST_F(IfcHandlerTest, SesCaseGarbage)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -741,11 +751,12 @@ TEST_F(IfcHandlerTest, SesCaseGarbage)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Can't parse session case"));
+  EXPECT_TRUE(log.contains("Can't parse session case"));
 }
 
 TEST_F(IfcHandlerTest, SesCaseRange1)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -759,11 +770,12 @@ TEST_F(IfcHandlerTest, SesCaseRange1)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("session case out of allowable range"));
+  EXPECT_TRUE(log.contains("session case out of allowable range"));
 }
 
 TEST_F(IfcHandlerTest, SesCaseRange2)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -777,7 +789,7 @@ TEST_F(IfcHandlerTest, SesCaseRange2)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("session case out of allowable range"));
+  EXPECT_TRUE(log.contains("session case out of allowable range"));
 }
 
 TEST_F(IfcHandlerTest, Negation)
@@ -1319,6 +1331,7 @@ TEST_F(IfcHandlerTest, SIPHeaderExtensionIgnored)
 
 TEST_F(IfcHandlerTest, SIPHeaderNoHeader)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -1332,11 +1345,12 @@ TEST_F(IfcHandlerTest, SIPHeaderNoHeader)
          true,
          SessionCase::Terminating,
          false);
-  EXPECT_TRUE(_log.contains("Missing Header element for SIPHeader service point trigger"));
+  EXPECT_TRUE(log.contains("Missing Header element for SIPHeader service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -1351,8 +1365,9 @@ TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
          SessionCase::Terminating,
          false);
 
-  EXPECT_TRUE(_log.contains("Invalid regular expression in Header element for SIPHeader service point trigger"));
+  EXPECT_TRUE(log.contains("Invalid regular expression in Header element for SIPHeader service point trigger"));
 
+  CapturingTestLogger log2;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -1366,7 +1381,7 @@ TEST_F(IfcHandlerTest, SIPHeaderBadRegex)
          true,
          SessionCase::Terminating,
          false);
-  EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
+  EXPECT_TRUE(log2.contains("Invalid regular expression in Content element for SIPHeader service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, ReqURIMatch)
@@ -1468,6 +1483,7 @@ TEST_F(IfcHandlerTest, ReqURINoMatch)
 
 TEST_F(IfcHandlerTest, ReqURIBadRegex)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -1481,7 +1497,7 @@ TEST_F(IfcHandlerTest, ReqURIBadRegex)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Invalid regular expression in Request URI service point trigger"));
+  EXPECT_TRUE(log.contains("Invalid regular expression in Request URI service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, RegTypeMethodNoMatch)
@@ -2030,6 +2046,7 @@ TEST_F(IfcHandlerTest, SDPMediaBandwMatch)
 
 TEST_F(IfcHandlerTest, SDPNoLine)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -2043,11 +2060,12 @@ TEST_F(IfcHandlerTest, SDPNoLine)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Missing Line element for SessionDescription service point trigger"));
+  EXPECT_TRUE(log.contains("Missing Line element for SessionDescription service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, SDPBadLineRegex)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -2061,11 +2079,12 @@ TEST_F(IfcHandlerTest, SDPBadLineRegex)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Invalid regular expression in Line element for Session Description service point trigger"));
+  EXPECT_TRUE(log.contains("Invalid regular expression in Line element for Session Description service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, SDPBadContentRegex)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -2079,7 +2098,7 @@ TEST_F(IfcHandlerTest, SDPBadContentRegex)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Invalid regular expression in Content element for Session Description service point trigger"));
+  EXPECT_TRUE(log.contains("Invalid regular expression in Content element for Session Description service point trigger"));
 }
 
 TEST_F(IfcHandlerTest, SDPNoContentMatch)
@@ -2237,6 +2256,7 @@ TEST_F(IfcHandlerTest, SDPOriginContentNoMatch)
 
 TEST_F(IfcHandlerTest, SDPNoEqualsSign)
 {
+  CapturingTestLogger log;
   doTest("",
          "    <TriggerPoint>\n"
          "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
@@ -2250,7 +2270,7 @@ TEST_F(IfcHandlerTest, SDPNoEqualsSign)
          true,
          SessionCase::Originating,
          false);
-  EXPECT_TRUE(_log.contains("Found badly formatted SDP line: einvalidline"));
+  EXPECT_TRUE(log.contains("Found badly formatted SDP line: einvalidline"));
 }
 
 

@@ -66,8 +66,6 @@ using testing::Not;
 class ACRTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

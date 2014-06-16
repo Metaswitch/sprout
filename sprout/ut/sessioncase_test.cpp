@@ -52,8 +52,6 @@ using namespace std;
 class SessionCaseTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

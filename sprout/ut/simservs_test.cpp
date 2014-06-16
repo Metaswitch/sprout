@@ -52,7 +52,6 @@ using namespace std;
 /// Fixture for test.
 class SimServsTest : public ::testing::Test
 {
-  FakeLogger _log;
 
   SimServsTest()
   {
@@ -207,12 +206,14 @@ TEST_F(SimServsTest, MissingElement) {
 
 /// XML parse errors are illegal and should give the default, with a log message.
 TEST_F(SimServsTest, InvalidXml1) {
+  CapturingTestLogger log;
   SCOPED_TRACE("");
   string xml = "<blah";
   simservs ss(xml);
   ss_values exp;
   expect_ss(exp, ss);
-  EXPECT_TRUE(_log.contains("Parse error"));
+  EXPECT_TRUE(log.contains("Parse error"));
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(SimServsTest, Typical)

@@ -246,25 +246,28 @@ TEST_F(DeregistrationHandlerTest, AoRsOnlyTest)
 
 TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
 {
+  CapturingTestLogger log;
   std::string body = "{[}";
   int status = handler->parse_request(body);
-  EXPECT_TRUE(_log.contains("Failed to read data"));
+  EXPECT_TRUE(log.contains("Failed to read data"));
   ASSERT_EQ(status, 400);
 }
 
 TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
 {
+  CapturingTestLogger log;
   std::string body = "{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}";
   int status = handler->parse_request(body);
-  EXPECT_TRUE(_log.contains("Registrations not available in JSON"));
+  EXPECT_TRUE(log.contains("Registrations not available in JSON"));
   ASSERT_EQ(status, 400);
 }
 
 TEST_F(DeregistrationHandlerTest, MissingPrimaryIMPUJSONTest)
 {
+  CapturingTestLogger log;
   std::string body = "{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
   int status = handler->parse_request(body);
-  EXPECT_TRUE(_log.contains("Invalid JSON - registration doesn't contain primary-impu"));
+  EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
   ASSERT_EQ(status, 400);
 }
 

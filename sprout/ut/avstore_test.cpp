@@ -53,8 +53,6 @@ using namespace std;
 /// Fixture for RegStoreTest.
 class AvStoreTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   AvStoreTest()
   {
   }

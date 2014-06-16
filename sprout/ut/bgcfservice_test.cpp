@@ -54,8 +54,6 @@ using namespace std;
 /// Fixture for BgcfServiceTest.
 class BgcfServiceTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   BgcfServiceTest()
   {
     Log::setLoggingLevel(99);
@@ -128,30 +126,38 @@ TEST_F(BgcfServiceTest, DefaultRoute)
 
 TEST_F(BgcfServiceTest, ParseError)
 {
+  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));
-  EXPECT_TRUE(_log.contains("Failed to read BGCF configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
   ET("+15108580271", "").test(bgcf_);
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingParts)
 {
+  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_parts.json"));
-  EXPECT_TRUE(_log.contains("Badly formed BGCF route entry"));
+  EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
   ET("foreign-domain.example.com", "").test(bgcf_);
   ET("198.147.226.99", "").test(bgcf_);
   ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_);
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingBlock)
 {
+  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_block.json"));
-  EXPECT_TRUE(_log.contains("Badly formed BGCF configuration file - missing routes object"));
+  EXPECT_TRUE(log.contains("Badly formed BGCF configuration file - missing routes object"));
   ET("+15108580271", "").test(bgcf_);
+  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingFile)
 {
+  CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(_log.contains("Failed to read BGCF configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
   ET("+15108580271", "").test(bgcf_);
+  PrintingTestLogger::DEFAULT.take_over();
 }

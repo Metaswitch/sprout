@@ -48,8 +48,6 @@
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   BaseTest();
   virtual ~BaseTest();
 };
