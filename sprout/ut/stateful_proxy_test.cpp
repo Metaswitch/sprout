@@ -6531,7 +6531,7 @@ TEST_F(IscTest, OriginatingTerminatingAS)
   tpAS.expect_target(current_txdata(), false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
 
@@ -6731,19 +6731,19 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
 
   // INVITE passed on to AS1 (as originating AS for 6505551000)
   SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
+  pjsip_tx_data* invite_txdata = pop_txdata();
+  out = invite_txdata->msg;
   ReqMatcher r1("INVITE");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS.expect_target(current_txdata(), false);
+  tpAS.expect_target(invite_txdata, false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
 
   // AS1 sends an immediate 100 Trying
-  inject_msg(respond_to_current_txdata(100), &tpAS);
+  inject_msg(respond_to_txdata(invite_txdata, 100), &tpAS);
 
   // ---------- AS1 turns INVITE around
   // (acting as routing B2BUA by adding a Via, and removing the top Route.)
@@ -6753,7 +6753,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   {
     via_hdr->rport_param = via_hdr->sent_by.port;
   }
-  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr = pjsip_via_hdr_create(invite_txdata->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
   via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
@@ -6767,7 +6767,6 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
     pj_list_erase(hdr);
   }
   inject_msg(out, &tpAS);
-  free_txdata();
 
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
@@ -6778,11 +6777,11 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
 
   // INVITE passed on to AS1 (as terminating AS for 6505551234)
   SCOPED_TRACE("INVITE (S)");
-  out = current_txdata()->msg;
+  invite_txdata = pop_txdata();
+  out = invite_txdata->msg;
   r1 = ReqMatcher("INVITE");
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
-
-  tpAS.expect_target(current_txdata(), false);
+  tpAS.expect_target(invite_txdata, false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr>"));
@@ -6790,7 +6789,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
               testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
 
   // AS1 sends an immediate 100 Trying
-  inject_msg(respond_to_current_txdata(100), &tpAS);
+  inject_msg(respond_to_txdata(invite_txdata, 100), &tpAS);
 
   // ---------- AS1 turns INVITE around
   // (acting as routing B2BUA by adding a Via, and removing the top Route.)
@@ -6799,7 +6798,7 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
   {
     via_hdr->rport_param = via_hdr->sent_by.port;
   }
-  via_hdr = pjsip_via_hdr_create(current_txdata()->pool);
+  via_hdr = pjsip_via_hdr_create(invite_txdata->pool);
   via_hdr->transport = pj_str("FAKE_UDP");
   via_hdr->sent_by.host = pj_str("1.2.3.4");
   via_hdr->sent_by.port = 56789;
@@ -6812,7 +6811,6 @@ TEST_F(IscTest, OriginatingTerminatingASTimeout)
     pj_list_erase(hdr);
   }
   inject_msg(out, &tpAS);
-  free_txdata();
 
   // 100 Trying goes back to AS1
   out = current_txdata()->msg;
@@ -7016,7 +7014,7 @@ TEST_F(IscTest, OriginatingTerminatingMessageASTimeout)
   tpAS.expect_target(message_txdata, false);
   EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
-              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr>"));
+              testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=TCP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=TCP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
               testing::MatchesRegex("P-Served-User: <sip:6505551000@homedomain>;sescase=orig;regstate=reg"));
 

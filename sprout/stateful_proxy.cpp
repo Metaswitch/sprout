@@ -3032,7 +3032,7 @@ AsChainLink::Disposition UASTransaction::apply_services(Target*& target)
     self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 
-    if (_as_chainlinks.back().session_case().is_originating())
+    if (_as_chain_links.back().session_case().is_originating())
     {
       pjsip_param *orig_param = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
       pj_strdup(_req->pool, &orig_param->name, &STR_ORIG);
