@@ -482,14 +482,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
           }
           else
           {
-            // We're in the middle of an AS chain, but we've lost our
-            // reference to the rest of the chain. We must not carry on
-            // - fail the request with a suitable error code.
-            LOG_ERROR("Original dialog lookup for %.*s not found",
-                      uri->user.slen, uri->user.ptr);
-            pjsip_tx_data_dec_ref(tdata);
-            reject_request(rdata, PJSIP_SC_BAD_REQUEST);
-            return;
+            // The ODI token is invalid or expired.  Treat call as OOTB.
+            SAS::Event event(get_trail(rdata), SASEvent::SCSCF_ODI_INVALID, 0);
+            event.add_var_param(PJUtils::pj_str_to_string(&uri->user));
+            SAS::report_event(event);
           }
         }
 

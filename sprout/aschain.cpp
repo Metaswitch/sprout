@@ -325,6 +325,14 @@ AsChainLink::on_initial_request(CallServices* call_services,
     self_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     self_uri->lr_param = 1;
 
+    if (_as_chain->_session_case.is_originating())
+    {
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(tdata->pool, &orig_param->value, "");
+      pj_list_insert_after(&self_uri->other_param, orig_param);
+    }
+
     as_target->paths.push_back((pjsip_uri*)self_uri);
 
     // Stop processing the chain and send the request out to the AS.
