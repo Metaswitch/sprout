@@ -158,8 +158,6 @@ TEST_F(AsChainTest, AsInvocation)
   AsChain as_chain3(_as_chain_table, SessionCase::Originating, "sip:5755550011@homedomain", true, 0, ifcs3, NULL);
   AsChainLink as_chain_link3(&as_chain3, 0u);
 
-  // @@@ not testing MMTEL AS yet - leave that to CallServices UTs.
-
   string str("INVITE sip:5755550099@homedomain SIP/2.0\n"
              "Via: SIP/2.0/TCP 10.64.90.97:50693;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
              "Max-Forwards: 69\n"
@@ -177,36 +175,19 @@ TEST_F(AsChainTest, AsInvocation)
   pj_status_t status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  Target *target;
   AsChainLink::Disposition disposition;
+  std::string server_name;
 
   // Nothing to invoke. Just proceed.
-  target = NULL;
-  disposition = as_chain_link.on_initial_request(NULL, NULL, tdata, &target);
+  disposition = as_chain_link.on_initial_request(tdata, server_name);
   EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
-  EXPECT_TRUE(target == NULL);
-  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>", get_headers(tdata->msg, "Route"));
+  EXPECT_EQ(server_name, "");
 
   // Invoke external AS on originating side.
-  target = NULL;
   LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
-  disposition = as_chain_link2.on_initial_request(NULL, NULL, tdata, &target);
+  disposition = as_chain_link2.on_initial_request(tdata, server_name);
   EXPECT_EQ(AsChainLink::Disposition::Skip, disposition);
-  ASSERT_TRUE(target != NULL);
-  EXPECT_FALSE(target->from_store);
-  EXPECT_EQ("sip:5755550099@homedomain", str_uri(target->uri));
-  ASSERT_EQ(2u, target->paths.size());
-  std::list<pjsip_uri*>::iterator it = target->paths.begin();
-  EXPECT_EQ("sip:pancommunicon.cw-ngv.com;lr", str_uri(*it));
-  ++it;
-  EXPECT_EQ("sip:odi_" + as_chain_link2.next_odi_token() + "@127.0.0.1:5058;lr;orig", str_uri(*it));
-  EXPECT_EQ("sip:5755550099@homedomain", str_uri(tdata->msg->line.req.uri));
-  EXPECT_EQ("Route: <sip:nextnode;transport=TCP;lr;orig>",
-            get_headers(tdata->msg, "Route"));
-  delete target; target = NULL;
-
-  // MMTEL cases can't easily be tested here, because they construct
-  // real CallServices objects.
+  EXPECT_EQ(server_name, "sip:pancommunicon.cw-ngv.com");
 }
 
 // ++@@@ aschain.to_string

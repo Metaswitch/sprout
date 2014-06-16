@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
-
 #pragma once
 
 extern "C" {
@@ -55,7 +52,6 @@ extern "C" {
 
 
 // Forward declarations.
-class CallServices;
 class UASTransaction;
 
 /// Short-lived data structure holding the details of a calculated target.
@@ -98,12 +94,9 @@ class AsChainTable;
 //
 // References are released by AsChainLink::release().
 //
-// AsChain objects are destroyed by AsChain::request_destroy().
-//
 class AsChain
 {
 public:
-  void request_destroy();
 
 private:
   friend class AsChainLink;
@@ -257,9 +250,27 @@ public:
     return _as_chain->_served_user;
   }
 
+  /// Returns registration status of the served user.
+  bool is_registered() const
+  {
+    return (_as_chain != NULL) ? _as_chain->_is_registered : false;
+  }
+
   bool matches_target(pjsip_tx_data* tdata) const
   {
     return _as_chain->matches_target(tdata);
+  }
+
+  /// Returns the ODI token of the next AsChainLink in this chain.
+  const std::string& next_odi_token() const
+  {
+    return _as_chain->_odi_tokens[_index + 1];
+  }
+
+  /// Returns the appropriate AS timeout to use for this link.
+  int as_timeout() const
+  {
+    return (_default_handling == SESSION_CONTINUED) ? AS_TIMEOUT_CONTINUE : AS_TIMEOUT_TERMINATE;
   }
 
   /// Returns whether or not processing of the AS chain should continue on
@@ -270,7 +281,7 @@ public:
   }
 
   /// Called on receipt of each response from the AS.
-  void on_response(pjsip_rx_data* rdata);
+  void on_response(int status_code);
 
   /// Called if the AS is not responding.
   void on_not_responding();
@@ -304,10 +315,8 @@ public:
                                      Ifcs& ifcs,
                                      ACR* acr);
 
-  Disposition on_initial_request(CallServices* call_services,
-                                 UASTransaction* uas_data,
-                                 pjsip_tx_data* tdata,
-                                 Target** target);
+  Disposition on_initial_request(pjsip_tx_data* tdata,
+                                 std::string& server_name);
 
 private:
   friend class AsChainTable;
@@ -318,12 +327,6 @@ private:
     _responsive(false),
     _default_handling(SESSION_CONTINUED)
   {
-  }
-
-  /// Returns the ODI token of the next AsChainLink in this chain.
-  const std::string& next_odi_token() const
-  {
-    return _as_chain->_odi_tokens[_index + 1];
   }
 
   /// Pointer to the owning AsChain object.
