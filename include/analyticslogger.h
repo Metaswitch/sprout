@@ -79,6 +79,7 @@ private:
   static const int BUFFER_SIZE = 1000;
 
   Logger* _logger;
+  Logger* _default_logger;
 };
 
 #endif
