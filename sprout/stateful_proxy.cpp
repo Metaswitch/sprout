@@ -1761,9 +1761,8 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if (((!PJUtils::is_home_domain(req_uri)) &&
-       (!PJUtils::is_uri_local(req_uri))) ||
-       (PJUtils::is_uri_phone_number(req_uri)))
+  if ((!PJUtils::is_home_domain(req_uri)) &&
+      (!PJUtils::is_uri_local(req_uri)))
   {
     if (sip_uri)
     {
@@ -1844,7 +1843,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
     public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
   }
 
-  if ((!PJUtils::is_uri_phone_number(req_uri)) && (store) && (hss) && is_user_registered(public_id))
+  if ((!public_id.empty()) && (store) && (hss) && is_user_registered(public_id))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
