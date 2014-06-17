@@ -241,7 +241,6 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 static int compare_sip_sc(int sc1, int sc2);
 static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_bool_t is_user_numeric(const std::string& user);
-static pj_bool_t is_user_global(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -1727,26 +1726,15 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
                                              int max_targets,
                                              SAS::TrailId trail)
 {
-  bool sip_uri = false;
-  bool tel_uri = false;
-
-  // RFC 3261 Section 16.5 Determining Request Targets
-
   pjsip_uri* req_uri = (pjsip_uri*)msg->line.req.uri;
 
-  if (PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri))
-  {
-    sip_uri = true;
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))
-  {
-    tel_uri = true;
-  }
+  // RFC 3261 Section 16.5 Determining Request Targets
 
   // If the Request-URI of the request contains an maddr parameter, the
   // Request-URI MUST be placed into the target set as the only target
   // URI, and the proxy MUST proceed to Section 16.6.
-  if (sip_uri && ((pjsip_sip_uri*)req_uri)->maddr_param.slen)
+  if ((PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri)) &&
+      (((pjsip_sip_uri*)req_uri)->maddr_param.slen))
   {
     LOG_INFO("Route request to maddr %.*s",
              ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
@@ -1761,72 +1749,12 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // not responsible for, the Request-URI MUST be placed into the target
   // set as the only target, and the element MUST proceed to the task of
   // Request Forwarding (Section 16.6).
-  if (((!PJUtils::is_home_domain(req_uri)) &&
-       (!PJUtils::is_uri_local(req_uri))) ||
-       (PJUtils::is_uri_phone_number(req_uri)))
+  if ((!PJUtils::is_home_domain(req_uri)) &&
+      (!PJUtils::is_uri_local(req_uri)))
   {
-    if (sip_uri)
-    {
-      LOG_INFO("Route request to domain %.*s",
-               ((pjsip_sip_uri*)req_uri)->host.slen,
-               ((pjsip_sip_uri*)req_uri)->host.ptr);
-    }
-
     Target target;
-    target.uri = req_uri;
-
-    if ((bgcf_service) &&
-        (sip_uri || tel_uri))
-    {
-      // See if we have a configured route to the destination.
-      std::string domain;
-
-      if (!PJUtils::is_uri_phone_number(req_uri))
-      {
-        domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      }
-
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
-
-      if (!bgcf_route.empty())
-      {
-        for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
-        {
-          pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
-          if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
-          {
-            LOG_DEBUG("Adding route: %s", (*ii).c_str());
-            target.paths.push_back(route_uri);
-          }
-          else
-          {
-            // One of the routes is an invalid SIP URI. Stop processing the entry
-            // and clear the target
-            LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
-            target.paths.clear();
-          }
-        }
-
-        // We have added a BGCF generated route to the request, so we should
-        // switch ACR context for the downstream leg.
-        _bgcf_acr = bgcf_acr_factory->get_acr(trail,
-                                              CALLING_PARTY,
-                                              ACR::requested_node_role(msg));
-        if (_downstream_acr != _upstream_acr)
-        {
-          // We've already set up a different downstream ACR to the upstream ACR
-          // so free it off.
-          delete _downstream_acr;
-        }
-        _downstream_acr = _bgcf_acr;
-
-        // Pass the request to the downstream ACR as if it is being received.
-        _downstream_acr->rx_request(msg);
-      }
-    }
-
+    get_route_from_bgcf(msg, req_uri, pool, target, trail);
     targets.push_back(target);
-
     return;
   }
 
@@ -1838,13 +1766,9 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
   // is_user_registered() checks on Homestead to see whether the user
   // is registered - if not, we don't need to use the memcached store
   // to look up their bindings.
-  std::string public_id;
-  if (sip_uri)
-  {
-    public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
-  }
+  std::string public_id = PJUtils::public_id_from_uri(req_uri);
 
-  if ((!PJUtils::is_uri_phone_number(req_uri)) && (store) && (hss) && is_user_registered(public_id))
+  if ((store) && (hss) && (is_user_registered(public_id)))
   {
     // Determine the canonical public ID, and look up the set of associated
     // URIs on the HSS.
@@ -1978,56 +1902,134 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
 static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trail)
 {
   pj_status_t status = PJ_SUCCESS;
+  pjsip_uri* req_uri = tdata->msg->line.req.uri;
   std::string user;
-  std::string uri;
 
   // Determine whether we have a SIP URI or a tel URI
-  if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
+  if (PJSIP_URI_SCHEME_IS_SIP(req_uri))
   {
-    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
+    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->user);
   }
-  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
+  else if (PJSIP_URI_SCHEME_IS_TEL(req_uri))
   {
-    user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
+    user = PJUtils::public_id_from_uri(req_uri);
   }
 
   // Check whether we have a global number or whether we allow
   // ENUM lookups for local numbers
-  if (is_user_global(user) || !global_only_lookups)
+  if (PJUtils::is_user_global(user) || !global_only_lookups)
   {
     // Perform an ENUM lookup if we have a tel URI, or if we have
     // a SIP URI which is being treated as a phone number
-    if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
+    if ((PJUtils::is_uri_phone_number(req_uri)) ||
         (!user_phone && is_user_numeric(user)))
     {
       LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      uri = enum_service->lookup_uri_from_user(user, trail);
+      std::string new_user = enum_service->lookup_uri_from_user(user, trail);
+
+      if (!new_user.empty())
+      {
+        pjsip_uri* new_req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_user, tdata->pool);
+        if (new_req_uri != NULL)
+        {
+          LOG_DEBUG("Update request URI to %s", new_user.c_str());
+          tdata->msg->line.req.uri = new_req_uri;
+        }
+        else
+        {
+          LOG_WARNING("Badly formed URI %s from ENUM translation", new_user.c_str());
+          status = PJ_EINVAL;
+        }
+      }
+      else if (PJUtils::is_uri_phone_number(req_uri))
+      {
+        LOG_DEBUG("Could not find ENUM entry for telephone number");
+        status = PJ_ENOTFOUND;
+      }
     }
   }
-  else if (PJUtils::is_uri_phone_number(tdata->msg->line.req.uri))
+  else if (PJUtils::is_uri_phone_number(req_uri))
   {
     LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
     status = PJ_EUNKNOWN;
   }
 
-  if (!uri.empty())
-  {
-    pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(uri, tdata->pool);
-    if (req_uri != NULL)
-    {
-      LOG_DEBUG("Update request URI to %s", uri.c_str());
-      tdata->msg->line.req.uri = req_uri;
-    }
-    else
-    {
-      LOG_WARNING("Badly formed URI %s from ENUM translation", uri.c_str());
-      status = PJ_EINVAL;
-    }
-  }
 
   return status;
 }
 
+
+/// Calls into the BGCF to try and find somewhere to route to.
+void UASTransaction::get_route_from_bgcf(pjsip_msg* msg,
+                                         pjsip_uri* req_uri,
+                                         pj_pool_t* pool,
+                                         Target& target,
+                                         SAS::TrailId trail)
+{
+  target.uri = req_uri;
+
+  if ((bgcf_service) &&
+      ((PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri)) ||
+       (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))))
+  {
+    // See if we have a configured route to the destination.
+    std::string domain;
+
+    if (!PJUtils::is_uri_phone_number(req_uri))
+    {
+      domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+    }
+
+    if (!domain.empty())
+    {
+      LOG_INFO("Route request to domain %.*s",
+               ((pjsip_sip_uri*)req_uri)->host.slen,
+               ((pjsip_sip_uri*)req_uri)->host.ptr);
+    }
+    else
+    {
+      LOG_INFO("Route request to default BGCF entry");
+    }
+
+    std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
+
+    if (!bgcf_route.empty())
+    {
+      for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
+      {
+        pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
+        if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
+        {
+          LOG_DEBUG("Adding route: %s", (*ii).c_str());
+          target.paths.push_back(route_uri);
+        }
+        else
+        {
+          // One of the routes is an invalid SIP URI. Stop processing the entry
+          // and clear the target
+          LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
+          target.paths.clear();
+        }
+      }
+
+      // We have added a BGCF generated route to the request, so we should
+      // switch ACR context for the downstream leg.
+      _bgcf_acr = bgcf_acr_factory->get_acr(trail,
+                                            CALLING_PARTY,
+                                            ACR::requested_node_role(msg));
+      if (_downstream_acr != _upstream_acr)
+      {
+        // We've already set up a different downstream ACR to the upstream ACR
+        // so free it off.
+        delete _downstream_acr;
+      }
+      _downstream_acr = _bgcf_acr;
+
+      // Pass the request to the downstream ACR as if it is being received.
+      _downstream_acr->rx_request(msg);
+    }
+  }
+}
 
 static void proxy_process_register_response(pjsip_rx_data* rdata)
 {
@@ -2459,7 +2461,17 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
           LOG_DEBUG("Translating URI");
           status = translate_request_uri(_req, trail());
 
-          if (status != PJ_SUCCESS)
+          if (status == PJ_ENOTFOUND)
+          {
+            // We couldn't find an ENUM entry for a telephone number. We should now
+            // try and forward to the BGCF.
+            get_route_from_bgcf(_req->msg,
+                                _req->msg->line.req.uri,
+                                _req->pool,
+                                *target,
+                                trail());
+          }
+          else if (status != PJ_SUCCESS)
           {
             // An error occurred during URI translation.  This doesn't happen if
             // there is no match, only if the URI is invalid or there is a match
@@ -4818,19 +4830,6 @@ static pj_bool_t is_user_numeric(const std::string& user)
     }
   }
   return PJ_TRUE;
-}
-
-// Determines whether a user string represents a global number.
-//
-// @returns PJ_TRUE if so, PJ_FALSE if not.
-static pj_bool_t is_user_global(const std::string& user)
-{
-  if (user.size() > 0 && user[0] == '+')
-  {
-    return PJ_TRUE;
-  }
-
-  return PJ_FALSE;
 }
 
 /// Adds a Path header when functioning as an edge proxy.

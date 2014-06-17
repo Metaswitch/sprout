@@ -56,6 +56,9 @@ extern "C" {
 #include "basicproxy.h"
 #include "icscfproxy.h"
 
+/// Define a constant for the maximum number of ENUM lookups
+/// we want to do in I-CSCF termination processing.
+#define MAX_ENUM_LOOKUPS 2
 
 /// Constructor.
 ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
@@ -63,12 +66,16 @@ ICSCFProxy::ICSCFProxy(pjsip_endpoint* endpt,
                        int priority,
                        HSSConnection* hss,
                        ACRFactory* acr_factory,
-                       SCSCFSelector* scscf_selector) :
+                       SCSCFSelector* scscf_selector,
+                       EnumService* enum_service,
+                       bool enforce_global_only_lookups) :
   BasicProxy(endpt, "mod-icscf", priority, false),
   _port(port),
   _hss(hss),
   _scscf_selector(scscf_selector),
-  _acr_factory(acr_factory)
+  _acr_factory(acr_factory),
+  _enum_service(enum_service),
+  _global_only_lookups(enforce_global_only_lookups)
 {
 }
 
@@ -274,7 +281,19 @@ pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
       // Terminating request.
       LOG_DEBUG("Terminating request");
       _case = SessionCase::TERMINATING;
-      impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(msg));
+      pjsip_uri* uri = PJUtils::term_served_user(msg);
+      impu = PJUtils::public_id_from_uri(uri);
+
+      if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+          (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0))
+      {
+        pjsip_tel_uri* tel_uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri);
+        if ((tel_uri != NULL) && (PJSIP_URI_SCHEME_IS_TEL(tel_uri)))
+        {
+          LOG_DEBUG("Change request URI from SIP URI to tel URI %s", impu.c_str());
+          msg->line.req.uri = (pjsip_uri*)tel_uri;
+        }
+      }
     }
 
     // Create an LIR router to handle the HSS interactions and S-CSCF
@@ -318,45 +337,88 @@ void ICSCFProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
 int ICSCFProxy::UASTsx::calculate_targets()
 {
   pjsip_sip_uri* scscf_sip_uri;
+  int status_code = PJSIP_SC_OK;
+  bool successful_enum_translation = false;
 
-  // Invoke the router to select an S-CSCF.
-  int status_code = _router->get_scscf(_req->pool, scscf_sip_uri);
-
-  if (status_code == PJSIP_SC_OK)
+  // We put this processing in a loop because we may need to go round
+  // multiple times if we do successful ENUM translation and have a new
+  // SIP URI to try and find an S-CSCF for.
+  for (int ii = 0; ii < MAX_ENUM_LOOKUPS; ++ii)
   {
-    // Found a suitable S-CSCF.
+    // Invoke the router to select an S-CSCF.
+    status_code = _router->get_scscf(_req->pool, scscf_sip_uri);
 
-    if (_case == SessionCase::REGISTER)
+    if (status_code == PJSIP_SC_OK)
     {
-      // REGISTER request, so add a target with this S-CSCF as the Request-URI.
-      LOG_DEBUG("Found SCSCF for REGISTER");
-      Target* target = new Target;
-      target->uri = (pjsip_uri*)scscf_sip_uri;
-      add_target(target);
+      // Found a suitable S-CSCF.
 
-      // Don't add a P-User-Database header - as per 5.3.1.2/TS24.229 Note 3
-      // this can only be added if we have local configuration that the S-CSCF
-      // can process P-User-Database.
-    }
-    else
-    {
-      // Non-register request, so add a Route header for the destination S-CSCF.
-      LOG_DEBUG("Found SCSCF for non-REGISTER");
-      Target* target = new Target;
-      scscf_sip_uri->lr_param = 1;
-      if (_case == SessionCase::ORIGINATING)
+      if (_case == SessionCase::REGISTER)
       {
-        // Add the "orig" parameter.
-        pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
-        pj_strdup(_req->pool, &p->name, &STR_ORIG);
-        p->value.slen = 0;
-        pj_list_insert_after(&scscf_sip_uri->other_param, p);
-      }
-      target->paths.push_back((pjsip_uri*)scscf_sip_uri);
-      add_target(target);
+        // REGISTER request, so add a target with this S-CSCF as the Request-URI.
+        LOG_DEBUG("Found SCSCF for REGISTER");
+        Target* target = new Target;
+        target->uri = (pjsip_uri*)scscf_sip_uri;
+        add_target(target);
 
-      // Remove the P-Profile-Key header if present.
-      PJUtils::remove_hdr(_req->msg, &STR_P_PROFILE_KEY);
+        // Don't add a P-User-Database header - as per 5.3.1.2/TS24.229 Note 3
+        // this can only be added if we have local configuration that the S-CSCF
+        // can process P-User-Database.
+      }
+      else
+      {
+        // Non-register request, so add a Route header for the destination S-CSCF.
+        LOG_DEBUG("Found SCSCF for non-REGISTER");
+        Target* target = new Target;
+        scscf_sip_uri->lr_param = 1;
+        if (_case == SessionCase::ORIGINATING)
+        {
+          // Add the "orig" parameter.
+          pjsip_param* p = PJ_POOL_ALLOC_T(_req->pool, pjsip_param);
+          pj_strdup(_req->pool, &p->name, &STR_ORIG);
+          p->value.slen = 0;
+          pj_list_insert_after(&scscf_sip_uri->other_param, p);
+        }
+        target->paths.push_back((pjsip_uri*)scscf_sip_uri);
+        add_target(target);
+
+        // Remove the P-Profile-Key header if present.
+        PJUtils::remove_hdr(_req->msg, &STR_P_PROFILE_KEY);
+      }
+    }
+    else if ((status_code == PJSIP_SC_NOT_FOUND) &&
+             (_case == SessionCase::TERMINATING) &&
+             (PJSIP_URI_SCHEME_IS_TEL(_req->msg->line.req.uri)))
+    {
+      std::string user = PJUtils::public_id_from_uri((pjsip_uri*)_req->msg->line.req.uri);
+
+      if ((!((ICSCFProxy*)_proxy)->_global_only_lookups) ||
+          (PJUtils::is_user_global(user)))
+      {
+        std::string new_uri = ((ICSCFProxy*)_proxy)->_enum_service->lookup_uri_from_user(user, _trail);
+        if (!new_uri.empty())
+        {
+          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, _req->pool);
+          if (req_uri != NULL)
+          {
+            LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+            _req->msg->line.req.uri = req_uri;
+            status_code = PJSIP_SC_OK;
+            successful_enum_translation = true;
+          }
+          else
+          {
+            LOG_WARNING("Badly formed URI %s from ENUM translation", new_uri.c_str());
+          }
+        }
+      }
+    }
+
+    // We only want to continue in this loop if we've done a
+    // successful ENUM translation and we want to try and find
+    // an S-CSCF again.
+    if (!successful_enum_translation)
+    {
+      break;
     }
   }
 

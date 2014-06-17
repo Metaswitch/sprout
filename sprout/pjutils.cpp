@@ -1420,6 +1420,52 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
            (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
 }
 
+pjsip_tel_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri)
+{
+  pjsip_tel_uri* tel_uri;
+
+  tel_uri->number = sip_uri->user;
+  tel_uri->context.slen = 0;
+  tel_uri->other_param.next = NULL;
+
+  pjsip_param* isub = pjsip_param_find(&sip_uri->other_param, &STR_ISUB);
+  if (isub != NULL)
+  {
+    tel_uri->isub_param.slen = isub->value.slen;
+    tel_uri->isub_param.ptr = isub->value.ptr;
+  }
+  else
+  {
+    tel_uri->isub_param.slen = 0;
+  }
+
+  pjsip_param* ext = pjsip_param_find(&sip_uri->other_param, &STR_EXT);
+  if (ext != NULL)
+  {
+    tel_uri->ext_param.slen = ext->value.slen;
+    tel_uri->ext_param.ptr = ext->value.ptr;
+  }
+  else
+  {
+    tel_uri->ext_param.slen = 0;
+  }
+
+  return tel_uri;
+}
+
+// Determines whether a user string represents a global number.
+//
+// @returns PJ_TRUE if so, PJ_FALSE if not.
+pj_bool_t PJUtils::is_user_global(const std::string& user)
+{
+  if (user.size() > 0 && user[0] == '+')
+  {
+    return PJ_TRUE;
+  }
+
+  return PJ_FALSE;
+}
+
 // Return true if there are no route headers, or there is exactly one,
 // which is local
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)

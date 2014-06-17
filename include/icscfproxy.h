@@ -44,6 +44,7 @@
 
 #include "hssconnection.h"
 #include "scscfselector.h"
+#include "enumservice.h"
 #include "servercaps.h"
 #include "acr.h"
 #include "icscfrouter.h"
@@ -58,7 +59,9 @@ public:
              int priority,
              HSSConnection* hss,
              ACRFactory* acr_factory,
-             SCSCFSelector* scscf_selector);
+             SCSCFSelector* scscf_selector,
+             EnumService* enum_service,
+             bool enforce_global_only_lookups);
 
   /// Destructor.
   ~ICSCFProxy();
@@ -145,6 +148,13 @@ private:
 
   /// ACR factory for I-CSCF ACRs.
   ACRFactory* _acr_factory;
+
+  /// Enum service.
+  EnumService* _enum_service;
+
+  /// A flag indicating whether or not we enforce the rule that ENUM
+  /// lookups are only done for global numbers.
+  bool _global_only_lookups;
 };
 
 

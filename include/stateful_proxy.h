@@ -222,6 +222,12 @@ private:
                                int max_targets,
                                SAS::TrailId trail);
 
+  void get_route_from_bgcf(pjsip_msg* msg,
+                           pjsip_uri* req_uri,
+                           pj_pool_t* pool,
+                           Target &target,
+                           SAS::TrailId trail);
+
   void cancel_trying_timer();
 
   pj_grp_lock_t*       _lock;      //< Lock to protect this UASTransaction and the underlying PJSIP transaction
