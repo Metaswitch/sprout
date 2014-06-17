@@ -346,6 +346,7 @@ void SipTest::add_host_mapping(const string& hostname, const string& addresses)
   std::vector<DnsRRecord*> records;
   while (!address_list.empty())
   {
+    cwtest_add_host_mapping(hostname, address_list.front());
     struct in_addr addr;
     inet_pton(AF_INET, address_list.front().c_str(), &addr);
     records.push_back((DnsRRecord*)new DnsARecord(hostname, 36000000, addr));
