@@ -197,7 +197,6 @@ TEST_F(HssConnectionTest, CorruptDigest)
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
   delete actual;
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
@@ -258,7 +257,6 @@ TEST_F(HssConnectionTest, BadXML)
   _hss.update_registration_state("pubid42_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 
@@ -271,7 +269,6 @@ TEST_F(HssConnectionTest, BadXML2)
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
@@ -283,7 +280,6 @@ TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)
   _hss.update_registration_state("missingelement1", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
@@ -295,7 +291,6 @@ TEST_F(HssConnectionTest, BadXML_MissingClearwaterRegData)
   _hss.update_registration_state("missingelement3", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed Homestead XML"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
@@ -307,7 +302,6 @@ TEST_F(HssConnectionTest, BadXML_MissingIMSSubscription)
   _hss.update_registration_state("missingelement2", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 
@@ -321,7 +315,6 @@ TEST_F(HssConnectionTest, ServerFailure)
   EXPECT_EQ("", regstate);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("http://narcissus/impu/pubid44/reg-data failed"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(HssConnectionTest, SimpleUserAuth)

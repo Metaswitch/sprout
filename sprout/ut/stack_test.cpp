@@ -168,5 +168,4 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
   EXPECT_EQ(baseline, get_thread_count());
 
   destroy_stack();
-  PrintingTestLogger::DEFAULT.take_over();
 }

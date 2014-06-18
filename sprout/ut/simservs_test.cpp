@@ -212,7 +212,6 @@ TEST_F(SimServsTest, InvalidXml1) {
   ss_values exp;
   expect_ss(exp, ss);
   EXPECT_TRUE(log.contains("Parse error"));
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(SimServsTest, Typical)

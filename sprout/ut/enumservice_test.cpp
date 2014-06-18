@@ -116,7 +116,6 @@ TEST_F(JSONEnumServiceTest, ParseError)
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_parse_error.json"));
   EXPECT_TRUE(log.contains("Failed to read ENUM configuration data"));
   ET("+15108580271", "").test(enum_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(JSONEnumServiceTest, MissingParts)
@@ -128,7 +127,6 @@ TEST_F(JSONEnumServiceTest, MissingParts)
   ET("+15108580272", "").test(enum_);
   ET("+15108580273", "").test(enum_);
   ET("+15108580274", "sip:+15108580274@ut.cw-ngv.com").test(enum_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(JSONEnumServiceTest, MissingBlock)
@@ -137,7 +135,6 @@ TEST_F(JSONEnumServiceTest, MissingBlock)
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_missing_block.json"));
   EXPECT_TRUE(log.contains("Badly formed ENUM configuration data - missing number_blocks object"));
   ET("+15108580271", "").test(enum_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(JSONEnumServiceTest, MissingFile)
@@ -146,7 +143,6 @@ TEST_F(JSONEnumServiceTest, MissingFile)
   JSONEnumService enum_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
   EXPECT_TRUE(log.contains("Failed to read ENUM configuration data"));
   ET("+15108580271", "").test(enum_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(JSONEnumServiceTest, Regex)
@@ -176,7 +172,6 @@ TEST_F(JSONEnumServiceTest, BadRegex)
   ET("+15108580273", "").test(enum_);
   ET("+15108580274", "").test(enum_);
   ET("+15108580275", "").test(enum_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 struct ares_naptr_reply basic_naptr_reply[] = {

@@ -129,7 +129,6 @@ TEST_F(BgcfServiceTest, ParseError)
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));
   EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
   ET("+15108580271", "").test(bgcf_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingParts)
@@ -140,7 +139,6 @@ TEST_F(BgcfServiceTest, MissingParts)
   ET("foreign-domain.example.com", "").test(bgcf_);
   ET("198.147.226.99", "").test(bgcf_);
   ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingBlock)
@@ -149,7 +147,6 @@ TEST_F(BgcfServiceTest, MissingBlock)
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_block.json"));
   EXPECT_TRUE(log.contains("Badly formed BGCF configuration file - missing routes object"));
   ET("+15108580271", "").test(bgcf_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
 
 TEST_F(BgcfServiceTest, MissingFile)
@@ -158,5 +155,4 @@ TEST_F(BgcfServiceTest, MissingFile)
   BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
   EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
   ET("+15108580271", "").test(bgcf_);
-  PrintingTestLogger::DEFAULT.take_over();
 }
