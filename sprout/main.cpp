@@ -788,6 +788,9 @@ void exception_handler(int sig)
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
+  // Ensure the log files are complete
+  LOG_COMMIT();
+
   // Dump a core.
   abort();
 }
