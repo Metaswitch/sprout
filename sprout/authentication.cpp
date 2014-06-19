@@ -303,7 +303,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
   // Get the Authentication Vector from the HSS.
   Json::Value* av = NULL;
-  hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
+  HTTPCode http_code = hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
 
   if ((av != NULL) &&
       (!verify_auth_vector(av, impi, get_trail(rdata))))
@@ -408,13 +408,29 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
   else
   {
+    std::string error_msg;
+
+    // If we couldn't get the AV because a downstream node is overloaded then don't return
+    // a 4xx error to the client.
+    if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
+    {
+      error_msg = "Downstream node is overloaded or unresponsive, unable to get Authentication vector";
+      LOG_DEBUG(error_msg.c_str());
+      tdata->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
+      tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVER_TIMEOUT);
+    }
+    else
+    {
+      error_msg = "Failed to get Authentication vector";
+      LOG_DEBUG(error_msg.c_str());
+      tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
+      tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
+    }
+
     SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED, 0);
-    std::string error_msg = "Failed to get Authentication vector";
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
-    tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
-    tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
     pjsip_tx_data_invalidate_msg(tdata);
   }
 }

@@ -685,6 +685,44 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
 }
 
 
+TEST_F(AuthenticationTest, DigestAuthFailTimeout)
+{
+  // Test a failed SIP Digest authentication flows where homestead is overloaded,
+  // and when it reports the HSS is overloaded
+  pjsip_tx_data* tdata;
+
+  // Set up the HSS response for the AV query using a default private user identity.
+  _hss_connection->set_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                           503);
+  _hss_connection->set_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain",
+                           504);
+
+  // Send in a REGISTER request.
+  AuthenticationMessage msg1("REGISTER");
+  msg1._auth_hdr = true;
+  msg1._auth_user = "6505550001@homedomain";
+  inject_msg(msg1.get());
+
+  // Expect a 504 Server Timeout response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(504).matches(tdata->msg);
+  free_txdata();
+
+  msg1._auth_user = "6505550002@homedomain";
+  inject_msg(msg1.get());
+
+  // Expect a 504 Server Timeout response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(504).matches(tdata->msg);
+  free_txdata();
+
+  _hss_connection->delete_rc("/impi/6505550001%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+  _hss_connection->delete_rc("/impi/6505550002%40homedomain/av?impu=sip%3A6505550001%40homedomain");
+}
+
+
 TEST_F(AuthenticationTest, AKAAuthSuccess)
 {
   // Test a successful AKA authentication flow.

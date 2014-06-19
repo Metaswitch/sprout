@@ -85,41 +85,6 @@ HSSConnection::~HSSConnection()
 }
 
 
-/// Retrieve user's digest data as JSON object. Caller is responsible for deleting.
-HTTPCode HSSConnection::get_digest_data(const std::string& private_user_identity,
-                                        const std::string& public_user_identity,
-                                        Json::Value*& digest_data,
-                                        SAS::TrailId trail)
-{
-  Utils::StopWatch stopWatch;
-  stopWatch.start();
-
-  SAS::Event event(trail, SASEvent::HTTP_HOMESTEAD_DIGEST, 0);
-  event.add_var_param(private_user_identity);
-  event.add_var_param(public_user_identity);
-  SAS::report_event(event);
-
-  std::string path = "/impi/" +
-                     Utils::url_escape(private_user_identity) +
-                     "/digest";
-  if (!public_user_identity.empty())
-  {
-    path += "?public_id=" + Utils::url_escape(public_user_identity);
-  }
-
-  HTTPCode rc = get_json_object(path, digest_data, trail);
-
-  unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
-  {
-    _latency_stat.accumulate(latency_us);
-    _digest_latency_stat.accumulate(latency_us);
-  }
-
-  return rc;
-}
-
-
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
 HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity,
                                         const std::string& public_user_identity,
@@ -160,7 +125,12 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   HTTPCode rc = get_json_object(path, av, trail);
 
   unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
+
+  // Only accumulate the latency if we haven't already applied a
+  // penalty
+  if ((rc != HTTP_SERVER_UNAVAILABLE) &&
+      (rc != HTTP_GATEWAY_TIMEOUT)    &&
+      (stopWatch.read(latency_us)))
   {
     _latency_stat.accumulate(latency_us);
     _digest_latency_stat.accumulate(latency_us);
@@ -402,14 +372,17 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   HTTPCode http_code = put_for_xml_object(path, "{\"reqtype\": \""+type+"\"}", root_underlying_ptr, trail);
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
+
   unsigned long latency_us = 0;
 
-  if (http_code != HTTP_SERVER_UNAVAILABLE) {
-    if (stopWatch.read(latency_us))
-    {
-      _latency_stat.accumulate(latency_us);
-      _subscription_latency_stat.accumulate(latency_us);
-    }
+  // Only accumulate the latency if we haven't already applied a
+  // penalty
+  if ((http_code != HTTP_SERVER_UNAVAILABLE) &&
+      (http_code != HTTP_GATEWAY_TIMEOUT)    &&
+      (stopWatch.read(latency_us)))
+  {
+    _latency_stat.accumulate(latency_us);
+    _subscription_latency_stat.accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -443,19 +416,20 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   rapidxml::xml_document<>* root_underlying_ptr = NULL;
   HTTPCode http_code = get_xml_object(path, root_underlying_ptr, trail);
 
-
   // Needs to be a shared pointer - multiple Ifcs objects will need a reference
   // to it, so we want to delete the underlying document when they all go out
   // of scope.
   std::shared_ptr<rapidxml::xml_document<> > root (root_underlying_ptr);
   unsigned long latency_us = 0;
 
-  if (http_code != HTTP_SERVER_UNAVAILABLE) {
-    if (stopWatch.read(latency_us))
-    {
-      _latency_stat.accumulate(latency_us);
-      _subscription_latency_stat.accumulate(latency_us);
-    }
+  // Only accumulate the latency if we haven't already applied a
+  // penalty
+  if ((http_code != HTTP_SERVER_UNAVAILABLE) &&
+      (http_code != HTTP_GATEWAY_TIMEOUT)    &&
+      (stopWatch.read(latency_us)))
+  {
+    _latency_stat.accumulate(latency_us);
+    _subscription_latency_stat.accumulate(latency_us);
   }
 
   if (http_code != HTTP_OK)
@@ -508,7 +482,11 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
   HTTPCode rc = get_json_object(path, user_auth_status, trail);
 
   unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
+  // Only accumulate the latency if we haven't already applied a
+  // penalty
+  if ((rc != HTTP_SERVER_UNAVAILABLE) &&
+      (rc != HTTP_GATEWAY_TIMEOUT)    &&
+      (stopWatch.read(latency_us)))
   {
     _latency_stat.accumulate(latency_us);
     _user_auth_latency_stat.accumulate(latency_us);
@@ -548,7 +526,11 @@ HTTPCode HSSConnection::get_location_data(const std::string& public_user_identit
   HTTPCode rc = get_json_object(path, location_data, trail);
 
   unsigned long latency_us = 0;
-  if (stopWatch.read(latency_us))
+  // Only accumulate the latency if we haven't already applied a
+  // penalty
+  if ((rc != HTTP_SERVER_UNAVAILABLE) &&
+      (rc != HTTP_GATEWAY_TIMEOUT)    &&
+      (stopWatch.read(latency_us)))
   {
     _latency_stat.accumulate(latency_us);
     _location_latency_stat.accumulate(latency_us);

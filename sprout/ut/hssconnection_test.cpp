@@ -59,10 +59,6 @@ class HssConnectionTest : public BaseTest
     _hss("narcissus", NULL, NULL)
   {
     fakecurl_responses.clear();
-    fakecurl_responses["http://narcissus/impi/privid69/digest"] = "{\"digest\": \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=pubid42"] = "{\"digest\": \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/impi/privid_corrupt/digest?public_id=pubid42"] = "{\"digest\"; \"myhashhere\"}";
-    fakecurl_responses["http://narcissus/impi/privid69/digest?public_id=wrongpubid"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
@@ -137,6 +133,7 @@ class HssConnectionTest : public BaseTest
     fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid44/reg-data", "{\"reqtype\": \"reg\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
+    fakecurl_responses["http://narcissus/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
     fakecurl_responses["http://narcissus/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
     fakecurl_responses["http://narcissus/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
@@ -179,25 +176,6 @@ class HssConnectionTest : public BaseTest
   {
   }
 };
-
-TEST_F(HssConnectionTest, SimpleDigest)
-{
-  Json::Value* actual;
-  _hss.get_digest_data("privid69", "pubid42", actual, 0);
-  ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("myhashhere", actual->get("digest", "").asString());
-  delete actual;
-}
-
-TEST_F(HssConnectionTest, CorruptDigest)
-{
-  CapturingTestLogger log;
-  Json::Value* actual;
-  _hss.get_digest_data("privid_corrupt", "pubid42", actual, 0);
-  ASSERT_TRUE(actual == NULL);
-  EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
-  delete actual;
-}
 
 TEST_F(HssConnectionTest, SimpleAssociatedUris)
 {
@@ -332,6 +310,16 @@ TEST_F(HssConnectionTest, FullUserAuth)
   _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
   ASSERT_TRUE(actual != NULL);
   EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  delete actual;
+}
+
+TEST_F(HssConnectionTest, CorruptAuth)
+{
+  CapturingTestLogger log;
+  Json::Value* actual;
+  _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", actual, 0);
+  ASSERT_TRUE(actual == NULL);
+  EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
   delete actual;
 }
 

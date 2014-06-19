@@ -85,9 +85,9 @@ get_settings()
         sprout_rr_level="pcscf"
         scscf=5054
         alias_list=""
-        chronos_hostname="localhost:7253"
         default_session_expires=600
         . /etc/clearwater/config
+        [ -n "$chronos_hostname" ] || chronos_hostname=$local_ip:7253
 
         # Set up a default cluster_settings file if it does not exist.  The local
         # IP address needs to be surrounded by square brackets if it is IPv6.

@@ -1195,8 +1195,8 @@ TEST_F(RegistrarTest, AssociatedUrisTimeOut)
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  EXPECT_EQ(503, out->line.status.code);
-  EXPECT_EQ("Service Unavailable", str_pj(out->line.status.reason));
+  EXPECT_EQ(504, out->line.status.code);
+  EXPECT_EQ("Server Timeout", str_pj(out->line.status.reason));
 
   _hss_connection->delete_rc("/impu/sip%3A6505550232%40homedomain/reg-data");
 }

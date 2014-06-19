@@ -201,11 +201,12 @@ private:
   AsChainLink create_as_chain(const SessionCase& session_case, Ifcs ifcs, std::string served_user = "");
 
   bool find_as_chain(const ServingState& serving_state);
-  AsChainLink::Disposition handle_originating(Target** pre_target);
+  AsChainLink::Disposition handle_originating(Target*& target);
   void common_start_of_terminating_processing();
   bool move_to_terminating_chain();
-  AsChainLink::Disposition handle_terminating(Target** pre_target);
-  void handle_outgoing_non_cancel(Target* pre_target);
+  AsChainLink::Disposition handle_terminating(Target*& target);
+  AsChainLink::Disposition apply_services(Target*& target);
+  void handle_outgoing_non_cancel(Target* target);
 
   bool get_data_from_hss(std::string public_id, HSSCallInformation& data, SAS::TrailId trail);
   bool lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail);
@@ -242,9 +243,9 @@ private:
   CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
-  AsChainLink          _as_chain_link; //< Set if transaction is currently being controlled by an AS chain.
-  bool                 _as_chain_linked; //< Set if transaction has ever been linked to an AS chain.
-  std::list<AsChain*>  _victims;  //< Objects to die along with the transaction.
+  std::list<AsChainLink> _as_chain_links; //< References to the AsChains this transaction is associated with.
+                                          //< The last in the list is the chain currently controlling the
+                                          //< transaction.
   std::map<std::string, HSSCallInformation> cached_hss_data; // Maps public IDs to their associated URIs and IFC
 
   /// Pointer to ACR used for the upstream side of the transaction.  NULL if

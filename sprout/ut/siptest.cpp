@@ -343,6 +343,7 @@ void SipTest::add_host_mapping(const string& hostname, const string& addresses)
   std::vector<DnsRRecord*> records;
   while (!address_list.empty())
   {
+    cwtest_add_host_mapping(hostname, address_list.front());
     struct in_addr addr;
     inet_pton(AF_INET, address_list.front().c_str(), &addr);
     records.push_back((DnsRRecord*)new DnsARecord(hostname, 36000000, addr));
@@ -355,7 +356,7 @@ void SipTest::inject_msg(const string& msg, TransportFlow* tp)
 {
   pjsip_rx_data* rdata = build_rxdata(msg, tp);
   char buf[100];
-  snprintf(buf, sizeof(buf), "inject_msg on %p", tp);
+  snprintf(buf, sizeof(buf), "inject_msg on %p (transport %p)", tp, tp->_transport);
   log_pjsip_buf(buf, rdata->pkt_info.packet, rdata->pkt_info.len);
   pj_size_t size_eaten = pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
                                                     rdata);
