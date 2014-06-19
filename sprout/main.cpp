@@ -788,6 +788,10 @@ void exception_handler(int sig)
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
+  // Ensure the log files are complete - the core file created by abort() below
+  // will trigger the log files to be copied to the diags bundle
+  LOG_COMMIT();
+
   // Dump a core.
   abort();
 }
