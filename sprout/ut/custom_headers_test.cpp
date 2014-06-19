@@ -40,7 +40,6 @@
 #include "siptest.hpp"
 #include "pjutils.h"
 #include "stack.h"
-#include "fakelogger.hpp"
 #include "custom_headers.h"
 
 using namespace std;

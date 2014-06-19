@@ -43,7 +43,6 @@
 
 #include "utils.h"
 #include "siptest.hpp"
-#include "fakelogger.hpp"
 #include "pjutils.h"
 #include "stack.h"
 

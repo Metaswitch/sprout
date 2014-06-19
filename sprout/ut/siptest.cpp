@@ -55,7 +55,6 @@ extern "C" {
 #include "statistic.h"
 #include "faketransport_udp.hpp"
 #include "faketransport_tcp.hpp"
-#include "fakelogger.hpp"
 #include "pjutils.h"
 #include "test_interposer.hpp"
 #include "siptest.hpp"

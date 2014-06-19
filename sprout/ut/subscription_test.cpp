@@ -43,7 +43,6 @@
 #include "analyticslogger.h"
 #include "stack.h"
 #include "subscription.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"

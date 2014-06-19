@@ -51,7 +51,6 @@ extern "C" {
 #include "avstore.h"
 #include "hssconnection.h"
 #include "authentication.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "md5.h"

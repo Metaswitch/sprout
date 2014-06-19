@@ -46,7 +46,6 @@
 #include "test_utils.hpp"
 #include "analyticslogger.h"
 #include "stateful_proxy.h"
-#include "fakelogger.hpp"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"

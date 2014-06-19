@@ -44,7 +44,6 @@
 #include "stack.h"
 #include "registrar.h"
 #include "registration_utils.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"

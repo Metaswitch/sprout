@@ -42,7 +42,6 @@
 
 #include "utils.h"
 #include "siptest.hpp"
-#include "fakelogger.hpp"
 
 #include "sessioncase.h"
 

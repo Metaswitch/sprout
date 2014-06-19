@@ -44,7 +44,6 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "dialog_tracker.hpp"
-#include "fakelogger.hpp"
 
 using namespace std;
 

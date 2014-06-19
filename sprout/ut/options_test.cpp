@@ -42,7 +42,6 @@
 #include "utils.h"
 #include "analyticslogger.h"
 #include "options.h"
-#include "fakelogger.hpp"
 
 using namespace std;
 

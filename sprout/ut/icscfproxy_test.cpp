@@ -45,7 +45,6 @@
 #include "utils.h"
 #include "test_utils.hpp"
 #include "icscfproxy.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 

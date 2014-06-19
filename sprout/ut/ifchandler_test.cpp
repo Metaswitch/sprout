@@ -43,7 +43,6 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "fakehssconnection.hpp"
-#include "fakelogger.hpp"
 #include "fakechronosconnection.hpp"
 
 #include "ifchandler.h"

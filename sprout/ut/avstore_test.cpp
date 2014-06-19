@@ -44,7 +44,6 @@
 #include "sas.h"
 #include "localstore.h"
 #include "avstore.h"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 

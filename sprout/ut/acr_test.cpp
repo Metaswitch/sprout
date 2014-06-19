@@ -48,7 +48,6 @@ extern "C" {
 #include <json/json.h>
 
 #include "test_utils.hpp"
-#include "fakelogger.hpp"
 #include "siptest.hpp"
 #include "utils.h"
 #include "pjutils.h"

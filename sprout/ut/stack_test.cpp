@@ -46,7 +46,6 @@
 #include "utils.h"
 #include "sas.h"
 #include "stack.h"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "siptest.hpp"
 

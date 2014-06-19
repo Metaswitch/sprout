@@ -46,7 +46,6 @@
 #include "hssconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
-#include "fakelogger.hpp"
 
 using namespace std;
 
