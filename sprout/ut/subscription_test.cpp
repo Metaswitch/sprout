@@ -66,9 +66,8 @@ public:
     _remote_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
-    _analytics = new AnalyticsLogger("foo");
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
-    _analytics->_logger = NULL;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
     ASSERT_EQ(PJ_SUCCESS, ret);
@@ -94,14 +93,12 @@ public:
 
   SubscriptionTest() : SipTest(&mod_subscription)
   {
-    _analytics->_logger = &PrintingTestLogger::DEFAULT;
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
   }
 
   ~SubscriptionTest()
   {
-    _analytics->_logger = NULL;
   }
 
 protected:

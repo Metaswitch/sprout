@@ -51,17 +51,13 @@
 #include "analyticslogger.h"
 
 
-AnalyticsLogger::AnalyticsLogger(const std::string& directory)
+AnalyticsLogger::AnalyticsLogger(Logger* logger): _logger(logger)
 {
-  _default_logger = new Logger(directory, std::string("log"));
-  _logger = _default_logger;
-  _logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
 }
 
 
 AnalyticsLogger::~AnalyticsLogger()
 {
-  delete _default_logger;
 }
 
 

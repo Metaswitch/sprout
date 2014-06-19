@@ -47,7 +47,7 @@
 class AnalyticsLogger
 {
 public:
-  AnalyticsLogger(const std::string& directory);
+  AnalyticsLogger(Logger* logger);
   ~AnalyticsLogger();
 
   void registration(const std::string& aor,

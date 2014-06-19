@@ -75,8 +75,7 @@ public:
     _av_store = new AvStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
-    _analytics = new AnalyticsLogger("foo");
-    _analytics->_logger = NULL;
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_authentication("homedomain",
                                           _av_store,
@@ -102,12 +101,10 @@ public:
 
   AuthenticationTest() : SipTest(&mod_auth)
   {
-    _analytics->_logger = &PrintingTestLogger::DEFAULT;
   }
 
   ~AuthenticationTest()
   {
-    _analytics->_logger = NULL;
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.

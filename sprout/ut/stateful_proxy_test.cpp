@@ -335,8 +335,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _analytics = new AnalyticsLogger("foo");
-    _analytics->_logger = NULL;
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _call_services = NULL;
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
@@ -414,7 +413,6 @@ public:
   StatefulProxyTestBase()
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    _analytics->_logger = &PrintingTestLogger::DEFAULT;
     _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {
@@ -459,7 +457,6 @@ public:
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
 
-    _analytics->_logger = NULL;
   }
 
 protected:

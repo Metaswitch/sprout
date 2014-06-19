@@ -904,6 +904,7 @@ int main(int argc, char *argv[])
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;
   IfcHandler* ifc_handler = NULL;
+  Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
@@ -1043,7 +1044,9 @@ int main(int argc, char *argv[])
 
   if (opt.analytics_enabled)
   {
-    analytics_logger = new AnalyticsLogger(opt.analytics_directory);
+    analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
+    analytics_logger_logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
+    analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
   if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
@@ -1564,6 +1567,9 @@ int main(int argc, char *argv[])
 
   delete sip_resolver;
   delete dns_resolver;
+
+  delete analytics_logger;
+  delete analytics_logger_logger;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
