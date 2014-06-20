@@ -471,6 +471,21 @@ void RalfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
     _route_hdr_transmitted = hdr_contents((pjsip_hdr*)route_hdr);
   }
 
+  // If the request is an INVITE, save the delta_seconds value from the
+  // Session-Expires header if present.
+  if (req->line.req.method.id == PJSIP_INVITE_METHOD)
+  {
+    pjsip_session_expires_hdr* sess_expires = (pjsip_session_expires_hdr*)
+                             pjsip_msg_find_hdr_by_names(req,
+                                                         &STR_SESSION_EXPIRES,
+                                                         &STR_X,
+                                                         NULL);
+    if (sess_expires != NULL)
+    {
+      _interim_interval = sess_expires->expires;
+    }
+  }
+
   if ((_method != "REGISTER") &&
       (_node_role == NODE_ROLE_ORIGINATING))
   {
