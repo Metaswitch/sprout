@@ -1153,6 +1153,15 @@ int main(int argc, char *argv[])
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
 
+  // Determine if we're IPv4 or IPv6.
+  int http_af = AF_INET;
+  struct in6_addr dummy_addr;
+  if (inet_pton(AF_INET6, opt.http_address.c_str(), &dummy_addr) == 1)
+  {
+    LOG_DEBUG("Local host is an IPv6 address");
+    http_af = AF_INET6;
+  }
+
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
@@ -1244,10 +1253,23 @@ int main(int argc, char *argv[])
   if (opt.chronos_service != "")
   {
     std::string port_str = std::to_string(opt.http_port);
-    std::string http_uri = opt.http_address + ":" + std::string(port_str);
+    std::string chronos_callback_uri;
+
+    // We want Chronos to call back to its local sprout instance so that we can
+    // handle Sprouts failing without missing timers.
+    if (http_af == AF_INET)
+    {
+      chronos_callback_uri = "127.0.0.1:" + port_str;
+    }
+    else
+    {
+      chronos_callback_uri = "[::1]:" + port_str;
+    }
+
     // Create a connection to Chronos.
     LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service, http_uri);
+    chronos_connection = new ChronosConnection(opt.chronos_service,
+                                               chronos_callback_uri);
   }
 
   if (opt.scscf_enabled)
