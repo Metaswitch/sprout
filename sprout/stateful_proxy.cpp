@@ -1792,8 +1792,12 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
         {
           pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
+
           if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
           {
+            // Enforce loose routing
+            ((pjsip_sip_uri*)route_uri)->lr_param = 1;
+
             LOG_DEBUG("Adding route: %s", (*ii).c_str());
             target.paths.push_back(route_uri);
           }
