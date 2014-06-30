@@ -803,6 +803,7 @@ pj_status_t BasicProxy::UASTsx::create_pjsip_transaction(pjsip_rx_data* rdata)
     // LCOV_EXCL_START
     pj_grp_lock_release(_lock);
     pj_grp_lock_dec_ref(_lock);
+    _lock = NULL;
     return status;
     // LCOV_EXCL_STOP
   }
