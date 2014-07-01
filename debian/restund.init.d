@@ -85,7 +85,7 @@ do_start()
                 || return 1
 
         # daemon is not running, so attempt to start it.
-        export LD_LIBRARY_PATH=/usr/share/clearwater/lib
+        export LD_LIBRARY_PATH=/usr/share/clearwater/restund/lib
         ulimit -Hn 10000
         ulimit -Sn 10000
         ulimit -c unlimited
