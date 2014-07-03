@@ -49,7 +49,7 @@ extern "C" {
 #include "dnscachedresolver.h"
 #include "localstore.h"
 #include "regstore.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "fakehssconnection.hpp"
 
 using std::string;

@@ -46,7 +46,7 @@
 #include "utils.h"
 #include "sas.h"
 #include "scscfselector.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "test_utils.hpp"
 
 using namespace std;

@@ -46,7 +46,7 @@
 #include "utils.h"
 #include "sas.h"
 #include "bgcfservice.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "test_utils.hpp"
 
 using namespace std;

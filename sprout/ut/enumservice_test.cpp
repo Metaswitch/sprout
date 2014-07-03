@@ -46,7 +46,7 @@
 #include "sas.h"
 #include "enumservice.h"
 #include "fakednsresolver.hpp"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "test_utils.hpp"
 
 using namespace std;

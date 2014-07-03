@@ -42,7 +42,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "stack.h"
 
 /// Fixture for test.

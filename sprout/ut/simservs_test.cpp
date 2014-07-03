@@ -45,7 +45,7 @@
 #include "gtest/gtest.h"
 
 #include "simservs.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 
 using namespace std;
 
