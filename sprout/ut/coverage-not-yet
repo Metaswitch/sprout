@@ -15,6 +15,7 @@ modules/cpp-common/src/dnsparser.cpp
 modules/cpp-common/src/baseresolver.cpp
 modules/cpp-common/src/fakelogger.cpp
 modules/cpp-common/src/saslogger.cpp
+modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/test_utils/mock_sas.cpp
 
 # We don't fully exercise rapidjson
