@@ -393,6 +393,7 @@ pjsip_rx_data* SipTest::build_rxdata(const string& msg, TransportFlow* tp)
                          sizeof(pj_ioqueue_op_key_t));
 
   // Copy in message bytes.
+  rdata->pkt_info.packet = (char*)pj_pool_alloc(rdata->tp_info.pool, strlen(msg.data()) + 1);
   strcpy(rdata->pkt_info.packet, msg.data());
   rdata->pkt_info.len = msg.length();
 
@@ -590,9 +591,9 @@ pjsip_tx_data* SipTest::create_response(pjsip_tx_data* tdata, int st_code, const
   rdata->tp_info.transport = tdata->tp_info.transport;
 
   /* Copy the packet. */
-  pj_memcpy(rdata->pkt_info.packet, tdata->buf.start,
-            tdata->buf.cur - tdata->buf.start);
   rdata->pkt_info.len = tdata->buf.cur - tdata->buf.start;
+  rdata->pkt_info.packet = (char*)pj_pool_alloc(rdata->tp_info.pool, rdata->pkt_info.len + 1);
+  pj_memcpy(rdata->pkt_info.packet, tdata->buf.start, rdata->pkt_info.len);
 
   /* the source address */
   rdata->pkt_info.src_addr = tdata->tp_info.dst_addr;

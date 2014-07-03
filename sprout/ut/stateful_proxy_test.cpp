@@ -1795,7 +1795,8 @@ TEST_F(StatefulProxyTest, TestValidBGCFRoute)
   msg._todomain = "domainvalid";
   add_host_mapping("domainvalid", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*10.0.0.1.*"), hdrs);
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainvalid"), hdrs);
 }
 
 TEST_F(StatefulProxyTest, TestInvalidBGCFRoute)

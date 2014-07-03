@@ -647,7 +647,8 @@ static pj_status_t start_async_read(struct fake_udp_transport *tp)
     for (i=0; i<tp->rdata_cnt; ++i) {
 	pj_ssize_t size;
 
-	size = sizeof(tp->rdata[i]->pkt_info.packet);
+	size = PJSIP_MAX_PKT_LEN;
+        tp->rdata[i]->pkt_info.packet = (char*)pj_pool_alloc(tp->rdata[i]->tp_info.pool, size);
 	tp->rdata[i]->pkt_info.src_addr_len = sizeof(tp->rdata[i]->pkt_info.src_addr);
 	status = pj_ioqueue_recvfrom(tp->key,
 				     &tp->rdata[i]->tp_info.op_key.op_key,
