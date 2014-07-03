@@ -45,18 +45,16 @@
 #include "gtest/gtest.h"
 
 #include "simservs.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 
 using namespace std;
 
 /// Fixture for test.
 class SimServsTest : public ::testing::Test
 {
-  FakeLogger _log;
 
   SimServsTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~SimServsTest()
@@ -207,12 +205,13 @@ TEST_F(SimServsTest, MissingElement) {
 
 /// XML parse errors are illegal and should give the default, with a log message.
 TEST_F(SimServsTest, InvalidXml1) {
+  CapturingTestLogger log;
   SCOPED_TRACE("");
   string xml = "<blah";
   simservs ss(xml);
   ss_values exp;
   expect_ss(exp, ss);
-  EXPECT_TRUE(_log.contains("Parse error"));
+  EXPECT_TRUE(log.contains("Parse error"));
 }
 
 TEST_F(SimServsTest, Typical)

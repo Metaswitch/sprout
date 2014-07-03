@@ -46,7 +46,7 @@
 #include "sas.h"
 #include "enumservice.h"
 #include "fakednsresolver.hpp"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "test_utils.hpp"
 
 using namespace std;
@@ -54,11 +54,8 @@ using namespace std;
 /// Fixture for EnumServiceTest.
 class EnumServiceTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   EnumServiceTest()
   {
-    Log::setLoggingLevel(99);
     FakeDNSResolver::reset();
     FakeDNSResolverFactory::_expected_server.af = AF_INET;
     FakeDNSResolverFactory::_expected_server.addr.ipv4.s_addr = htonl(0x7f000001);
@@ -115,15 +112,17 @@ TEST_F(JSONEnumServiceTest, NoMatch)
 
 TEST_F(JSONEnumServiceTest, ParseError)
 {
+  CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_parse_error.json"));
-  EXPECT_TRUE(_log.contains("Failed to read ENUM configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read ENUM configuration data"));
   ET("+15108580271", "").test(enum_);
 }
 
 TEST_F(JSONEnumServiceTest, MissingParts)
 {
+  CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_missing_parts.json"));
-  EXPECT_TRUE(_log.contains("Badly formed ENUM number block"));
+  EXPECT_TRUE(log.contains("Badly formed ENUM number block"));
   ET("+15108580271", "").test(enum_);
   ET("+15108580272", "").test(enum_);
   ET("+15108580273", "").test(enum_);
@@ -132,15 +131,17 @@ TEST_F(JSONEnumServiceTest, MissingParts)
 
 TEST_F(JSONEnumServiceTest, MissingBlock)
 {
+  CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_missing_block.json"));
-  EXPECT_TRUE(_log.contains("Badly formed ENUM configuration data - missing number_blocks object"));
+  EXPECT_TRUE(log.contains("Badly formed ENUM configuration data - missing number_blocks object"));
   ET("+15108580271", "").test(enum_);
 }
 
 TEST_F(JSONEnumServiceTest, MissingFile)
 {
+  CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(_log.contains("Failed to read ENUM configuration data"));
+  EXPECT_TRUE(log.contains("Failed to read ENUM configuration data"));
   ET("+15108580271", "").test(enum_);
 }
 
@@ -155,13 +156,14 @@ TEST_F(JSONEnumServiceTest, Regex)
 
 TEST_F(JSONEnumServiceTest, BadRegex)
 {
+  CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/test_enum_bad_regex.json"));
   // Unfortunately the logs here are hard to parse, so we just look for at least one instance of the
   // "badly formed regular expression" log, followed by a JSON expression for each of the bad number blocks.
-  EXPECT_TRUE(_log.contains("Badly formed regular expression in ENUM number block"));
-  EXPECT_TRUE(_log.contains("\"prefix\" : \"+15108580273\""));
-  EXPECT_TRUE(_log.contains("\"prefix\" : \"+15108580274\""));
-  EXPECT_TRUE(_log.contains("\"prefix\" : \"+15108580275\""));
+  EXPECT_TRUE(log.contains("Badly formed regular expression in ENUM number block"));
+  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580273\""));
+  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580274\""));
+  EXPECT_TRUE(log.contains("\"prefix\" : \"+15108580275\""));
   // First entry is valid to confirm basic regular expression is valid.
   ET("+15108580271", "sip:+15108580271@ut.cw-ngv.com").test(enum_);
   // Second entry is technically invalid but it works in the obvious way and it's easier to permit than to add code to reject.

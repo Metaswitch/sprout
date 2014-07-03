@@ -42,7 +42,6 @@
 #include "utils.h"
 #include "dnscachedresolver.h"
 #include "sipresolver.h"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 
@@ -51,7 +50,6 @@ using namespace std;
 /// Fixture for SIPResolverTest.
 class SIPResolverTest : public ::testing::Test
 {
-  FakeLogger _log;
   DnsCachedResolver _dnsresolver;
   SIPResolver _sipresolver;
 
@@ -61,7 +59,6 @@ class SIPResolverTest : public ::testing::Test
     _dnsresolver("0.0.0.0"),
     _sipresolver(&_dnsresolver)
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~SIPResolverTest()
