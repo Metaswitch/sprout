@@ -51,7 +51,6 @@ extern "C" {
 #include "avstore.h"
 #include "hssconnection.h"
 #include "authentication.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "md5.h"
@@ -68,8 +67,6 @@ using testing::Not;
 class AuthenticationTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -78,9 +75,7 @@ public:
     _av_store = new AvStore(_local_data_store);
     _hss_connection = new FakeHSSConnection();
     _chronos_connection = new FakeChronosConnection();
-    _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
-    _analytics->_logger = NULL;
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_authentication("homedomain",
                                           _av_store,
@@ -106,12 +101,10 @@ public:
 
   AuthenticationTest() : SipTest(&mod_auth)
   {
-    _analytics->_logger = &_log;
   }
 
   ~AuthenticationTest()
   {
-    _analytics->_logger = NULL;
   }
 
   /// Parses a WWW-Authenticate header to the list of parameters.

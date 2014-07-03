@@ -37,7 +37,7 @@ udp_listen              $bracketed_ip:3478
 udp_sockbuf_size        524288
 tcp_listen              $bracketed_ip:3478
 # modules
-module_path             /usr/share/clearwater/lib
+module_path             /usr/share/clearwater/restund/lib
 module                  stat.so
 module                  httpdb.so
 module                  binding.so

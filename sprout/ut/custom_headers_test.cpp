@@ -40,7 +40,6 @@
 #include "siptest.hpp"
 #include "pjutils.h"
 #include "stack.h"
-#include "fakelogger.hpp"
 #include "custom_headers.h"
 
 using namespace std;
@@ -51,8 +50,6 @@ using namespace std;
 class CustomHeadersTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

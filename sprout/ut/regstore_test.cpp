@@ -47,7 +47,6 @@
 #include "sas.h"
 #include "localstore.h"
 #include "regstore.h"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
@@ -57,8 +56,6 @@ using namespace std;
 /// Fixture for RegStoreTest.
 class RegStoreTest : public SipTest
 {
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

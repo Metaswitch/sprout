@@ -49,7 +49,7 @@ extern "C" {
 #include "dnscachedresolver.h"
 #include "localstore.h"
 #include "regstore.h"
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "fakehssconnection.hpp"
 
 using std::string;
@@ -244,7 +244,6 @@ private:
   // The DNS resolver.
   static DnsCachedResolver _dnsresolver;
 
-  static FakeLogger* _log;
 };
 
 /// Helper to print pj_status_t to ostream.

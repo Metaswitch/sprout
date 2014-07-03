@@ -42,14 +42,12 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "fakelogger.hpp"
+#include "fakelogger.h"
 #include "stack.h"
 
 /// Fixture for test.
 class BaseTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   BaseTest();
   virtual ~BaseTest();
 };

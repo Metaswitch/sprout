@@ -46,7 +46,6 @@
 #include "utils.h"
 #include "sas.h"
 #include "stack.h"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 #include "siptest.hpp"
 
@@ -55,11 +54,8 @@ using namespace std;
 /// Fixture for StackTest.
 class StackTest : public ::testing::Test
 {
-  FakeLogger _log;
-
   StackTest()
   {
-    Log::setLoggingLevel(99);
   }
 
   virtual ~StackTest()
@@ -100,6 +96,7 @@ int get_thread_count()
 
 TEST_F(StackTest, DISABLED_SimpleLifeCycle)
 {
+  CapturingTestLogger log;
   // Work out who we are
   char buf[200];
   int rv = gethostname(buf, sizeof(buf));
@@ -146,15 +143,15 @@ TEST_F(StackTest, DISABLED_SimpleLifeCycle)
                               NULL,                         // Load monitor
                               "");                          // CDF domain
   ASSERT_EQ(PJ_SUCCESS, rc) << PjStatus(rc);
-  EXPECT_TRUE(_log.contains("Listening on port 9408"));
-  EXPECT_TRUE(_log.contains("Local host aliases:"));
-  EXPECT_TRUE(_log.contains(dns)) << dns << endl << _log._lastlog;
-  EXPECT_TRUE(_log.contains(ip)) << ip << endl << _log._lastlog;
-  EXPECT_TRUE(_log.contains("127.0.0.1"));
-  EXPECT_TRUE(_log.contains("localhost"));
-  EXPECT_TRUE(_log.contains("thatone.zalpha.example.com"));
-  EXPECT_TRUE(_log.contains("other.example.org"));
-  EXPECT_TRUE(_log.contains("192.168.0.4"));
+  EXPECT_TRUE(log.contains("Listening on port 9408"));
+  EXPECT_TRUE(log.contains("Local host aliases:"));
+  EXPECT_TRUE(log.contains(dns));// << dns << endl << _log._lastlog;
+  EXPECT_TRUE(log.contains(ip));// << ip << endl << _log._lastlog;
+  EXPECT_TRUE(log.contains("127.0.0.1"));
+  EXPECT_TRUE(log.contains("localhost"));
+  EXPECT_TRUE(log.contains("thatone.zalpha.example.com"));
+  EXPECT_TRUE(log.contains("other.example.org"));
+  EXPECT_TRUE(log.contains("192.168.0.4"));
   EXPECT_EQ(7u, stack_data.name_cnt);
   EXPECT_EQ(string(dns), str_pj(stack_data.name[0]));
 

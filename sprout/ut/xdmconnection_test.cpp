@@ -49,7 +49,6 @@
 #include "xdmconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
-#include "fakelogger.hpp"
 #include "test_utils.hpp"
 
 using namespace std;

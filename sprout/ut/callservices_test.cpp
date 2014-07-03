@@ -47,7 +47,6 @@
 #include "aschain.h"
 #include "ifchandler.h"
 #include "callservices.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"
 #include "siptest.hpp"

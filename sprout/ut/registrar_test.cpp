@@ -44,7 +44,6 @@
 #include "stack.h"
 #include "registrar.h"
 #include "registration_utils.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
@@ -57,8 +56,6 @@ class RegistrarTest : public SipTest
 {
 public:
 
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
@@ -70,11 +67,9 @@ public:
     _remote_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
-    _analytics = new AnalyticsLogger("foo");
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _ifc_handler = new IfcHandler();
-    delete _analytics->_logger;
-    _analytics->_logger = NULL;
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, _ifc_handler, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
@@ -103,7 +98,6 @@ public:
 
   RegistrarTest() : SipTest(&mod_registrar)
   {
-    _analytics->_logger = &_log;
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
   }
@@ -123,7 +117,6 @@ public:
     //pjsip_tsx_layer_instance()->stop();
     //pjsip_tsx_layer_instance()->start();
 
-    _analytics->_logger = NULL;
   }
 
 protected:
