@@ -1722,7 +1722,6 @@ bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId
 /// Calculate a list of targets for the message.
 void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
                                              pj_pool_t* pool,
-                                             const TrustBoundary* trust,
                                              TargetList& targets,
                                              int max_targets,
                                              SAS::TrailId trail)
@@ -3062,7 +3061,7 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   else
   {
     // Find targets.
-    proxy_calculate_targets(_req->msg, _req->pool, _trust, targets, MAX_FORKING, trail());
+    proxy_calculate_targets(_req->msg, _req->pool, targets, MAX_FORKING, trail());
   }
 
   if (targets.size() == 0)

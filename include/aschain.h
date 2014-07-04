@@ -65,6 +65,8 @@ struct Target
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
   int liveness_timeout;
+  bool deprioritized;
+  int tiebreaker;
 
   // Default constructor.
   Target() :
@@ -75,7 +77,9 @@ struct Target
     uri(NULL),
     paths(),
     transport(NULL),
-    liveness_timeout(0)
+    liveness_timeout(0),
+    deprioritized(false),
+    tiebreaker(0)
   {
   }
 };

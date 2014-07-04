@@ -217,7 +217,6 @@ private:
 
   void proxy_calculate_targets(pjsip_msg* msg,
                                pj_pool_t* pool,
-                               const TrustBoundary* trust,
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
