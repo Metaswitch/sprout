@@ -342,7 +342,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
         {
           // Either this is a new binding, has come from a restarted device, or
           // is an update to an existing binding.
-          binding->_uri = "<" + contact_uri + ">";
+          binding->_uri = contact_uri;
 
           if (cid != binding->_cid)
           {
