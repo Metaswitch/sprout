@@ -1,3 +1,4 @@
 usr/sbin/restund usr/share/clearwater/bin
+usr/lib/libre.* usr/share/clearwater/restund/lib
 usr/lib/restund/modules/* usr/share/clearwater/restund/lib
 restund.root/* /
