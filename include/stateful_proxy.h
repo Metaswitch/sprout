@@ -220,6 +220,18 @@ private:
                                TargetList& targets,
                                int max_targets,
                                SAS::TrailId trail);
+  void get_targets_from_store(const std::string& aor,
+                              RegStore*& store,
+                              RegStore*& remote_store,
+                              pjsip_msg*& msg,
+                              int max_targets,
+                              TargetList& targets,
+                              SAS::TrailId trail);
+  void get_all_bindings(const std::string& aor,
+                        RegStore*& store,
+                        RegStore*& remote_store,
+                        RegStore::AoR::Bindings& bindings,
+                        SAS::TrailId trail);
 
   void cancel_trying_timer();
 
