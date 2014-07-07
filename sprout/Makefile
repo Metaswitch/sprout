@@ -70,7 +70,8 @@ TARGET_SOURCES := logger.cpp \
                   accesslogger.cpp \
                   httpstack.cpp \
                   handlers.cpp \
-                  ipv6utils.cpp
+                  ipv6utils.cpp \
+                  contact_filtering.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

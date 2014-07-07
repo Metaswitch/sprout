@@ -130,6 +130,7 @@ extern "C" {
 #include "dialog_tracker.hpp"
 #include "quiescing_manager.h"
 #include "scscfselector.h"
+#include "contact_filtering.h"
 
 static RegStore* store;
 static RegStore* remote_store;
@@ -1897,11 +1898,11 @@ void UASTransaction::get_targets_from_store(const std::string& aor,
                    remote_store,
                    bindings,
                    trail);
-//  filter_bindings(bindings,
-//                  msg,
-//                  max_targets,
-//                  targets,
-//                  trail);
+  filter_bindings(bindings,
+                  msg,
+                  max_targets,
+                  targets,
+                  trail);
 }
 
 void UASTransaction::get_all_bindings(const std::string& aor,
