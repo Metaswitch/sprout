@@ -4343,8 +4343,10 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
           pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
         }
 
-        pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
-        _uas_data->on_new_client_response(this, rdata);
+        if (_uas_data != NULL) {
+          pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
+          _uas_data->on_new_client_response(this, rdata);
+        }
       }
 
       // If UAC transaction is terminated because of a timeout, treat this as
