@@ -224,6 +224,7 @@ private:
                               RegStore*& store,
                               RegStore*& remote_store,
                               pjsip_msg*& msg,
+                              pj_pool_t* pool,
                               int max_targets,
                               TargetList& targets,
                               SAS::TrailId trail);

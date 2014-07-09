@@ -1873,6 +1873,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
                            store,
                            remote_store,
                            msg,
+                           pool,
                            max_targets,
                            targets,
                            trail);
@@ -1888,6 +1889,7 @@ void UASTransaction::get_targets_from_store(const std::string& aor,
                                             RegStore*& store,
                                             RegStore*& remote_store,
                                             pjsip_msg*& msg,
+                                            pj_pool_t* pool,
                                             int max_targets,
                                             TargetList& targets,
                                             SAS::TrailId trail)
@@ -1898,11 +1900,13 @@ void UASTransaction::get_targets_from_store(const std::string& aor,
                    remote_store,
                    bindings,
                    trail);
-  filter_bindings(bindings,
-                  msg,
-                  max_targets,
-                  targets,
-                  trail);
+  filter_bindings_to_targets(aor,
+                             bindings,
+                             msg,
+                             pool,
+                             max_targets,
+                             targets,
+                             trail);
 }
 
 void UASTransaction::get_all_bindings(const std::string& aor,

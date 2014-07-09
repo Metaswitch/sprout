@@ -41,30 +41,51 @@
 #include "aschain.h"
 #include "custom_headers.h"
 
+typedef std::map<std::string, std::string> FeatureSet;
+typedef std::pair<const std::string, std::string> Feature;
+
+// Exception thrown if a feature rule doesn't parse
+class FeatureParseError {};
+
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
-void filter_bindings(RegStore::AoR::Bindings& bindings,
-                     pjsip_msg* msg,
-                     int max_targets,
-                     TargetList& targets,
-                     SAS::TrailId trail);
+void filter_bindings_to_targets(const std::string& aor,
+                                const RegStore::AoR::Bindings& bindings,
+                                pjsip_msg* msg,
+                                pj_pool_t* pool,
+                                int max_targets,
+                                TargetList& targets,
+                                SAS::TrailId trail);
+bool binding_to_target(const std::string& aor,
+                       const std::string& binding_id,
+                       const RegStore::AoR::Binding& binding,
+                       bool deprioritized,
+                       pj_pool_t* pool,
+                       Target& target);
 
 // Add an automatically created feature set if none have been
 // specified.
-void add_implicit_filters(pjsip_msg* msg);
+void add_implicit_filters(const pjsip_msg* msg,
+                          pj_pool_t* pool,
+                          std::vector<pjsip_accept_contact_hdr*> accept_contacts,
+                          std::vector<pjsip_reject_contact_hdr*> reject_contacts);
 
 // Utility functions for comparing feature sets.
 enum MatchResult { YES, UNKNOWN, NO };
-MatchResult match_feature_sets(pjsip_contact_hdr* contact,
+MatchResult match_feature_sets(const FeatureSet& contact_filter_set,
                                pjsip_accept_contact_hdr* accept);
-MatchResult match_feature_sets(pjsip_contact_hdr* contact,
+MatchResult match_feature_sets(const FeatureSet& contact_filter_set,
                                pjsip_reject_contact_hdr* reject);
-MatchResult match_feature(pj_str_t* matcher,
-                          pj_str_t* matchee);
+MatchResult match_feature(const Feature& matcher,
+                          const Feature& matchee);
+MatchResult match_numeric(const std::string& matcher,
+                          const std::string& matchee);
+MatchResult match_tokens(const std::string& matcher,
+                         const std::string& matchee);
 
 // Trim a list of targets to contain at most `max_targets`.
-void limit_target_count(int max_targets,
-                        TargetList& targets);
-bool compare_targets(Target& t1, Target& t2);
+void prune_targets(int max_targets,
+                   TargetList& targets);
+bool compare_targets(const Target& t1, const Target& t2);
 
 #endif
