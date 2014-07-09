@@ -388,7 +388,7 @@ std::string RegStore::Connector::serialize_aor(AoR* aor_data)
     oss.write((const char *)&b->_priority, sizeof(int));
     int num_params = b->_params.size();
     oss.write((const char *)&num_params, sizeof(int));
-    for (std::list<std::pair<std::string, std::string> >::const_iterator i = b->_params.begin();
+    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
          i != b->_params.end();
          ++i)
     {
@@ -473,13 +473,15 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
 
     int num_params;
     iss.read((char *)&num_params, sizeof(int));
-    b->_params.resize(num_params);
-    for (std::list<std::pair<std::string, std::string> >::iterator i = b->_params.begin();
-         i != b->_params.end();
-         ++i)
+    for (int ii = 0;
+         ii < num_params;
+         ++ii)
     {
-      getline(iss, i->first, '\0');
-      getline(iss, i->second, '\0');
+      std::string pname;
+      std::string pvalue;
+      getline(iss, pname, '\0');
+      getline(iss, pvalue, '\0');
+      b->_params[pname] = pvalue;
     }
 
     int num_paths = 0;

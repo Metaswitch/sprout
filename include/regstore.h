@@ -90,8 +90,8 @@ public:
       int _priority;
 
       /// Any other parameters found in the Contact: header, stored as key ->
-      /// value in order of appearance.  E.g., "+sip.ice" -> "".
-      std::list<std::pair<std::string, std::string> > _params;
+      /// value.  E.g., "+sip.ice" -> "".
+      std::map<std::string, std::string> _params;
 
       /// The timer ID provided by Chronos.
       std::string _timer_id;

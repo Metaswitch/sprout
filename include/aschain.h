@@ -83,7 +83,7 @@ struct Target
   {
   }
 };
-typedef std::list<Target> TargetList;
+typedef std::vector<Target> TargetList;
 
 class AsChainTable;
 
