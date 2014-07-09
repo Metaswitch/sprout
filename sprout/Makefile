@@ -69,6 +69,7 @@ TARGET_SOURCES := logger.cpp \
                   chronosconnection.cpp \
                   accesslogger.cpp \
                   httpstack.cpp \
+                  httpstack_utils.cpp \
                   handlers.cpp \
                   ipv6utils.cpp
 

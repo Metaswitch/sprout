@@ -57,10 +57,9 @@ public:
 
   virtual ~ChronosHandlerFactory() {}
 
-  SASEvent::HttpLogLevel sas_log_level(HttpStack::Request& req)
+  HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
   {
-    // Log all chronos flows at detail level.
-    return SASEvent::HttpLogLevel::DETAIL;
+    return &HttpStackUtils::CHRONOS_SAS_LOGGER;
   }
 };
 

@@ -34,3 +34,6 @@ flowtable.cpp
 custom_headers.cpp
 sipresolver.cpp
 acr.cpp
+
+# Tested as part of homestead
+httpstack_utils.cpp
