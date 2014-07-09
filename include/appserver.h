@@ -48,7 +48,79 @@ extern "C" {
 
 #include "sas.h"
 
-/// The AppServer class is an abstract base class used to implement services.                                                                                                                    
+
+/// The ServiceTransactionContext class is an abstract base class used to
+/// handle the underlying service-related processing of a single transaction.
+///
+class ServiceTransactionContext
+{
+public:
+  /// Virtual destructor.
+  virtual ~ServiceTransactionContext();
+
+  /// Adds the service to the underlying SIP dialog with the specified dialog
+  /// identifier.
+  ///
+  /// @param  dialog_id    - The dialog identifier to be used for this service.
+  ///                        If omitted, a default unique identifier is created
+  ///                        using parameters from the SIP request.
+  ///
+  virtual void add_to_dialog(const std::string& dialog_id="") = 0;
+
+  /// Returns the dialog identifier for this service.
+  ///
+  /// @returns             - The dialog identifier attached to this service,
+  ///                        either by this ServiceTransactionContext instance
+  ///                        or by an earlier transaction in the same dialog.
+  virtual const std::string& dialog_id() const = 0;
+
+  /// Clones the request.  This is typically used when forking a request if
+  /// different request modifications are required on each fork.
+  ///
+  /// @returns             - The cloned request message.
+  /// @param  req          - The request message to clone.
+  virtual pjsip_msg* clone_request(pjsip_msg* req) = 0;
+
+  /// Adds the specified URI as a new target for the request.  If no request
+  /// is specified, the originally received request is used.  Each target is
+  /// assigned a unique fork identifier, which is passed in with any subsequent
+  /// received responses.
+  ///
+  /// @returns             - The identity of this fork.
+  /// @param               - The URI for the new target.
+  /// @param               - The request message to use for this fork.  If NULL
+  ///                        the original request message is used.
+  virtual int add_target(pjsip_uri* request_uri,
+                         pjsip_msg* req=NULL) = 0;
+
+  /// Rejects the original request with the specified status code and text.
+  /// This method can only be called when handling the original request.
+  /// Any subsequent rejection of the request must be done by sending a final
+  /// response using the send_response method.
+  ///
+  /// @param  status_code  - The SIP status code to send on the response.
+  /// @param  status_text  - The SIP status text to send on the response.  If 
+  ///                        omitted, the default status text for the code is
+  ///                        used (if this is a standard SIP status code).
+  virtual void reject(int status_code,
+                      const std::string& status_text="") = 0;
+
+  /// Sends a provisional or final response to the transaction.  If a final
+  /// response is sent on an INVITE transaction that was forked, all forks 
+  /// which have not yet responded are cancelled.
+  ///
+  /// @param  rsp          - The response message to send.
+  virtual void send_response(pjsip_msg* rsp) = 0;
+
+  /// Returns the SAS trail identifier that should be used for any SAS events
+  /// related to this service invocation.
+  virtual SAS::TrailId trail() const = 0;
+
+};
+
+
+/// The AppServer class is an abstract base class used to implement services
+///
 /// Derived classes are instantiated during system initialization and 
 /// register a service name with Sprout.  Sprout calls the get_context method
 /// on an AppServer derived class when
@@ -67,46 +139,67 @@ public:
   /// Called when the system determines the service should be invoked for
   /// a received request.  The AppServer can either return NULL indicating it
   /// does not want to process the request, or create a suitable object
-  /// derived from the ServiceTransactionContext class to process the request.
+  /// derived from the AppServerTransactionContext class to process the
+  /// request.
   ///
+  /// @param  service_ctxt  - The service context to use to perform
+  ///                         the underlying service-related processing.
   /// @param  req           - The received request message.
-  virtual ServiceTransactionContext* get_context(pjsip_msg* req,
-                                                 const std::string& dialog_id) = 0;
+  virtual AppServerTransactionContext* get_context(const ServiceTransactionContext* service_ctxt,
+                                                   pjsip_msg* req,
+                                                   const std::string& dialog_id) = 0;
+
+  /// Returns the name of this service.
+  const std::string service_name() { return _service_name; }
 
 protected:
   /// Constructor.
   AppServer(const std::string& service_name);
 
+  /// Implementation to use for protocol-handler methods.
+  const ServiceTransactionContext::ProtocolImpl* _prot_impl;
+
 private:
   /// The name of this service.
-  std::string _service_name;
+  const std::string _service_name;
 };
 
 
-
-
-/// The ServiceTransactionContext class is an abstract base class used to
-/// handle the service-related processing of a single transaction.
+/// The AppServerTransactionContext class is an abstract base class used to
+/// handle the application-server-specific processing of a single transaction.
+/// It encapsulates a ServiceTransactionContext, which it calls through to to
+/// perform the underlying service-related processing.
 ///
-class ServiceTransactionContext
+class AppServerTransactionContext
 {
 public:
   /// Virtual destructor.
-  virtual ~ServiceTransactionContext();
+  virtual ~AppServerTransactionContext();
 
-  /// Called with the original received request for the transaction.  Unless
-  /// the reject method is called, on return from this method the request will
-  /// be forwarded to all targets added using the add_target API, or to
-  /// the existing RequestURI if no targets were added.
+  /// Called for an initial request (dialog-initiating or out-of-dialog) with
+  /// the original received request for the transaction.  Unless the reject
+  /// method is called, on return from this method the request will be
+  /// forwarded to all targets added using the add_target API, or to the
+  /// existing RequestURI if no targets were added.
   ///
-  /// @param req           - The received request.
-  virtual void on_request(pjsip_msg* req) = 0;
+  /// @param req           - The received initial request.
+  virtual void on_initial_request(pjsip_msg* req) = 0;
+
+  /// Called with an in-dialog request with the original received request for
+  /// the transaction.  Unless the reject method is called, on return from
+  /// this method the request will be forwarded to all targets added using the
+  /// add_target API, or to the existing RequestURI if no targets were added.
+  ///
+  /// @param req           - The received in-dialog request.
+  virtual void on_in_dialog_request(pjsip_msg* req);
 
   /// Called with all responses received on the transaction.  If a transport
   /// error or transaction timeout occurs on a downstream leg, this method is
   /// called with a 408 response.  The return value indicates whether the 
   /// response should be forwarded upstream (after suitable consolidation if
-  /// the request was forked).
+  /// the request was forked).  If the return value is false and new targets
+  /// have been added with the add_target API, the original request is forked
+  /// to them.
   ///
   /// @returns             - true if the response should be forwarded upstream
   ///                        false if the response should be dropped
@@ -127,8 +220,9 @@ public:
 
 protected:
   /// Constructor.
-  ServiceTransacionContext(const std::string& service_name,
-                           const std::string& dialog_id);
+  AppServerTransactionContext(const ServiceTransactionContext* service_ctxt,
+                              const std::string& service_name,
+                              const std::string& dialog_id);
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -137,21 +231,24 @@ protected:
   ///                        If omitted, a default unique identifier is created
   ///                        using parameters from the SIP request.
   ///
-  void add_to_dialog(const std::string& dialog_id="");
+  void add_to_dialog(const std::string& dialog_id="")
+    {_service_ctxt->add_to_dialog(dialog_id);}
 
   /// Returns the dialog identifier for this service.
   ///
   /// @returns             - The dialog identifier attached to this service,
   ///                        either by this ServiceTransactionContext instance
   ///                        or by an earlier transaction in the same dialog.
-  const std::string& dialog_id() const;
+  const std::string& dialog_id() const
+    {return _service_ctxt->dialog_id();}
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
   ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
-  pjsip_msg* clone_request(pjsip_msg* req);
+  pjsip_msg* clone_request(pjsip_msg* req)
+    {return _service_ctxt->clone_request(req);}
 
   /// Adds the specified URI as a new target for the request.  If no request
   /// is specified, the originally received request is used.  Each target is
@@ -163,7 +260,8 @@ protected:
   /// @param               - The request message to use for this fork.  If NULL
   ///                        the original request message is used.
   int add_target(pjsip_uri* request_uri,
-                 pjsip_msg* req=NULL);
+                 pjsip_msg* req=NULL)
+    {return _service_ctxt->add_target(request_uri, req);}
 
   /// Rejects the original request with the specified status code and text.
   /// This method can only be called when handling the original request.
@@ -175,19 +273,24 @@ protected:
   ///                        omitted, the default status text for the code is
   ///                        used (if this is a standard SIP status code).
   void reject(int status_code,
-              const std::string& status_text="");
+              const std::string& status_text="")
+    {return _service_ctxt->reject(status_code, status_text);}
 
   /// Sends a provisional or final response to the transaction.  If a final
   /// response is sent on an INVITE transaction that was forked, all forks 
   /// which have not yet responded are cancelled.
   ///
   /// @param  rsp          - The response message to send.
-  void send_response(pjsip_msg* rsp);
+  void send_response(pjsip_msg* rsp)
+    {return _service_ctxt->send_response(rsp);}
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
-  SAS::TrailId trail() const;
+  SAS::TrailId trail() const
+    {return _service_ctxt->trail();}
 
 private:
+  /// Transaction context to use for underlying service-related processing.
+  const ServiceTransactionContext* _service_ctxt;
 
 };
