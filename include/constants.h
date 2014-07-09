@@ -80,6 +80,7 @@ const pj_str_t STR_P_PROFILE_KEY = pj_str((char*)"P-Profile-Key");
 const pj_str_t STR_APPLICATION = pj_str((char*)"application");
 const pj_str_t STR_SDP = pj_str((char*)"sdp");
 const pj_str_t STR_EVENT = pj_str((char*)"Event");
+const pj_str_t STR_EVENT_SHORT = pj_str((char*)"o");
 const pj_str_t STR_X = pj_str((char*)"X");
 const pj_str_t STR_REASON = pj_str((char*)"Reason");
 const pj_str_t STR_TRANSIT_IOI = pj_str((char*)"transit-ioi");
@@ -92,6 +93,11 @@ const pj_str_t STR_SOS = pj_str((char*)"sos");
 const pj_str_t STR_USER = pj_str((char*)"user");
 const pj_str_t STR_CHARGE_ORIG = pj_str((char*)"charge-orig");
 const pj_str_t STR_CHARGE_TERM = pj_str((char*)"charge-term");
+const pj_str_t STR_METHOD = pj_str((char*)"method");
+const pj_str_t STR_ACCEPT_CONTACT = pj_str((char*)"Accept-Contact");
+const pj_str_t STR_ACCEPT_CONTACT_SHORT = pj_str((char*)"a");
+const pj_str_t STR_REJECT_CONTACT = pj_str((char*)"Reject-Contact");
+const pj_str_t STR_REJECT_CONTACT_SHORT = pj_str((char*)"j");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
