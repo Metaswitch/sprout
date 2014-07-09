@@ -38,6 +38,7 @@
 #define HANDLERS_H__
 
 #include "httpstack.h"
+#include "httpstack_utils.h"
 #include "chronosconnection.h"
 #include "hssconnection.h"
 #include "regstore.h"
@@ -48,11 +49,10 @@
 /// a subclass of ConfiguredHandlerFactory that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>
-class ChronosHandlerFactory : public HttpStack::ConfiguredHandlerFactory<H, C>
+class ChronosHandlerFactory : public HttpStackUtils::SpawningController<H, C>
 {
 public:
-  ChronosHandlerFactory(C* cfg) :
-    HttpStack::ConfiguredHandlerFactory<H, C>(cfg)
+  ChronosHandlerFactory(C* cfg) : HttpStackUtils::SpawningController<H, C>(cfg)
   {}
 
   virtual ~ChronosHandlerFactory() {}
@@ -64,7 +64,7 @@ public:
   }
 };
 
-class RegistrationTimeoutHandler : public HttpStack::Handler
+class RegistrationTimeoutHandler : public HttpStackUtils::Handler
 {
 public:
   struct Config
@@ -80,7 +80,7 @@ public:
   RegistrationTimeoutHandler(HttpStack::Request& req,
                              const Config* cfg,
                              SAS::TrailId trail) :
-    HttpStack::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Handler(req, trail), _cfg(cfg)
   {};
 
   void run();
@@ -101,7 +101,7 @@ protected:
   std::string _binding_id;
 };
 
-class DeregistrationHandler : public HttpStack::Handler
+class DeregistrationHandler : public HttpStackUtils::Handler
 {
 public:
   struct Config
@@ -119,7 +119,7 @@ public:
   DeregistrationHandler(HttpStack::Request& req,
                         const Config* cfg,
                         SAS::TrailId trail) :
-    HttpStack::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Handler(req, trail), _cfg(cfg)
   {};
 
   void run();
@@ -138,7 +138,7 @@ protected:
   std::string _notify;
 };
 
-class AuthTimeoutHandler : public HttpStack::Handler
+class AuthTimeoutHandler : public HttpStackUtils::Handler
 {
 public:
   struct Config
@@ -151,7 +151,7 @@ public:
   AuthTimeoutHandler(HttpStack::Request& req,
                      const Config* cfg,
                      SAS::TrailId trail) :
-    HttpStack::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Handler(req, trail), _cfg(cfg)
   {};
 
   void run();
