@@ -212,8 +212,8 @@ bool binding_to_target(const std::string& aor,
 // specified.
 void add_implicit_filters(const pjsip_msg* msg,
                           pj_pool_t* pool,
-                          std::vector<pjsip_accept_contact_hdr*> accept_headers,
-                          std::vector<pjsip_reject_contact_hdr*> reject_headers)
+                          std::vector<pjsip_accept_contact_hdr*>& accept_headers,
+                          const std::vector<pjsip_reject_contact_hdr*>& reject_headers)
 {
   if (accept_headers.empty() && reject_headers.empty())
   {
@@ -223,7 +223,7 @@ void add_implicit_filters(const pjsip_msg* msg,
     
     // Create a method feature, specifying the requests's method.
     pjsip_param* method_feature = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &method_feature->name, &STR_METHOD);
+    pj_strdup(pool, &method_feature->name, &STR_METHODS);
     pj_strdup(pool, &method_feature->value, &msg->line.req.method.name);
     pj_list_insert_after(&new_hdr->feature_set, method_feature);
 
@@ -237,7 +237,7 @@ void add_implicit_filters(const pjsip_msg* msg,
     if (event_hdr != NULL)
     {
       pjsip_param* event_feature = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      pj_strdup(pool, &event_feature->name, &STR_METHOD);
+      pj_strdup(pool, &event_feature->name, &STR_EVENT);
       pj_strdup(pool, &event_feature->value, &event_hdr->hvalue);
       pj_list_insert_after(&new_hdr->feature_set, event_feature);
     }

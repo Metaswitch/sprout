@@ -203,7 +203,7 @@ TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesBool2)
   EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
 }
 
-class ContactFilteringMatchFeatureSetTest : public ContactFilteringTest
+class ContactFilteringPrebuiltHeadersFixture : public ContactFilteringTest
 {
 public:
   pjsip_accept_contact_hdr* accept_hdr;
@@ -236,6 +236,7 @@ public:
   }
 };
 
+typedef ContactFilteringPrebuiltHeadersFixture ContactFilteringMatchFeatureSetTest;
 TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalAccept)
 {
   FeatureSet contact_feature_set;
@@ -394,3 +395,27 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalReject)
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }
 
+typedef ContactFilteringPrebuiltHeadersFixture ContactFilteringImplicitFiltersTest;
+TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilter)
+{
+  std::vector<pjsip_accept_contact_hdr*>accept_headers;
+  std::vector<pjsip_reject_contact_hdr*>reject_headers;
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  add_implicit_filters(msg, pool, accept_headers, reject_headers);
+
+  ASSERT_EQ((unsigned)1, accept_headers.size());
+  EXPECT_EQ((unsigned)0, reject_headers.size());
+  pjsip_accept_contact_hdr* new_accept = accept_headers[0];
+  EXPECT_TRUE(new_accept->required_match);
+  EXPECT_FALSE(new_accept->explicit_match);
+  pjsip_param* feature_param = new_accept->feature_set.next;
+  ASSERT_NE(&new_accept->feature_set, feature_param);
+
+  std::string feature_name(feature_param->name.ptr, feature_param->name.slen);
+  std::string feature_value(feature_param->value.ptr, feature_param->value.slen);
+  EXPECT_EQ(feature_name, "methods");
+  EXPECT_EQ(feature_value, "INVITE");
+}

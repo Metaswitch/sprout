@@ -67,8 +67,8 @@ bool binding_to_target(const std::string& aor,
 // specified.
 void add_implicit_filters(const pjsip_msg* msg,
                           pj_pool_t* pool,
-                          std::vector<pjsip_accept_contact_hdr*> accept_contacts,
-                          std::vector<pjsip_reject_contact_hdr*> reject_contacts);
+                          std::vector<pjsip_accept_contact_hdr*>& accept_contacts,
+                          const std::vector<pjsip_reject_contact_hdr*>& reject_contacts);
 
 // Utility functions for comparing feature sets.
 enum MatchResult { YES, UNKNOWN, NO };
