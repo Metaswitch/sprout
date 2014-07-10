@@ -95,8 +95,6 @@ CONST_PJSTR(STR_XMLNS_XSI_VAL,  "http://www.w3.org/2001/XMLSchema-instance");
 CONST_PJSTR(STR_XSI_SLOC_NAME,  "xsi:schemaLocation");
 CONST_PJSTR(STR_XSI_SLOC_VAL,   "http://www.w3.org/2001/03/xml.xsd");
 
-CONST_PJSTR(STR_SUBSCRIPTION_STATE, "Subscription-State")
-
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
                              pj_str_t *aor,
@@ -384,12 +382,6 @@ pj_status_t NotifyUtils::create_notify(
     pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
     event_hdr->event_type = STR_REG;
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
-
-    // Add the Subscription-State header. We only send NOTIFYs when a
-    // binding they're subscribed to changes, not when their
-    // subscription runs out, so the value will always be "active".
-    pjsip_generic_string_hdr* subscription_state_hdr = pjsip_generic_string_hdr_create((*tdata_notify)->pool, &STR_SUBSCRIPTION_STATE, &STR_ACTIVE);
-    pj_list_push_back( &(*tdata_notify)->msg->hdr, subscription_state_hdr);
 
     // complete body
     pjsip_msg_body *body2;
