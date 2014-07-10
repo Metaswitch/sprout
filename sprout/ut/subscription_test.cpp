@@ -261,6 +261,7 @@ TEST_F(SubscriptionTest, EmergencySubscription)
   pjsip_msg* out = pop_txdata()->msg;
   EXPECT_EQ(489, out->line.status.code);
   EXPECT_EQ("Bad Event", str_pj(out->line.status.reason));
+  EXPECT_THAT(get_headers(out, "Allow-Events"), testing::MatchesRegex("Allow-Events: reg"));
 
   check_subscriptions("sip:6505550231@homedomain", 0u);
 }
@@ -547,6 +548,7 @@ void SubscriptionTest::check_OK_and_NOTIFY()
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(to_tag));
+  EXPECT_THAT(get_headers(out, "Subscription-State"), testing::MatchesRegex("Subscription-State: active"));
 
   inject_msg(respond_to_current_txdata(200));
 }
