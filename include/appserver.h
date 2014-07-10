@@ -97,8 +97,8 @@ public:
   /// received responses.
   ///
   /// @returns             - The identity of this fork.
-  /// @param               - The URI for the new target.
-  /// @param               - The request message to use for this fork.  If NULL
+  /// @param  request_uri  - The URI for the new target.
+  /// @param  req          - The request message to use for this fork.  If NULL
   ///                        the original request message is used.
   virtual int add_target(pjsip_uri* request_uri,
                          pjsip_msg* req=NULL) = 0;
@@ -143,7 +143,7 @@ public:
 /// on an AppServer derived class when
 ///
 /// -  an IFC triggers with ServiceName containing a host name of the form
-///    <service_name>.<homedomain>
+///    &lt;service_name&gt;.&lt;homedomain&gt;
 /// -  a request is received for a dialog where the service previously called
 ///    add_to_dialog.
 ///
@@ -162,6 +162,7 @@ public:
   /// @param  service_ctxt  - The service context to use to perform
   ///                         the underlying service-related processing.
   /// @param  req           - The received request message.
+  /// @param  dialog_id     - The dialog ID for this transaction.
   virtual AppServerTransactionContext* get_context(ServiceTransactionContext* service_ctxt,
                                                    pjsip_msg* req,
                                                    const std::string& dialog_id) = 0;
@@ -272,8 +273,8 @@ protected:
   /// received responses.
   ///
   /// @returns             - The identity of this fork.
-  /// @param               - The URI for the new target.
-  /// @param               - The request message to use for this fork.  If NULL
+  /// @param  request_uri  - The URI for the new target.
+  /// @param  req          - The request message to use for this fork.  If NULL
   ///                        the original request message is used.
   int add_target(pjsip_uri* request_uri,
                  pjsip_msg* req=NULL)
