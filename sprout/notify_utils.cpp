@@ -385,7 +385,9 @@ pj_status_t NotifyUtils::create_notify(
     event_hdr->event_type = STR_REG;
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
 
-    // Add the Event header
+    // Add the Subscription-State header. We only send NOTIFYs when a
+    // binding they're subscribed to changes, not when their
+    // subscription runs out, so the value will always be "active".
     pjsip_generic_string_hdr* subscription_state_hdr = pjsip_generic_string_hdr_create((*tdata_notify)->pool, &STR_SUBSCRIPTION_STATE, &STR_ACTIVE);
     pj_list_push_back( &(*tdata_notify)->msg->hdr, subscription_state_hdr);
 
