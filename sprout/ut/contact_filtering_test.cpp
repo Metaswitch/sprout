@@ -402,12 +402,14 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilter)
   std::vector<pjsip_reject_contact_hdr*>reject_headers;
   pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
   ASSERT_NE((pjsip_msg*)NULL, msg);
+
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   add_implicit_filters(msg, pool, accept_headers, reject_headers);
 
   ASSERT_EQ((unsigned)1, accept_headers.size());
   EXPECT_EQ((unsigned)0, reject_headers.size());
+
   pjsip_accept_contact_hdr* new_accept = accept_headers[0];
   EXPECT_TRUE(new_accept->required_match);
   EXPECT_FALSE(new_accept->explicit_match);
@@ -418,4 +420,72 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilter)
   std::string feature_value(feature_param->value.ptr, feature_param->value.slen);
   EXPECT_EQ(feature_name, "methods");
   EXPECT_EQ(feature_value, "INVITE");
+}
+TEST_F(ContactFilteringImplicitFiltersTest, DontAddImplicitFilterAccept)
+{
+  std::vector<pjsip_accept_contact_hdr*>accept_headers;
+  std::vector<pjsip_reject_contact_hdr*>reject_headers;
+  accept_headers.push_back(accept_hdr);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  add_implicit_filters(msg, pool, accept_headers, reject_headers);
+
+  ASSERT_EQ((unsigned)1, accept_headers.size());
+  EXPECT_EQ((unsigned)0, reject_headers.size());
+}
+TEST_F(ContactFilteringImplicitFiltersTest, DontAddImplicitFilterReject)
+{
+  std::vector<pjsip_accept_contact_hdr*>accept_headers;
+  std::vector<pjsip_reject_contact_hdr*>reject_headers;
+  reject_headers.push_back(reject_hdr);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  add_implicit_filters(msg, pool, accept_headers, reject_headers);
+
+  ASSERT_EQ((unsigned)0, accept_headers.size());
+  EXPECT_EQ((unsigned)1, reject_headers.size());
+}
+TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
+{
+  std::vector<pjsip_accept_contact_hdr*>accept_headers;
+  std::vector<pjsip_reject_contact_hdr*>reject_headers;
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+  pj_str_t event_name = pj_str((char*)"Event");
+  pj_str_t event_value = pj_str((char*)"explosion");
+  pjsip_generic_string_hdr* event_hdr =
+    pjsip_generic_string_hdr_create(pool,
+                                    &event_name,
+                                    &event_value);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)event_hdr);
+
+  add_implicit_filters(msg, pool, accept_headers, reject_headers);
+
+  ASSERT_EQ((unsigned)1, accept_headers.size());
+  EXPECT_EQ((unsigned)0, reject_headers.size());
+
+  pjsip_accept_contact_hdr* new_accept = accept_headers[0];
+  
+  EXPECT_TRUE(new_accept->required_match);
+  EXPECT_FALSE(new_accept->explicit_match);
+
+  pj_str_t param_name = pj_str((char*)"methods");
+  pjsip_param* feature_param = pjsip_param_find(&new_accept->feature_set, &param_name);
+  ASSERT_NE((pjsip_param*)NULL, feature_param);
+  std::string feature_value(feature_param->value.ptr, feature_param->value.slen);
+  EXPECT_EQ(feature_value, "INVITE");
+
+  param_name = pj_str((char*)"events");
+  feature_param = pjsip_param_find(&new_accept->feature_set, &param_name);
+  ASSERT_NE((pjsip_param*)NULL, feature_param);
+  feature_value = std::string(feature_param->value.ptr, feature_param->value.slen);
+  EXPECT_EQ(feature_value, "explosion");
 }

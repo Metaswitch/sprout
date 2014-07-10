@@ -80,6 +80,7 @@ const pj_str_t STR_P_PROFILE_KEY = pj_str((char*)"P-Profile-Key");
 const pj_str_t STR_APPLICATION = pj_str((char*)"application");
 const pj_str_t STR_SDP = pj_str((char*)"sdp");
 const pj_str_t STR_EVENT = pj_str((char*)"Event");
+const pj_str_t STR_EVENTS = pj_str((char*)"events");
 const pj_str_t STR_EVENT_SHORT = pj_str((char*)"o");
 const pj_str_t STR_X = pj_str((char*)"X");
 const pj_str_t STR_REASON = pj_str((char*)"Reason");

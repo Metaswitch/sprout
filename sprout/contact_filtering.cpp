@@ -237,7 +237,7 @@ void add_implicit_filters(const pjsip_msg* msg,
     if (event_hdr != NULL)
     {
       pjsip_param* event_feature = PJ_POOL_ALLOC_T(pool, pjsip_param);
-      pj_strdup(pool, &event_feature->name, &STR_EVENT);
+      pj_strdup(pool, &event_feature->name, &STR_EVENTS);
       pj_strdup(pool, &event_feature->value, &event_hdr->hvalue);
       pj_list_insert_after(&new_hdr->feature_set, event_feature);
     }
@@ -569,7 +569,8 @@ MatchResult match_tokens(const std::string& matcher,
   std::sort(matchee_tokens.begin(), matchee_tokens.end());
 
   // Find the intersection.
-  std::vector<std::string> intersection(matcher_tokens.size() + matchee_tokens.size());
+  std::vector<std::string> intersection(matcher_tokens.size() +
+                                        matchee_tokens.size());
   std::vector<std::string>::iterator it;
   it = std::set_intersection(matcher_tokens.begin(), matcher_tokens.end(),
                              matchee_tokens.begin(), matchee_tokens.end(),
