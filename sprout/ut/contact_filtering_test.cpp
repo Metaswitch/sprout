@@ -75,8 +75,8 @@ TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithLessThan) { EXP
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithLessThan) { EXPECT_EQ(NO, match_numeric("#2.5", "#<=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#2.5", "#>=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#1.5", "#>=2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5", "#0.5..2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithRange) { EXPECT_EQ(NO, match_numeric("#1.5", "#2.5..3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithRange) { EXPECT_EQ(NO, match_numeric("#1.5", "#2.5:3.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithInteger) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithInteger) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#1.5")); }
@@ -84,9 +84,9 @@ TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithLessThan) {
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithLessThan) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#<=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#>=2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#>=2.5", "#>=1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithRange) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#2.5..3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#>=1.5", "#0.5..2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithRange) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#0.5..1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithRange) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#2.5:3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#>=1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithRange) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#0.5:1.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithInteger) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithInteger) { EXPECT_EQ(NO, match_numeric("#<=1.5", "#2.5")); }
@@ -94,24 +94,24 @@ TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithGreaterThan) {
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#<=2.5", "#>=3.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithLessThan) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#<=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#<=2.5", "#<=3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithRange) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#0.5..1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#<=1.5", "#0.5..2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithRange) { EXPECT_EQ(NO, match_numeric("#<=0.5", "#1.5..2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithRange) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#0.5:1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#<=1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithRange) { EXPECT_EQ(NO, match_numeric("#<=0.5", "#1.5:2.5")); }
 
-TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithInteger) { EXPECT_EQ(YES, match_numeric("#1.5..3.5", "#2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithInteger) { EXPECT_EQ(NO, match_numeric("#1.5..2.5", "#3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#2.5..3.5", "#>=1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#1.5..2.5", "#>=3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5..2.5", "#<=3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithLessThan) { EXPECT_EQ(NO, match_numeric("#2.5..3.5", "#<=1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithRange) { EXPECT_EQ(YES, match_numeric("#1.5..4.5", "#2.5..3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5..3.5", "#2.5..4.5")); }
-TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithRange) { EXPECT_EQ(NO, match_numeric("#1.5..2.5", "#3.5..4.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithInteger) { EXPECT_EQ(YES, match_numeric("#1.5:3.5", "#2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithInteger) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#2.5:3.5", "#>=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#>=3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5:2.5", "#<=3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithLessThan) { EXPECT_EQ(NO, match_numeric("#2.5:3.5", "#<=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithRange) { EXPECT_EQ(YES, match_numeric("#1.5:4.5", "#2.5:3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5:3.5", "#2.5:4.5")); }
+TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithRange) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#3.5:4.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, InvalidNumericRandom) { EXPECT_THROW(match_numeric("banana", "#1.5"), FeatureParseError); }
-TEST_F(ContactFilteringMatchNumericTest, InvalidNumericNoOctothorp) { EXPECT_THROW(match_numeric("2.5..4.5", "#1.0"), FeatureParseError); }
-TEST_F(ContactFilteringMatchNumericTest, InvalidNumericNoContents) { EXPECT_THROW(match_numeric("#2.5..4.5", ""), FeatureParseError); }
-TEST_F(ContactFilteringMatchNumericTest, InvalidNumericBackwardsRange) { EXPECT_THROW(match_numeric("#4.5..2.5", "#2"), FeatureParseError); }
+TEST_F(ContactFilteringMatchNumericTest, InvalidNumericNoOctothorp) { EXPECT_THROW(match_numeric("2.5:4.5", "#1.0"), FeatureParseError); }
+TEST_F(ContactFilteringMatchNumericTest, InvalidNumericNoContents) { EXPECT_THROW(match_numeric("#2.5:4.5", ""), FeatureParseError); }
+TEST_F(ContactFilteringMatchNumericTest, InvalidNumericBackwardsRange) { EXPECT_THROW(match_numeric("#4.5:2.5", "#2"), FeatureParseError); }
 
 typedef ContactFilteringTest ContactFilteringMatchTokensTest;
 TEST_F(ContactFilteringMatchTokensTest, MatchingTokens) { EXPECT_EQ(YES, match_tokens("hello,world", "goodbye,cruel,world")); }

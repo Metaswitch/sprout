@@ -493,7 +493,7 @@ struct NumericRange
 
   NumericRange(const std::string& str)
   {
-    if (sscanf(str.c_str(), "#%f..%f", &minimum, &maximum) == 2)
+    if (sscanf(str.c_str(), "#%f:%f", &minimum, &maximum) == 2)
     {
       if (minimum > maximum)
       {
