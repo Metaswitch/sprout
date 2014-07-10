@@ -39,6 +39,9 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef APPSERVER_H__
+#define APPSERVER_H__
+
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
@@ -48,6 +51,10 @@ extern "C" {
 
 #include "sas.h"
 
+class ServiceTransactionContext;
+class AppServer;
+class AppServerTransactionContext;
+
 
 /// The ServiceTransactionContext class is an abstract base class used to
 /// handle the underlying service-related processing of a single transaction.
@@ -56,7 +63,7 @@ class ServiceTransactionContext
 {
 public:
   /// Virtual destructor.
-  virtual ~ServiceTransactionContext();
+  virtual ~ServiceTransactionContext() {}
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -112,6 +119,13 @@ public:
   /// @param  rsp          - The response message to send.
   virtual void send_response(pjsip_msg* rsp) = 0;
 
+  /// Returns the pool corresponding to a message.  This pool can then be used
+  /// to allocate further headers or bodies to add to the message.
+  ///
+  /// @returns             - The pool corresponding to this message.
+  /// @param  msg          - The message.
+  virtual pj_pool_t* get_pool(const pjsip_msg* msg) = 0;
+
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
   virtual SAS::TrailId trail() const = 0;
@@ -134,7 +148,7 @@ class AppServer
 {
 public:
   /// Virtual destructor.
-  virtual ~AppServer();
+  virtual ~AppServer() {}
 
   /// Called when the system determines the service should be invoked for
   /// a received request.  The AppServer can either return NULL indicating it
@@ -145,7 +159,7 @@ public:
   /// @param  service_ctxt  - The service context to use to perform
   ///                         the underlying service-related processing.
   /// @param  req           - The received request message.
-  virtual AppServerTransactionContext* get_context(const ServiceTransactionContext* service_ctxt,
+  virtual AppServerTransactionContext* get_context(ServiceTransactionContext* service_ctxt,
                                                    pjsip_msg* req,
                                                    const std::string& dialog_id) = 0;
 
@@ -154,10 +168,8 @@ public:
 
 protected:
   /// Constructor.
-  AppServer(const std::string& service_name);
-
-  /// Implementation to use for protocol-handler methods.
-  const ServiceTransactionContext::ProtocolImpl* _prot_impl;
+  AppServer(const std::string& service_name) :
+    _service_name(service_name) {}
 
 private:
   /// The name of this service.
@@ -174,7 +186,7 @@ class AppServerTransactionContext
 {
 public:
   /// Virtual destructor.
-  virtual ~AppServerTransactionContext();
+  virtual ~AppServerTransactionContext() {}
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.  Unless the reject
@@ -191,7 +203,7 @@ public:
   /// add_target API, or to the existing RequestURI if no targets were added.
   ///
   /// @param req           - The received in-dialog request.
-  virtual void on_in_dialog_request(pjsip_msg* req);
+  virtual void on_in_dialog_request(pjsip_msg* req) {}
 
   /// Called with all responses received on the transaction.  If a transport
   /// error or transaction timeout occurs on a downstream leg, this method is
@@ -206,7 +218,7 @@ public:
   /// @param  rsp          - The received request.
   /// @param  fork_id      - The identity of the downstream fork on which
   ///                        the response was received.
-  virtual bool on_response(pjsip_msg* rsp, int fork_id);
+  virtual bool on_response(pjsip_msg* rsp, int fork_id) {return true;}
 
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request or an error on the inbound transport).  On return from 
@@ -216,13 +228,14 @@ public:
   /// @param  status_code  - Indicates the reason for the cancellation 
   ///                        (487 for a CANCEL, 408 for a transport error
   ///                        or transaction timeout)
-  virtual void on_cancel(int status_code);
+  virtual void on_cancel(int status_code) {}
 
 protected:
   /// Constructor.
-  AppServerTransactionContext(const ServiceTransactionContext* service_ctxt,
+  AppServerTransactionContext(ServiceTransactionContext* service_ctxt,
                               const std::string& service_name,
-                              const std::string& dialog_id);
+                              const std::string& dialog_id) :
+    _service_ctxt(service_ctxt) {}
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -284,6 +297,14 @@ protected:
   void send_response(pjsip_msg* rsp)
     {return _service_ctxt->send_response(rsp);}
 
+  /// Returns the pool corresponding to a message.  This pool can then be used
+  /// to allocate further headers or bodies to add to the message.
+  ///
+  /// @returns             - The pool corresponding to this message.
+  /// @param  msg          - The message.
+  pj_pool_t* get_pool(const pjsip_msg* msg)
+    {return _service_ctxt->get_pool(msg);}
+
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
   SAS::TrailId trail() const
@@ -291,6 +312,8 @@ protected:
 
 private:
   /// Transaction context to use for underlying service-related processing.
-  const ServiceTransactionContext* _service_ctxt;
+  ServiceTransactionContext* _service_ctxt;
 
 };
+
+#endif
