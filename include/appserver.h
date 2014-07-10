@@ -56,8 +56,11 @@ class AppServer;
 class AppServerTransactionContext;
 
 
-/// The ServiceTransactionContext class is an abstract base class used to
-/// handle the underlying service-related processing of a single transaction.
+/// The ServiceTransactionContext class handles the underlying service-related
+/// processing of a single transaction.  It is an abstract base class to allow
+/// for alternative implementations - in particular, production and test.  It
+/// is implemented by the underlying service infrastructure, not by the
+/// application service itself.
 ///
 class ServiceTransactionContext
 {
@@ -197,10 +200,9 @@ public:
   /// @param req           - The received initial request.
   virtual void on_initial_request(pjsip_msg* req) = 0;
 
-  /// Called with an in-dialog request with the original received request for
+  /// Called for an in-dialog request with the original received request for
   /// the transaction.  Unless the reject method is called, on return from
-  /// this method the request will be forwarded to all targets added using the
-  /// add_target API, or to the existing RequestURI if no targets were added.
+  /// this method the request will be forwarded within the dialog.
   ///
   /// @param req           - The received in-dialog request.
   virtual void on_in_dialog_request(pjsip_msg* req) {}
@@ -223,7 +225,8 @@ public:
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request or an error on the inbound transport).  On return from 
   /// this method the transaction (and any remaining downstream legs) will be
-  /// cancelled automatically.
+  /// cancelled automatically.  No further methods will be called for this
+  /// transaction.
   ///
   /// @param  status_code  - Indicates the reason for the cancellation 
   ///                        (487 for a CANCEL, 408 for a transport error
