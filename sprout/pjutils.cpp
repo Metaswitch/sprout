@@ -1176,12 +1176,11 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
   if (hdr_list)
   {
     const pjsip_hdr* hdr = hdr_list->next;
-    while (hdr != hdr_list)
-    {
+    do {
       pjsip_msg_add_hdr(tdata->msg,
                         (pjsip_hdr*) pjsip_hdr_clone(tdata->pool, hdr) );
       hdr = hdr->next;
-    }
+    } while (hdr != hdr_list);
   }
 
   // Add the message body, if any.
