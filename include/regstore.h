@@ -178,10 +178,10 @@ public:
     typedef std::map<std::string, Subscription*> Subscriptions;
 
     /// Retrieve all the bindings.
-    inline const Bindings& bindings() { return _bindings; }
+    inline const Bindings& bindings() const { return _bindings; }
 
     /// Retrieve all the subscriptions.
-    inline const Subscriptions& subscriptions() { return _subscriptions; }
+    inline const Subscriptions& subscriptions() const { return _subscriptions; }
 
     /// CSeq value for event notifications for this AoR.  This is initialised
     /// to one when the AoR record is first set up and incremented every time

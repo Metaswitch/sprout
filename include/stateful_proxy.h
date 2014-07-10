@@ -231,7 +231,7 @@ private:
   void get_all_bindings(const std::string& aor,
                         RegStore*& store,
                         RegStore*& remote_store,
-                        RegStore::AoR::Bindings& bindings,
+                        RegStore::AoR** aor_data,
                         SAS::TrailId trail);
 
   void cancel_trying_timer();

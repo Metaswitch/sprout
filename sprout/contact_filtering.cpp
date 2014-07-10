@@ -43,7 +43,7 @@
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
 void filter_bindings_to_targets(const std::string& aor,
-                                const RegStore::AoR::Bindings& bindings,
+                                const RegStore::AoR* aor_data,
                                 pjsip_msg* msg,
                                 pj_pool_t* pool,
                                 int max_targets,
@@ -93,6 +93,7 @@ void filter_bindings_to_targets(const std::string& aor,
 
   // Iterate over the Bindings, checking if they're valid and creating a target
   // if so.
+  const RegStore::AoR::Bindings bindings = aor_data->bindings();
   for (RegStore::AoR::Bindings::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
@@ -494,7 +495,10 @@ struct NumericRange
   {
     if (sscanf(str.c_str(), "#%f..%f", &minimum, &maximum) == 2)
     {
-      return;
+      if (minimum > maximum)
+      {
+        throw FeatureParseError();
+      }
     }
     else if (sscanf(str.c_str(), "#>=%f", &minimum) == 1)
     {
@@ -511,7 +515,7 @@ struct NumericRange
     else
     {
       // Invalid format for numeric.
-      throw new FeatureParseError();
+      throw FeatureParseError();
     }
   }
 };
@@ -530,14 +534,7 @@ MatchResult match_numeric(const std::string& matcher,
     {
       rc = YES;
     }
-    else
-    {
-      rc = UNKNOWN;
-    }
-  }
-  else
-  {
-    if (matcher_range.maximum >= matchee_range.maximum)
+    else if (matcher_range.maximum >= matchee_range.minimum)
     {
       rc = UNKNOWN;
     }
@@ -545,6 +542,14 @@ MatchResult match_numeric(const std::string& matcher,
     {
       rc = NO;
     }
+  }
+  else if (matcher_range.minimum <= matchee_range.maximum)
+  {
+    rc = UNKNOWN;
+  }
+  else
+  {
+    rc = NO;
   }
 
   return rc;
@@ -564,11 +569,12 @@ MatchResult match_tokens(const std::string& matcher,
   std::sort(matchee_tokens.begin(), matchee_tokens.end());
 
   // Find the intersection.
-  std::vector<std::string> intersection;
+  std::vector<std::string> intersection(matcher_tokens.size() + matchee_tokens.size());
   std::vector<std::string>::iterator it;
   it = std::set_intersection(matcher_tokens.begin(), matcher_tokens.end(),
                              matchee_tokens.begin(), matchee_tokens.end(),
                              intersection.begin());
+  intersection.resize(it - intersection.begin());
 
   if (intersection.size() != 0)
   {

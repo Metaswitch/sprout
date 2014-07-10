@@ -917,18 +917,18 @@ pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
 
   for (;;)
   {
+    // We might need to swallow the ';'.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);
+    }
+
     pjsip_parse_param_imp(scanner, pool, &name, &value,
                           PJSIP_PARSE_REMOVE_QUOTE);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;
     pj_list_insert_before(&hdr->feature_set, param);
-
-    // We might need to swallow the ';'.
-    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
-    {
-      pj_scan_get_char(scanner);
-    }
 
     // If we're EOF or looking at a newline, we're done.
     pj_scan_skip_whitespace(scanner);
@@ -1049,6 +1049,12 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
 
   for (;;)
   {
+    // We might need to swallow the ';'.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);
+    }
+
     pjsip_parse_param_imp(scanner, pool, &name, &value,
                           PJSIP_PARSE_REMOVE_QUOTE);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
@@ -1066,14 +1072,6 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
     else
     {
       pj_list_insert_before(&hdr->feature_set, param);
-    }
-
-    pj_list_insert_before(&hdr->feature_set, param);
-
-    // We might need to swallow the ';'.
-    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
-    {
-      pj_scan_get_char(scanner);
     }
 
     // If we're EOF or looking at a newline, we're done.

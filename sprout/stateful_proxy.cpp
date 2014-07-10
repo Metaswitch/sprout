@@ -1894,49 +1894,43 @@ void UASTransaction::get_targets_from_store(const std::string& aor,
                                             TargetList& targets,
                                             SAS::TrailId trail)
 {
-  RegStore::AoR::Bindings bindings;
+  RegStore::AoR* aor_data = NULL;
   get_all_bindings(aor,
                    store,
                    remote_store,
-                   bindings,
+                   &aor_data,
                    trail);
   filter_bindings_to_targets(aor,
-                             bindings,
+                             aor_data,
                              msg,
                              pool,
                              max_targets,
                              targets,
                              trail);
+  delete aor_data; aor_data = NULL;
 }
 
 void UASTransaction::get_all_bindings(const std::string& aor,
                                       RegStore*& store,
                                       RegStore*& remote_store,
-                                      RegStore::AoR::Bindings& bindings,
+                                      RegStore::AoR** aor_data,
                                       SAS::TrailId trail)
 {
   // Look up the target in the registration data store.
   LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-  RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
+  *aor_data = store->get_aor_data(aor, trail);
 
   // If we didn't get bindings from the local store and we have a remote
   // store, try the remote.
   if ((remote_store != NULL) &&
-      ((aor_data == NULL) ||
-       (aor_data->bindings().empty())))
+      ((*aor_data == NULL) ||
+       ((*aor_data)->bindings().empty())))
   {
-    delete aor_data;
-    aor_data = remote_store->get_aor_data(aor, trail);
-  }
-
-  if (aor_data != NULL)
-  {
-    bindings = aor_data->bindings();
+    delete *aor_data;
+    *aor_data = remote_store->get_aor_data(aor, trail);
   }
 
   // TODO - Log bindings to SAS
-
-  delete aor_data;
 }
 
 /// Attempt ENUM lookup if appropriate.

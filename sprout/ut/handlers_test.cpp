@@ -98,9 +98,9 @@ TEST_F(RegistrationTimeoutHandlersTest, MainlineTest)
   b1->_expires = now + 5;
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = false;
   b1->_private_id = "6505550231";
 
@@ -199,9 +199,9 @@ TEST_F(DeregistrationHandlerTest, MainlineTest)
   b1->_expires = now + 300;
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = false;
   b1->_private_id = "6505550231";
 
