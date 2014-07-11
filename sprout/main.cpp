@@ -212,9 +212,9 @@ QuiescingManager *quiescing_mgr;
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
 
-const static int TARGET_LATENCY = 1000000;
+const static int TARGET_LATENCY = 100000;
 const static int MAX_TOKENS = 20;
-const static float INITIAL_TOKEN_RATE = 100.0;
+const static float INITIAL_TOKEN_RATE = 10.0;
 const static float MIN_TOKEN_RATE = 10.0;
 
 static void usage(void)
