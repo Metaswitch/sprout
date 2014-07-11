@@ -57,7 +57,7 @@ extern "C" {
 #include <queue>
 #include <string>
 
-
+#include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
 #include "sasevent.h"
@@ -908,6 +908,7 @@ int main(int argc, char *argv[])
   XDMConnection* xdm_connection = NULL;
   CallServices* call_services = NULL;
   IfcHandler* ifc_handler = NULL;
+  Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
   BgcfService* bgcf_service = NULL;
@@ -1047,7 +1048,9 @@ int main(int argc, char *argv[])
 
   if (opt.analytics_enabled)
   {
-    analytics_logger = new AnalyticsLogger(opt.analytics_directory);
+    analytics_logger_logger = new Logger(opt.analytics_directory, std::string("log"));
+    analytics_logger_logger->set_flags(Logger::ADD_TIMESTAMPS|Logger::FLUSH_ON_WRITE);
+    analytics_logger = new AnalyticsLogger(analytics_logger_logger);
   }
 
   if ((!opt.pcscf_enabled) && (!opt.scscf_enabled) && (!opt.icscf_enabled))
@@ -1244,10 +1247,21 @@ int main(int argc, char *argv[])
   if (opt.chronos_service != "")
   {
     std::string port_str = std::to_string(opt.http_port);
-    std::string http_uri = opt.http_address + ":" + std::string(port_str);
+    std::string chronos_callback_host = "127.0.0.1:" + port_str;
+
+    // We want Chronos to call back to its local sprout instance so that we can
+    // handle Sprouts failing without missing timers.
+    if (is_ipv6(opt.http_address))
+    {
+      chronos_callback_host = "[::1]:" + port_str;
+    }
+
     // Create a connection to Chronos.
-    LOG_STATUS("Creating connection to Chronos %s", opt.chronos_service.c_str());
-    chronos_connection = new ChronosConnection(opt.chronos_service, http_uri);
+    LOG_STATUS("Creating connection to Chronos %s using %s as the callback URI",
+               opt.chronos_service.c_str(),
+               chronos_callback_host.c_str());
+    chronos_connection = new ChronosConnection(opt.chronos_service,
+                                               chronos_callback_host);
   }
 
   if (opt.scscf_enabled)
@@ -1476,20 +1490,20 @@ int main(int argc, char *argv[])
 
     // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
     // chronos requests, so use the ChronosHandlerFactory.
-    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_handler_factory(&reg_timeout_config);
-    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_handler_factory(&auth_timeout_config);
-    HttpStack::ConfiguredHandlerFactory<DeregistrationHandler, DeregistrationHandler::Config> deregistration_handler_factory(&deregistration_config);
+    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_controller(&reg_timeout_config);
+    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_controller(&auth_timeout_config);
+    HttpStackUtils::SpawningController<DeregistrationHandler, DeregistrationHandler::Config> deregistration_controller(&deregistration_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
-      http_stack->register_handler("^/timers$",
-                                   &reg_timeout_handler_factory);
-      http_stack->register_handler("^/authentication-timeout$",
-                                   &auth_timeout_handler_factory);
-      http_stack->register_handler("^/registrations?*$",
-                                   &deregistration_handler_factory);
+      http_stack->register_controller("^/timers$",
+                                      &reg_timeout_controller);
+      http_stack->register_controller("^/authentication-timeout$",
+                                      &auth_timeout_controller);
+      http_stack->register_controller("^/registrations?*$",
+                                      &deregistration_controller);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
@@ -1568,6 +1582,9 @@ int main(int argc, char *argv[])
 
   delete sip_resolver;
   delete dns_resolver;
+
+  delete analytics_logger;
+  delete analytics_logger_logger;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

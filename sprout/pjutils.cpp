@@ -1176,12 +1176,11 @@ pj_status_t PJUtils::respond_stateless(pjsip_endpoint* endpt,
   if (hdr_list)
   {
     const pjsip_hdr* hdr = hdr_list->next;
-    while (hdr != hdr_list)
-    {
+    do {
       pjsip_msg_add_hdr(tdata->msg,
                         (pjsip_hdr*) pjsip_hdr_clone(tdata->pool, hdr) );
       hdr = hdr->next;
-    }
+    } while (hdr != hdr_list);
   }
 
   // Add the message body, if any.
@@ -1318,19 +1317,6 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
 bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs)
 {
   return (pj_sockaddr_cmp(&lhs, &rhs) < 0);
-}
-
-
-/// Generate a random base64-encoded token.
-void PJUtils::create_random_token(size_t length,       //< Number of characters.
-                                  std::string& token)  //< Destination. Must be empty.
-{
-  token.reserve(length);
-
-  for (size_t ii = 0; ii < length; ++ii)
-  {
-    token += _b64[rand() % 64];
-  }
 }
 
 

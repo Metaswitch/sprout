@@ -45,7 +45,6 @@
 #include "utils.h"
 #include "test_utils.hpp"
 #include "icscfproxy.h"
-#include "fakelogger.hpp"
 #include "fakehssconnection.hpp"
 #include "faketransport_tcp.hpp"
 #include "test_interposer.hpp"
@@ -252,8 +251,6 @@ private:
 class BasicProxyTestBase : public SipTest
 {
 public:
-  FakeLogger _log;
-
   /// TX data for testing.  Will be cleaned up.  Each message in a
   /// forked flow has its URI stored in _uris, and its txdata stored
   /// in _tdata against that URI.
@@ -281,9 +278,7 @@ public:
 
   BasicProxyTestBase()
   {
-    Log::setLoggingLevel(-1); // cover out-of-range log levels
-    Log::setLoggingLevel(99);
-    _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
   }
 
   ~BasicProxyTestBase()

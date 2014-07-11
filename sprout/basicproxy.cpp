@@ -803,6 +803,7 @@ pj_status_t BasicProxy::UASTsx::create_pjsip_transaction(pjsip_rx_data* rdata)
     // LCOV_EXCL_START
     pj_grp_lock_release(_lock);
     pj_grp_lock_dec_ref(_lock);
+    _lock = NULL;
     return status;
     // LCOV_EXCL_STOP
   }
@@ -1755,8 +1756,10 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       if (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG)
       {
         LOG_DEBUG("%s - RX_MSG on active UAC transaction", name());
-        pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
-        _uas_tsx->on_new_client_response(this, rdata);
+        if (_uas_tsx != NULL) {
+          pjsip_rx_data* rdata = event->body.tsx_state.src.rdata;
+          _uas_tsx->on_new_client_response(this, rdata);
+        }
       }
 
       // If UAC transaction is terminated because of a timeout, treat this as

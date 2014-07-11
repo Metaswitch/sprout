@@ -42,7 +42,6 @@
 #include "utils.h"
 #include "analyticslogger.h"
 #include "options.h"
-#include "fakelogger.hpp"
 
 using namespace std;
 
@@ -50,8 +49,6 @@ using namespace std;
 class OptionsTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

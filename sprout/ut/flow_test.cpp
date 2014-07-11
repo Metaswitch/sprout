@@ -44,7 +44,6 @@
 #include "utils.h"
 #include "siptest.hpp"
 #include "dialog_tracker.hpp"
-#include "fakelogger.hpp"
 
 using namespace std;
 
@@ -52,7 +51,6 @@ using namespace std;
 class FlowTest : public SipTest
 {
 public:
-  FakeLogger _log;
   static FlowTable* ft;
   static QuiescingManager* qm;
   Flow* flow;

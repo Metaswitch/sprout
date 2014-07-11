@@ -42,7 +42,6 @@
 
 #include "utils.h"
 #include "siptest.hpp"
-#include "fakelogger.hpp"
 
 #include "sessioncase.h"
 
@@ -52,8 +51,6 @@ using namespace std;
 class SessionCaseTest : public SipTest
 {
 public:
-  FakeLogger _log;
-
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();

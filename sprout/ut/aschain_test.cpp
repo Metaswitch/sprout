@@ -43,7 +43,6 @@
 
 #include "utils.h"
 #include "siptest.hpp"
-#include "fakelogger.hpp"
 #include "pjutils.h"
 #include "stack.h"
 
@@ -57,7 +56,6 @@ using testing::MatchesRegex;
 class AsChainTest : public SipTest
 {
 public:
-  FakeLogger _log;
   AsChainTable* _as_chain_table;
 
   static void SetUpTestCase()

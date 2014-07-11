@@ -46,7 +46,6 @@
 #include "test_utils.hpp"
 #include "analyticslogger.h"
 #include "stateful_proxy.h"
-#include "fakelogger.hpp"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"
@@ -313,7 +312,6 @@ private:
 class StatefulProxyTestBase : public SipTest
 {
 public:
-  FakeLogger _log;
   static QuiescingManager _quiescing_manager;
 
 
@@ -337,9 +335,7 @@ public:
     _chronos_connection = new FakeChronosConnection();
     _local_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _analytics = new AnalyticsLogger("foo");
-    delete _analytics->_logger;
-    _analytics->_logger = NULL;
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _call_services = NULL;
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
@@ -416,9 +412,7 @@ public:
 
   StatefulProxyTestBase()
   {
-    Log::setLoggingLevel(99);
-    _log_traffic = FakeLogger::isNoisy(); // true to see all traffic
-    _analytics->_logger = &_log;
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _local_data_store->flush_all();  // start from a clean slate on each test
     if (_hss_connection)
     {
@@ -463,7 +457,6 @@ public:
     pjsip_tsx_layer_instance()->stop();
     pjsip_tsx_layer_instance()->start();
 
-    _analytics->_logger = NULL;
   }
 
 protected:
