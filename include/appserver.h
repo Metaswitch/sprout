@@ -122,6 +122,14 @@ public:
   /// @param  rsp          - The response message to send.
   virtual void send_response(pjsip_msg* rsp) = 0;
 
+  /// Frees the specified message.  Received responses or messages that have
+  /// been cloned with add_target are owned by the AppServerTsx.  It must
+  /// call into ServiceTsx either to send them on or to free them (via this
+  /// API).
+  ///
+  /// @param  msg          - The message to free.
+  virtual void free_msg(pjsip_msg* msg) = 0;
+
   /// Returns the pool corresponding to a message.  This pool can then be used
   /// to allocate further headers or bodies to add to the message.
   ///
@@ -295,6 +303,15 @@ protected:
   /// @param  rsp          - The response message to send.
   void send_response(pjsip_msg* rsp)
     {return _service_tsx->send_response(rsp);}
+
+  /// Frees the specified message.  Received responses or messages that have
+  /// been cloned with add_target are owned by the AppServerTsx.  It must
+  /// call into ServiceTsx either to send them on or to free them (via this
+  /// API).
+  ///
+  /// @param  msg          - The message to free.
+  void free_msg(pjsip_msg* msg)
+    {return _service_tsx->free_msg(msg);}
 
   /// Returns the pool corresponding to a message.  This pool can then be used
   /// to allocate further headers or bodies to add to the message.

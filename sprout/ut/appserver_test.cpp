@@ -210,8 +210,7 @@ public:
 
   bool on_response(pjsip_msg* rsp, int fork_id)
   {
-    // This is superfluous - we could just return true - but means we could
-    // manipulate the response before sending it.
+    // This is superfluous - we could just return true.
     send_response(rsp);
     return false;
   }
@@ -246,6 +245,13 @@ public:
     pj_pool_t* pool = get_pool(req);
     add_target(PJUtils::uri_from_string("sip:alice@example.com", pool), req1);
     add_target(PJUtils::uri_from_string("sip:bob@example.com", pool), req2);
+  }
+
+  bool on_response(pjsip_msg* rsp, int fork_id)
+  {
+    // Drop all responses - naughty!
+    free_msg(rsp);
+    return false;
   }
 };
  
@@ -298,6 +304,11 @@ TEST_F(AppServerTest, DummyForkTest)
   }
   as_tsx.on_initial_request(req);
 
-  as_tsx.on_response(parse_msg(msg.get_response()), 0);
-  as_tsx.on_response(parse_msg(msg.get_response()), 0);
+  pjsip_msg* rsp = parse_msg(msg.get_response());
+  EXPECT_CALL(*_service_tsx, free_msg(rsp));
+  as_tsx.on_response(rsp, 0);
+
+  rsp = parse_msg(msg.get_response());
+  EXPECT_CALL(*_service_tsx, free_msg(rsp));
+  as_tsx.on_response(rsp, 0);
 }
