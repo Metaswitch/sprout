@@ -36,4 +36,4 @@ sipresolver.cpp
 acr.cpp
 
 # Tested as part of homestead
-httpstack_utils.cpp
+modules/cpp-common/src/httpstack_utils.cpp
