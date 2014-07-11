@@ -343,6 +343,8 @@ pj_status_t NotifyUtils::create_notify(
 
     if (reg_state == NotifyUtils::TERMINATED)
     {
+      // The only reason we support is timeout (this also covers
+      // actively unsubscribing)
       sub_state_hdr->sub_state = STR_TERMINATED;
       sub_state_hdr->reason_param = STR_TIMEOUT;
     }
