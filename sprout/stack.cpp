@@ -391,7 +391,7 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     // all the worker threads are deadlock, so exit the process so it will be
     // restarted.
     LOG_ERROR("Detected worker thread deadlock - exiting");
-    exit(1);
+    abort();
   }
 
   // Before we start, get a timestamp.  This will track the time from
