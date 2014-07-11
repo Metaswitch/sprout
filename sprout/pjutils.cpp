@@ -1321,19 +1321,6 @@ bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs
 }
 
 
-/// Generate a random base64-encoded token.
-void PJUtils::create_random_token(size_t length,       //< Number of characters.
-                                  std::string& token)  //< Destination. Must be empty.
-{
-  token.reserve(length);
-
-  for (size_t ii = 0; ii < length; ++ii)
-  {
-    token += _b64[rand() % 64];
-  }
-}
-
-
 void PJUtils::clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool)
 {
   pjsip_hdr* original_hdr = NULL;
