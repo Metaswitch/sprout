@@ -280,7 +280,7 @@ Flow::Flow(FlowTable* flow_table, pjsip_transport* transport, const pj_sockaddr*
   pthread_mutex_init(&_flow_lock, NULL);
 
   // Create a random base64 encoded token for the flow.
-  PJUtils::create_random_token(Flow::TOKEN_LENGTH, _token);
+  Utils::create_random_token(Flow::TOKEN_LENGTH, _token);
 
   if (PJSIP_TRANSPORT_IS_RELIABLE(_transport))
   {

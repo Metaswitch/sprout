@@ -277,7 +277,7 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
   for (size_t i = 0; i < len; i++)
   {
     std::string token;
-    PJUtils::create_random_token(TOKEN_LENGTH, token);
+    Utils::create_random_token(TOKEN_LENGTH, token);
     tokens.push_back(token);
     _t2c_map[token] = AsChainLink(as_chain, i);
   }
