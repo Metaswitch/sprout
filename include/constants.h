@@ -92,6 +92,7 @@ const pj_str_t STR_SOS = pj_str((char*)"sos");
 const pj_str_t STR_USER = pj_str((char*)"user");
 const pj_str_t STR_CHARGE_ORIG = pj_str((char*)"charge-orig");
 const pj_str_t STR_CHARGE_TERM = pj_str((char*)"charge-term");
+const pj_str_t STR_ALLOW_EVENTS = pj_str((char*)"Allow-Events");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
