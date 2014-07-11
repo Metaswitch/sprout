@@ -59,12 +59,12 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase();
-    _service_ctxt = new MockServiceTransactionContext();
+    _service_tsx = new MockServiceTsx();
   }
 
   static void TearDownTestCase()
   {
-    delete _service_ctxt; _service_ctxt = NULL;
+    delete _service_tsx; _service_tsx = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -76,9 +76,9 @@ public:
   {
   }
 
-  static MockServiceTransactionContext* _service_ctxt; 
+  static MockServiceTsx* _service_tsx; 
 };
-MockServiceTransactionContext* AppServerTest::_service_ctxt = NULL;
+MockServiceTsx* AppServerTest::_service_tsx = NULL;
 
 namespace AS
 {
@@ -196,12 +196,12 @@ MATCHER_P(UriEquals, uri, "")
 }
 
 
-/// Dummy AppServerTransactionContext that adds itself to the dialog.
-class DummyDialogASTC : public AppServerTransactionContext
+/// Dummy AppServerTsx that adds itself to the dialog.
+class DummyDialogASTsx : public AppServerTsx
 {
 public:
-  DummyDialogASTC(ServiceTransactionContext* service_ctxt) :
-    AppServerTransactionContext(service_ctxt, "mock", "") {}
+  DummyDialogASTsx(ServiceTsx* service_tsx) :
+    AppServerTsx(service_tsx) {}
 
   void on_initial_request(pjsip_msg* req)
   {
@@ -218,12 +218,12 @@ public:
 };
  
 
-/// Dummy AppServerTransactionContext that rejects the transaction.
-class DummyRejectASTC : public AppServerTransactionContext
+/// Dummy AppServerTsx that rejects the transaction.
+class DummyRejectASTsx : public AppServerTsx
 {
 public:
-  DummyRejectASTC(ServiceTransactionContext* service_ctxt) :
-    AppServerTransactionContext(service_ctxt, "mock", "") {}
+  DummyRejectASTsx(ServiceTsx* service_tsx) :
+    AppServerTsx(service_tsx) {}
 
   void on_initial_request(pjsip_msg* req)
   {
@@ -232,12 +232,12 @@ public:
 };
  
 
-/// Dummy AppServerTransactionContext that forks the transaction.
-class DummyForkASTC : public AppServerTransactionContext
+/// Dummy AppServerTsx that forks the transaction.
+class DummyForkASTsx : public AppServerTsx
 {
 public:
-  DummyForkASTC(ServiceTransactionContext* service_ctxt) :
-    AppServerTransactionContext(service_ctxt, "mock", "") {}
+  DummyForkASTsx(ServiceTsx* service_tsx) :
+    AppServerTsx(service_tsx) {}
 
   void on_initial_request(pjsip_msg* req)
   {
@@ -250,37 +250,37 @@ public:
 };
  
 
-/// Test the DummyDialogASTC by passing a request and a response in.
+/// Test the DummyDialogASTsx by passing a request and a response in.
 TEST_F(AppServerTest, DummyDialogTest)
 {
   Message msg;
-  DummyDialogASTC astc(_service_ctxt);
+  DummyDialogASTsx as_tsx(_service_tsx);
 
-  EXPECT_CALL(*_service_ctxt, add_to_dialog(""));
-  astc.on_initial_request(parse_msg(msg.get_request()));
+  EXPECT_CALL(*_service_tsx, add_to_dialog(""));
+  as_tsx.on_initial_request(parse_msg(msg.get_request()));
 
   pjsip_msg* rsp = parse_msg(msg.get_response());
-  EXPECT_CALL(*_service_ctxt, send_response(rsp));
-  astc.on_response(rsp, 0);
+  EXPECT_CALL(*_service_tsx, send_response(rsp));
+  as_tsx.on_response(rsp, 0);
 }
 
 
-/// Test the DummyRejectASTC by passing a request in and getting it rejected.
+/// Test the DummyRejectASTsx by passing a request in and getting it rejected.
 TEST_F(AppServerTest, DummyRejectTest)
 {
   Message msg;
-  DummyRejectASTC astc(_service_ctxt);
+  DummyRejectASTsx as_tsx(_service_tsx);
 
-  EXPECT_CALL(*_service_ctxt, reject(404, "Who?"));
-  astc.on_initial_request(parse_msg(msg.get_request()));
+  EXPECT_CALL(*_service_tsx, reject(404, "Who?"));
+  as_tsx.on_initial_request(parse_msg(msg.get_request()));
 }
 
 
-/// Test the DummyForkASTC by passing a request in and checking it's forked.
+/// Test the DummyForkASTsx by passing a request in and checking it's forked.
 TEST_F(AppServerTest, DummyForkTest)
 {
   Message msg;
-  DummyForkASTC astc(_service_ctxt);
+  DummyForkASTsx as_tsx(_service_tsx);
 
   pjsip_msg* req = parse_msg(msg.get_request());
   pjsip_msg req1;
@@ -288,16 +288,16 @@ TEST_F(AppServerTest, DummyForkTest)
   {
     // Use a sequence to ensure this happens in order.
     InSequence seq;
-    EXPECT_CALL(*_service_ctxt, clone_request(req))
+    EXPECT_CALL(*_service_tsx, clone_request(req))
       .WillOnce(Return(&req1))
       .WillOnce(Return(&req2));
-    EXPECT_CALL(*_service_ctxt, get_pool(req))
+    EXPECT_CALL(*_service_tsx, get_pool(req))
       .WillOnce(Return(stack_data.pool));
-    EXPECT_CALL(*_service_ctxt, add_target(UriEquals("sip:alice@example.com"), &req1));
-    EXPECT_CALL(*_service_ctxt, add_target(UriEquals("sip:bob@example.com"), &req2));
+    EXPECT_CALL(*_service_tsx, add_target(UriEquals("sip:alice@example.com"), &req1));
+    EXPECT_CALL(*_service_tsx, add_target(UriEquals("sip:bob@example.com"), &req2));
   }
-  astc.on_initial_request(req);
+  as_tsx.on_initial_request(req);
 
-  astc.on_response(parse_msg(msg.get_response()), 0);
-  astc.on_response(parse_msg(msg.get_response()), 0);
+  as_tsx.on_response(parse_msg(msg.get_response()), 0);
+  as_tsx.on_response(parse_msg(msg.get_response()), 0);
 }

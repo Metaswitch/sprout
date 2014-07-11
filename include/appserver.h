@@ -51,22 +51,22 @@ extern "C" {
 
 #include "sas.h"
 
-class ServiceTransactionContext;
+class ServiceTsx;
 class AppServer;
-class AppServerTransactionContext;
+class AppServerTsx;
 
 
-/// The ServiceTransactionContext class handles the underlying service-related
-/// processing of a single transaction.  It is an abstract base class to allow
-/// for alternative implementations - in particular, production and test.  It
-/// is implemented by the underlying service infrastructure, not by the
+/// The ServiceTsx class handles the underlying service-related processing of
+/// a single transaction.  It is an abstract base class to allow for
+/// alternative implementations - in particular, production and test.  It is
+/// implemented by the underlying service infrastructure, not by the
 /// application service itself.
 ///
-class ServiceTransactionContext
+class ServiceTsx
 {
 public:
   /// Virtual destructor.
-  virtual ~ServiceTransactionContext() {}
+  virtual ~ServiceTsx() {}
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -80,7 +80,7 @@ public:
   /// Returns the dialog identifier for this service.
   ///
   /// @returns             - The dialog identifier attached to this service,
-  ///                        either by this ServiceTransactionContext instance
+  ///                        either by this ServiceTsx instance
   ///                        or by an earlier transaction in the same dialog.
   virtual const std::string& dialog_id() const = 0;
 
@@ -136,10 +136,10 @@ public:
 };
 
 
-/// The AppServer class is an abstract base class used to implement services
+/// The AppServer class is an abstract base class used to implement services.
 ///
 /// Derived classes are instantiated during system initialization and 
-/// register a service name with Sprout.  Sprout calls the get_context method
+/// register a service name with Sprout.  Sprout calls the get_app_tsx method
 /// on an AppServer derived class when
 ///
 /// -  an IFC triggers with ServiceName containing a host name of the form
@@ -153,19 +153,16 @@ public:
   /// Virtual destructor.
   virtual ~AppServer() {}
 
-  /// Called when the system determines the service should be invoked for
-  /// a received request.  The AppServer can either return NULL indicating it
+  /// Called when the system determines the service should be invoked for a
+  /// received request.  The AppServer can either return NULL indicating it
   /// does not want to process the request, or create a suitable object
-  /// derived from the AppServerTransactionContext class to process the
-  /// request.
+  /// derived from the AppServerTsx class to process the request.
   ///
-  /// @param  service_ctxt  - The service context to use to perform
+  /// @param  service_tsx   - The service context to use to perform
   ///                         the underlying service-related processing.
   /// @param  req           - The received request message.
-  /// @param  dialog_id     - The dialog ID for this transaction.
-  virtual AppServerTransactionContext* get_context(ServiceTransactionContext* service_ctxt,
-                                                   pjsip_msg* req,
-                                                   const std::string& dialog_id) = 0;
+  virtual AppServerTsx* get_app_tsx(ServiceTsx* service_tsx,
+                                    pjsip_msg* req) = 0;
 
   /// Returns the name of this service.
   const std::string service_name() { return _service_name; }
@@ -178,19 +175,20 @@ protected:
 private:
   /// The name of this service.
   const std::string _service_name;
+
 };
 
 
-/// The AppServerTransactionContext class is an abstract base class used to
-/// handle the application-server-specific processing of a single transaction.
-/// It encapsulates a ServiceTransactionContext, which it calls through to to
-/// perform the underlying service-related processing.
+/// The AppServerTsx class is an abstract base class used to handle the
+/// application-server-specific processing of a single transaction.  It
+/// encapsulates a ServiceTsx, which it calls through to to perform the
+/// underlying service-related processing.
 ///
-class AppServerTransactionContext
+class AppServerTsx
 {
 public:
   /// Virtual destructor.
-  virtual ~AppServerTransactionContext() {}
+  virtual ~AppServerTsx() {}
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.  Unless the reject
@@ -236,10 +234,7 @@ public:
 
 protected:
   /// Constructor.
-  AppServerTransactionContext(ServiceTransactionContext* service_ctxt,
-                              const std::string& service_name,
-                              const std::string& dialog_id) :
-    _service_ctxt(service_ctxt) {}
+  AppServerTsx(ServiceTsx* service_tsx) : _service_tsx(service_tsx) {}
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -249,15 +244,15 @@ protected:
   ///                        using parameters from the SIP request.
   ///
   void add_to_dialog(const std::string& dialog_id="")
-    {_service_ctxt->add_to_dialog(dialog_id);}
+    {_service_tsx->add_to_dialog(dialog_id);}
 
   /// Returns the dialog identifier for this service.
   ///
   /// @returns             - The dialog identifier attached to this service,
-  ///                        either by this ServiceTransactionContext instance
+  ///                        either by this ServiceTsx instance
   ///                        or by an earlier transaction in the same dialog.
   const std::string& dialog_id() const
-    {return _service_ctxt->dialog_id();}
+    {return _service_tsx->dialog_id();}
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
@@ -265,7 +260,7 @@ protected:
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
   pjsip_msg* clone_request(pjsip_msg* req)
-    {return _service_ctxt->clone_request(req);}
+    {return _service_tsx->clone_request(req);}
 
   /// Adds the specified URI as a new target for the request.  If no request
   /// is specified, the originally received request is used.  Each target is
@@ -278,7 +273,7 @@ protected:
   ///                        the original request message is used.
   int add_target(pjsip_uri* request_uri,
                  pjsip_msg* req=NULL)
-    {return _service_ctxt->add_target(request_uri, req);}
+    {return _service_tsx->add_target(request_uri, req);}
 
   /// Rejects the original request with the specified status code and text.
   /// This method can only be called when handling the original request.
@@ -291,7 +286,7 @@ protected:
   ///                        used (if this is a standard SIP status code).
   void reject(int status_code,
               const std::string& status_text="")
-    {return _service_ctxt->reject(status_code, status_text);}
+    {return _service_tsx->reject(status_code, status_text);}
 
   /// Sends a provisional or final response to the transaction.  If a final
   /// response is sent on an INVITE transaction that was forked, all forks 
@@ -299,7 +294,7 @@ protected:
   ///
   /// @param  rsp          - The response message to send.
   void send_response(pjsip_msg* rsp)
-    {return _service_ctxt->send_response(rsp);}
+    {return _service_tsx->send_response(rsp);}
 
   /// Returns the pool corresponding to a message.  This pool can then be used
   /// to allocate further headers or bodies to add to the message.
@@ -307,16 +302,16 @@ protected:
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
   pj_pool_t* get_pool(const pjsip_msg* msg)
-    {return _service_ctxt->get_pool(msg);}
+    {return _service_tsx->get_pool(msg);}
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
   SAS::TrailId trail() const
-    {return _service_ctxt->trail();}
+    {return _service_tsx->trail();}
 
 private:
   /// Transaction context to use for underlying service-related processing.
-  ServiceTransactionContext* _service_ctxt;
+  ServiceTsx* _service_tsx;
 
 };
 

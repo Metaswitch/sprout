@@ -45,10 +45,10 @@
 #include "gmock/gmock.h"
 #include "appserver.h"
 
-class MockServiceTransactionContext : public ServiceTransactionContext
+class MockServiceTsx : public ServiceTsx
 {
 public:
-  MockServiceTransactionContext(std::string dialog_id = "", SAS::TrailId trail = 0) :
+  MockServiceTsx(std::string dialog_id = "", SAS::TrailId trail = 0) :
     _dialog_id(dialog_id), _trail(trail) {}
 
   const std::string& dialog_id() const {return _dialog_id;}
@@ -71,18 +71,14 @@ class MockAppServer : public AppServer
 public:
   MockAppServer(const std::string& service_name = "mock") : AppServer(service_name) {}
 
-  MOCK_METHOD3(get_context, AppServerTransactionContext*(ServiceTransactionContext*, pjsip_msg*, const std::string&));
+  MOCK_METHOD2(get_context, AppServerTsx*(ServiceTsx*, pjsip_msg*));
 };
 
 
-class MockAppServerTransactionContext : public AppServerTransactionContext
+class MockAppServerTsx : public AppServerTsx
 {
 public:
-  /// Constructor.
-  MockAppServerTransactionContext(ServiceTransactionContext* service_ctxt,
-                                  const std::string& service_name = "mock",
-                                  const std::string& dialog_id = "") :
-    AppServerTransactionContext(service_ctxt, service_name, dialog_id) {}
+  MockAppServerTsx(ServiceTsx* service_tsx) : AppServerTsx(service_tsx) {}
 
   MOCK_METHOD1(on_initial_request, void(pjsip_msg*));
   MOCK_METHOD1(on_in_dialog_request, void(pjsip_msg*));
