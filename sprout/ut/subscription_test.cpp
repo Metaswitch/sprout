@@ -112,7 +112,7 @@ protected:
   static FakeChronosConnection* _chronos_connection;
 
   void check_subscriptions(std::string aor, uint32_t expected);
-  void check_OK_and_NOTIFY();
+  void check_OK_and_NOTIFY(bool terminated = false);
 };
 
 LocalStore* SubscriptionTest::_local_data_store;
@@ -198,7 +198,7 @@ string SubscribeMessage::get()
                    /*  6 */ _body.c_str(),
                    /*  7 */ (_contact == "*") ? "*" : string("<").append(_contact).append(">").c_str(),
                    /*  8 */ _route.c_str(),
-                   /*  9 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
+                   /*  9 */ _expires.empty() ? "" : string("Expires: ").append(_expires).append("\r\n").c_str(),
                    /* 10 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 11 */ _event.empty() ? "" : string(_event).append("\r\n").c_str(),
                    /* 12 */ _accepts.empty() ? "" : string(_accepts).append("\r\n").c_str(),
@@ -294,6 +294,10 @@ TEST_F(SubscriptionTest, SimpleMainline)
   inject_msg(msg.get());
   check_OK_and_NOTIFY();
   check_subscriptions("sip:6505550231@homedomain", 1u);
+
+  msg._expires = "0";
+  inject_msg(msg.get());
+  check_OK_and_NOTIFY(true);
 }
 
 /// Simple correct example with Tel URIs
@@ -519,7 +523,7 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
   delete aor_data; aor_data = NULL;
 }
 
-void SubscriptionTest::check_OK_and_NOTIFY()
+void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
 {
   ASSERT_EQ(2, txdata_count());
   pjsip_msg* out = pop_txdata()->msg;
@@ -545,6 +549,16 @@ void SubscriptionTest::check_OK_and_NOTIFY()
   out = current_txdata()->msg;
   EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
   EXPECT_EQ("Event: reg", get_headers(out, "Event"));
+
+  if (terminated)
+  {
+    EXPECT_EQ("Subscription-State: terminated;reason=timeout", get_headers(out, "Subscription-State"));
+  }
+  else
+  {
+    EXPECT_EQ("Subscription-State: active;expires=3761", get_headers(out, "Subscription-State"));
+  }
+
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));
   EXPECT_THAT(get_headers(out, "From"), testing::MatchesRegex(to_tag));
 

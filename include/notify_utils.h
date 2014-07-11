@@ -65,7 +65,8 @@ namespace NotifyUtils
                             NotifyUtils::DocState doc_state,
                             NotifyUtils::RegContactState reg_state,
                             NotifyUtils::RegContactState contact_state,
-                            NotifyUtils::ContactEvent contact_event);
+                            NotifyUtils::ContactEvent contact_event,
+                            int expiry);
 };
 
 #endif

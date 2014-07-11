@@ -259,8 +259,18 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
       if (update_notify)
       {
-        status = NotifyUtils::create_notify(tdata_notify, subscription, aor, (*aor_data)->_notify_cseq, bindings,
-                           NotifyUtils::FULL, NotifyUtils::ACTIVE, NotifyUtils::ACTIVE, NotifyUtils::REGISTERED);
+        NotifyUtils::RegContactState state = NotifyUtils::ACTIVE;
+
+        if (expiry == 0)
+        {
+          state = NotifyUtils::TERMINATED;
+        }
+
+        status = NotifyUtils::create_notify(tdata_notify, subscription, aor, 
+                                            (*aor_data)->_notify_cseq, bindings,
+                                            NotifyUtils::FULL, state, 
+                                            NotifyUtils::ACTIVE, NotifyUtils::REGISTERED, 
+                                            expiry);
       }
 
       if (analytics != NULL)

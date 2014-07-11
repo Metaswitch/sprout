@@ -49,52 +49,6 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 
-#define CONST_PJSTR(NAME, VALUE) static const pj_str_t NAME = {VALUE, sizeof(VALUE) - 1};
-
-/* MIME */
-CONST_PJSTR(STR_MIME_TYPE,      "application");
-CONST_PJSTR(STR_MIME_SUBTYPE,   "reginfo+xml");
-
-/* XML node name constants */
-CONST_PJSTR(STR_REGISTRATION,   "registration");
-CONST_PJSTR(STR_CONTACT,        "contact");
-CONST_PJSTR(STR_URI,            "uri");
-
-/* XML node attribute constants */
-CONST_PJSTR(STR_STATE,          "state");
-CONST_PJSTR(STR_AOR,            "aor");
-CONST_PJSTR(STR_ID,             "id");
-
-/* XML node registration STATE attribute enum constants. */
-CONST_PJSTR(STR_INIT,           "init");
-CONST_PJSTR(STR_ACTIVE,         "active");
-CONST_PJSTR(STR_TERMINATED,     "terminated");
-
-/* XML node doc STATE attribute enum constants. */
-CONST_PJSTR(STR_FULL,           "full");
-CONST_PJSTR(STR_PARTIAL,        "partial");
-
-/* XML node EVENT attribute enum constants. */
-CONST_PJSTR(STR_REGISTERED,     "registered");
-CONST_PJSTR(STR_CREATED,        "created");
-CONST_PJSTR(STR_REFRESHED,      "refreshed");
-CONST_PJSTR(STR_EXPIRED,        "expired");
-CONST_PJSTR(STR_DEACTIVATED,    "deactivated");
-CONST_PJSTR(STR_UNREGISTERED,   "unregistered");
-
-/* XML attributes constants */
-CONST_PJSTR(STR_REGINFO,        "reginfo");
-CONST_PJSTR(STR_XMLNS_NAME,     "xmlns");
-CONST_PJSTR(STR_XMLNS_VAL,      "urn:ietf:params:xml:ns:reginfo");
-CONST_PJSTR(STR_VERSION,        "version");
-CONST_PJSTR(STR_VERSION_VAL,    "0");
-CONST_PJSTR(STR_XMLNS_XSI_NAME, "xmlns:xsi");
-CONST_PJSTR(STR_XMLNS_XSI_VAL,  "http://www.w3.org/2001/XMLSchema-instance");
-
-// XML schema location
-CONST_PJSTR(STR_XSI_SLOC_NAME,  "xsi:schemaLocation");
-CONST_PJSTR(STR_XSI_SLOC_VAL,   "http://www.w3.org/2001/03/xml.xsd");
-
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
                              pj_str_t *aor,
@@ -339,7 +293,8 @@ pj_status_t NotifyUtils::create_notify(
                                     NotifyUtils::DocState doc_state,
                                     NotifyUtils::RegContactState reg_state,
                                     NotifyUtils::RegContactState contact_state,
-                                    NotifyUtils::ContactEvent contact_event)
+                                    NotifyUtils::ContactEvent contact_event,
+                                    int expiry)
 {
   pj_status_t status = create_request_from_subscription(tdata_notify,
                                                         subscription,
@@ -382,6 +337,22 @@ pj_status_t NotifyUtils::create_notify(
     pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
     event_hdr->event_type = STR_REG;
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
+
+    // Add the Subscription-State header
+    pjsip_sub_state_hdr* sub_state_hdr = pjsip_sub_state_hdr_create((*tdata_notify)->pool);
+
+    if (reg_state == NotifyUtils::TERMINATED)
+    {
+      sub_state_hdr->sub_state = STR_TERMINATED;
+      sub_state_hdr->reason_param = STR_TIMEOUT;
+    }
+    else
+    {
+      sub_state_hdr->sub_state = STR_ACTIVE;
+      sub_state_hdr->expires_param = expiry;
+    }
+
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, sub_state_hdr);
 
     // complete body
     pjsip_msg_body *body2;
