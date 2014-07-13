@@ -17,6 +17,9 @@ modules/cpp-common/src/fakelogger.cpp
 modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/test_utils/mock_sas.cpp
+modules/cpp-common/test_utils/fakecurl.cpp
+modules/cpp-common/test_utils/fakehttpconnection.cpp
+modules/cpp-common/test_utils/mockhttpstack.hpp
 
 # We don't fully exercise rapidjson
 modules/rapidjson/include/rapidjson/allocators.h
@@ -34,3 +37,6 @@ flowtable.cpp
 custom_headers.cpp
 sipresolver.cpp
 acr.cpp
+
+# Tested as part of homestead
+modules/cpp-common/src/httpstack_utils.cpp
