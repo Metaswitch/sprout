@@ -965,8 +965,8 @@ pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_init(pj_pool_t* pool, void* m
 
   // Based on init_hdr from sip_msg.c
   hdr->type = PJSIP_H_OTHER;
-  hdr->name = STR_P_C_F_A;
-  hdr->sname = STR_P_C_F_A;
+  hdr->name = STR_REJECT_CONTACT;
+  hdr->sname = STR_REJECT_CONTACT_SHORT;
   hdr->vptr = &pjsip_reject_contact_vptr;
   pj_list_init(hdr);
   pj_list_init(&hdr->feature_set);
@@ -1110,8 +1110,8 @@ pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_init(pj_pool_t* pool, void* m
 
   // Based on init_hdr from sip_msg.c
   hdr->type = PJSIP_H_OTHER;
-  hdr->name = STR_P_C_F_A;
-  hdr->sname = STR_P_C_F_A;
+  hdr->name = STR_ACCEPT_CONTACT;
+  hdr->sname = STR_ACCEPT_CONTACT_SHORT;
   hdr->vptr = &pjsip_accept_contact_vptr;
   pj_list_init(hdr);
   hdr->required_match = false;

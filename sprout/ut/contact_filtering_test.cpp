@@ -1,6 +1,6 @@
 /**
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2014  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -116,6 +116,7 @@ TEST_F(ContactFilteringMatchNumericTest, InvalidNumericBackwardsRange) { EXPECT_
 typedef ContactFilteringTest ContactFilteringMatchTokensTest;
 TEST_F(ContactFilteringMatchTokensTest, MatchingTokens) { EXPECT_EQ(YES, match_tokens("hello,world", "goodbye,cruel,world")); }
 TEST_F(ContactFilteringMatchTokensTest, NonMatchingTokens) { EXPECT_EQ(NO, match_tokens("hello,dave", "i,cant,let,you,do,that")); }
+TEST_F(ContactFilteringMatchTokensTest, MatchingTokensCaseInsensitive) { EXPECT_EQ(YES, match_tokens("hello,dave", "Hello,is,it,me,your,looking,for")); }
 
 typedef ContactFilteringTest ContactFilteringMatchFeatureTest;
 TEST_F(ContactFilteringMatchFeatureTest, MatchBoolean)
@@ -202,6 +203,18 @@ TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesBool2)
   Feature matchee("+sip.crazy", "");
   EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
 }
+TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesString)
+{
+  Feature matcher("+sip.crazy", "<hello>");
+  Feature matchee("+sip.crazy", "hello");
+  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesToken)
+{
+  Feature matcher("+sip.crazy", "hello");
+  Feature matchee("+sip.crazy", "<hello>");
+  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+}
 
 class ContactFilteringPrebuiltHeadersFixture : public ContactFilteringTest
 {
@@ -212,7 +225,7 @@ public:
   void SetUp()
   {
     pj_str_t header_name = pj_str((char*)"Accept-Contact");
-    char* header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello";
+    char* header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;!+sip.negated";
     accept_hdr = (pjsip_accept_contact_hdr*)
       pjsip_parse_hdr(pool,
                       &header_name,
@@ -221,7 +234,7 @@ public:
                       NULL);
     ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
     header_name = pj_str((char*)"Reject-Contact");
-    header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello";
+    header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;!+sip.negated";
     reject_hdr = (pjsip_reject_contact_hdr*)
       pjsip_parse_hdr(pool,
                       &header_name,
@@ -244,6 +257,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -253,6 +267,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -263,6 +278,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["!+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -274,6 +290,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -284,6 +301,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingExplicitAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -295,6 +313,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["!+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -306,6 +325,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingRequiredAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -316,6 +336,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingRequiredAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -327,6 +348,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingRequiredAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["!+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -339,6 +361,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingRequiredExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -350,6 +373,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingRequiredExplicitAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -362,6 +386,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingRequiredExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["!+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -372,6 +397,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalReject)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, reject_hdr));
 }
@@ -381,6 +407,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalReject)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }
@@ -391,6 +418,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalReject)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["!+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
+  contact_feature_set["!+sip.negated"] = "";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }
@@ -488,4 +516,442 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
   ASSERT_NE((pjsip_param*)NULL, feature_param);
   feature_value = std::string(feature_param->value.ptr, feature_param->value.slen);
   EXPECT_EQ(feature_value, "explosion");
+}
+
+class ContactFilteringCreateBindingFixture : public ContactFilteringTest
+{
+public:
+  void create_binding(RegStore::AoR::Binding& binding)
+  {
+    binding._uri = "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931";
+    binding._cid = "gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq";
+    binding._path_headers.push_back("sip:token@domain.com;lr");
+    binding._path_headers.push_back("sip:token2@domain2.com;lr");
+    binding._cseq = 3;
+    binding._expires = 300;
+    binding._priority = 1234;
+    binding._params["+sip.string"] = "<hello>";
+    binding._params["+sip.boolean"] = "";
+    binding._params["methods"] = "invite,options";
+    binding._timer_id = "";
+    binding._private_id = "user@domain.com";
+    binding._emergency_registration = false;
+  }
+};
+
+class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBindingFixture {};
+
+TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
+{
+  RegStore::AoR::Binding binding;
+  create_binding(binding);
+  std::string aor = "sip:user@domain.com";
+  std::string binding_id = "<sip:user@10.1.2.3>";
+  Target target;
+  EXPECT_TRUE(binding_to_target(aor,
+                                binding_id,
+                                binding,
+                                false,
+                                pool,
+                                target));
+  EXPECT_EQ(PJ_TRUE, target.from_store);
+  EXPECT_EQ(PJ_FALSE, target.upstream_route);
+  EXPECT_EQ(aor, target.aor);
+  EXPECT_EQ(binding_id, target.binding_id);
+  EXPECT_NE((pjsip_uri*)NULL, target.uri);
+  EXPECT_EQ((unsigned)2, target.paths.size());
+  EXPECT_EQ((pjsip_transport*)NULL, target.transport);
+  EXPECT_EQ(0, target.liveness_timeout);
+  EXPECT_EQ(300, target.contact_expiry);
+  EXPECT_EQ((unsigned)1234, target.contact_q1000_value);
+}
+TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
+{
+  RegStore::AoR::Binding binding;
+  create_binding(binding);
+  std::string aor = "sip:user@domain.com";
+  std::string binding_id = "<sip:user@10.1.2.3>";
+  binding._uri = "banana";
+  Target target;
+  EXPECT_FALSE(binding_to_target(aor,
+                                binding_id,
+                                binding,
+                                false,
+                                pool,
+                                target));
+}
+TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
+{
+  RegStore::AoR::Binding binding;
+  create_binding(binding);
+  std::string aor = "sip:user@domain.com";
+  std::string binding_id = "<sip:user@10.1.2.3>";
+  binding._path_headers.push_back("banana");
+  Target target;
+  EXPECT_FALSE(binding_to_target(aor,
+                                binding_id,
+                                binding,
+                                false,
+                                pool,
+                                target));
+}
+
+class ContactFilteringFullStackTest :
+  public ContactFilteringCreateBindingFixture {};
+
+TEST_F(ContactFilteringFullStackTest, NoFiltering)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)1, targets.size());
+  EXPECT_FALSE(targets[0].deprioritized);
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  // Pick a method the contact doesn't support
+  msg->line.req.method.name = pj_str((char*)"MESSAGE");
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since we explicitely deny supporting "MESSAGE" this contact is skipped.
+  EXPECT_EQ((unsigned)0, targets.size());
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+  binding->_params.erase("methods");
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  // Pick a method the contact doesn't support
+  msg->line.req.method.name = pj_str((char*)"MESSAGE");
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since we don't explicitely deny supporting "MESSAGE" this contact
+  // is deprioritized.
+  EXPECT_EQ((unsigned)1, targets.size());
+  EXPECT_TRUE(targets[0].deprioritized);
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add an Accept-Contact header that triggers a YES match
+  pj_str_t header_name = pj_str((char*)"Accept-Contact");
+  char* header_value = (char*)"*;+sip.string=\"<hello>\"";
+  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  accept_hdr = (pjsip_accept_contact_hdr*)pjsip_accept_contact_hdr_clone(pool, accept_hdr);
+  accept_hdr = (pjsip_accept_contact_hdr*)pjsip_accept_contact_hdr_shallow_clone(pool, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)1, targets.size());
+  EXPECT_FALSE(targets[0].deprioritized);
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add an Accept-Contact header that triggers a YES match
+  pj_str_t header_name = pj_str((char*)"Accept-Contact");
+  char* header_value = (char*)"*;+sip.other=\"#6\";explicit";
+  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since the Accept-Header specifies a value that the binding doesn't
+  // the target is deprioritized.
+  EXPECT_EQ((unsigned)1, targets.size());
+  EXPECT_TRUE(targets[0].deprioritized);
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add an Accept-Contact header that triggers a YES match
+  pj_str_t header_name = pj_str((char*)"Accept-Contact");
+  char* header_value = (char*)"*;+sip.other=\"#6\";explicit;required";
+  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since the Accept-Header specifies a value that the binding doesn't
+  // the target is deprioritized.
+  EXPECT_EQ((unsigned)0, targets.size());
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add an Accept-Contact header that triggers a YES match
+  pj_str_t header_name = pj_str((char*)"Reject-Contact");
+  char* header_value = (char*)"*;+sip.string=\"<hello>\"";
+  pjsip_reject_contact_hdr* reject_hdr = (pjsip_reject_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_reject_contact_hdr*)NULL, reject_hdr);
+  reject_hdr = (pjsip_reject_contact_hdr*)pjsip_reject_contact_hdr_clone(pool, reject_hdr);
+  reject_hdr = (pjsip_reject_contact_hdr*)pjsip_reject_contact_hdr_shallow_clone(pool, reject_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)reject_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since the Accept-Header specifies a value that the binding doesn't
+  // the target is deprioritized.
+  EXPECT_EQ((unsigned)0, targets.size());
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
+  create_binding(*binding);
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add an Accept-Contact header that triggers a YES match
+  pj_str_t header_name = pj_str((char*)"Reject-Contact");
+  char* header_value = (char*)"*;+sip.string=\"<goodbye>\"";
+  pjsip_reject_contact_hdr* reject_hdr = (pjsip_reject_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_reject_contact_hdr*)NULL, reject_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)reject_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  // Since the Accept-Header specifies a value that the binding doesn't
+  // the target is deprioritized.
+  EXPECT_EQ((unsigned)1, targets.size());
+  
+  delete aor_data;
+}
+TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR();
+
+  for (int ii = 0;
+       ii < 20;
+       ii++)
+  {
+    std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
+    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    create_binding(*binding);
+    
+    // Change the features on some of the bindings.
+    if (ii % 2 == 0)
+    {
+      binding->_params["+sip.other"] = "<string>";
+    }
+    if (ii % 3 == 0)
+    {
+      binding->_params["+sip.other2"] = "#5";
+    }
+    binding->_expires = ii * 100;
+  }
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+
+  // Add some Accept headers to eliminate some bindings and
+  // de-prioritize others.
+  pj_str_t header_name = pj_str((char*)"Accept-Contact");
+  char* header_value = (char*)"*;+sip.other2=\"#5\";explicit";
+  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+  header_value = (char*)"*;+sip.other=\"<string>\";explicit;required";
+  accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)5, targets.size());
+  
+  delete aor_data;
 }

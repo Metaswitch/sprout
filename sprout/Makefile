@@ -123,7 +123,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        chronosconnection_test.cpp \
                        handlers_test.cpp \
                        mock_sas.cpp \
-											 contact_filtering_test.cpp
+                       contact_filtering_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

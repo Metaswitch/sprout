@@ -65,7 +65,7 @@ struct Target
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
   int liveness_timeout;
-  float contact_q_value;
+  uint32_t contact_q1000_value;
   bool deprioritized;
   int contact_expiry;
 
@@ -79,7 +79,7 @@ struct Target
     paths(),
     transport(NULL),
     liveness_timeout(0),
-    contact_q_value(1.0),
+    contact_q1000_value(1000),
     deprioritized(false),
     contact_expiry(0)
   {

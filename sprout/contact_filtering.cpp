@@ -2,7 +2,7 @@
  * @file contact_filtering.cpp Contact filtering implementation.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2014  Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -39,6 +39,7 @@
 #include "pjutils.h"
 
 #include <limits>
+#include <boost/algorithm/string.hpp>
 
 // Entry point for contact filtering.  Convert the set of bindings to a set of
 // Targets, applying filtering where required.
@@ -66,7 +67,7 @@ void filter_bindings_to_targets(const std::string& aor,
       pjsip_msg_find_hdr_by_names(msg,
                                   &STR_ACCEPT_CONTACT,
                                   &STR_ACCEPT_CONTACT_SHORT,
-                                  accept_header);
+                                  accept_header->next);
   }
 
   // Extract all the Reject-Contact headers.
@@ -82,7 +83,7 @@ void filter_bindings_to_targets(const std::string& aor,
       pjsip_msg_find_hdr_by_names(msg,
                                   &STR_REJECT_CONTACT,
                                   &STR_REJECT_CONTACT_SHORT,
-                                  reject_header);
+                                  reject_header->next);
   }
 
   // Maybe add an implicit filter.
@@ -139,13 +140,13 @@ void filter_bindings_to_targets(const std::string& aor,
       // There's a chance the records in the store are invalid, if so we'll drop
       // the target.
       Target target;
-      bool conversion_rc = binding_to_target(aor,
-                                             binding->first,
-                                             *binding->second,
-                                             deprioritized,
-                                             pool,
-                                             target);
-      if (conversion_rc)
+      bool valid = binding_to_target(aor,
+                                     binding->first,
+                                     *binding->second,
+                                     deprioritized,
+                                     pool,
+                                     target);
+      if (valid)
       {
         targets.push_back(target);
       }
@@ -156,7 +157,7 @@ void filter_bindings_to_targets(const std::string& aor,
   prune_targets(max_targets, targets);
 }
 
-// Convert a binding to it's equivalent Target.  This can fail if (for example), 
+// Convert a binding to its equivalent Target.  This can fail if (for example), 
 // the stored Path headers are not valid URIs.  In this case the function returns
 // false and the target parameter should not be used.
 bool binding_to_target(const std::string& aor,
@@ -174,7 +175,7 @@ bool binding_to_target(const std::string& aor,
   target.uri = PJUtils::uri_from_string(binding._uri, pool);
   target.deprioritized = deprioritized;
   target.contact_expiry = binding._expires;
-//  target.contact_q_value = binding._q_value;
+  target.contact_q1000_value = binding._priority;
 
   if (target.uri == NULL)
   {
@@ -186,7 +187,7 @@ bool binding_to_target(const std::string& aor,
   else
   {
     for (std::list<std::string>::const_iterator path = binding._path_headers.begin();
-         path != binding._path_headers.end() && (!valid);
+         path != binding._path_headers.end();
          ++path)
     {
       pjsip_uri* path_uri = PJUtils::uri_from_string(*path, pool);
@@ -262,10 +263,8 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     MatchResult feature_match_rc;
 
     // For boolean features the name may be prefixed with ! to indicate negation.
-    std::string feature_name = std::string(feature_param->name.ptr,
-                                           feature_param->name.slen);
-    std::string feature_value = std::string(feature_param->value.ptr,
-                                            feature_param->value.slen);
+    std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
+    std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
     Feature feature(feature_name, feature_value);
     std::string negated_feature_name;
     if (feature_name[0] == '!')
@@ -407,9 +406,9 @@ MatchResult match_feature(const Feature& matcher,
   MatchResult rc;
 
   // Start off with boolean features (these have no value)
-  if (matcher.second.length() == 0)
+  if (matcher.second.empty())
   {
-    if (matchee.second.length() != 0)
+    if (!matchee.second.empty())
     {
       // Matcher says boolean, matchee says valued... can't compare
       rc = UNKNOWN;
@@ -427,7 +426,7 @@ MatchResult match_feature(const Feature& matcher,
       }
     }
   }
-  else if (matchee.second.length() == 0)
+  else if (matchee.second.empty())
   {
     // Matchee is boolean but matcher is not.   Can't compare.
     rc = UNKNOWN;
@@ -555,6 +554,13 @@ MatchResult match_numeric(const std::string& matcher,
   return rc;
 }
 
+// Only needed for passing in to "transform" below.
+std::string string_to_lowercase(std::string& str)
+{
+  ::boost::algorithm::to_lower(str);
+  return str;
+}
+
 MatchResult match_tokens(const std::string& matcher,
                          const std::string& matchee)
 {
@@ -564,11 +570,22 @@ MatchResult match_tokens(const std::string& matcher,
   std::vector<std::string> matchee_tokens;
   Utils::split_string(matchee, ',', matchee_tokens, 0, true);
 
-  // Sort the lists (so we can use set_interection later)
+  // Lower-case everything so we can safely compare.
+  std::transform(matcher_tokens.begin(), matcher_tokens.end(),
+                 matcher_tokens.begin(), string_to_lowercase);
+  std::transform(matchee_tokens.begin(), matchee_tokens.end(),
+                 matchee_tokens.begin(), string_to_lowercase);
+
+  // Sort the lists (so we can use set_intersection later)
   std::sort(matcher_tokens.begin(), matcher_tokens.end());
   std::sort(matchee_tokens.begin(), matchee_tokens.end());
 
-  // Find the intersection.
+  // Find the intersection.  The API for set_intersection makes no
+  // sense.  Basically you pass it two ordered ranges and a start
+  // point for output and it writes matching entries into the output
+  // interator.  It returns the end iterator for what it wrote out so
+  // you can resize() down to just the intersection (as we do) and
+  // then check the length to see if the intersection was non-empty.
   std::vector<std::string> intersection(matcher_tokens.size() +
                                         matchee_tokens.size());
   std::vector<std::string>::iterator it;
@@ -607,11 +624,11 @@ void prune_targets(int max_targets,
 bool compare_targets(const Target& t1, const Target& t2)
 {
   // Start by comparing "q-values", higher is better.
-  if (t1.contact_q_value > t1.contact_q_value)
+  if (t1.contact_q1000_value > t1.contact_q1000_value)
   {
     return true;
   }
-  else if (t1.contact_q_value < t1.contact_q_value)
+  else if (t1.contact_q1000_value < t1.contact_q1000_value)
   {
     return false;
   }
