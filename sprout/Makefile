@@ -29,6 +29,7 @@ TARGET_SOURCES := logger.cpp \
                   connection_pool.cpp \
                   flowtable.cpp \
                   httpconnection.cpp \
+                  httpresolver.cpp \
                   hssconnection.cpp \
                   websockets.cpp \
                   localstore.cpp \

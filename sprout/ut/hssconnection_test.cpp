@@ -43,6 +43,7 @@
 
 #include "utils.h"
 #include "sas.h"
+#include "fakehttpresolver.hpp"
 #include "hssconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
@@ -52,13 +53,15 @@ using namespace std;
 /// Fixture for HssConnectionTest.
 class HssConnectionTest : public BaseTest
 {
+  FakeHttpResolver _resolver;
   HSSConnection _hss;
 
   HssConnectionTest() :
-    _hss("narcissus", NULL, NULL)
+    _resolver("10.42.42.42"),
+    _hss("narcissus", &_resolver, NULL, NULL)
   {
     fakecurl_responses.clear();
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>REGISTERED</RegistrationState>"
@@ -88,18 +91,18 @@ class HssConnectionTest : public BaseTest
       "</ServiceProfile>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")];
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")];
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")];
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "")] = fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")];
 
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid42_malformed/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42_malformed/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
               "<Grou";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid43_malformed/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43_malformed/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>REGISTERED</RegistrationState>"
@@ -129,40 +132,40 @@ class HssConnectionTest : public BaseTest
       "</ServiceProfile>"
       "</NonsenseWord>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid44/reg-data", "{\"reqtype\": \"reg\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
-    fakecurl_responses["http://narcissus/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
-    fakecurl_responses["http://narcissus/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
-    fakecurl_responses["http://narcissus/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
-    fakecurl_responses["http://narcissus/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
-    fakecurl_responses["http://narcissus/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
-    fakecurl_responses["http://narcissus/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid50/reg-data", "{\"reqtype\": \"call\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid44/reg-data", "{\"reqtype\": \"reg\"}")] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
+    fakecurl_responses["http://10.42.42.42:80/impi/privid69/registration-status?impu=pubid44&visited-network=domain&auth-type=REG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
+    fakecurl_responses["http://10.42.42.42:80/impi/privid_corrupt/registration-status?impu=pubid44"] = "{\"result-code\": 2001, \"scscf\"; \"server-name\"}";
+    fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location"] = "{\"result-code\": 2001, \"scscf\": \"server-name\"}";
+    fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?auth-type=DEREG"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [], \"optional-capabilities\": []}";
+    fakecurl_responses["http://10.42.42.42:80/impu/pubid44/location?originating=true&auth-type=CAPAB"] = "{\"result-code\": 2001, \"mandatory-capabilities\": [1, 2, 3], \"optional-capabilities\": []}";
+    fakecurl_responses["http://10.42.42.42:80/impu/pubid45/location"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"call\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>UNREGISTERED</RegistrationState>"
       "<IMSSubscription>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/pubid50/reg-data", "{\"reqtype\": \"dereg-admin\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid50/reg-data", "{\"reqtype\": \"dereg-admin\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "<IMSSubscription>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/missingelement1/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement1/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<IMSSubscription>"
       "</IMSSubscription>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/missingelement2/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement2/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
       "<RegistrationState>NOT_REGISTERED</RegistrationState>"
       "</ClearwaterRegData>";
-    fakecurl_responses_with_body[std::make_pair("http://narcissus/impu/missingelement3/reg-data", "{\"reqtype\": \"reg\"}")] =
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement3/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<C>"
       "<RegistrationState>NOT_REGISTERED</RegistrationState>"

@@ -61,10 +61,12 @@ const std::string HSSConnection::STATE_REGISTERED = "REGISTERED";
 const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 
 HSSConnection::HSSConnection(const std::string& server,
+                             HttpResolver* resolver,
                              LoadMonitor *load_monitor,
                              LastValueCache *stats_aggregator) :
   _http(new HttpConnection(server,
                            false,
+                           resolver,
                            "connected_homesteads",
                            load_monitor,
                            stats_aggregator,

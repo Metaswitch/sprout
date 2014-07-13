@@ -50,10 +50,12 @@
 
 /// Main constructor.
 XDMConnection::XDMConnection(const std::string& server,
+                             HttpResolver* resolver,
                              LoadMonitor *load_monitor,
                              LastValueCache* stats_aggregator) :
   _http(new HttpConnection(server,
                            true,
+                           resolver,
                            "connected_homers",
                            load_monitor,
                            stats_aggregator,
