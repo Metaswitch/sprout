@@ -90,6 +90,12 @@ struct rx_msg_qe
 };
 eventq<struct rx_msg_qe> rx_msg_q;
 
+// Deadlock detection threshold for the message queue (in milliseconds).  This
+// is set to roughly twice the expected maximum service time for each message
+// (currently four seconds, allowing for four Homestead/Homer interactions
+// from a single request, each with a possible 500ms timeout).
+static const int MSG_Q_DEADLOCK_TIME = 4000;
+
 static Accumulator* latency_accumulator;
 static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
@@ -352,12 +358,11 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
   requests_counter->increment();
 
   // Check whether the request should be processed
-  if (!(load_monitor->admit_request())                                  &&
-      (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)                  &&
-      (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)     &&
-      (rdata->msg_info.msg->line.req.method.id != PJSIP_OPTIONS_METHOD))
+  if (!(load_monitor->admit_request()) &&
+      (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG) &&
+      (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD))
   {
-    // Discard non-OPTIONS requests if there are no available tokens.
+    // Discard non-ACK requests if there are no available tokens.
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
     LOG_DEBUG("Rejected request due to overload");
@@ -377,6 +382,16 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
 
     overload_counter->increment();
     return PJ_TRUE;
+  }
+
+  // Check that the worker threads are not all deadlocked.
+  if (rx_msg_q.is_deadlocked())
+  {
+    // The queue has not been serviced for sufficiently long to imply that
+    // all the worker threads are deadlock, so exit the process so it will be
+    // restarted.
+    LOG_ERROR("Detected worker thread deadlock - exiting");
+    abort();
   }
 
   // Before we start, get a timestamp.  This will track the time from
@@ -766,6 +781,9 @@ pj_status_t init_pjsip()
 
   status = register_custom_headers();
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+
+  // Enable deadlock detection on the message queue.
+  rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
   return PJ_SUCCESS;
 }

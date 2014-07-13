@@ -99,6 +99,7 @@ const pj_str_t STR_ACCEPT_CONTACT = pj_str((char*)"Accept-Contact");
 const pj_str_t STR_ACCEPT_CONTACT_SHORT = pj_str((char*)"a");
 const pj_str_t STR_REJECT_CONTACT = pj_str((char*)"Reject-Contact");
 const pj_str_t STR_REJECT_CONTACT_SHORT = pj_str((char*)"j");
+const pj_str_t STR_ALLOW_EVENTS = pj_str((char*)"Allow-Events");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");

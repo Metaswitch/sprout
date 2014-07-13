@@ -124,7 +124,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        chronosconnection_test.cpp \
                        handlers_test.cpp \
                        mock_sas.cpp \
-                       contact_filtering_test.cpp
+                       contact_filtering_test.cpp \
+                       appserver_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -152,9 +153,9 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
-            -I${ROOT}/usr/include \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/modules/cpp-common/test_utils \
+            -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)

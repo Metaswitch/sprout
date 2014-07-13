@@ -347,11 +347,14 @@ void process_subscription_request(pjsip_rx_data* rdata)
     event.add_var_param(error_msg);
     SAS::report_event(event);
 
+    // Allow-Events is a mandatory header on 489 responses.
+    pjsip_generic_string_hdr* allow_events_hdr = pjsip_generic_string_hdr_create(rdata->tp_info.pool, &STR_ALLOW_EVENTS, &STR_REG);
+
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
                                PJSIP_SC_BAD_EVENT,
                                NULL,
-                               NULL,
+                               (pjsip_hdr*)allow_events_hdr,
                                NULL);
     return;
   }
