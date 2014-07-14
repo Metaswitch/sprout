@@ -104,8 +104,8 @@ pj_xml_node* notify_create_reg_state_xml(
                          RegStore::AoR::Subscription* subscription,
                          std::map<std::string, RegStore::AoR::Binding> bindings,
                          NotifyUtils::DocState doc_state,
-                         NotifyUtils::RegContactState reg_state,
-                         NotifyUtils::RegContactState contact_state,
+                         NotifyUtils::RegContactSubState reg_state,
+                         NotifyUtils::RegContactSubState contact_state,
                          NotifyUtils::ContactEvent contact_event)
 {
   LOG_DEBUG("Create the XML body for a SIP NOTIFY");
@@ -218,8 +218,8 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                RegStore::AoR::Subscription* subscription,
                                std::map<std::string, RegStore::AoR::Binding> bindings,
                                NotifyUtils::DocState doc_state,
-                               NotifyUtils::RegContactState reg_state,
-                               NotifyUtils::RegContactState contact_state,
+                               NotifyUtils::RegContactSubState reg_state,
+                               NotifyUtils::RegContactSubState contact_state,
                                NotifyUtils::ContactEvent contact_event)
 {
   LOG_DEBUG("Create body of a SIP NOTIFY");
@@ -291,9 +291,10 @@ pj_status_t NotifyUtils::create_notify(
                                     int cseq,
                                     std::map<std::string, RegStore::AoR::Binding> bindings,
                                     NotifyUtils::DocState doc_state,
-                                    NotifyUtils::RegContactState reg_state,
-                                    NotifyUtils::RegContactState contact_state,
+                                    NotifyUtils::RegContactSubState reg_state,
+                                    NotifyUtils::RegContactSubState contact_state,
                                     NotifyUtils::ContactEvent contact_event,
+                                    NotifyUtils::RegContactSubState subscription_state,
                                     int expiry)
 {
   pj_status_t status = create_request_from_subscription(tdata_notify,
@@ -341,7 +342,7 @@ pj_status_t NotifyUtils::create_notify(
     // Add the Subscription-State header
     pjsip_sub_state_hdr* sub_state_hdr = pjsip_sub_state_hdr_create((*tdata_notify)->pool);
 
-    if (reg_state == NotifyUtils::TERMINATED)
+    if (subscription_state == NotifyUtils::TERMINATED)
     {
       // The only reason we support is timeout (this also covers
       // actively unsubscribing)

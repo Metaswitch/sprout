@@ -450,7 +450,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                                         aor_data->_notify_cseq, bindings_for_notify,
                                                         NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
                                                         NotifyUtils::ACTIVE, contact_event,
-                                                        (subscription->_expires - now));
+                                                        NotifyUtils::ACTIVE, (subscription->_expires - now));
         if (status == PJ_SUCCESS)
         {
           status = PJUtils::send_request(tdata_notify);

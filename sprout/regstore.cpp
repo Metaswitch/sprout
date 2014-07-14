@@ -705,7 +705,7 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
                                   NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
                                   NotifyUtils::TERMINATED, NotifyUtils::EXPIRED,
-                                  (s->_expires - time(NULL)));
+                                  NotifyUtils::ACTIVE, (s->_expires - time(NULL)));
 
   if (status == PJ_SUCCESS)
   {

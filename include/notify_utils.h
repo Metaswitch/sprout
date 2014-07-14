@@ -54,7 +54,7 @@ extern "C" {
 namespace NotifyUtils
 {
   enum DocState { FULL, PARTIAL };
-  enum RegContactState { ACTIVE, TERMINATED };
+  enum RegContactSubState { ACTIVE, TERMINATED };
   enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
@@ -63,9 +63,10 @@ namespace NotifyUtils
                             int cseq,
                             std::map<std::string, RegStore::AoR::Binding> bindings,
                             NotifyUtils::DocState doc_state,
-                            NotifyUtils::RegContactState reg_state,
-                            NotifyUtils::RegContactState contact_state,
+                            NotifyUtils::RegContactSubState reg_state,
+                            NotifyUtils::RegContactSubState contact_state,
                             NotifyUtils::ContactEvent contact_event,
+                            NotifyUtils::RegContactSubState subscription_state,
                             int expiry);
 };
 
