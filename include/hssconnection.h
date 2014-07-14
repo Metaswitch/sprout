@@ -59,6 +59,7 @@ class HSSConnection
 {
 public:
   HSSConnection(const std::string& server,
+                HttpResolver* resolver,
                 LoadMonitor *load_monitor,
                 LastValueCache *stats_aggregator);
   ~HSSConnection();
