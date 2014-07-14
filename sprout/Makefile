@@ -29,6 +29,7 @@ TARGET_SOURCES := logger.cpp \
                   connection_pool.cpp \
                   flowtable.cpp \
                   httpconnection.cpp \
+                  httpresolver.cpp \
                   hssconnection.cpp \
                   websockets.cpp \
                   localstore.cpp \
@@ -123,6 +124,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        subscription_test.cpp \
                        chronosconnection_test.cpp \
                        handlers_test.cpp \
+                       httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp

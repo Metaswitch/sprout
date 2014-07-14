@@ -916,6 +916,7 @@ int main(int argc, char *argv[])
   LoadMonitor* load_monitor = NULL;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
+  HttpResolver* http_resolver = NULL;
   Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
   RegStore* local_reg_store = NULL;
@@ -1191,11 +1192,15 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  // Now that we know the address family, create an HttpResolver too.
+  http_resolver = new HttpResolver(dns_resolver, stack_data.addr_family);
+
   if (opt.ralf_server != "")
   {
     // Create HttpConnection pool for Ralf Rf billing interface.
     ralf_connection = new HttpConnection(opt.ralf_server,
                                          false,
+                                         http_resolver,
                                          "connected_ralfs",
                                          load_monitor,
                                          stack_data.stats_aggregator,
@@ -1210,6 +1215,7 @@ int main(int argc, char *argv[])
     // Create a connection to the HSS.
     LOG_STATUS("Creating connection to HSS %s", opt.hss_server.c_str());
     hss_connection = new HSSConnection(opt.hss_server,
+                                       http_resolver,
                                        load_monitor,
                                        stack_data.stats_aggregator);
   }
@@ -1261,7 +1267,8 @@ int main(int argc, char *argv[])
                opt.chronos_service.c_str(),
                chronos_callback_host.c_str());
     chronos_connection = new ChronosConnection(opt.chronos_service,
-                                               chronos_callback_host);
+                                               chronos_callback_host,
+                                               http_resolver);
   }
 
   if (opt.scscf_enabled)
@@ -1300,6 +1307,7 @@ int main(int argc, char *argv[])
       // Create a connection to the XDMS.
       LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
       xdm_connection = new XDMConnection(opt.xdm_server,
+                                         http_resolver,
                                          load_monitor,
                                          stack_data.stats_aggregator);
     }

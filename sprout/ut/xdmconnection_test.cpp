@@ -45,6 +45,7 @@
 
 #include "utils.h"
 #include "sas.h"
+#include "fakehttpresolver.hpp"
 #include "httpconnection.h"
 #include "xdmconnection.h"
 #include "basetest.hpp"
@@ -56,15 +57,17 @@ using namespace std;
 /// Fixture for XdmConnectionTest.
 class XdmConnectionTest : public BaseTest
 {
+  FakeHttpResolver _resolver;
   XDMConnection _xdm;
 
   XdmConnectionTest() :
-    _xdm("cyrus", NULL, NULL)
+    _resolver("10.42.42.42"),
+    _xdm("cyrus", &_resolver, NULL, NULL)
   {
     fakecurl_responses.clear();
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf2/simservs.xml"] = "yadda";
-    fakecurl_responses["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf3/simservs.xml"] = "wherizzit?";
+    fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>";
+    fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf2/simservs.xml"] = "yadda";
+    fakecurl_responses["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf3/simservs.xml"] = "wherizzit?";
   }
 
   virtual ~XdmConnectionTest()
@@ -83,7 +86,7 @@ TEST_F(XdmConnectionTest, SimServsGet)
   bool ret = _xdm.get_simservs("gand/alf", output, "friend_and_enter", 0);
   EXPECT_TRUE(ret);
   EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Still</boring>", output);
-  Request& req = fakecurl_requests["http://cyrus/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"];
+  Request& req = fakecurl_requests["http://10.42.42.42:80/org.etsi.ngn.simservs/users/gand%2Falf/simservs.xml"];
   EXPECT_EQ("GET", req._method);
   EXPECT_FALSE(req._httpauth & CURLAUTH_DIGEST) << req._httpauth;
   EXPECT_EQ("", req._username);
