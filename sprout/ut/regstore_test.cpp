@@ -113,9 +113,9 @@ TEST_F(RegStoreTest, BindingTests)
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
 
@@ -212,9 +212,9 @@ TEST_F(RegStoreTest, SubscriptionTests)
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
 
@@ -309,9 +309,9 @@ TEST_F(RegStoreTest, CopyTests)
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono1.homedomain;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
 
@@ -381,9 +381,9 @@ TEST_F(RegStoreTest, ExpiryTests)
   b1->_expires = now + 100;
   b1->_timer_id = "00000000000";
   b1->_priority = 0;
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_private_id = "5102175698@cw-ngv.com";
   b1->_emergency_registration = false;
   b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:2"));
@@ -394,9 +394,9 @@ TEST_F(RegStoreTest, ExpiryTests)
   b2->_expires = now + 200;
   b2->_timer_id = "00000000000";
   b2->_priority = 0;
-  b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b2->_params.push_back(std::make_pair("reg-id", "2"));
-  b2->_params.push_back(std::make_pair("+sip.ice", ""));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "2";
+  b2->_params["+sip.ice"] = "";
   b2->_private_id = "5102175699@cw-ngv.com";
   b2->_emergency_registration = false;
 

@@ -89,6 +89,18 @@ typedef struct pjsip_p_c_f_a_hdr {
   pjsip_param other_param;
 } pjsip_p_c_f_a_hdr;
 
+typedef struct pjsip_accept_contact_hdr {
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_accept_contact_hdr);
+  bool required_match;
+  bool explicit_match;
+  pjsip_param feature_set;
+} pjsip_accept_contact_hdr;
+
+typedef struct pjsip_reject_contact_hdr {
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_reject_contact_hdr);
+  pjsip_param feature_set;
+} pjsip_reject_contact_hdr;
+
 /// Utility functions (parse, create, init, clone, print_on)
 
 // Privacy
@@ -129,5 +141,21 @@ pjsip_p_c_f_a_hdr* pjsip_p_c_f_a_hdr_init(pj_pool_t* pool, void* mem);
 void* pjsip_p_c_f_a_hdr_clone(pj_pool_t* pool, const void* o);
 void* pjsip_p_c_f_a_hdr_shallow_clone(pj_pool_t* pool, const void* o);
 int pjsip_p_c_f_a_hdr_print_on(void *hdr, char* buf, pj_size_t len);
+
+// Reject-Contact
+pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx);
+pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_create(pj_pool_t* pool);
+pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_init(pj_pool_t* pool, void* mem);
+void* pjsip_reject_contact_hdr_clone(pj_pool_t* pool, const void* o);
+void* pjsip_reject_contact_hdr_shallow_clone(pj_pool_t* pool, const void* o);
+int pjsip_reject_contact_hdr_print_on(void* hdr, char* buf, pj_size_t len);
+
+// Accept-Contact
+pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx);
+pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_create(pj_pool_t* pool);
+pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_init(pj_pool_t* pool, void* mem);
+void* pjsip_accept_contact_hdr_clone(pj_pool_t* pool, const void* o);
+void* pjsip_accept_contact_hdr_shallow_clone(pj_pool_t* pool, const void* o);
+int pjsip_accept_contact_hdr_print_on(void* hdr, char* buf, pj_size_t len);
 
 #endif

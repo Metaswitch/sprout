@@ -892,6 +892,297 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
   return p - buf;
 }
 
+pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
+{
+  // The Reject-Contact header has the following ABNF:
+  //
+  // Reject-Contact  =  ("Reject-Contact" / "j") HCOLON rc-value
+  //                       *(COMMA rc-value)
+  // rc-value        =  "*" *(SEMI rc-params)
+  // rc-params       =  feature-param / generic-param
+  //
+  // But we allow any value for the header (not just *).
+
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  pjsip_reject_contact_hdr* hdr = pjsip_reject_contact_hdr_create(pool);
+  pj_str_t name;
+  pj_str_t value;
+  pjsip_param *param;
+
+  // Read and ignore the value.
+  pj_str_t header_value;
+  pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
+
+  for (;;)
+  {
+    // We might need to swallow the ';'.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);
+    }
+
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+    param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    param->name = name;
+    param->value = value;
+    pj_list_insert_before(&hdr->feature_set, param);
+
+    // If we're EOF or looking at a newline, we're done.
+    pj_scan_skip_whitespace(scanner);
+    if (pj_scan_is_eof(scanner) ||
+        (*scanner->curptr == '\r') ||
+        (*scanner->curptr == '\n'))
+    {
+      break;
+    }
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
+pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_create(pj_pool_t* pool)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_reject_contact_hdr));
+  return pjsip_reject_contact_hdr_init(pool, mem);
+}
+
+pjsip_hdr_vptr pjsip_reject_contact_vptr = {
+  pjsip_reject_contact_hdr_clone,
+  pjsip_reject_contact_hdr_shallow_clone,
+  pjsip_reject_contact_hdr_print_on
+};
+
+pjsip_reject_contact_hdr* pjsip_reject_contact_hdr_init(pj_pool_t* pool, void* mem)
+{
+  pjsip_reject_contact_hdr* hdr = (pjsip_reject_contact_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  // Based on init_hdr from sip_msg.c
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = STR_REJECT_CONTACT;
+  hdr->sname = STR_REJECT_CONTACT_SHORT;
+  hdr->vptr = &pjsip_reject_contact_vptr;
+  pj_list_init(hdr);
+  pj_list_init(&hdr->feature_set);
+
+  return hdr;
+}
+
+void *pjsip_reject_contact_hdr_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_reject_contact_hdr* hdr = pjsip_reject_contact_hdr_create(pool);
+  pjsip_reject_contact_hdr* other = (pjsip_reject_contact_hdr*)o;
+
+  pjsip_param_clone(pool, &hdr->feature_set, &other->feature_set);
+
+  return hdr;
+}
+
+void *pjsip_reject_contact_hdr_shallow_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_reject_contact_hdr* hdr = pjsip_reject_contact_hdr_create(pool);
+  pjsip_reject_contact_hdr* other = (pjsip_reject_contact_hdr*)o;
+
+  pjsip_param_shallow_clone(pool, &hdr->feature_set, &other->feature_set);
+
+  return hdr;
+}
+
+int pjsip_reject_contact_hdr_print_on(void* void_hdr,
+                                      char* buf,
+                                      pj_size_t size)
+{
+  int printed;
+  char *startbuf = buf;
+  char *endbuf = buf + size;
+  pjsip_reject_contact_hdr* hdr = (pjsip_reject_contact_hdr *)void_hdr;
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+
+  /* Route and Record-Route don't compact forms */
+  copy_advance(buf, hdr->name);
+  *buf++ = ':';
+  *buf++ = ' ';
+  *buf++ = '*';
+
+  printed = pjsip_param_print_on(&hdr->feature_set, buf, endbuf-buf,
+                                 &pc->pjsip_TOKEN_SPEC,
+                                 &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0)
+  {
+    return -1;
+  }
+  buf += printed;
+
+  return buf-startbuf;
+}
+
+pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
+{
+  // The Accept-Contact header has the following ABNF:
+  //
+  // Accept-Contact  =  ("Accept-Contact" / "j") HCOLON ac-value
+  //                       *(COMMA ac-value)
+  // ac-value        =  "*" *(SEMI ac-params)
+  // ac-params       =  feature-param / req-param / explicit-param / generic-param
+  // req-param       =  "require"
+  // explicit-param  =  "explicit"
+  //
+  // But we allow any value for the header (not just *).
+
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+  pjsip_accept_contact_hdr* hdr = pjsip_accept_contact_hdr_create(pool);
+  pj_str_t name;
+  pj_str_t value;
+  pjsip_param *param;
+
+  // Read and ignore the value.
+  pj_str_t header_value;
+  pj_scan_get(scanner, &pc->pjsip_TOKEN_SPEC, &header_value);
+
+  for (;;)
+  {
+    // We might need to swallow the ';'.
+    if (!pj_scan_is_eof(scanner) && *scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);
+    }
+
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+    param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    param->name = name;
+    param->value = value;
+
+    if (!pj_stricmp2(&name, "required"))
+    {
+      hdr->required_match = true;
+    }
+    else if (!pj_stricmp2(&name, "explicit"))
+    {
+      hdr->explicit_match = true;
+    }
+    else
+    {
+      pj_list_insert_before(&hdr->feature_set, param);
+    }
+
+    // If we're EOF or looking at a newline, we're done.
+    pj_scan_skip_whitespace(scanner);
+    if (pj_scan_is_eof(scanner) ||
+        (*scanner->curptr == '\r') ||
+        (*scanner->curptr == '\n'))
+    {
+      break;
+    }
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
+
+pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_create(pj_pool_t* pool)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_accept_contact_hdr));
+  return pjsip_accept_contact_hdr_init(pool, mem);
+}
+
+pjsip_hdr_vptr pjsip_accept_contact_vptr = {
+  pjsip_accept_contact_hdr_clone,
+  pjsip_accept_contact_hdr_shallow_clone,
+  pjsip_accept_contact_hdr_print_on
+};
+
+pjsip_accept_contact_hdr* pjsip_accept_contact_hdr_init(pj_pool_t* pool, void* mem)
+{
+  pjsip_accept_contact_hdr* hdr = (pjsip_accept_contact_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  // Based on init_hdr from sip_msg.c
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = STR_ACCEPT_CONTACT;
+  hdr->sname = STR_ACCEPT_CONTACT_SHORT;
+  hdr->vptr = &pjsip_accept_contact_vptr;
+  pj_list_init(hdr);
+  hdr->required_match = false;
+  hdr->explicit_match = false;
+  pj_list_init(&hdr->feature_set);
+
+  return hdr;
+}
+
+void *pjsip_accept_contact_hdr_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_accept_contact_hdr* hdr = pjsip_accept_contact_hdr_create(pool);
+  pjsip_accept_contact_hdr* other = (pjsip_accept_contact_hdr*)o;
+
+  hdr->required_match = other->required_match;
+  hdr->explicit_match = other->explicit_match;
+
+  pjsip_param_clone(pool, &hdr->feature_set, &other->feature_set);
+
+  return hdr;
+}
+
+void *pjsip_accept_contact_hdr_shallow_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_accept_contact_hdr* hdr = pjsip_accept_contact_hdr_create(pool);
+  pjsip_accept_contact_hdr* other = (pjsip_accept_contact_hdr*)o;
+
+  hdr->required_match = other->required_match;
+  hdr->explicit_match = other->explicit_match;
+
+  pjsip_param_shallow_clone(pool, &hdr->feature_set, &other->feature_set);
+
+  return hdr;
+}
+
+int pjsip_accept_contact_hdr_print_on(void* void_hdr,
+                                      char* buf,
+                                      pj_size_t size)
+{
+  int printed;
+  char *startbuf = buf;
+  char *endbuf = buf + size;
+  pjsip_accept_contact_hdr* hdr = (pjsip_accept_contact_hdr *)void_hdr;
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+
+  /* Route and Record-Route don't compact forms */
+  copy_advance(buf, hdr->name);
+  copy_advance(buf, pj_str(": *"));
+
+  if (hdr->required_match)
+  {
+    copy_advance(buf, pj_str(";required"));
+  }
+
+  if (hdr->explicit_match)
+  {
+    copy_advance(buf, pj_str(";explicit"));
+  }
+
+  printed = pjsip_param_print_on(&hdr->feature_set, buf, endbuf-buf,
+                                 &pc->pjsip_TOKEN_SPEC,
+                                 &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0)
+  {
+    return -1;
+  }
+  buf += printed;
+
+  return buf-startbuf;
+}
+
 /// Register all of our custom header parsers with pjSIP.  This should be
 // called once during startup.
 pj_status_t register_custom_headers()
@@ -913,6 +1204,10 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("P-Served-User", NULL, &parse_hdr_p_served_user);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Session-Expires", NULL, &parse_hdr_session_expires);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Reject-Contact", "j", &parse_hdr_reject_contact);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Accept-Contact", "a", &parse_hdr_accept_contact);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
 
   return PJ_SUCCESS;
