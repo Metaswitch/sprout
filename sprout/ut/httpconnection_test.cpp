@@ -46,6 +46,7 @@
 #include "utils.h"
 #include "sas.h"
 #include "sproutsasevent.h"
+#include "fakehttpresolver.hpp"
 #include "httpconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
@@ -61,28 +62,31 @@ using ::testing::MatchesRegex;
 class HttpConnectionTest : public BaseTest
 {
   LoadMonitor _lm;
+  FakeHttpResolver _resolver;
   HttpConnection _http;
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
+    _resolver("10.42.42.42"),
     _http("cyrus",
           true,
+          &_resolver,
           "connected_homers",
           &_lm,
           stack_data.stats_aggregator,
           SASEvent::HttpLogLevel::PROTOCOL)
   {
     fakecurl_responses.clear();
-    fakecurl_responses["http://cyrus/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
-    fakecurl_responses["http://cyrus/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://cyrus/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
-    fakecurl_responses["http://cyrus/up/up/up"] = "<message>ok, whatever...</message>";
-    fakecurl_responses["http://cyrus/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
-    fakecurl_responses["http://cyrus/down/down/down"] = "<message>WHOOOOSH!!</message>";
-    fakecurl_responses["http://cyrus/down/down/up"] = CURLE_RECV_ERROR;
-    fakecurl_responses["http://cyrus/down/around"] = Response(CURLE_SEND_ERROR, "<message>Gotcha!</message>");
-    fakecurl_responses["http://cyrus/delete_id"] = CURLE_OK;
-    fakecurl_responses["http://cyrus/put_id"] = CURLE_OK;
-    fakecurl_responses["http://cyrus/post_id"] = Response({"Location: test"});
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
+    fakecurl_responses["http://10.42.42.42:80/up/up/up"] = "<message>ok, whatever...</message>";
+    fakecurl_responses["http://10.42.42.42:80/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
+    fakecurl_responses["http://10.42.42.42:80/down/down/down"] = "<message>WHOOOOSH!!</message>";
+    fakecurl_responses["http://10.42.42.42:80/down/down/up"] = CURLE_RECV_ERROR;
+    fakecurl_responses["http://10.42.42.42:80/down/around"] = Response(CURLE_SEND_ERROR, "<message>Gotcha!</message>");
+    fakecurl_responses["http://10.42.42.42:80/delete_id"] = CURLE_OK;
+    fakecurl_responses["http://10.42.42.42:80/put_id"] = CURLE_OK;
+    fakecurl_responses["http://10.42.42.42:80/post_id"] = Response({"Location: test"});
   }
 
   virtual ~HttpConnectionTest()
@@ -99,7 +103,7 @@ TEST_F(HttpConnectionTest, SimpleKeyAuthGet)
   long ret = _http.send_get("/blah/blah/blah", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
   EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>", output);
-  Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
+  Request& req = fakecurl_requests["http://10.42.42.42:80/blah/blah/blah"];
   EXPECT_EQ("GET", req._method);
   EXPECT_FALSE(req._httpauth & CURLAUTH_DIGEST) << req._httpauth;
   EXPECT_EQ("", req._username);
@@ -145,7 +149,7 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   // just take the risk of an occasional spurious test failure).
   ret = _http.send_get("/up/up/up", output, "legolas", 0);
   EXPECT_EQ(200, ret);
-  Request& req = fakecurl_requests["http://cyrus/up/up/up"];
+  Request& req = fakecurl_requests["http://10.42.42.42:80/up/up/up"];
   EXPECT_FALSE(req._fresh);
 
   // Now wait a long time - much longer than the 1-minute average
@@ -157,7 +161,7 @@ TEST_F(HttpConnectionTest, ConnectionRecycle)
   // the same connection, but we'll take the risk.
   ret = _http.send_get("/down/down/down", output, "gimli", 0);
   EXPECT_EQ(200, ret);
-  Request& req2 = fakecurl_requests["http://cyrus/down/down/down"];
+  Request& req2 = fakecurl_requests["http://10.42.42.42:80/down/down/down"];
   EXPECT_TRUE(req2._fresh);
 
   // Should be a single connection to the hardcoded fakecurl IP.
@@ -208,7 +212,7 @@ TEST_F(HttpConnectionTest, SASCorrelationHeader)
 
   _http.send_get("/blah/blah/blah", output, "gandalf", 0);
 
-  Request& req = fakecurl_requests["http://cyrus/blah/blah/blah"];
+  Request& req = fakecurl_requests["http://10.42.42.42:80/blah/blah/blah"];
 
   // The CURL request should contain an X-SAS-HTTP-Branch-ID whose value is a
   // UUID.
@@ -240,4 +244,45 @@ TEST_F(HttpConnectionTest, SASCorrelationHeader)
   EXPECT_EQ(marker->var_params[0], uuid);
 
   mock_sas_collect_messages(false);
+}
+
+TEST_F(HttpConnectionTest, ParseHostPort)
+{
+  // Test port-parsing by adding a port
+  HttpConnection http2("cyrus:1234",
+                       true,
+                       &_resolver,
+                       "connected_homers",
+                       &_lm,
+                       stack_data.stats_aggregator,
+                       SASEvent::HttpLogLevel::PROTOCOL);
+  fakecurl_responses["http://10.42.42.42:1234/port-1234"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
+
+  string output;
+  long ret = http2.send_get("/port-1234", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
+  EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>", output);
+}
+
+TEST_F(HttpConnectionTest, ParseHostPortIPv6)
+{
+  // Test parsing with an IPv6 address
+  HttpConnection http2("[1::1]",
+                       true,
+                       &_resolver,
+                       "connected_homers",
+                       &_lm,
+                       stack_data.stats_aggregator,
+                       SASEvent::HttpLogLevel::PROTOCOL);
+
+  string output;
+  long ret = http2.send_get("/blah/blah/blah", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
+  EXPECT_EQ("<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>", output);
+}
+
+TEST_F(HttpConnectionTest, BasicResolverTest)
+{
+  // Just check the resolver constructs/destroys correctly.
+  HttpResolver resolver(NULL, AF_INET);
 }

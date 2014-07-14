@@ -43,6 +43,7 @@
 
 #include "utils.h"
 #include "sas.h"
+#include "fakehttpresolver.hpp"
 #include "chronosconnection.h"
 #include "basetest.hpp"
 #include "fakecurl.hpp"
@@ -52,10 +53,12 @@ using namespace std;
 /// Fixture for ChronosConnectionTest.
 class ChronosConnectionTest : public BaseTest
 {
+  FakeHttpResolver _resolver;
   ChronosConnection _chronos;
 
   ChronosConnectionTest() :
-    _chronos("narcissus", "localhost:9888")
+    _resolver("10.42.42.42"),
+    _chronos("narcissus", "localhost:9888", &_resolver)
   {
     fakecurl_responses.clear();
   }
@@ -67,7 +70,7 @@ class ChronosConnectionTest : public BaseTest
 
 TEST_F(ChronosConnectionTest, SendDelete)
 {
-  fakecurl_responses["http://narcissus/timers/delete_id"] = CURLE_OK;
+  fakecurl_responses["http://10.42.42.42:80/timers/delete_id"] = CURLE_OK;
   HTTPCode status = _chronos.send_delete("delete_id",  0);
   EXPECT_EQ(status, 200);
 }
@@ -81,7 +84,7 @@ TEST_F(ChronosConnectionTest, SendInvalidDelete)
 TEST_F(ChronosConnectionTest, SendPost)
 {
   std::list<std::string> headers = {"Location: http://localhost:7253/timers/abcd"};
-  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+  fakecurl_responses["http://10.42.42.42:80/timers"] = Response(headers);
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
@@ -93,7 +96,7 @@ TEST_F(ChronosConnectionTest, SendPost)
 TEST_F(ChronosConnectionTest, SendPostWithNoLocationHeader)
 {
   std::list<std::string> headers = {"Header: header"};
-  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+  fakecurl_responses["http://10.42.42.42:80/timers"] = Response(headers);
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
@@ -105,7 +108,7 @@ TEST_F(ChronosConnectionTest, SendPostWithNoLocationHeader)
 TEST_F(ChronosConnectionTest, SendPostWithNoHeaders)
 {
   std::list<std::string> headers = {""};
-  fakecurl_responses["http://narcissus/timers"] = Response(headers);
+  fakecurl_responses["http://10.42.42.42:80/timers"] = Response(headers);
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string post_identity = "";
@@ -117,7 +120,7 @@ TEST_F(ChronosConnectionTest, SendPostWithNoHeaders)
 TEST_F(ChronosConnectionTest, SendPut)
 {
   std::list<std::string> headers = {"Location: http://localhost:7253/timers/efgh"};
-  fakecurl_responses["http://narcissus/timers/abcd"] = Response(headers);
+  fakecurl_responses["http://10.42.42.42:80/timers/abcd"] = Response(headers);
 
   // We expect Chronos to change the put identity to the value in the Location
   // header.
@@ -131,7 +134,7 @@ TEST_F(ChronosConnectionTest, SendPut)
 TEST_F(ChronosConnectionTest, SendPutWithNoLocationHeader)
 {
   std::list<std::string> headers = {"Header: header"};
-  fakecurl_responses["http://narcissus/timers/abcd"] = Response(headers);
+  fakecurl_responses["http://10.42.42.42:80/timers/abcd"] = Response(headers);
 
   std::string opaque = "{\"aor_id\": \"aor_id\", \"binding_id\": \"binding_id\"}";
   std::string put_identity = "abcd";

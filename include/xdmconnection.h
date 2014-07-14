@@ -51,6 +51,7 @@ class XDMConnection
 {
 public:
   XDMConnection(const std::string& server,
+                HttpResolver* resolver,
                 LoadMonitor *load_monitor,
                 LastValueCache* stats_aggregator);
   XDMConnection(HttpConnection* http, LastValueCache* stats_aggregator);
