@@ -465,6 +465,12 @@ void SipTest::parse_rxdata(pjsip_rx_data* rdata)
   }
 }
 
+pjsip_msg* SipTest::parse_msg(const std::string& msg)
+{
+  pjsip_rx_data* rdata = build_rxdata(msg);
+  parse_rxdata(rdata);
+  return rdata->msg_info.msg;
+}
 
 pj_status_t SipTest::on_tx_msg(pjsip_tx_data* tdata)
 {

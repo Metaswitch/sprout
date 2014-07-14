@@ -180,6 +180,10 @@ protected:
   /// transport layer.
   void parse_rxdata(pjsip_rx_data* rdata);
 
+  /// Parse a string containing a SIP message into a pjsip_msg.  Used by
+  /// subclasses that don't actually use PJSIP modules. 
+  pjsip_msg* parse_msg(const std::string& msg);
+
   /// Should we log all SIP traffic as it passes?
   bool _log_traffic;
 

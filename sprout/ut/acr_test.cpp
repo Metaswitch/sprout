@@ -85,13 +85,6 @@ public:
 
 protected:
 
-  pjsip_msg* parse_msg(const std::string& msg)
-  {
-    pjsip_rx_data* rdata = build_rxdata(msg);
-    ACRTest::parse_rxdata(rdata);
-    return rdata->msg_info.msg;
-  }
-
   // Compares output ACR against expected ACR from file.
   bool compare_acr(const std::string& output,
                    const std::string& expected_file)
