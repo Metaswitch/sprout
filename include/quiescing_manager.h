@@ -39,6 +39,8 @@
 #ifndef QUIESCING_MANAGER_H__
 #define QUIESCING_MANAGER_H__
 
+#include <queue>
+
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
