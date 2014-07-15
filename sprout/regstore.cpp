@@ -705,9 +705,12 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   std::map<std::string, AoR::Binding> bindings;
   bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(b_id, *b));
   pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
-                                  NotifyUtils::PARTIAL, NotifyUtils::ACTIVE,
-                                  NotifyUtils::TERMINATED, NotifyUtils::EXPIRED,
-                                  NotifyUtils::ACTIVE, (s->_expires - time(NULL)));
+                                  NotifyUtils::DocState::PARTIAL, 
+                                  NotifyUtils::RegistrationState::ACTIVE,
+                                  NotifyUtils::ContactState::TERMINATED, 
+                                  NotifyUtils::ContactEvent::EXPIRED,
+                                  NotifyUtils::SubscriptionState::ACTIVE,
+                                  (s->_expires - time(NULL)));
 
   if (status == PJ_SUCCESS)
   {
