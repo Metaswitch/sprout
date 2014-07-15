@@ -110,4 +110,51 @@ const pj_str_t SIP_REASON_ENUM_FAILED = pj_str((char*)"ENUM translation failed")
 const pj_str_t SIP_REASON_OFFNET_DISALLOWED = pj_str((char*)"Off-net calling not allowed");
 const pj_str_t SIP_REASON_ADDR_INCOMPLETE = pj_str((char*)"Address Incomplete");
 
+/// Constants for generating notify bodies.
+
+//MINE
+const pj_str_t STR_MIME_TYPE = pj_str((char*)"application");
+const pj_str_t STR_MIME_SUBTYPE = pj_str((char*)"reginfo+xml");
+
+/* XML node name constants */
+const pj_str_t STR_REGISTRATION = pj_str((char*)"registration");
+const pj_str_t STR_CONTACT = pj_str((char*)"contact");
+const pj_str_t STR_URI = pj_str((char*)"uri");
+
+/* XML node attribute constants */
+const pj_str_t STR_STATE = pj_str((char*)"state");
+const pj_str_t STR_AOR = pj_str((char*)"aor");
+const pj_str_t STR_ID = pj_str((char*)"id");
+
+/* XML node registration STATE attribute enum constants. */
+const pj_str_t STR_INIT = pj_str((char*)"init");
+const pj_str_t STR_ACTIVE = pj_str((char*)"active");
+const pj_str_t STR_TERMINATED = pj_str((char*)"terminated");
+
+/* XML node doc STATE attribute enum constants. */
+const pj_str_t STR_FULL = pj_str((char*)"full");
+const pj_str_t STR_PARTIAL = pj_str((char*)"partial");
+
+/* XML node EVENT attribute enum constants. */
+const pj_str_t STR_REGISTERED = pj_str((char*)"registered");
+const pj_str_t STR_CREATED = pj_str((char*)"created");
+const pj_str_t STR_REFRESHED = pj_str((char*)"refreshed");
+const pj_str_t STR_EXPIRED = pj_str((char*)"expired");
+const pj_str_t STR_DEACTIVATED = pj_str((char*)"deactivated");
+const pj_str_t STR_UNREGISTERED = pj_str((char*)"unregistered");
+const pj_str_t STR_TIMEOUT = pj_str((char*)"timeout");
+
+/* XML attributes constants */
+const pj_str_t STR_REGINFO = pj_str((char*)"reginfo");
+const pj_str_t STR_XMLNS_NAME = pj_str((char*)"xmlns");
+const pj_str_t STR_XMLNS_VAL = pj_str((char*)"urn:ietf:params:xml:ns:reginfo");
+const pj_str_t STR_VERSION = pj_str((char*)"version");
+const pj_str_t STR_VERSION_VAL = pj_str((char*)"0");
+const pj_str_t STR_XMLNS_XSI_NAME = pj_str((char*)"xmlns:xsi");
+const pj_str_t STR_XMLNS_XSI_VAL = pj_str((char*)"http://www.w3.org/2001/XMLSchema-instance");
+
+// XML schema location
+const pj_str_t STR_XSI_SLOC_NAME = pj_str((char*)"xsi:schemaLocation");
+const pj_str_t STR_XSI_SLOC_VAL = pj_str((char*)"http://www.w3.org/2001/03/xml.xsd");
+
 #endif /* CONSTANTS_H_ */

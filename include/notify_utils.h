@@ -53,9 +53,12 @@ extern "C" {
 
 namespace NotifyUtils
 {
-  enum DocState { FULL, PARTIAL };
-  enum RegContactState { ACTIVE, TERMINATED };
-  enum ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
+  // See RFC 3265 
+  enum class DocState { FULL, PARTIAL };
+  enum class RegistrationState { ACTIVE, TERMINATED };
+  enum class ContactState { ACTIVE, TERMINATED };
+  enum class SubscriptionState { ACTIVE, TERMINATED };
+  enum class ContactEvent { REGISTERED, CREATED, REFRESHED, EXPIRED, DEACTIVATED };
 
   pj_status_t create_notify(pjsip_tx_data** tdata_notify,
                             RegStore::AoR::Subscription* subscription,
@@ -63,9 +66,11 @@ namespace NotifyUtils
                             int cseq,
                             std::map<std::string, RegStore::AoR::Binding> bindings,
                             NotifyUtils::DocState doc_state,
-                            NotifyUtils::RegContactState reg_state,
-                            NotifyUtils::RegContactState contact_state,
-                            NotifyUtils::ContactEvent contact_event);
+                            NotifyUtils::RegistrationState reg_state,
+                            NotifyUtils::ContactState contact_state,
+                            NotifyUtils::ContactEvent contact_event,
+                            NotifyUtils::SubscriptionState subscription_state,
+                            int expiry);
 };
 
 #endif

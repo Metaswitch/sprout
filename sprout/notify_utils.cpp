@@ -49,52 +49,6 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 
-#define CONST_PJSTR(NAME, VALUE) static const pj_str_t NAME = {VALUE, sizeof(VALUE) - 1};
-
-/* MIME */
-CONST_PJSTR(STR_MIME_TYPE,      "application");
-CONST_PJSTR(STR_MIME_SUBTYPE,   "reginfo+xml");
-
-/* XML node name constants */
-CONST_PJSTR(STR_REGISTRATION,   "registration");
-CONST_PJSTR(STR_CONTACT,        "contact");
-CONST_PJSTR(STR_URI,            "uri");
-
-/* XML node attribute constants */
-CONST_PJSTR(STR_STATE,          "state");
-CONST_PJSTR(STR_AOR,            "aor");
-CONST_PJSTR(STR_ID,             "id");
-
-/* XML node registration STATE attribute enum constants. */
-CONST_PJSTR(STR_INIT,           "init");
-CONST_PJSTR(STR_ACTIVE,         "active");
-CONST_PJSTR(STR_TERMINATED,     "terminated");
-
-/* XML node doc STATE attribute enum constants. */
-CONST_PJSTR(STR_FULL,           "full");
-CONST_PJSTR(STR_PARTIAL,        "partial");
-
-/* XML node EVENT attribute enum constants. */
-CONST_PJSTR(STR_REGISTERED,     "registered");
-CONST_PJSTR(STR_CREATED,        "created");
-CONST_PJSTR(STR_REFRESHED,      "refreshed");
-CONST_PJSTR(STR_EXPIRED,        "expired");
-CONST_PJSTR(STR_DEACTIVATED,    "deactivated");
-CONST_PJSTR(STR_UNREGISTERED,   "unregistered");
-
-/* XML attributes constants */
-CONST_PJSTR(STR_REGINFO,        "reginfo");
-CONST_PJSTR(STR_XMLNS_NAME,     "xmlns");
-CONST_PJSTR(STR_XMLNS_VAL,      "urn:ietf:params:xml:ns:reginfo");
-CONST_PJSTR(STR_VERSION,        "version");
-CONST_PJSTR(STR_VERSION_VAL,    "0");
-CONST_PJSTR(STR_XMLNS_XSI_NAME, "xmlns:xsi");
-CONST_PJSTR(STR_XMLNS_XSI_VAL,  "http://www.w3.org/2001/XMLSchema-instance");
-
-// XML schema location
-CONST_PJSTR(STR_XSI_SLOC_NAME,  "xsi:schemaLocation");
-CONST_PJSTR(STR_XSI_SLOC_VAL,   "http://www.w3.org/2001/03/xml.xsd");
-
 // Return a XML registration node with the attributes populated
 pj_xml_node* create_reg_node(pj_pool_t *pool,
                              pj_str_t *aor,
@@ -150,8 +104,8 @@ pj_xml_node* notify_create_reg_state_xml(
                          RegStore::AoR::Subscription* subscription,
                          std::map<std::string, RegStore::AoR::Binding> bindings,
                          NotifyUtils::DocState doc_state,
-                         NotifyUtils::RegContactState reg_state,
-                         NotifyUtils::RegContactState contact_state,
+                         NotifyUtils::RegistrationState reg_state,
+                         NotifyUtils::ContactState contact_state,
                          NotifyUtils::ContactEvent contact_event)
 {
   LOG_DEBUG("Create the XML body for a SIP NOTIFY");
@@ -171,7 +125,7 @@ pj_xml_node* notify_create_reg_state_xml(
   pj_xml_add_attr(doc, attr);
 
   // Add the state - this will be partial except on an initial subscription
-  const pj_str_t* state_str = (doc_state == NotifyUtils::FULL) ?
+  const pj_str_t* state_str = (doc_state == NotifyUtils::DocState::FULL) ?
                                                        &STR_FULL : &STR_PARTIAL;
   attr = pj_xml_attr_new(pool, &STR_STATE, state_str);
   pj_xml_add_attr(doc, attr);
@@ -183,7 +137,7 @@ pj_xml_node* notify_create_reg_state_xml(
 
   pj_cstr(&reg_aor, aor.c_str());
   pj_cstr(&reg_id, subscription->_to_tag.c_str());
-  reg_state_str = (reg_state == NotifyUtils::ACTIVE)
+  reg_state_str = (reg_state == NotifyUtils::RegistrationState::ACTIVE)
                                                   ? STR_ACTIVE : STR_TERMINATED;
   reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str);
 
@@ -199,26 +153,26 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_str_t c_event;
 
     pj_cstr(&c_id, binding->first.c_str());
-    c_state = (contact_state == NotifyUtils::ACTIVE)
+    c_state = (contact_state == NotifyUtils::ContactState::ACTIVE)
                                                   ? STR_ACTIVE : STR_TERMINATED;
 
     switch (contact_event)
     {
-      case NotifyUtils::REGISTERED:
+      case NotifyUtils::ContactEvent::REGISTERED:
         c_event = STR_REGISTERED;
         break;
-      case NotifyUtils::CREATED:
+      case NotifyUtils::ContactEvent::CREATED:
         c_event = STR_CREATED;
         break;
       // LCOV_EXCL_START
-      case NotifyUtils::DEACTIVATED:
+      case NotifyUtils::ContactEvent::DEACTIVATED:
         c_event = STR_DEACTIVATED;
         break;
       // LCOV_EXCL_STOP
-      case NotifyUtils::REFRESHED:
+      case NotifyUtils::ContactEvent::REFRESHED:
         c_event = STR_REFRESHED;
         break;
-      case NotifyUtils::EXPIRED:
+      case NotifyUtils::ContactEvent::EXPIRED:
         c_event = STR_EXPIRED;
         break;
     }
@@ -264,8 +218,8 @@ pj_status_t notify_create_body(pjsip_msg_body* body,
                                RegStore::AoR::Subscription* subscription,
                                std::map<std::string, RegStore::AoR::Binding> bindings,
                                NotifyUtils::DocState doc_state,
-                               NotifyUtils::RegContactState reg_state,
-                               NotifyUtils::RegContactState contact_state,
+                               NotifyUtils::RegistrationState reg_state,
+                               NotifyUtils::ContactState contact_state,
                                NotifyUtils::ContactEvent contact_event)
 {
   LOG_DEBUG("Create body of a SIP NOTIFY");
@@ -337,9 +291,11 @@ pj_status_t NotifyUtils::create_notify(
                                     int cseq,
                                     std::map<std::string, RegStore::AoR::Binding> bindings,
                                     NotifyUtils::DocState doc_state,
-                                    NotifyUtils::RegContactState reg_state,
-                                    NotifyUtils::RegContactState contact_state,
-                                    NotifyUtils::ContactEvent contact_event)
+                                    NotifyUtils::RegistrationState reg_state,
+                                    NotifyUtils::ContactState contact_state,
+                                    NotifyUtils::ContactEvent contact_event,
+                                    NotifyUtils::SubscriptionState subscription_state,
+                                    int expiry)
 {
   pj_status_t status = create_request_from_subscription(tdata_notify,
                                                         subscription,
@@ -382,6 +338,24 @@ pj_status_t NotifyUtils::create_notify(
     pjsip_event_hdr* event_hdr = pjsip_event_hdr_create((*tdata_notify)->pool);
     event_hdr->event_type = STR_REG;
     pj_list_push_back( &(*tdata_notify)->msg->hdr, event_hdr);
+
+    // Add the Subscription-State header
+    pjsip_sub_state_hdr* sub_state_hdr = pjsip_sub_state_hdr_create((*tdata_notify)->pool);
+
+    if (subscription_state == NotifyUtils::SubscriptionState::TERMINATED)
+    {
+      // The only reason we support is timeout (this also covers
+      // actively unsubscribing)
+      sub_state_hdr->sub_state = STR_TERMINATED;
+      sub_state_hdr->reason_param = STR_TIMEOUT;
+    }
+    else
+    {
+      sub_state_hdr->sub_state = STR_ACTIVE;
+      sub_state_hdr->expires_param = expiry;
+    }
+
+    pj_list_push_back( &(*tdata_notify)->msg->hdr, sub_state_hdr);
 
     // complete body
     pjsip_msg_body *body2;
