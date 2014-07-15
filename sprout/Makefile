@@ -72,7 +72,8 @@ TARGET_SOURCES := logger.cpp \
                   httpstack.cpp \
                   httpstack_utils.cpp \
                   handlers.cpp \
-                  ipv6utils.cpp
+                  ipv6utils.cpp \
+                  contact_filtering.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -125,6 +126,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        handlers_test.cpp \
                        httpresolver_test.cpp \
                        mock_sas.cpp \
+                       contact_filtering_test.cpp \
                        appserver_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.

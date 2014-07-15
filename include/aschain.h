@@ -65,6 +65,9 @@ struct Target
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
   int liveness_timeout;
+  uint32_t contact_q1000_value;
+  bool deprioritized;
+  int contact_expiry;
 
   // Default constructor.
   Target() :
@@ -75,11 +78,14 @@ struct Target
     uri(NULL),
     paths(),
     transport(NULL),
-    liveness_timeout(0)
+    liveness_timeout(0),
+    contact_q1000_value(1000),
+    deprioritized(false),
+    contact_expiry(0)
   {
   }
 };
-typedef std::list<Target> TargetList;
+typedef std::vector<Target> TargetList;
 
 class AsChainTable;
 

@@ -388,7 +388,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             std::string pname = PJUtils::pj_str_to_string(&p->name);
             std::string pvalue = PJUtils::pj_str_to_string(&p->value);
-            binding->_params.push_back(std::make_pair(pname, pvalue));
+            binding->_params[pname] = pvalue;
             p = p->next;
           }
 
@@ -818,7 +818,7 @@ void process_register_request(pjsip_rx_data* rdata)
         contact->q1000 = binding->_priority;
         contact->expires = binding->_expires - now;
         pj_list_init(&contact->other_param);
-        for (std::list<std::pair<std::string, std::string> >::iterator j = binding->_params.begin();
+        for (std::map<std::string, std::string>::iterator j = binding->_params.begin();
              j != binding->_params.end();
              ++j)
         {

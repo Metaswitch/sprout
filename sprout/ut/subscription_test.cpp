@@ -280,9 +280,9 @@ TEST_F(SubscriptionTest, SimpleMainline)
   b1->_expires = now + 300;
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
@@ -315,9 +315,9 @@ TEST_F(SubscriptionTest, SimpleMainlineWithTelURI)
   b1->_expires = now + 300;
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = false;
 
   // Add the AoR record to the store.
@@ -471,9 +471,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b1->_expires = now + 300;
   b1->_priority = 0;
   b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b1->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b1->_params.push_back(std::make_pair("reg-id", "1"));
-  b1->_params.push_back(std::make_pair("+sip.ice", ""));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = true;
 
   RegStore::AoR::Binding* b2 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
@@ -483,9 +483,9 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   b2->_expires = now + 300;
   b2->_priority = 0;
   b2->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
-  b2->_params.push_back(std::make_pair("+sip.instance", "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""));
-  b2->_params.push_back(std::make_pair("reg-id", "1"));
-  b2->_params.push_back(std::make_pair("+sip.ice", ""));
+  b2->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b2->_params["reg-id"] = "1";
+  b2->_params["+sip.ice"] = "";
   b2->_emergency_registration = false;
 
   // Add the AoR record to the store.
