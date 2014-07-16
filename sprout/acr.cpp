@@ -442,16 +442,6 @@ void RalfACR::rx_request(pjsip_msg* req, pj_time_val timestamp)
 
   // Store the charging function addresses if present.
   store_charging_addresses(req);
-
-  if (_node_role == NODE_ROLE_TERMINATING)
-  {
-    // In the terminating case, the called party address is taken from the
-    // RequestURI after it has been modified by any ASs, but before it has
-    // been converted to a contact address.  We therefore store the RequestURI
-    // on every received request as we will catch it as received from the
-    // final AS in the chain but before we convert to a contact address.
-    store_called_party_address(req);
-  }
 }
 
 /// Called with the request as it is forwarded by this node.
@@ -486,11 +476,10 @@ void RalfACR::tx_request(pjsip_msg* req, pj_time_val timestamp)
     }
   }
 
-  if ((_method != "REGISTER") &&
-      (_node_role == NODE_ROLE_ORIGINATING))
+  if (_method != "REGISTER")
   {
-    // In the originating case, the called party address is taken from the
-    // RequestURI when the request is transmitted.
+    // The called party address is taken from the RequestURI when the request
+    // is transmitted.
     store_called_party_address(req);
   }
 

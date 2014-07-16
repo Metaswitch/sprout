@@ -17,7 +17,7 @@
           "sip:6505550001@homedomain",
           "tel:6505550001"
         ],
-        "Called-Party-Address": "sip:6505559999@homedomain",
+        "Called-Party-Address": "sip:6505559999@10.83.18.50:5060;transport=TCP",
         "Calling-Party-Address": [
           "sip:6505550000@homedomain",
           "tel:6505550000"
