@@ -1815,12 +1815,15 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         _bgcf_acr = bgcf_acr_factory->get_acr(trail,
                                               CALLING_PARTY,
                                               ACR::requested_node_role(msg));
-        if (_downstream_acr != _upstream_acr)
+         
+        if ((_downstream_acr != _upstream_acr) &&
+            (!_as_chain_links.empty()))
         {
           // We've already set up a different downstream ACR to the upstream ACR
-          // so free it off.
+          // and the ASChain hasn't taken ownership of the acr so free it off.
           delete _downstream_acr;
         }
+
         _downstream_acr = _bgcf_acr;
 
         // Pass the request to the downstream ACR as if it is being received.
