@@ -79,6 +79,7 @@ class HttpConnectionTest : public BaseTest
     fakecurl_responses["http://10.42.42.42:80/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
     fakecurl_responses["http://10.42.42.42:80/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
     fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/recv_error"] = CURLE_RECV_ERROR;
     fakecurl_responses["http://10.42.42.42:80/up/up/up"] = "<message>ok, whatever...</message>";
     fakecurl_responses["http://10.42.42.42:80/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
     fakecurl_responses["http://10.42.42.42:80/down/down/down"] = "<message>WHOOOOSH!!</message>";
@@ -131,6 +132,13 @@ TEST_F(HttpConnectionTest, SimpleGetRetry)
   ret = _http.send_get("/down/around", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
   EXPECT_EQ("<message>Gotcha!</message>", output);
+}
+
+TEST_F(HttpConnectionTest, ReceiveError)
+{
+  string output;
+  long ret = _http.send_get("/blah/blah/recv_error", output, "gandalf", 0);
+  EXPECT_EQ(500, ret);
 }
 
 TEST_F(HttpConnectionTest, ConnectionRecycle)
