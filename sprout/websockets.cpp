@@ -321,6 +321,7 @@ static pj_bool_t on_ws_data(ws_transport *ws,
 
   const char *msg_str = msg->get_payload().c_str();
   if (strlen(msg_str) <= PJSIP_MAX_PKT_LEN) {
+    ws->rdata.pkt_info.packet = (char*)pj_pool_alloc(ws->rdata.tp_info.pool, strlen(msg_str) + 1);
     strcpy(ws->rdata.pkt_info.packet, msg_str);
   } else {
     LOG_ERROR("Dropping incoming websocket message as it is larger than PJSIP_MAX_PKT_LEN, %d", strlen(msg_str));
