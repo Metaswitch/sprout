@@ -21,6 +21,9 @@ modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp
 modules/cpp-common/test_utils/mockhttpstack.hpp
 
+modules/app-servers/include/appserver.h
+modules/app-servers/test/mockappserver.hpp
+
 # We don't fully exercise rapidjson
 modules/rapidjson/include/rapidjson/allocators.h
 modules/rapidjson/include/rapidjson/internal/stack.h

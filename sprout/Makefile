@@ -157,13 +157,16 @@ CPPFLAGS += -Wno-write-strings \
 CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/modules/cpp-common/test_utils \
+            -I${ROOT}/modules/app-servers/include \
+            -I${ROOT}/modules/app-servers/test \
+            -I${ROOT}/sprout/ut \
             -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test
 
 # Production build:
 #
