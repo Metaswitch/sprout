@@ -353,15 +353,18 @@ void SipTest::add_host_mapping(const string& hostname, const string& addresses)
 
 void SipTest::inject_msg(const string& msg, TransportFlow* tp)
 {
-  pjsip_rx_data* rdata = build_rxdata(msg, tp);
+  pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+							PJSIP_POOL_RDATA_LEN,
+							PJSIP_POOL_RDATA_INC);
+  pjsip_rx_data* rdata = build_rxdata(msg, tp, rdata_pool);
   char buf[100];
   snprintf(buf, sizeof(buf), "inject_msg on %p (transport %p)", tp, tp->_transport);
   log_pjsip_buf(buf, rdata->pkt_info.packet, rdata->pkt_info.len);
   pj_size_t size_eaten = pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
                                                     rdata);
   EXPECT_EQ((pj_size_t)rdata->pkt_info.len, size_eaten);
-  pj_pool_reset(rdata->tp_info.pool);
-  pj_pool_release(rdata->tp_info.pool);
+  pj_pool_reset(rdata_pool);
+  pj_pool_release(rdata_pool);
 }
 
 void SipTest::inject_msg(pjsip_msg* msg, TransportFlow* tp)
@@ -382,13 +385,14 @@ pj_bool_t SipTest::inject_msg_direct(const string& msg, pjsip_module* module)
   return ret;
 }
 
-pjsip_rx_data* SipTest::build_rxdata(const string& msg, TransportFlow* tp)
+pjsip_rx_data* SipTest::build_rxdata(const string& msg, TransportFlow* tp, pj_pool_t* rdata_pool)
 {
   pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(stack_data.pool, pjsip_rx_data);
 
-  pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
-							PJSIP_POOL_RDATA_LEN,
-							PJSIP_POOL_RDATA_INC);
+  if (rdata_pool == NULL)
+  {
+    rdata_pool = stack_data.pool;
+  }
 
   // Init transport info part.
   rdata->tp_info.pool = rdata_pool;

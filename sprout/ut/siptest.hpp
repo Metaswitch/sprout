@@ -173,7 +173,7 @@ protected:
   void register_uri(RegStore* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600);
 
   /// Build an incoming SIP packet.
-  pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default);
+  pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default, pj_pool_t* rdata_pool = NULL);
 
   /// Parse an incoming SIP message.  Used by subclasses which wish
   /// to inject messages directly into modules, bypassing the
@@ -181,7 +181,7 @@ protected:
   void parse_rxdata(pjsip_rx_data* rdata);
 
   /// Parse a string containing a SIP message into a pjsip_msg.  Used by
-  /// subclasses that don't actually use PJSIP modules. 
+  /// subclasses that don't actually use PJSIP modules.
   pjsip_msg* parse_msg(const std::string& msg);
 
   /// Should we log all SIP traffic as it passes?
