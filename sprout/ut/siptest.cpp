@@ -360,6 +360,8 @@ void SipTest::inject_msg(const string& msg, TransportFlow* tp)
   pj_size_t size_eaten = pjsip_tpmgr_receive_packet(rdata->tp_info.transport->tpmgr,
                                                     rdata);
   EXPECT_EQ((pj_size_t)rdata->pkt_info.len, size_eaten);
+  pj_pool_reset(rdata->tp_info.pool);
+  pj_pool_release(rdata->tp_info.pool);
 }
 
 void SipTest::inject_msg(pjsip_msg* msg, TransportFlow* tp)
@@ -384,8 +386,12 @@ pjsip_rx_data* SipTest::build_rxdata(const string& msg, TransportFlow* tp)
 {
   pjsip_rx_data* rdata = PJ_POOL_ZALLOC_T(stack_data.pool, pjsip_rx_data);
 
+  pj_pool_t *rdata_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+							PJSIP_POOL_RDATA_LEN,
+							PJSIP_POOL_RDATA_INC);
+
   // Init transport info part.
-  rdata->tp_info.pool = stack_data.pool;
+  rdata->tp_info.pool = rdata_pool;
   rdata->tp_info.transport = tp->_transport;
   rdata->tp_info.tp_data = NULL;
   rdata->tp_info.op_key.rdata = rdata;
