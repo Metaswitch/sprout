@@ -39,7 +39,6 @@
 #include <json/reader.h>
 #include "gtest/gtest.h"
 
-
 FakeHSSConnection::FakeHSSConnection() : HSSConnection("localhost", NULL, NULL, NULL)
 {
 }
@@ -54,6 +53,7 @@ FakeHSSConnection::~FakeHSSConnection()
 void FakeHSSConnection::flush_all()
 {
   _results.clear();
+  _calls.clear();
 }
 
 void FakeHSSConnection::set_result(const std::string& url,
@@ -118,6 +118,7 @@ long FakeHSSConnection::get_json_object(const std::string& path,
                                         Json::Value*& object,
                                         SAS::TrailId trail)
 {
+  _calls.insert(UrlBody(path, ""));
   HTTPCode http_code = HTTP_NOT_FOUND;
 
   std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, ""));
@@ -169,6 +170,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
                                        rapidxml::xml_document<>*& root,
                                        SAS::TrailId trail)
 {
+  _calls.insert(UrlBody(path, body));
   HTTPCode http_code = HTTP_NOT_FOUND;
 
   std::map<UrlBody, std::string>::const_iterator i = _results.find(UrlBody(path, body));
@@ -210,3 +212,7 @@ long FakeHSSConnection::get_xml_object(const std::string& path,
   return http_code;
 }
 
+bool FakeHSSConnection::url_was_requested(const std::string& url, const std::string& body)
+{
+  return (_calls.find(UrlBody(url, body)) != _calls.end());
+}

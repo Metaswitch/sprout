@@ -196,8 +196,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
-  // Get the Authentication Vector from the store. We should
-  // immediately clear the AV, to avoid replay attacks.
+  // Get the Authentication Vector from the store.
   Json::Value* av = av_store->get_av(impi, nonce, trail);
 
   if (av == NULL)
@@ -253,18 +252,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
         // These credentials are for a different realm, so no credentials were
         // actually provided for us to check.
         status = PJSIP_EAUTHNOAUTH;
-      }
-    }
-
-    // Delete the AV from the store, unless the status indicates that these
-    // credentials weren't even for the right realm.  In that case, they weren't
-    // even trying to authenticate against us, so leave them around in case they
-    // do try against our realm later.
-    if (status != PJSIP_EAUTHNOAUTH)
-    {
-      bool rc = av_store->delete_av(impi, nonce, trail);
-      if (!rc) {
-        LOG_ERROR("Tried to delete AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
       }
     }
 
@@ -538,6 +525,15 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
+
+      std::string impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+      std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
+      Json::Value av;
+      bool rc = av_store->set_av_tombstone(impi, nonce, &av, trail);
+
+      if (!rc) {
+        LOG_ERROR("Tried to delete AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
+      }
 
       // If doing AKA authentication, check for an AUTS parameter.  We only
       // check this if the request authenticated as actioning it otherwise

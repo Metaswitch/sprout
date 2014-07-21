@@ -68,6 +68,11 @@ public:
               const Json::Value* av,
               SAS::TrailId trail);
 
+  bool set_av_tombstone(const std::string& impi,
+              const std::string& nonce,
+              const Json::Value* av,
+              SAS::TrailId trail);
+
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
   /// @returns         A pointer to a JSONCPP Json::Value object encoding the
@@ -79,9 +84,9 @@ public:
                       const std::string& nonce,
                       SAS::TrailId trail);
 
-  bool delete_av(const std::string& impi,
-                 const std::string& nonce,
-                 SAS::TrailId trail);
+  Json::Value* get_av_tombstone(const std::string& impi,
+                      const std::string& nonce,
+                      SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.

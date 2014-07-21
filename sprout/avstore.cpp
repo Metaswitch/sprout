@@ -88,38 +88,6 @@ bool AvStore::set_av(const std::string& impi,
   return true;
 }
 
-bool AvStore::delete_av(const std::string& impi,
-                        const std::string& nonce,
-                        SAS::TrailId trail)
-{
-  std::string key = impi + '\\' + nonce;
-  LOG_DEBUG("Delete AV for %s", key.c_str());
-  Store::Status status = _data_store->delete_data("av", key, trail);
-  std::string operation = "DELETE";
-  if (status != Store::Status::OK)
-  {
-    // LCOV_EXCL_START
-    std::string error_msg = "Failed to delete Authentication Vector for private_id " + impi;
-    LOG_ERROR(error_msg.c_str());
-
-    SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param(operation);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
-
-    return false;
-    // LCOV_EXCL_STOP
-  }
-
-  SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-  event.add_var_param(operation);
-  event.add_var_param(impi);
-  SAS::report_event(event);
-
-  return true;
-}
-
-
 Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce,
                              SAS::TrailId trail)
@@ -157,6 +125,63 @@ Json::Value* AvStore::get_av(const std::string& impi,
     event.add_var_param(operation);
     event.add_var_param(error_msg);
     SAS::report_event(event);
+  }
+
+  return av;
+}
+
+bool AvStore::set_av_tombstone(const std::string& impi,
+                               const std::string& nonce,
+                               const Json::Value* av_tombstone,
+                               SAS::TrailId trail)
+{
+  std::string key = impi + '\\' + nonce + "\\authdone";
+  Json::FastWriter writer;
+  std::string data = writer.write(*av_tombstone);
+  LOG_DEBUG("Set AV tombstone for %s\n%s", key.c_str(), data.c_str());
+  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
+  std::string operation = "SET";
+  if (status != Store::Status::OK)
+  {
+    // LCOV_EXCL_START
+    std::string error_msg = "Failed to write Authentication Vector tombstone for private_id " + impi;
+    LOG_ERROR(error_msg.c_str());
+    return false;
+    // LCOV_EXCL_STOP
+  }
+
+  return true;
+}
+
+Json::Value* AvStore::get_av_tombstone(const std::string& impi,
+                                       const std::string& nonce,
+                                       SAS::TrailId trail)
+{
+  Json::Value* av = NULL;
+  std::string key = impi + '\\' + nonce + "\\authdone";
+  std::string data;
+  uint64_t cas;
+  Store::Status status = _data_store->get_data("av", key, data, cas, trail);
+  std::string operation = "GET";
+
+  if (status == Store::Status::OK)
+  {
+    LOG_DEBUG("Retrieved AV tombstone for %s\n%s", key.c_str(), data.c_str());
+    av = new Json::Value;
+    Json::Reader reader;
+    bool parsingSuccessful = reader.parse(data, *av);
+    if (!parsingSuccessful)
+    {
+      LOG_DEBUG("Failed to parse AV\n%s",
+                reader.getFormattedErrorMessages().c_str());
+      delete av;
+      av = NULL;
+    }
+  }
+  else
+  {
+    std::string error_msg = "Failed to get Authentication Vector tombstone for private_id " + impi;
+    LOG_WARNING(error_msg.c_str());
   }
 
   return av;

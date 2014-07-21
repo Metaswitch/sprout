@@ -314,20 +314,21 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
-  Json::Value json("{}");
-  store->set_av("6505550231@homedomain", "abcdef", &json, 0);
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
-  ASSERT_EQ(NULL, store->get_av("6505550231@homedomain", "abcdef", 0));
+  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 }
 
 TEST_F(AuthTimeoutTest, MainlineTest)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
+  Json::Value json("{}");
+  store->set_av_tombstone("test@example.com", "abcdef", &json, 0);
   int status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
+  ASSERT_FALSE(fake_hss->url_was_requested("/impu/sip%3Atest%40example.com/reg-data?private_id=test%40example.com", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 }
 
 TEST_F(AuthTimeoutTest, NoIMPU)

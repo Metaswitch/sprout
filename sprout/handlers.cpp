@@ -532,11 +532,11 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     return HTTP_BAD_RESULT;
   }
 
-  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce, trail());
+  Json::Value* json = _cfg->_avstore->get_av_tombstone(_impi, _nonce, trail());
   bool success = false;
   HTTPCode hss_query = HTTP_OK;
 
-  if (json == NULL)
+  if (json != NULL)
   {
     // Mainline case - our AV has already been deleted because the
     // user has tried to authenticate. No need to notify the HSS in
@@ -561,11 +561,7 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
 
     if (hss_query == HTTP_OK)
     {
-      success = _cfg->_avstore->delete_av(_impi, _nonce, trail());
-      if (!success) {
-        LOG_ERROR("Tried to delete AV for %s/%s based on a Chronos timer pop, but failed", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
-      }
-
+      success = true;
     }
 
     delete json;
