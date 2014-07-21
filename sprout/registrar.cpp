@@ -448,10 +448,10 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
         pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor,
                                                         aor_data->_notify_cseq, bindings_for_notify,
-                                                        NotifyUtils::DocState::PARTIAL, 
+                                                        NotifyUtils::DocState::PARTIAL,
                                                         NotifyUtils::RegistrationState::ACTIVE,
                                                         NotifyUtils::ContactState::ACTIVE, contact_event,
-                                                        NotifyUtils::SubscriptionState::ACTIVE, 
+                                                        NotifyUtils::SubscriptionState::ACTIVE,
                                                         (subscription->_expires - now));
         if (status == PJ_SUCCESS)
         {
@@ -531,7 +531,7 @@ void process_register_request(pjsip_rx_data* rdata)
   calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
   SAS::report_marker(calling_dn);
 
-  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;

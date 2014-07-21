@@ -532,22 +532,28 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     return HTTP_BAD_RESULT;
   }
 
-  Json::Value* json = _cfg->_avstore->get_av_tombstone(_impi, _nonce, trail());
-  bool success = false;
+  // If authentication completed, we'll have written a marker to
+  // indicate that. Look for it.
+  bool success = _cfg->_avstore->get_av_tombstone(_impi, _nonce, trail());
   HTTPCode hss_query = HTTP_OK;
 
-  if (json != NULL)
-  {
-    // Mainline case - our AV has already been deleted because the
-    // user has tried to authenticate. No need to notify the HSS in
-    // this case (as they'll either have successfully authenticated
-    // and triggered a REGISTRATION SAR, or failed and triggered an
-    // AUTHENTICATION_FAILURE SAR).
-    success = true;
-  }
-  else
+  if (!success)
   {
     LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+
+    // Retrieve the original authentication vector, so we have the
+    // original REGISTER's branch parameter for SAS correlation
+    Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, trail());
+    SAS::TrailId trail = SAS::new_trail(1u);
+
+    if (av)
+    {
+      correlate_branch_from_av(av, trail);
+    }
+    else
+    {
+      LOG_ERROR("Could not raise branch correlation marker because original AV is missing"); // LCOV_EXCL_LINE
+    }
 
     // Note that both AV deletion and the AUTHENTICATION_TIMEOUT SAR
     // are idempotent, so there's no problem if Chronos' timer pops
@@ -557,14 +563,14 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     // If either of these operations fail, we return a 500 Internal
     // Server Error - this will trigger Chronos to try a different
     // Sprout, which may have better connectivity to Homestead or Memcached.
-    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
+    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail);
 
     if (hss_query == HTTP_OK)
     {
       success = true;
     }
 
-    delete json;
+    delete av;
   }
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;

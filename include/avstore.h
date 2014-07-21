@@ -70,7 +70,6 @@ public:
 
   bool set_av_tombstone(const std::string& impi,
               const std::string& nonce,
-              const Json::Value* av,
               SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
@@ -84,7 +83,8 @@ public:
                       const std::string& nonce,
                       SAS::TrailId trail);
 
-  Json::Value* get_av_tombstone(const std::string& impi,
+
+  bool get_av_tombstone(const std::string& impi,
                       const std::string& nonce,
                       SAS::TrailId trail);
 
@@ -98,5 +98,7 @@ private:
   /// should pop before it expires.
   static const int AV_EXPIRY = 40;
 };
+
+void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail);
 
 #endif

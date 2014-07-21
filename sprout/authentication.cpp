@@ -255,6 +255,8 @@ pj_status_t user_lookup(pj_pool_t *pool,
       }
     }
 
+    correlate_branch_from_av(av, trail);
+
     delete av;
   }
 
@@ -379,6 +381,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
 
     // Add the header to the message.
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
+
+    // Store the branch parameter in memcached for correlation purposes
+    pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_VIA, NULL);
+    std::string branch = (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
+
+    (*av)["branch"] = branch;
 
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
@@ -528,11 +536,10 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       std::string impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
       std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
-      Json::Value av;
-      bool rc = av_store->set_av_tombstone(impi, nonce, &av, trail);
+      bool rc = av_store->set_av_tombstone(impi, nonce, trail);
 
       if (!rc) {
-        LOG_ERROR("Tried to delete AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
+        LOG_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
       }
 
       // If doing AKA authentication, check for an AUTS parameter.  We only
@@ -607,7 +614,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Add a SAS end marker
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
