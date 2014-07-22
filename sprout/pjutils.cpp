@@ -1379,7 +1379,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
 
       // Now see if we can find the next Via header and log it if so.  This will have been added by
       // the previous server.  This means we'll be able to correlate with its trail.
-      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via);
+      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via->next);
       if (second_via != NULL)
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);

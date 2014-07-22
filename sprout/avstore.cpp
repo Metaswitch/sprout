@@ -127,7 +127,6 @@ Json::Value* AvStore::get_av(const std::string& impi,
     SAS::report_event(event);
   }
 
-  LOG_INFO("All OK");
   return av;
 }
 

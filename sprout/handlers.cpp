@@ -128,6 +128,8 @@ void RegistrationTimeoutHandler::run()
 
   send_http_reply(HTTP_OK);
 
+  LOG_DEBUG("RegistrationTimeoutHandler - SAS trail ID is %l", trail());
+
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
   SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
@@ -544,11 +546,10 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     // Retrieve the original authentication vector, so we have the
     // original REGISTER's branch parameter for SAS correlation
     Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, trail());
-    SAS::TrailId trail = SAS::new_trail(1u);
 
     if (av)
     {
-      correlate_branch_from_av(av, trail);
+      correlate_branch_from_av(av, trail());
     }
     else
     {
@@ -563,7 +564,7 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     // If either of these operations fail, we return a 500 Internal
     // Server Error - this will trigger Chronos to try a different
     // Sprout, which may have better connectivity to Homestead or Memcached.
-    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail);
+    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail());
 
     if (hss_query == HTTP_OK)
     {
