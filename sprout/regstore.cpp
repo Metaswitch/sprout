@@ -90,7 +90,7 @@ RegStore::AoR* RegStore::get_aor_data(const std::string& aor_id, SAS::TrailId tr
   if (aor_data != NULL)
   {
     int now = time(NULL);
-    expire_bindings(aor_data, now);
+    expire_bindings(aor_data, now, trail);
     expire_subscriptions(aor_data, now);
   }
 
@@ -180,7 +180,7 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   // This prevents a window condition where Chronos can return a binding to
   // expire, but memcached has already deleted the aor data (meaning that
   // no NOTIFYs could be sent)
-  int orig_max_expires = expire_bindings(aor_data, now);
+  int orig_max_expires = expire_bindings(aor_data, now, trail);
   int max_expires = orig_max_expires + 10;
 
   // expire_bindings returns "now" if there are no remaining bindings,
@@ -288,7 +288,8 @@ bool RegStore::Connector::set_aor_data(const std::string& aor_id,
 /// @param aor_data      The registration data record.
 /// @param now           The current time in seconds since the epoch.
 int RegStore::expire_bindings(AoR* aor_data,
-                              int now)
+                              int now,
+                              SAS::TrailId trail)
 {
   int max_expires = now;
   for (AoR::Bindings::iterator i = aor_data->_bindings.begin();
@@ -311,7 +312,7 @@ int RegStore::expire_bindings(AoR* aor_data,
         // Don't send a notification when an emergency registration expires
         if (!b->_emergency_registration)
         {
-          send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+          send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail);
         }
       }
 
@@ -319,7 +320,7 @@ int RegStore::expire_bindings(AoR* aor_data,
       // previous post/put failed) then don't.
       if (b->_timer_id != "")
       {
-        _chronos->send_delete(b->_timer_id, 0);
+        _chronos->send_delete(b->_timer_id, trail);
       }
 
       delete i->second;
@@ -699,21 +700,24 @@ void RegStore::AoR::remove_subscription(const std::string& to_tag)
 }
 
 void RegStore::send_notify(AoR::Subscription* s, int cseq,
-                           AoR::Binding* b, std::string b_id)
+                           AoR::Binding* b, std::string b_id,
+                           SAS::TrailId trail)
 {
   pjsip_tx_data* tdata_notify = NULL;
   std::map<std::string, AoR::Binding> bindings;
   bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(b_id, *b));
   pj_status_t status = NotifyUtils::create_notify(&tdata_notify, s, "aor", cseq, bindings,
-                                  NotifyUtils::DocState::PARTIAL, 
+                                  NotifyUtils::DocState::PARTIAL,
                                   NotifyUtils::RegistrationState::ACTIVE,
-                                  NotifyUtils::ContactState::TERMINATED, 
+                                  NotifyUtils::ContactState::TERMINATED,
                                   NotifyUtils::ContactEvent::EXPIRED,
                                   NotifyUtils::SubscriptionState::ACTIVE,
                                   (s->_expires - time(NULL)));
 
   if (status == PJ_SUCCESS)
   {
+    set_trail(tdata_notify, trail);
+    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata_notify->msg);
     status = PJUtils::send_request(tdata_notify);
   }
 }

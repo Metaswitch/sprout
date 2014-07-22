@@ -455,6 +455,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
                                                         (subscription->_expires - now));
         if (status == PJ_SUCCESS)
         {
+          set_trail(tdata_notify, trail);
+          PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata_notify->msg);
           status = PJUtils::send_request(tdata_notify);
         }
       }

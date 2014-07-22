@@ -254,10 +254,10 @@ public:
   bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail, bool& all_bindings_expired);
 
   // Send a SIP NOTIFY
-  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id);
+  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id, SAS::TrailId trail);
 
 private:
-  int expire_bindings(AoR* aor_data, int now);
+  int expire_bindings(AoR* aor_data, int now, SAS::TrailId trail);
   void expire_subscriptions(AoR* aor_data, int now);
 
   ChronosConnection* _chronos;

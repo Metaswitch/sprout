@@ -1357,6 +1357,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
   // If we have a call ID, log it.
   if (cid_hdr != NULL)
   {
+    LOG_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);

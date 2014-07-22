@@ -456,7 +456,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
                ++j)
           {
             // LCOV_EXCL_START
-            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail());
             // LCOV_EXCL_STOP
           }
         }
