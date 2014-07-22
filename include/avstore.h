@@ -68,8 +68,8 @@ public:
               const Json::Value* av,
               SAS::TrailId trail);
 
-  /// Store a tombstone for the specified Authentication Vector in the
-  /// store, indexed by the private user identity and nonce.
+  /// Converts the record for the specified Authentication
+  /// Vector into a tombstone.
   /// @param impi      A reference to the private user identity.
   /// @param nonce     A reference to the nonce.
   /// @returns True if we successfully set the data in memcached,
@@ -89,12 +89,12 @@ public:
                       const std::string& nonce,
                       SAS::TrailId trail);
 
-  /// Retrieve a tombstone record for the specified Authentication
-  /// Vector from the store.
+  /// Checks whether the record for the specified Authentication
+  /// Vector is a tombstone.
   /// @param impi      A reference to the private user identity.
   /// @param nonce     A reference to the nonce.
-  /// @returns True if we successfully found the tombstone in memcached,
-  /// false otherwise.
+  /// @returns True if we successfully found the record in memcached
+  /// and it was a tombstone, false otherwise.
   bool get_av_tombstone(const std::string& impi,
                         const std::string& nonce,
                         SAS::TrailId trail);

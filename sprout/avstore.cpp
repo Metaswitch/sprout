@@ -134,7 +134,7 @@ bool AvStore::set_av_tombstone(const std::string& impi,
                                const std::string& nonce,
                                SAS::TrailId trail)
 {
-  std::string key = impi + '\\' + nonce + "\\authdone";
+  std::string key = impi + '\\' + nonce;
   std::string data = "";
   LOG_DEBUG("Set AV tombstone for %s", key.c_str());
   Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
@@ -156,16 +156,21 @@ bool AvStore::get_av_tombstone(const std::string& impi,
                                        SAS::TrailId trail)
 {
   bool rc = false;
-  std::string key = impi + '\\' + nonce + "\\authdone";
+  std::string key = impi + '\\' + nonce;
   std::string data;
   uint64_t cas;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
   std::string operation = "GET";
 
-  if (status == Store::Status::OK)
+  if ((status == Store::Status::OK) && data.empty())
   {
-    LOG_DEBUG("Retrieved AV tombstone for %s\n%s", key.c_str(), data.c_str());
+    LOG_DEBUG("Retrieved AV tombstone for %s", key.c_str());
     rc = true;
+  }
+  else if (status == Store::Status::OK)
+  {
+    LOG_DEBUG("Retrieved AV for %s, but it's not a tombstone", key.c_str());
+    rc = false;
   }
   else
   {
