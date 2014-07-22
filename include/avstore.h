@@ -68,9 +68,15 @@ public:
               const Json::Value* av,
               SAS::TrailId trail);
 
+  /// Store a tombstone for the specified Authentication Vector in the
+  /// store, indexed by the private user identity and nonce.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
+  /// @returns True if we successfully set the data in memcached,
+  /// false otherwise.
   bool set_av_tombstone(const std::string& impi,
-              const std::string& nonce,
-              SAS::TrailId trail);
+                        const std::string& nonce,
+                        SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
@@ -83,10 +89,15 @@ public:
                       const std::string& nonce,
                       SAS::TrailId trail);
 
-
+  /// Retrieve a tombstone record for the specified Authentication
+  /// Vector from the store.
+  /// @param impi      A reference to the private user identity.
+  /// @param nonce     A reference to the nonce.
+  /// @returns True if we successfully found the tombstone in memcached,
+  /// false otherwise.
   bool get_av_tombstone(const std::string& impi,
-                      const std::string& nonce,
-                      SAS::TrailId trail);
+                        const std::string& nonce,
+                        SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.
@@ -99,6 +110,8 @@ private:
   static const int AV_EXPIRY = 40;
 };
 
+// Utility function - retrieves the "branch" field from the given AV
+// and raises a correlating transaction marker in the given trail.
 void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail);
 
 #endif

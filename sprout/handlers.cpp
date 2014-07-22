@@ -128,8 +128,6 @@ void RegistrationTimeoutHandler::run()
 
   send_http_reply(HTTP_OK);
 
-  LOG_DEBUG("RegistrationTimeoutHandler - SAS trail ID is %l", trail());
-
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
   SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
