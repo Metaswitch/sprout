@@ -46,16 +46,16 @@
 #include "avstore.h"
 
 /// Common factory for all handlers that deal with chronos timer pops. This is
-/// a subclass of ConfiguredHandlerFactory that requests HTTP flows to be
+/// a subclass of ConfiguredController that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>
-class ChronosHandlerFactory : public HttpStackUtils::SpawningController<H, C>
+class ChronosController : public HttpStackUtils::SpawningController<H, C>
 {
 public:
-  ChronosHandlerFactory(C* cfg) : HttpStackUtils::SpawningController<H, C>(cfg)
+  ChronosController(C* cfg) : HttpStackUtils::SpawningController<H, C>(cfg)
   {}
 
-  virtual ~ChronosHandlerFactory() {}
+  virtual ~ChronosController() {}
 
   HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
   {
@@ -63,7 +63,7 @@ public:
   }
 };
 
-class RegistrationTimeoutHandler : public HttpStackUtils::Handler
+class RegistrationTimeoutTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -76,10 +76,10 @@ public:
     HSSConnection* _hss;
   };
 
-  RegistrationTimeoutHandler(HttpStack::Request& req,
+  RegistrationTimeoutTask(HttpStack::Request& req,
                              const Config* cfg,
                              SAS::TrailId trail) :
-    HttpStackUtils::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
   void run();
@@ -100,7 +100,7 @@ protected:
   std::string _binding_id;
 };
 
-class DeregistrationHandler : public HttpStackUtils::Handler
+class DeregistrationTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -115,10 +115,10 @@ public:
   };
 
 
-  DeregistrationHandler(HttpStack::Request& req,
+  DeregistrationTask(HttpStack::Request& req,
                         const Config* cfg,
                         SAS::TrailId trail) :
-    HttpStackUtils::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
   void run();
@@ -137,7 +137,7 @@ protected:
   std::string _notify;
 };
 
-class AuthTimeoutHandler : public HttpStackUtils::Handler
+class AuthTimeoutTask : public HttpStackUtils::Task
 {
 public:
   struct Config
@@ -147,10 +147,10 @@ public:
     AvStore* _avstore;
     HSSConnection* _hss;
   };
-  AuthTimeoutHandler(HttpStack::Request& req,
+  AuthTimeoutTask(HttpStack::Request& req,
                      const Config* cfg,
                      SAS::TrailId trail) :
-    HttpStackUtils::Handler(req, trail), _cfg(cfg)
+    HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
   void run();

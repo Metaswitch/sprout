@@ -1492,15 +1492,15 @@ int main(int argc, char *argv[])
   {
     http_stack = HttpStack::get_instance();
 
-    RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
-    AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
-    DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+    RegistrationTimeoutTask::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+    AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
+    DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
 
-    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
-    // chronos requests, so use the ChronosHandlerFactory.
-    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_controller(&reg_timeout_config);
-    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_controller(&auth_timeout_config);
-    HttpStackUtils::SpawningController<DeregistrationHandler, DeregistrationHandler::Config> deregistration_controller(&deregistration_config);
+    // The RegistrationTimeoutTask and AuthTimeoutTask both handle
+    // chronos requests, so use the ChronosController.
+    ChronosController<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_controller(&reg_timeout_config);
+    ChronosController<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_controller(&auth_timeout_config);
+    HttpStackUtils::SpawningController<DeregistrationTask, DeregistrationTask::Config> deregistration_controller(&deregistration_config);
 
     try
     {
