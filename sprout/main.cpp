@@ -1497,21 +1497,21 @@ int main(int argc, char *argv[])
     DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
 
     // The RegistrationTimeoutTask and AuthTimeoutTask both handle
-    // chronos requests, so use the ChronosController.
-    ChronosController<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_controller(&reg_timeout_config);
-    ChronosController<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_controller(&auth_timeout_config);
-    HttpStackUtils::SpawningController<DeregistrationTask, DeregistrationTask::Config> deregistration_controller(&deregistration_config);
+    // chronos requests, so use the ChronosHandler.
+    ChronosHandler<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_handler(&reg_timeout_config);
+    ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+    HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
-      http_stack->register_controller("^/timers$",
-                                      &reg_timeout_controller);
-      http_stack->register_controller("^/authentication-timeout$",
-                                      &auth_timeout_controller);
-      http_stack->register_controller("^/registrations?*$",
-                                      &deregistration_controller);
+      http_stack->register_handler("^/timers$",
+                                      &reg_timeout_handler);
+      http_stack->register_handler("^/authentication-timeout$",
+                                      &auth_timeout_handler);
+      http_stack->register_handler("^/registrations?*$",
+                                      &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)

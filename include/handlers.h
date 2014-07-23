@@ -46,16 +46,16 @@
 #include "avstore.h"
 
 /// Common factory for all handlers that deal with chronos timer pops. This is
-/// a subclass of ConfiguredController that requests HTTP flows to be
+/// a subclass of ConfiguredHandler that requests HTTP flows to be
 /// logged at detail level.
 template<class H, class C>
-class ChronosController : public HttpStackUtils::SpawningController<H, C>
+class ChronosHandler : public HttpStackUtils::SpawningHandler<H, C>
 {
 public:
-  ChronosController(C* cfg) : HttpStackUtils::SpawningController<H, C>(cfg)
+  ChronosHandler(C* cfg) : HttpStackUtils::SpawningHandler<H, C>(cfg)
   {}
 
-  virtual ~ChronosController() {}
+  virtual ~ChronosHandler() {}
 
   HttpStack::SasLogger* sas_logger(HttpStack::Request& req)
   {
