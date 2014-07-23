@@ -66,17 +66,8 @@ public:
   bool set_av(const std::string& impi,
               const std::string& nonce,
               const Json::Value* av,
+              uint64_t cas,
               SAS::TrailId trail);
-
-  /// Converts the record for the specified Authentication
-  /// Vector into a tombstone.
-  /// @param impi      A reference to the private user identity.
-  /// @param nonce     A reference to the nonce.
-  /// @returns True if we successfully set the data in memcached,
-  /// false otherwise.
-  bool set_av_tombstone(const std::string& impi,
-                        const std::string& nonce,
-                        SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
@@ -87,17 +78,8 @@ public:
   /// @param nonce     A reference to the nonce.
   Json::Value* get_av(const std::string& impi,
                       const std::string& nonce,
+                      uint64_t& cas,
                       SAS::TrailId trail);
-
-  /// Checks whether the record for the specified Authentication
-  /// Vector is a tombstone.
-  /// @param impi      A reference to the private user identity.
-  /// @param nonce     A reference to the nonce.
-  /// @returns True if we successfully found the record in memcached
-  /// and it was a tombstone, false otherwise.
-  bool get_av_tombstone(const std::string& impi,
-                        const std::string& nonce,
-                        SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.

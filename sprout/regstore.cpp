@@ -717,8 +717,7 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   if (status == PJ_SUCCESS)
   {
     set_trail(tdata_notify, trail);
-    PJUtils::mark_sas_call_branch_ids(trail, NULL, tdata_notify->msg);
-    status = PJUtils::send_request(tdata_notify);
+    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
   }
 }
 

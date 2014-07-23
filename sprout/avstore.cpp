@@ -57,13 +57,14 @@ AvStore::~AvStore()
 bool AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
                      const Json::Value* av,
+                     uint64_t cas,
                      SAS::TrailId trail)
 {
   std::string key = impi + '\\' + nonce;
   Json::FastWriter writer;
   std::string data = writer.write(*av);
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
-  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
+  Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
   std::string operation = "SET";
   if (status != Store::Status::OK)
   {
@@ -90,12 +91,12 @@ bool AvStore::set_av(const std::string& impi,
 
 Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce,
+                             uint64_t& cas,
                              SAS::TrailId trail)
 {
   Json::Value* av = NULL;
   std::string key = impi + '\\' + nonce;
   std::string data;
-  uint64_t cas;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
   std::string operation = "GET";
 
@@ -130,73 +131,21 @@ Json::Value* AvStore::get_av(const std::string& impi,
   return av;
 }
 
-bool AvStore::set_av_tombstone(const std::string& impi,
-                               const std::string& nonce,
-                               SAS::TrailId trail)
-{
-  std::string key = impi + '\\' + nonce;
-  std::string data = "";
-  LOG_DEBUG("Set AV tombstone for %s", key.c_str());
-  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
-  std::string operation = "SET";
-  if (status != Store::Status::OK)
-  {
-    // LCOV_EXCL_START
-    std::string error_msg = "Failed to write Authentication Vector tombstone for private_id " + impi;
-    LOG_ERROR(error_msg.c_str());
-    return false;
-    // LCOV_EXCL_STOP
-  }
-
-  return true;
-}
-
-bool AvStore::get_av_tombstone(const std::string& impi,
-                                       const std::string& nonce,
-                                       SAS::TrailId trail)
-{
-  bool rc = false;
-  std::string key = impi + '\\' + nonce;
-  std::string data;
-  uint64_t cas;
-  Store::Status status = _data_store->get_data("av", key, data, cas, trail);
-  std::string operation = "GET";
-
-  if ((status == Store::Status::OK) && data.empty())
-  {
-    LOG_DEBUG("Retrieved AV tombstone for %s", key.c_str());
-    rc = true;
-  }
-  else if (status == Store::Status::OK)
-  {
-    LOG_DEBUG("Retrieved AV for %s, but it's not a tombstone", key.c_str());
-    rc = false;
-  }
-  else
-  {
-    std::string error_msg = "Failed to get Authentication Vector tombstone for private_id " + impi;
-    LOG_WARNING(error_msg.c_str());
-    rc = false;
-  }
-
-  return rc;
-}
-
 void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail)
 {
   Json::Value null_json;
   Json::Value branch = av->get("branch", null_json);
   if (branch.isNull())
   {
-    LOG_ERROR("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
   }
   else if (!branch.isString())
   {
-    LOG_ERROR("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
   }
   else if (branch.asString().empty())
   {
-    LOG_ERROR("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
   }
   else
   {

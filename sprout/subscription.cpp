@@ -536,7 +536,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
     set_trail(tdata_notify, trail);
-    status = PJUtils::send_request(tdata_notify);
+    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
     if (status != PJ_SUCCESS)
     {

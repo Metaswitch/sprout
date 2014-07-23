@@ -939,7 +939,8 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                   int retries,
                                   void* token,
-                                  pjsip_endpt_send_callback cb)
+                                  pjsip_endpt_send_callback cb,
+                                  bool log_sas_branch)
 {
   pjsip_transaction* tsx;
   pj_status_t status = PJ_SUCCESS;
@@ -980,7 +981,10 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     {
       // Set the trail ID in the transaction from the message.
       set_trail(tsx, get_trail(tdata));
-
+      if (log_sas_branch)
+      {
+        PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
+      }
       // Set up the module data for the new transaction to reference
       // the state information.
       tsx->mod_data[mod_sprout_util.id] = sss;

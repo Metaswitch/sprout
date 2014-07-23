@@ -532,45 +532,47 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     return HTTP_BAD_RESULT;
   }
 
-  // If authentication completed, we'll have written a marker to
-  // indicate that. Look for it.
-  bool success = _cfg->_avstore->get_av_tombstone(_impi, _nonce, trail());
-  HTTPCode hss_query = HTTP_OK;
-
-  if (!success)
+  bool success = false;
+  uint64_t cas;
+  Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
+  if (av != NULL)
   {
-    LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
-
-    // Retrieve the original authentication vector, so we have the
-    // original REGISTER's branch parameter for SAS correlation
-    Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, trail());
-
-    if (av)
+    // If authentication completed, we'll have written a marker to
+    // indicate that. Look for it.
+    if (!av->isMember("tombstone"))
     {
+      LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+
+      // Retrieve the original authentication vector, so we have the
+      // original REGISTER's branch parameter for SAS correlation
+
       correlate_branch_from_av(av, trail());
+
+      // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
+      // problem if Chronos' timer pops twice (e.g. if we have high
+      // latency and these operations take more than 2 seconds).
+
+      // If either of these operations fail, we return a 500 Internal
+      // Server Error - this will trigger Chronos to try a different
+      // Sprout, which may have better connectivity to Homestead or Memcached.
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail());
+
+      if (hss_query == HTTP_OK)
+      {
+        success = true;
+      }
     }
     else
     {
-      LOG_ERROR("Could not raise branch correlation marker because original AV is missing"); // LCOV_EXCL_LINE
-    }
-
-    // Note that both AV deletion and the AUTHENTICATION_TIMEOUT SAR
-    // are idempotent, so there's no problem if Chronos' timer pops
-    // twice (e.g. if we have high latency and these operations take
-    // more than 2 seconds).
-
-    // If either of these operations fail, we return a 500 Internal
-    // Server Error - this will trigger Chronos to try a different
-    // Sprout, which may have better connectivity to Homestead or Memcached.
-    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail());
-
-    if (hss_query == HTTP_OK)
-    {
+      LOG_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
       success = true;
     }
-
-    delete av;
   }
+  else
+  {
+    LOG_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
+  }
+  delete av;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }
