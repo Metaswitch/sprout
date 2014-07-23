@@ -326,9 +326,7 @@ TEST_F(AuthTimeoutTest, NonceTimedOut)
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 }
 
-// This tests the case where the AV record is not marked as a tombstone in memcached, but the Chronos timer has popped.
-// The subscriber's registration state is updated, and the record is deleted from the AV store.
-TEST_F(AuthTimeoutTest, NonceTimedOutWithBadJSON)
+TEST_F(AuthTimeoutTest, NonceTimedOutWithNoBranch)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
@@ -337,40 +335,48 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithBadJSON)
   Json::Value digest(Json::objectValue);
   av_nobranch["digest"] = digest;
 
-  Json::Value av_emptybranch(Json::objectValue);
-  Json::Value branch("");
-  av_emptybranch["digest"] = digest;
-  av_emptybranch["branch"] = branch;
-
-  Json::Value av_intbranch(Json::objectValue);
-  Json::Value intbranch(6);
-  av_intbranch["digest"] = digest;
-  av_intbranch["branch"] = intbranch;
-
   store->set_av("6505550231@homedomain", "abcdef", &av_nobranch, 0, 0);
-  status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-
-  uint64_t cas;
-  Json::Value* old_av = store->get_av("6505550231@homedomain", "abcdef", cas, 0);
-  delete old_av;
-  store->set_av("6505550231@homedomain", "abcdef", &av_emptybranch, cas, 0);
-  status = handler->handle_response(body);
-
-  ASSERT_EQ(status, 200);
-  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
-
-  old_av = store->get_av("6505550231@homedomain", "abcdef", cas, 0);
-  delete old_av;
-  store->set_av("6505550231@homedomain", "abcdef", &av_intbranch, cas, 0);
   status = handler->handle_response(body);
 
   ASSERT_EQ(status, 200);
   ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
 }
 
+TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyBranch)
+{
+  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
+  int status = 0;
+  Json::Value av_emptybranch(Json::objectValue);
+  Json::Value digest(Json::objectValue);
+  Json::Value branch("");
+  av_emptybranch["digest"] = digest;
+  av_emptybranch["branch"] = branch;
+
+  store->set_av("6505550231@homedomain", "abcdef", &av_emptybranch, 0, 0);
+  status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 200);
+  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+}
+
+TEST_F(AuthTimeoutTest, NonceTimedOutWithIntegerBranch)
+{
+  fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
+  std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
+  int status = 0;
+  Json::Value av_intbranch(Json::objectValue);
+  Json::Value digest(Json::objectValue);
+  Json::Value intbranch(6);
+  av_intbranch["digest"] = digest;
+  av_intbranch["branch"] = intbranch;
+
+  store->set_av("6505550231@homedomain", "abcdef", &av_intbranch, 0, 0);
+  status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 200);
+  ASSERT_TRUE(fake_hss->url_was_requested("/impu/sip%3A6505550231%40homedomain/reg-data?private_id=6505550231%40homedomain", "{\"reqtype\": \"dereg-auth-timeout\"}"));
+}
 
 TEST_F(AuthTimeoutTest, MainlineTest)
 {

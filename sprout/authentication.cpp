@@ -539,7 +539,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      printf("AV: %p\n", av);
       (*av)["tombstone"] = Json::Value("true");
       bool rc = av_store->set_av(impi, nonce, av, cas, trail);
 
