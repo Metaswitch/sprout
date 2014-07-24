@@ -107,7 +107,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void RegistrationTimeoutHandler::run()
+void RegistrationTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -142,7 +142,7 @@ void RegistrationTimeoutHandler::run()
   delete this;
 }
 
-void AuthTimeoutHandler::run()
+void AuthTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -174,7 +174,7 @@ void AuthTimeoutHandler::run()
   delete this;
 }
 
-void DeregistrationHandler::run()
+void DeregistrationTask::run()
 {
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
@@ -214,7 +214,7 @@ void DeregistrationHandler::run()
 }
 //LCOV_EXCL_STOP
 
-void RegistrationTimeoutHandler::handle_response()
+void RegistrationTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
@@ -240,12 +240,12 @@ void RegistrationTimeoutHandler::handle_response()
   delete aor_data;
 }
 
-RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
-                                                        std::string aor_id,
-                                                        RegStore::AoR* previous_aor_data,
-                                                        RegStore* remote_store,
-                                                        bool is_primary,
-                                                        bool& all_bindings_expired)
+RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
+                                                     std::string aor_id,
+                                                     RegStore::AoR* previous_aor_data,
+                                                     RegStore* remote_store,
+                                                     bool is_primary,
+                                                     bool& all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -272,7 +272,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-HTTPCode RegistrationTimeoutHandler::parse_response(std::string body)
+HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -312,7 +312,7 @@ HTTPCode RegistrationTimeoutHandler::parse_response(std::string body)
 }
 
 // Retrieve the aors and any private IDs from the request body
-HTTPCode DeregistrationHandler::parse_request(std::string body)
+HTTPCode DeregistrationTask::parse_request(std::string body)
 {
   Json::Value json_body;
   Json::Reader reader;
@@ -367,7 +367,7 @@ HTTPCode DeregistrationHandler::parse_request(std::string body)
   return HTTP_OK;
 }
 
-HTTPCode DeregistrationHandler::handle_request()
+HTTPCode DeregistrationTask::handle_request()
 {
   for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
   {
@@ -402,12 +402,12 @@ HTTPCode DeregistrationHandler::handle_request()
   return HTTP_OK;
 }
 
-RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
-                                                   std::string aor_id,
-                                                   std::string private_id,
-                                                   RegStore::AoR* previous_aor_data,
-                                                   RegStore* remote_store,
-                                                   bool is_primary)
+RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
+                                                std::string aor_id,
+                                                std::string private_id,
+                                                RegStore::AoR* previous_aor_data,
+                                                RegStore* remote_store,
+                                                bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -485,7 +485,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
   return aor_data;
 }
 
-HTTPCode AuthTimeoutHandler::handle_response(std::string body)
+HTTPCode AuthTimeoutTask::handle_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;

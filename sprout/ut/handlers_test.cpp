@@ -49,7 +49,7 @@
 
 using namespace std;
 
-class RegistrationTimeoutHandlersTest : public BaseTest
+class RegistrationTimeoutTasksTest : public BaseTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -58,9 +58,9 @@ class RegistrationTimeoutHandlersTest : public BaseTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  RegistrationTimeoutHandler::Config* chronos_config;
+  RegistrationTimeoutTask::Config* chronos_config;
 
-  RegistrationTimeoutHandler* handler;
+  RegistrationTimeoutTask* handler;
 
   void SetUp()
   {
@@ -69,8 +69,8 @@ class RegistrationTimeoutHandlersTest : public BaseTest
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "timers");
-    chronos_config = new RegistrationTimeoutHandler::Config(store, store, fake_hss);
-    handler = new RegistrationTimeoutHandler(*req, chronos_config, 0);
+    chronos_config = new RegistrationTimeoutTask::Config(store, store, fake_hss);
+    handler = new RegistrationTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()
@@ -86,7 +86,7 @@ class RegistrationTimeoutHandlersTest : public BaseTest
 
 };
 
-TEST_F(RegistrationTimeoutHandlersTest, MainlineTest)
+TEST_F(RegistrationTimeoutTasksTest, MainlineTest)
 {
   // Get an initial empty AoR record and add a standard binding.
   int now = time(NULL);
@@ -120,7 +120,7 @@ TEST_F(RegistrationTimeoutHandlersTest, MainlineTest)
   handler->handle_response();
 }
 
-TEST_F(RegistrationTimeoutHandlersTest, InvalidJSONTest)
+TEST_F(RegistrationTimeoutTasksTest, InvalidJSONTest)
 {
   std::string body = "{\"aor_id\" \"aor_id\", \"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
@@ -128,7 +128,7 @@ TEST_F(RegistrationTimeoutHandlersTest, InvalidJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(RegistrationTimeoutHandlersTest, MissingAorJSONTest)
+TEST_F(RegistrationTimeoutTasksTest, MissingAorJSONTest)
 {
   std::string body = "{\"binding_id\": \"binding_id\"}";
   int status = handler->parse_response(body);
@@ -136,7 +136,7 @@ TEST_F(RegistrationTimeoutHandlersTest, MissingAorJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(RegistrationTimeoutHandlersTest, MissingBindingJSONTest)
+TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
 {
   std::string body = "{\"aor_id\": \"aor_id\"}";
   int status = handler->parse_response(body);
@@ -144,7 +144,7 @@ TEST_F(RegistrationTimeoutHandlersTest, MissingBindingJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-class DeregistrationHandlerTest : public BaseTest
+class DeregistrationTaskTest : public BaseTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -153,9 +153,9 @@ class DeregistrationHandlerTest : public BaseTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  DeregistrationHandler::Config* deregistration_config;
+  DeregistrationTask::Config* deregistration_config;
 
-  DeregistrationHandler* handler;
+  DeregistrationTask* handler;
 
   void SetUp()
   {
@@ -164,8 +164,8 @@ class DeregistrationHandlerTest : public BaseTest
     store = new RegStore(local_data_store, chronos_connection);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "registrations");
-    deregistration_config = new DeregistrationHandler::Config(store, store, fake_hss, NULL);
-    handler = new DeregistrationHandler(*req, deregistration_config, 0);
+    deregistration_config = new DeregistrationTask::Config(store, store, fake_hss, NULL);
+    handler = new DeregistrationTask(*req, deregistration_config, 0);
 
     stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
     // The expiry tests require pjsip, so initialise for this test
@@ -186,7 +186,7 @@ class DeregistrationHandlerTest : public BaseTest
   }
 };
 
-TEST_F(DeregistrationHandlerTest, MainlineTest)
+TEST_F(DeregistrationTaskTest, MainlineTest)
 {
   // Get an initial empty AoR record and add a standard binding
   int now = time(NULL);
@@ -217,7 +217,7 @@ TEST_F(DeregistrationHandlerTest, MainlineTest)
   handler->handle_request();
 }
 
-TEST_F(DeregistrationHandlerTest, AoROnlyTest)
+TEST_F(DeregistrationTaskTest, AoROnlyTest)
 {
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
   int status = handler->parse_request(body);
@@ -226,7 +226,7 @@ TEST_F(DeregistrationHandlerTest, AoROnlyTest)
   handler->handle_request();
 }
 
-TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairsTest)
+TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
 {
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}]}";
   int status = handler->parse_request(body);
@@ -235,7 +235,7 @@ TEST_F(DeregistrationHandlerTest, AoRPrivateIdPairsTest)
   handler->handle_request();
 }
 
-TEST_F(DeregistrationHandlerTest, AoRsOnlyTest)
+TEST_F(DeregistrationTaskTest, AoRsOnlyTest)
 {
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}, {\"primary-impu\": \"sip:6505552002\"}]}";
   int status = handler->parse_request(body);
@@ -244,7 +244,7 @@ TEST_F(DeregistrationHandlerTest, AoRsOnlyTest)
   handler->handle_request();
 }
 
-TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
+TEST_F(DeregistrationTaskTest, InvalidJSONTest)
 {
   CapturingTestLogger log;
   std::string body = "{[}";
@@ -253,7 +253,7 @@ TEST_F(DeregistrationHandlerTest, InvalidJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
+TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 {
   CapturingTestLogger log;
   std::string body = "{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}";
@@ -262,7 +262,7 @@ TEST_F(DeregistrationHandlerTest, MissingRegistrationsJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-TEST_F(DeregistrationHandlerTest, MissingPrimaryIMPUJSONTest)
+TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
 {
   CapturingTestLogger log;
   std::string body = "{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
@@ -280,9 +280,9 @@ class AuthTimeoutTest : public BaseTest
 
   MockHttpStack stack;
   MockHttpStack::Request* req;
-  AuthTimeoutHandler::Config* chronos_config;
+  AuthTimeoutTask::Config* chronos_config;
 
-  AuthTimeoutHandler* handler;
+  AuthTimeoutTask* handler;
 
   void SetUp()
   {
@@ -291,8 +291,8 @@ class AuthTimeoutTest : public BaseTest
     store = new AvStore(local_data_store);
     fake_hss = new FakeHSSConnection();
     req = new MockHttpStack::Request(&stack, "/", "authentication-timeout");
-    chronos_config = new AuthTimeoutHandler::Config(store, fake_hss);
-    handler = new AuthTimeoutHandler(*req, chronos_config, 0);
+    chronos_config = new AuthTimeoutTask::Config(store, fake_hss);
+    handler = new AuthTimeoutTask(*req, chronos_config, 0);
   }
 
   void TearDown()
