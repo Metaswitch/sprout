@@ -77,8 +77,8 @@ public:
   };
 
   RegistrationTimeoutTask(HttpStack::Request& req,
-                             const Config* cfg,
-                             SAS::TrailId trail) :
+                          const Config* cfg,
+                          SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
@@ -116,8 +116,8 @@ public:
 
 
   DeregistrationTask(HttpStack::Request& req,
-                        const Config* cfg,
-                        SAS::TrailId trail) :
+                     const Config* cfg,
+                     SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 
@@ -148,8 +148,8 @@ public:
     HSSConnection* _hss;
   };
   AuthTimeoutTask(HttpStack::Request& req,
-                     const Config* cfg,
-                     SAS::TrailId trail) :
+                  const Config* cfg,
+                  SAS::TrailId trail) :
     HttpStackUtils::Task(req, trail), _cfg(cfg)
   {};
 

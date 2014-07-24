@@ -241,11 +241,11 @@ void RegistrationTimeoutTask::handle_response()
 }
 
 RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
-                                                        std::string aor_id,
-                                                        RegStore::AoR* previous_aor_data,
-                                                        RegStore* remote_store,
-                                                        bool is_primary,
-                                                        bool& all_bindings_expired)
+                                                     std::string aor_id,
+                                                     RegStore::AoR* previous_aor_data,
+                                                     RegStore* remote_store,
+                                                     bool is_primary,
+                                                     bool& all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -403,11 +403,11 @@ HTTPCode DeregistrationTask::handle_request()
 }
 
 RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
-                                                   std::string aor_id,
-                                                   std::string private_id,
-                                                   RegStore::AoR* previous_aor_data,
-                                                   RegStore* remote_store,
-                                                   bool is_primary)
+                                                std::string aor_id,
+                                                std::string private_id,
+                                                RegStore::AoR* previous_aor_data,
+                                                RegStore* remote_store,
+                                                bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
