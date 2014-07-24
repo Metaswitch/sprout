@@ -45,6 +45,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include "pjsip-simple/evsub.h"
 }
 
 #include <vector>
@@ -1212,7 +1213,18 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  PJUtils::mark_sas_call_branch_ids(trail(), rdata->msg_info.cid, rdata->msg_info.msg);
+  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
+  {
+    // Omit the Call-ID for these requests, as the same Call-ID can be
+    // reused over a long period of time and produce huge SAS trails.
+    PJUtils::mark_sas_call_branch_ids(trail(), NULL, rdata->msg_info.msg);
+  }
+  else
+  {
+    PJUtils::mark_sas_call_branch_ids(trail(), rdata->msg_info.cid, rdata->msg_info.msg);
+  }
 }
 
 

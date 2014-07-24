@@ -167,7 +167,8 @@ void generate_new_branch_id(pjsip_tx_data* tdata);
 pj_status_t send_request(pjsip_tx_data* tdata,
                          int retries=0,
                          void* token=NULL,
-                         pjsip_endpt_send_callback cb=NULL);
+                         pjsip_endpt_send_callback cb=NULL,
+                         bool log_sas_branch = false);
 
 pj_status_t send_request_stateless(pjsip_tx_data* tdata,
                                    int retries=0);
@@ -208,7 +209,7 @@ bool check_route_headers(pjsip_rx_data* rdata);
 
 void put_unary_param(pjsip_param* params_list,
                      const pj_str_t* name,
-                     pj_pool_t* pool); 
+                     pj_pool_t* pool);
 
 } // namespace PJUtils
 
