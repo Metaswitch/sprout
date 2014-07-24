@@ -36,6 +36,7 @@
 
 #pragma once
 
+#include <set>
 #include <string>
 #include "log.h"
 #include "sas.h"
@@ -55,6 +56,7 @@ public:
   void delete_result(const std::string& url);
   void set_rc(const std::string& url, long rc);
   void delete_rc(const std::string& url);
+  bool url_was_requested(const std::string& url, const std::string& body);
 
 private:
   long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
@@ -66,4 +68,5 @@ private:
   typedef std::pair<std::string, std::string> UrlBody;
   std::map<UrlBody, std::string> _results;
   std::map<std::string, long> _rcs;
+  std::set<UrlBody> _calls;
 };
