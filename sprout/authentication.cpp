@@ -180,7 +180,8 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId t
 
 pj_status_t user_lookup(pj_pool_t *pool,
                         const pjsip_auth_lookup_cred_param *param,
-                        pjsip_cred_info *cred_info)
+                        pjsip_cred_info *cred_info,
+                        void* av_param)
 {
   const pj_str_t* acc_name = &param->acc_name;
   const pj_str_t* realm = &param->realm;
@@ -196,9 +197,8 @@ pj_status_t user_lookup(pj_pool_t *pool,
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
-  // Get the Authentication Vector from the store. We should
-  // immediately clear the AV, to avoid replay attacks.
-  Json::Value* av = av_store->get_av(impi, nonce, trail);
+  // Get the Authentication Vector from the store.
+  Json::Value* av = (Json::Value*)av_param;
 
   if (av == NULL)
   {
@@ -209,7 +209,6 @@ pj_status_t user_lookup(pj_pool_t *pool,
       (!verify_auth_vector(av, impi, trail)))
   {
     // Authentication vector is badly formed.
-    delete av;                                                 // LCOV_EXCL_LINE
     av = NULL;                                                 // LCOV_EXCL_LINE
   }
 
@@ -256,19 +255,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
       }
     }
 
-    // Delete the AV from the store, unless the status indicates that these
-    // credentials weren't even for the right realm.  In that case, they weren't
-    // even trying to authenticate against us, so leave them around in case they
-    // do try against our realm later.
-    if (status != PJSIP_EAUTHNOAUTH)
-    {
-      bool rc = av_store->delete_av(impi, nonce, trail);
-      if (!rc) {
-        LOG_ERROR("Tried to delete AV for %s/%s after processing an authentication, but failed", impi.c_str(), nonce.c_str()); // LCOV_EXCL_LINE
-      }
-    }
-
-    delete av;
+    correlate_branch_from_av(av, trail);
   }
 
   return status;
@@ -393,9 +380,16 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     // Add the header to the message.
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hdr);
 
+    // Store the branch parameter in memcached for correlation purposes
+    pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_VIA, NULL);
+    std::string branch = (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
+
+    (*av)["branch"] = branch;
+
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
-    bool success = av_store->set_av(impi, nonce, av, get_trail(rdata));
+    uint64_t cas = 0;
+    bool success = av_store->set_av(impi, nonce, av, cas, get_trail(rdata));
     if (success)
     {
       // We've written the AV into the store, so need to set a Chronos
@@ -526,10 +520,16 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   if ((auth_hdr != NULL) &&
       (auth_hdr->credential.digest.response.slen != 0))
   {
+    std::string impi = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.username);
+    std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
+    uint64_t cas = 0;
+
+    Json::Value* av = av_store->get_av(impi, nonce, cas, trail);
+
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
     LOG_DEBUG("Verify authentication information in request");
-    status = pjsip_auth_srv_verify(&auth_srv, rdata, &sc);
+    status = pjsip_auth_srv_verify2(&auth_srv, rdata, &sc, (void*)av);
 
     if (status == PJ_SUCCESS)
     {
@@ -538,6 +538,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
+
+      (*av)["tombstone"] = Json::Value("true");
+      bool rc = av_store->set_av(impi, nonce, av, cas, trail);
+
+
+      if (!rc) {
+        // LCOV_EXCL_START
+        LOG_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
+                  impi.c_str(),
+                  nonce.c_str());
+        // LCOV_EXCL_STOP
+      }
 
       // If doing AKA authentication, check for an AUTS parameter.  We only
       // check this if the request authenticated as actioning it otherwise
@@ -580,14 +592,18 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         }
       }
 
+
       if (status == PJ_SUCCESS)
       {
         // Request authentication completed, so let the message through to
         // other modules.
+        delete av;
         return PJ_FALSE;
       }
     }
+    delete av;
   }
+
 
   // The message either has insufficient authentication information, or
   // has failed authentication.  In either case, the message will be
@@ -611,7 +627,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Add a SAS end marker
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
@@ -727,7 +743,7 @@ pj_status_t init_authentication(const std::string& realm_name,
   // Initialize the authorization server.
   pjsip_auth_srv_init_param params;
   params.realm = &WILDCARD_REALM;
-  params.lookup2 = user_lookup;
+  params.lookup3 = user_lookup;
   params.options = 0;
   status = pjsip_auth_srv_init2(stack_data.pool, &auth_srv, &params);
 

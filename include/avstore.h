@@ -66,6 +66,7 @@ public:
   bool set_av(const std::string& impi,
               const std::string& nonce,
               const Json::Value* av,
+              uint64_t cas,
               SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
@@ -77,11 +78,8 @@ public:
   /// @param nonce     A reference to the nonce.
   Json::Value* get_av(const std::string& impi,
                       const std::string& nonce,
+                      uint64_t& cas,
                       SAS::TrailId trail);
-
-  bool delete_av(const std::string& impi,
-                 const std::string& nonce,
-                 SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.
@@ -93,5 +91,9 @@ private:
   /// should pop before it expires.
   static const int AV_EXPIRY = 40;
 };
+
+// Utility function - retrieves the "branch" field from the given AV
+// and raises a correlating transaction marker in the given trail.
+void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail);
 
 #endif
