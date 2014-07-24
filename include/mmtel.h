@@ -1,5 +1,5 @@
 /**
- * @file call_services.h Interface declaration for the MMTel call services module
+ * @file mmtel.h Interface declaration for the MMTel call service
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -37,8 +37,8 @@
 ///
 ///
 
-#ifndef CALLSERVICES_H__
-#define CALLSERVICES_H__
+#ifndef MMTEL_H__
+#define MMTEL_H__
 
 #include <string>
 
@@ -50,95 +50,69 @@ extern "C" {
 
 #include "rapidxml/rapidxml.hpp"
 
+#include "appserver.h"
 #include "xdmconnection.h"
 #include "simservs.h"
 #include "aschain.h"
 
-// forward declaration
-class UASTransaction;
-
-class CallServices
+class Mmtel : public AppServer
 {
 public:
-  CallServices(XDMConnection* xdm_client);
-  ~CallServices();
+  Mmtel(const std::string& service_name,
+        XDMConnection* xdm_client) :
+    AppServer(service_name),
+    _xdmc(xdm_client) {}
 
-  class CallServiceBase
-  {
-  public:
-    CallServiceBase(std::string country_code, UASTransaction* uas_data);
-    ~CallServiceBase();
-
-  protected:
-    std::string _country_code;
-    UASTransaction* _uas_data;
-    simservs* _user_services;
-    bool apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
-                            pjsip_tx_data* tx_data);
-    bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg);
-  };
-
-  class Originating : public CallServiceBase
-  {
-  public:
-    Originating(CallServices* callServices,
-                UASTransaction* uas_data,
-                pjsip_msg* msg,
-                std::string served_user);
-    ~Originating();
-
-    bool on_initial_invite(pjsip_tx_data* tx_data);
-
-  private:
-
-    bool apply_privacy(pjsip_tx_data* tx_data);
-    bool apply_ob_call_barring(pjsip_tx_data* tx_data);
-  };
-  friend class Originating;
-
-  class Terminating : public CallServiceBase
-  {
-  public:
-    Terminating(CallServices* callServices,
-                UASTransaction* uas_data,
-                pjsip_msg* msg,
-                std::string served_user);
-    ~Terminating();
-
-    bool on_initial_invite(pjsip_tx_data* tx_data);
-    bool on_response(pjsip_msg* tx_data);
-    bool on_final_response(pjsip_tx_data* tx_data);
-
-  private:
-    bool _ringing;
-    unsigned int _media_conditions;
-    pj_timer_entry _no_reply_timer;
-
-    bool apply_privacy(pjsip_tx_data* tx_data);
-    bool apply_call_diversion(unsigned int conditions, int code);
-    bool apply_ib_call_barring(pjsip_tx_data* tx_data);
-    bool check_call_diversion_rules(unsigned int conditions, int code);
-    unsigned int condition_from_status(int code);
-    void no_reply_timer_pop();
-
-    static void no_reply_timer_pop(pj_timer_heap_t *timer_heap, pj_timer_entry *entry);
-  };
-  friend class Terminating;
-
-  static const int DEFAULT_MAX_FORWARDS = 70;
-
-  static bool is_mmtel(std::string uri);
+  AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
+                            pjsip_msg* req);
 
 private:
-  static const std::string MMTEL_URI_PREFIX;
+  XDMConnection* _xdmc;
+};
+
+class MmtelTsx : public AppServerTsx
+{
+public:
+  MmtelTsx(AppServerTsxHelper* helper,
+           pjsip_msg* msg,
+           XDMConnection* xdm_client);
+  ~MmtelTsx();
+
+  void on_initial_request(pjsip_msg* req);
+  void on_response(pjsip_msg* rsp, int fork_id);
+
+private:
+  bool _originating;
+  pjsip_method_e _method;
+  std::string _country_code;
+  simservs* _user_services;
+  bool _ringing;
+  unsigned int _media_conditions;
+  pj_timer_entry _no_reply_timer;
 
   XDMConnection* _xdmc;
 
+  void finish_processing(pjsip_msg* msg, pjsip_status_code rc);
+
   simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 
+  pjsip_status_code apply_ob_call_barring(pjsip_msg* msg);
+  pjsip_status_code apply_ib_call_barring(pjsip_msg* msg);
+  pjsip_status_code apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
+                          pjsip_msg* msg);
+  pjsip_status_code apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool);
+  pjsip_status_code apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool);
+  pjsip_status_code apply_call_diversion(unsigned int conditions, int code);
+  pjsip_status_code check_call_diversion_rules(unsigned int conditions, int code);
+  bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg);
+
+  unsigned int condition_from_status(int code);
   static int parse_privacy_headers(pjsip_generic_array_hdr *header_array);
-  static void build_privacy_header(pjsip_tx_data *tx_data, int fields);
+  static void build_privacy_header(pjsip_msg* msg, pj_pool_t* pool, int fields);
   static unsigned int get_media_type_conditions(pjsip_msg *msg);
+
+  void no_reply_timer_pop();
+  static void no_reply_timer_pop(pj_timer_heap_t *timer_heap, pj_timer_entry *entry);
 };
 
 #endif
