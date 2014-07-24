@@ -90,7 +90,7 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
     _originating = false;
   }
 
-  _method = msg->line.req.method.id; 
+  _method = msg->line.req.method.id;
 
   _user_services = get_user_services(served_user, trail());
 
@@ -180,7 +180,7 @@ void MmtelTsx::on_initial_request(pjsip_msg* msg)
       rc = apply_ib_call_barring(msg);
     }
   }
-  
+
   finish_processing(msg, rc);
 }
 
