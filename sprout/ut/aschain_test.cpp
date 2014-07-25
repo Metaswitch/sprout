@@ -177,14 +177,12 @@ TEST_F(AsChainTest, AsInvocation)
   std::string server_name;
 
   // Nothing to invoke. Just proceed.
-  disposition = as_chain_link.on_initial_request(tdata, server_name);
-  EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
+  as_chain_link.on_initial_request(tdata->msg, server_name);
   EXPECT_EQ(server_name, "");
 
   // Invoke external AS on originating side.
   LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
-  disposition = as_chain_link2.on_initial_request(tdata, server_name);
-  EXPECT_EQ(AsChainLink::Disposition::Skip, disposition);
+  as_chain_link2.on_initial_request(tdata->msg, server_name);
   EXPECT_EQ(server_name, "sip:pancommunicon.cw-ngv.com");
 }
 
