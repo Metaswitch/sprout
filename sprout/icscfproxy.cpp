@@ -366,13 +366,13 @@ int ICSCFProxy::UASTsx::calculate_targets()
 
 /// Handles a response to an associated UACTsx.
 void ICSCFProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
-                                                pjsip_rx_data *rdata)
+                                                pjsip_tx_data *tdata)
 {
   // Pass the response to the ACR for reporting.
-  _acr->rx_response(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  _acr->rx_response(tdata->msg, tdata->rx_timestamp);
 
   // Pass the response on to the BasicProxy method.
-  BasicProxy::UASTsx::on_new_client_response(uac_tsx, rdata);
+  BasicProxy::UASTsx::on_new_client_response(uac_tsx, tdata);
 }
 
 
@@ -422,7 +422,8 @@ void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
 
 /// Called when a request is transmitted on an associated client transaction.
 /// Handles interactions with the ACR for the request if one is allocated.
-void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
+void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata,
+                                              UACTsx* uac_tsx)
 {
   _acr->tx_request(tdata->msg);
 }
@@ -486,7 +487,7 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
       // We found a suitable alternate S-CSCF and have programmed it as a
       // target, so action the retry.
       LOG_INFO("I-CSCF retrying request to alternate S-CSCF");
-      forward_request();
+      forward_to_targets();
     }
     else
     {

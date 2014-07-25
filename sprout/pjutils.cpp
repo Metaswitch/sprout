@@ -618,10 +618,10 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
                                      pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response(endpt,
-                       rdata,
-                       st_code,
-                       st_text,
-                       p_tdata);
+                                                   rdata,
+                                                   st_code,
+                                                   st_text,
+                                                   p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -634,6 +634,113 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
 
   }
   return status;
+}
+
+
+/// Creates a response to the message in the supplied pjsip_tx_data structure.
+pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
+                                     const pjsip_tx_data *req_tdata,
+                                     int st_code,
+                                     const std::string& st_text,
+                                     pjsip_tx_data **p_tdata)
+{
+  pjsip_msg* req_msg = req_tdata->msg;
+
+  // Create a new transmit buffer.
+  pjsip_tx_data *tdata;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &tdata);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  // Set initial reference count to 1.
+  pjsip_tx_data_add_ref(tdata);
+
+  // Copy the SAS trail across from the request.
+  set_trail(tdata, get_trail(req_tdata));
+
+  // Create new response message.
+  pjsip_msg* msg = pjsip_msg_create(tdata->pool, PJSIP_RESPONSE_MSG);
+  tdata->msg = msg;
+
+  // Set status code and reason text.
+  msg->line.status.code = st_code;
+  if (st_text != "")
+  {                                                                
+    pj_strdup2(tdata->pool, &msg->line.status.reason, st_text.c_str());
+  }
+  else
+  {
+    msg->line.status.reason = *pjsip_get_status_text(st_code);
+  }
+
+  // Set TX data attributes.
+  tdata->rx_timestamp = req_tdata->rx_timestamp;
+
+  // Copy all the via headers except for the top one, in order.  We omit the
+  // top Via because our own Via header will have already been added to the
+  // request.
+  pjsip_via_hdr* top_via = NULL;
+  pjsip_via_hdr* via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, NULL);
+  if (via) 
+  {
+    via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, via->next);
+  }
+  while (via)
+  {
+    pjsip_via_hdr *new_via;
+
+    new_via = (pjsip_via_hdr*)pjsip_hdr_clone(tdata->pool, via);
+    if (top_via == NULL)
+    {
+      top_via = new_via;
+    }
+
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)new_via);
+    via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, via->next);
+  }
+
+  // Copy all Record-Route headers, in order.
+  pjsip_rr_hdr* rr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_RECORD_ROUTE, NULL);
+  while (rr)
+  {
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, rr));
+    rr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_RECORD_ROUTE, rr->next);
+  }
+
+  // Copy Call-ID header.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CID_HDR(req_msg)));
+
+  // Copy From header.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_FROM_HDR(req_msg)));
+
+  // Copy To header. */
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_TO_HDR(req_msg)));
+
+  // Must add To tag in the response (Section 8.2.6.2), except if this is
+  // 100 (Trying) response. Same tag must be created for the same request
+  // (e.g. same tag in provisional and final response). The easiest way
+  // to do this is to derive the tag from Via branch parameter (or to
+  // use it directly).
+  pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(msg);
+  if ((to_hdr->tag.slen == 0) &&
+      (st_code > 100) &&
+      (top_via))
+  {
+    to_hdr->tag = top_via->branch_param;
+  }
+
+  // Copy CSeq header. */
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CSEQ_HDR(req_msg)));
+
+  // Some headers should always be copied onto responses, like charging headers
+  PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
+  PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+
+  *p_tdata = tdata;
+
+  return PJ_SUCCESS;
 }
 
 
