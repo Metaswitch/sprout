@@ -1438,3 +1438,150 @@ void PJUtils::put_unary_param(pjsip_param* params_list,
     pj_list_push_back(params_list, param);
   }
 }
+
+/// Redirects the call to the specified target, for the reason specified in the
+// status code.
+//
+// @returns whether the call should continue as it was.
+pjsip_status_code PJUtils::redirect(pjsip_msg* msg, std::string target, pj_pool_t* pool, pjsip_status_code code)
+{
+  pjsip_uri* target_uri = PJUtils::uri_from_string(target, pool);
+
+  if (target_uri == NULL)
+  {
+    // Target URI was badly formed, so continue processing the call without
+    // the redirect.
+    return PJSIP_SC_OK;
+  }
+
+  return redirect_int(msg, target_uri, pool, code);
+}
+
+/// Redirects the call to the specified target, for the reason specified in the
+// status code.
+//
+// @returns whether the call should continue as it was (always false).
+pjsip_status_code PJUtils::redirect(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code)
+{
+  return redirect_int(msg, (pjsip_uri*)pjsip_uri_clone(pool, target), pool, code);
+}
+
+pjsip_status_code PJUtils::redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code)
+{
+  static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
+  static const int MAX_HISTORY_INFOS = 5;
+
+  // Default the code to 480 Temporarily Unavailable.
+  code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+  pjsip_status_code rc = code;
+
+  // Count the number of existing History-Info headers.
+  int num_history_infos = 0;
+  pjsip_history_info_hdr* prev_history_info_hdr = NULL;
+  for (pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_HISTORY_INFO, NULL);
+       hdr != NULL;
+       hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_HISTORY_INFO, hdr->next))
+  {
+    ++num_history_infos;
+    prev_history_info_hdr = (pjsip_history_info_hdr*)hdr;
+  }
+
+  // If we haven't already had too many redirections (i.e. History-Info
+  // headers), do the redirect.
+  if (num_history_infos < MAX_HISTORY_INFOS)
+  {
+    rc = PJSIP_SC_CALL_BEING_FORWARDED;
+
+    // Add a Diversion header with the original request URI and the reason
+    // for the diversion.
+    std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
+    div += ";reason=";
+    div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
+      (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+      (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
+      (code == 0) ? "unconditional" :
+      "unknown";
+    pj_str_t sdiv;
+    pjsip_generic_string_hdr* diversion =
+      pjsip_generic_string_hdr_create(pool,
+                                      &STR_DIVERSION,
+                                      pj_cstr(&sdiv, div.c_str()));
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)diversion);
+
+    // Create or update a History-Info header for the old target.
+    if (prev_history_info_hdr == NULL)
+    {
+      prev_history_info_hdr = create_history_info_hdr(msg->line.req.uri, pool);
+      prev_history_info_hdr->index = pj_str("1");
+      pjsip_msg_add_hdr(msg, (pjsip_hdr*)prev_history_info_hdr);
+    }
+
+    update_history_info_reason(((pjsip_name_addr*)(prev_history_info_hdr->uri))->uri, pool, code);
+
+    // Set up the new target URI.
+    msg->line.req.uri = target;
+
+    // Create a History-Info header for the new target.
+    pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target, pool);
+
+    // Set up the index parameter.  This is the previous value suffixed with ".1".
+    history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
+    history_info_hdr->index.ptr = (char*)pj_pool_alloc(pool, history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
+
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)history_info_hdr);
+  }
+
+  return rc;
+}
+
+pjsip_history_info_hdr* PJUtils::create_history_info_hdr(pjsip_uri* target, pj_pool_t* pool)
+{
+  // Create a History-Info header.
+  pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(pool);
+
+  // Clone the URI and set up its parameters.
+  pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(pool, (pjsip_uri*)pjsip_uri_get_uri(target));
+  pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(pool);
+  history_info_name_addr_uri->uri = history_info_uri;
+  history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
+
+  return history_info_hdr;
+}
+
+void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, int code)
+{
+  static const pj_str_t STR_REASON = pj_str("Reason");
+  static const pj_str_t STR_SIP = pj_str("SIP");
+  static const pj_str_t STR_CAUSE = pj_str("cause");
+  static const pj_str_t STR_TEXT = pj_str("text");
+
+  if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
+  {
+    // Set up the Reason parameter - this is always "SIP".
+    pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
+    if (pj_list_empty(&history_info_sip_uri->other_param))
+    {
+      pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_REASON;
+      param->value = STR_SIP;
+
+      pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
+
+      // Now add the cause parameter.
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_CAUSE;
+      char cause_text[4];
+      sprintf(cause_text, "%u", code);
+      pj_strdup2(pool, &param->value, cause_text);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+
+      // Finally add the text parameter.
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_TEXT;
+      param->value = *pjsip_get_status_text(code);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+    }
+  }
+}

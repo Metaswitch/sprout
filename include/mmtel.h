@@ -88,11 +88,13 @@ private:
   simservs* _user_services;
   bool _ringing;
   unsigned int _media_conditions;
+  int _late_redirect_fork_id;
+  pjsip_msg* _late_redirect_msg;
   pj_timer_entry _no_reply_timer;
 
   XDMConnection* _xdmc;
 
-  void finish_processing(pjsip_msg* msg, pjsip_status_code rc);
+  void finish_processing(pjsip_msg*& msg, pjsip_status_code rc);
 
   simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 
@@ -102,8 +104,8 @@ private:
                           pjsip_msg* msg);
   pjsip_status_code apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool);
   pjsip_status_code apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool);
-  pjsip_status_code apply_call_diversion(unsigned int conditions, int code);
-  pjsip_status_code check_call_diversion_rules(unsigned int conditions, int code);
+  pjsip_status_code apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
+  pjsip_status_code check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
   bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg);
 
   unsigned int condition_from_status(int code);

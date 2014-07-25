@@ -123,6 +123,11 @@ MmtelTsx::~MmtelTsx()
     _no_reply_timer.id = 0;
   }
 
+  if (_late_redirect_msg != NULL)
+  {
+    free_msg(_late_redirect_msg);
+  }
+
   if (_user_services != NULL)
   {
     delete _user_services;
@@ -172,7 +177,7 @@ void MmtelTsx::on_initial_request(pjsip_msg* msg)
 
     if (rc == PJSIP_SC_OK)
     {
-      rc = apply_call_diversion(_media_conditions, 0);
+      rc = apply_call_diversion(msg, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
     }
 
     if (rc == PJSIP_SC_OK)
@@ -188,10 +193,11 @@ void MmtelTsx::on_initial_request(pjsip_msg* msg)
 void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
 {
   pjsip_status_code rc = PJSIP_SC_OK;
+  pj_pool_t* pool = get_pool(msg);
+  pjsip_status_code code = (pjsip_status_code)msg->line.status.code;
 
-  if (msg->line.status.code < 200)
+  if (code < 200)
   {
-    int code = msg->line.status.code;
     switch (code)
     {
     case PJSIP_SC_RINGING:
@@ -225,6 +231,11 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
               // Log this failure, but don't fail the call - there's no point.
               LOG_WARNING("Failed to set no-reply timer - status %d", status);
             }
+            else
+            {
+              _late_redirect_fork_id = fork_id;
+              _late_redirect_msg = clone_request(msg);
+            }
             break;
           }
         }
@@ -237,10 +248,15 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
       pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
       if (contact_hdr != NULL)
       {
-        // TODO: return correct code here (either code or PJSIP_SC_CALL_BEING_FORWARDED),
-        // expose this redirect function to the MMTel app server.
-        //
-        // rc = _uas_data->redirect(contact_hdr->uri, code);
+        rc = PJUtils::redirect(msg, contact_hdr->uri, pool, code);
+
+        // If we have a 18X, send a provisional response. Final responses will
+        // be handled higher up.
+        if (rc < 200)
+        {
+          pjsip_msg* rsp = create_response(msg, rc);
+          send_response(rsp);
+        }
       }
       break;
     }
@@ -254,23 +270,24 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
       _no_reply_timer.id = 0;
     }
 
-    int code = msg->line.status.code;
-    rc = apply_call_diversion(condition_from_status(code) | _media_conditions, code);
+    rc = apply_call_diversion(msg, condition_from_status(code) | _media_conditions, code);
   }
 
   finish_processing(msg, rc);
 }
 
-void MmtelTsx::finish_processing(pjsip_msg* msg,
+void MmtelTsx::finish_processing(pjsip_msg*& msg,
                                  pjsip_status_code rc)
 {
-  if (rc == PJSIP_SC_OK)
+  if (rc <= PJSIP_SC_OK)
   {
-    forward_request(msg);
+    send_request(msg);
   }
   else
   {
-    reject(rc);
+    pjsip_msg* rsp = create_response(msg, rc);
+    free_msg(msg);
+    send_response(rsp);
   }
 }
 
@@ -756,7 +773,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
 // Apply call diversion services as a terminating AS.
 //
 // @returns true if the call may proceed as-is, false otherwise.
-pjsip_status_code MmtelTsx::apply_call_diversion(unsigned int conditions, int code)
+pjsip_status_code MmtelTsx::apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
 {
   pjsip_status_code rc = PJSIP_SC_OK;
   // If this is an INVITE and call diversion is enabled, check the rules.
@@ -764,7 +781,7 @@ pjsip_status_code MmtelTsx::apply_call_diversion(unsigned int conditions, int co
       (_user_services != NULL) &&
       (_user_services->cdiv_enabled()))
   {
-    rc = check_call_diversion_rules(conditions, code);
+    rc = check_call_diversion_rules(msg, conditions, code);
   }
   return rc;
 }
@@ -773,8 +790,10 @@ pjsip_status_code MmtelTsx::apply_call_diversion(unsigned int conditions, int co
 // divert the call if so.
 //
 // @returns true if the call may proceed as-is, false otherwise.
-pjsip_status_code MmtelTsx::check_call_diversion_rules(unsigned int conditions, int code)
+pjsip_status_code MmtelTsx::check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
 {
+  pjsip_status_code rc = PJSIP_SC_OK;
+  pj_pool_t* pool = get_pool(msg);
   const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
   for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
        rule != cdiv_rules->end();
@@ -784,13 +803,18 @@ pjsip_status_code MmtelTsx::check_call_diversion_rules(unsigned int conditions, 
     if ((rule->conditions() & ~conditions) == 0)
     {
       LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-      // TODO: return correct code here (either code or PJSIP_SC_CALL_BEING_FORWARDED),
-      // expose this redirect function to the MMTel app server.
-      //
-      // return _uas_data->redirect(rule->forward_target(), code);
+      rc = PJUtils::redirect(msg, rule->forward_target(), pool, code);
+
+      // If we have a 18X, send a provisional response. Final responses will
+      // be handled higher up.
+      if (rc < 200)
+      {
+        pjsip_msg* rsp = create_response(msg, rc);
+        send_response(rsp);
+      }
     }
   }
-  return PJSIP_SC_OK;
+  return rc;
 }
 
 // Determine the condition corresponding to the specified code, as specified by
@@ -837,8 +861,18 @@ unsigned int MmtelTsx::condition_from_status(int code)
 
 void MmtelTsx::no_reply_timer_pop()
 {
+  // TODO
+  // cancel_fork API doesn't currently exist.
+  // Currently requests/responses won't get sent at the end of
+  // this function because the underlying sproutlet layer's handlers
+  // don't get invoked - instead we fall back through to the pjsip
+  // timers code.
+  cancel_fork(_late_redirect_fork_id);
   _no_reply_timer.id = 0;
-  apply_call_diversion(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+  pjsip_status_code rc = apply_call_diversion(_late_redirect_msg,
+                                              _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
+                                              PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+  finish_processing(_late_redirect_msg, rc);
 }
 
 // Handles the no-reply timer popping.
