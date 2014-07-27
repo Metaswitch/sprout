@@ -5,6 +5,7 @@ extern "C" {
 }
 
 
+#include "log.h"
 #include "appserver.h"
 
 /// Sample AppServerTsx that forks the transaction.
@@ -16,6 +17,8 @@ public:
 
   void on_initial_request(pjsip_msg* req)
   {
+    LOG_DEBUG("SampleForkAS - process request %p", req);
+
     // Clone the request and redirect it to an external number
     pjsip_msg* clone = clone_request(req);
 
@@ -23,7 +26,7 @@ public:
     {
       LOG_DEBUG("Forking request to external number");
       pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)clone->line.req.uri;
-      pj_strdup2(get_pool(clone), &sip_uri->user, "+442083627241");
+      pj_strdup2(get_pool(clone), &sip_uri->user, "011442083627241");
       send_request(clone);
     }
     else

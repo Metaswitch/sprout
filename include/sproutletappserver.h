@@ -51,25 +51,22 @@ extern "C" {
 }
 
 #include "sas.h"
+#include "stack.h"
 #include "appserver.h"
 #include "sproutlet.h"
 
 class SproutletAppServerTsxHelper : public AppServerTsxHelper
 {
 public:
-  /// Constructor
-  SproutletAppServerTsxHelper(SproutletTsxHelper* helper) :
-                              _helper(helper),
-                              _fixed_route(NULL)
-  {
-  }
+  /// Constructor.
+  SproutletAppServerTsxHelper(SproutletTsxHelper* helper);
 
-  /// Set the Route: header to re-insert on forwarded requests for this
-  /// transaction.  May be NULL (e.g. for in-dialog requests).
-  inline void set_fixed_route(pjsip_hdr* route)
-  {
-    _fixed_route = route;
-  }
+  /// Destructor.
+  virtual ~SproutletAppServerTsxHelper();
+
+  /// Stores the onward route for this transaction ready to apply to 
+  /// transaction.
+  void store_onward_route(pjsip_msg* req);
 
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -78,20 +75,14 @@ public:
   ///                        If omitted, a default unique identifier is created
   ///                        using parameters from the SIP request.
   ///
-  virtual void add_to_dialog(const std::string& dialog_id="")
-  {
-    _helper->add_to_dialog(dialog_id);
-  }
+  virtual void add_to_dialog(const std::string& dialog_id="");
 
   /// Returns the dialog identifier for this service.
   ///
   /// @returns             - The dialog identifier attached to this service,
   ///                        either by this ServiceTsx instance
   ///                        or by an earlier transaction in the same dialog.
-  virtual const std::string& dialog_id() const
-  {
-    return _helper->dialog_id();
-  }
+  virtual const std::string& dialog_id() const;
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork or for storing
@@ -99,10 +90,7 @@ public:
   ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
-  virtual pjsip_msg* clone_request(pjsip_msg* req)
-  {
-    return _helper->clone_request(req);
-  }
+  virtual pjsip_msg* clone_request(pjsip_msg* req);
 
   /// Create a response from a given request, this response can be passed to
   /// send_response or stored for later.  It may be freed again by passing
@@ -114,8 +102,7 @@ public:
   /// @param  status_text  - The text part of the status line.
   virtual pjsip_msg* create_response(pjsip_msg* req,
                                      pjsip_status_code status_code,
-                                     const std::string& status_text="")
-  {return _helper->create_response(req, status_code, status_text);}
+                                     const std::string& status_text="");
 
   /// Indicate that the request should be forwarded following standard routing
   /// rules.  Note that, even if other Route headers are added by this AS, the
@@ -141,10 +128,7 @@ public:
   /// This function may be called while handling any response.
   ///
   /// @param  rsp          - The response message to use for forwarding.
-  virtual void send_response(pjsip_msg*& rsp)
-  {
-    _helper->send_response(rsp);
-  }
+  virtual void send_response(pjsip_msg*& rsp);
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
@@ -152,31 +136,23 @@ public:
   /// API).
   ///
   /// @param  msg          - The message to free.
-  virtual void free_msg(pjsip_msg*& msg)
-  {
-    _helper->free_msg(msg);
-  }
+  virtual void free_msg(pjsip_msg*& msg);
 
   /// Returns the pool corresponding to a message.  This pool can then be used
   /// to allocate further headers or bodies to add to the message.
   ///
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
-  virtual pj_pool_t* get_pool(const pjsip_msg* msg)
-  {
-    return _helper->get_pool(msg);
-  }
+  virtual pj_pool_t* get_pool(const pjsip_msg* msg);
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
-  virtual SAS::TrailId trail() const
-  {
-    return _helper->trail();
-  }
+  virtual SAS::TrailId trail() const;
 
 private:
   SproutletTsxHelper* _helper;
-  pjsip_hdr* _fixed_route;
+  pj_pool_t* _pool;
+  pjsip_route_hdr _route_set;
 };
 
 class SproutletAppServerShim : public Sproutlet
@@ -192,11 +168,7 @@ public:
                                 pjsip_msg* req);
 
   /// Constructor.
-  SproutletAppServerShim(AppServer* app) :
-    Sproutlet("shim-" + app->service_name()),
-    _app(app)
-  {
-  }
+  SproutletAppServerShim(AppServer* app);
 
 private:
   AppServer* _app;
@@ -208,50 +180,30 @@ public:
   /// Constructor
   SproutletAppServerShimTsx(SproutletTsxHelper* sproutlet_helper,
                             SproutletAppServerTsxHelper*& app_server_helper,
-                            AppServerTsx* app_tsx) : 
-    SproutletTsx(sproutlet_helper),
-    _app_server_helper(app_server_helper),
-    _app_tsx(app_tsx)
-  {
-    app_server_helper = NULL;
-  }
+                            AppServerTsx* app_tsx);
 
   /// Destructor
-  virtual ~SproutletAppServerShimTsx()
-  {
-    delete _app_server_helper;
-  }
+  virtual ~SproutletAppServerShimTsx();
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.
   ///
-  /// This function removes the ODI route header from the request before
-  /// passing it to the app server's TsxObject.  The ODI token is passed
-  /// to the TsxHelper so that it can put the header back on after the 
-  /// message has been processed by the app server.
-  virtual void on_initial_request(pjsip_msg* req);
+  /// This function stores all but the top Route header from the request, so 
+  /// they can be restored on any requests sent onward by the AS.
+  virtual void on_rx_initial_request(pjsip_msg* req);
 
   /// Called for an in-dialog request with the original received request for
   /// the transaction.
-  virtual void on_in_dialog_request(pjsip_msg* req)
-  {
-    _app_tsx->on_initial_request(req);
-  }
+  virtual void on_rx_in_dialog_request(pjsip_msg* req);
 
   /// Called with all responses received on the transaction.  If a transport
   /// error or transaction timeout occurs on a downstream leg, this method is
   /// called with a 408 response.
-  virtual void on_response(pjsip_msg* rsp, int fork_id)
-  {
-    _app_tsx->on_response(rsp, fork_id);
-  }
+  virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
 
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request or an error on the inbound transport).
-  virtual void on_cancel(int status_code)
-  {
-    _app_tsx->on_cancel(status_code);
-  }
+  virtual void on_rx_cancel(int status_code, pjsip_msg* cancel_req);
 
 private:
   SproutletAppServerTsxHelper* _app_server_helper;

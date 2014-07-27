@@ -901,6 +901,8 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
       int index;
       --_pending_sends;
       ++_pending_responses;
+      LOG_DEBUG("Sending request, pending %d sends and %d responses",
+                _pending_sends, _pending_responses);
       status = forward_request(uac_tdata, index);
       if (status != PJ_SUCCESS) 
       {

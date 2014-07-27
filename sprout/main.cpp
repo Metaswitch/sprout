@@ -1490,12 +1490,12 @@ int main(int argc, char *argv[])
   AppServer* app = new SampleForkAS();
   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
 
-  // Create the map of sproutlets.
-  std::map<std::string, Sproutlet*> sproutlets;
-  sproutlets[app_sproutlet->service_name()] = app_sproutlet;
+  // Create the list of sproutlets.
+  std::list<Sproutlet*> sproutlets;
+  sproutlets.push_back(app_sproutlet);
 
   // Create the Sproutlet proxy.
-  std::string as_uri = "sip:mikeas.cw-ngv.com";
+  std::string as_uri = opt.scscf_uri;
   SproutletProxy* proxy = new SproutletProxy(stack_data.endpt,
                                              PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                              as_uri,

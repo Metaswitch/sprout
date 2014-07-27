@@ -58,33 +58,26 @@ extern "C" {
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
                                const std::string& uri,
-                               const std::map<std::string, Sproutlet*>& sproutlets) :
+                               const std::list<Sproutlet*>& sproutlets) :
   BasicProxy(endpt, "mod-sproutlet-controller", priority, false),
-  _sproutlets(sproutlets)
+  _sproutlets()
 {
+  /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   _uri = PJUtils::uri_from_string(uri, stack_data.pool, false);
+
+  /// Build a map from service-name to Sproutlet object.
+  for (std::list<Sproutlet*>::const_iterator i = sproutlets.begin();
+       i != sproutlets.end();
+       ++i) 
+  {
+    _sproutlets[(*i)->service_name()] = (*i);
+  }
 }
 
 
 /// Destructor.
 SproutletProxy::~SproutletProxy()
 {
-}
-
-
-/// Process received requests not absorbed by transaction layer.
-pj_bool_t SproutletProxy::on_rx_request(pjsip_rx_data* rdata)
-{
-  // Check that this request is targetted at one of the Sproutlets managed
-  // by this proxy.
-  if (target_sproutlet(rdata->msg_info.msg) != NULL) 
-  {
-    // Found the target Sproutlet for the URI, so handle the request.
-    BasicProxy::on_rx_request(rdata);
-    return PJ_TRUE;
-  }
-
-  return PJ_FALSE;
 }
 
 
@@ -96,22 +89,25 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
 
 
 /// Utility method to find the appropriate Sproutlet to handle a request.
-Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* msg)
+std::list<Sproutlet*> SproutletProxy::target_sproutlets(pjsip_msg* msg)
 {
+  std::list<Sproutlet*> sproutlets;
 #if 0
-  std::string dest_uri = PJUtils::uri_to_string(PJUtils::next_hop(msg),
-                                                PJSIP_URI_IN_ROUTING_HDR);
 
-  std::map<std::string, Sproutlet*>::const_iterator i = _sproutlets.find(dest_uri);
+  bool in_dialog = (PJSIP_MSG_TO_HDR(msg)->tag.slen > 0);
 
-  if (i != _sproutlets.end()) 
+  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
+                                  pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
+
+  if ((hroute != NULL) && (pjsip_uri_compare(hroute->name_add.uri, _uri))) 
   {
-    return i->second;
-  }
+    // The Route header references this node, so we should apply services.
 
-  return NULL;
+  }
+#else
+  sproutlets.push_back(_sproutlets.begin()->second);
 #endif
-  return _sproutlets.begin()->second;
+  return sproutlets;
 }
 
 
@@ -122,6 +118,7 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   // Add a Record-Route header.
   // @TODO - for full implementation must only add one Record-Route and add
   // parameters for others.
+  LOG_DEBUG("Add Record-Route %s:%s", service_name.c_str(), dialog_id.c_str());
 
   pjsip_sip_uri* rr_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool, _uri);
   rr_uri->lr_param = 1;
@@ -162,7 +159,9 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
   {
     // Locate the target Sproutlet for the request, and create the helper and
     // the Sproutlet transaction.
-    Sproutlet* sproutlet = ((SproutletProxy*)_proxy)->target_sproutlet(_req->msg);
+    std::list<Sproutlet*> sproutlets =
+                       ((SproutletProxy*)_proxy)->target_sproutlets(_req->msg);
+    Sproutlet* sproutlet = sproutlets.front();
     LOG_DEBUG("Initializing SproutletProxy transaction for %s",
               sproutlet->service_name().c_str());
     _service_name = sproutlet->service_name();
@@ -185,15 +184,17 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
 void SproutletProxy::UASTsx::process_tsx_request()
 {
   // Pass the request to the Sproutlet at the root of the tree.
-  if (_in_dialog) 
+  pjsip_tx_data* req = _req;
+  _req = NULL;
+  if (!_in_dialog) 
   {
     LOG_DEBUG("Pass initial request to Sproutlet");
-    _sproutlet->on_rx_initial_request(_req->msg);
+    _sproutlet->on_rx_initial_request(req->msg);
   }
   else
   {
     LOG_DEBUG("Pass in dialog request to Sproutlet");
-    _sproutlet->on_rx_in_dialog_request(_req->msg);
+    _sproutlet->on_rx_in_dialog_request(req->msg);
   }
 
   // Now query the helper and process any follow-on actions.
@@ -229,7 +230,6 @@ void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
   if (tdata->msg->line.status.code >= PJSIP_SC_OK) 
   {
     // This is a final response, so dissociate the UAC transaction.
-    --_pending_responses;
     dissociate(uac_tsx);
   }
 
@@ -326,7 +326,7 @@ void SproutletProxy::UASTsx::process_actions(SproutletProxyTsxHelper* helper)
     ++_pending_responses;
 
     pjsip_tx_data* tdata = i->second;
-    LOG_DEBUG("Processing request %p", tdata);
+    LOG_DEBUG("Processing request %p, fork = %d", tdata, i->first);
 
     if (record_route) 
     {
@@ -335,8 +335,18 @@ void SproutletProxy::UASTsx::process_actions(SproutletProxyTsxHelper* helper)
       ((SproutletProxy*)_proxy)->add_record_route(tdata, _service_name, dialog_id);
     }
 
+    // Store the fork ID corresponding to the UAC transaction so we can route
+    // responses appropriately.
+    // @TODO - this is a bit of a hack because we need the fork mapping set up
+    // before calling forward_request.
+    int index = _uac_tsx.size();
+    if (_uac_2_fork.size() <= (size_t)index) 
+    {
+      _uac_2_fork.resize(index + 1);
+    }
+    _uac_2_fork[_uac_tsx.size()] = i->first;
+
     // Forward the request, remembering the UAC index.
-    int index;
     pj_status_t status = forward_request(i->second, index);
 
     if (status != PJ_SUCCESS) 
@@ -344,9 +354,6 @@ void SproutletProxy::UASTsx::process_actions(SproutletProxyTsxHelper* helper)
       // @TODO
     }
 
-    // Store the fork ID corresponding to the UAC transaction so we can route
-    // responses appropriately.
-    _uac_2_fork[index] = i->first;
   }
 }
 
@@ -435,7 +442,7 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(pjsip_tx_data* inbound_request,
   _unique_id(0),
   _trail_id(trail_id)
 {
-  _clones[inbound_request->msg] = inbound_request;
+  register_tdata(inbound_request);
 }
 
 SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
@@ -473,6 +480,8 @@ void SproutletProxyTsxHelper::responses(std::list<pjsip_tx_data*>& responses)
 
 void SproutletProxyTsxHelper::register_tdata(pjsip_tx_data* tdata)
 {
+  LOG_DEBUG("Adding message %p => txdata %p mapping",
+            tdata->msg, tdata);
   _clones[tdata->msg] = tdata;
 }
 
@@ -508,7 +517,7 @@ pjsip_msg* SproutletProxyTsxHelper::clone_request(pjsip_msg* req)
 
   // Clone the tdata and put it back into the map
   pjsip_tx_data* new_tdata = PJUtils::clone_tdata(it->second);
-  _clones[new_tdata->msg] = new_tdata;
+  register_tdata(new_tdata);
 
   return new_tdata->msg;
 }
@@ -536,7 +545,7 @@ pjsip_msg* SproutletProxyTsxHelper::create_response(pjsip_msg* req,
 
   if (status == PJ_SUCCESS) 
   {
-    _clones[new_tdata->msg] = new_tdata;
+    register_tdata(new_tdata);
     return new_tdata->msg;
   }
 
@@ -545,6 +554,8 @@ pjsip_msg* SproutletProxyTsxHelper::create_response(pjsip_msg* req,
 
 int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
 {
+  LOG_DEBUG("Sproutlet send_request %p", req);
+
   // Check that this actually is a request
   if (req->type != PJSIP_REQUEST_MSG)
   {
@@ -571,12 +582,14 @@ int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
     }
   }
 
-  // Move the clone out of the clones list.
-  _clones.erase(req);
-
   // We've found the tdata, move it to _requests under a new unique ID.
   int fork_id = _unique_id++;
   _requests[fork_id] = it->second;
+  LOG_DEBUG("Added request %d (tdata=%p) to output with fork id %d",
+            _requests.size(), it->second, fork_id);
+
+  // Move the clone out of the clones list.
+  _clones.erase(req);
 
   // Finish up
   req = NULL;
@@ -610,11 +623,11 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
     }
   }
 
-  // Move the clone out of the clones list.
-  _clones.erase(rsp);
-
   // We've found the tdata, move it to _responses.
   _responses.push_back(it->second);
+
+  // Move the clone out of the clones list.
+  _clones.erase(rsp);
 
   // Finish up
   rsp = NULL;
@@ -630,8 +643,9 @@ void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
     return;
   }
 
-  _clones.erase(msg);
   pjsip_tx_data_dec_ref(it->second);
+
+  _clones.erase(msg);
 
   // Finish up
   msg = NULL;

@@ -58,19 +58,16 @@ public:
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& uri,
-                 const std::map<std::string, Sproutlet*>& sproutlets);
+                 const std::list<Sproutlet*>& sproutlets);
 
   /// Destructor.
   ~SproutletProxy();
 
 protected:
-  /// Process received requests not absorbed by transaction layer.
-  virtual pj_bool_t on_rx_request(pjsip_rx_data* rdata);
-
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
-  Sproutlet* target_sproutlet(pjsip_msg* msg);
+  std::list<Sproutlet*> target_sproutlets(pjsip_msg* msg);
 
   void add_record_route(pjsip_tx_data* tdata,
                         const std::string& service_name,
