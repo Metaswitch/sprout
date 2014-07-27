@@ -196,6 +196,14 @@ std::string PJUtils::pj_status_to_string(const pj_status_t status)
 }
 
 
+std::string PJUtils::hdr_to_string(void* hdr)
+{
+  char buf[500];
+  int len = pjsip_hdr_print_on((pjsip_hdr*)hdr, buf, sizeof(buf));
+  return std::string(buf, len);
+}
+
+
 /// Returns a canonical SIP address of record from a URI, as per the rules
 /// in RFC3261 s10.3 step 5.  In particular, strip all parameters and the
 /// password before rendering the URI to a string.

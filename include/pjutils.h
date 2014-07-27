@@ -81,6 +81,8 @@ std::string pj_str_to_string(const pj_str_t* pjstr);
 
 std::string pj_status_to_string(const pj_status_t status);
 
+std::string hdr_to_string(void* hdr);
+
 std::string aor_from_uri(const pjsip_sip_uri* uri);
 
 std::string public_id_from_uri(const pjsip_uri* uri);
