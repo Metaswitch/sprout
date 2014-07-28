@@ -1061,7 +1061,7 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
     param->name = name;
     param->value = value;
 
-    if (!pj_stricmp2(&name, "required"))
+    if (!pj_stricmp2(&name, "require"))
     {
       hdr->required_match = true;
     }
@@ -1163,7 +1163,7 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
 
   if (hdr->required_match)
   {
-    copy_advance(buf, pj_str(";required"));
+    copy_advance(buf, pj_str(";require"));
   }
 
   if (hdr->explicit_match)
