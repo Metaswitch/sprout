@@ -186,6 +186,18 @@ std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
   return ((pjstr != NULL) && (pj_strlen(pjstr) > 0)) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
 }
 
+std::string PJUtils::pj_str_to_unquoted_string(const pj_str_t* pjstr)
+{
+  std::string ret = pj_str_to_string(pjstr);
+
+  if ((ret.front() == '"') && (ret.back() == '"'))
+  {
+    ret = ret.substr(1, (ret.size() - 2));
+  }
+
+  return ret;
+}
+
 
 std::string PJUtils::pj_status_to_string(const pj_status_t status)
 {

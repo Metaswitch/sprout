@@ -272,3 +272,116 @@ TEST_F(CustomHeadersTest, SessionExpires)
   EXPECT_EQ(written, 63);
   EXPECT_STREQ("Session-Expires: 600;refresher=uas;other-param=10;more-param=42", buf);
 }
+
+TEST_F(CustomHeadersTest, AcceptContact)
+{
+  pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                 PJSIP_POOL_RDATA_LEN,
+                                                 PJSIP_POOL_RDATA_INC);
+  pj_pool_t *clone_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                  PJSIP_POOL_RDATA_LEN,
+                                                  PJSIP_POOL_RDATA_INC);
+
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Accept-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;require\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("Accept-Contact");
+  pjsip_accept_contact_hdr* hdr =
+      (pjsip_accept_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                            &header_name,
+                                                            NULL);
+  EXPECT_NE(hdr, (pjsip_accept_contact_hdr*)NULL);
+  EXPECT_EQ(true, hdr->required_match);
+  EXPECT_EQ(true, hdr->explicit_match);
+  EXPECT_EQ(1u, pj_list_size(&hdr->feature_set));
+
+  pjsip_accept_contact_hdr* clone = (pjsip_accept_contact_hdr*)hdr->vptr->clone(clone_pool, (void*)hdr);
+  EXPECT_EQ(true, clone->required_match);
+  EXPECT_EQ(true, clone->explicit_match);
+  EXPECT_EQ(1u, pj_list_size(&clone->feature_set));
+
+  pjsip_accept_contact_hdr* sclone = (pjsip_accept_contact_hdr*)hdr->vptr->shallow_clone(clone_pool, (void*)clone);
+  EXPECT_EQ(true, sclone->required_match);
+  EXPECT_EQ(true, sclone->explicit_match);
+  EXPECT_EQ(1u, pj_list_size(&sclone->feature_set));
+
+  pj_pool_release(main_pool);
+
+  char buf[1024];
+  memset(buf, 0, 1024);
+  pjsip_hdr* generic_hdr = (pjsip_hdr*)sclone;
+  int written = generic_hdr->vptr->print_on(sclone, buf, 0);
+  EXPECT_EQ(written, -1);
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = generic_hdr->vptr->print_on(sclone, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 65);
+  EXPECT_STREQ("Accept-Contact: *;+sip.instance=\"<i:am:a:robot>\";explicit;require", buf);
+  pj_pool_release(clone_pool);
+}
+
+TEST_F(CustomHeadersTest, RejectContact)
+{
+  pj_pool_t *main_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                 PJSIP_POOL_RDATA_LEN,
+                                                 PJSIP_POOL_RDATA_INC);
+  pj_pool_t *clone_pool = pjsip_endpt_create_pool(stack_data.endpt, "rtd%p",
+                                                  PJSIP_POOL_RDATA_LEN,
+                                                  PJSIP_POOL_RDATA_INC);
+
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtVFjqo;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Reject-Contact: *;+sip.instance=\"<i:am:a:robot>\"\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str, _tp_default, main_pool);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("Reject-Contact");
+  pjsip_reject_contact_hdr* hdr =
+      (pjsip_reject_contact_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                            &header_name,
+                                                            NULL);
+  EXPECT_NE(hdr, (pjsip_reject_contact_hdr*)NULL);
+  EXPECT_EQ(1u, pj_list_size(&hdr->feature_set));
+
+  pjsip_reject_contact_hdr* clone = (pjsip_reject_contact_hdr*)hdr->vptr->clone(clone_pool, (void*)hdr);
+  EXPECT_EQ(1u, pj_list_size(&clone->feature_set));
+
+  pjsip_reject_contact_hdr* sclone = (pjsip_reject_contact_hdr*)hdr->vptr->shallow_clone(clone_pool, (void*)clone);
+  EXPECT_EQ(1u, pj_list_size(&sclone->feature_set));
+
+  pj_pool_release(main_pool);
+
+  char buf[1024];
+  memset(buf, 0, 1024);
+  pjsip_hdr* generic_hdr = (pjsip_hdr*)sclone;
+  int written = generic_hdr->vptr->print_on(sclone, buf, 0);
+  EXPECT_EQ(written, -1);
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = generic_hdr->vptr->print_on(sclone, buf, i);
+    i++;
+  }
+  EXPECT_STREQ("Reject-Contact: *;+sip.instance=\"<i:am:a:robot>\"", buf);
+  pj_pool_release(clone_pool);
+}

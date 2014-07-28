@@ -79,6 +79,8 @@ pjsip_uri* uri_from_string(const std::string& uri_s,
 
 std::string pj_str_to_string(const pj_str_t* pjstr);
 
+std::string pj_str_to_unquoted_string(const pj_str_t* pjstr);
+
 std::string pj_status_to_string(const pj_status_t status);
 
 std::string aor_from_uri(const pjsip_sip_uri* uri);

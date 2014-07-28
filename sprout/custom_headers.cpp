@@ -923,8 +923,7 @@ pjsip_hdr* parse_hdr_reject_contact(pjsip_parse_ctx* ctx)
       pj_scan_get_char(scanner);
     }
 
-    pjsip_parse_param_imp(scanner, pool, &name, &value,
-                          PJSIP_PARSE_REMOVE_QUOTE);
+    pjsip_parse_param_imp(scanner, pool, &name, &value, 0);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;
@@ -1055,8 +1054,7 @@ pjsip_hdr* parse_hdr_accept_contact(pjsip_parse_ctx* ctx)
       pj_scan_get_char(scanner);
     }
 
-    pjsip_parse_param_imp(scanner, pool, &name, &value,
-                          PJSIP_PARSE_REMOVE_QUOTE);
+    pjsip_parse_param_imp(scanner, pool, &name, &value, 0);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;
@@ -1161,16 +1159,6 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
   copy_advance(buf, hdr->name);
   copy_advance(buf, pj_str(": *"));
 
-  if (hdr->required_match)
-  {
-    copy_advance(buf, pj_str(";require"));
-  }
-
-  if (hdr->explicit_match)
-  {
-    copy_advance(buf, pj_str(";explicit"));
-  }
-
   printed = pjsip_param_print_on(&hdr->feature_set, buf, endbuf-buf,
                                  &pc->pjsip_TOKEN_SPEC,
                                  &pc->pjsip_TOKEN_SPEC, ';');
@@ -1179,6 +1167,16 @@ int pjsip_accept_contact_hdr_print_on(void* void_hdr,
     return -1;
   }
   buf += printed;
+
+  if (hdr->explicit_match)
+  {
+    copy_advance(buf, pj_str(";explicit"));
+  }
+
+  if (hdr->required_match)
+  {
+    copy_advance(buf, pj_str(";require"));
+  }
 
   return buf-startbuf;
 }

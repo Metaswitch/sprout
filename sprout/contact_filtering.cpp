@@ -133,7 +133,7 @@ void filter_bindings_to_targets(const std::string& aor,
         deprioritized = true;
       }
     }
-    
+
     // Assuming we're still allowed to use this Contact, create a target from it.
     if (!rejected)
     {
@@ -157,7 +157,7 @@ void filter_bindings_to_targets(const std::string& aor,
   prune_targets(max_targets, targets);
 }
 
-// Convert a binding to its equivalent Target.  This can fail if (for example), 
+// Convert a binding to its equivalent Target.  This can fail if (for example),
 // the stored Path headers are not valid URIs.  In this case the function returns
 // false and the target parameter should not be used.
 bool binding_to_target(const std::string& aor,
@@ -221,7 +221,7 @@ void add_implicit_filters(const pjsip_msg* msg,
     pjsip_accept_contact_hdr* new_hdr = pjsip_accept_contact_hdr_create(pool);
     new_hdr->explicit_match = false;
     new_hdr->required_match = true;
-    
+
     // Create a method feature, specifying the requests's method.
     pjsip_param* method_feature = PJ_POOL_ALLOC_T(pool, pjsip_param);
     pj_strdup(pool, &method_feature->name, &STR_METHODS);
@@ -264,7 +264,8 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
 
     // For boolean features the name may be prefixed with ! to indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
-    std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
+    std::string feature_value = PJUtils::pj_str_to_unquoted_string(&feature_param->value);
+
     Feature feature(feature_name, feature_value);
     std::string negated_feature_name;
     if (feature_name[0] == '!')
@@ -277,7 +278,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     }
 
     // Now find the Contact's version of this feature (using either name).
-    FeatureSet::const_iterator contact_feature; 
+    FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
     if (contact_feature == contact_feature_set.end())
     {
@@ -354,11 +355,11 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
        (feature_param != &reject->feature_set) && (rc == YES);
        feature_param = feature_param->next)
   {
-    // For boolean features the name may be prefixed with ! to indicate negation.
-    std::string feature_name = std::string(feature_param->name.ptr,
-                                           feature_param->name.slen);
-    std::string feature_value = std::string(feature_param->value.ptr,
-                                            feature_param->value.slen);
+    // For boolean features the name may be prefixed with ! to
+    // indicate negation.
+    std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
+    std::string feature_value = PJUtils::pj_str_to_unquoted_string(&feature_param->value);
+
     Feature feature(feature_name, feature_value);
     std::string negated_feature_name;
     if (feature_name[0] == '!')
@@ -371,7 +372,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     }
 
     // Now find the Contact's version of this feature (using either name).
-    FeatureSet::const_iterator contact_feature; 
+    FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
     if (contact_feature == contact_feature_set.end())
     {
@@ -469,7 +470,7 @@ MatchResult match_feature(const Feature& matcher,
   else
   {
     // Matcher is a token set...
-    if ((matchee.second[0] == '#') || 
+    if ((matchee.second[0] == '#') ||
         (matchee.second[0] == '<'))
     {
       // ...but the matchee is not
@@ -616,7 +617,7 @@ void prune_targets(int max_targets,
   // Sort the targets and truncate.
   std::sort(targets.begin(), targets.end(), compare_targets);
 
-  // Truncate down to max_targets by creating the shortened list and 
+  // Truncate down to max_targets by creating the shortened list and
   // swapping for the passed one.
   TargetList(targets.begin(), targets.begin() + max_targets).swap(targets);
 }
