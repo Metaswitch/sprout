@@ -178,6 +178,11 @@ void SproutletAppServerTsxHelper::send_response(pjsip_msg*& rsp)
   _helper->send_response(rsp);
 }
 
+void SproutletAppServerTsxHelper::cancel_fork(int fork_id)
+{
+  _helper->cancel_fork(fork_id);
+}
+
 /// Frees the specified message.  Received responses or messages that have
 /// been cloned with add_target are owned by the AppServerTsx.  It must
 /// call into ServiceTsx either to send them on or to free them (via this
@@ -197,6 +202,21 @@ void SproutletAppServerTsxHelper::free_msg(pjsip_msg*& msg)
 pj_pool_t* SproutletAppServerTsxHelper::get_pool(const pjsip_msg* msg)
 {
   return _helper->get_pool(msg);
+}
+
+bool SproutletAppServerTsxHelper::schedule_timer(int id, void* context, int duration)
+{
+  return _helper->schedule_timer(id, context, duration);
+}
+
+void SproutletAppServerTsxHelper::cancel_timer(int id)
+{
+  _helper->cancel_timer(id);
+}
+
+bool SproutletAppServerTsxHelper::timer_running(int id)
+{
+  return _helper->timer_running(id);
 }
 
 /// Returns the SAS trail identifier that should be used for any SAS events

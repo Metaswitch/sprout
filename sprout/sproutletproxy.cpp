@@ -633,6 +633,10 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
   rsp = NULL;
 }
 
+void SproutletProxyTsxHelper::cancel_fork(int fork_id)
+{
+}
+
 void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
 {
   // Get the tdata from the map of clones
@@ -662,6 +666,20 @@ pj_pool_t* SproutletProxyTsxHelper::get_pool(const pjsip_msg* msg)
   }
 
   return it->second->pool;
+}
+
+bool SproutletProxyTsxHelper::schedule_timer(int id, void* context, int duration)
+{
+  return false;
+}
+
+void SproutletProxyTsxHelper::cancel_timer(int id)
+{
+}
+
+bool SproutletProxyTsxHelper::timer_running(int id)
+{
+  return false;
 }
 
 SAS::TrailId SproutletProxyTsxHelper::trail() const

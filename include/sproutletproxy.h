@@ -185,8 +185,12 @@ public:
                              const std::string& status_text="");
   int send_request(pjsip_msg*& req);
   void send_response(pjsip_msg*& rsp); 
+  void cancel_fork(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
+  bool schedule_timer(int id, void* context, int duration);
+  void cancel_timer(int id);
+  bool timer_running(int id);
   SAS::TrailId trail() const;
 
 private:

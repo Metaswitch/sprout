@@ -131,6 +131,11 @@ public:
   /// @param  rsp          - The response message to use for forwarding.
   virtual void send_response(pjsip_msg*& rsp) = 0;
 
+  /// Cancels a forked INVITE request by sending a CANCEL request.
+  ///
+  /// @param fork_id       - The identifier of the fork to CANCEL.
+  virtual void cancel_fork(int fork_id) = 0;
+
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
   /// call into SproutletTsx either to send them on or to free them (via this
@@ -145,6 +150,30 @@ public:
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
   virtual pj_pool_t* get_pool(const pjsip_msg* msg) = 0;
+
+  /// Schedules a timer with the specified identifier and expiry period.
+  /// The on_timer_expiry callback will be called back with the timer identity
+  /// and context parameter when the timer expires.  If the identifier 
+  /// corresponds to a timer that is already running, the timer will be stopped
+  /// and restarted with the new duration and context parameter.
+  ///
+  /// @returns             - true/false indicating when the timer is programmed.
+  /// @param  id           - A unique identifier for the timer.
+  /// @param  context      - Context parameter returned on the callback.
+  /// @param  duration     - Timer duration in milliseconds.
+  virtual bool schedule_timer(int id, void* context, int duration) = 0;
+
+  /// Cancels the timer with the specified identifier.  This is a no-op if
+  /// there is no timer with this identifier running.
+  ///
+  /// @param  id           - The unique identifier for the timer.
+  virtual void cancel_timer(int id) = 0;
+
+  /// Queries the state of a timer.
+  ///
+  /// @returns             - true if the timer is running, false otherwise.
+  /// @param  id           - The unique identifier for the timer. 
+  virtual bool timer_running(int id) = 0;
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
@@ -230,6 +259,13 @@ public:
   ///                        was triggered by an error or timeout.
   virtual void on_rx_cancel(int status_code, pjsip_msg* cancel_req) {}
 
+  /// Called when a timer programmed by the SproutletTsx expires.
+  ///
+  /// @param  id           - The unique identifier for the timer.
+  /// @param  context      - The context parameter specified when the timer
+  ///                        was scheduled.
+  virtual void on_timer_expiry(int id, void* context) {}
+
 protected:
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
@@ -298,6 +334,12 @@ protected:
   void send_response(pjsip_msg*& rsp)
     {_helper->send_response(rsp);}
 
+  /// Cancels a forked INVITE request by sending a CANCEL request.
+  ///
+  /// @param fork_id       - The identifier of the fork to CANCEL.
+  void cancel_fork(int fork_id)
+    {_helper->cancel_fork(fork_id);}
+
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
   /// call into SproutletTsx either to send them on or to free them (via this
@@ -314,6 +356,33 @@ protected:
   /// @param  msg          - The message.
   pj_pool_t* get_pool(const pjsip_msg* msg)
     {return _helper->get_pool(msg);}
+
+  /// Schedules a timer with the specified identifier and expiry period.
+  /// The on_timer_expiry callback will be called back with the timer identity
+  /// and context parameter when the timer expires.  If the identifier 
+  /// corresponds to a timer that is already running, the timer will be stopped
+  /// and restarted with the new duration and context parameter.
+  ///
+  /// @returns             - true/false indicating when the timer is programmed.
+  /// @param  id           - A unique identifier for the timer.
+  /// @param  context      - Context parameter returned on the callback.
+  /// @param  duration     - Timer duration in milliseconds.
+  bool schedule_timer(int id, void* context, int duration)
+    {return _helper->schedule_timer(id, context, duration);}
+
+  /// Cancels the timer with the specified identifier.  This is a no-op if
+  /// there is no timer with this identifier running.
+  ///
+  /// @param  id           - The unique identifier for the timer.
+  void cancel_timer(int id)
+    {_helper->cancel_timer(id);}
+
+  /// Queries the state of a timer.
+  ///
+  /// @returns             - true if the timer is running, false otherwise.
+  /// @param  id           - The unique identifier for the timer.
+  bool timer_running(int id)
+    {return _helper->timer_running(id);}
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.

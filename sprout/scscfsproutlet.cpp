@@ -277,27 +277,31 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Failed to determine the served user for a request we should provide
     // services on, so reject the request.
-    reject(status_code);
-  }
-
-  if (_as_chain_link.is_set()) 
-  {
-    // AS chain is set up, so must apply services to the request.
-    if (_session_case->is_originating()) 
-    {
-      apply_originating_services(req);
-    }
-    else
-    {
-      apply_terminating_services(req);
-    }
+    pjsip_msg* rsp = create_response(req, status_code);
+    send_response(rsp);
+    free_msg(req);
   }
   else
   {
-    // No AS chain set, so don't apply services to the request.
-    // Default action will be to try to route following remaining Route
-    // headers or to the RequestURI.
-    forward_request(req);
+    if (_as_chain_link.is_set()) 
+    {
+      // AS chain is set up, so must apply services to the request.
+      if (_session_case->is_originating()) 
+      {
+        apply_originating_services(req);
+      }
+      else
+      {
+        apply_terminating_services(req);
+      }
+    }
+    else
+    {
+      // No AS chain set, so don't apply services to the request.
+      // Default action will be to try to route following remaining Route
+      // headers or to the RequestURI.
+      send_request(req);
+    }
   }
 }
 
@@ -314,7 +318,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
   _acr->tx_request(req);
 
-  forward_request(req);
+  send_request(req);
 }
 
 
@@ -818,7 +822,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
   add_route_uri(req, odi_uri);
 
   // Forward the request.
-  forward_request(req);
+  send_request(req);
 
 #if 0
   // Start the liveness timer for the AS.
@@ -837,7 +841,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
                                   _scscf->icscf_uri()).c_str());
   add_route_uri(req,
                 (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->icscf_uri()));
-  forward_request(req);
+  send_request(req);
 }
 
 
@@ -849,7 +853,7 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
                                   _scscf->bgcf_uri()).c_str());
   add_route_uri(req,
                 (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->bgcf_uri()));
-  forward_request(req);
+  send_request(req);
 }
 
 
@@ -861,7 +865,7 @@ void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
                                   _scscf->scscf_uri()).c_str());
   add_route_uri(req,
                 (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->scscf_uri()));
-  forward_request(req);
+  send_request(req);
 }
 
 
@@ -878,7 +882,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
     LOG_INFO("Route request to maddr %.*s",
              ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
              ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
-    forward_request(req);
+    send_request(req);
   }
   else if ((!PJUtils::is_home_domain(req_uri)) &&
            (!PJUtils::is_uri_local(req_uri)))
@@ -887,7 +891,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
     // to the domain in the Request-URI unchanged.
     LOG_INFO("Route request to RequestURI %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
-    forward_request(req);
+    send_request(req);
   }
   else if (PJSIP_URI_SCHEME_IS_SIP(req_uri))
   {
@@ -898,7 +902,9 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   else
   {
     // The RequestURI contains a Tel URI???
-    reject(PJSIP_SC_NOT_FOUND);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
+    send_response(rsp);
+    free_msg(req);
   }
 }
 
@@ -968,7 +974,9 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   if (targets.empty()) 
   {
     // No valid target bindings for this request, so reject it.
-    reject(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    send_response(rsp);
+    free_msg(req);
   }
   else
   {
@@ -996,7 +1004,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
       // Forward the request and remember the binding identifier used for this
       // in case we get a Flow Failed response.
-      int fork_id = forward_request(to_send);
+      int fork_id = send_request(to_send);
       _target_bindings[fork_id] = targets[ii].binding_id;
     }
   }
@@ -1042,8 +1050,9 @@ int SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
       {
         LOG_WARNING("Badly formed URI %s from ENUM translation", uri.c_str());
         status_code = PJSIP_SC_NOT_FOUND;
-        reject(PJSIP_SC_NOT_FOUND,
-               PJUtils::pj_str_to_string(&SIP_REASON_ENUM_FAILED));
+        pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "ENUM Failed");
+        send_response(rsp);
+        free_msg(req);
       }
     }
     else if (PJUtils::is_uri_phone_number(req->line.req.uri))
@@ -1053,8 +1062,9 @@ int SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
       LOG_WARNING("Unable to resolve URI phone number %s using ENUM",
                   PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req->line.req.uri).c_str());
       status_code = PJSIP_SC_ADDRESS_INCOMPLETE;
-      reject(PJSIP_SC_ADDRESS_INCOMPLETE,
-             PJUtils::pj_str_to_string(&SIP_REASON_ADDR_INCOMPLETE));
+      pjsip_msg* rsp = create_response(req, PJSIP_SC_ADDRESS_INCOMPLETE);
+      send_response(rsp);
+      free_msg(req);
     }
   }
   return status_code;

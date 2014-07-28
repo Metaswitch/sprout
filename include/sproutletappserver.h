@@ -130,6 +130,11 @@ public:
   /// @param  rsp          - The response message to use for forwarding.
   virtual void send_response(pjsip_msg*& rsp);
 
+  /// Cancels a forked INVITE request by sending a CANCEL request.
+  ///
+  /// @param fork_id       - The identifier of the fork to CANCEL.
+  virtual void cancel_fork(int fork_id);
+
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
   /// call into ServiceTsx either to send them on or to free them (via this
@@ -144,6 +149,30 @@ public:
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
   virtual pj_pool_t* get_pool(const pjsip_msg* msg);
+
+  /// Schedules a timer with the specified identifier and expiry period.
+  /// The on_timer_expiry callback will be called back with the timer identity
+  /// and context parameter when the timer expires.  If the identifier 
+  /// corresponds to a timer that is already running, the timer will be stopped
+  /// and restarted with the new duration and context parameter.
+  ///
+  /// @returns             - true/false indicating when the timer is programmed.
+  /// @param  id           - A unique identifier for the timer.
+  /// @param  context      - Context parameter returned on the callback.
+  /// @param  duration     - Timer duration in milliseconds.
+  virtual bool schedule_timer(int id, void* context, int duration);
+
+  /// Cancels the timer with the specified identifier.  This is a no-op if
+  /// there is no timer with this identifier running.
+  ///
+  /// @param  id           - The unique identifier for the timer.
+  virtual void cancel_timer(int id);
+
+  /// Queries the state of a timer.
+  ///
+  /// @returns             - true if the timer is running, false otherwise.
+  /// @param  id           - The unique identifier for the timer.
+  virtual bool timer_running(int id);
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
