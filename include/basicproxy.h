@@ -321,11 +321,13 @@ protected:
     pjsip_tx_data* _tdata;
 
     /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
+    SAS::TrailId trail() const { return _trail; }
 
     /// The resolved server addresses for this transaction.
     std::vector<AddrInfo> _servers;
     int _current_server;
+
+    SAS::TrailId _trail;
 
     bool _pending_destroy;
     int _context_count;
