@@ -10,7 +10,7 @@ PREFIX ?= ${ROOT}/usr
 INSTALL_DIR ?= ${PREFIX}
 MODULE_DIR := ${ROOT}/modules
 
-DEB_COMPONENT := sprout
+DEB_COMPONENT :=  sprout
 DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
 DEB_NAMES := sprout-libs sprout-libs-dbg sprout sprout-dbg bono bono-dbg restund clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
 
