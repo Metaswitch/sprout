@@ -314,6 +314,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+
   if (expiry > max_expires)
   {
     // Expiry is too long, set it to the maximum.

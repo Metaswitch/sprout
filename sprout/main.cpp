@@ -186,6 +186,7 @@ struct options
     { "enforce-user-phone", no_argument,      0, 'u'},
     { "enforce-global-only-lookups", no_argument, 0, 'g'},
     { "reg-max-expires",   required_argument, 0, 'e'},
+    { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
     { "pjsip-threads",     required_argument, 0, 'P'},
     { "worker-threads",    required_argument, 0, 'W'},
     { "analytics",         required_argument, 0, 'a'},
