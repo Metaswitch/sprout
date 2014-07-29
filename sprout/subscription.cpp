@@ -71,7 +71,7 @@ static AnalyticsLogger* analytics;
 static int max_expires;
 
 /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
-static const int DEFAULT_SUBSCRIPION_EXPIRES = 3761;
+static const int DEFAULT_SUBSCRIPTION_EXPIRES = 3761;
 
 uint32_t id_deployment = 0;
 uint32_t id_instance = 0;
@@ -242,7 +242,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
 
       // Calculate the expiry period for the subscription.
-      expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+      expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
 
       if (expiry > max_expires)
       {
@@ -313,7 +313,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+  int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
 
   if (expiry > max_expires)
   {
