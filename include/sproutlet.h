@@ -1,5 +1,5 @@
 /**
- * @file abstractservice.h  Abstract SIP Service interface definition
+ * @file sproutlet.h  SIP sproutlet interface definition
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2014  Metaswitch Networks Ltd
@@ -39,8 +39,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#ifndef ABSTRACTSERVICE_H__
-#define ABSTRACTSERVICE_H__
+#ifndef SPROUTLET_H__
+#define SPROUTLET_H__
 
 extern "C" {
 #include <pjsip.h>
@@ -51,39 +51,39 @@ extern "C" {
 
 #include "sas.h"
 
-class ServiceTsxHelper;
-class AbstractService;
-class AbstractServiceTsx;
+class SproutletTsxHelper;
+class Sproutlet;
+class SproutletTsx;
 
 
-/// The ServiceTsxHelper class handles the underlying service-related processing of
-/// a single transaction.  Once a service has been triggered as part of handling
-/// a transaction, the related ServiceTsxHelper is inspected to determine what should
+/// The SproutletTsxHelper class handles the underlying service-related processing of
+/// a single transaction.  Once a sproutlet has been triggered as part of handling
+/// a transaction, the related SproutletTsxHelper is inspected to determine what should
 /// be done next, e.g. forward the request, reject it, fork it etc.
 /// 
 /// This is an abstract base class to allow for alternative implementations -
 /// in particular, production and test.  It is implemented by the underlying
-/// service infrastructure, not by the services themselves.
+/// service infrastructure, not by the sproutlets themselves.
 ///
-class ServiceTsxHelper
+class SproutletTsxHelper
 {
 public:
   /// Virtual destructor.
-  virtual ~ServiceTsxHelper() {}
+  virtual ~SproutletTsxHelper() {}
 
-  /// Adds the service to the underlying SIP dialog with the specified dialog
+  /// Adds the sproutlet to the underlying SIP dialog with the specified dialog
   /// identifier.
   ///
-  /// @param  dialog_id    - The dialog identifier to be used for this service.
+  /// @param  dialog_id    - The dialog identifier to be used for this sproutlet.
   ///                        If omitted, a default unique identifier is created
   ///                        using parameters from the SIP request.
   ///
   virtual void add_to_dialog(const std::string& dialog_id="") = 0;
 
-  /// Returns the dialog identifier for this service.
+  /// Returns the dialog identifier for this sproutlet.
   ///
-  /// @returns             - The dialog identifier attached to this service,
-  ///                        either by this ServiceTsx instance
+  /// @returns             - The dialog identifier attached to this sproutlet,
+  ///                        either by this SproutletTsx instance
   ///                        or by an earlier transaction in the same dialog.
   virtual const std::string& dialog_id() const = 0;
 
@@ -106,13 +106,15 @@ public:
   /// This function may be called while processing initial requests,
   /// in-dialog requests and cancels but not during response handling
   ///
+  /// @returns             - A unique ID for this fork, used to corellate
+  ///                        replies.
   /// @param  req          - The request message to use for forwarding.  If NULL
   ///                        the original request message is used.
-  virtual void forward_request(pjsip_msg* req=NULL) = 0;
+  virtual int forward_request(pjsip_msg*& req) = 0;
 
   /// Indicate that the response should be forwarded following standard routing
-  /// rules.  Note that, if this service created multiple forks, the responses
-  /// will be aggregated before being sent downstream.
+  /// rules.  Note that, if this sproutlet created multiple forks, the responses
+  /// will be aggregated before being sent upstream.
   ///
   /// This function may be called while handling any response.
   ///
@@ -120,16 +122,15 @@ public:
   virtual void forward_response(pjsip_msg*& rsp) = 0;
 
 #if 0
-// AMC The following API call is needed to allow ASs that call out to other
-// SIP devices to process a call, or to allow asynchronous handling of
+// AMC The following API call is needed to allow Sproutlets that call out to
+// asynchronous APIs to process a call, or to allow asynchronous handling of
 // requests (e.g. database dips).  Lifetimes of objects are hard to manage -
 // possibly this function should return a special callback object to use?
 
-  /// Defer handling a request until a later time.  The service code should
-  /// keep a reference to the Once the asynchronous
-  /// operation has been completed, the service should hold on to the
-  /// ServiceTxsHelper and call into one of the other transaction actions to
-  /// indicate the desired behaviour.  Services must be prepared for the
+  /// Defer handling a request until a later time.  Once the asynchronous
+  /// operation has been completed, the sproutlet should hold on to the
+  /// SproutletTxsHelper and call into one of the other transaction actions to
+  /// indicate the desired behaviour.  Sproutlets must be prepared for the
   /// transaction to be cancelled at any time.
   ///
   /// This function may be called during any of the entry point functions.
@@ -137,8 +138,8 @@ public:
   virtual void defer_request() = 0;
 
 // AMC the following function is needed to build a B2BUA or an AS that creates
-// OOTB calls.  Somehow need to add a way for a service to get hold of a
-// ServiceTxsHelper when not in a transaction.
+// OOTB calls.  Somehow need to add a way for a sproutlet to get hold of a
+// SproutletTxsHelper when not in a transaction.
 
   /// Create and send a new request.  This function may be called at any time.
   ///
@@ -160,12 +161,12 @@ public:
                       const std::string& status_text="") = 0;
 
   /// Frees the specified message.  Received responses or messages that have
-  /// been cloned with add_target are owned by the AppServerTsx.  It must
-  /// call into ServiceTsx either to send them on or to free them (via this
+  /// been cloned with add_target are owned by the SproutletTsx.  It must
+  /// call into SproutletTsx either to send them on or to free them (via this
   /// API).
   ///
   /// @param  msg          - The message to free.
-  virtual void free_msg(pjsip_msg* msg) = 0;
+  virtual void free_msg(pjsip_msg*& msg) = 0;
 
   /// Returns the pool corresponding to a message.  This pool can then be used
   /// to allocate further headers or bodies to add to the message.
@@ -175,22 +176,21 @@ public:
   virtual pj_pool_t* get_pool(const pjsip_msg* msg) = 0;
 
   /// Returns the SAS trail identifier that should be used for any SAS events
-  /// related to this service invocation.
+  /// related to this sproutlet invocation.
   virtual SAS::TrailId trail() const = 0;
 
 };
 
 
-/// The ServiceTsx class is an abstract base class used to handle the
-/// application-server-specific processing of a single transaction.  It
-/// is provided with a ServiceTsxHelper, which it may use to perform the
-/// underlying service-related processing.
-///
-class ServiceTsx
+/// The SproutletTsx class is an abstract base class used to handle the
+/// sproutlet-specific processing of a single transaction.  It is provided with
+/// a SproutletTsxHelper, which it may use to perform the underlying
+/// sproutlet-related processing.
+class SproutletTsx
 {
 public:
   /// Virtual destructor.
-  virtual ~ServiceTsx() {}
+  virtual ~SproutletTsx() {}
 
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.
@@ -201,10 +201,9 @@ public:
   ///
   /// * forward_request() - May be called multiple times
   /// * reject()
-  /// * defer_request()
   ///
   /// @param req           - The received initial request.
-  virtual void on_initial_request(pjsip_msg* req) { forward_request(); }
+  virtual void on_initial_request(pjsip_msg* req) { forward_request(req); }
 
   /// Called for an in-dialog request with the original received request for
   /// the transaction.
@@ -215,10 +214,9 @@ public:
   ///
   /// * forward_request()
   /// * reject()
-  /// * defer_request()
   ///
   /// @param req           - The received in-dialog request.
-  virtual void on_in_dialog_request(pjsip_msg* req) { forward_reqeust(); }
+  virtual void on_in_dialog_request(pjsip_msg* req) { forward_request(req); }
 
   /// Called with all responses received on the transaction.  If a transport
   /// error or transaction timeout occurs on a downstream leg, this method is
@@ -231,12 +229,11 @@ public:
   /// * forward_response() - Multiple responses will be aggregated automatically
   ///                        across forks.
   /// * create_fork()
-  /// * defer_response()
   ///
   /// @param  rsp          - The received request.
   /// @param  fork_id      - The identity of the downstream fork on which
   ///                        the response was received.
-  virtual void on_response(pjsip_msg* rsp, int fork_id) { forward_response(); }
+  virtual void on_response(pjsip_msg* rsp, int fork_id) { forward_response(rsp); }
 
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request or an error on the inbound transport).  On return from 
@@ -251,23 +248,105 @@ public:
 
 protected:
   /// Constructor.
-  ServiceTsx(ServiceTsxHelper* helper) : _helper(helper) {}
+  SproutletTsx(SproutletTsxHelper* helper) : _helper(helper) {}
 
-  /// AMC - Add wrapper functions here to call through to the
-  /// helper (as for AppServerTsx).
+  /// Adds the sproutlet to the underlying SIP dialog with the specified dialog
+  /// identifier.
+  ///
+  /// @param  dialog_id    - The dialog identifier to be used for this sproutlet.
+  ///                        If omitted, a default unique identifier is created
+  ///                        using parameters from the SIP request.
+  ///
+  void add_to_dialog(const std::string& dialog_id="")
+    {_helper->add_to_dialog(dialog_id);}
+
+  /// Returns the dialog identifier for this sproutlet.
+  ///
+  /// @returns             - The dialog identifier attached to this service,
+  ///                        either by this ServiceTsx instance
+  ///                        or by an earlier transaction in the same dialog.
+  const std::string& dialog_id() const
+    {return _helper->dialog_id();}
+
+  /// Clones the request.  This is typically used when forking a request if
+  /// different request modifications are required on each fork.
+  ///
+  /// @returns             - The cloned request message.
+  /// @param  req          - The request message to clone.
+  pjsip_msg* clone_request(pjsip_msg* req)
+    {return _helper->clone_request(req);}
+
+  /// Indicate that the request should be forwarded following standard routing
+  /// rules.
+  ///
+  /// This function may be called repeatedly to create downstream forks of an
+  /// original upstream request and may also be called during response processing
+  /// or an original request to create a late fork.  When processing an in-dialog
+  /// request this function may only be called once.
+  /// 
+  /// This function may be called while processing initial requests,
+  /// in-dialog requests and cancels but not during response handling.
+  ///
+  /// @returns             - The ID of this forwarded request
+  /// @param  req          - The request message to use for forwarding.
+  int forward_request(pjsip_msg*& req)
+    {return _helper->forward_request(req);}
+
+  /// Indicate that the response should be forwarded following standard routing
+  /// rules.  Note that, if this sproutlet created multiple forks, the responses
+  /// will be aggregated before being sent upstream.
+  /// 
+  /// This function may be called while handling any response.
+  ///
+  /// @param  rsp          - The response message to use for forwarding.
+  void forward_response(pjsip_msg*& rsp)
+    {_helper->forward_response(rsp);}
+
+  /// Rejects the request with the specified status code and text.
+  /// 
+  /// This method can only be called when handling any non-cancel request.
+  ///
+  /// @param  status_code  - The SIP status code to send on the response.
+  /// @param  status_text  - The SIP status text to send on the response.  If 
+  ///                        omitted, the default status text for the code is
+  ///                        used (if this is a standard SIP status code).
+  void reject(int status_code,
+              const std::string& status_text="")
+    {return _helper->reject(status_code, status_text);}
+
+  /// Frees the specified message.  Received responses or messages that have
+  /// been cloned with add_target are owned by the SproutletTsx.  It must
+  /// call into SproutletTsx either to send them on or to free them (via this
+  /// API).
+  ///
+  /// @param  msg          - The message to free.
+  void free_msg(pjsip_msg*& msg)
+    {return _helper->free_msg(msg);}
+
+  /// Returns the pool corresponding to a message.  This pool can then be used
+  /// to allocate further headers or bodies to add to the message.
+  ///
+  /// @returns             - The pool corresponding to this message.
+  /// @param  msg          - The message.
+  pj_pool_t* get_pool(const pjsip_msg* msg)
+    {return _helper->get_pool(msg);}
+
+  /// Returns the SAS trail identifier that should be used for any SAS events
+  /// related to this sproutlet invocation.
+  SAS::TrailId trail() const
+    {return _helper->trail();}
 
 private:
-  /// Transaction helper to use for underlying service-related processing.
-  ServiceTsxHelper* _helper;
-}
+  /// Transaction helper to use for underlying sproutlet-related processing.
+  SproutletTsxHelper* _helper;
+};
 
 
-/// The AbstractService class is a base class on which SIP services can be
-/// built.  
+/// The Sproutlet class is a base class on which SIP services can be built.  
 ///
 /// Derived classes are instantiated during system initialization and 
 /// register a service name with Sprout.  Sprout calls the create_tsx method
-/// on an AbstractService derived class when the ServiceManager determines that
+/// on an Sproutlet derived class when the SproutletManager determines that
 /// the next hop for a request contains a hostname of the form
 /// &lt;service_name&gt;.&lt;homedomain&gt;.  This may happen if:
 ///
@@ -278,34 +357,34 @@ private:
 /// -  an in-dialog request is received for a dialog on which the service
 ///    previously called add_to_dialog.
 ///
-class AbstractService
+class Sproutlet
 {
 public:
   /// Virtual destructor.
-  virtual ~AbstractService() {}
+  virtual ~Sproutlet() {}
 
-  /// Called when the system determines the service should be invoked for a
-  /// received request.  The AbstractService can either return NULL indicating it
+  /// Called when the system determines the sproutlet should be invoked for a
+  /// received request.  The Sproutlet can either return NULL indicating it
   /// does not want to process the request, or create a suitable object
-  /// derived from the ServiceTsx class to process the request.
+  /// derived from the SproutletTsx class to process the request.
   ///
   /// @param  helper        - The service helper to use to perform
-  ///                         the underlying service-related processing.
+  ///                         the underlying isproutlet-related processing.
   /// @param  req           - The received request message.
-  virtual ServiceTsx* get_app_tsx(ServiceTsxHelper* helper,
-                                  pjsip_msg* req) = 0;
+  virtual SproutletTsx* get_app_tsx(SproutletTsxHelper* helper,
+                                    pjsip_msg* req) = 0;
 
-  /// Returns the name of this service.
-  const std::string service_name() { return _service_name; }
+  /// Returns the name of this sproutlet.
+  const std::string sproutlet_name() { return _sproutlet_name; }
 
 protected:
   /// Constructor.
-  AbstractService(const std::string& service_name) :
-    _service_name(service_name) {}
+  Sproutlet(const std::string& sproutlet_name) :
+    _sproutlet_name(sproutlet_name) {}
 
 private:
-  /// The name of this service.
-  const std::string _service_name;
+  /// The name of this sproutlet.
+  const std::string _sproutlet_name;
 };
 
 #endif

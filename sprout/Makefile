@@ -73,7 +73,8 @@ TARGET_SOURCES := logger.cpp \
                   httpstack_utils.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
-                  contact_filtering.cpp
+                  contact_filtering.cpp \
+									sproutletappserver.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -127,7 +128,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
-                       appserver_test.cpp
+                       appserver_test.cpp \
+											 sproutletappserver_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
