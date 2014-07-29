@@ -92,7 +92,8 @@ enum OptionTypes
 {
   OPT_DEFAULT_SESSION_EXPIRES=256+1,
   OPT_ADDITIONAL_HOME_DOMAINS,
-  OPT_EMERGENCY_REG_ACCEPTED
+  OPT_EMERGENCY_REG_ACCEPTED,
+  OPT_SUB_MAX_EXPIRES
 };
 
 struct options
@@ -139,6 +140,7 @@ struct options
   pj_bool_t              analytics_enabled;
   std::string            analytics_directory;
   int                    reg_max_expires;
+  int                    sub_max_expires;
   int                    pjsip_threads;
   std::string            http_address;
   int                    http_port;
@@ -288,6 +290,8 @@ static void usage(void)
        "                            contains a global number (defaults to false)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
+       "     --sub-max-expires <expiry>\n"
+       "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
        " -T  --http_address <server>\n"
@@ -374,6 +378,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int c;
   int opt_ind;
   int reg_max_expires;
+  int sub_max_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -645,6 +650,25 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         LOG_WARNING("Invalid value for reg_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->reg_max_expires);
+      }
+      break;
+
+    case OPT_SUB_MAX_EXPIRES:
+      sub_max_expires = atoi(pj_optarg);
+
+      if (sub_max_expires > 0)
+      {
+        options->sub_max_expires = sub_max_expires;
+        LOG_INFO("Maximum registration period set to %d seconds\n",
+                 options->sub_max_expires);
+      }
+      else
+      {
+        // The parameter could be invalid either because it's -ve, or it's not
+        // an integer (in which case atoi returns 0). Log, but don't store it.
+        LOG_WARNING("Invalid value for sub_max_expires: '%s'. "
+                    "The default value of %d will be used.",
+                    pj_optarg, options->sub_max_expires);
       }
       break;
 
@@ -971,6 +995,7 @@ int main(int argc, char *argv[])
   opt.enforce_user_phone = false;
   opt.enforce_global_only_lookups = false;
   opt.reg_max_expires = 300;
+  opt.sub_max_expires = 300;
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
   opt.sas_server = "0.0.0.0";
@@ -1371,7 +1396,8 @@ int main(int argc, char *argv[])
                                remote_reg_store,
                                hss_connection,
                                scscf_acr_factory,
-                               analytics_logger);
+                               analytics_logger,
+                               opt.sub_max_expires);
 
     if (status != PJ_SUCCESS)
     {

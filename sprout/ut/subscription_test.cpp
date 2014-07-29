@@ -69,7 +69,7 @@ public:
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics);
+    pj_status_t ret = init_subscription(_store, _remote_store, _hss_connection, _acr_factory, _analytics, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
     stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
 
@@ -557,7 +557,7 @@ void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
   }
   else
   {
-    EXPECT_EQ("Subscription-State: active;expires=3761", get_headers(out, "Subscription-State"));
+    EXPECT_EQ("Subscription-State: active;expires=300", get_headers(out, "Subscription-State"));
   }
 
   EXPECT_THAT(get_headers(out, "To"), testing::MatchesRegex("To: .*;tag=10.114.61.213\\+1\\+8c8b232a\\+5fb751cf"));

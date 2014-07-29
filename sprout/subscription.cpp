@@ -68,6 +68,8 @@ static ACRFactory* acr_factory;
 
 static AnalyticsLogger* analytics;
 
+static int max_expires;
+
 /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
 static const int DEFAULT_SUBSCRIPION_EXPIRES = 3761;
 
@@ -241,6 +243,13 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
 
       // Calculate the expiry period for the subscription.
       expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+
+      if (expiry > max_expires)
+      {
+        // Expiry is too long, set it to the maximum.
+        expiry = max_expires;
+      }
+
       subscription->_expires = now + expiry;
       std::map<std::string, RegStore::AoR::Binding> bindings;
 
@@ -305,6 +314,11 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
   int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
@@ -632,7 +646,8 @@ pj_status_t init_subscription(RegStore* registrar_store,
                               RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
-                              AnalyticsLogger* analytics_logger)
+                              AnalyticsLogger* analytics_logger,
+                              int cfg_max_expires)
 {
   pj_status_t status;
 
@@ -641,6 +656,7 @@ pj_status_t init_subscription(RegStore* registrar_store,
   hss = hss_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
+  max_expires = cfg_max_expires;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_subscription);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);

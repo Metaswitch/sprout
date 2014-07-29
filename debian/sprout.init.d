@@ -194,6 +194,11 @@ do_start()
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
         fi
 
+        if [ ! -z $sub_max_expires ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires $sub_max_expires"
+        fi
+
         # Only add the icscf and scscf arguments if they're not 0
         if [ ! -z $scscf ] && [ ! $scscf = 0 ]
         then
