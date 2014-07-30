@@ -189,18 +189,18 @@ do_start()
         # Add alias host names if any are defined.
         [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias $alias_list"
 
-        if [ ! -z $reg_max_expires ]
+        if [ -n $reg_max_expires ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
         fi
 
-        if [ ! -z $sub_max_expires ]
+        if [ -n $sub_max_expires ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires $sub_max_expires"
         fi
 
         # Only add the icscf and scscf arguments if they're not 0
-        if [ ! -z $scscf ] && [ ! $scscf = 0 ]
+        if [ -n $scscf ] && [ ! $scscf = 0 ]
         then
           # S-CSCF function is enabled, so add S-CSCF specific parameters
           DAEMON_ARGS="$DAEMON_ARGS --scscf $scscf"
@@ -216,7 +216,7 @@ do_start()
 
         fi
 
-        if [ ! -z $icscf ] && [ ! $icscf = 0 ]
+        if [ -n $icscf ] && [ ! $icscf = 0 ]
         then
           # I-CSCF function is enabled
           DAEMON_ARGS="$DAEMON_ARGS --icscf $icscf"
