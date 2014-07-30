@@ -299,7 +299,7 @@ int identity_hdr_print(pjsip_routing_hdr* hdr,
                             endbuf-buf);
   if (printed < 1)
   {
-    return -1;
+    return -1; // LCOV_EXCL_LINE
   }
   buf += printed;
 
@@ -308,7 +308,7 @@ int identity_hdr_print(pjsip_routing_hdr* hdr,
                                  &pc->pjsip_TOKEN_SPEC, ';');
   if (printed < 0)
   {
-    return -1;
+    return -1; // LCOV_EXCL_LINE
   }
   buf += printed;
 
