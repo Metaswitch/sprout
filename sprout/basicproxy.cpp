@@ -314,6 +314,9 @@ void BasicProxy::on_cancel_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  // Set the SAS trail on the CANCEL transaction.
+  set_trail(cancel_tsx, get_trail(rdata));
+
   // Feed the CANCEL request to the transaction.
   pjsip_tsx_recv_msg(cancel_tsx, rdata);
 
@@ -426,7 +429,7 @@ BasicProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   _uac_tsx(),
   _pending_sends(0),
   _pending_responses(0),
-  _best_rsp(NULL),
+  _final_rsp(NULL),
   _pending_destroy(false),
   _context_count(0)
 {
@@ -470,13 +473,13 @@ BasicProxy::UASTsx::~UASTsx()
     _req = NULL;
   }
 
-  if (_best_rsp != NULL)
+  if (_final_rsp != NULL)
   {
     // The pre-built response hasn't been used, so free it.
     // LCOV_EXCL_START
     LOG_DEBUG("Free un-used best response");
-    pjsip_tx_data_dec_ref(_best_rsp);
-    _best_rsp = NULL;
+    pjsip_tx_data_dec_ref(_final_rsp);
+    _final_rsp = NULL;
     // LCOV_EXCL_STOP
   }
 
@@ -548,7 +551,7 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
                                 rdata,
                                 PJSIP_SC_REQUEST_TIMEOUT,
                                 NULL,
-                                &_best_rsp);
+                                &_final_rsp);
 
     // If delay_trying is enabled, then don't send a 100 Trying now.
     if ((rdata->msg_info.msg->line.req.method.id == PJSIP_INVITE_METHOD) &&
@@ -1026,11 +1029,11 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       LOG_DEBUG("%s - Forward 200 OK response", name());
 
       // Send this response immediately as a final response.
-      if (_best_rsp != NULL)
+      if (_final_rsp != NULL)
       {
-        pjsip_tx_data_dec_ref(_best_rsp);
+        pjsip_tx_data_dec_ref(_final_rsp);
       }
-      _best_rsp = tdata;
+      _final_rsp = tdata;
       --_pending_responses;
       dissociate(uac_tsx);
       on_final_response();
@@ -1040,17 +1043,17 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       // Final, non-OK response.  Is this the "best" response
       // received so far?
       LOG_DEBUG("%s - 3xx/4xx/5xx/6xx response", uac_tsx->name());
-      if ((_best_rsp == NULL) ||
-          (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+      if ((_final_rsp == NULL) ||
+          (compare_sip_sc(status_code, _final_rsp->msg->line.status.code) > 0))
       {
         LOG_DEBUG("%s - Best 3xx/4xx/5xx/6xx response so far", uac_tsx->name());
 
-        if (_best_rsp != NULL)
+        if (_final_rsp != NULL)
         {
-          pjsip_tx_data_dec_ref(_best_rsp);
+          pjsip_tx_data_dec_ref(_final_rsp);
         }
 
-        _best_rsp = tdata;
+        _final_rsp = tdata;
       }
       else
       {
@@ -1124,12 +1127,12 @@ void BasicProxy::UASTsx::on_final_response()
 {
   if (_tsx != NULL)
   {
-    pjsip_tx_data *best_rsp = _best_rsp;
-    int st_code = best_rsp->msg->line.status.code;
-    _best_rsp = NULL;
-    set_trail(best_rsp, trail());
-    on_tx_response(best_rsp);
-    pjsip_tsx_send_msg(_tsx, best_rsp);
+    pjsip_tx_data* rsp = _final_rsp;
+    _final_rsp = NULL;
+    int st_code = rsp->msg->line.status.code;
+    set_trail(rsp, trail());
+    on_tx_response(rsp);
+    pjsip_tsx_send_msg(_tsx, rsp);
 
     if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
         (st_code == 200))
@@ -1145,19 +1148,20 @@ void BasicProxy::UASTsx::on_final_response()
 }
 
 
-/// Sends a response using the buffer saved off for the best response.
+/// Sends a response using the buffer saved off for the final response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
-  if (_req->msg->line.req.method.id != PJSIP_ACK_METHOD) 
+  if ((_req->msg->line.req.method.id != PJSIP_ACK_METHOD) &&
+      (_final_rsp != NULL))
   {
     if ((st_code >= 100) && (st_code < 200))
     {
       // Send a provisional response.
       // LCOV_EXCL_START
-      pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
+      pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_final_rsp);
       prov_rsp->msg->line.status.code = st_code;
       prov_rsp->msg->line.status.reason =
-                  (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+                (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
       pjsip_tx_data_invalidate_msg(prov_rsp);
       set_trail(prov_rsp, trail());
       on_tx_response(prov_rsp);
@@ -1167,15 +1171,15 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
     else
     {
       // Send a final response.
-      pjsip_tx_data *best_rsp = _best_rsp;
-      _best_rsp = NULL;
-      best_rsp->msg->line.status.code = st_code;
-      best_rsp->msg->line.status.reason =
-                  (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
-      pjsip_tx_data_invalidate_msg(best_rsp);
-      set_trail(best_rsp, trail());
-      on_tx_response(best_rsp);
-      pjsip_tsx_send_msg(_tsx, best_rsp);
+      pjsip_tx_data *final_rsp = _final_rsp;
+      _final_rsp = NULL;
+      final_rsp->msg->line.status.code = st_code;
+      final_rsp->msg->line.status.reason =
+                (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+      pjsip_tx_data_invalidate_msg(final_rsp);
+      set_trail(final_rsp, trail());
+      on_tx_response(final_rsp);
+      pjsip_tsx_send_msg(_tsx, final_rsp);
     }
   }
 }
@@ -1404,7 +1408,12 @@ void BasicProxy::UASTsx::cancel_trying_timer()
 void BasicProxy::UASTsx::trying_timer_expired()
 {
   enter_context();
+
   pthread_mutex_lock(&_trying_timer_lock);
+
+  LOG_DEBUG("Trying timer expired for %s, transaction state = %s",
+            name(),
+            (_tsx != NULL) ? pjsip_tsx_state_str(_tsx->state) : "Unknown");
 
   if ((_trying_timer.id == TRYING_TIMER) &&
       (_tsx != NULL) &&
@@ -1412,11 +1421,13 @@ void BasicProxy::UASTsx::trying_timer_expired()
   {
     // Transaction is still in Trying state, so send a 100 Trying response
     // now.
+    LOG_DEBUG("Send delayed 100 Trying response");
     send_response(100);
     _trying_timer.id = 0;
   }
 
   pthread_mutex_unlock(&_trying_timer_lock);
+
   exit_context();
 }
 
@@ -1495,7 +1506,7 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
   pj_status_t status;
 
   // Store the request and add a reference to the request so we can be sure it
-  // remains valid for retries.
+  // remains valid for retries and building timeout responses.
   _tdata = tdata;
   pjsip_tx_data_add_ref(_tdata);
 

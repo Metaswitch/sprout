@@ -39,14 +39,12 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-
 extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
 }
-
 
 #include "log.h"
 #include "pjutils.h"
@@ -63,7 +61,9 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
   _sproutlets()
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
+  LOG_DEBUG("Supplied Record-Route URI = %s", uri.c_str());
   _uri = PJUtils::uri_from_string(uri, stack_data.pool, false);
+  LOG_DEBUG("Rendered URI = %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, _uri).c_str());
 
   /// Build a map from service-name to Sproutlet object.
   for (std::list<Sproutlet*>::const_iterator i = sproutlets.begin();
@@ -128,12 +128,13 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   std::string pname = service_name + ":" + dialog_id;
   pjsip_param *p = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
   pj_strdup2(tdata->pool, &p->name, pname.c_str());
+  p->value.slen = 0;
   pj_list_insert_before(&rr_uri->other_param, p);
 
   // Construct and add the Record-Route header.
   pjsip_rr_hdr* hrr = pjsip_rr_hdr_create(tdata->pool);
   hrr->name_addr.uri = (pjsip_uri*)rr_uri;
-  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)hrr);
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hrr);
 }
 
 
@@ -165,15 +166,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     LOG_DEBUG("Initializing SproutletProxy transaction for %s",
               sproutlet->service_name().c_str());
     _service_name = sproutlet->service_name();
-    _helper = new SproutletProxyTsxHelper(_req, trail());
-    _sproutlet = sproutlet->get_tsx(_helper, _req->msg);
-
-    if (_sproutlet == NULL) 
-    {
-      // The Sproutlet has decided it doesn't want to handle the message, so
-      // just use a default Sproutlet that passes the request through.
-      _sproutlet = new SproutletTsx(_helper);
-    }
+    _helper = new SproutletProxyTsxHelper(this, sproutlet, _req, trail());
   }
                                                        
   return status;
@@ -186,19 +179,7 @@ void SproutletProxy::UASTsx::process_tsx_request()
   // Pass the request to the Sproutlet at the root of the tree.
   pjsip_tx_data* req = _req;
   _req = NULL;
-  if (!_in_dialog) 
-  {
-    LOG_DEBUG("Pass initial request to Sproutlet");
-    _sproutlet->on_rx_initial_request(req->msg);
-  }
-  else
-  {
-    LOG_DEBUG("Pass in dialog request to Sproutlet");
-    _sproutlet->on_rx_in_dialog_request(req->msg);
-  }
-
-  // Now query the helper and process any follow-on actions.
-  process_actions(_helper);
+  _helper->rx_request(req);
 }
 
 
@@ -206,15 +187,7 @@ void SproutletProxy::UASTsx::process_tsx_request()
 void SproutletProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
 {
   // Pass the CANCEL to the Sproutlet at the root of the tree.
-  _sproutlet->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED, rdata->msg_info.msg);
-
-  // Send CANCEL to cancel the UAC transactions.
-  // The UAS INVITE transaction will get final response when
-  // we receive final response from the UAC INVITE transaction.
-  cancel_pending_uac_tsx(0, false);
-
-  // @TODO - will need to process CANCELs through the tree of Sproutlet's
-  // when we support arbitrary Sproutlet topologies.
+  _helper->rx_cancel(rdata);
 }
 
 
@@ -224,43 +197,13 @@ void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 {
   enter_context();
 
-  _helper->register_tdata(tdata);
-  _sproutlet->on_rx_response(tdata->msg, _uac_2_fork[uac_tsx->index()]);
-
   if (tdata->msg->line.status.code >= PJSIP_SC_OK) 
   {
     // This is a final response, so dissociate the UAC transaction.
     dissociate(uac_tsx);
   }
 
-  process_actions(_helper);
-
-  exit_context();
-}
-
-
-/// Called when a response is transmitted on this transaction.
-void SproutletProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
-{
-  enter_context();
-
-  if ((_sproutlet != NULL) &&
-      (tdata->msg->line.status.code != PJSIP_SC_TRYING))
-  {
-    _sproutlet->on_tx_response(tdata->msg);
-  }
-
-  exit_context();
-}
-
-
-/// Called when a request is transmitted on an associated client transaction.
-/// Handles interactions with the ACR for the request if one is allocated.
-void SproutletProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_tsx)
-{
-  enter_context();
-
-  _sproutlet->on_tx_request(tdata->msg, _uac_2_fork[uac_tsx->index()]);
+  _helper->rx_response(tdata, _uac_2_fork[uac_tsx->index()]);
 
   exit_context();
 }
@@ -280,13 +223,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
   {
     // Notify the root Sproutlet of the error.
-    _sproutlet->on_rx_cancel(PJSIP_SC_REQUEST_TIMEOUT, NULL);
-    if (_tsx->method.id == PJSIP_INVITE_METHOD)
-    {
-      // INVITE transaction has been terminated.  If there are any
-      // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, true);
-    }
+    _helper->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
   }
 
   BasicProxy::UASTsx::on_tsx_state(event);
@@ -294,195 +231,103 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   exit_context();
 }
 
-
-/// Process actions required by a Sproutlet
-void SproutletProxy::UASTsx::process_actions(SproutletProxyTsxHelper* helper)
+void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
+                                              const std::string& service_name,
+                                              const std::string& dialog_id)
 {
-  // First handle any responses generated or forwarded by the Sproutlet.
-  LOG_DEBUG("Processing actions from sproutlet");
-  std::list<pjsip_tx_data*> rsps;
-  helper->responses(rsps);
-  LOG_DEBUG("%d responses", rsps.size());
-  while (!rsps.empty()) 
+  ((SproutletProxy*)_proxy)->add_record_route(tdata, service_name, dialog_id);
+}
+
+void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req, int fork_id, SproutletProxyTsxHelper* helper)
+{
+  int index = _uac_tsx.size();
+  if (_uac_2_fork.size() < (size_t)index + 1) 
   {
-    pjsip_tx_data* tdata = rsps.front();
-    LOG_DEBUG("Process response %p", tdata);
-    rsps.pop_front();
-    process_response(tdata);
+    _uac_2_fork.resize(index + 1);
   }
+  _uac_2_fork[index] = fork_id;
 
-  // Now handle any requests forwarded/generated by the Sproutlet.
-  std::string dialog_id;
-  bool record_route = helper->record_route_requested(dialog_id);
-  std::unordered_map<int, pjsip_tx_data*> reqs;
-  helper->requests(reqs);
-  LOG_DEBUG("%d requests", reqs.size());
-  _pending_sends = reqs.size();
-  for (std::unordered_map<int, pjsip_tx_data*>::const_iterator i = reqs.begin();
-       i != reqs.end();
-       ++i) 
+  if (_fork_2_uac.size() < (size_t)fork_id + 1) 
   {
-    --_pending_sends;
-    ++_pending_responses;
-
-    pjsip_tx_data* tdata = i->second;
-    LOG_DEBUG("Processing request %p, fork = %d", tdata, i->first);
-
-    if (record_route) 
-    {
-      // The Sproutlet has requested that we Record-Route on this dialog, so
-      // add a Record-Route header.
-      ((SproutletProxy*)_proxy)->add_record_route(tdata, _service_name, dialog_id);
-    }
-
-    // Store the fork ID corresponding to the UAC transaction so we can route
-    // responses appropriately.
-    // @TODO - this is a bit of a hack because we need the fork mapping set up
-    // before calling forward_request.
-    int index = _uac_tsx.size();
-    if (_uac_2_fork.size() <= (size_t)index) 
-    {
-      _uac_2_fork.resize(index + 1);
-    }
-    _uac_2_fork[_uac_tsx.size()] = i->first;
-
-    // Forward the request, remembering the UAC index.
-    pj_status_t status = forward_request(i->second, index);
-
-    if (status != PJ_SUCCESS) 
-    {
-      // @TODO
-    }
-
+    _fork_2_uac.resize(fork_id + 1);
   }
+  _fork_2_uac[fork_id] = index;
+
+  forward_request(req, index);
 }
 
 
-void SproutletProxy::UASTsx::process_response(pjsip_tx_data* tdata)
+void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp, SproutletProxyTsxHelper* helper)
 {
-  int status_code = tdata->msg->line.status.code;
-
-  if (status_code == 100)
+  if (_final_rsp != NULL) 
   {
-    // We will already have sent a locally generated 100 Trying response, so
-    // don't forward this one.
-    LOG_DEBUG("Discard 100/INVITE response");
-    pjsip_tx_data_dec_ref(tdata);
-    return;
+    pjsip_tx_data_dec_ref(_final_rsp);
   }
+  _final_rsp = rsp;
 
-  if ((status_code > 100) &&
-      (status_code < 199) &&
-      (_tsx->method.id == PJSIP_INVITE_METHOD))
+  on_final_response();
+}
+
+
+void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code, int fork_id, SproutletProxyTsxHelper* helper)
+{
+  // Find the UAC transaction index corresponding to this fork.
+  LOG_DEBUG("Request to cancel fork %d", fork_id);
+  LOG_DEBUG("_fork_2_uac.size() == %d", _fork_2_uac.size());
+  if ((size_t)fork_id < _fork_2_uac.size()) 
   {
-    // Forward all provisional responses to INVITEs.
-    LOG_DEBUG("Forward 1xx response");
-
-    // Forward response with the UAS transaction
-    on_tx_response(tdata);
-    pjsip_tsx_send_msg(_tsx, tdata);
-  }
-  else if (status_code == 200)
-  {
-    // 200 OK.
-    LOG_DEBUG("Forward 200 OK response");
-
-    // Send this response immediately as a final response.
-    if (_best_rsp != NULL)
+    int index = _fork_2_uac[fork_id];
+    LOG_DEBUG("_fork_2_uac[%d] = %d", fork_id, index);
+    LOG_DEBUG("_uac_tsx.size() = %d", _uac_tsx.size());
+    if ((index < _uac_tsx.size()) &&
+        (_uac_tsx[index] != NULL))
     {
-      pjsip_tx_data_dec_ref(_best_rsp);
-    }
-    _best_rsp = tdata;
-    --_pending_responses;
-    on_final_response();
-  }
-  else
-  {
-    // Final, non-OK response.  Is this the "best" response
-    // received so far?
-    LOG_DEBUG("3xx/4xx/5xx/6xx response");
-    if ((_best_rsp == NULL) ||
-        (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
-    {
-      LOG_DEBUG("Best 3xx/4xx/5xx/6xx response so far");
-
-      if (_best_rsp != NULL)
-      {
-        pjsip_tx_data_dec_ref(_best_rsp);
-      }
-
-      _best_rsp = tdata;
-    }
-    else
-    {
-      pjsip_tx_data_dec_ref(tdata);
-    }
-
-    --_pending_responses;
-    if (_pending_sends + _pending_responses == 0)
-    {
-      // Received responses on every UAC transaction, so check terminating
-      // call services and then send the best response on the UAS
-      // transaction.
-      LOG_DEBUG("All UAC responded");
-      on_final_response();
+      LOG_DEBUG("Cancel pending transaction");
+      _uac_tsx[index]->cancel_pending_tsx(status_code);
     }
   }
 }
+
 
 //
 // SproutletTsxHelper methods.
 //
 
-SproutletProxyTsxHelper::SproutletProxyTsxHelper(pjsip_tx_data* inbound_request,
+SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_tsx,
+                                                 Sproutlet* sproutlet,
+                                                 pjsip_tx_data* req,
                                                  SAS::TrailId trail_id) :
+  _proxy_tsx(proxy_tsx),
+  _sproutlet(NULL),
+  _service_name(""),
+  _packets(),
+  _send_requests(),
+  _send_responses(),
   _dialog_id(""),
   _record_routed(false),
-  _final_response_sent(false),
-  _unique_id(0),
+  _pending_sends(0),
+  _pending_responses(0),
+  _best_rsp(NULL),
+  _complete(false),
+  _forks(),
   _trail_id(trail_id)
 {
-  register_tdata(inbound_request);
+  // Call the Sproutlet to get a SproutletTsx object.
+  _sproutlet = sproutlet->get_tsx(this, req->msg);
+  _service_name = sproutlet->service_name();
+  if (_sproutlet == NULL) 
+  {
+    // The Sproutlet doesn't want to handle this request, so create a default
+    // SproutletTsx to handle it.
+    _sproutlet = new SproutletTsx(this);
+  }
 }
 
 SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
 {
-  assert(_clones.empty());
-  assert(_requests.empty());
-  assert(_responses.empty());
-}
-
-bool SproutletProxyTsxHelper::record_route_requested(std::string& dialog_id)
-{
-  if (_record_routed)
-  {
-    dialog_id = _dialog_id;
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-void SproutletProxyTsxHelper::requests(std::unordered_map<int, pjsip_tx_data*>& requests)
-{
-  requests = _requests;
-  _requests.clear();
-}
-
-void SproutletProxyTsxHelper::responses(std::list<pjsip_tx_data*>& responses)
-{
-  responses = _responses;
-  _responses.clear();
-}
-
-
-void SproutletProxyTsxHelper::register_tdata(pjsip_tx_data* tdata)
-{
-  LOG_DEBUG("Adding message %p => txdata %p mapping",
-            tdata->msg, tdata);
-  _clones[tdata->msg] = tdata;
+  assert(_packets.empty());
+  assert(_send_requests.empty());
+  assert(_send_responses.empty());
 }
 
 //
@@ -508,8 +353,8 @@ const std::string& SproutletProxyTsxHelper::dialog_id() const
 pjsip_msg* SproutletProxyTsxHelper::clone_request(pjsip_msg* req)
 {
   // Get the old tdata from the map of clones
-  Clones::iterator it = _clones.find(req);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(req);
+  if (it == _packets.end())
   {
     LOG_WARNING("Sproutlet attempted to clone an unrecognised request");
     return NULL;
@@ -527,8 +372,8 @@ pjsip_msg* SproutletProxyTsxHelper::create_response(pjsip_msg* req,
                                                     const std::string& status_text)
 {
   // Get the request's tdata from the map of clones
-  Clones::iterator it = _clones.find(req);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(req);
+  if (it == _packets.end())
   {
     LOG_WARNING("Sproutlet attempted to create a response from an unrecognised request");
     return NULL;
@@ -564,32 +409,23 @@ int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
   }
 
   // Get the tdata from the map of clones
-  Clones::iterator it = _clones.find(req);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(req);
+  if (it == _packets.end())
   {
     LOG_ERROR("Sproutlet attempted to forward an unrecognised request");
     return -1;
   }
 
-  // If we've already forwarded a final response, we should not forward a
-  // request too.
-  if (req->line.status.code >= PJSIP_SC_OK)
-  {
-    _final_response_sent = true;
-    if (!_requests.empty())
-    {
-      LOG_ERROR("Sproutlet sent a final response as well as forwarding downstream");
-    }
-  }
-
-  // We've found the tdata, move it to _requests under a new unique ID.
-  int fork_id = _unique_id++;
-  _requests[fork_id] = it->second;
+  // We've found the tdata, move it to _send_requests under a new unique ID.
+  int fork_id = _forks.size();
+  _forks.resize(fork_id + 1);
+  _forks[fork_id] = PENDING;
+  _send_requests[fork_id] = it->second;
   LOG_DEBUG("Added request %d (tdata=%p) to output with fork id %d",
-            _requests.size(), it->second, fork_id);
+            _send_requests.size(), it->second, fork_id);
 
   // Move the clone out of the clones list.
-  _clones.erase(req);
+  _packets.erase(req);
 
   // Finish up
   req = NULL;
@@ -606,28 +442,18 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
   }
 
   // Get the tdata from the map of clones
-  Clones::iterator it = _clones.find(rsp);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(rsp);
+  if (it == _packets.end())
   {
     LOG_ERROR("Sproutlet attempted to clone an unrecognised request");
     return;
   }
 
-  // If this is a final response, we should not have a request forwarded too.
-  if (rsp->line.status.code >= PJSIP_SC_OK)
-  {
-    _final_response_sent = true;
-    if (!_requests.empty())
-    {
-      LOG_ERROR("Sproutlet sent a final response as well as forwarding downstream");
-    }
-  }
-
-  // We've found the tdata, move it to _responses.
-  _responses.push_back(it->second);
+  // We've found the tdata, move it to _send_responses.
+  _send_responses.push_back(it->second);
 
   // Move the clone out of the clones list.
-  _clones.erase(rsp);
+  _packets.erase(rsp);
 
   // Finish up
   rsp = NULL;
@@ -635,13 +461,34 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
 
 void SproutletProxyTsxHelper::cancel_fork(int fork_id)
 {
+  if ((_forks.size() > (size_t)fork_id) &&
+      (_forks[fork_id] == PENDING))
+  {
+    // The fork is still pending a response, so we can CANCEL it.
+    // @TODO, should probably check this is an INVITE transaction!
+    _forks[fork_id] = PENDING_CANCEL;
+  }
+}
+
+void SproutletProxyTsxHelper::cancel_pending_forks()
+{
+  LOG_DEBUG("%d forks", _forks.size());
+  for (size_t ii = 0; ii < _forks.size(); ++ii) 
+  {
+    LOG_DEBUG("Fork %d status = %d", ii, _forks[ii]);
+    if (_forks[ii] == PENDING) 
+    {
+      LOG_DEBUG("Set status of fork %d to PENDING_CANCEL", ii);
+      _forks[ii] = PENDING_CANCEL;
+    }
+  }
 }
 
 void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
 {
   // Get the tdata from the map of clones
-  Clones::iterator it = _clones.find(msg);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(msg);
+  if (it == _packets.end())
   {
     LOG_ERROR("Sproutlet attempted to free an unrecognised message");
     return;
@@ -649,7 +496,7 @@ void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
 
   pjsip_tx_data_dec_ref(it->second);
 
-  _clones.erase(msg);
+  _packets.erase(msg);
 
   // Finish up
   msg = NULL;
@@ -658,8 +505,8 @@ void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
 pj_pool_t* SproutletProxyTsxHelper::get_pool(const pjsip_msg* msg)
 {
   // Get the tdata from the map of clones
-  Clones::iterator it = _clones.find(msg);
-  if (it == _clones.end())
+  Packets::iterator it = _packets.find(msg);
+  if (it == _packets.end())
   {
     LOG_ERROR("Sproutlet attempted to get the pool for an unrecognised message");
     return NULL;
@@ -686,3 +533,272 @@ SAS::TrailId SproutletProxyTsxHelper::trail() const
 {
   return _trail_id;
 }
+
+void SproutletProxyTsxHelper::rx_request(pjsip_tx_data* req)
+{
+  register_tdata(req);
+  if (PJSIP_MSG_TO_HDR(req->msg)->tag.slen == 0) 
+  {
+    LOG_DEBUG("Pass initial request to Sproutlet");
+    _sproutlet->on_rx_initial_request(req->msg);
+  }
+  else
+  {
+    LOG_DEBUG("Pass in dialog request to Sproutlet");
+    _sproutlet->on_rx_in_dialog_request(req->msg);
+  }
+  process_actions();
+
+}
+
+void SproutletProxyTsxHelper::rx_response(pjsip_tx_data* rsp, int fork_id)
+{
+  register_tdata(rsp);
+  if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
+  {
+    // Final response, so mark the fork as completed and decrement the number
+    // of pending responses.
+    _forks[fork_id] = COMPLETE;
+    LOG_DEBUG("Received final response on fork %d, status = %d",
+              fork_id, _forks[fork_id]);
+    --_pending_responses;
+  }
+  _sproutlet->on_rx_response(rsp->msg, fork_id);
+  process_actions();
+}
+
+void SproutletProxyTsxHelper::rx_cancel(pjsip_rx_data* cancel)
+{
+  LOG_DEBUG("Received CANCEL request");
+  _sproutlet->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
+                           cancel->msg_info.msg);
+  cancel_pending_forks();
+  process_actions();
+}
+
+void SproutletProxyTsxHelper::rx_error(int status_code)
+{
+  _sproutlet->on_rx_cancel(status_code, NULL);
+  process_actions();
+}
+
+void SproutletProxyTsxHelper::register_tdata(pjsip_tx_data* tdata)
+{
+  LOG_DEBUG("Adding message %p => txdata %p mapping",
+            tdata->msg, tdata);
+  _packets[tdata->msg] = tdata;
+}
+
+/// Process actions required by a Sproutlet
+void SproutletProxyTsxHelper::process_actions()
+{
+  LOG_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
+            _send_responses.size(), _send_requests.size());
+
+  // First increment the pending sends count by the number of requests waiting
+  // to be sent.  This must happen first to avoid the response aggregation
+  // code incorrectly triggering on the count of error responses.
+  _pending_sends += _send_requests.size();
+
+  // Now handle any responses generated or forwarded by the Sproutlet.
+  while (!_send_responses.empty())
+  {
+    pjsip_tx_data* tdata = _send_responses.front();
+    _send_responses.pop_front();
+    aggregate_response(tdata);
+  }
+
+  if ((!_complete) &&
+      (_best_rsp != NULL) &&
+      (_pending_sends + _pending_responses == 0))
+  {
+    // There are no pending responses and no new forked requests waiting to
+    // be sent, and the Sproutlet has sent at least one final response, so
+    // send this best response upstream.
+    LOG_DEBUG("All UAC responded");
+    tx_response(_best_rsp);
+  }
+
+  if (!_complete) 
+  {
+    // The Sproutlet transaction hasn't completed, so handle any requests
+    // forwarded/generated by the Sproutlet.
+    for (std::unordered_map<int, pjsip_tx_data*>::const_iterator i = _send_requests.begin();
+         i != _send_requests.end();
+         ++i) 
+    {
+      pjsip_tx_data* tdata = i->second;
+      LOG_DEBUG("Processing request %p, fork = %d", tdata, i->first);
+
+      if (_record_routed) 
+      {
+        // The Sproutlet has requested that we Record-Route on this dialog, so
+        // add a Record-Route header.
+        _proxy_tsx->add_record_route(tdata, _service_name, _dialog_id);
+      }
+
+      tx_request(tdata, i->first);
+    }
+    _send_requests.clear();
+  }
+
+  for (size_t ii = 0; ii < _forks.size(); ++ii) 
+  {
+    LOG_DEBUG("Fork %d status = %d", ii, _forks[ii]);
+    if (_forks[ii] == PENDING_CANCEL)
+    {
+      LOG_DEBUG("Cancel fork %d", ii);
+      _proxy_tsx->tx_sproutlet_cancel(0, ii, this);
+      _forks[ii] = CANCELLED;
+    }
+  }
+}
+
+void SproutletProxyTsxHelper::aggregate_response(pjsip_tx_data* rsp)
+{
+  int status_code = rsp->msg->line.status.code;
+  LOG_DEBUG("Aggregating response with status code %d", status_code);
+
+  if (_complete) 
+  {
+    // We've already sent a final response upstream (a 200 OK) so discard
+    // this discard.
+    LOG_DEBUG("Discard stale response");
+    pjsip_tx_data_dec_ref(rsp);
+    return;
+  }
+
+  if (status_code == 100)
+  {
+    // We will already have sent a locally generated 100 Trying response, so
+    // don't forward this one.
+    LOG_DEBUG("Discard 100/INVITE response");
+    pjsip_tx_data_dec_ref(rsp);
+    return;
+  }
+
+  if ((status_code > 100) &&
+      (status_code < 199))
+  {
+    // Forward all provisional responses to INVITEs.
+    LOG_DEBUG("Forward 1xx response");
+    tx_response(rsp);
+  }
+  else if (status_code == 200)
+  {
+    // 200 OK.
+    LOG_DEBUG("Forward 200 OK response");
+
+    // Send this response immediately as a final response.
+    if (_best_rsp != NULL)
+    {
+      pjsip_tx_data_dec_ref(_best_rsp);
+    }
+    _best_rsp = rsp;
+
+    tx_response(_best_rsp);
+  }
+  else
+  {
+    // Final, non-OK response.  Is this the "best" response received so far?
+    LOG_DEBUG("3xx/4xx/5xx/6xx response");
+    if ((_best_rsp == NULL) ||
+        (compare_sip_sc(status_code, _best_rsp->msg->line.status.code) > 0))
+    {
+      LOG_DEBUG("Best 3xx/4xx/5xx/6xx response so far");
+
+      if (_best_rsp != NULL)
+      {
+        pjsip_tx_data_dec_ref(_best_rsp);
+      }
+
+      _best_rsp = rsp;
+    }
+    else
+    {
+      LOG_DEBUG("Discard response - we already have a better one");
+      pjsip_tx_data_dec_ref(rsp);
+    }
+  }
+}
+
+void SproutletProxyTsxHelper::tx_request(pjsip_tx_data* req, int fork_id)
+{
+  // Set the status of this fork.
+  _forks[fork_id] = PENDING;
+  LOG_DEBUG("Transmitting request on fork_id %d, status = %d",
+            fork_id, _forks[fork_id]);
+  --_pending_sends;
+  ++_pending_responses;
+
+  // Notify the sproutlet that the request is being sent downstream.
+  _sproutlet->on_tx_request(req->msg, fork_id);
+
+  // Forward the request downstream.
+  _proxy_tsx->tx_sproutlet_request(req, fork_id, this);
+}
+
+void SproutletProxyTsxHelper::tx_response(pjsip_tx_data* rsp)
+{
+  // Notify the sproutlet that the response is being sent upstream.
+  _sproutlet->on_tx_response(rsp->msg);
+
+  if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
+  {
+    _complete = true;
+  }
+
+  // Forward the response upstream.
+  _proxy_tsx->tx_sproutlet_response(rsp, this);
+}
+
+/// Compare two status codes from the perspective of which is the best to
+/// return to the originator of a forked transaction.  This will only ever
+/// be called for 3xx/4xx/5xx/6xx response codes.
+///
+/// @returns +1 if sc1 is better than sc2
+///          0 if sc1 and sc2 are identical (or equally as good)
+///          -1 if sc2 is better than sc1
+///
+int SproutletProxyTsxHelper::compare_sip_sc(int sc1, int sc2)
+{
+  // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
+  LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
+  if (sc1 == sc2)
+  {
+    // Status codes are equal.
+    return 0;
+  }
+  else if (sc1 == PJSIP_SC_REQUEST_TIMEOUT)
+  {
+    // A timeout response is never better than anything else.
+    return -1;
+  }
+  else if (sc2 == PJSIP_SC_REQUEST_TIMEOUT)
+  {
+    // A non-timeout response is always better than a timeout.
+    return 1;
+  }
+  else if (sc2 == PJSIP_SC_REQUEST_TERMINATED)
+  {
+    // Request terminated is always better than anything else because
+    // this should only happen if transaction is CANCELLED by originator
+    // and this will be the expected response.
+    return -1;
+  }
+  else if (sc1 == PJSIP_SC_REQUEST_TERMINATED)
+  {
+    return 1;
+  }
+  // Default behaviour is to favour the lowest number.
+  else if (sc1 < sc2)
+  {
+    return 1;
+  }
+  else
+  {
+    return -1;
+  }
+}
+
+

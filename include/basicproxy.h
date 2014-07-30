@@ -235,9 +235,9 @@ protected:
     /// Count of targets the request was forked to that have yet to respond.
     size_t _pending_responses;
 
-    /// A pointer to the best response received so far.  This is initialised
-    /// to a 408 Request Timeout response.
-    pjsip_tx_data* _best_rsp;
+    /// A pointer to the best final response received so far.  This is
+    /// initialised to a 408 Request Timeout response.
+    pjsip_tx_data* _final_rsp;
 
     bool _pending_destroy;
     int _context_count;

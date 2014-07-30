@@ -96,17 +96,22 @@ protected:
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_tx_data *tdata);
 
-    /// Notification that a response is being transmitted on this transaction.
-    virtual void on_tx_response(pjsip_tx_data* tdata);
-
-    /// Notification that a request is being transmitted to a client.
-    virtual void on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_tsx);
-
     virtual void on_tsx_state(pjsip_event* event);
 
-    void process_actions(SproutletProxyTsxHelper* helper);
+    virtual void add_record_route(pjsip_tx_data* tdata,
+                                  const std::string& service_name,
+                                  const std::string& dialog_id);
 
-    void process_response(pjsip_tx_data* tdata);
+    virtual void tx_sproutlet_request(pjsip_tx_data* req,
+                                      int fork_id,
+                                      SproutletProxyTsxHelper* helper);
+
+    virtual void tx_sproutlet_response(pjsip_tx_data* rsp,
+                                       SproutletProxyTsxHelper* helper);
+
+    virtual void tx_sproutlet_cancel(int status_code,
+                                     int fork_id,
+                                     SproutletProxyTsxHelper* helper);
 
   private:
 
@@ -122,57 +127,35 @@ protected:
     SproutletTsx* _sproutlet;
 
     std::vector<int> _uac_2_fork;
+    std::vector<int> _fork_2_uac;
+
+    friend class SproutletProxyTsxHelper;
   };
 
   pjsip_uri* _uri;
 
   std::map<std::string, Sproutlet*> _sproutlets;
 
+  friend class SproutletProxyTsxHelper;
   friend class UASTsx;
 };
 
 
 class SproutletProxyTsxHelper : public SproutletTsxHelper
 {
-  typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Clones;
+  typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
   typedef std::unordered_map<int, pjsip_tx_data*> Requests;
   typedef std::list<pjsip_tx_data*> Responses;
 
 public:
   /// Constructor
-  SproutletProxyTsxHelper(pjsip_tx_data* inbound_request,
+  SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_tsx,
+                          Sproutlet* sproutlet,
+                          pjsip_tx_data* req,
                           SAS::TrailId trail_id);
 
   /// Virtual destructor.
   virtual ~SproutletProxyTsxHelper();
-
-  /// Get the dialog ID that should be used for Record-Routing this request.
-  /// This value is persisted in the Tsx between calls.
-  ///
-  /// @returns                 - True if this Sproutlet should be Routed in
-  /// @param dialog_id         - The dialog ID to use
-  bool record_route_requested(std::string& dialog_id);
-
-  /// Get the collection of forwarded messages.  The items in the collection
-  /// are passed to the caller who becomes responsible for their lifetime.
-  ///
-  /// @param request           - A map of fork_id to tdata for each message.
-  void requests(Requests& requests);
-
-  /// Get the list of reponse messages, these responses are in the order they 
-  /// should be sent downstream.  The items in the collection are passed to the
-  /// caller who becomes responsible for their lifetime.
-  ///
-  /// Only the last message on this list can be a final response (>=200), if it is
-  /// then the requests() set will be empty, if not there will be at least one
-  /// request on the list.
-  ///
-  /// @param response          - The tdata of the response to send.
-  void responses(Responses& responses);
-
-  /// Registers a pjsip_tx_data structure with the helper before the contained
-  /// message is passed to the Sproutlet.
-  void register_tdata(pjsip_tx_data* tdata);
 
   /// This implementation has concrete implementations for all of the virtual
   /// functions from SproutletTsxHelper.  See there for function comments for
@@ -186,6 +169,7 @@ public:
   int send_request(pjsip_msg*& req);
   void send_response(pjsip_msg*& rsp); 
   void cancel_fork(int fork_id);
+  void cancel_pending_forks();
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
   bool schedule_timer(int id, void* context, int duration);
@@ -194,14 +178,45 @@ public:
   SAS::TrailId trail() const;
 
 private:
-  Clones _clones;
-  Requests _requests;
-  Responses _responses;
+
+  void rx_request(pjsip_tx_data* req);
+  void rx_response(pjsip_tx_data* rsp, int fork_id);
+  void rx_cancel(pjsip_rx_data* cancel);
+  void rx_error(int status_code);
+  void register_tdata(pjsip_tx_data* tdata);
+
+  void process_actions();
+  void aggregate_response(pjsip_tx_data* rsp);
+  void tx_request(pjsip_tx_data* req, int fork_id);
+  void tx_response(pjsip_tx_data* rsp);
+  int compare_sip_sc(int sc1, int sc2);
+
+  SproutletProxy::UASTsx* _proxy_tsx;
+
+  SproutletTsx* _sproutlet;
+
+  std::string _service_name;
+
+  Packets _packets;
+
+  Requests _send_requests;
+  Responses _send_responses;
+
   std::string _dialog_id;
   bool _record_routed;
-  bool _final_response_sent;
-  int _unique_id;
+
+  int _pending_sends;
+  int _pending_responses;
+  pjsip_tx_data* _best_rsp;
+
+  bool _complete;
+
+  typedef enum {PENDING, PENDING_CANCEL, CANCELLED, COMPLETE} ForkStatus;
+  std::vector<ForkStatus> _forks;
+
   SAS::TrailId _trail_id;
+
+  friend class SproutletProxy::UASTsx;
 };
 
 #endif
