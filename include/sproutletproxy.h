@@ -102,16 +102,16 @@ protected:
                                   const std::string& service_name,
                                   const std::string& dialog_id);
 
-    virtual void tx_sproutlet_request(pjsip_tx_data* req,
+    virtual void tx_sproutlet_request(TsxHelper* helper,
                                       int fork_id,
-                                      TsxHelper* helper);
+                                      pjsip_tx_data* req);
 
-    virtual void tx_sproutlet_response(pjsip_tx_data* rsp,
-                                       TsxHelper* helper);
+    virtual void tx_sproutlet_response(TsxHelper* helper,
+                                       pjsip_tx_data* rsp);
 
-    virtual void tx_sproutlet_cancel(int status_code,
+    virtual void tx_sproutlet_cancel(TsxHelper* helper,
                                      int fork_id,
-                                     TsxHelper* helper);
+                                     int status_code);
 
   private:
     class TsxHelper : public SproutletTsxHelper

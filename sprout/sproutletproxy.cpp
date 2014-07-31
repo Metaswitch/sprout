@@ -237,9 +237,9 @@ void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
   ((SproutletProxy*)_proxy)->add_record_route(tdata, service_name, dialog_id);
 }
 
-void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req,
+void SproutletProxy::UASTsx::tx_sproutlet_request(TsxHelper* helper,
                                                   int fork_id,
-                                                  TsxHelper* helper)
+                                                  pjsip_tx_data* req)
 {
   int index = _uac_tsx.size();
   if (_uac_2_fork.size() < (size_t)index + 1) 
@@ -258,8 +258,8 @@ void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req,
 }
 
 
-void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp,
-                                                   TsxHelper* helper)
+void SproutletProxy::UASTsx::tx_sproutlet_response(TsxHelper* helper,
+                                                   pjsip_tx_data* rsp)
 {
   if (_final_rsp != NULL) 
   {
@@ -271,9 +271,9 @@ void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp,
 }
 
 
-void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code,
+void SproutletProxy::UASTsx::tx_sproutlet_cancel(TsxHelper* helper,
                                                  int fork_id,
-                                                 TsxHelper* helper)
+                                                 int status_code)
 {
   // Find the UAC transaction index corresponding to this fork.
   LOG_DEBUG("Request to cancel fork %d", fork_id);
@@ -705,7 +705,7 @@ void SproutletProxy::UASTsx::TsxHelper::process_actions()
       // Fork has been marked as pending cancel and we have received a 
       // provisional response, so can send the CANCEL.
       LOG_DEBUG("Send CANCEL for fork %d", ii);
-      _proxy_tsx->tx_sproutlet_cancel(_forks[ii].cancel_reason, ii, this);
+      _proxy_tsx->tx_sproutlet_cancel(this, ii, _forks[ii].cancel_reason);
       _forks[ii].pending_cancel = false;
     }
   }
@@ -795,7 +795,7 @@ void SproutletProxy::UASTsx::TsxHelper::tx_request(pjsip_tx_data* req, int fork_
   _sproutlet->on_tx_request(req->msg, fork_id);
 
   // Forward the request downstream.
-  _proxy_tsx->tx_sproutlet_request(req, fork_id, this);
+  _proxy_tsx->tx_sproutlet_request(this, fork_id, req);
 }
 
 void SproutletProxy::UASTsx::TsxHelper::tx_response(pjsip_tx_data* rsp)
@@ -809,7 +809,7 @@ void SproutletProxy::UASTsx::TsxHelper::tx_response(pjsip_tx_data* rsp)
   }
 
   // Forward the response upstream.
-  _proxy_tsx->tx_sproutlet_response(rsp, this);
+  _proxy_tsx->tx_sproutlet_response(this, rsp);
 }
 
 /// Compare two status codes from the perspective of which is the best to
