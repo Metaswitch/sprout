@@ -251,7 +251,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, get_pool(req));
       if (route_uri != NULL)
       {
-        // PJUtils::add_route_uri(req, route_uri);
+        PJUtils::add_route_header(req, (pjsip_sip_uri*)route_uri, get_pool(req));
       }
       else
       {
