@@ -321,6 +321,9 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_t
     _sproutlet = new SproutletTsx(this);
   }
 
+  // Store the request method.
+  _method = req->msg->line.req.method.id;
+
   // Set up the dialog identifier, either by extracting it from the Route header
   // (on an in-dialog request), or by creating a default.
   if (PJSIP_MSG_TO_HDR(req->msg)->tag.slen == 0) 
@@ -332,16 +335,15 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_t
   {
     // In-dialog request, so pull from top Route header.
     LOG_DEBUG("In-dialog request");
-    pjsip_route_hdr* hr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg, PJSIP_H_ROUTE, NULL);
+    pjsip_route_hdr* hr = (pjsip_route_hdr*)
+                            pjsip_msg_find_hdr(req->msg, PJSIP_H_ROUTE, NULL);
     if ((hr != NULL) &&
         (PJSIP_URI_SCHEME_IS_SIP(hr->name_addr.uri)))
     {
-      LOG_DEBUG("Found route header, search for parameter %s", _service_name.c_str());
       pjsip_sip_uri* uri = (pjsip_sip_uri*)hr->name_addr.uri;
       pj_str_t sname;
       sname.slen = _service_name.length();
       sname.ptr = (char*)_service_name.data();
-      LOG_DEBUG("%.*s", sname.slen, sname.ptr);
       pjsip_param* p = pjsip_param_find(&uri->other_param, &sname);
       if (p != NULL) 
       {
@@ -351,8 +353,6 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_t
       }
     }
   }
-
-
 }
 
 SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
@@ -451,7 +451,8 @@ int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
   // We've found the tdata, move it to _send_requests under a new unique ID.
   int fork_id = _forks.size();
   _forks.resize(fork_id + 1);
-  _forks[fork_id] = PENDING;
+  _forks[fork_id].state = PJSIP_TSX_STATE_NULL;
+  _forks[fork_id].pending_cancel = false;
   _send_requests[fork_id] = it->second;
   LOG_DEBUG("Added request %d (tdata=%p) to output with fork id %d",
             _send_requests.size(), it->second, fork_id);
@@ -491,27 +492,33 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
   rsp = NULL;
 }
 
-void SproutletProxyTsxHelper::cancel_fork(int fork_id)
+void SproutletProxyTsxHelper::cancel_fork(int fork_id, int reason)
 {
-  if ((_forks.size() > (size_t)fork_id) &&
-      (_forks[fork_id] == PENDING))
+  if ((_method == PJSIP_INVITE_METHOD) &&
+      (_forks.size() > (size_t)fork_id) &&
+      ((_forks[fork_id].state == PJSIP_TSX_STATE_CALLING) ||
+       (_forks[fork_id].state == PJSIP_TSX_STATE_PROCEEDING)))
   {
-    // The fork is still pending a response, so we can CANCEL it.
-    // @TODO, should probably check this is an INVITE transaction!
-    _forks[fork_id] = PENDING_CANCEL;
+    // The fork is still pending a final response, so we can CANCEL it.
+    LOG_DEBUG("Cancelling fork %d, reason = %d", fork_id, reason);
+    _forks[fork_id].pending_cancel = true;
+    _forks[fork_id].cancel_reason = reason;
   }
 }
 
-void SproutletProxyTsxHelper::cancel_pending_forks()
+void SproutletProxyTsxHelper::cancel_pending_forks(int reason)
 {
-  LOG_DEBUG("%d forks", _forks.size());
-  for (size_t ii = 0; ii < _forks.size(); ++ii) 
+  if (_method == PJSIP_INVITE_METHOD) 
   {
-    LOG_DEBUG("Fork %d status = %d", ii, _forks[ii]);
-    if (_forks[ii] == PENDING) 
+    for (size_t ii = 0; ii < _forks.size(); ++ii) 
     {
-      LOG_DEBUG("Set status of fork %d to PENDING_CANCEL", ii);
-      _forks[ii] = PENDING_CANCEL;
+      if ((_forks[ii].state == PJSIP_TSX_STATE_CALLING) ||
+          (_forks[ii].state == PJSIP_TSX_STATE_PROCEEDING))
+      {
+        LOG_DEBUG("Cancelling fork %d, reason = %d", ii, reason);
+        _forks[ii].pending_cancel = true;
+        _forks[ii].cancel_reason = reason;
+      }
     }
   }
 }
@@ -586,11 +593,19 @@ void SproutletProxyTsxHelper::rx_request(pjsip_tx_data* req)
 void SproutletProxyTsxHelper::rx_response(pjsip_tx_data* rsp, int fork_id)
 {
   register_tdata(rsp);
-  if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
+  if ((PJSIP_IS_STATUS_IN_CLASS(rsp->msg->line.status.code, 100)) &&
+      (_forks[fork_id].state == PJSIP_TSX_STATE_CALLING))
+  {
+    // Provisional response on fork still in calling state, so move to 
+    // proceeding state.
+    LOG_DEBUG("Received provisional response on fork %d", fork_id);
+    _forks[fork_id].state = PJSIP_TSX_STATE_PROCEEDING;
+  }
+  else if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
   {
     // Final response, so mark the fork as completed and decrement the number
     // of pending responses.
-    _forks[fork_id] = COMPLETE;
+    _forks[fork_id].state = PJSIP_TSX_STATE_COMPLETED;
     LOG_DEBUG("Received final response on fork %d, status = %d",
               fork_id, _forks[fork_id]);
     --_pending_responses;
@@ -677,11 +692,14 @@ void SproutletProxyTsxHelper::process_actions()
   for (size_t ii = 0; ii < _forks.size(); ++ii) 
   {
     LOG_DEBUG("Fork %d status = %d", ii, _forks[ii]);
-    if (_forks[ii] == PENDING_CANCEL)
+    if ((_forks[ii].pending_cancel) &&
+        (_forks[ii].state == PJSIP_TSX_STATE_PROCEEDING))
     {
-      LOG_DEBUG("Cancel fork %d", ii);
-      _proxy_tsx->tx_sproutlet_cancel(0, ii, this);
-      _forks[ii] = CANCELLED;
+      // Fork has been marked as pending cancel and we have received a 
+      // provisional response, so can send the CANCEL.
+      LOG_DEBUG("Send CANCEL for fork %d", ii);
+      _proxy_tsx->tx_sproutlet_cancel(_forks[ii].cancel_reason, ii, this);
+      _forks[ii].pending_cancel = false;
     }
   }
 }
@@ -756,10 +774,13 @@ void SproutletProxyTsxHelper::aggregate_response(pjsip_tx_data* rsp)
 
 void SproutletProxyTsxHelper::tx_request(pjsip_tx_data* req, int fork_id)
 {
-  // Set the status of this fork.
-  _forks[fork_id] = PENDING;
-  LOG_DEBUG("Transmitting request on fork_id %d, status = %d",
-            fork_id, _forks[fork_id]);
+  // Set the state of this fork to CALLING (strictly speaking this should
+  // be TRYING for non-INVITE transaction, but we only need to track this
+  // state for determining when we can legally send CANCEL requests using
+  // CALLING in all cases is fine).
+  _forks[fork_id].state = PJSIP_TSX_STATE_CALLING;
+  LOG_DEBUG("Transmitting request on fork_id %d, state = %d",
+            fork_id, pjsip_tsx_state_str(_forks[fork_id].state));
   --_pending_sends;
   ++_pending_responses;
 

@@ -134,7 +134,7 @@ public:
   /// Cancels a forked INVITE request by sending a CANCEL request.
   ///
   /// @param fork_id       - The identifier of the fork to CANCEL.
-  virtual void cancel_fork(int fork_id) = 0;
+  virtual void cancel_fork(int fork_id, int reason=0) = 0;
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
@@ -337,8 +337,8 @@ protected:
   /// Cancels a forked INVITE request by sending a CANCEL request.
   ///
   /// @param fork_id       - The identifier of the fork to CANCEL.
-  void cancel_fork(int fork_id)
-    {_helper->cancel_fork(fork_id);}
+  void cancel_fork(int fork_id, int reason=0)
+    {_helper->cancel_fork(fork_id, reason);}
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must

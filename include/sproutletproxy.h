@@ -168,8 +168,8 @@ public:
                              const std::string& status_text="");
   int send_request(pjsip_msg*& req);
   void send_response(pjsip_msg*& rsp); 
-  void cancel_fork(int fork_id);
-  void cancel_pending_forks();
+  void cancel_fork(int fork_id, int reason=0);
+  void cancel_pending_forks(int reason=0);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
   bool schedule_timer(int id, void* context, int duration);
@@ -197,6 +197,8 @@ private:
 
   std::string _service_name;
 
+  pjsip_method_e _method;
+
   Packets _packets;
 
   Requests _send_requests;
@@ -211,7 +213,15 @@ private:
 
   bool _complete;
 
-  typedef enum {PENDING, PENDING_CANCEL, CANCELLED, COMPLETE} ForkStatus;
+  // Vector keeping track of the status of each fork.  The state field can
+  // only ever take a subset of the values defined by PJSIP - NULL, CALLING,
+  // PROCEEDING and COMPLETED.
+  typedef struct
+  {
+    pjsip_tsx_state_e state;
+    bool pending_cancel;
+    int cancel_reason;
+  } ForkStatus;
   std::vector<ForkStatus> _forks;
 
   SAS::TrailId _trail_id;
