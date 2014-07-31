@@ -125,10 +125,9 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
 
   // Construct a parameter encoding the service name and dialog identifier,
   // and add it to the URI.
-  std::string pname = service_name + ":" + dialog_id;
   pjsip_param *p = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-  pj_strdup2(tdata->pool, &p->name, pname.c_str());
-  p->value.slen = 0;
+  pj_strdup2(tdata->pool, &p->name, service_name.c_str());
+  pj_strdup2(tdata->pool, &p->value, dialog_id.c_str());
   pj_list_insert_before(&rr_uri->other_param, p);
 
   // Construct and add the Record-Route header.
@@ -279,7 +278,7 @@ void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code, int fork_id, S
     int index = _fork_2_uac[fork_id];
     LOG_DEBUG("_fork_2_uac[%d] = %d", fork_id, index);
     LOG_DEBUG("_uac_tsx.size() = %d", _uac_tsx.size());
-    if ((index < _uac_tsx.size()) &&
+    if (((size_t)index < _uac_tsx.size()) &&
         (_uac_tsx[index] != NULL))
     {
       LOG_DEBUG("Cancel pending transaction");
@@ -321,6 +320,39 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_t
     // SproutletTsx to handle it.
     _sproutlet = new SproutletTsx(this);
   }
+
+  // Set up the dialog identifier, either by extracting it from the Route header
+  // (on an in-dialog request), or by creating a default.
+  if (PJSIP_MSG_TO_HDR(req->msg)->tag.slen == 0) 
+  {
+    // Initial request, create default.
+    // @TODO
+  }
+  else
+  {
+    // In-dialog request, so pull from top Route header.
+    LOG_DEBUG("In-dialog request");
+    pjsip_route_hdr* hr = (pjsip_route_hdr*)pjsip_msg_find_hdr(req->msg, PJSIP_H_ROUTE, NULL);
+    if ((hr != NULL) &&
+        (PJSIP_URI_SCHEME_IS_SIP(hr->name_addr.uri)))
+    {
+      LOG_DEBUG("Found route header, search for parameter %s", _service_name.c_str());
+      pjsip_sip_uri* uri = (pjsip_sip_uri*)hr->name_addr.uri;
+      pj_str_t sname;
+      sname.slen = _service_name.length();
+      sname.ptr = (char*)_service_name.data();
+      LOG_DEBUG("%.*s", sname.slen, sname.ptr);
+      pjsip_param* p = pjsip_param_find(&uri->other_param, &sname);
+      if (p != NULL) 
+      {
+        // Found the appropriate parameter, so extract the dialog identifier.
+        _dialog_id = PJUtils::pj_str_to_string(&p->value);
+        LOG_DEBUG("Found dialog identifier %s", _dialog_id.c_str());
+      }
+    }
+  }
+
+
 }
 
 SproutletProxyTsxHelper::~SproutletProxyTsxHelper()

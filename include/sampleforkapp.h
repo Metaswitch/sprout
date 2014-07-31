@@ -20,7 +20,7 @@ public:
     LOG_DEBUG("SampleForkAS - process request %p", req);
 
     // Add the app to the dialog.
-    add_to_dialog();
+    add_to_dialog("fred");
 
     // Clone the request and redirect it to an external number
     pjsip_msg* clone = clone_request(req);
