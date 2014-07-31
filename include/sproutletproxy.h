@@ -49,8 +49,6 @@
 #include "basicproxy.h"
 #include "sproutlet.h"
 
-class SproutletProxyTsxHelper;
-
 class SproutletProxy : public BasicProxy
 {
 public:
@@ -75,6 +73,8 @@ protected:
 
   class UASTsx : public BasicProxy::UASTsx
   {
+    class TsxHelper;
+
   public:
     /// Constructor.
     UASTsx(BasicProxy* proxy);
@@ -104,16 +104,103 @@ protected:
 
     virtual void tx_sproutlet_request(pjsip_tx_data* req,
                                       int fork_id,
-                                      SproutletProxyTsxHelper* helper);
+                                      TsxHelper* helper);
 
     virtual void tx_sproutlet_response(pjsip_tx_data* rsp,
-                                       SproutletProxyTsxHelper* helper);
+                                       TsxHelper* helper);
 
     virtual void tx_sproutlet_cancel(int status_code,
                                      int fork_id,
-                                     SproutletProxyTsxHelper* helper);
+                                     TsxHelper* helper);
 
   private:
+    class TsxHelper : public SproutletTsxHelper
+    {
+      typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
+      typedef std::unordered_map<int, pjsip_tx_data*> Requests;
+      typedef std::list<pjsip_tx_data*> Responses;
+
+    public:
+      /// Constructor
+      TsxHelper(SproutletProxy::UASTsx* proxy_tsx,
+                Sproutlet* sproutlet,
+                pjsip_tx_data* req,
+                SAS::TrailId trail_id);
+
+      /// Virtual destructor.
+      virtual ~TsxHelper();
+
+      /// This implementation has concrete implementations for all of the virtual
+      /// functions from SproutletTsxHelper.  See there for function comments for
+      /// the following.
+      void add_to_dialog(const std::string& dialog_id="");
+      const std::string& dialog_id() const;
+      pjsip_msg* clone_request(pjsip_msg* req);
+      pjsip_msg* create_response(pjsip_msg* req,
+                                 pjsip_status_code status_code,
+                                 const std::string& status_text="");
+      int send_request(pjsip_msg*& req);
+      void send_response(pjsip_msg*& rsp); 
+      void cancel_fork(int fork_id, int reason=0);
+      void cancel_pending_forks(int reason=0);
+      void free_msg(pjsip_msg*& msg);
+      pj_pool_t* get_pool(const pjsip_msg* msg);
+      bool schedule_timer(int id, void* context, int duration);
+      void cancel_timer(int id);
+      bool timer_running(int id);
+      SAS::TrailId trail() const;
+
+    private:
+
+      void rx_request(pjsip_tx_data* req);
+      void rx_response(pjsip_tx_data* rsp, int fork_id);
+      void rx_cancel(pjsip_rx_data* cancel);
+      void rx_error(int status_code);
+      void register_tdata(pjsip_tx_data* tdata);
+
+      void process_actions();
+      void aggregate_response(pjsip_tx_data* rsp);
+      void tx_request(pjsip_tx_data* req, int fork_id);
+      void tx_response(pjsip_tx_data* rsp);
+      int compare_sip_sc(int sc1, int sc2);
+
+      SproutletProxy::UASTsx* _proxy_tsx;
+
+      SproutletTsx* _sproutlet;
+
+      std::string _service_name;
+
+      pjsip_method_e _method;
+
+      Packets _packets;
+
+      Requests _send_requests;
+      Responses _send_responses;
+
+      std::string _dialog_id;
+      bool _record_routed;
+
+      int _pending_sends;
+      int _pending_responses;
+      pjsip_tx_data* _best_rsp;
+
+      bool _complete;
+
+      // Vector keeping track of the status of each fork.  The state field can
+      // only ever take a subset of the values defined by PJSIP - NULL, CALLING,
+      // PROCEEDING and COMPLETED.
+      typedef struct
+      {
+        pjsip_tsx_state_e state;
+        bool pending_cancel;
+        int cancel_reason;
+      } ForkStatus;
+      std::vector<ForkStatus> _forks;
+
+      SAS::TrailId _trail_id;
+
+      friend class SproutletProxy::UASTsx;
+    };
 
     /// Records whether or not the request is an in-dialog request.
     bool _in_dialog;
@@ -123,110 +210,23 @@ protected:
     bool _record_routed;
 
     std::string _service_name;
-    SproutletProxyTsxHelper* _helper;
+    TsxHelper* _helper;
     SproutletTsx* _sproutlet;
 
     std::vector<int> _uac_2_fork;
     std::vector<int> _fork_2_uac;
 
-    friend class SproutletProxyTsxHelper;
+    friend class TsxHelper;
   };
 
   pjsip_uri* _uri;
 
   std::map<std::string, Sproutlet*> _sproutlets;
 
-  friend class SproutletProxyTsxHelper;
+  //friend class UASTsx::TsxHelper;
   friend class UASTsx;
 };
 
 
-class SproutletProxyTsxHelper : public SproutletTsxHelper
-{
-  typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
-  typedef std::unordered_map<int, pjsip_tx_data*> Requests;
-  typedef std::list<pjsip_tx_data*> Responses;
-
-public:
-  /// Constructor
-  SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_tsx,
-                          Sproutlet* sproutlet,
-                          pjsip_tx_data* req,
-                          SAS::TrailId trail_id);
-
-  /// Virtual destructor.
-  virtual ~SproutletProxyTsxHelper();
-
-  /// This implementation has concrete implementations for all of the virtual
-  /// functions from SproutletTsxHelper.  See there for function comments for
-  /// the following.
-  void add_to_dialog(const std::string& dialog_id="");
-  const std::string& dialog_id() const;
-  pjsip_msg* clone_request(pjsip_msg* req);
-  pjsip_msg* create_response(pjsip_msg* req,
-                             pjsip_status_code status_code,
-                             const std::string& status_text="");
-  int send_request(pjsip_msg*& req);
-  void send_response(pjsip_msg*& rsp); 
-  void cancel_fork(int fork_id, int reason=0);
-  void cancel_pending_forks(int reason=0);
-  void free_msg(pjsip_msg*& msg);
-  pj_pool_t* get_pool(const pjsip_msg* msg);
-  bool schedule_timer(int id, void* context, int duration);
-  void cancel_timer(int id);
-  bool timer_running(int id);
-  SAS::TrailId trail() const;
-
-private:
-
-  void rx_request(pjsip_tx_data* req);
-  void rx_response(pjsip_tx_data* rsp, int fork_id);
-  void rx_cancel(pjsip_rx_data* cancel);
-  void rx_error(int status_code);
-  void register_tdata(pjsip_tx_data* tdata);
-
-  void process_actions();
-  void aggregate_response(pjsip_tx_data* rsp);
-  void tx_request(pjsip_tx_data* req, int fork_id);
-  void tx_response(pjsip_tx_data* rsp);
-  int compare_sip_sc(int sc1, int sc2);
-
-  SproutletProxy::UASTsx* _proxy_tsx;
-
-  SproutletTsx* _sproutlet;
-
-  std::string _service_name;
-
-  pjsip_method_e _method;
-
-  Packets _packets;
-
-  Requests _send_requests;
-  Responses _send_responses;
-
-  std::string _dialog_id;
-  bool _record_routed;
-
-  int _pending_sends;
-  int _pending_responses;
-  pjsip_tx_data* _best_rsp;
-
-  bool _complete;
-
-  // Vector keeping track of the status of each fork.  The state field can
-  // only ever take a subset of the values defined by PJSIP - NULL, CALLING,
-  // PROCEEDING and COMPLETED.
-  typedef struct
-  {
-    pjsip_tsx_state_e state;
-    bool pending_cancel;
-    int cancel_reason;
-  } ForkStatus;
-  std::vector<ForkStatus> _forks;
-
-  SAS::TrailId _trail_id;
-
-  friend class SproutletProxy::UASTsx;
-};
 
 #endif

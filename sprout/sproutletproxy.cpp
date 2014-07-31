@@ -165,7 +165,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     LOG_DEBUG("Initializing SproutletProxy transaction for %s",
               sproutlet->service_name().c_str());
     _service_name = sproutlet->service_name();
-    _helper = new SproutletProxyTsxHelper(this, sproutlet, _req, trail());
+    _helper = new TsxHelper(this, sproutlet, _req, trail());
   }
                                                        
   return status;
@@ -237,7 +237,9 @@ void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
   ((SproutletProxy*)_proxy)->add_record_route(tdata, service_name, dialog_id);
 }
 
-void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req, int fork_id, SproutletProxyTsxHelper* helper)
+void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req,
+                                                  int fork_id,
+                                                  TsxHelper* helper)
 {
   int index = _uac_tsx.size();
   if (_uac_2_fork.size() < (size_t)index + 1) 
@@ -256,7 +258,8 @@ void SproutletProxy::UASTsx::tx_sproutlet_request(pjsip_tx_data* req, int fork_i
 }
 
 
-void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp, SproutletProxyTsxHelper* helper)
+void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp,
+                                                   TsxHelper* helper)
 {
   if (_final_rsp != NULL) 
   {
@@ -268,7 +271,9 @@ void SproutletProxy::UASTsx::tx_sproutlet_response(pjsip_tx_data* rsp, Sproutlet
 }
 
 
-void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code, int fork_id, SproutletProxyTsxHelper* helper)
+void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code,
+                                                 int fork_id,
+                                                 TsxHelper* helper)
 {
   // Find the UAC transaction index corresponding to this fork.
   LOG_DEBUG("Request to cancel fork %d", fork_id);
@@ -289,13 +294,13 @@ void SproutletProxy::UASTsx::tx_sproutlet_cancel(int status_code, int fork_id, S
 
 
 //
-// SproutletTsxHelper methods.
+// UASTsx::TsxHelper methods.
 //
 
-SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_tsx,
-                                                 Sproutlet* sproutlet,
-                                                 pjsip_tx_data* req,
-                                                 SAS::TrailId trail_id) :
+SproutletProxy::UASTsx::TsxHelper::TsxHelper(SproutletProxy::UASTsx* proxy_tsx,
+                                             Sproutlet* sproutlet,
+                                             pjsip_tx_data* req,
+                                             SAS::TrailId trail_id) :
   _proxy_tsx(proxy_tsx),
   _sproutlet(NULL),
   _service_name(""),
@@ -355,7 +360,7 @@ SproutletProxyTsxHelper::SproutletProxyTsxHelper(SproutletProxy::UASTsx* proxy_t
   }
 }
 
-SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
+SproutletProxy::UASTsx::TsxHelper::~TsxHelper()
 {
   assert(_packets.empty());
   assert(_send_requests.empty());
@@ -363,10 +368,10 @@ SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
 }
 
 //
-// SproutletTsxHelper overloads.
+// UASTsx::TsxHelper overloads.
 //
 
-void SproutletProxyTsxHelper::add_to_dialog(const std::string& dialog_id)
+void SproutletProxy::UASTsx::TsxHelper::add_to_dialog(const std::string& dialog_id)
 {
   if (_record_routed)
   {
@@ -377,12 +382,12 @@ void SproutletProxyTsxHelper::add_to_dialog(const std::string& dialog_id)
   _dialog_id = dialog_id;
 }
 
-const std::string& SproutletProxyTsxHelper::dialog_id() const
+const std::string& SproutletProxy::UASTsx::TsxHelper::dialog_id() const
 {
   return _dialog_id;
 }
 
-pjsip_msg* SproutletProxyTsxHelper::clone_request(pjsip_msg* req)
+pjsip_msg* SproutletProxy::UASTsx::TsxHelper::clone_request(pjsip_msg* req)
 {
   // Get the old tdata from the map of clones
   Packets::iterator it = _packets.find(req);
@@ -399,9 +404,9 @@ pjsip_msg* SproutletProxyTsxHelper::clone_request(pjsip_msg* req)
   return new_tdata->msg;
 }
 
-pjsip_msg* SproutletProxyTsxHelper::create_response(pjsip_msg* req,
-                                                    pjsip_status_code status_code,
-                                                    const std::string& status_text)
+pjsip_msg* SproutletProxy::UASTsx::TsxHelper::create_response(pjsip_msg* req,
+                                                              pjsip_status_code status_code,
+                                                              const std::string& status_text)
 {
   // Get the request's tdata from the map of clones
   Packets::iterator it = _packets.find(req);
@@ -429,7 +434,7 @@ pjsip_msg* SproutletProxyTsxHelper::create_response(pjsip_msg* req,
   return NULL;
 }
 
-int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
+int SproutletProxy::UASTsx::TsxHelper::send_request(pjsip_msg*& req)
 {
   LOG_DEBUG("Sproutlet send_request %p", req);
 
@@ -465,7 +470,7 @@ int SproutletProxyTsxHelper::send_request(pjsip_msg*& req)
   return fork_id;
 }
 
-void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
+void SproutletProxy::UASTsx::TsxHelper::send_response(pjsip_msg*& rsp)
 {
   // Check that this actually is a response
   if (rsp->type != PJSIP_RESPONSE_MSG)
@@ -492,7 +497,7 @@ void SproutletProxyTsxHelper::send_response(pjsip_msg*& rsp)
   rsp = NULL;
 }
 
-void SproutletProxyTsxHelper::cancel_fork(int fork_id, int reason)
+void SproutletProxy::UASTsx::TsxHelper::cancel_fork(int fork_id, int reason)
 {
   if ((_method == PJSIP_INVITE_METHOD) &&
       (_forks.size() > (size_t)fork_id) &&
@@ -506,7 +511,7 @@ void SproutletProxyTsxHelper::cancel_fork(int fork_id, int reason)
   }
 }
 
-void SproutletProxyTsxHelper::cancel_pending_forks(int reason)
+void SproutletProxy::UASTsx::TsxHelper::cancel_pending_forks(int reason)
 {
   if (_method == PJSIP_INVITE_METHOD) 
   {
@@ -523,7 +528,7 @@ void SproutletProxyTsxHelper::cancel_pending_forks(int reason)
   }
 }
 
-void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
+void SproutletProxy::UASTsx::TsxHelper::free_msg(pjsip_msg*& msg)
 {
   // Get the tdata from the map of clones
   Packets::iterator it = _packets.find(msg);
@@ -541,7 +546,7 @@ void SproutletProxyTsxHelper::free_msg(pjsip_msg*& msg)
   msg = NULL;
 }
 
-pj_pool_t* SproutletProxyTsxHelper::get_pool(const pjsip_msg* msg)
+pj_pool_t* SproutletProxy::UASTsx::TsxHelper::get_pool(const pjsip_msg* msg)
 {
   // Get the tdata from the map of clones
   Packets::iterator it = _packets.find(msg);
@@ -554,26 +559,28 @@ pj_pool_t* SproutletProxyTsxHelper::get_pool(const pjsip_msg* msg)
   return it->second->pool;
 }
 
-bool SproutletProxyTsxHelper::schedule_timer(int id, void* context, int duration)
+bool SproutletProxy::UASTsx::TsxHelper::schedule_timer(int id,
+                                                       void* context,
+                                                       int duration)
 {
   return false;
 }
 
-void SproutletProxyTsxHelper::cancel_timer(int id)
+void SproutletProxy::UASTsx::TsxHelper::cancel_timer(int id)
 {
 }
 
-bool SproutletProxyTsxHelper::timer_running(int id)
+bool SproutletProxy::UASTsx::TsxHelper::timer_running(int id)
 {
   return false;
 }
 
-SAS::TrailId SproutletProxyTsxHelper::trail() const
+SAS::TrailId SproutletProxy::UASTsx::TsxHelper::trail() const
 {
   return _trail_id;
 }
 
-void SproutletProxyTsxHelper::rx_request(pjsip_tx_data* req)
+void SproutletProxy::UASTsx::TsxHelper::rx_request(pjsip_tx_data* req)
 {
   register_tdata(req);
   if (PJSIP_MSG_TO_HDR(req->msg)->tag.slen == 0) 
@@ -590,7 +597,7 @@ void SproutletProxyTsxHelper::rx_request(pjsip_tx_data* req)
 
 }
 
-void SproutletProxyTsxHelper::rx_response(pjsip_tx_data* rsp, int fork_id)
+void SproutletProxy::UASTsx::TsxHelper::rx_response(pjsip_tx_data* rsp, int fork_id)
 {
   register_tdata(rsp);
   if ((PJSIP_IS_STATUS_IN_CLASS(rsp->msg->line.status.code, 100)) &&
@@ -614,7 +621,7 @@ void SproutletProxyTsxHelper::rx_response(pjsip_tx_data* rsp, int fork_id)
   process_actions();
 }
 
-void SproutletProxyTsxHelper::rx_cancel(pjsip_rx_data* cancel)
+void SproutletProxy::UASTsx::TsxHelper::rx_cancel(pjsip_rx_data* cancel)
 {
   LOG_DEBUG("Received CANCEL request");
   _sproutlet->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
@@ -623,13 +630,13 @@ void SproutletProxyTsxHelper::rx_cancel(pjsip_rx_data* cancel)
   process_actions();
 }
 
-void SproutletProxyTsxHelper::rx_error(int status_code)
+void SproutletProxy::UASTsx::TsxHelper::rx_error(int status_code)
 {
   _sproutlet->on_rx_cancel(status_code, NULL);
   process_actions();
 }
 
-void SproutletProxyTsxHelper::register_tdata(pjsip_tx_data* tdata)
+void SproutletProxy::UASTsx::TsxHelper::register_tdata(pjsip_tx_data* tdata)
 {
   LOG_DEBUG("Adding message %p => txdata %p mapping",
             tdata->msg, tdata);
@@ -637,7 +644,7 @@ void SproutletProxyTsxHelper::register_tdata(pjsip_tx_data* tdata)
 }
 
 /// Process actions required by a Sproutlet
-void SproutletProxyTsxHelper::process_actions()
+void SproutletProxy::UASTsx::TsxHelper::process_actions()
 {
   LOG_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
             _send_responses.size(), _send_requests.size());
@@ -704,7 +711,7 @@ void SproutletProxyTsxHelper::process_actions()
   }
 }
 
-void SproutletProxyTsxHelper::aggregate_response(pjsip_tx_data* rsp)
+void SproutletProxy::UASTsx::TsxHelper::aggregate_response(pjsip_tx_data* rsp)
 {
   int status_code = rsp->msg->line.status.code;
   LOG_DEBUG("Aggregating response with status code %d", status_code);
@@ -772,7 +779,7 @@ void SproutletProxyTsxHelper::aggregate_response(pjsip_tx_data* rsp)
   }
 }
 
-void SproutletProxyTsxHelper::tx_request(pjsip_tx_data* req, int fork_id)
+void SproutletProxy::UASTsx::TsxHelper::tx_request(pjsip_tx_data* req, int fork_id)
 {
   // Set the state of this fork to CALLING (strictly speaking this should
   // be TRYING for non-INVITE transaction, but we only need to track this
@@ -791,7 +798,7 @@ void SproutletProxyTsxHelper::tx_request(pjsip_tx_data* req, int fork_id)
   _proxy_tsx->tx_sproutlet_request(req, fork_id, this);
 }
 
-void SproutletProxyTsxHelper::tx_response(pjsip_tx_data* rsp)
+void SproutletProxy::UASTsx::TsxHelper::tx_response(pjsip_tx_data* rsp)
 {
   // Notify the sproutlet that the response is being sent upstream.
   _sproutlet->on_tx_response(rsp->msg);
@@ -813,7 +820,7 @@ void SproutletProxyTsxHelper::tx_response(pjsip_tx_data* rsp)
 ///          0 if sc1 and sc2 are identical (or equally as good)
 ///          -1 if sc2 is better than sc1
 ///
-int SproutletProxyTsxHelper::compare_sip_sc(int sc1, int sc2)
+int SproutletProxy::UASTsx::TsxHelper::compare_sip_sc(int sc1, int sc2)
 {
   // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
   LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
