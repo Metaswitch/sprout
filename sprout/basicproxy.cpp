@@ -854,46 +854,43 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
 {
   pj_status_t status = PJ_EUNKNOWN;
 
-//  if (_tsx != NULL)
+  // Initialise the UAC data structures for each new target.
+  _pending_sends = _targets.size();
+
+  while (!_targets.empty())
   {
-    // Initialise the UAC data structures for each new target.
-    _pending_sends = _targets.size();
+    LOG_DEBUG("Allocating transaction and data for target");
+    pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
 
-    while (!_targets.empty())
+    if (uac_tdata == NULL)
     {
-      LOG_DEBUG("Allocating transaction and data for target");
-      pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
+      // LCOV_EXCL_START
+      status = PJ_ENOMEM;
+      LOG_ERROR("Failed to clone request for forked transaction, %s",
+                PJUtils::pj_status_to_string(status).c_str());
+      break;
+      // LCOV_EXCL_STOP
+    }
 
-      if (uac_tdata == NULL)
-      {
-        // LCOV_EXCL_START
-        status = PJ_ENOMEM;
-        LOG_ERROR("Failed to clone request for forked transaction, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-        break;
-        // LCOV_EXCL_STOP
-      }
+    // Set the target information in the request.
+    Target* target = _targets.front();
+    _targets.pop_front();
+    set_req_target(uac_tdata, target); 
+    delete target;
 
-      // Set the target information in the request.
-      Target* target = _targets.front();
-      _targets.pop_front();
-      set_req_target(uac_tdata, target); 
-      delete target;
-
-      // Forward the request.
-      int index;
-      --_pending_sends;
-      ++_pending_responses;
-      LOG_DEBUG("Sending request, pending %d sends and %d responses",
-                _pending_sends, _pending_responses);
-      status = forward_request(uac_tdata, index);
-      if (status != PJ_SUCCESS) 
-      {
-        // @TODO - handle errors better!!
-        // LCOV_EXCL_START
-        break;
-        // LCOV_EXCL_STOP
-      }
+    // Forward the request.
+    size_t index;
+    --_pending_sends;
+    ++_pending_responses;
+    LOG_DEBUG("Sending request, pending %d sends and %d responses",
+              _pending_sends, _pending_responses);
+    status = forward_request(uac_tdata, index);
+    if (status != PJ_SUCCESS) 
+    {
+      // @TODO - handle errors better!!
+      // LCOV_EXCL_START
+      break;
+      // LCOV_EXCL_STOP
     }
   }
 
@@ -960,13 +957,12 @@ void BasicProxy::UASTsx::set_req_target(pjsip_tx_data* tdata,
   }
 }
 
-
-/// Forwards a request creating a UACTsx to handle the downstream hop.
-pj_status_t BasicProxy::UASTsx::forward_request(pjsip_tx_data* tdata, int& index)
+/// Allocates and initializes a new UACTsx for the request.
+pj_status_t BasicProxy::UASTsx::allocate_uac(pjsip_tx_data* tdata,
+                                             size_t& index)
 {
-  index = _uac_tsx.size();
-
   // Create and initialize the UAC transaction.
+  index = _uac_tsx.size();
   UACTsx* uac_tsx = create_uac_tsx(index);
   pj_status_t status = (uac_tsx != NULL) ? uac_tsx->init(tdata) : PJ_ENOMEM;
 
@@ -980,12 +976,23 @@ pj_status_t BasicProxy::UASTsx::forward_request(pjsip_tx_data* tdata, int& index
   }
   else
   {
-    // Add the UAC transaction to the list.
+    // Add the UAC transaction to the vector.
     _uac_tsx.push_back(uac_tsx);
+  }
 
-    // All the data structures, transactions and transmit data have
-    // been created, so start send the request.
-    uac_tsx->send_request();
+  return status;
+}
+
+
+/// Forwards a request creating a UACTsx to handle the downstream hop.
+pj_status_t BasicProxy::UASTsx::forward_request(pjsip_tx_data* tdata,
+                                                size_t& index)
+{
+  pj_status_t status = allocate_uac(tdata, index);
+
+  if (status == PJ_SUCCESS)
+  {
+    _uac_tsx[index]->send_request();
   }
   return status;
 }
@@ -1505,14 +1512,9 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 {
   pj_status_t status;
 
-  // Store the request and add a reference to the request so we can be sure it
-  // remains valid for retries and building timeout responses.
-  _tdata = tdata;
-  pjsip_tx_data_add_ref(_tdata);
-
   _trail = _uas_tsx->trail();
 
-  if (_tdata->msg->line.req.method.id != PJSIP_ACK_METHOD) 
+  if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD) 
   {
     // Use the lock associated with the PJSIP UAS transaction.
     _lock = _uas_tsx->_lock;
@@ -1539,11 +1541,16 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
     LOG_DEBUG("Added trail identifier %ld to UAC transaction", get_trail(_tsx));
   }
 
-  if (_tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
+  // Store the request and add a reference to the request so we can be sure it
+  // remains valid for retries and building timeout responses.
+  _tdata = tdata;
+  pjsip_tx_data_add_ref(_tdata);
+
+  if (tdata->tp_sel.type != PJSIP_TPSELECTOR_TRANSPORT)
   {
     // Resolve the next hop destination for this request to a set of target
     // servers (IP address/port/transport tuples).
-    PJUtils::resolve_next_hop(_tdata, 0, _servers, trail());
+    PJUtils::resolve_next_hop(tdata, 0, _servers, trail());
   }
 
   return PJ_SUCCESS;

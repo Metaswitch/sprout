@@ -169,8 +169,11 @@ protected:
     /// Adds the target information to a request ready to send.
     virtual void set_req_target(pjsip_tx_data* tdata, BasicProxy::Target* target);
 
-    /// Forwards a request.
-    virtual pj_status_t forward_request(pjsip_tx_data* tdata, int& index);
+    /// Allocates and initializes a UAC transaction.
+    virtual pj_status_t allocate_uac(pjsip_tx_data* tdata, size_t& index);
+
+    /// Forwards a request, allocating and initializing the transaction.
+    virtual pj_status_t forward_request(pjsip_tx_data* tdata, size_t& index);
 
     /// Calculate targets for requests where Route headers do not determine
     /// the target.

@@ -241,20 +241,32 @@ void SproutletProxy::UASTsx::tx_sproutlet_request(TsxHelper* helper,
                                                   int fork_id,
                                                   pjsip_tx_data* req)
 {
-  int index = _uac_tsx.size();
-  if (_uac_2_fork.size() < (size_t)index + 1) 
-  {
-    _uac_2_fork.resize(index + 1);
-  }
-  _uac_2_fork[index] = fork_id;
+  // Allocate and initialise a UAC transaction for the request.
+  size_t index;
+  pj_status_t status = allocate_uac(req, index);
 
-  if (_fork_2_uac.size() < (size_t)fork_id + 1) 
+  if (status == PJ_SUCCESS) 
   {
-    _fork_2_uac.resize(fork_id + 1);
-  }
-  _fork_2_uac[fork_id] = index;
+    // Fix up the mapping between the Sproutlet/fork and the UAC transaction.
+    if (_uac_2_fork.size() < index + 1) 
+    {
+      _uac_2_fork.resize(index + 1);
+    }
+    _uac_2_fork[index] = fork_id;
 
-  forward_request(req, index);
+    if (_fork_2_uac.size() < (size_t)fork_id + 1) 
+    {
+      _fork_2_uac.resize(fork_id + 1);
+    }
+    _fork_2_uac[fork_id] = index;
+
+    // Send the request over the UAC transaction.
+    _uac_tsx[index]->send_request();
+  }
+  else
+  {
+    // @TODO - build and send 500 response to Sproutlet.
+  }
 }
 
 
