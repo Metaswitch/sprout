@@ -529,6 +529,16 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   LOG_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
 }
 
+/// Add a Route header with the specified URI.
+void PJUtils::add_route_header(pjsip_msg* msg,
+                               pjsip_sip_uri* uri,
+                               pj_pool_t* pool)
+{
+  pjsip_route_hdr* hroute = pjsip_route_hdr_create(pool);
+  hroute->name_addr.uri = (pjsip_uri*)uri;
+  uri->lr_param = 1;            // Always use loose routing.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)hroute);
+}
 
 /// Remove all existing copies of a header.  The header to delete must
 /// not be one that has an abbreviation.

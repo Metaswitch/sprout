@@ -262,12 +262,12 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
 
 void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
-  int status_code = PJSIP_SC_OK;
+  pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
-  status_code = determine_served_user(req);
+  status_code = (pjsip_status_code)determine_served_user(req);
 
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
@@ -373,7 +373,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Forward the response upstream.  The proxy layer will aggregate responses
   // if required.
-  forward_response(rsp);
+  send_response(rsp);
 }
 
 
@@ -805,7 +805,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
   // Add the application server URI as the next Route header.
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
                           PJUtils::uri_from_string(server_name, get_pool(req));
-  add_route_uri(req, as_uri);
+  PJUtils::add_route_header(req, as_uri, get_pool(req));
 
   // Insert route header below it with an ODI in it.
   pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
@@ -819,7 +819,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
     pj_strdup2(get_pool(req), &orig_param->value, "");
     pj_list_insert_after(&odi_uri->other_param, orig_param);
   }
-  add_route_uri(req, odi_uri);
+  PJUtils::add_route_header(req, odi_uri, get_pool(req));
 
   // Forward the request.
   send_request(req);
@@ -839,8 +839,10 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   LOG_INFO("Routing to I-CSCF %s", 
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _scscf->icscf_uri()).c_str());
-  add_route_uri(req,
-                (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->icscf_uri()));
+  PJUtils::add_route_header(req,
+                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
+                                                            _scscf->icscf_uri()),
+                            get_pool(req));
   send_request(req);
 }
 
@@ -851,8 +853,10 @@ void SCSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
   LOG_INFO("Routing to BGCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _scscf->bgcf_uri()).c_str());
-  add_route_uri(req,
-                (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->bgcf_uri()));
+  PJUtils::add_route_header(req,
+                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
+                                                            _scscf->bgcf_uri()),
+                            get_pool(req));
   send_request(req);
 }
 
@@ -863,8 +867,10 @@ void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
   LOG_INFO("Routing to terminating S-CSCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                   _scscf->scscf_uri()).c_str());
-  add_route_uri(req,
-                (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), _scscf->scscf_uri()));
+  PJUtils::add_route_header(req,
+                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
+                                                            _scscf->scscf_uri()),
+                            get_pool(req));
   send_request(req);
 }
 
@@ -998,8 +1004,10 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
            ++j) 
       {
         pjsip_sip_uri* path_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*j);
-        add_route_uri(to_send,
-                 (pjsip_sip_uri*)pjsip_uri_clone(get_pool(to_send), path_uri));
+        PJUtils::add_route_header(to_send,
+                                  (pjsip_sip_uri*)pjsip_uri_clone(get_pool(to_send),
+                                                                  path_uri),
+                                  get_pool(to_send));
       }
 
       // Forward the request and remember the binding identifier used for this
@@ -1010,16 +1018,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   }
 
   delete aor_data; aor_data = NULL;
-}
-
-
-/// Add a Route header with the specified URI.
-void SCSCFSproutletTsx::add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri)
-{
-  pjsip_route_hdr* hroute = pjsip_route_hdr_create(get_pool(msg));
-  hroute->name_addr.uri = (pjsip_uri*)uri;
-  uri->lr_param = 1;            // Always use loose routing.
-  pjsip_msg_add_hdr(msg, (pjsip_hdr*)hroute);
 }
 
 

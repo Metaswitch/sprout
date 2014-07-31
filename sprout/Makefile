@@ -74,8 +74,9 @@ TARGET_SOURCES := logger.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
                   contact_filtering.cpp	\
-									sproutletappserver.cpp \
-									sproutletproxy.cpp
+                  sproutletappserver.cpp \
+                  sproutletproxy.cpp \
+                  bgcfsproutlet.cpp
 
 
 TARGET_SOURCES_BUILD := main.cpp
