@@ -122,6 +122,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
                        icscfproxy_test.cpp \
+                       icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
