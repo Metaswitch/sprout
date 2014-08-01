@@ -75,7 +75,7 @@ ICSCFSproutlet::~ICSCFSproutlet()
 
 /// Creates a ICSCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
-SproutletTsx* ICSCFSproutlet::get_app_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {
@@ -123,10 +123,6 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   _acr->rx_request(req);
 
   LOG_DEBUG("I-CSCF initialize transaction for REGISTER request");
-
-  // Since we may retry the request on a negative response, clone the original
-  // request now.
-  _cloned_req = clone_request(req);
 
   // Extract relevant fields from the message
   std::string impu;
@@ -180,6 +176,15 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   // expires header or expires values in the contact headers this will
   // be a registration not a deregistration.)
   auth_type = (PJUtils::max_expires(req, 1) > 0) ? "REG" : "DEREG";
+
+  // Remove any Route headers present on the request as we're re-routing the
+  // message.
+  pj_str_t route_hdr_name = pj_str((char *)"Route");
+  PJUtils::remove_hdr(req, &route_hdr_name);
+
+  // Since we may retry the request on a negative response, clone the original
+  // request now.
+  _cloned_req = clone_request(req);
 
   // Create an UAR router to handle the HSS interactions and S-CSCF
   // selection.
@@ -366,10 +371,6 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // if present.
   PJUtils::remove_hdr(req, &STR_P_PROFILE_KEY);
 
-  // Since we may retry the request on a negative response, clone the original
-  // request now.
-  _cloned_req = clone_request(req);
-
   // Determine orig/term and the served user's name.
   pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
                                                                 PJSIP_H_ROUTE,
@@ -392,6 +393,14 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     _originating = false;
     impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
   }
+
+  // Remove Route: header to us from the request.
+  pj_str_t route_hdr_name = pj_str((char *)"Route");
+  PJUtils::remove_hdr(req, &route_hdr_name);
+
+  // Since we may retry the request on a negative response, clone the original
+  // request now.
+  _cloned_req = clone_request(req);
 
   // Create an LIR router to handle the HSS interactions and S-CSCF
   // selection.
@@ -472,7 +481,6 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     if (status_code == PJSIP_SC_OK)
     {
       LOG_DEBUG("Found SCSCF for non-REGISTER");
-      _cloned_req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
 
       if (_originating)
       {
@@ -488,7 +496,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       pjsip_msg* tmp_clone = clone_request(_cloned_req);
 
       // Send the old clone as a new fork and save off the new clone.
-      _cloned_req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
+      PJUtils::add_route_header(_cloned_req, scscf_sip_uri, get_pool(_cloned_req));
       send_request(_cloned_req);
       _cloned_req = tmp_clone;
 
