@@ -73,7 +73,8 @@ TARGET_SOURCES := logger.cpp \
                   httpstack_utils.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
-                  contact_filtering.cpp
+                  contact_filtering.cpp \
+                  localroaming.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -127,7 +128,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
-                       appserver_test.cpp
+                       appserver_test.cpp \
+                       localroaming_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -159,14 +161,16 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/cpp-common/test_utils \
             -I${ROOT}/modules/app-servers/include \
             -I${ROOT}/modules/app-servers/test \
+            -I${ROOT}/modules/gemini/include \
             -I${ROOT}/sprout/ut \
+            -I${ROOT}/modules/gemini/src/ut \
             -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src
 
 # Production build:
 #
@@ -226,7 +230,7 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 #
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/cpp-common/include/|^ut/|^usr/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \
