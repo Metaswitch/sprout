@@ -163,6 +163,18 @@ TEST_F(UtilsTest, Escape)
   EXPECT_EQ(expected, actual);
 }
 
+TEST_F(UtilsTest, Unescape)
+{
+  string actual = Utils::url_unescape("");
+  EXPECT_EQ("", actual);
+
+  actual = Utils::url_unescape("/The%20quick%20brown%20fox%20%22%3B'%24%3F%26%3D%25\n\377");
+  EXPECT_EQ("/The quick brown fox \";'$?&=%\n\377", actual);
+
+  std::string original = " \"#$%&+,/:;<=>?@[\\]^`{|}~some other text";
+  EXPECT_EQ(original, Utils::url_unescape(Utils::url_escape(original)));
+}
+
 TEST_F(UtilsTest, Trim)
 {
   string s = "    floop  ";
