@@ -328,10 +328,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string error_msg = "Subscribe failed as using invalid URI Scheme";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -368,10 +366,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // that's been registered for emergency service.
     LOG_ERROR("Rejecting subscribe request from emergency registration");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string error_msg = "Subscribe failed as using emergency registration";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
@@ -577,69 +573,68 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   SAS::TrailId trail = get_trail(rdata);
 
   if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
-      !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) &&
-      ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
-      (PJUtils::check_route_headers(rdata)))
+      !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())))
   {
-    // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
-    // whether it should be processed by this module or passed up to an AS.
-    pjsip_msg *msg = rdata->msg_info.msg;
-
-    // A valid subscription must have the Event header set to "reg". This is case-sensitive
-    pj_str_t event_name = pj_str("Event");
-    pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
-
-    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
+    if (((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
+         (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
+        (PJUtils::check_route_headers(rdata)))
     {
-      // The Event header is missing or doesn't match "reg"
-      LOG_DEBUG("Rejecting subscription request with invalid event header");
+      // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
+      // whether it should be processed by this module or passed up to an AS.
+      pjsip_msg *msg = rdata->msg_info.msg;
 
-      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-      std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Event header is invalid or missing - it should be 'reg'";
-      event.add_var_param(error_msg);
-      SAS::report_event(event);
+      // A valid subscription must have the Event header set to "reg". This is case-sensitive
+      pj_str_t event_name = pj_str("Event");
+      pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
 
-      return PJ_FALSE;
-    }
-
-    // Accept header may be present - if so must include the application/reginfo+xml
-    pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
-    if (accept)
-    {
-      bool found = false;
-      pj_str_t reginfo = pj_str("application/reginfo+xml");
-      for (uint32_t i = 0; i < accept->count; i++)
+      if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
       {
-        if (!pj_strcmp(accept->values + i, &reginfo))
-        {
-          found = true;
-        }
-      }
+        // The Event header is missing or doesn't match "reg"
+        LOG_DEBUG("Rejecting subscription request with invalid event header");
 
-      if (!found)
-      {
-        // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-        LOG_DEBUG("Rejecting subscription request with invalid accept header");
-
-        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-        std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Accepts header is invalid - if it's present it should be 'application/reginfo+xml'";
-        event.add_var_param(error_msg);
+        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
         SAS::report_event(event);
 
         return PJ_FALSE;
       }
+
+      // Accept header may be present - if so must include the application/reginfo+xml
+      pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
+      if (accept)
+      {
+        bool found = false;
+        pj_str_t reginfo = pj_str("application/reginfo+xml");
+        for (uint32_t i = 0; i < accept->count; i++)
+        {
+          if (!pj_strcmp(accept->values + i, &reginfo))
+          {
+            found = true;
+          }
+        }
+
+        if (!found)
+        {
+          // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
+          LOG_DEBUG("Rejecting subscription request with invalid accept header");
+
+          SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+          SAS::report_event(event);
+
+          return PJ_FALSE;
+        }
+      }
+
+      process_subscription_request(rdata);
+      return PJ_TRUE;
     }
-
-    process_subscription_request(rdata);
-    return PJ_TRUE;
+    else
+    {
+      LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+      SAS::report_event(event);
+      return PJ_FALSE;
+    }
   }
-
-  SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-  std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as it wasn't targeted at the home domain or this node";
-  event.add_var_param(error_msg);
-  SAS::report_event(event);
-
   return PJ_FALSE;
 }
 
