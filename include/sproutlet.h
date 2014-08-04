@@ -429,16 +429,25 @@ public:
                                 pjsip_msg* req) = 0;
 
   /// Returns the name of this service.
-  const std::string service_name() { return _service_name; }
+  const std::string service_name() const { return _service_name; }
+
+  /// Returns the default port for this service.
+  int port() const { return _port; }
 
 protected:
   /// Constructor.
-  Sproutlet(const std::string& service_name) :
-    _service_name(service_name) {}
+  Sproutlet(const std::string& service_name, int port) :
+    _service_name(service_name),
+    _port(port)
+  {
+  }
 
 private:
   /// The name of this service.
   const std::string _service_name;
+
+  /// The default port for this service (0 if no default).
+  const int _port;
 };
 
 #endif

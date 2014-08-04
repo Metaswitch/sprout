@@ -151,6 +151,7 @@ BasicProxy::UASTsx* ICSCFProxy::create_uas_tsx()
 ICSCFProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   BasicProxy::UASTsx(proxy),
   _router(NULL),
+  _hss_query_success(false),
   _acr(NULL),
   _in_dialog(false)
 {
@@ -325,6 +326,7 @@ int ICSCFProxy::UASTsx::calculate_targets()
   if (status_code == PJSIP_SC_OK)
   {
     // Found a suitable S-CSCF.
+    _hss_query_success = true;
 
     if (_case == SessionCase::REGISTER)
     {
@@ -383,7 +385,7 @@ void ICSCFProxy::UASTsx::on_final_response()
   if (_tsx != NULL)
   {
     bool retried = false;
-    if (_final_rsp->msg->line.status.code >= 300)
+    if ((_hss_query_success) && (_final_rsp->msg->line.status.code >= 300))
     {
       // Request rejected, see if we can/should do a retry.
       retried = retry_to_alternate_scscf(_final_rsp->msg->line.status.code);
@@ -518,7 +520,6 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
           _final_rsp->msg->line.status.reason =
                      *pjsip_get_status_text(_final_rsp->msg->line.status.code);
         }
-        pjsip_tx_data_invalidate_msg(_final_rsp);
       }
     }
   }

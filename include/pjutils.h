@@ -131,6 +131,12 @@ pj_bool_t is_first_hop(pjsip_msg* msg);
 
 int max_expires(pjsip_msg* msg, int default_expires);
 
+pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
+                         pjsip_rx_data* rdata);
+
+pjsip_tx_data* clone_msg(pjsip_endpoint* endpt,
+                         pjsip_tx_data* tdata);
+
 pj_status_t create_response(pjsip_endpoint *endpt,
       		            const pjsip_rx_data *rdata,
       		            int st_code,
@@ -140,7 +146,7 @@ pj_status_t create_response(pjsip_endpoint *endpt,
 pj_status_t create_response(pjsip_endpoint *endpt,
                             const pjsip_tx_data *tdata,
                             int st_code,
-                            const std::string& st_text,
+      		            const pj_str_t* st_text,
                             pjsip_tx_data **p_tdata);
 
 pj_status_t create_request_fwd(pjsip_endpoint *endpt,
@@ -154,6 +160,10 @@ pj_status_t create_response_fwd(pjsip_endpoint *endpt,
                                 pjsip_rx_data *rdata,
                                 unsigned options,
                                 pjsip_tx_data **p_tdata);
+
+pjsip_tx_data* create_cancel(pjsip_endpoint* endpt,
+                             pjsip_tx_data* tdata,
+                             int reason_code);
 
 void resolve(const std::string& name,
              int port,
@@ -195,8 +205,12 @@ pj_status_t respond_stateful(pjsip_endpoint* endpt,
                              const pjsip_hdr* hdr_list,
                              const pjsip_msg_body* body);
 
-pjsip_tx_data *clone_tdata(pjsip_tx_data *tdata);
+pjsip_tx_data *clone_tdata(pjsip_tx_data* tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
+
+void add_top_via(pjsip_tx_data* tdata);
+
+void add_reason(pjsip_tx_data* tdata, int reason_code);
 
 bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);
 

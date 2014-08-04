@@ -65,7 +65,15 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
-  std::list<Sproutlet*> target_sproutlets(pjsip_msg* msg);
+  /// Gets the need target Sproutlet for the message by analysing the top
+  /// Route header.
+  Sproutlet* target_sproutlet(pjsip_msg* msg, int port);
+
+  /// Extracts the next service identifier from the specified SIP URI.
+  std::string service_id(pjsip_sip_uri* uri);
+
+  /// Extracts the service name from the specified service identifier.
+  std::string service_name(const std::string& service_id);
 
   void add_record_route(pjsip_tx_data* tdata,
                         const std::string& service_name,
@@ -86,7 +94,7 @@ protected:
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
-    virtual void process_tsx_request();
+    virtual void process_tsx_request(pjsip_rx_data* rdata);
 
     /// Handle a received CANCEL request.
     virtual void process_cancel_request(pjsip_rx_data* rdata);
@@ -98,22 +106,27 @@ protected:
 
     virtual void on_tsx_state(pjsip_event* event);
 
-    virtual void add_record_route(pjsip_tx_data* tdata,
-                                  const std::string& service_name,
-                                  const std::string& dialog_id);
-
-    virtual void tx_sproutlet_request(TsxHelper* helper,
-                                      int fork_id,
-                                      pjsip_tx_data* req);
-
-    virtual void tx_sproutlet_response(TsxHelper* helper,
-                                       pjsip_tx_data* rsp);
-
-    virtual void tx_sproutlet_cancel(TsxHelper* helper,
-                                     int fork_id,
-                                     int status_code);
 
   private:
+    void tx_sproutlet_request(TsxHelper* helper,
+                              int fork_id,
+                              pjsip_tx_data* req);
+
+    void tx_sproutlet_response(TsxHelper* helper,
+                               pjsip_tx_data* rsp);
+
+    void tx_sproutlet_cancel(TsxHelper* helper,
+                             int fork_id,
+                             pjsip_tx_data* cancel);
+
+    /// Gets the need target Sproutlet for the message by analysing the top
+    /// Route header.
+    Sproutlet* target_sproutlet(pjsip_msg* msg, int port);
+
+    void add_record_route(pjsip_tx_data* tdata,
+                          const std::string& service_name,
+                          const std::string& dialog_id);
+
     class TsxHelper : public SproutletTsxHelper
     {
       typedef std::unordered_map<const pjsip_msg*, pjsip_tx_data*> Packets;
@@ -151,10 +164,9 @@ protected:
       SAS::TrailId trail() const;
 
     private:
-
       void rx_request(pjsip_tx_data* req);
       void rx_response(pjsip_tx_data* rsp, int fork_id);
-      void rx_cancel(pjsip_rx_data* cancel);
+      void rx_cancel(pjsip_tx_data* cancel);
       void rx_error(int status_code);
       void register_tdata(pjsip_tx_data* tdata);
 
@@ -162,6 +174,7 @@ protected:
       void aggregate_response(pjsip_tx_data* rsp);
       void tx_request(pjsip_tx_data* req, int fork_id);
       void tx_response(pjsip_tx_data* rsp);
+      void tx_cancel(int fork_id);
       int compare_sip_sc(int sc1, int sc2);
 
       SproutletProxy::UASTsx* _proxy_tsx;
@@ -170,7 +183,9 @@ protected:
 
       std::string _service_name;
 
-      pjsip_method_e _method;
+      /// Immutable reference to the original request.  A mutable clone of this
+      /// is passed to the Sproutlet.
+      pjsip_tx_data* _req;
 
       Packets _packets;
 
@@ -186,12 +201,13 @@ protected:
 
       bool _complete;
 
-      // Vector keeping track of the status of each fork.  The state field can
-      // only ever take a subset of the values defined by PJSIP - NULL, CALLING,
-      // PROCEEDING and COMPLETED.
+      /// Vector keeping track of the status of each fork.  The state field can
+      /// only ever take a subset of the values defined by PJSIP - NULL, CALLING,
+      /// PROCEEDING and COMPLETED.
       typedef struct
       {
         pjsip_tsx_state_e state;
+        pjsip_tx_data* req;
         bool pending_cancel;
         int cancel_reason;
       } ForkStatus;
@@ -202,28 +218,41 @@ protected:
       friend class SproutletProxy::UASTsx;
     };
 
-    /// Records whether or not the request is an in-dialog request.
-    bool _in_dialog;
-
     /// Flags whether or not this node has already Record-Routed itself on
     /// this transaction.
     bool _record_routed;
 
-    std::string _service_name;
-    TsxHelper* _helper;
-    SproutletTsx* _sproutlet;
+    /// The root Sproutlet for this transaction.
+    TsxHelper* _root;
 
-    std::vector<int> _uac_2_fork;
-    std::vector<int> _fork_2_uac;
+    /// Templated type used to map from upstream Sproutlet/fork to the
+    /// downstream Sproutlet or UACTsx.
+    template<typename T>
+    struct DMap
+    {
+      typedef std::map<std::pair<TsxHelper*, int>, T> type;
+      typedef typename std::map<std::pair<TsxHelper*, int>, T>::iterator iterator;
+    };
+
+    /// Mapping from upstream Sproutlet/fork to downstream Sproutlet.
+    DMap<TsxHelper*>::type _dmap_sproutlet;
+
+    /// Mapping from upstream Sproutlet/fork to downstream UACTsx.
+    DMap<UACTsx*>::type _dmap_uac;
+
+    /// Mapping from downstream Sproutlet or UAC transaction to upstream
+    /// Sproutlet/fork.
+    typedef std::map<void*, std::pair<TsxHelper*, int> > UMap;
+    UMap _umap;
 
     friend class TsxHelper;
   };
 
-  pjsip_uri* _uri;
+  pjsip_sip_uri* _uri;
 
-  std::map<std::string, Sproutlet*> _sproutlets;
+  std::map<std::string, Sproutlet*> _service_map;
+  std::map<int, Sproutlet*> _port_map;
 
-  //friend class UASTsx::TsxHelper;
   friend class UASTsx;
 };
 

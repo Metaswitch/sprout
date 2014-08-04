@@ -126,6 +126,9 @@ private:
     /// I-CSCF router object for the request.
     ICSCFRouter* _router;
 
+    /// Indicates whether the HSS query returned a successful result.
+    bool _hss_query_success;
+
     /// The ACR for the request (if ACR generation is enabled).
     ACR* _acr;
 

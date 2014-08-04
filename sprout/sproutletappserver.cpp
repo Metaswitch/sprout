@@ -228,7 +228,7 @@ SAS::TrailId SproutletAppServerTsxHelper::trail() const
 
 /// Constructor.
 SproutletAppServerShim::SproutletAppServerShim(AppServer* app) :
-  Sproutlet(app->service_name()),
+  Sproutlet(app->service_name(), 0),
   _app(app)
 {
 }

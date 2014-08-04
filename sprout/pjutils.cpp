@@ -619,6 +619,36 @@ int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
 }
 
 
+pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
+                                  pjsip_rx_data* rdata)
+{
+  pjsip_tx_data* clone = NULL;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
+  if (status == PJ_SUCCESS) 
+  {
+    pjsip_tx_data_add_ref(clone);
+    clone->msg = pjsip_msg_clone(clone->pool, rdata->msg_info.msg);
+    set_trail(clone, get_trail(rdata));
+  }
+  return clone;
+}
+
+
+pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
+                                  pjsip_tx_data* tdata)
+{
+  pjsip_tx_data* clone = NULL;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
+  if (status == PJ_SUCCESS) 
+  {
+    pjsip_tx_data_add_ref(clone);
+    clone->msg = pjsip_msg_clone(clone->pool, tdata->msg);
+    set_trail(clone, get_trail(tdata));
+  }
+  return clone;
+}
+
+
 pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
                                      const pjsip_rx_data* rdata,
                                      int st_code,
@@ -649,7 +679,7 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
 pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
                                      const pjsip_tx_data *req_tdata,
                                      int st_code,
-                                     const std::string& st_text,
+                                     const pj_str_t* st_text,
                                      pjsip_tx_data **p_tdata)
 {
   pjsip_msg* req_msg = req_tdata->msg;
@@ -674,9 +704,9 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
 
   // Set status code and reason text.
   msg->line.status.code = st_code;
-  if (st_text != "")
+  if (st_text != NULL)
   {                                                                
-    pj_strdup2(tdata->pool, &msg->line.status.reason, st_text.c_str());
+    pj_strdup(tdata->pool, &msg->line.status.reason, st_text);
   }
   else
   {
@@ -686,15 +716,9 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
   // Set TX data attributes.
   tdata->rx_timestamp = req_tdata->rx_timestamp;
 
-  // Copy all the via headers except for the top one, in order.  We omit the
-  // top Via because our own Via header will have already been added to the
-  // request.
+  // Copy all the via headers in order.
   pjsip_via_hdr* top_via = NULL;
   pjsip_via_hdr* via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, NULL);
-  if (via) 
-  {
-    via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, via->next);
-  }
   while (via)
   {
     pjsip_via_hdr *new_via;
@@ -791,6 +815,26 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
   return status;
 }
 
+
+pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
+                                      pjsip_tx_data* tdata,
+                                      int reason_code)
+{
+  pjsip_tx_data* cancel;
+  pj_status_t status = pjsip_endpt_create_cancel(endpt, tdata, &cancel);
+
+  if (status != PJ_SUCCESS) 
+  {
+    return NULL;
+  }
+
+  if (reason_code != 0)
+  {
+    add_reason(cancel, reason_code);
+  }
+
+  return cancel;
+}
 
 /// Resolves a destination.
 void PJUtils::resolve(const std::string& name,
@@ -1404,13 +1448,6 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   // Copy the trail identifier to the cloned message.
   set_trail(cloned_tdata, get_trail(tdata));
 
-  if (tdata->msg->type == PJSIP_REQUEST_MSG)
-  {
-    // Substitute the branch value in the top Via header with a unique
-    // branch identifier.
-    generate_new_branch_id(cloned_tdata);
-  }
-
   // If the original message already had a specified transport set this
   // on the clone.  (Must use pjsip_tx_data_set_transport to ensure
   // reference counts get updated.)
@@ -1428,6 +1465,32 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   return cloned_tdata;
 }
 
+void PJUtils::add_top_via(pjsip_tx_data* tdata)
+{
+  // Add a new Via header with a unique branch identifier.
+  pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
+  generate_new_branch_id(tdata);
+}
+
+void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)
+{
+  char reason_val_str[100];
+  const pj_str_t* reason_text = pjsip_get_status_text(reason_code);
+  snprintf(reason_val_str,
+           sizeof(reason_val_str),
+           "SIP ;cause=%d ;text=\"%.*s\"",
+           reason_code,
+           (int)reason_text->slen,
+           reason_text->ptr);
+  pj_str_t reason_name = pj_str("Reason");
+  pj_str_t reason_val = pj_str(reason_val_str);
+  pjsip_hdr* reason_hdr =
+                      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
+                                                                  &reason_name,
+                                                                  &reason_val);
+  pjsip_msg_add_hdr(tdata->msg, reason_hdr);
+}
 
 bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs)
 {

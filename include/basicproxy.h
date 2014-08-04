@@ -113,7 +113,7 @@ protected:
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
-    virtual void process_tsx_request();
+    virtual void process_tsx_request(pjsip_rx_data* rdata);
 
     /// Handle a received CANCEL request.
     virtual void process_cancel_request(pjsip_rx_data* rdata);

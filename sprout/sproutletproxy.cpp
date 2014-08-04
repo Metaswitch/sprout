@@ -58,19 +58,25 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                const std::string& uri,
                                const std::list<Sproutlet*>& sproutlets) :
   BasicProxy(endpt, "mod-sproutlet-controller", priority, false),
-  _sproutlets()
+  _uri(NULL),
+  _service_map(),
+  _port_map()
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
   LOG_DEBUG("Supplied Record-Route URI = %s", uri.c_str());
-  _uri = PJUtils::uri_from_string(uri, stack_data.pool, false);
-  LOG_DEBUG("Rendered URI = %s", PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, _uri).c_str());
+  _uri = (pjsip_sip_uri*)PJUtils::uri_from_string(uri, stack_data.pool, false);
 
-  /// Build a map from service-name to Sproutlet object.
+  /// Build maps from service name and port number to Sproutlet object.
   for (std::list<Sproutlet*>::const_iterator i = sproutlets.begin();
        i != sproutlets.end();
        ++i) 
   {
-    _sproutlets[(*i)->service_name()] = (*i);
+    _service_map[(*i)->service_name()] = *i;
+
+    if ((*i)->port() != 0) 
+    {
+      _port_map[(*i)->port()] = *i;
+    }
   }
 }
 
@@ -89,25 +95,50 @@ BasicProxy::UASTsx* SproutletProxy::create_uas_tsx()
 
 
 /// Utility method to find the appropriate Sproutlet to handle a request.
-std::list<Sproutlet*> SproutletProxy::target_sproutlets(pjsip_msg* msg)
+Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* msg, int port)
 {
-  std::list<Sproutlet*> sproutlets;
-#if 0
+  Sproutlet* sproutlet = NULL;
+  std::string id;
 
-  bool in_dialog = (PJSIP_MSG_TO_HDR(msg)->tag.slen > 0);
-
-  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
+  // Find and parse the top Route header.
+  pjsip_route_hdr* route = (pjsip_route_hdr*)
                                   pjsip_msg_find_hdr(msg, PJSIP_H_ROUTE, NULL);
 
-  if ((hroute != NULL) && (pjsip_uri_compare(hroute->name_add.uri, _uri))) 
+  if ((route != NULL) &&
+      (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri)))
   {
-    // The Route header references this node, so we should apply services.
-
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+    id = service_id(uri);
+    if (port == 0) 
+    {
+      // No port was specified, so use the URI port instead.
+      port = uri->port;
+    }
   }
-#else
-  sproutlets.push_back(_sproutlets.begin()->second);
-#endif
-  return sproutlets;
+
+  if (!id.empty()) 
+  {
+    // There was a service identifier encoded in the Route URI.
+    std::map<std::string, Sproutlet*>::iterator i =
+                                           _service_map.find(service_name(id));
+
+    if (i != _service_map.end()) 
+    {
+      sproutlet = i->second;
+    }
+  }
+  else if (port != 0)
+  {
+    // No service identifier in the Route URI, so check for a default service
+    // for the port.
+    std::map<int, Sproutlet*>::iterator i = _port_map.find(port);
+    if (i != _port_map.end()) 
+    {
+      sproutlet = i->second;
+    }
+  }
+
+  return sproutlet;
 }
 
 
@@ -137,9 +168,85 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
 }
 
 
+/// Extracts the first service identifier encoded in the URI (if any).
+/// Service identifiers can be encoded in the host or user part of the URI.
+/// If encoded in the host, the service identifier can only contain a service
+/// name.  If encoded in the user part, the service identifier can also
+/// have a concatenated service index, separated by a '-'.  If multiple
+/// service identifiers are included in the user part, they are separated by
+/// '&' characters.
+std::string SproutletProxy::service_id(pjsip_sip_uri* uri)
+{
+  std::string id;
+
+  if (!pj_stricmp(&uri->host, &_uri->host)) 
+  {
+    // The URI domain is the same as the local URI domain, so look for 
+    // service names in the user portion of the URI.
+    if (uri->user.slen > 0) 
+    {
+      // Scan for a separator
+      char* sep = pj_strchr(&uri->user, '&');
+      if (sep != NULL) 
+      {
+        // Found a separator, so service name is the string up to the 
+        // separator.
+        id = std::string(uri->user.ptr, (sep - uri->user.ptr));
+      }
+      else
+      {
+        // No separator, so service name is the full username.
+        id = std::string(uri->user.ptr, uri->user.slen);
+      }
+    }
+  }
+  else
+  {
+    // The URI domain is not identical to the local URI domain, so check
+    // for the service name as the first part of the domain.
+    char* sep = pj_strchr(&uri->host, '.');
+    if (sep != NULL) 
+    {
+      // Extract the root of the domain and check it is the same as the
+      // local URI domain.
+      pj_str_t root_host;
+      root_host.ptr = sep + 1;
+      root_host.slen = uri->host.slen - (sep + 1 - uri->host.ptr);
+      if (!pj_stricmp(&root_host, &_uri->host)) 
+      {
+        // The root of the URI domain matches, so the service name is
+        // the portion at the front.
+        id = std::string(uri->host.ptr, (sep - uri->host.ptr));
+      }
+    }
+  }
+
+  return id;
+}
+
+
+/// Extracts the service name from a service identifier.
+std::string SproutletProxy::service_name(const std::string& service_id)
+{
+  size_t sep = service_id.find_first_of('-');
+  if (sep != std::string::npos) 
+  {
+    return service_id.substr(0, sep);
+  }
+  else
+  {
+    return service_id;
+  }
+}
+
+
 SproutletProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   BasicProxy::UASTsx(proxy),
-  _in_dialog(false)
+  _record_routed(false),
+  _root(NULL),
+  _dmap_sproutlet(),
+  _dmap_uac(),
+  _umap()                   
 {
 }
 
@@ -159,13 +266,12 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
   {
     // Locate the target Sproutlet for the request, and create the helper and
     // the Sproutlet transaction.
-    std::list<Sproutlet*> sproutlets =
-                       ((SproutletProxy*)_proxy)->target_sproutlets(_req->msg);
-    Sproutlet* sproutlet = sproutlets.front();
+    Sproutlet* sproutlet =
+                   target_sproutlet(_req->msg,
+                                    rdata->tp_info.transport->local_name.port);
     LOG_DEBUG("Initializing SproutletProxy transaction for %s",
               sproutlet->service_name().c_str());
-    _service_name = sproutlet->service_name();
-    _helper = new TsxHelper(this, sproutlet, _req, trail());
+    _root = new TsxHelper(this, sproutlet, _req, trail());
   }
                                                        
   return status;
@@ -173,12 +279,10 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
 
 
 /// Handle the incoming half of a transaction request.
-void SproutletProxy::UASTsx::process_tsx_request()
+void SproutletProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
 {
   // Pass the request to the Sproutlet at the root of the tree.
-  pjsip_tx_data* req = _req;
-  _req = NULL;
-  _helper->rx_request(req);
+  _root->rx_request(_req);
 }
 
 
@@ -186,23 +290,44 @@ void SproutletProxy::UASTsx::process_tsx_request()
 void SproutletProxy::UASTsx::process_cancel_request(pjsip_rx_data* rdata)
 {
   // Pass the CANCEL to the Sproutlet at the root of the tree.
-  _helper->rx_cancel(rdata);
+  pjsip_tx_data* tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
+  _root->rx_cancel(tdata);
 }
 
 
 /// Handles a response to an associated UACTsx.
 void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
-                                                    pjsip_tx_data *tdata)
+                                                    pjsip_tx_data *rsp)
 {
   enter_context();
 
-  if (tdata->msg->line.status.code >= PJSIP_SC_OK) 
+  if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
   {
     // This is a final response, so dissociate the UAC transaction.
     dissociate(uac_tsx);
   }
 
-  _helper->rx_response(tdata, _uac_2_fork[uac_tsx->index()]);
+  UMap::iterator i = _umap.find((void*)uac_tsx);
+
+  if (i != _umap.end()) 
+  {
+    // Pass the response to the upstream Sproutlet on the appropriate fork.
+    TsxHelper* upstream_helper = i->second.first;
+    int upstream_fork = i->second.second;
+
+    if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
+    {
+      // Final response, so break the linkage between the UAC transaction and
+      // the Sproutlets.
+      _dmap_uac.erase(i->second);
+      _umap.erase(i);
+    }
+    upstream_helper->rx_response(rsp, upstream_fork);
+  }
+  else
+  {
+    pjsip_tx_data_dec_ref(rsp);
+  }
 
   exit_context();
 }
@@ -222,13 +347,20 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
        (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
   {
     // Notify the root Sproutlet of the error.
-    _helper->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
+    _root->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
   }
 
   BasicProxy::UASTsx::on_tsx_state(event);
 
   exit_context();
 }
+
+
+Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg, int port)
+{
+  return ((SproutletProxy*)_proxy)->target_sproutlet(msg, port);
+}
+
 
 void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
                                               const std::string& service_name,
@@ -237,35 +369,52 @@ void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
   ((SproutletProxy*)_proxy)->add_record_route(tdata, service_name, dialog_id);
 }
 
+
 void SproutletProxy::UASTsx::tx_sproutlet_request(TsxHelper* helper,
                                                   int fork_id,
                                                   pjsip_tx_data* req)
 {
-  // Allocate and initialise a UAC transaction for the request.
-  size_t index;
-  pj_status_t status = allocate_uac(req, index);
+  Sproutlet* sproutlet = target_sproutlet(req->msg, 0);
 
-  if (status == PJ_SUCCESS) 
+  if (sproutlet != NULL) 
   {
-    // Fix up the mapping between the Sproutlet/fork and the UAC transaction.
-    if (_uac_2_fork.size() < index + 1) 
-    {
-      _uac_2_fork.resize(index + 1);
-    }
-    _uac_2_fork[index] = fork_id;
+    // Found a local Sproutlet to handle the request, so create a helper.
+    TsxHelper* downstream_helper = new TsxHelper(this, sproutlet, req, trail());
 
-    if (_fork_2_uac.size() < (size_t)fork_id + 1) 
+    if (downstream_helper != NULL) 
     {
-      _fork_2_uac.resize(fork_id + 1);
-    }
-    _fork_2_uac[fork_id] = index;
+      // Set up the mappings.
+      _dmap_sproutlet[std::make_pair(helper, fork_id)] = downstream_helper;
+      _umap[(void*)downstream_helper] = std::make_pair(helper, fork_id);
 
-    // Send the request over the UAC transaction.
-    _uac_tsx[index]->send_request();
+      // Pass the request to the downstream helper.
+      downstream_helper->rx_request(req);
+    }
+    else
+    {
+      // @TODO
+    }
   }
   else
   {
-    // @TODO - build and send 500 response to Sproutlet.
+    // No local Sproutlet, so route the request externally.
+    size_t index;
+    pj_status_t status = allocate_uac(req, index);
+
+    if (status == PJ_SUCCESS) 
+    {
+      // Successfully set up UAC transaction, so set up the mappings and
+      // send the request.
+      _dmap_uac[std::make_pair(helper, fork_id)] = _uac_tsx[index];
+      _umap[(void*)_uac_tsx[index]] = std::make_pair(helper, fork_id);
+
+      // Send the request.
+      _uac_tsx[index]->send_request();
+    }
+    else
+    {
+      // @TODO
+    }
   }
 }
 
@@ -273,34 +422,68 @@ void SproutletProxy::UASTsx::tx_sproutlet_request(TsxHelper* helper,
 void SproutletProxy::UASTsx::tx_sproutlet_response(TsxHelper* helper,
                                                    pjsip_tx_data* rsp)
 {
-  if (_final_rsp != NULL) 
+  if (helper == _root) 
   {
-    pjsip_tx_data_dec_ref(_final_rsp);
+    // This is the root sproutlet in the tree, so send the response on the
+    // UAS transaction.
+    if (_final_rsp != NULL) 
+    {
+      pjsip_tx_data_dec_ref(_final_rsp);
+    }
+    _final_rsp = rsp;
+    on_final_response();
   }
-  _final_rsp = rsp;
+  else
+  {
+    // Find the upstream Sproutlet/fork for this helper.
+    UMap::iterator i = _umap.find((void*)helper); 
+    if (i != _umap.end()) 
+    {
+      // Found the upstream Sproutlet/fork, so pass the request.
+      TsxHelper* upstream_helper = i->second.first;
+      int upstream_fork = i->second.second;
 
-  on_final_response();
+      if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
+      {
+        // Final response, so break the linkage between the Sproutlets.
+        _dmap_sproutlet.erase(i->second);
+        _umap.erase(i);
+      }
+      upstream_helper->rx_response(rsp, upstream_fork);
+    }
+    else
+    {
+      // Failed to find the upstream Sproutlet, so discard the response.
+      pjsip_tx_data_dec_ref(rsp);
+    }
+  }
 }
 
 
 void SproutletProxy::UASTsx::tx_sproutlet_cancel(TsxHelper* helper,
                                                  int fork_id,
-                                                 int status_code)
+                                                 pjsip_tx_data* cancel)
 {
-  // Find the UAC transaction index corresponding to this fork.
-  LOG_DEBUG("Request to cancel fork %d", fork_id);
-  LOG_DEBUG("_fork_2_uac.size() == %d", _fork_2_uac.size());
-  if ((size_t)fork_id < _fork_2_uac.size()) 
+  DMap<TsxHelper*>::iterator i = _dmap_sproutlet.find(std::make_pair(helper, fork_id));
+
+  if (i != _dmap_sproutlet.end()) 
   {
-    int index = _fork_2_uac[fork_id];
-    LOG_DEBUG("_fork_2_uac[%d] = %d", fork_id, index);
-    LOG_DEBUG("_uac_tsx.size() = %d", _uac_tsx.size());
-    if (((size_t)index < _uac_tsx.size()) &&
-        (_uac_tsx[index] != NULL))
+    // Pass the CANCEL request to the downstream Sproutlet.
+    TsxHelper* downstream_helper = i->second;
+    downstream_helper->rx_cancel(cancel);
+  }
+  else
+  {
+    DMap<UACTsx*>::iterator j = _dmap_uac.find(std::make_pair(helper, fork_id));
+    if (j != _dmap_uac.end()) 
     {
-      LOG_DEBUG("Cancel pending transaction");
-      _uac_tsx[index]->cancel_pending_tsx(status_code);
+      // CANCEL the downstream UAC transaction.
+      UACTsx* uac_tsx = j->second;
+      uac_tsx->cancel_pending_tsx(0);
     }
+
+    // Free the CANCEL request.
+    pjsip_tx_data_dec_ref(cancel);
   }
 }
 
@@ -337,9 +520,6 @@ SproutletProxy::UASTsx::TsxHelper::TsxHelper(SproutletProxy::UASTsx* proxy_tsx,
     // SproutletTsx to handle it.
     _sproutlet = new SproutletTsx(this);
   }
-
-  // Store the request method.
-  _method = req->msg->line.req.method.id;
 
   // Set up the dialog identifier, either by extracting it from the Route header
   // (on an in-dialog request), or by creating a default.
@@ -410,7 +590,14 @@ pjsip_msg* SproutletProxy::UASTsx::TsxHelper::clone_request(pjsip_msg* req)
   }
 
   // Clone the tdata and put it back into the map
-  pjsip_tx_data* new_tdata = PJUtils::clone_tdata(it->second);
+  pjsip_tx_data* new_tdata = PJUtils::clone_msg(stack_data.endpt, it->second);
+
+  if (new_tdata == NULL) 
+  {
+    LOG_ERROR("Failed to clone request for Sproutlet %s", _service_name.c_str());
+    return NULL;
+  }
+
   register_tdata(new_tdata);
 
   return new_tdata->msg;
@@ -431,10 +618,12 @@ pjsip_msg* SproutletProxy::UASTsx::TsxHelper::create_response(pjsip_msg* req,
   // Create a response from the tdata and add it to the map.
   pjsip_tx_data* new_tdata;
 
+  pj_str_t status_text_str;
+  pj_cstr(&status_text_str, status_text.c_str());
   pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                 it->second,
                                                 status_code,
-                                                status_text,
+                                                (status_text_str.slen > 0) ? &status_text_str : NULL,
                                                 &new_tdata);
 
   if (status == PJ_SUCCESS) 
@@ -511,12 +700,13 @@ void SproutletProxy::UASTsx::TsxHelper::send_response(pjsip_msg*& rsp)
 
 void SproutletProxy::UASTsx::TsxHelper::cancel_fork(int fork_id, int reason)
 {
-  if ((_method == PJSIP_INVITE_METHOD) &&
-      (_forks.size() > (size_t)fork_id) &&
+  if ((_forks.size() > (size_t)fork_id) &&
       ((_forks[fork_id].state == PJSIP_TSX_STATE_CALLING) ||
-       (_forks[fork_id].state == PJSIP_TSX_STATE_PROCEEDING)))
+       (_forks[fork_id].state == PJSIP_TSX_STATE_PROCEEDING)) &&
+      (_forks[fork_id].req->msg->line.req.method.id == PJSIP_INVITE_METHOD))          
   {
-    // The fork is still pending a final response, so we can CANCEL it.
+    // The fork is still pending a final response to an INVITE request, so
+    // we can CANCEL it.
     LOG_DEBUG("Cancelling fork %d, reason = %d", fork_id, reason);
     _forks[fork_id].pending_cancel = true;
     _forks[fork_id].cancel_reason = reason;
@@ -525,17 +715,17 @@ void SproutletProxy::UASTsx::TsxHelper::cancel_fork(int fork_id, int reason)
 
 void SproutletProxy::UASTsx::TsxHelper::cancel_pending_forks(int reason)
 {
-  if (_method == PJSIP_INVITE_METHOD) 
+  for (size_t ii = 0; ii < _forks.size(); ++ii) 
   {
-    for (size_t ii = 0; ii < _forks.size(); ++ii) 
+    if (((_forks[ii].state == PJSIP_TSX_STATE_CALLING) ||
+         (_forks[ii].state == PJSIP_TSX_STATE_PROCEEDING)) &&
+        (_forks[ii].req->msg->line.req.method.id == PJSIP_INVITE_METHOD)) 
     {
-      if ((_forks[ii].state == PJSIP_TSX_STATE_CALLING) ||
-          (_forks[ii].state == PJSIP_TSX_STATE_PROCEEDING))
-      {
-        LOG_DEBUG("Cancelling fork %d, reason = %d", ii, reason);
-        _forks[ii].pending_cancel = true;
-        _forks[ii].cancel_reason = reason;
-      }
+      // The fork is still pending a final response to an INVITE request, so
+      // we can CANCEL it.
+      LOG_DEBUG("Cancelling fork %d, reason = %d", ii, reason);
+      _forks[ii].pending_cancel = true;
+      _forks[ii].cancel_reason = reason;
     }
   }
 }
@@ -594,16 +784,27 @@ SAS::TrailId SproutletProxy::UASTsx::TsxHelper::trail() const
 
 void SproutletProxy::UASTsx::TsxHelper::rx_request(pjsip_tx_data* req)
 {
-  register_tdata(req);
-  if (PJSIP_MSG_TO_HDR(req->msg)->tag.slen == 0) 
+  // Keep an immutable reference to the request.
+  _req = req;
+  pjsip_tx_data_add_ref(_req);
+
+  // Clone the request to get a mutable copy to pass to the Sproutlet.
+  pjsip_tx_data* clone = PJUtils::clone_msg(stack_data.endpt, req);
+  if (clone == NULL) 
+  {
+    // @TODO
+  }
+
+  register_tdata(clone);
+  if (PJSIP_MSG_TO_HDR(clone->msg)->tag.slen == 0) 
   {
     LOG_DEBUG("Pass initial request to Sproutlet");
-    _sproutlet->on_rx_initial_request(req->msg);
+    _sproutlet->on_rx_initial_request(clone->msg);
   }
   else
   {
     LOG_DEBUG("Pass in dialog request to Sproutlet");
-    _sproutlet->on_rx_in_dialog_request(req->msg);
+    _sproutlet->on_rx_in_dialog_request(clone->msg);
   }
   process_actions();
 
@@ -628,16 +829,20 @@ void SproutletProxy::UASTsx::TsxHelper::rx_response(pjsip_tx_data* rsp, int fork
     LOG_DEBUG("Received final response on fork %d, status = %d",
               fork_id, _forks[fork_id]);
     --_pending_responses;
+
+    // Decrement the reference on the request sent on this fork.
+    pjsip_tx_data_dec_ref(_forks[fork_id].req);
   }
   _sproutlet->on_rx_response(rsp->msg, fork_id);
   process_actions();
 }
 
-void SproutletProxy::UASTsx::TsxHelper::rx_cancel(pjsip_rx_data* cancel)
+void SproutletProxy::UASTsx::TsxHelper::rx_cancel(pjsip_tx_data* cancel)
 {
   LOG_DEBUG("Received CANCEL request");
   _sproutlet->on_rx_cancel(PJSIP_SC_REQUEST_TERMINATED,
-                           cancel->msg_info.msg);
+                           cancel->msg);
+  pjsip_tx_data_dec_ref(cancel);
   cancel_pending_forks();
   process_actions();
 }
@@ -717,8 +922,7 @@ void SproutletProxy::UASTsx::TsxHelper::process_actions()
       // Fork has been marked as pending cancel and we have received a 
       // provisional response, so can send the CANCEL.
       LOG_DEBUG("Send CANCEL for fork %d", ii);
-      _proxy_tsx->tx_sproutlet_cancel(this, ii, _forks[ii].cancel_reason);
-      _forks[ii].pending_cancel = false;
+      tx_cancel(ii);
     }
   }
 }
@@ -803,6 +1007,9 @@ void SproutletProxy::UASTsx::TsxHelper::tx_request(pjsip_tx_data* req, int fork_
   --_pending_sends;
   ++_pending_responses;
 
+  // Store a reference to the request and increment the reference count.
+  _forks[fork_id].req = req;
+
   // Notify the sproutlet that the request is being sent downstream.
   _sproutlet->on_tx_request(req->msg, fork_id);
 
@@ -817,11 +1024,22 @@ void SproutletProxy::UASTsx::TsxHelper::tx_response(pjsip_tx_data* rsp)
 
   if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
   {
+    pjsip_tx_data_dec_ref(_req);
     _complete = true;
   }
 
   // Forward the response upstream.
   _proxy_tsx->tx_sproutlet_response(this, rsp);
+}
+
+void SproutletProxy::UASTsx::TsxHelper::tx_cancel(int fork_id)
+{
+  // Build a CANCEL request from the original request sent on this fork.
+  pjsip_tx_data* cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                 _forks[fork_id].req,
+                                                 _forks[fork_id].cancel_reason);
+  _proxy_tsx->tx_sproutlet_cancel(this, fork_id, cancel);
+  _forks[fork_id].pending_cancel = false;
 }
 
 /// Compare two status codes from the perspective of which is the best to

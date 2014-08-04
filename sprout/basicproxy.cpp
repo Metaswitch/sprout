@@ -279,7 +279,7 @@ void BasicProxy::on_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Process the request.
-  uas_tsx->process_tsx_request();
+  uas_tsx->process_tsx_request(rdata);
 
   // Initializing the transaction entered its context, so exit now.
   uas_tsx->exit_context();
@@ -505,8 +505,6 @@ BasicProxy::UASTsx::~UASTsx()
 /// Initializes the UASTsx object to handle proxying of the request.
 pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
-  pj_status_t status;
-
   _trail = get_trail(rdata);
 
   // initialise deferred trying timer
@@ -517,20 +515,21 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
   // Do any start of transaction logging operations.
   on_tsx_start(rdata);
 
-  status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &_req);
-  if (status != PJ_SUCCESS)
+  _req = PJUtils::clone_msg(stack_data.endpt, rdata);
+  if (_req == NULL)
   {
     // LCOV_EXCL_START - no UT for forcing PJSIP errors.
+    LOG_ERROR("Failed to clone received request");
     on_tsx_complete();
     _pending_destroy = true;
-    return status;
+    return PJ_ENOMEM;
     // LCOV_EXCL_STOP
   }
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Not an ACK message, so create a PJSIP UAS transaction for the request.
-    status = create_pjsip_transaction(rdata);
+    pj_status_t status = create_pjsip_transaction(rdata);
 
     if (status != PJ_SUCCESS)
     {
@@ -583,29 +582,13 @@ pj_status_t BasicProxy::UASTsx::init(pjsip_rx_data* rdata)
 
 
 /// Handle the incoming half of a transaction request.
-void BasicProxy::UASTsx::process_tsx_request()
+void BasicProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
 {
   // Process routing headers.
   int status_code = process_routing();
-  if (status_code != PJSIP_SC_OK)
-  {
-    // LCOV_EXCL_START - no UT for forcing PJSIP errors.
-    LOG_ERROR("Error process routing headers");
-    if (_req->msg->line.req.method.id != PJSIP_ACK_METHOD)
-    {
-      // Send error response on UAS transaction.
-      send_response(status_code);
-    }
-    else
-    {
-      // ACK request, so just discard and suicide.
-      _pending_destroy = true;
-    }
-    return;
-    // LCOV_EXCL_STOP
-  }
 
-  if (_targets.size() == 0)
+  if ((status_code == PJSIP_SC_OK) &&
+      (_targets.size() == 0))
   {
     // We don't have any targets yet, so calculate them now.
     status_code = calculate_targets();
@@ -614,18 +597,16 @@ void BasicProxy::UASTsx::process_tsx_request()
       LOG_DEBUG("Calculate targets failed with %d status code", status_code);
       send_response(status_code);
     }
-  }
-
-  if ((status_code == PJSIP_SC_OK) &&
-      (_targets.size() == 0))
-  {
-    // No targets found, so reject with a 404 status code.  Should never
-    // happen as calculate_targets should return a status code if it
-    // doesn't add any targets.
-    // LCOV_EXCL_START - Should never happen.
-    LOG_INFO("Reject request with 404");
-    send_response(PJSIP_SC_NOT_FOUND);
-    // LCOV_EXCL_STOP
+    else if (_targets.size() == 0)
+    {
+      // No targets found, so reject with a 404 status code.  Should never
+      // happen as calculate_targets should return a status code if it
+      // doesn't add any targets.
+      // LCOV_EXCL_START - Should never happen.
+      LOG_INFO("Reject request with 404");
+      status_code = PJSIP_SC_NOT_FOUND;
+      // LCOV_EXCL_STOP
+    }
   }
 
   if (status_code == PJSIP_SC_OK) 
@@ -639,16 +620,22 @@ void BasicProxy::UASTsx::process_tsx_request()
       // Send 500/Internal Server Error to UAS transaction
       // LCOV_EXCL_START
       LOG_ERROR("Failed to allocate UAC transaction for UAS transaction");
-      send_response(PJSIP_SC_INTERNAL_SERVER_ERROR);
+      status_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
       // LCOV_EXCL_STOP
     }
   }
 
-  if (_req->msg->line.req.method.id == PJSIP_ACK_METHOD)
+  if (_tsx == NULL)
   {
     // ACK request, so no response to wait for.
     on_tsx_complete();
     _pending_destroy = true;
+  }
+  else if (status_code != PJSIP_SC_OK)
+  {
+    // Failed to forward the request, so send a response with the appropriate 
+    // status code.
+    send_response(status_code);
   }
 }
 
@@ -861,6 +848,7 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
   {
     LOG_DEBUG("Allocating transaction and data for target");
     pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
+    PJUtils::add_top_via(uac_tdata);
 
     if (uac_tdata == NULL)
     {
@@ -1085,12 +1073,12 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 
     exit_context();
   }
-// LCOV_EXCL_START
+  // LCOV_EXCL_START
   else
   {
     pjsip_tx_data_dec_ref(tdata);
   }
-// LCOV_EXCL_STOP
+  // LCOV_EXCL_STOP
 }
 
 
@@ -1138,6 +1126,7 @@ void BasicProxy::UASTsx::on_final_response()
     _final_rsp = NULL;
     int st_code = rsp->msg->line.status.code;
     set_trail(rsp, trail());
+    pjsip_tx_data_invalidate_msg(rsp);
     on_tx_response(rsp);
     pjsip_tsx_send_msg(_tsx, rsp);
 
@@ -1158,35 +1147,32 @@ void BasicProxy::UASTsx::on_final_response()
 /// Sends a response using the buffer saved off for the final response.
 void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
-  if ((_req->msg->line.req.method.id != PJSIP_ACK_METHOD) &&
-      (_final_rsp != NULL))
+  if (_tsx != NULL)
   {
     if ((st_code >= 100) && (st_code < 200))
     {
-      // Send a provisional response.
-      // LCOV_EXCL_START
-      pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_final_rsp);
-      prov_rsp->msg->line.status.code = st_code;
-      prov_rsp->msg->line.status.reason =
-                (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
-      pjsip_tx_data_invalidate_msg(prov_rsp);
-      set_trail(prov_rsp, trail());
-      on_tx_response(prov_rsp);
-      pjsip_tsx_send_msg(_tsx, prov_rsp);
-      // LCOV_EXCL_STOP
+      // Build and send a provisional response building it from scratch using
+      // the original request.
+      pjsip_tx_data* prov_rsp;
+      pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                    _req,
+                                                    100,
+                                                    st_text,
+                                                    &prov_rsp);
+      if (status == PJ_SUCCESS) 
+      {
+        set_trail(prov_rsp, trail());
+        on_tx_response(prov_rsp);
+        pjsip_tsx_send_msg(_tsx, prov_rsp);
+      }
     }
-    else
+    else if (_final_rsp != NULL)
     {
       // Send a final response.
-      pjsip_tx_data *final_rsp = _final_rsp;
-      _final_rsp = NULL;
-      final_rsp->msg->line.status.code = st_code;
-      final_rsp->msg->line.status.reason =
+      _final_rsp->msg->line.status.code = st_code;
+      _final_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
-      pjsip_tx_data_invalidate_msg(final_rsp);
-      set_trail(final_rsp, trail());
-      on_tx_response(final_rsp);
-      pjsip_tsx_send_msg(_tsx, final_rsp);
+      on_final_response();
     }
   }
 }
@@ -1643,29 +1629,10 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
     LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
-      pjsip_tx_data *cancel;
-      pjsip_endpt_create_cancel(stack_data.endpt, _tsx->last_tx, &cancel);
-      if (st_code != 0)
-      {
-        char reason_val_str[96];                                        //LCOV_EXCL_LINE
-        const pj_str_t* st_text = pjsip_get_status_text(st_code);       //LCOV_EXCL_LINE
-        sprintf(reason_val_str,                                         //LCOV_EXCL_LINE
-                "SIP ;cause=%d ;text=\"%.*s\"",                         //LCOV_EXCL_LINE
-                st_code,                                                //LCOV_EXCL_LINE
-                (int)st_text->slen,                                     //LCOV_EXCL_LINE
-                st_text->ptr);                                          //LCOV_EXCL_LINE
-        pj_str_t reason_name = pj_str("Reason");                        //LCOV_EXCL_LINE
-        pj_str_t reason_val = pj_str(reason_val_str);                   //LCOV_EXCL_LINE
-        pjsip_hdr* reason_hdr =                                         //LCOV_EXCL_LINE
-               (pjsip_hdr*)pjsip_generic_string_hdr_create(cancel->pool,//LCOV_EXCL_LINE
-                                                           &reason_name,//LCOV_EXCL_LINE
-                                                           &reason_val);//LCOV_EXCL_LINE
-        pjsip_msg_add_hdr(cancel->msg, reason_hdr);                     //LCOV_EXCL_LINE
-      }
-      if (get_trail(_tsx) == 0)
-      {
-        LOG_ERROR("Sending CANCEL request with no SAS trail");
-      }
+      LOG_DEBUG("Sending CANCEL request");
+      pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                     _tsx->last_tx,
+                                                     st_code);
       set_trail(cancel, get_trail(_tsx));
 
       if (_tsx->transport != NULL)
@@ -1678,7 +1645,6 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
         pjsip_tx_data_set_transport(cancel, &tp_selector);
       }
 
-      LOG_DEBUG("Sending CANCEL request");
       pj_status_t status = pjsip_endpt_send_request(stack_data.endpt, cancel, -1, NULL, NULL);
       if (status != PJ_SUCCESS)
       {
@@ -1804,7 +1770,7 @@ void BasicProxy::UACTsx::send_timeout_response()
   pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                 _tdata,
                                                 PJSIP_SC_REQUEST_TIMEOUT,
-                                                "",
+                                                NULL,
                                                 &tdata);
   if (status != PJ_SUCCESS)
   {
