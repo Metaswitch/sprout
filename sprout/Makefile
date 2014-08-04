@@ -332,7 +332,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	-valgrind --gen-suppressions=all $(VGFLAGS) \
+	-valgrind --gen-suppressions=all --show-reachable=yes $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean

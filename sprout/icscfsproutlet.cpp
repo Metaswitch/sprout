@@ -113,6 +113,7 @@ ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
 ICSCFSproutletRegTsx::~ICSCFSproutletRegTsx()
 {
   delete _acr;
+  delete _router;
 }
 
 
@@ -213,6 +214,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
+    free_msg(_cloned_req);
   }
 }
 
@@ -356,6 +358,7 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
 ICSCFSproutletTsx::~ICSCFSproutletTsx()
 {
   delete _acr;
+  delete _router;
 }
 
 
@@ -434,9 +437,11 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
+    // Failed to find an S-CSCF, the is the final response.
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
+    free_msg(_cloned_req);
   }
 }
 

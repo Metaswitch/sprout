@@ -139,13 +139,15 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
 
 SproutletProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   BasicProxy::UASTsx(proxy),
-  _in_dialog(false)
+  _in_dialog(false),
+  _helper(NULL)
 {
 }
 
 
 SproutletProxy::UASTsx::~UASTsx()
 {
+  delete _helper; _helper = NULL;
 }
 
 
@@ -360,6 +362,7 @@ SproutletProxyTsxHelper::~SproutletProxyTsxHelper()
   assert(_packets.empty());
   assert(_send_requests.empty());
   assert(_send_responses.empty());
+  delete _sproutlet; _sproutlet = NULL;
 }
 
 //

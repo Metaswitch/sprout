@@ -79,7 +79,7 @@ public:
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
-    SproutletProxy* _icscf_proxy =
+    _icscf_proxy =
       new SproutletProxy(stack_data.endpt,
                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                          PJUtils::pj_str_to_string(&stack_data.scscf_uri),

@@ -71,7 +71,7 @@ public:
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector);
 
-  ~ICSCFSproutlet();
+  virtual ~ICSCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
 
