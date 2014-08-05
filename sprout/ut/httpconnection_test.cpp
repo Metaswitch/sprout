@@ -111,6 +111,22 @@ TEST_F(HttpConnectionTest, SimpleKeyAuthGet)
   EXPECT_EQ("", req._password);
 }
 
+TEST_F(HttpConnectionTest, SimpleIPv6Get)
+{
+  string output;
+  FakeHttpResolver _resolver("1::1");
+  HttpConnection http2("[1::1]:80",
+                       true,
+                       &_resolver,
+                       "connected_homers",
+                       &_lm,
+                       stack_data.stats_aggregator,
+                       SASEvent::HttpLogLevel::PROTOCOL);
+  fakecurl_responses["http://[1::1]:80/ipv6get"] = CURLE_OK;
+  long ret = http2.send_get("/ipv6get", output, "gandalf", 0);
+  EXPECT_EQ(200, ret);
+}
+
 TEST_F(HttpConnectionTest, SimpleGetFailure)
 {
   string output;
