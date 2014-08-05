@@ -116,6 +116,7 @@ namespace SASEvent
   const int IFC_MATCHED = SPROUT_BASE + 0x0000C3;
 
   const int TRANSPORT_FAILURE = SPROUT_BASE + 0x0000D0;
+  const int TIMEOUT_FAILURE = SPROUT_BASE + 0x0000D1;
 
 } //namespace SASEvent
 

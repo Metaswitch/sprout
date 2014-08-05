@@ -4329,11 +4329,17 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         // transaction.
         LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
                   _tsx->obj_name);
-        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        if (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)
         {
           LOG_DEBUG("Timeout or transport error");
           SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
+          SAS::report_event(sas_event);
+          _uas_data->on_client_not_responding(this);
+        }
+        else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
+        {
+          LOG_DEBUG("Timeout error");
+          SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
           SAS::report_event(sas_event);
           _uas_data->on_client_not_responding(this);
         }
