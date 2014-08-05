@@ -431,6 +431,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   SAS::Event event(trail, SASEvent::IFC_TEST_MATCHED, 0);
   event.add_var_param(ifc_str);
   SAS::report_event(event);
+  std::string server_name = "<unknown>";
 
   try
   {
@@ -440,7 +441,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
       std::string error_msg = "iFC missing ApplicationServer element";
 
       SAS::Event event(trail, SASEvent::IFC_INVALID, 0);
-      event.add_var_param("<unknown>");
+      event.add_var_param(server_name);
       event.add_var_param(error_msg);
       SAS::report_event(event);
 
@@ -468,7 +469,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
       {
         std::string reg_state = reg ? "reg" : "unreg";
         std::string reason = "iFC ProfilePartIndicator " + reg_state + " doesn't match";
-        LOG_DEBUG(reason);
+        LOG_DEBUG(reason.c_str());
 
         SAS::Event event(trail, SASEvent::IFC_NOT_MATCHED, 0);
         event.add_var_param(server_name);
@@ -561,14 +562,14 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   catch (ifc_error err)
   {
     // Ignore individual criteria which can't be parsed.
-    std::string err_str = "iFC evaluation error: " + err.what();
+    std::string err_str = "iFC evaluation error: " + std::string(err.what());
 
     SAS::Event event(trail, SASEvent::IFC_INVALID, 0);
     event.add_var_param(server_name);
     event.add_var_param(err_str);
     SAS::report_event(event);
 
-    LOG_ERROR(err_str);
+    LOG_ERROR(err_str.c_str());
 
     return false;
   }
