@@ -367,6 +367,12 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     // Retry-After header with a zero length timeout.
     LOG_DEBUG("Rejected request due to overload");
 
+    SAS::Event event(get_trail(rdata), SASEvent::SIP_OVERLOAD, 0);
+    event.add_static_param(load_monitor->get_target_latency());
+    event.add_static_param(load_monitor->get_current_latency());
+    event.add_static_param(load_monitor->get_rate_limit());
+    SAS::report_event(event);
+
     pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
     PJUtils::respond_stateless(stack_data.endpt,
                                rdata,
