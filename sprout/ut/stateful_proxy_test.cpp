@@ -1329,6 +1329,7 @@ void StatefulProxyTest::doSuccessfulFlow(Message& msg,
   // 100 Trying goes back
   out = current_txdata()->msg;
   RespMatcher(100).matches(out);
+  HeaderMatcher("To", "To: <.*>").match(out); // No tag
   free_txdata();
 
   // INVITE passed on

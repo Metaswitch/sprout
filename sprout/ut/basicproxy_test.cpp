@@ -546,6 +546,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -594,6 +595,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeaders)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the second Route header.
@@ -658,6 +660,7 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <tel:1231231231>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -722,6 +725,7 @@ TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in RequestURI.
@@ -789,6 +793,7 @@ TEST_F(BasicProxyTest, RouteToHomeURINoPathTransport)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // The proxy resolves the requestURI to the test target bob@node1.homedomain.
@@ -862,6 +867,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithPath)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // The proxy resolves the requestURI to the test target bob@node1.homedomain
@@ -940,6 +946,7 @@ TEST_F(BasicProxyTest, RouteToHomeURIWithTransport)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp1->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // The proxy resolves the requestURI to the test target bob@node1.homedomain
@@ -1019,6 +1026,7 @@ TEST_F(BasicProxyTest, RouteToHomeURITransportCancel)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp1->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // The proxy resolves the requestURI to the test target bob@node1.homedomain
@@ -1138,6 +1146,7 @@ TEST_F(BasicProxyTest, ForkedRequestSuccess)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Catch the request forked to node1.homedomain via proxy1.homedomain.
@@ -1313,6 +1322,7 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Catch the request forked to node1.homedomain via proxy1.homedomain.
@@ -1430,6 +1440,7 @@ TEST_F(BasicProxyTest, ForkedRequestConnFail)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Catch the request forked to node1.homedomain via proxy1.homedomain.
@@ -1521,6 +1532,7 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Catch the request forked to node1.homedomain via proxy1.homedomain.
@@ -1670,6 +1682,7 @@ TEST_F(BasicProxyTest, RouteToHomeURINotFound)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Check the 404 Not Found.
@@ -1716,6 +1729,7 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -1764,6 +1778,7 @@ TEST_F(BasicProxyTest, StrictRouterUpstream)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Check the 404 response.
@@ -1814,6 +1829,7 @@ TEST_F(BasicProxyTest, StrictRouterDownstream)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the second Route header.
@@ -1881,6 +1897,7 @@ TEST_F(BasicProxyTest, StatelessForwardResponse)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -1961,6 +1978,7 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2060,6 +2078,7 @@ TEST_F(BasicProxyTest, LateCancel)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Catch the request forwarded to node1.homedomain via proxy1.homedomain.
@@ -2234,6 +2253,7 @@ TEST_F(BasicProxyTest, ResponseErrors)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2379,6 +2399,7 @@ TEST_F(BasicProxyTest, DnsResolutionFailure)
   tdata = current_txdata();
   tp->expect_target(tdata);
   RespMatcher(100).matches(tdata->msg);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Check the 408 Request Timeout.
@@ -2429,6 +2450,7 @@ TEST_F(BasicProxyTest, DISABLED_RetryOnTimeout)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2536,6 +2558,7 @@ TEST_F(BasicProxyTest, RetryOnTransportError)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2642,6 +2665,7 @@ TEST_F(BasicProxyTest, RetryOn5xx)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2751,6 +2775,7 @@ TEST_F(BasicProxyTest, RetryFailed)
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
   // Request is forwarded to the node in the top Route header.
@@ -2912,6 +2937,7 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
   pjsip_tx_data* tdata2 = current_txdata();
   RespMatcher(100).matches(tdata2->msg);
   tp->expect_target(tdata2);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata2->msg, "To")); // No tag
   free_txdata();
 
   // Send a 200 OK response.
