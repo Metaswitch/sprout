@@ -572,70 +572,75 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 {
   SAS::TrailId trail = get_trail(rdata);
 
-  if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
-      !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())))
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
-    if (((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
+    // Not an S-CSCF, so don't handle SUBSCRIBEs.
+    return PJ_FALSE;
+  }
+
+  if (pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method()))
+  {
+    // This isn't a SUBSCRIBE, so this module can't process it.
+    return PJ_FALSE;
+  }
+
+  if (!((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri) ||
          (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
-        (PJUtils::check_route_headers(rdata)))
+        PJUtils::check_route_headers(rdata)))
+  {
+    LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+    SAS::report_event(event);
+    return PJ_FALSE;
+  }
+
+  // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
+  // whether it should be processed by this module or passed up to an AS.
+  pjsip_msg *msg = rdata->msg_info.msg;
+
+  // A valid subscription must have the Event header set to "reg". This is case-sensitive
+  pj_str_t event_name = pj_str("Event");
+  pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
+
+  if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
+  {
+    // The Event header is missing or doesn't match "reg"
+    LOG_DEBUG("Rejecting subscription request with invalid event header");
+
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+    SAS::report_event(event);
+
+    return PJ_FALSE;
+  }
+
+  // Accept header may be present - if so must include the application/reginfo+xml
+  pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
+  if (accept)
+  {
+    bool found = false;
+    pj_str_t reginfo = pj_str("application/reginfo+xml");
+    for (uint32_t i = 0; i < accept->count; i++)
     {
-      // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
-      // whether it should be processed by this module or passed up to an AS.
-      pjsip_msg *msg = rdata->msg_info.msg;
-
-      // A valid subscription must have the Event header set to "reg". This is case-sensitive
-      pj_str_t event_name = pj_str("Event");
-      pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
-
-      if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
+      if (!pj_strcmp(accept->values + i, &reginfo))
       {
-        // The Event header is missing or doesn't match "reg"
-        LOG_DEBUG("Rejecting subscription request with invalid event header");
-
-        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
-        SAS::report_event(event);
-
-        return PJ_FALSE;
+        found = true;
       }
-
-      // Accept header may be present - if so must include the application/reginfo+xml
-      pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
-      if (accept)
-      {
-        bool found = false;
-        pj_str_t reginfo = pj_str("application/reginfo+xml");
-        for (uint32_t i = 0; i < accept->count; i++)
-        {
-          if (!pj_strcmp(accept->values + i, &reginfo))
-          {
-            found = true;
-          }
-        }
-
-        if (!found)
-        {
-          // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-          LOG_DEBUG("Rejecting subscription request with invalid accept header");
-
-          SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
-          SAS::report_event(event);
-
-          return PJ_FALSE;
-        }
-      }
-
-      process_subscription_request(rdata);
-      return PJ_TRUE;
     }
-    else
+
+    if (!found)
     {
-      LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
-      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+      // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
+      LOG_DEBUG("Rejecting subscription request with invalid accept header");
+
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
       SAS::report_event(event);
+
       return PJ_FALSE;
     }
   }
-  return PJ_FALSE;
+
+  process_subscription_request(rdata);
+  return PJ_TRUE;
 }
 
 pj_status_t init_subscription(RegStore* registrar_store,
