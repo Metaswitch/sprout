@@ -117,6 +117,8 @@ namespace SASEvent
   const int IFC_TESTING = SPROUT_BASE + 0x0000C4;
   const int IFC_MATCHED = SPROUT_BASE + 0x0000C5;
 
+  const int SIP_OVERLOAD = SPROUT_BASE + 0x0000D2;
+
 } //namespace SASEvent
 
 #endif
