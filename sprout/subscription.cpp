@@ -575,7 +575,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
     // Not an S-CSCF, so don't handle SUBSCRIBEs.
-    return PJ_FALSE;
+    return PJ_FALSE; // LCOV_EXCL_LINE
   }
 
   if (pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method()))
