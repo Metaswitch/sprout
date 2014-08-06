@@ -74,6 +74,7 @@ public:
   SCSCFSproutlet(const std::string& scscf_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
+                 int port,
                  RegStore* store,
                  RegStore* remote_store,
                  HSSConnection* hss,
@@ -81,7 +82,10 @@ public:
                  ACRFactory* acr_factory);
   ~SCSCFSproutlet();
 
-  SproutletTsx* get_app_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
+
+  void set_user_phone(bool v) { _user_phone = v; }
+  void set_global_only_lookups(bool v) { _global_only_lookups = v; }
 
 private:
 
@@ -162,7 +166,7 @@ public:
 private:
   /// Determines the session case and the served user for the request,
   /// and links to the appropriate AS Chain.
-  int determine_served_user(pjsip_msg* req);
+  pjsip_status_code determine_served_user(pjsip_msg* req);
 
   /// Gets the served user indicated in the message.
   std::string served_user_from_msg(pjsip_msg* msg);
@@ -200,7 +204,7 @@ private:
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
   /// Does URI translation if required.
-  int uri_translation(pjsip_msg* req);
+  pjsip_status_code uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.
@@ -219,6 +223,10 @@ private:
   /// filled in correctly if this function returns true.
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
+
+  /// Adds a Session-Expires header to the request to force the UEs to
+  /// exchange periodic session refresh messages.
+  void add_session_expires(pjsip_msg* req);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.

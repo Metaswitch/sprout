@@ -76,6 +76,9 @@ public:
   virtual pj_status_t on_tx_response(pjsip_tx_data* tdata);
   virtual void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event);
 
+  void bind_transaction(void* uas_uac_tsx, pjsip_transaction* tsx);
+  void unbind_transaction(pjsip_transaction* tsx);
+
 protected:
 
   /// Class holding the details of a calculated target for a transaction.
@@ -338,8 +341,6 @@ protected:
     friend class UASTsx;
   };
 
-  void bind_transaction(void* uas_uac_tsx, pjsip_transaction* tsx);
-  void unbind_transaction(pjsip_transaction* tsx);
   void* get_from_transaction(pjsip_transaction* tsx);
 
   virtual void on_tsx_request(pjsip_rx_data* rdata);

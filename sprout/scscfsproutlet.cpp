@@ -52,18 +52,22 @@
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
+                               int port,
                                RegStore* store,
                                RegStore* remote_store,
                                HSSConnection* hss,
                                EnumService* enum_service,
                                ACRFactory* acr_factory) :
-  Sproutlet("S-CSCF"),
+  Sproutlet("S-CSCF", port),
   _store(store), 
   _remote_store(remote_store),
   _hss(hss),
   _enum_service(enum_service),
-  _acr_factory(acr_factory)                 
+  _acr_factory(acr_factory),
+  _global_only_lookups(false),
+  _user_phone(false)
 {
+
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
@@ -84,7 +88,7 @@ SCSCFSproutlet::~SCSCFSproutlet()
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.
-SproutletTsx* SCSCFSproutlet::get_app_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
 {
   return (SproutletTsx*)new SCSCFSproutletTsx(helper, this);
 }
@@ -245,16 +249,28 @@ bool SCSCFSproutlet::is_user_global(const std::string& user)
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf) :
   SproutletTsx(helper),
-  _scscf(scscf)
+  _scscf(scscf),
+  _session_case(NULL),
+  _as_chain_link(),
+  _hss_data_cached(false),
+  _registered(false),
+  _uris(),
+  _ifcs(),
+  _acr(NULL),
+  _target_aor(),        
+  _target_bindings()               
 {
+  LOG_DEBUG("S-CSCF Transaction (%p) created", this);
 }
-
 
 
 SCSCFSproutletTsx::~SCSCFSproutletTsx()
 {
-  if (_acr != NULL) 
+  LOG_DEBUG("S-CSCF Transaction (%p) destroyed", this);
+  if ((_acr != NULL) &&
+      (!_as_chain_link.is_set()))
   {
+    _acr->send_message();
     delete _acr;
   }
 }
@@ -262,12 +278,26 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
 
 void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
-  int status_code = PJSIP_SC_OK;
+  LOG_INFO("S-CSCF received initial request");
+
+  pjsip_status_code status_code = PJSIP_SC_OK;
+
+  // Add a Session-Expires header if required.
+  add_session_expires(req);
 
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
   // services.
   status_code = determine_served_user(req);
+
+  if (_acr == NULL) 
+  {
+    // No ACR found or created while determining the served user, so create
+    // a new one.
+    _acr = _scscf->get_acr(trail(),
+                           CALLING_PARTY,
+                           ACR::requested_node_role(req));
+  }
 
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
@@ -277,37 +307,43 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Failed to determine the served user for a request we should provide
     // services on, so reject the request.
+    LOG_INFO("Failed to determine served user for request, reject with %d status code",
+             status_code);
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
   }
-  else
+  else if (_as_chain_link.is_set()) 
   {
-    if (_as_chain_link.is_set()) 
+    // AS chain is set up, so must apply services to the request.
+    LOG_INFO("Found served user, so apply services");
+    if (_session_case->is_originating()) 
     {
-      // AS chain is set up, so must apply services to the request.
-      if (_session_case->is_originating()) 
-      {
-        apply_originating_services(req);
-      }
-      else
-      {
-        apply_terminating_services(req);
-      }
+      apply_originating_services(req);
     }
     else
     {
-      // No AS chain set, so don't apply services to the request.
-      // Default action will be to try to route following remaining Route
-      // headers or to the RequestURI.
-      send_request(req);
+      apply_terminating_services(req);
     }
+  }
+  else
+  {
+    // No AS chain set, so don't apply services to the request.
+    // Default action will be to try to route following remaining Route
+    // headers or to the RequestURI.
+    LOG_INFO("Route request without applying services");
+    send_request(req);
   }
 }
 
 
 void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
+  LOG_INFO("S-CSCF received in-dialog request");
+
+  // Add a Session-Expires header if required.
+  add_session_expires(req);
+
   // Create an ACR for this request and pass the request to it.
   _acr = _scscf->get_acr(trail(),
                          CALLING_PARTY,
@@ -315,8 +351,6 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
   // @TODO - request timestamp???
   _acr->rx_request(req);
-
-  _acr->tx_request(req);
 
   send_request(req);
 }
@@ -329,15 +363,6 @@ void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
     // Pass the transmitted request to the ACR to update the accounting
     // information.
     _acr->tx_request(req);
-
-    if (req->line.req.method.id == PJSIP_ACK_METHOD) 
-    {
-      // Transmitted an standalone ACK request, so send the ACR immediately
-      // as there will be no response.
-      _acr->send_message();
-      delete _acr;
-      _acr = NULL;
-    }
   }
 }
 
@@ -373,7 +398,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Forward the response upstream.  The proxy layer will aggregate responses
   // if required.
-  forward_response(rsp);
+  send_response(rsp);
 }
 
 
@@ -384,14 +409,6 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
     // Pass the transmitted response to the ACR to update the accounting
     // information.
     _acr->tx_response(rsp);
-
-    if (rsp->line.status.code >= PJSIP_SC_OK) 
-    {
-      // The response was a final response, so send the ACR and delete it.
-      _acr->send_message();
-      delete _acr;
-      _acr = NULL;
-    }
   }
 }
 
@@ -415,13 +432,12 @@ void SCSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 }
 
 
-int SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
+pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 {
-  int status_code = PJSIP_SC_OK;
+  pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Get the top route header.
-  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
-                                  pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+  const pjsip_route_hdr* hroute = route_hdr();
 
   if ((hroute != NULL) &&
       ((PJUtils::is_home_domain(hroute->name_addr.uri)) ||
@@ -432,6 +448,7 @@ int SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     // this an originating request or not - see 3GPP TS 24.229
     // s5.4.3.1, s5.4.1.2.2F and the behaviour of
     // proxy_calculate_targets as an access proxy.
+    LOG_DEBUG("Route header references this system");
     pjsip_sip_uri* uri = (pjsip_sip_uri*)hroute->name_addr.uri;
     pjsip_param* orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
 
@@ -444,6 +461,7 @@ int SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       // See 3GPP TS 24.229 s5.4.3.4.
       std::string odi_token = std::string(uri->user.ptr + STR_ODI_PREFIX.slen,
                                           uri->user.slen - STR_ODI_PREFIX.slen);
+      LOG_DEBUG("Found ODI token %s", odi_token.c_str());
       _as_chain_link = _scscf->as_chain_table()->lookup(odi_token);
 
       if (_as_chain_link.is_set())
@@ -456,6 +474,7 @@ int SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       else
       {
         // The ODI token is invalid or expired.  Treat call as OOTB.
+        LOG_INFO("Expired ODI token %s so handle as OOTB request", odi_token.c_str());
         SAS::Event event(trail(), SASEvent::SCSCF_ODI_INVALID, 0);
         event.add_var_param(PJUtils::pj_str_to_string(&uri->user));
         SAS::report_event(event);
@@ -1005,6 +1024,11 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       // Forward the request and remember the binding identifier used for this
       // in case we get a Flow Failed response.
       int fork_id = send_request(to_send);
+
+      if (_target_bindings.size() < (size_t)(fork_id + 1)) 
+      {
+        _target_bindings.resize(fork_id + 1);
+      }
       _target_bindings[fork_id] = targets[ii].binding_id;
     }
   }
@@ -1024,9 +1048,9 @@ void SCSCFSproutletTsx::add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri)
 
 
 /// Do URI translation if required.
-int SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
+pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
 {
-  int status_code = PJSIP_SC_OK;
+  pjsip_status_code status_code = PJSIP_SC_OK;
 
   if ((PJUtils::is_home_domain(req->line.req.uri)) ||
       (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri)))
@@ -1136,3 +1160,18 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 }
 
 
+void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
+{
+  // Ensure that Session-Expires is added to the message to enable the session
+  // timer on the UEs.
+  pjsip_session_expires_hdr* session_expires =
+    (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(req,
+                                                           &STR_SESSION_EXPIRES,
+                                                           NULL);
+  if (session_expires == NULL)
+  {
+    session_expires = pjsip_session_expires_hdr_create(get_pool(req));
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
+  }
+  session_expires->expires = stack_data.default_session_expires;
+}

@@ -61,19 +61,13 @@ SproutletAppServerTsxHelper::~SproutletAppServerTsxHelper()
   pj_pool_release(_pool);
 }
 
-/// Stores the onward route for this transaction ready to apply to 
-/// transaction.
+/// Stores the onward route for this transaction ready to apply to requests
+/// sent by the app server.
 void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
 {
   LOG_DEBUG("Store onward route-set for request");
   pjsip_route_hdr* hroute = (pjsip_route_hdr*)
                                 pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-  if (hroute != NULL) 
-  {
-    LOG_DEBUG("Skip top header: %s", PJUtils::hdr_to_string(hroute).c_str());
-    hroute = (pjsip_route_hdr*)
-                        pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, hroute->next);
-  }
   while (hroute != NULL) 
   {
     LOG_DEBUG("Store header: %s",

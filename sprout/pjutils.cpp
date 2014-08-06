@@ -629,6 +629,8 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, rdata->msg_info.msg);
     set_trail(clone, get_trail(rdata));
+    LOG_DEBUG("Cloned %s to %s", pjsip_rx_data_get_info(rdata), clone->obj_name);
+
   }
   return clone;
 }
@@ -644,6 +646,7 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, tdata->msg);
     set_trail(clone, get_trail(tdata));
+    LOG_DEBUG("Cloned %s to %s", tdata->obj_name, clone->obj_name);
   }
   return clone;
 }

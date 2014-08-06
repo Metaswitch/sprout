@@ -80,6 +80,16 @@ public:
   ///
   virtual void add_to_dialog(const std::string& dialog_id="") = 0;
 
+  /// Returns the top Route header from the original incoming request.  This
+  /// can be inpsected by the Sproutlet, but should not be modified.  Note that
+  /// this Route header is removed from the request passed to the Sproutlet on
+  /// the on_rx_*_request calls.
+  ///
+  /// @returns             - A pointer to a read-only copy of the top Route
+  ///                        header from the received request.
+  ///
+  virtual const pjsip_route_hdr* route_hdr() const = 0;
+
   /// Returns the dialog identifier for this service.
   ///
   /// @returns             - The dialog identifier attached to this service,
@@ -276,6 +286,17 @@ protected:
   ///
   void add_to_dialog(const std::string& dialog_id="")
     {_helper->add_to_dialog(dialog_id);}
+
+  /// Returns the top Route header from the original incoming request.  This
+  /// can be inpsected by the Sproutlet, but should not be modified.  Note that
+  /// this Route header is removed from the request passed to the Sproutlet on
+  /// the on_rx_*_request calls.
+  ///
+  /// @returns             - A pointer to a read-only copy of the top Route
+  ///                        header from the received request.
+  ///
+  virtual const pjsip_route_hdr* route_hdr() const
+    {return _helper->route_hdr();}
 
   /// Returns the dialog identifier for this service.
   ///
