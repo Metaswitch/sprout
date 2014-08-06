@@ -89,6 +89,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        fakechronosconnection.cpp \
                        basetest.cpp \
                        siptest.cpp \
+                       sip_common.cpp \
                        sipresolver_test.cpp \
                        authentication_test.cpp \
                        simservs_test.cpp \

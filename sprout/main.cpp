@@ -1269,11 +1269,10 @@ int main(int argc, char *argv[])
   else
   {
     // Ralf is not enabled, so create a null ACRFactory for all components.
-    ACRFactory* null_acr_factory = new ACRFactory();
-    scscf_acr_factory = null_acr_factory;
-    bgcf_acr_factory = null_acr_factory;
-    icscf_acr_factory = null_acr_factory;
-    pcscf_acr_factory = null_acr_factory;
+    scscf_acr_factory = new ACRFactory();
+    bgcf_acr_factory = new ACRFactory();
+    icscf_acr_factory = new ACRFactory();
+    pcscf_acr_factory = new ACRFactory();
   }
 
   if (opt.chronos_service != "")
