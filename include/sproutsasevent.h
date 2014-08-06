@@ -123,6 +123,9 @@ namespace SASEvent
 
   const int SIP_OVERLOAD = SPROUT_BASE + 0x0000D2;
 
+  const int TRANSPORT_FAILURE = SPROUT_BASE + 0x0000D0;
+  const int TIMEOUT_FAILURE = SPROUT_BASE + 0x0000D1;
+
 } //namespace SASEvent
 
 #endif
