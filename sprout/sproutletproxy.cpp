@@ -78,7 +78,11 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
     std::string service_name = (*i)->service_name();
     std::string service_host = service_name + "." +
                                std::string(_uri->host.ptr, _uri->host.slen);
+
+    LOG_DEBUG("Add service name map %s", service_name.c_str());
     _service_name_map[service_name] = *i;
+
+    LOG_DEBUG("Add service host map %s", service_host.c_str());
     _service_host_map[service_host] = *i;
 
     if ((*i)->port() != 0) 
@@ -171,9 +175,11 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
 Sproutlet* SproutletProxy::service_from_host(pjsip_sip_uri* uri)
 {
   Sproutlet* sproutlet = NULL;
+  LOG_DEBUG("Look for Sproutlet host mapping for %.*s", uri->host.slen, uri->host.ptr);
 
-  std::map<std::string, Sproutlet*>::iterator i =
-        _service_host_map.find(std::string(uri->host.ptr, uri->host.slen));
+  std::string service_host = std::string(uri->host.ptr, uri->host.slen);
+
+  std::map<std::string, Sproutlet*>::iterator i = _service_host_map.find(service_host);
 
   if (i != _service_host_map.end()) 
   {
@@ -190,36 +196,34 @@ Sproutlet* SproutletProxy::service_from_user(pjsip_sip_uri* uri)
 {
   Sproutlet* sproutlet = NULL;
 
-  if (!is_uri_local(uri)) 
+  if ((!is_uri_local(uri)) && (uri->user.slen > 0))
   {
     // The URI domain is the same as the local URI domain, so look for 
     // service names in the user portion of the URI.
-    LOG_DEBUG("URI domain is same as local URI domain");
-    if (uri->user.slen > 0) 
-    {
-      // Scan for a separator.
-      LOG_DEBUG("Look for service name in user field");
-      char* sep = pj_strchr(&uri->user, '&');
-      std::string service;
-      if (sep != NULL) 
-      {
-        // Found a separator, so service name is the string up to the 
-        // separator.
-        service = std::string(uri->user.ptr, (sep - uri->user.ptr));
-      }
-      else
-      {
-        // No separator, so service name is the full user name.
-        service = std::string(uri->user.ptr, uri->user.slen);
-      }
-      std::map<std::string, Sproutlet*>::iterator i =
-                                               _service_name_map.find(service);
+    LOG_DEBUG("Look for Sproutlet service mapping for user %.*s",
+              uri->user.slen, uri->user.ptr);
 
-      if (i != _service_name_map.end()) 
-      {
-        LOG_DEBUG("Found service name %s", service.c_str());
-        sproutlet = i->second;
-      }
+    // Scan for a separator.
+    char* sep = pj_strchr(&uri->user, '&');
+    std::string service;
+    if (sep != NULL) 
+    {
+      // Found a separator, so service name is the string up to the 
+      // separator.
+      service = std::string(uri->user.ptr, (sep - uri->user.ptr));
+    }
+    else
+    {
+      // No separator, so service name is the full user name.
+      service = std::string(uri->user.ptr, uri->user.slen);
+    }
+    std::map<std::string, Sproutlet*>::iterator i =
+                                             _service_name_map.find(service);
+
+    if (i != _service_name_map.end()) 
+    {
+      LOG_DEBUG("Found service name %s", service.c_str());
+      sproutlet = i->second;
     }
   }
 

@@ -50,6 +50,8 @@
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
+#include "icscfsproutlet.h"
+#include "bgcfsproutlet.h"
 #include "sproutletproxy.h"
 
 using namespace std;
@@ -331,6 +333,7 @@ public:
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
+    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
 
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
@@ -342,7 +345,7 @@ public:
     // Create the S-CSCF Sproutlet.
     _scscf_sproutlet = new SCSCFSproutlet("sip:homedomain",
                                           "sip:icscf.homedomain",
-                                          "sip:homedomain",
+                                          "sip:bgcf.homedomain",
                                           5058,
                                           _store,
                                           NULL,
@@ -350,9 +353,20 @@ public:
                                           _enum_service,
                                           _acr_factory);
 
+    // Create the I-CSCF Sproutlet.
+    _icscf_sproutlet = new ICSCFSproutlet(_hss_connection,
+                                          _acr_factory,
+                                          _scscf_selector);
+
+    // Create the BGCF Sproutlet.
+    _bgcf_sproutlet = new BGCFSproutlet(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"),
+                                        _acr_factory);
+
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_scscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain",
@@ -368,7 +382,10 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _proxy; _proxy = NULL;
+    delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
+    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
+    delete _scscf_selector; _scscf_selector = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _store; _store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
@@ -432,7 +449,10 @@ protected:
   static FakeHSSConnection* _hss_connection;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
+  static SCSCFSelector* _scscf_selector;
   static SCSCFSproutlet* _scscf_sproutlet;
+  static ICSCFSproutlet* _icscf_sproutlet;
+  static BGCFSproutlet* _bgcf_sproutlet;
   static SproutletProxy* _proxy;
 
   void doTestHeaders(TransportFlow* tpA,
@@ -466,7 +486,10 @@ AnalyticsLogger* SCSCFTest::_analytics;
 FakeHSSConnection* SCSCFTest::_hss_connection;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
+SCSCFSelector* SCSCFTest::_scscf_selector;
 SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
+ICSCFSproutlet* SCSCFTest::_icscf_sproutlet;
+BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
 SproutletProxy* SCSCFTest::_proxy;
 
 using SP::Message;

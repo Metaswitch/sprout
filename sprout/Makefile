@@ -74,10 +74,11 @@ TARGET_SOURCES := logger.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
                   contact_filtering.cpp \
-									sproutletproxy.cpp \
-									sproutletappserver.cpp \
-									scscfsproutlet.cpp
-
+                  sproutletproxy.cpp \
+                  sproutletappserver.cpp \
+                  scscfsproutlet.cpp \
+                  bgcfsproutlet.cpp \
+                  icscfsproutlet.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -122,6 +123,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
                        icscfproxy_test.cpp \
+                       icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
@@ -332,7 +334,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	-valgrind --gen-suppressions=all $(VGFLAGS) \
+	-valgrind --gen-suppressions=all --show-reachable=yes $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
