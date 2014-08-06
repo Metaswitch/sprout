@@ -607,8 +607,15 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     // The Event header is missing or doesn't match "reg"
     LOG_DEBUG("Rejecting subscription request with invalid event header");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
-    SAS::report_event(event);
+    SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+    if (event)
+    {
+      char event_hdr_str[256];
+      memset(event_hdr_str, 0, 256);
+      pjsip_hdr_print_on(event, event_hdr_str, 255);
+      sas_event.add_var_param(event_hdr_str);
+    }
+    SAS::report_event(sas_event);
 
     return PJ_FALSE;
   }
@@ -631,8 +638,11 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     {
       // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
       LOG_DEBUG("Rejecting subscription request with invalid accept header");
-
+      char accept_hdr_str[256];
+      memset(accept_hdr_str, 0, 256);
+      pjsip_hdr_print_on(accept, accept_hdr_str, 255);
       SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+      event.add_var_param(accept_hdr_str);
       SAS::report_event(event);
 
       return PJ_FALSE;
