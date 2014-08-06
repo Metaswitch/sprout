@@ -171,7 +171,6 @@ TEST_F(UtilsTest, Unescape)
 
   for (char c = 1; c < 127; c++)
   {
-    printf("c is %d\n", c);
     std::string original(10, c);
     EXPECT_EQ(original, Utils::url_unescape(Utils::url_escape(original)));
   }
