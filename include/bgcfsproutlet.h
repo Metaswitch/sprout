@@ -54,8 +54,8 @@ extern "C" {
 #include "analyticslogger.h"
 #include "stack.h"
 #include "acr.h"
+#include "bgcfservice.h"
 #include "sproutlet.h"
-#include "updater.h"
 
 #include <map>
 #include <vector>
@@ -67,16 +67,13 @@ class BGCFSproutletTsx;
 class BGCFSproutlet : public Sproutlet
 {
 public:
-  BGCFSproutlet(const std::string& bgcf_file,
+  BGCFSproutlet(BgcfService* bgcf_service,
                 ACRFactory* acr_factory);
   ~BGCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
 
 private:
-
-  /// Callback function to load updated routing rules.
-  void update_routes();
 
   /// Lookup a route from the configured rules.
   ///
@@ -91,10 +88,7 @@ private:
 
   friend class BGCFSproutletTsx;
 
-  std::string _bgcf_file;
-  std::map<std::string, std::vector<std::string>> _routes;
-
-  Updater<void, BGCFSproutlet>* _updater;
+  BgcfService* _bgcf_service;
 
   ACRFactory* _acr_factory;
 };

@@ -273,6 +273,11 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
     _acr->send_message();
     delete _acr;
   }
+
+  if (_as_chain_link.is_set()) 
+  {
+    _as_chain_link.release();
+  }
 }
 
 
@@ -329,10 +334,17 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   else
   {
     // No AS chain set, so don't apply services to the request.
-    // Default action will be to try to route following remaining Route
-    // headers or to the RequestURI.
+#if 0
+    // Default action is to try to route following remaining Route headers or
+    // to the RequestURI.
     LOG_INFO("Route request without applying services");
     send_request(req);
+#else
+    // Default action is to route the request directly to the BGCF.
+    LOG_INFO("Route request to BGCF without applying services");
+    route_to_bgcf(req);
+#endif
+
   }
 }
 
@@ -728,6 +740,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
   {
     // No more application servers, so perform processing at the end of
     // originating call processing.
+    LOG_INFO("Completed applying originating services");
 
     if (stack_data.record_route_on_completion_of_originating)
     {
@@ -781,6 +794,8 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
   {
     // No more application servers to invoke, so perform end of terminating
     // request processing.
+    LOG_INFO("Completed applying originating services");
+
     if (stack_data.record_route_on_completion_of_terminating) 
     {
       LOG_DEBUG("Add service to dialog - end of terminating handling");
@@ -859,13 +874,27 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
 /// Route the request to the I-CSCF.
 void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 {
-  LOG_INFO("Routing to I-CSCF %s", 
-           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->icscf_uri()).c_str());
-  PJUtils::add_route_header(req,
-                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            _scscf->icscf_uri()),
-                            get_pool(req));
+  const pjsip_uri* icscf_uri = _scscf->icscf_uri();
+
+  if (icscf_uri != NULL) 
+  {
+    // I-CSCF is enabled, so route to it.
+    LOG_INFO("Routing to I-CSCF %s", 
+             PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
+    PJUtils::add_route_header(req,
+                              (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), icscf_uri),
+                              get_pool(req));
+  }
+  else
+  {
+    // I-CSCF is disabled, so route directly to the local S-CSCF.
+    const pjsip_uri* scscf_uri = _scscf->scscf_uri();
+    LOG_INFO("Routing directly to S-CSCF %s",
+             PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, scscf_uri).c_str());
+    PJUtils::add_route_header(req,
+                              (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), scscf_uri),
+                              get_pool(req));
+  }
   send_request(req);
 }
 

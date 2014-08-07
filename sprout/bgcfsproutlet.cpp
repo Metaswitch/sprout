@@ -46,21 +46,18 @@
 #include <fstream>
 
 /// BGCFSproutlet constructor.                           
-BGCFSproutlet::BGCFSproutlet(const std::string& bgcf_file,
+BGCFSproutlet::BGCFSproutlet(BgcfService* bgcf_service,
                              ACRFactory* acr_factory) :
   Sproutlet("bgcf", 0),
-  _bgcf_file(bgcf_file),
+  _bgcf_service(bgcf_service),
   _acr_factory(acr_factory)
 {
-  // Create an updater to keep the bgcf routes configured appropriately.
-  _updater = new Updater<void, BGCFSproutlet>(this, std::mem_fun(&BGCFSproutlet::update_routes));
 }
 
 
 /// BGCFSproutlet destructor.
 BGCFSproutlet::~BGCFSproutlet()
 {
-  delete _updater; _updater = NULL;
 }
 
 
@@ -72,73 +69,6 @@ SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
 }
 
 
-/// Callback function to load updated routing rules.
-void BGCFSproutlet::update_routes()
-{
-  Json::Value root;
-  Json::Reader reader;
-
-  std::string jsonData;
-  std::ifstream file;
-
-  LOG_STATUS("Loading BGCF configuration from %s", _bgcf_file.c_str());
-
-  std::map<std::string, std::vector<std::string>> new_routes;
-
-  file.open(_bgcf_file.c_str());
-  if (file.is_open())
-  {
-    if (!reader.parse(file, root))
-    {
-      LOG_WARNING("Failed to read BGCF configuration data, %s",
-                  reader.getFormattedErrorMessages().c_str());
-      return;
-    }
-
-    file.close();
-
-    if (root["routes"].isArray())
-    {
-      Json::Value routes = root["routes"];
-
-      for (size_t ii = 0; ii < routes.size(); ++ii)
-      {
-        Json::Value route = routes[(int)ii];
-        if ((route["domain"].isString()) &&
-            (route["route"].isArray()))
-        {
-          std::vector<std::string> route_vec;
-          Json::Value route_vals = route["route"];
-          std::string domain = route["domain"].asString();
-
-          for (size_t jj = 0; jj < route_vals.size(); ++jj)
-          {
-            Json::Value route_val = route_vals[(int)jj];
-            route_vec.push_back(route_val.asString());
-          }
-
-          new_routes.insert(std::make_pair(domain, route_vec));
-          route_vec.clear();
-        }
-        else
-        {
-          LOG_WARNING("Badly formed BGCF route entry %s", route.toStyledString().c_str());
-        }
-      }
-
-      _routes = new_routes;
-    }
-    else
-    {
-      LOG_WARNING("Badly formed BGCF configuration file - missing routes object");
-    }
-  }
-  else
-  {
-    LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
-  }
-}
-
 /// Look up a route from the configured rules.
 ///
 /// @return            - The URIs to route the message on to (in order).
@@ -146,59 +76,7 @@ void BGCFSproutlet::update_routes()
 std::vector<std::string> BGCFSproutlet::get_route(const std::string &domain,
                                                   SAS::TrailId trail) const
 {
-  LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
-
-  // First try the specified domain.
-  std::map<std::string, std::vector<std::string>>::const_iterator ii = _routes.find(domain);
-  if (ii != _routes.end())
-  {
-    LOG_INFO("Found route to domain %s", domain.c_str());
-
-    SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE, 0);
-    event.add_var_param(domain);
-    std::string route_string;
-
-    for (std::vector<std::string>::const_iterator jj = ii->second.begin();
-         jj != ii->second.end();
-         ++jj)
-    {
-      route_string = route_string + *jj + ";";
-    }
-
-    event.add_var_param(route_string);
-    SAS::report_event(event);
-
-    return ii->second;
-  }
-
-  // Then try the default domain (*).
-  ii = _routes.find("*");
-  if (ii != _routes.end())
-  {
-    LOG_INFO("Found default route");
-
-    SAS::Event event(trail, SASEvent::BGCF_DEFAULT_ROUTE, 0);
-    event.add_var_param(domain);
-    std::string route_string;
-
-    for (std::vector<std::string>::const_iterator jj = ii->second.begin();
-         jj != ii->second.end();
-         ++jj)
-    {
-      route_string = route_string + *jj + ";";
-    }
-
-    event.add_var_param(route_string);
-    SAS::report_event(event);
-
-    return ii->second;
-  }
-
-  SAS::Event event(trail, SASEvent::BGCF_NO_ROUTE, 0);
-  event.add_var_param(domain);
-  SAS::report_event(event);
-
-  return std::vector<std::string>();
+  return _bgcf_service->get_route(domain, trail);
 }
 
 /// Get an ACR instance from the factory.
@@ -264,11 +142,18 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
+    LOG_DEBUG("No route configured for %s", domain.c_str());
+#if 0
     // TS 24.229 doesn't cover the behavior if the domain is not routable
     // from the BGCF.  Simply response 404 and explain why in the reason.
     pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "No route to target");
     send_response(rsp);
     free_msg(req);
+#else
+    // Previous behaviour on no route was to try to forward the request as-is,
+    // (so trying to route to the domain in the request URI directly).
+    send_request(req);
+#endif
   }
 }
 

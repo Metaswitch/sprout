@@ -82,6 +82,7 @@ protected:
 
   bool is_uri_local(pjsip_uri* uri);
   bool is_uri_local(pjsip_sip_uri* uri);
+  bool is_host_local(pj_str_t* host);
 
   class UASTsx : public BasicProxy::UASTsx
   {
@@ -193,6 +194,8 @@ public:
 
   /// Virtual destructor.
   virtual ~SproutletWrapper();
+
+  const std::string& service_name() const;
 
   /// This implementation has concrete implementations for all of the virtual
   /// functions from SproutletTsxHelper.  See there for function comments for

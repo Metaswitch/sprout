@@ -315,7 +315,8 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   else
   {
     // Existing services parameter, so extract existing parameter.
-    std::string services = std::string(p->value.ptr, p->value.slen);
+    services = std::string(p->value.ptr, p->value.slen);
+    LOG_DEBUG("Existing services parameter = %s", services.c_str());
   }
 
   // Add the service name and dialog identifier to the parameter.
@@ -342,7 +343,13 @@ bool SproutletProxy::is_uri_local(pjsip_uri* uri)
 bool SproutletProxy::is_uri_local(pjsip_sip_uri* uri)
 {
   pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-  if (!pj_stricmp(&sip_uri->host, &_uri->host))
+  return is_host_local(&sip_uri->host);
+}
+
+
+bool SproutletProxy::is_host_local(pj_str_t* host)
+{
+  if (!pj_stricmp(host, &_uri->host))
   {
     return true;
   }
@@ -658,6 +665,8 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
                                        int fork_id,
                                        pjsip_tx_data* cancel)
 {
+  LOG_DEBUG("Process CANCEL from %s on fork %d",
+            upstream->service_name().c_str(), fork_id);
   DMap<SproutletWrapper*>::iterator i =
                        _dmap_sproutlet.find(std::make_pair(upstream, fork_id));
 
@@ -665,6 +674,7 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
   {
     // Pass the CANCEL request to the downstream Sproutlet.
     SproutletWrapper* downstream = i->second;
+    LOG_DEBUG("Route CANCEL to %s", downstream->service_name().c_str());
     downstream->rx_cancel(cancel);
   }
   else
@@ -673,6 +683,7 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
     if (j != _dmap_uac.end()) 
     {
       // CANCEL the downstream UAC transaction.
+      LOG_DEBUG("Route CANCEL to downstream UAC transaction");
       UACTsx* uac_tsx = j->second;
       uac_tsx->cancel_pending_tsx(0);
     }
@@ -806,6 +817,11 @@ SproutletWrapper::~SproutletWrapper()
   assert(_packets.empty());
   assert(_send_requests.empty());
   assert(_send_responses.empty());
+}
+
+const std::string& SproutletWrapper::service_name() const
+{
+  return _service_name;
 }
 
 //
@@ -1395,9 +1411,37 @@ int SproutletWrapper::compare_sip_sc(int sc1, int sc2)
   }
 }
 
-/// Checks whether the specified URI is "owned" by this system.
+/// Checks whether the specified URI is "owned" by this system.  The URI is
+/// considered local if the domain is either equal to the base URI domain, or
+/// the service name prepended to the base URI domain.
 bool SproutletWrapper::is_uri_local(pjsip_uri* uri) const
 {
+  if (_proxy->is_uri_local(uri)) 
+  {
+    return true;
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+    pj_str_t host = sip_uri->host;
+    char* sep = pj_strchr(&host, '.');
+    if (sep != NULL)
+    {
+      host.slen = sep - host.ptr;
+      if (!pj_stricmp2(&host, _service_name.c_str())) 
+      {
+        // The first part of the domain is the service name, so check that
+        // the rest of the URI is local.
+        host.ptr = sep + 1;
+        host.slen = sip_uri->host.slen - (sep + 1 - sip_uri->host.ptr);
+        if (_proxy->is_host_local(&host)) 
+        {
+          return true;
+        }
+      }
+    }
+  }
+
   return _proxy->is_uri_local(uri);
 }
 
