@@ -1148,12 +1148,22 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
 {
   if ((st_code >= 100) && (st_code < 200))
   {
-    // Send a provisional response.
+    // Build a provisional response.
     // LCOV_EXCL_START
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason =
                 (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+
+    // If this is a 100 Trying response, we need to clear the To tag.  This was
+    // filled in when we created _best_rsp as a final response, but isn't valid
+    // on a 100 Trying response.
+    if (st_code == 100)
+    {
+      PJSIP_MSG_TO_HDR(prov_rsp->msg)->tag.slen = 0;
+    }
+
+    // Send the message.
     pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     on_tx_response(prov_rsp);
