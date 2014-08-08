@@ -853,6 +853,19 @@ pjsip_msg* SproutletWrapper::original_request()
     LOG_ERROR("Failed to clone original request for Sproutlet %s", _service_name.c_str());
     return NULL;
   }
+
+  // Remove the top Route header from the request if it refers to this node.
+  // The Sproutlet can inspect the route_hdr API if required using the
+  // route_hdr() API, but cannot manipulate it.
+  pjsip_route_hdr* hr = (pjsip_route_hdr*)
+                           pjsip_msg_find_hdr(clone->msg, PJSIP_H_ROUTE, NULL);
+  if ((hr != NULL) &&
+      (is_uri_local(hr->name_addr.uri)))
+  {
+    LOG_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
+    pj_list_erase(hr);
+  }
+
   register_tdata(clone);
 
   return clone->msg;
@@ -1090,18 +1103,6 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   if (clone == NULL) 
   {
     // @TODO
-  }
-
-  // Remove the top Route header from the request if it refers to this node.
-  // The Sproutlet can inspect the route_hdr API if required using the
-  // route_hdr() API, but cannot manipulate it.
-  pjsip_route_hdr* hr = (pjsip_route_hdr*)
-                                pjsip_msg_find_hdr(clone, PJSIP_H_ROUTE, NULL);
-  if ((hr != NULL) &&
-      (is_uri_local(hr->name_addr.uri)))
-  {
-    LOG_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
-    pj_list_erase(hr);
   }
 
   if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0) 
