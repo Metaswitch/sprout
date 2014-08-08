@@ -844,6 +844,20 @@ const std::string& SproutletWrapper::dialog_id() const
   return _dialog_id;
 }
 
+pjsip_msg* SproutletWrapper::original_request()
+{
+  pjsip_tx_data* clone = PJUtils::clone_msg(stack_data.endpt, _req);
+
+  if (clone == NULL) 
+  {
+    LOG_ERROR("Failed to clone original request for Sproutlet %s", _service_name.c_str());
+    return NULL;
+  }
+  register_tdata(clone);
+
+  return clone->msg;
+}
+
 /// Returns the top Route header from the original request.
 const pjsip_route_hdr* SproutletWrapper::route_hdr() const
 {
@@ -1072,7 +1086,7 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   pjsip_tx_data_add_ref(_req);
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
-  pjsip_tx_data* clone = PJUtils::clone_msg(stack_data.endpt, req);
+  pjsip_msg* clone = original_request();
   if (clone == NULL) 
   {
     // @TODO
@@ -1082,7 +1096,7 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   // The Sproutlet can inspect the route_hdr API if required using the
   // route_hdr() API, but cannot manipulate it.
   pjsip_route_hdr* hr = (pjsip_route_hdr*)
-                           pjsip_msg_find_hdr(clone->msg, PJSIP_H_ROUTE, NULL);
+                                pjsip_msg_find_hdr(clone, PJSIP_H_ROUTE, NULL);
   if ((hr != NULL) &&
       (is_uri_local(hr->name_addr.uri)))
   {
@@ -1090,16 +1104,15 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
     pj_list_erase(hr);
   }
 
-  register_tdata(clone);
-  if (PJSIP_MSG_TO_HDR(clone->msg)->tag.slen == 0) 
+  if (PJSIP_MSG_TO_HDR(clone)->tag.slen == 0) 
   {
     LOG_DEBUG("Pass initial request to Sproutlet");
-    _sproutlet->on_rx_initial_request(clone->msg);
+    _sproutlet->on_rx_initial_request(clone);
   }
   else
   {
     LOG_DEBUG("Pass in dialog request to Sproutlet");
-    _sproutlet->on_rx_in_dialog_request(clone->msg);
+    _sproutlet->on_rx_in_dialog_request(clone);
   }
   process_actions();
 }

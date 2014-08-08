@@ -201,6 +201,7 @@ public:
   /// functions from SproutletTsxHelper.  See there for function comments for
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
+  pjsip_msg* original_request();
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
   pjsip_msg* clone_request(pjsip_msg* req);
