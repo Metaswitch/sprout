@@ -69,9 +69,8 @@ public:
     _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
-    _ifc_handler = new IfcHandler();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, _ifc_handler, 300);
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
@@ -85,7 +84,6 @@ public:
   {
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
-    delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
     delete _remote_store; _remote_store = NULL;

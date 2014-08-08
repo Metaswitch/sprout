@@ -1300,7 +1300,6 @@ int main(int argc, char *argv[])
                                                http_resolver);
   }
 
-#if 0
   if (opt.scscf_enabled)
   {
     if (opt.store_servers != "")
@@ -1345,13 +1344,7 @@ int main(int argc, char *argv[])
     if (xdm_connection != NULL)
     {
       LOG_STATUS("Creating call services handler");
-      call_services = new CallServices(xdm_connection);
-    }
-
-    if (hss_connection != NULL)
-    {
-      LOG_STATUS("Initializing iFC handler");
-      ifc_handler = new IfcHandler();
+      // Create MMTEL Sproutlet.
     }
 
     if (opt.auth_enabled)
@@ -1387,7 +1380,6 @@ int main(int argc, char *argv[])
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
-                            ifc_handler,
                             opt.reg_max_expires);
 
     if (status != PJ_SUCCESS)
@@ -1409,6 +1401,10 @@ int main(int argc, char *argv[])
       LOG_ERROR("Failed to enable subscription module");
       return 1;
     }
+
+    // Create the S-CSCF Sproutlet.
+    scscf_sproutlet = new SCSCFSproutlet(scscf_
+
 
     // Launch stateful proxy as S-CSCF.
     status = init_stateful_proxy(local_reg_store,
