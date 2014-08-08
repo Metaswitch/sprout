@@ -396,10 +396,37 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   }
 #endif
 
+  int st_code = rsp->line.status.code;
+
   if (_as_chain_link.is_set()) 
   {
     // Pass the response code to the controlling AsChain for accounting.
-    _as_chain_link.on_response(rsp->line.status.code);
+    _as_chain_link.on_response(st_code);
+
+    if (!_as_chain_link.complete())
+    {
+      // The AS chain isn't complete, so the response must be from an
+      // application server.  Check to see if we need to trigger default
+      // handling.
+      if (((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
+           (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
+          (_as_chain_link.continue_session()))
+      {
+        // The AS either timed out or returned a 5xx error, and default
+        // handling is set to continue.
+        LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+        _as_chain_link = _as_chain_link.next();
+        pjsip_msg* req = original_request();
+        if (_session_case->is_originating()) 
+        {
+          apply_originating_services(req);
+        }
+        else
+        {
+          apply_terminating_services(req);
+        }
+      }
+    }
   }
 
   if (rsp->line.status.code == SIP_STATUS_FLOW_FAILED) 
