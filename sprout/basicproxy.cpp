@@ -45,6 +45,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include "pjsip-simple/evsub.h"
 }
 
 #include <vector>
@@ -1156,7 +1157,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
       pjsip_tx_data* prov_rsp;
       pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                     _req,
-                                                    100,
+                                                    st_code,
                                                     st_text,
                                                     &prov_rsp);
       if (status == PJ_SUCCESS) 
@@ -1215,7 +1216,18 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
     SAS::report_marker(called_dn);
   }
 
-  PJUtils::mark_sas_call_branch_ids(trail(), rdata->msg_info.cid, rdata->msg_info.msg);
+  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
+  {
+    // Omit the Call-ID for these requests, as the same Call-ID can be
+    // reused over a long period of time and produce huge SAS trails.
+    PJUtils::mark_sas_call_branch_ids(trail(), NULL, rdata->msg_info.msg);
+  }
+  else
+  {
+    PJUtils::mark_sas_call_branch_ids(trail(), rdata->msg_info.cid, rdata->msg_info.msg);
+  }
 }
 
 
@@ -1740,12 +1752,21 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         // transaction.
         LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
                   _tsx->obj_name);
-        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        if (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)
         {
           LOG_DEBUG("Timeout or transport error");
-          send_timeout_response();
+          SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
+          SAS::report_event(sas_event);
         }
+        // LCOV_EXCL_START - no timeouts in UT
+        else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
+        {
+          LOG_DEBUG("Timeout error");
+          SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
+          SAS::report_event(sas_event);
+        }
+        // LCOV_EXCL_STOP - no timeouts in UT
+        send_timeout_response();
       }
     }
   }

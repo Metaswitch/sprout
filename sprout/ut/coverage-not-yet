@@ -20,6 +20,9 @@ modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp
 modules/cpp-common/test_utils/mockhttpstack.hpp
+modules/cpp-common/test_utils/sip_common.cpp
+modules/cpp-common/test_utils/faketransport_tcp.cpp
+modules/cpp-common/test_utils/faketransport_udp.cpp
 
 modules/app-servers/include/appserver.h
 modules/app-servers/test/mockappserver.hpp
@@ -37,7 +40,6 @@ stack.cpp
 websockets.cpp
 dnsresolver.cpp
 flowtable.cpp
-custom_headers.cpp
 sipresolver.cpp
 acr.cpp
 

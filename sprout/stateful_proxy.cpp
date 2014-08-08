@@ -95,6 +95,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include "pjsip-simple/evsub.h"
 }
 
 // Common STL includes.
@@ -1815,7 +1816,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         _bgcf_acr = bgcf_acr_factory->get_acr(trail,
                                               CALLING_PARTY,
                                               ACR::requested_node_role(msg));
-         
+
         if ((_downstream_acr != _upstream_acr) &&
             (!_as_chain_links.empty()))
         {
@@ -3442,9 +3443,20 @@ pj_status_t UASTransaction::send_response(int st_code, const pj_str_t* st_text)
   // cancel any outstanding deferred trying responses
   if ((st_code >= 100) && (st_code < 200))
   {
+    // Build a provisional response.
     pjsip_tx_data* prov_rsp = PJUtils::clone_tdata(_best_rsp);
     prov_rsp->msg->line.status.code = st_code;
     prov_rsp->msg->line.status.reason = (st_text != NULL) ? *st_text : *pjsip_get_status_text(st_code);
+
+    // If this is a 100 Trying response, we need to clear the To tag.  This was
+    // filled in when we created _best_rsp as a final response, but isn't valid
+    // on a 100 Trying response.
+    if (st_code == 100)
+    {
+      PJSIP_MSG_TO_HDR(prov_rsp->msg)->tag.slen = 0;
+    }
+
+    // Send the response.
     pjsip_tx_data_invalidate_msg(prov_rsp);
     set_trail(prov_rsp, trail());
     _upstream_acr->tx_response(prov_rsp->msg);
@@ -3566,7 +3578,18 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
     }
   }
 
-  PJUtils::mark_sas_call_branch_ids(get_trail(rdata), _analytics.cid, rdata->msg_info.msg);
+  if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+      ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
+  {
+    // Omit the Call-ID for these requests, as the same Call-ID can be
+    // reused over a long period of time and produce huge SAS trails.
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), NULL, rdata->msg_info.msg);
+  }
+  else
+  {
+    PJUtils::mark_sas_call_branch_ids(get_trail(rdata), _analytics.cid, rdata->msg_info.msg);
+  }
 }
 
 // Generate analytics logs relating to a transaction completing.
@@ -4319,10 +4342,18 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         // transaction.
         LOG_DEBUG("%s - UAC tsx terminated while still connected to UAS tsx",
                   _tsx->obj_name);
-        if ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-            (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR))
+        if (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)
         {
           LOG_DEBUG("Timeout or transport error");
+          SAS::Event sas_event(trail(), SASEvent::TRANSPORT_FAILURE, 0);
+          SAS::report_event(sas_event);
+          _uas_data->on_client_not_responding(this);
+        }
+        else if (event->body.tsx_state.type == PJSIP_EVENT_TIMER)
+        {
+          LOG_DEBUG("Timeout error");
+          SAS::Event sas_event(trail(), SASEvent::TIMEOUT_FAILURE, 0);
+          SAS::report_event(sas_event);
           _uas_data->on_client_not_responding(this);
         }
         else

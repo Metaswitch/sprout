@@ -107,7 +107,7 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
-void RegistrationTimeoutHandler::run()
+void RegistrationTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -142,7 +142,7 @@ void RegistrationTimeoutHandler::run()
   delete this;
 }
 
-void AuthTimeoutHandler::run()
+void AuthTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
   {
@@ -174,7 +174,7 @@ void AuthTimeoutHandler::run()
   delete this;
 }
 
-void DeregistrationHandler::run()
+void DeregistrationTask::run()
 {
   // HTTP method must be a DELETE
   if (_req.method() != htp_method_DELETE)
@@ -214,7 +214,7 @@ void DeregistrationHandler::run()
 }
 //LCOV_EXCL_STOP
 
-void RegistrationTimeoutHandler::handle_response()
+void RegistrationTimeoutTask::handle_response()
 {
   bool all_bindings_expired = false;
   RegStore::AoR* aor_data = set_aor_data(_cfg->_store, _aor_id, NULL, _cfg->_remote_store, true, all_bindings_expired);
@@ -240,12 +240,12 @@ void RegistrationTimeoutHandler::handle_response()
   delete aor_data;
 }
 
-RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
-                                                        std::string aor_id,
-                                                        RegStore::AoR* previous_aor_data,
-                                                        RegStore* remote_store,
-                                                        bool is_primary,
-                                                        bool& all_bindings_expired)
+RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
+                                                     std::string aor_id,
+                                                     RegStore::AoR* previous_aor_data,
+                                                     RegStore* remote_store,
+                                                     bool is_primary,
+                                                     bool& all_bindings_expired)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -272,7 +272,7 @@ RegStore::AoR* RegistrationTimeoutHandler::set_aor_data(RegStore* current_store,
 }
 
 // Retrieve the aor and binding ID from the opaque data
-HTTPCode RegistrationTimeoutHandler::parse_response(std::string body)
+HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -312,7 +312,7 @@ HTTPCode RegistrationTimeoutHandler::parse_response(std::string body)
 }
 
 // Retrieve the aors and any private IDs from the request body
-HTTPCode DeregistrationHandler::parse_request(std::string body)
+HTTPCode DeregistrationTask::parse_request(std::string body)
 {
   Json::Value json_body;
   Json::Reader reader;
@@ -367,7 +367,7 @@ HTTPCode DeregistrationHandler::parse_request(std::string body)
   return HTTP_OK;
 }
 
-HTTPCode DeregistrationHandler::handle_request()
+HTTPCode DeregistrationTask::handle_request()
 {
   for (std::map<std::string, std::string>::iterator it=_bindings.begin(); it!=_bindings.end(); ++it)
   {
@@ -402,12 +402,12 @@ HTTPCode DeregistrationHandler::handle_request()
   return HTTP_OK;
 }
 
-RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
-                                                   std::string aor_id,
-                                                   std::string private_id,
-                                                   RegStore::AoR* previous_aor_data,
-                                                   RegStore* remote_store,
-                                                   bool is_primary)
+RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
+                                                std::string aor_id,
+                                                std::string private_id,
+                                                RegStore::AoR* previous_aor_data,
+                                                RegStore* remote_store,
+                                                bool is_primary)
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
@@ -454,7 +454,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
                ++j)
           {
             // LCOV_EXCL_START
-            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id);
+            current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail());
             // LCOV_EXCL_STOP
           }
         }
@@ -485,7 +485,7 @@ RegStore::AoR* DeregistrationHandler::set_aor_data(RegStore* current_store,
   return aor_data;
 }
 
-HTTPCode AuthTimeoutHandler::handle_response(std::string body)
+HTTPCode AuthTimeoutTask::handle_response(std::string body)
 {
   Json::Value json_body;
   std::string json_str = body;
@@ -532,44 +532,47 @@ HTTPCode AuthTimeoutHandler::handle_response(std::string body)
     return HTTP_BAD_RESULT;
   }
 
-  Json::Value* json = _cfg->_avstore->get_av(_impi, _nonce, trail());
   bool success = false;
-  HTTPCode hss_query = HTTP_OK;
-
-  if (json == NULL)
+  uint64_t cas;
+  Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
+  if (av != NULL)
   {
-    // Mainline case - our AV has already been deleted because the
-    // user has tried to authenticate. No need to notify the HSS in
-    // this case (as they'll either have successfully authenticated
-    // and triggered a REGISTRATION SAR, or failed and triggered an
-    // AUTHENTICATION_FAILURE SAR).
-    success = true;
+    // If authentication completed, we'll have written a marker to
+    // indicate that. Look for it.
+    if (!av->isMember("tombstone"))
+    {
+      LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
+
+      // Retrieve the original authentication vector, so we have the
+      // original REGISTER's branch parameter for SAS correlation
+
+      correlate_branch_from_av(av, trail());
+
+      // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
+      // problem if Chronos' timer pops twice (e.g. if we have high
+      // latency and these operations take more than 2 seconds).
+
+      // If either of these operations fail, we return a 500 Internal
+      // Server Error - this will trigger Chronos to try a different
+      // Sprout, which may have better connectivity to Homestead or Memcached.
+      HTTPCode hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, trail());
+
+      if (hss_query == HTTP_OK)
+      {
+        success = true;
+      }
+    }
+    else
+    {
+      LOG_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
+      success = true;
+    }
   }
   else
   {
-    LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
-
-    // Note that both AV deletion and the AUTHENTICATION_TIMEOUT SAR
-    // are idempotent, so there's no problem if Chronos' timer pops
-    // twice (e.g. if we have high latency and these operations take
-    // more than 2 seconds).
-
-    // If either of these operations fail, we return a 500 Internal
-    // Server Error - this will trigger Chronos to try a different
-    // Sprout, which may have better connectivity to Homestead or Memcached.
-    hss_query = _cfg->_hss->update_registration_state(_impu, _impi, HSSConnection::AUTH_TIMEOUT, 0);
-
-    if (hss_query == HTTP_OK)
-    {
-      success = _cfg->_avstore->delete_av(_impi, _nonce, trail());
-      if (!success) {
-        LOG_ERROR("Tried to delete AV for %s/%s based on a Chronos timer pop, but failed", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
-      }
-
-    }
-
-    delete json;
+    LOG_WARNING("Could not find AV for %s:%s when checking authentication timeout", _impi.c_str(), _nonce.c_str()); // LCOV_EXCL_LINE
   }
+  delete av;
 
   return success ? HTTP_OK : HTTP_SERVER_ERROR;
 }

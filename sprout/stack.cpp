@@ -43,6 +43,7 @@ extern "C" {
 #include <pjsip.h>
 #include <pjlib-util.h>
 #include <pjlib.h>
+#include "pjsip-simple/evsub.h"
 }
 #include <arpa/inet.h>
 
@@ -366,6 +367,54 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     // Respond statelessly with a 503 Service Unavailable, including a
     // Retry-After header with a zero length timeout.
     LOG_DEBUG("Rejected request due to overload");
+
+    pjsip_from_hdr* from = (pjsip_from_hdr*)rdata->msg_info.from;
+    pjsip_to_hdr* to = (pjsip_to_hdr*)rdata->msg_info.to;
+    pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
+
+    SAS::TrailId trail = get_trail(rdata);
+
+    SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
+    SAS::report_marker(start_marker);
+
+    SAS::Event event(trail, SASEvent::SIP_OVERLOAD, 0);
+    event.add_static_param(load_monitor->get_target_latency());
+    event.add_static_param(load_monitor->get_current_latency());
+    event.add_static_param(load_monitor->get_rate_limit());
+    SAS::report_event(event);
+
+    if (from)
+    {
+     SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
+     pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(from->uri);
+     calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
+     SAS::report_marker(calling_dn);
+    }
+
+    if (to)
+    {
+      SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
+      pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(to->uri);
+      called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
+      SAS::report_marker(called_dn);
+
+    }
+
+    if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
+        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||
+        ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_notify_method())) == 0))
+    {
+      // Omit the Call-ID for these requests, as the same Call-ID can be
+      // reused over a long period of time and produce huge SAS trails.
+      PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
+    }
+    else
+    {
+      PJUtils::mark_sas_call_branch_ids(trail, cid, rdata->msg_info.msg);
+    }
+
+    SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
+    SAS::report_marker(end_marker);
 
     pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
     PJUtils::respond_stateless(stack_data.endpt,

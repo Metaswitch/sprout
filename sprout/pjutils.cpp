@@ -186,6 +186,18 @@ std::string PJUtils::pj_str_to_string(const pj_str_t* pjstr)
   return ((pjstr != NULL) && (pj_strlen(pjstr) > 0)) ? std::string(pj_strbuf(pjstr), pj_strlen(pjstr)) : std::string("");
 }
 
+std::string PJUtils::pj_str_to_unquoted_string(const pj_str_t* pjstr)
+{
+  std::string ret = pj_str_to_string(pjstr);
+
+  if ((ret.front() == '"') && (ret.back() == '"'))
+  {
+    ret = ret.substr(1, (ret.size() - 2));
+  }
+
+  return ret;
+}
+
 
 std::string PJUtils::pj_status_to_string(const pj_status_t status)
 {
@@ -1111,7 +1123,8 @@ static void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event)
 pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
                                   int retries,
                                   void* token,
-                                  pjsip_endpt_send_callback cb)
+                                  pjsip_endpt_send_callback cb,
+                                  bool log_sas_branch)
 {
   pjsip_transaction* tsx;
   pj_status_t status = PJ_SUCCESS;
@@ -1152,7 +1165,10 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     {
       // Set the trail ID in the transaction from the message.
       set_trail(tsx, get_trail(tdata));
-
+      if (log_sas_branch)
+      {
+        PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
+      }
       // Set up the module data for the new transaction to reference
       // the state information.
       tsx->mod_data[mod_sprout_util.id] = sss;
@@ -1548,6 +1564,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
   // If we have a call ID, log it.
   if (cid_hdr != NULL)
   {
+    LOG_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s", cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::Marker cid_marker(trail, MARKER_ID_SIP_CALL_ID, 1u);
     cid_marker.add_var_param(cid_hdr->id.slen, cid_hdr->id.ptr);
     SAS::report_marker(cid_marker, SAS::Marker::Scope::Trace);
@@ -1570,7 +1587,7 @@ void PJUtils::mark_sas_call_branch_ids(const SAS::TrailId trail, pjsip_cid_hdr* 
 
       // Now see if we can find the next Via header and log it if so.  This will have been added by
       // the previous server.  This means we'll be able to correlate with its trail.
-      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via);
+      pjsip_via_hdr* second_via = (pjsip_via_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_VIA, top_via->next);
       if (second_via != NULL)
       {
         SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 2u);
