@@ -128,6 +128,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     {
       // For initial requests, the service can be encoded in the URI host name
       // or the URI user name.
+      LOG_DEBUG("Initial request");
       sproutlet = service_from_host(uri);
 
       if (sproutlet == NULL) 
@@ -139,6 +140,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     {
       // For in-dialog requests, the services (and dialog identifiers) are 
       // encoded in a URI parameter.
+      LOG_DEBUG("In-dialog request");
       sproutlet = service_from_params(uri);
     }
 
@@ -155,10 +157,11 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     // No service identifier in the Route URI, so check for a default service
     // for the port.  We can only do this if there is either no route header
     // or the URI in the Route header corresponds to our hostname.
+    LOG_DEBUG("No Sproutlet found using service name or host");
     if ((route == NULL) ||
         (is_uri_local(route->name_addr.uri)))
     {
-      LOG_DEBUG("No service identifier, so look for default service for port %d", port);
+      LOG_DEBUG("Find default service for port %d", port);
       std::map<int, Sproutlet*>::iterator i = _port_map.find(port);
       if (i != _port_map.end()) 
       {
@@ -235,14 +238,16 @@ Sproutlet* SproutletProxy::service_from_user(pjsip_sip_uri* uri)
 /// is encoded in a single parameter, separated by & characters.
 Sproutlet* SproutletProxy::service_from_params(pjsip_sip_uri* uri)
 {
-  Sproutlet* sproutlet;
+  Sproutlet* sproutlet = NULL;
 
   // Find the services parameter in the URI.
+  LOG_DEBUG("Look for Sproutlet service parameter");
   pjsip_param* p = pjsip_param_find(&uri->other_param, &STR_SERVICE);
 
   if (p != NULL) 
   {
     // Get the first service in the list.
+    LOG_DEBUG("Found services - %.*s", p->value.slen, p->value.ptr);
     pj_str_t service_str = p->value;
 
     // Scan for a separator between services.

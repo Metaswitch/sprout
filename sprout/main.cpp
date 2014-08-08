@@ -83,14 +83,15 @@ extern "C" {
 #include "memcachedstore.h"
 #include "localstore.h"
 #include "scscfselector.h"
-#include "icscfproxy.h"
 #include "chronosconnection.h"
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
 #include "sproutletappserver.h"
 #include "sproutletproxy.h"
-#include "sampleforkapp.h"
+#include "scscfsproutlet.h"
+#include "icscfsproutlet.h"
+#include "bgcfsproutlet.h"
 
 enum OptionTypes
 {
@@ -935,8 +936,6 @@ int main(int argc, char *argv[])
 
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
-  CallServices* call_services = NULL;
-  IfcHandler* ifc_handler = NULL;
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
@@ -952,7 +951,6 @@ int main(int argc, char *argv[])
   RegStore* remote_reg_store = NULL;
   AvStore* av_store = NULL;
   SCSCFSelector* scscf_selector = NULL;
-  ICSCFProxy* icscf_proxy = NULL;
   ChronosConnection* chronos_connection = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* scscf_acr_factory = NULL;
@@ -961,6 +959,8 @@ int main(int argc, char *argv[])
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
+  SproutletProxy* sproutlet_proxy = NULL;
+  std::list<Sproutlet*> sproutlets;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -1162,17 +1162,7 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-  if (opt.icscf_enabled)
-  {
-    // Create the SCSCFSelector.
     scscf_selector = new SCSCFSelector();
-
-    if (scscf_selector == NULL)
-    {
-      LOG_ERROR("Failed to load S-CSCF capabilities configuration for I-CSCF");
-      return 1;
-    }
-  }
 
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
@@ -1300,6 +1290,55 @@ int main(int argc, char *argv[])
                                                http_resolver);
   }
 
+  if (opt.pcscf_enabled)
+  {
+    // Launch stateful proxy as P-CSCF.
+    status = init_stateful_proxy(NULL,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 true,
+                                 opt.upstream_proxy,
+                                 opt.upstream_proxy_port,
+                                 opt.upstream_proxy_connections,
+                                 opt.upstream_proxy_recycle,
+                                 opt.ibcf,
+                                 opt.trusted_hosts,
+                                 analytics_logger,
+                                 NULL,
+                                 false,
+                                 false,
+                                 NULL,
+                                 NULL,
+                                 pcscf_acr_factory,
+                                 NULL,
+                                 NULL,
+                                 "",
+                                 quiescing_mgr,
+                                 NULL,
+                                 opt.icscf_enabled,
+                                 opt.scscf_enabled,
+                                 opt.emerg_reg_accepted);
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to enable P-CSCF edge proxy");
+      return 1;
+    }
+
+    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
+    if (websockets_enabled)
+    {
+      status = init_websockets((unsigned short)opt.webrtc_port);
+      if (status != PJ_SUCCESS)
+      {
+        LOG_ERROR("Error initializing websockets, %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+
+        return 1;
+      }
+    }
+  }
+
   if (opt.scscf_enabled)
   {
     if (opt.store_servers != "")
@@ -1402,126 +1441,99 @@ int main(int argc, char *argv[])
       return 1;
     }
 
-    // Create the S-CSCF Sproutlet.
-    scscf_sproutlet = new SCSCFSproutlet(scscf_
-
-
-    // Launch stateful proxy as S-CSCF.
-    status = init_stateful_proxy(local_reg_store,
-                                 remote_reg_store,
-                                 call_services,
-                                 ifc_handler,
-                                 false,
-                                 "",
-                                 0,
-                                 0,
-                                 0,
-                                 false,
-                                 "",
-                                 analytics_logger,
-                                 enum_service,
-                                 opt.enforce_user_phone,
-                                 opt.enforce_global_only_lookups,
-                                 bgcf_service,
-                                 hss_connection,
-                                 scscf_acr_factory,
-                                 bgcf_acr_factory,
-                                 icscf_acr_factory,
-                                 opt.external_icscf_uri,
-                                 quiescing_mgr,
-                                 scscf_selector,
-                                 opt.icscf_enabled,
-                                 opt.scscf_enabled,
-                                 false);
-
-    if (status != PJ_SUCCESS)
+    // Create the S-CSCF and BGCF Sproutlets.
+    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen);
+    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
+    std::string icscf_uri;
+    if (opt.icscf_enabled)
     {
-      LOG_ERROR("Failed to enable S-CSCF proxy");
-      return 1;
-    }
-  }
-
-  if (opt.pcscf_enabled)
-  {
-    // Launch stateful proxy as P-CSCF.
-    status = init_stateful_proxy(NULL,
-                                 NULL,
-                                 NULL,
-                                 NULL,
-                                 true,
-                                 opt.upstream_proxy,
-                                 opt.upstream_proxy_port,
-                                 opt.upstream_proxy_connections,
-                                 opt.upstream_proxy_recycle,
-                                 opt.ibcf,
-                                 opt.trusted_hosts,
-                                 analytics_logger,
-                                 NULL,
-                                 false,
-                                 false,
-                                 NULL,
-                                 NULL,
-                                 pcscf_acr_factory,
-                                 NULL,
-                                 NULL,
-                                 "",
-                                 quiescing_mgr,
-                                 NULL,
-                                 opt.icscf_enabled,
-                                 opt.scscf_enabled,
-                                 opt.emerg_reg_accepted);
-    if (status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Failed to enable P-CSCF edge proxy");
-      return 1;
-    }
-
-    pj_bool_t websockets_enabled = (opt.webrtc_port != 0);
-    if (websockets_enabled)
-    {
-      status = init_websockets((unsigned short)opt.webrtc_port);
-      if (status != PJ_SUCCESS)
+      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
+      // S-CSCF URI with the I-CSCF port number.
+      size_t pos = scscf_uri.find_first_of(std::to_string(opt.scscf_port));
+      if (pos != std::string::npos) 
       {
-        LOG_ERROR("Error initializing websockets, %s",
-                  PJUtils::pj_status_to_string(status).c_str());
-
-        return 1;
+        icscf_uri = scscf_uri.replace(pos,
+                                      std::to_string(opt.scscf_port).length(),
+                                      std::to_string(opt.icscf_port));
+      }
+      else
+      {
+        // No port number, so best we can do is strap icscf. on the front.
+        icscf_uri = "sip:icscf." + scscf_uri.substr(4);
       }
     }
+    else
+    {
+      icscf_uri = opt.external_icscf_uri;
+    }
+
+    SCSCFSproutlet* scscf_sproutlet =
+                      new SCSCFSproutlet(scscf_uri,
+                                         icscf_uri,
+                                         bgcf_uri,
+                                         opt.scscf_port,
+                                         local_reg_store,
+                                         remote_reg_store,
+                                         hss_connection,
+                                         enum_service,
+                                         scscf_acr_factory,
+                                         opt.enforce_user_phone,
+                                         opt.enforce_global_only_lookups);
+    if (scscf_sproutlet == NULL) 
+    {
+      LOG_ERROR("Failed to create S-CSCF Sproutlet");
+      return 1;
+    }
+    sproutlets.push_back(scscf_sproutlet);
+
+    BGCFSproutlet* bgcf_sproutlet = new BGCFSproutlet(0,
+                                                      bgcf_service,
+                                                      bgcf_acr_factory);
+    if (bgcf_sproutlet == NULL) 
+    {
+      LOG_ERROR("Failed to create BGCF Sproutlet");
+      return 1;
+    }
+
+    sproutlets.push_back(bgcf_sproutlet);
   }
 
   if (opt.icscf_enabled)
   {
-    // Launch I-CSCF proxy.
-    icscf_proxy = new ICSCFProxy(stack_data.endpt,
-                                 stack_data.icscf_port,
-                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                 hss_connection,
-                                 icscf_acr_factory,
-                                 scscf_selector);
-
-    if (icscf_proxy == NULL)
+    // Create the S-CSCF selector.
+    scscf_selector = new SCSCFSelector();
+    if (scscf_selector == NULL) 
     {
-      LOG_ERROR("Failed to enable I-CSCF proxy");
+      LOG_ERROR("Failed to create S-CSCF selector");
+      return 1;
+    }
+
+    // Create the I-CSCF sproutlet.
+    ICSCFSproutlet* icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
+                                                         hss_connection,
+                                                         icscf_acr_factory,
+                                                         scscf_selector);
+    if (icscf_sproutlet == NULL)
+    {
+      LOG_ERROR("Failed to create I-CSCF Sproutlet");
+      return 1;
+    }
+    sproutlets.push_back(icscf_sproutlet);
+  }
+
+  if (!sproutlets.empty())
+  {
+    // There are Sproutlets loaded, so start the Sproutlet proxy.
+    sproutlet_proxy = new SproutletProxy(stack_data.endpt,
+                                         PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
+                                         std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen),
+                                         sproutlets);
+    if (sproutlet_proxy == NULL) 
+    {
+      LOG_ERROR("Failed to create SproutletProxy");
       return 1;
     }
   }
-#endif
-
-  // Create an App Server.
-  AppServer* app = new SampleForkAS();
-  Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
-
-  // Create the list of sproutlets.
-  std::list<Sproutlet*> sproutlets;
-  sproutlets.push_back(app_sproutlet);
-
-  // Create the Sproutlet proxy.
-  std::string as_uri = opt.scscf_uri;
-  SproutletProxy* proxy = new SproutletProxy(stack_data.endpt,
-                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                             as_uri,
-                                             sproutlets);
 
   status = start_stack();
   if (status != PJ_SUCCESS)
@@ -1530,7 +1542,6 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-#if 0
   HttpStack* http_stack = NULL;
   if (opt.scscf_enabled)
   {
@@ -1564,11 +1575,9 @@ int main(int argc, char *argv[])
     }
   }
 
-#endif
   // Wait here until the quite semaphore is signaled.
   sem_wait(&term_sem);
 
-#if 0
   if (opt.scscf_enabled)
   {
     try
@@ -1581,7 +1590,6 @@ int main(int argc, char *argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
-#endif
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -1589,11 +1597,14 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
-  delete proxy;
-  delete app_sproutlet;
-  delete app;
+  // Destroy the Sproutlet Proxy and any Sproutlets.
+  delete sproutlet_proxy; 
+  while (!sproutlets.empty()) 
+  {
+    delete sproutlets.front();
+    sproutlets.pop_front();
+  }
 
-#if 0
   if (opt.scscf_enabled)
   {
     destroy_subscription();
@@ -1602,9 +1613,6 @@ int main(int argc, char *argv[])
     {
       destroy_authentication();
     }
-    destroy_stateful_proxy();
-    delete ifc_handler;
-    delete call_services;
     delete hss_connection;
     delete xdm_connection;
     delete enum_service;
@@ -1624,12 +1632,10 @@ int main(int argc, char *argv[])
   }
   if (opt.icscf_enabled)
   {
-    delete icscf_proxy;
     delete scscf_selector;
     delete icscf_acr_factory;
   }
 
-#endif
   destroy_options();
   destroy_stack();
 

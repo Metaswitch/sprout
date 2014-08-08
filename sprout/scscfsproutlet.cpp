@@ -57,17 +57,18 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                RegStore* remote_store,
                                HSSConnection* hss,
                                EnumService* enum_service,
-                               ACRFactory* acr_factory) :
+                               ACRFactory* acr_factory,
+                               bool user_phone,
+                               bool global_only_lookups) :
   Sproutlet("scscf", port),
   _store(store), 
   _remote_store(remote_store),
   _hss(hss),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
-  _global_only_lookups(false),
-  _user_phone(false)
+  _global_only_lookups(global_only_lookups),
+  _user_phone(user_phone)
 {
-
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
@@ -178,27 +179,33 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
   std::string user;
   std::string uri;
 
-  // Determine whether we have a SIP URI or a tel URI
-  if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
+  if (_enum_service != NULL) 
   {
-    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req->line.req.uri)->user);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri))
-  {
-    user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
-  }
+    // ENUM is enabled.
+    LOG_DEBUG("ENUM is enabled");
 
-  // Check whether we have a global number or whether we allow
-  // ENUM lookups for local numbers
-  if ((is_user_global(user)) || (!_global_only_lookups))
-  {
-    // Perform an ENUM lookup if we have a tel URI, or if we have
-    // a SIP URI which is being treated as a phone number
-    if ((PJUtils::is_uri_phone_number(req->line.req.uri)) ||
-        ((!_user_phone) && (is_user_numeric(user))))
+    // Determine whether we have a SIP URI or a tel URI
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
-      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      uri = _enum_service->lookup_uri_from_user(user, trail);
+      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req->line.req.uri)->user);
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri))
+    {
+      user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
+    }
+
+    // Check whether we have a global number or whether we allow
+    // ENUM lookups for local numbers
+    if ((is_user_global(user)) || (!_global_only_lookups))
+    {
+      // Perform an ENUM lookup if we have a tel URI, or if we have
+      // a SIP URI which is being treated as a phone number
+      if ((PJUtils::is_uri_phone_number(req->line.req.uri)) ||
+          ((!_user_phone) && (is_user_numeric(user))))
+      {
+        LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+        uri = _enum_service->lookup_uri_from_user(user, trail);
+      }
     }
   }
 
