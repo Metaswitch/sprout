@@ -346,7 +346,6 @@ public:
 
     // Create the S-CSCF Sproutlet.
     _scscf_sproutlet = new SCSCFSproutlet("sip:homedomain:5058",
-//                                        "sip:icscf.homedomain:5058",
                                           "",
                                           "sip:bgcf.homedomain:5058",
                                           5058,
@@ -356,20 +355,14 @@ public:
                                           _enum_service,
                                           _acr_factory);
 
-    // Create the I-CSCF Sproutlet.
-//    _icscf_sproutlet = new ICSCFSproutlet(_hss_connection,
-//                                          _acr_factory,
-//                                          _scscf_selector);
-    _icscf_sproutlet = NULL;
-
     // Create the BGCF Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(_bgcf_service,
+    _bgcf_sproutlet = new BGCFSproutlet(0,
+                                        _bgcf_service,
                                         _acr_factory);
 
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_scscf_sproutlet);
-//    sproutlets.push_back(_icscf_sproutlet);
     sproutlets.push_back(_bgcf_sproutlet);
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
@@ -387,7 +380,6 @@ public:
     pjsip_tsx_layer_destroy();
     delete _proxy; _proxy = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
-    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     delete _acr_factory; _acr_factory = NULL;
@@ -457,7 +449,6 @@ protected:
   static ACRFactory* _acr_factory;
   static SCSCFSelector* _scscf_selector;
   static SCSCFSproutlet* _scscf_sproutlet;
-  static ICSCFSproutlet* _icscf_sproutlet;
   static BGCFSproutlet* _bgcf_sproutlet;
   static SproutletProxy* _proxy;
 
@@ -495,7 +486,6 @@ EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
 SCSCFSelector* SCSCFTest::_scscf_selector;
 SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
-ICSCFSproutlet* SCSCFTest::_icscf_sproutlet;
 BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
 SproutletProxy* SCSCFTest::_proxy;
 

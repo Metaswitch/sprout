@@ -73,17 +73,17 @@ public:
     _acr_factory = new ACRFactory();
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
 
-    _icscf_sproutlet = new ICSCFSproutlet(_hss_connection,
+    _icscf_sproutlet = new ICSCFSproutlet(stack_data.icscf_port,
+                                          _hss_connection,
                                           _acr_factory,
                                           _scscf_selector);
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
-    _icscf_proxy =
-      new SproutletProxy(stack_data.endpt,
-                         PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                         PJUtils::pj_str_to_string(&stack_data.scscf_uri),
-                         sproutlets);
+    _icscf_proxy = new SproutletProxy(stack_data.endpt,
+                                      PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                      "sip:homedomain:" + std::to_string(stack_data.icscf_port),
+                                      sproutlets);
 
     // Schedule timers.
     SipTest::poll();
@@ -1927,8 +1927,9 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
   inject_msg(msg2.get_request(), tp);
 
-  // Expect both a 200 OK response to the CANCEL and a forwarded CANCEL.
-  ASSERT_EQ(2, txdata_count());
+  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as 
+  // no provisional response has yet been received.
+  ASSERT_EQ(1, txdata_count());
 
   // Check the 200 OK.
   tdata = current_txdata();
@@ -1936,8 +1937,13 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
   RespMatcher(200).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 100 Trying response to the INVITE, triggering the onward CANCEL.
+  inject_msg(respond_to_txdata(invite_tdata, 100));
 
   // Check the CANCEL is forwarded.
+  ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.1", 5058, tdata);
   ReqMatcher r2("CANCEL");
