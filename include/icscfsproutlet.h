@@ -67,7 +67,8 @@ class ICSCFSproutletRegTsx;
 class ICSCFSproutlet : public Sproutlet
 {
 public:
-  ICSCFSproutlet(HSSConnection* hss,
+  ICSCFSproutlet(int port,
+                 HSSConnection* hss,
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector);
 

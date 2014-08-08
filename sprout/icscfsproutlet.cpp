@@ -57,10 +57,11 @@ extern "C" {
 
 
 /// Constructor.
-ICSCFSproutlet::ICSCFSproutlet(HSSConnection* hss,
+ICSCFSproutlet::ICSCFSproutlet(int port,
+                               HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector) :
-  Sproutlet("icscf", 0),
+  Sproutlet("icscf", port),
   _hss(hss),
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory)
@@ -72,6 +73,7 @@ ICSCFSproutlet::ICSCFSproutlet(HSSConnection* hss,
 ICSCFSproutlet::~ICSCFSproutlet()
 {
 }
+
 
 /// Creates a ICSCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
@@ -375,9 +377,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   PJUtils::remove_hdr(req, &STR_P_PROFILE_KEY);
 
   // Determine orig/term and the served user's name.
-  pjsip_route_hdr* route = (pjsip_route_hdr*)pjsip_msg_find_hdr(req,
-                                                                PJSIP_H_ROUTE,
-                                                                NULL);
+  const pjsip_route_hdr* route = route_hdr();
   std::string impu;
 
   if ((route != NULL) &&
@@ -396,10 +396,6 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     _originating = false;
     impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
   }
-
-  // Remove Route: header to us from the request.
-  pj_str_t route_hdr_name = pj_str((char *)"Route");
-  PJUtils::remove_hdr(req, &route_hdr_name);
 
   // Since we may retry the request on a negative response, clone the original
   // request now.

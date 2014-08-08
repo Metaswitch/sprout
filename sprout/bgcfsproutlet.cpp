@@ -46,9 +46,10 @@
 #include <fstream>
 
 /// BGCFSproutlet constructor.                           
-BGCFSproutlet::BGCFSproutlet(BgcfService* bgcf_service,
+BGCFSproutlet::BGCFSproutlet(int port,
+                             BgcfService* bgcf_service,
                              ACRFactory* acr_factory) :
-  Sproutlet("bgcf", 0),
+  Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
   _acr_factory(acr_factory)
 {

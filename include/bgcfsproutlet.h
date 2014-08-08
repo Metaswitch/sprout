@@ -67,7 +67,8 @@ class BGCFSproutletTsx;
 class BGCFSproutlet : public Sproutlet
 {
 public:
-  BGCFSproutlet(BgcfService* bgcf_service,
+  BGCFSproutlet(int port,
+                BgcfService* bgcf_service,
                 ACRFactory* acr_factory);
   ~BGCFSproutlet();
 
