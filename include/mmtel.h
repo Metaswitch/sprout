@@ -80,6 +80,7 @@ public:
 
   void on_initial_request(pjsip_msg* req);
   void on_response(pjsip_msg* rsp, int fork_id);
+  void on_timer_expiry(void* context);
 
 private:
   bool _originating;
@@ -90,7 +91,7 @@ private:
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
   pjsip_msg* _late_redirect_msg;
-  pj_timer_entry _no_reply_timer;
+  TimerID _no_reply_timer;
 
   XDMConnection* _xdmc;
 
@@ -114,7 +115,6 @@ private:
   static unsigned int get_media_type_conditions(pjsip_msg *msg);
 
   void no_reply_timer_pop();
-  static void no_reply_timer_pop(pj_timer_heap_t *timer_heap, pj_timer_entry *entry);
 };
 
 #endif

@@ -106,21 +106,15 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
     {
       _media_conditions = 0;
     }
-
-    // Set up the no-reply timer.
-    memset(&_no_reply_timer, 0, sizeof(pj_timer_entry));
-    _no_reply_timer.user_data = this;
-    _no_reply_timer.cb = no_reply_timer_pop;
   }
 }
 
 /// Destructor for the MmtelTsx.
 MmtelTsx::~MmtelTsx()
 {
-  if (_no_reply_timer.id != 0)
+  if (_no_reply_timer != 0)
   {
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_no_reply_timer);
-    _no_reply_timer.id = 0;
+    cancel_timer(_no_reply_timer);
   }
 
   if (_late_redirect_msg != NULL)
@@ -205,7 +199,7 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
 
       // Consider starting the no-reply timer.  First, check call diversion is
       // enabled.
-      if ((_no_reply_timer.id == 0) &&
+      if ((_no_reply_timer == 0) &&
           (_user_services != NULL) &&
           (_user_services->cdiv_enabled()))
       {
@@ -221,11 +215,7 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
               ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
           {
             // We found a suitable rule.  Start the no-reply timer.
-            _no_reply_timer.id = 1;
-            pj_time_val delay;
-            delay.sec = _user_services->cdiv_no_reply_timer();
-            delay.msec = 0;
-            pj_status_t status = pjsip_endpt_schedule_timer(stack_data.endpt, &_no_reply_timer, &delay);
+            bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
             if (status != PJ_SUCCESS)
             {
               // Log this failure, but don't fail the call - there's no point.
@@ -243,6 +233,7 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
       break;
 
     case PJSIP_SC_MOVED_TEMPORARILY:
+    {
       // Handle 302 redirect by parsing the contact header and diverting to that
       // address.
       pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
@@ -260,14 +251,18 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
       }
       break;
     }
+
+    default:
+      // Do nothing.
+      break;
+    }
   }
   else
   {
     // We've got a final response, so there's no point in running the no-reply timer any longer.
-    if (_no_reply_timer.id != 0)
+    if (_no_reply_timer != 0)
     {
-      pjsip_endpt_cancel_timer(stack_data.endpt, &_no_reply_timer);
-      _no_reply_timer.id = 0;
+      cancel_timer(_no_reply_timer);
     }
 
     rc = apply_call_diversion(msg, condition_from_status(code) | _media_conditions, code);
@@ -859,28 +854,15 @@ unsigned int MmtelTsx::condition_from_status(int code)
   return condition;
 }
 
-void MmtelTsx::no_reply_timer_pop()
+void MmtelTsx::on_timer_expiry(void* context)
 {
-  // TODO
-  // cancel_fork API doesn't currently exist.
-  // Currently requests/responses won't get sent at the end of
-  // this function because the underlying sproutlet layer's handlers
-  // don't get invoked - instead we fall back through to the pjsip
-  // timers code.
+  // Cancel the original attempt and perform call forwarding to
+  // try a redirect.
   cancel_fork(_late_redirect_fork_id);
-  _no_reply_timer.id = 0;
   pjsip_status_code rc = apply_call_diversion(_late_redirect_msg,
                                               _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
                                               PJSIP_SC_TEMPORARILY_UNAVAILABLE);
   finish_processing(_late_redirect_msg, rc);
-}
-
-// Handles the no-reply timer popping.
-//
-// This is just a wrapper for the member function.
-void MmtelTsx::no_reply_timer_pop(pj_timer_heap_t *timer_heap, pj_timer_entry *entry)
-{
-  ((MmtelTsx *)entry->user_data)->no_reply_timer_pop();
 }
 
 pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* msg)
