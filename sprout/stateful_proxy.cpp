@@ -115,7 +115,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stateful_proxy.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "constants.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
@@ -412,8 +412,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Request looks sane, so clone the request to create transmit data.
-  status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
+  if (tdata == NULL)
   {
     LOG_ERROR("Failed to clone request to forward");
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
@@ -2903,7 +2903,8 @@ AsChainLink::Disposition UASTransaction::apply_services(Target*& target)
 
   while (true)
   {
-    disposition = _as_chain_links.back().on_initial_request(_req, server_name);
+    _as_chain_links.back().on_initial_request(_req->msg, server_name);
+    disposition = server_name.empty() ? AsChainLink::Disposition::Complete : AsChainLink::Disposition::Skip;
 
     if ((call_services_handler) &&
         (disposition == AsChainLink::Disposition::Skip) &&
@@ -3662,6 +3663,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", ii);
       uac_tdata = PJUtils::clone_tdata(_req);
+      PJUtils::add_top_via(uac_tdata);
 
       if (uac_tdata == NULL)
       {

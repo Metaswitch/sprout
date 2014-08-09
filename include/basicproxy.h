@@ -76,6 +76,9 @@ public:
   virtual pj_status_t on_tx_response(pjsip_tx_data* tdata);
   virtual void on_tsx_state(pjsip_transaction* tsx, pjsip_event* event);
 
+  void bind_transaction(void* uas_uac_tsx, pjsip_transaction* tsx);
+  void unbind_transaction(pjsip_transaction* tsx);
+
 protected:
 
   /// Class holding the details of a calculated target for a transaction.
@@ -113,23 +116,20 @@ protected:
     virtual pj_status_t init(pjsip_rx_data* rdata);
 
     /// Handle the incoming half of a transaction request.
-    virtual void process_tsx_request();
+    virtual void process_tsx_request(pjsip_rx_data* rdata);
 
     /// Handle a received CANCEL request.
     virtual void process_cancel_request(pjsip_rx_data* rdata);
 
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
-                                        pjsip_rx_data *rdata);
-
-    /// Notification that a client transaction is not responding.
-    virtual void on_client_not_responding(UACTsx* uac_tsx);
+                                        pjsip_tx_data *tdata);
 
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);
 
     /// Notification that a request is being transmitted to a client.
-    virtual void on_tx_client_request(pjsip_tx_data* tdata);
+    virtual void on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_tsx);
 
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UASTsx still
@@ -154,10 +154,6 @@ protected:
     void cancel_trying_timer();
     pj_status_t send_trying(pjsip_rx_data* rdata);
 
-    pj_timer_entry       _trying_timer;
-    static const int     TRYING_TIMER = 1;
-    pthread_mutex_t      _trying_timer_lock;
-
   protected:
     /// Process route information in the request.
     virtual int process_routing();
@@ -171,7 +167,16 @@ protected:
     /// Initializes UAC transactions to each of the specified targets and
     /// forwards the request.
     /// @returns a status code indicating whether or not the operation succeeded.
-    virtual pj_status_t forward_request();
+    virtual pj_status_t forward_to_targets();
+
+    /// Adds the target information to a request ready to send.
+    virtual void set_req_target(pjsip_tx_data* tdata, BasicProxy::Target* target);
+
+    /// Allocates and initializes a UAC transaction.
+    virtual pj_status_t allocate_uac(pjsip_tx_data* tdata, size_t& index);
+
+    /// Forwards a request, allocating and initializing the transaction.
+    virtual pj_status_t forward_request(pjsip_tx_data* tdata, size_t& index);
 
     /// Calculate targets for requests where Route headers do not determine
     /// the target.
@@ -230,19 +235,25 @@ protected:
     /// Associated UACTsx objects for each forked request.
     std::vector<UACTsx*> _uac_tsx;
 
-    /// Count of targets the request was forked to that have yet to respond.
-    size_t _pending_targets;
+    /// Count of targets the request is about to be forked to.
+    size_t _pending_sends;
 
-    /// A pointer to the best response received so far.  This is initialised
-    /// to a 408 Request Timeout response.
-    pjsip_tx_data* _best_rsp;
+    /// Count of targets the request was forked to that have yet to respond.
+    size_t _pending_responses;
+
+    /// A pointer to the best final response received so far.  This is
+    /// initialised to a 408 Request Timeout response.
+    pjsip_tx_data* _final_rsp;
 
     bool _pending_destroy;
     int _context_count;
 
+    pj_timer_entry       _trying_timer;
+    static const int     TRYING_TIMER = 1;
+    pthread_mutex_t      _trying_timer_lock;
+
     friend class UACTsx;
   };
-
 
   /// Class implementing the UAC side of a proxied transaction.  There may be
   /// multiple instances of this class for a single proxied transaction if it
@@ -257,11 +268,11 @@ protected:
     /// Returns the name of the underlying PJSIP transaction.
     inline const char* name() { return (_tsx != NULL) ? _tsx->obj_name : "unknown"; }
 
+    /// Returns the index of this UACTsx.
+    inline int index() { return _index; }
+
     /// Initializes a UAC transaction.
     virtual pj_status_t init(pjsip_tx_data* tdata);
-
-    /// Set the target for this UAC transaction.
-    virtual void set_target(BasicProxy::Target* target);
 
     /// Sends the initial request on this UAC transaction.
     virtual void send_request();
@@ -269,6 +280,9 @@ protected:
     /// Cancels the pending transaction, using the specified status code in the
     /// Reason header.
     virtual void cancel_pending_tsx(int st_code);
+
+    /// Builds and sends a timeout response upstream.
+    virtual void send_timeout_response();
 
     /// Attempts a retry of the request.
     virtual bool retry_request();
@@ -313,11 +327,13 @@ protected:
     pjsip_tx_data* _tdata;
 
     /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return (_tsx != NULL) ? get_trail(_tsx) : 0; }
+    SAS::TrailId trail() const { return _trail; }
 
     /// The resolved server addresses for this transaction.
     std::vector<AddrInfo> _servers;
     int _current_server;
+
+    SAS::TrailId _trail;
 
     bool _pending_destroy;
     int _context_count;
@@ -325,8 +341,6 @@ protected:
     friend class UASTsx;
   };
 
-  void bind_transaction(void* uas_uac_tsx, pjsip_transaction* tsx);
-  void unbind_transaction(pjsip_transaction* tsx);
   void* get_from_transaction(pjsip_transaction* tsx);
 
   virtual void on_tsx_request(pjsip_rx_data* rdata);
@@ -356,6 +370,9 @@ protected:
   /// Indicates that 100 Trying response to INVITE requests should be delayed
   /// until at least one downstream node has sent a 100 Trying response.
   bool _delay_trying;
+
+  /// The pjsip endpoint this proxy is associated with.
+  pjsip_endpoint* _endpt;
 
   friend class UASTsx;
   friend class UACTsx;

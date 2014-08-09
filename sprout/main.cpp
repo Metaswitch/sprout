@@ -68,7 +68,7 @@ extern "C" {
 #include "xdmconnection.h"
 #include "stateful_proxy.h"
 #include "websockets.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
 #include "authentication.h"
@@ -87,6 +87,10 @@ extern "C" {
 #include "chronosconnection.h"
 #include "handlers.h"
 #include "httpstack.h"
+#include "sproutlet.h"
+#include "sproutletappserver.h"
+#include "sproutletproxy.h"
+#include "sampleforkapp.h"
 
 enum OptionTypes
 {
@@ -1340,13 +1344,7 @@ int main(int argc, char *argv[])
     if (xdm_connection != NULL)
     {
       LOG_STATUS("Creating call services handler");
-      call_services = new CallServices(xdm_connection);
-    }
-
-    if (hss_connection != NULL)
-    {
-      LOG_STATUS("Initializing iFC handler");
-      ifc_handler = new IfcHandler();
+      // Create MMTEL Sproutlet.
     }
 
     if (opt.auth_enabled)
@@ -1382,7 +1380,6 @@ int main(int argc, char *argv[])
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
-                            ifc_handler,
                             opt.reg_max_expires);
 
     if (status != PJ_SUCCESS)
@@ -1404,6 +1401,10 @@ int main(int argc, char *argv[])
       LOG_ERROR("Failed to enable subscription module");
       return 1;
     }
+
+    // Create the S-CSCF Sproutlet.
+    scscf_sproutlet = new SCSCFSproutlet(scscf_
+
 
     // Launch stateful proxy as S-CSCF.
     status = init_stateful_proxy(local_reg_store,
@@ -1506,6 +1507,21 @@ int main(int argc, char *argv[])
     }
   }
 
+  // Create an App Server.
+  AppServer* app = new SampleForkAS();
+  Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
+
+  // Create the list of sproutlets.
+  std::list<Sproutlet*> sproutlets;
+  sproutlets.push_back(app_sproutlet);
+
+  // Create the Sproutlet proxy.
+  std::string as_uri = opt.scscf_uri;
+  SproutletProxy* proxy = new SproutletProxy(stack_data.endpt,
+                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                             as_uri,
+                                             sproutlets);
+
   status = start_stack();
   if (status != PJ_SUCCESS)
   {
@@ -1513,6 +1529,7 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+#if 0
   HttpStack* http_stack = NULL;
   if (opt.scscf_enabled)
   {
@@ -1546,9 +1563,11 @@ int main(int argc, char *argv[])
     }
   }
 
+#endif
   // Wait here until the quite semaphore is signaled.
   sem_wait(&term_sem);
 
+#if 0
   if (opt.scscf_enabled)
   {
     try
@@ -1561,6 +1580,7 @@ int main(int argc, char *argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
+#endif
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -1568,6 +1588,11 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
+  delete proxy;
+  delete app_sproutlet;
+  delete app;
+
+#if 0
   if (opt.scscf_enabled)
   {
     destroy_subscription();
@@ -1602,6 +1627,8 @@ int main(int argc, char *argv[])
     delete scscf_selector;
     delete icscf_acr_factory;
   }
+
+#endif
   destroy_options();
   destroy_stack();
 

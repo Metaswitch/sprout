@@ -321,8 +321,8 @@ public:
                                      Ifcs& ifcs,
                                      ACR* acr);
 
-  Disposition on_initial_request(pjsip_tx_data* tdata,
-                                 std::string& server_name);
+  void on_initial_request(pjsip_msg* msg,
+                          std::string& server_name);
 
 private:
   friend class AsChainTable;

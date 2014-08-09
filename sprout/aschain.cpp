@@ -194,41 +194,39 @@ AsChainLink AsChainLink::create_as_chain(AsChainTable* as_chain_table,
 // step-by-step details.
 //
 // @Returns whether processing should stop, continue, or skip to the end.
-AsChainLink::Disposition AsChainLink::on_initial_request(pjsip_tx_data* tdata,
-                                                         std::string& server_name)
+void AsChainLink::on_initial_request(pjsip_msg* msg,
+                                     std::string& server_name)
 {
-  // Store the RequestURI in the AsInformation structure for this link.
-  _as_chain->_as_info[_index].request_uri =
-        PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, tdata->msg->line.req.uri);
+  server_name = "";
 
-  if (complete())
+  while (!complete()) 
   {
-    LOG_DEBUG("No ASs left in chain");
-    return AsChainLink::Disposition::Complete;
+    const Ifc& ifc = (_as_chain->_ifcs)[_index];
+    if (ifc.filter_matches(_as_chain->session_case(),
+                            _as_chain->_is_registered,
+                            false,
+                            msg,
+                            trail()))
+    {
+      LOG_DEBUG("Matched iFC %s", to_string().c_str());
+      AsInvocation application_server = ifc.as_invocation();
+      server_name = application_server.server_name;
+
+      // Store the RequestURI and application server name in the AsInformation
+      // structure for this link.
+      _as_chain->_as_info[_index].request_uri =
+            PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
+      _as_chain->_as_info[_index].as_uri = server_name;
+
+      // Store the default handling as we may need it later.
+      _default_handling = application_server.default_handling;
+
+      break;
+    }
+    ++_index;
   }
 
-  const Ifc& ifc = (_as_chain->_ifcs)[_index];
-  if (!ifc.filter_matches(_as_chain->session_case(),
-                          _as_chain->_is_registered,
-                          false,
-                          tdata->msg,
-                          trail()))
-  {
-    LOG_DEBUG("No match for %s", to_string().c_str());
-    return AsChainLink::Disposition::Next;
-  }
-
-  AsInvocation application_server = ifc.as_invocation();
-  server_name = application_server.server_name;
-
-  // Store the application server name in the AsInformation structure for this
-  // link.
-  _as_chain->_as_info[_index].as_uri = server_name;
-
-  // Store the default handling as we may need it later.
-  _default_handling = application_server.default_handling;
-
-  return AsChainLink::Disposition::Skip;
+  return;
 }
 
 
