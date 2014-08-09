@@ -104,13 +104,14 @@ private:
   private:
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
-                                        pjsip_rx_data *rdata);
+                                        pjsip_tx_data *tdata);
 
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);
 
     /// Notification that a request is being transmitted to a client.
-    virtual void on_tx_client_request(pjsip_tx_data* tdata);
+    virtual void on_tx_client_request(pjsip_tx_data* tdata,
+                                      UACTsx* uac_tsx);
 
     /// Attempts to retry the request to an alternative S-CSCF.
     bool retry_to_alternate_scscf(int rsp_status);
@@ -124,6 +125,9 @@ private:
 
     /// I-CSCF router object for the request.
     ICSCFRouter* _router;
+
+    /// Indicates whether the HSS query returned a successful result.
+    bool _hss_query_success;
 
     /// The ACR for the request (if ACR generation is enabled).
     ACR* _acr;

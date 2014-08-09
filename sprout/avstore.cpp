@@ -57,13 +57,14 @@ AvStore::~AvStore()
 bool AvStore::set_av(const std::string& impi,
                      const std::string& nonce,
                      const Json::Value* av,
+                     uint64_t cas,
                      SAS::TrailId trail)
 {
   std::string key = impi + '\\' + nonce;
   Json::FastWriter writer;
   std::string data = writer.write(*av);
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
-  Store::Status status = _data_store->set_data("av", key, data, 0, AV_EXPIRY, trail);
+  Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
   std::string operation = "SET";
   if (status != Store::Status::OK)
   {
@@ -88,46 +89,14 @@ bool AvStore::set_av(const std::string& impi,
   return true;
 }
 
-bool AvStore::delete_av(const std::string& impi,
-                        const std::string& nonce,
-                        SAS::TrailId trail)
-{
-  std::string key = impi + '\\' + nonce;
-  LOG_DEBUG("Delete AV for %s", key.c_str());
-  Store::Status status = _data_store->delete_data("av", key, trail);
-  std::string operation = "DELETE";
-  if (status != Store::Status::OK)
-  {
-    // LCOV_EXCL_START
-    std::string error_msg = "Failed to delete Authentication Vector for private_id " + impi;
-    LOG_ERROR(error_msg.c_str());
-
-    SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param(operation);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
-
-    return false;
-    // LCOV_EXCL_STOP
-  }
-
-  SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-  event.add_var_param(operation);
-  event.add_var_param(impi);
-  SAS::report_event(event);
-
-  return true;
-}
-
-
 Json::Value* AvStore::get_av(const std::string& impi,
                              const std::string& nonce,
+                             uint64_t& cas,
                              SAS::TrailId trail)
 {
   Json::Value* av = NULL;
   std::string key = impi + '\\' + nonce;
   std::string data;
-  uint64_t cas;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
   std::string operation = "GET";
 
@@ -162,3 +131,26 @@ Json::Value* AvStore::get_av(const std::string& impi,
   return av;
 }
 
+void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail)
+{
+  Json::Value null_json;
+  Json::Value branch = av->get("branch", null_json);
+  if (branch.isNull())
+  {
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector is missing 'branch' field");
+  }
+  else if (!branch.isString())
+  {
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has a non-string 'branch' field");
+  }
+  else if (branch.asString().empty())
+  {
+    LOG_WARNING("Could not raise branch correlation marker because the stored authentication vector has an empty 'branch' field");
+  }
+  else
+  {
+    SAS::Marker via_marker(trail, MARKER_ID_VIA_BRANCH_PARAM, 1u);
+    via_marker.add_var_param(branch.asString());
+    SAS::report_marker(via_marker, SAS::Marker::Scope::Trace);
+  }
+}

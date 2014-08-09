@@ -56,7 +56,6 @@ extern "C" {
 #include "stack.h"
 #include "memcachedstore.h"
 #include "hssconnection.h"
-#include "ifchandler.h"
 #include "registrar.h"
 #include "registration_utils.h"
 #include "constants.h"
@@ -72,8 +71,6 @@ static HSSConnection* hss;
 
 // Factory for create ACR messages for Rf billing flows.
 static ACRFactory* acr_factory;
-
-static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
 
@@ -448,14 +445,15 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
 
         pj_status_t status = NotifyUtils::create_notify(&tdata_notify, subscription, aor,
                                                         aor_data->_notify_cseq, bindings_for_notify,
-                                                        NotifyUtils::DocState::PARTIAL, 
+                                                        NotifyUtils::DocState::PARTIAL,
                                                         NotifyUtils::RegistrationState::ACTIVE,
                                                         NotifyUtils::ContactState::ACTIVE, contact_event,
-                                                        NotifyUtils::SubscriptionState::ACTIVE, 
+                                                        NotifyUtils::SubscriptionState::ACTIVE,
                                                         (subscription->_expires - now));
         if (status == PJ_SUCCESS)
         {
-          status = PJUtils::send_request(tdata_notify);
+          set_trail(tdata_notify, trail);
+          status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
         }
       }
     }
@@ -531,7 +529,7 @@ void process_register_request(pjsip_rx_data* rdata)
   calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
   SAS::report_marker(calling_dn);
 
-  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;
@@ -985,7 +983,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
-                           IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
   pj_status_t status;
@@ -994,7 +991,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   remote_store = remote_reg_store;
   hss = hss_connection;
   analytics = analytics_logger;
-  ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
 

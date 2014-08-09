@@ -86,10 +86,11 @@ TEST_F(AvStoreTest, SimpleWriteRead)
   Json::Value* av_json_write = new Json::Value;
   reader.parse(av, *av_json_write);
 
-  av_store->set_av(impi, nonce, av_json_write, 0);
+  av_store->set_av(impi, nonce, av_json_write, 0, 0);
 
   // Retrieve the AV from the store.
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, 0);
+  uint64_t cas;
+  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
 
   EXPECT_THAT(av_json_read, ::testing::NotNull());
   ASSERT_EQ(0, av_json_read->compare(*av_json_write));
@@ -116,11 +117,12 @@ TEST_F(AvStoreTest, ReadExpired)
   Json::Value* av_json_write = new Json::Value;
   reader.parse(av, *av_json_write);
 
-  av_store->set_av(impi, nonce, av_json_write, 0);
+  av_store->set_av(impi, nonce, av_json_write, 0, 0);
 
   // Advance the time by 39 seconds and read the record.
   cwtest_advance_time_ms(39000);
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, 0);
+  uint64_t cas;
+  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
 
   EXPECT_THAT(av_json_read, ::testing::NotNull());
   ASSERT_EQ(0, av_json_read->compare(*av_json_write));
@@ -128,7 +130,7 @@ TEST_F(AvStoreTest, ReadExpired)
 
   // Advance the time another 2 seconds to expire the record.
   cwtest_advance_time_ms(2000);
-  av_json_read = av_store->get_av(impi, nonce, 0);
+  av_json_read = av_store->get_av(impi, nonce, cas, 0);
   ASSERT_EQ(NULL, av_json_read);
 
   delete av_json_write;
@@ -150,8 +152,10 @@ TEST_F(AvStoreTest, ReadCorrupt)
 
   local_data_store->set_data("av", impi + "\\" + nonce, av, 0, 30);
 
-  // Attempt to retrieve the corrupt AV from the store and get a failure.
-  Json::Value* av_json_read = av_store->get_av(impi, nonce, 0);
+  // Attempt to retrieve the corrupt AV from the store and get a
+  // failure.
+  uint64_t cas;
+  Json::Value* av_json_read = av_store->get_av(impi, nonce, cas, 0);
   ASSERT_EQ(NULL, av_json_read);
 
   delete av_store;

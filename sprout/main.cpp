@@ -87,12 +87,17 @@ extern "C" {
 #include "chronosconnection.h"
 #include "handlers.h"
 #include "httpstack.h"
+#include "sproutlet.h"
+#include "sproutletappserver.h"
+#include "sproutletproxy.h"
+#include "sampleforkapp.h"
 
 enum OptionTypes
 {
   OPT_DEFAULT_SESSION_EXPIRES=256+1,
   OPT_ADDITIONAL_HOME_DOMAINS,
-  OPT_EMERGENCY_REG_ACCEPTED
+  OPT_EMERGENCY_REG_ACCEPTED,
+  OPT_SUB_MAX_EXPIRES
 };
 
 struct options
@@ -139,6 +144,7 @@ struct options
   pj_bool_t              analytics_enabled;
   std::string            analytics_directory;
   int                    reg_max_expires;
+  int                    sub_max_expires;
   int                    pjsip_threads;
   std::string            http_address;
   int                    http_port;
@@ -184,6 +190,7 @@ struct options
     { "enforce-user-phone", no_argument,      0, 'u'},
     { "enforce-global-only-lookups", no_argument, 0, 'g'},
     { "reg-max-expires",   required_argument, 0, 'e'},
+    { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
     { "pjsip-threads",     required_argument, 0, 'P'},
     { "worker-threads",    required_argument, 0, 'W'},
     { "analytics",         required_argument, 0, 'a'},
@@ -288,6 +295,8 @@ static void usage(void)
        "                            contains a global number (defaults to false)\n"
        " -e, --reg-max-expires <expiry>\n"
        "                            The maximum allowed registration period (in seconds)\n"
+       "     --sub-max-expires <expiry>\n"
+       "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
        " -T  --http_address <server>\n"
@@ -374,6 +383,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
   int c;
   int opt_ind;
   int reg_max_expires;
+  int sub_max_expires;
 
   pj_optind = 0;
   while ((c = pj_getopt_long(argc, argv, pj_options_description.c_str(), long_opt, &opt_ind)) != -1)
@@ -645,6 +655,25 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         LOG_WARNING("Invalid value for reg_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->reg_max_expires);
+      }
+      break;
+
+    case OPT_SUB_MAX_EXPIRES:
+      sub_max_expires = atoi(pj_optarg);
+
+      if (sub_max_expires > 0)
+      {
+        options->sub_max_expires = sub_max_expires;
+        LOG_INFO("Maximum registration period set to %d seconds\n",
+                 options->sub_max_expires);
+      }
+      else
+      {
+        // The parameter could be invalid either because it's -ve, or it's not
+        // an integer (in which case atoi returns 0). Log, but don't store it.
+        LOG_WARNING("Invalid value for sub_max_expires: '%s'. "
+                    "The default value of %d will be used.",
+                    pj_optarg, options->sub_max_expires);
       }
       break;
 
@@ -971,6 +1000,7 @@ int main(int argc, char *argv[])
   opt.enforce_user_phone = false;
   opt.enforce_global_only_lookups = false;
   opt.reg_max_expires = 300;
+  opt.sub_max_expires = 300;
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
   opt.sas_server = "0.0.0.0";
@@ -1243,11 +1273,10 @@ int main(int argc, char *argv[])
   else
   {
     // Ralf is not enabled, so create a null ACRFactory for all components.
-    ACRFactory* null_acr_factory = new ACRFactory();
-    scscf_acr_factory = null_acr_factory;
-    bgcf_acr_factory = null_acr_factory;
-    icscf_acr_factory = null_acr_factory;
-    pcscf_acr_factory = null_acr_factory;
+    scscf_acr_factory = new ACRFactory();
+    bgcf_acr_factory = new ACRFactory();
+    icscf_acr_factory = new ACRFactory();
+    pcscf_acr_factory = new ACRFactory();
   }
 
   if (opt.chronos_service != "")
@@ -1315,13 +1344,7 @@ int main(int argc, char *argv[])
     if (xdm_connection != NULL)
     {
       LOG_STATUS("Creating call services handler");
-      call_services = new CallServices(xdm_connection);
-    }
-
-    if (hss_connection != NULL)
-    {
-      LOG_STATUS("Initializing iFC handler");
-      ifc_handler = new IfcHandler();
+      // Create MMTEL Sproutlet.
     }
 
     if (opt.auth_enabled)
@@ -1357,7 +1380,6 @@ int main(int argc, char *argv[])
                             hss_connection,
                             analytics_logger,
                             scscf_acr_factory,
-                            ifc_handler,
                             opt.reg_max_expires);
 
     if (status != PJ_SUCCESS)
@@ -1371,13 +1393,18 @@ int main(int argc, char *argv[])
                                remote_reg_store,
                                hss_connection,
                                scscf_acr_factory,
-                               analytics_logger);
+                               analytics_logger,
+                               opt.sub_max_expires);
 
     if (status != PJ_SUCCESS)
     {
       LOG_ERROR("Failed to enable subscription module");
       return 1;
     }
+
+    // Create the S-CSCF Sproutlet.
+    scscf_sproutlet = new SCSCFSproutlet(scscf_
+
 
     // Launch stateful proxy as S-CSCF.
     status = init_stateful_proxy(local_reg_store,
@@ -1480,6 +1507,21 @@ int main(int argc, char *argv[])
     }
   }
 
+  // Create an App Server.
+  AppServer* app = new SampleForkAS();
+  Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
+
+  // Create the list of sproutlets.
+  std::list<Sproutlet*> sproutlets;
+  sproutlets.push_back(app_sproutlet);
+
+  // Create the Sproutlet proxy.
+  std::string as_uri = opt.scscf_uri;
+  SproutletProxy* proxy = new SproutletProxy(stack_data.endpt,
+                                             PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                             as_uri,
+                                             sproutlets);
+
   status = start_stack();
   if (status != PJ_SUCCESS)
   {
@@ -1487,31 +1529,32 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+#if 0
   HttpStack* http_stack = NULL;
   if (opt.scscf_enabled)
   {
     http_stack = HttpStack::get_instance();
 
-    RegistrationTimeoutHandler::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
-    AuthTimeoutHandler::Config auth_timeout_config(av_store, hss_connection);
-    DeregistrationHandler::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
+    RegistrationTimeoutTask::Config reg_timeout_config(local_reg_store, remote_reg_store, hss_connection);
+    AuthTimeoutTask::Config auth_timeout_config(av_store, hss_connection);
+    DeregistrationTask::Config deregistration_config(local_reg_store, remote_reg_store, hss_connection, sip_resolver);
 
-    // The RegistrationTimeoutHandler and AuthTimeoutHandler both handle
-    // chronos requests, so use the ChronosHandlerFactory.
-    ChronosHandlerFactory<RegistrationTimeoutHandler, RegistrationTimeoutHandler::Config> reg_timeout_controller(&reg_timeout_config);
-    ChronosHandlerFactory<AuthTimeoutHandler, AuthTimeoutHandler::Config> auth_timeout_controller(&auth_timeout_config);
-    HttpStackUtils::SpawningController<DeregistrationHandler, DeregistrationHandler::Config> deregistration_controller(&deregistration_config);
+    // The RegistrationTimeoutTask and AuthTimeoutTask both handle
+    // chronos requests, so use the ChronosHandler.
+    ChronosHandler<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_handler(&reg_timeout_config);
+    ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
+    HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
 
     try
     {
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
-      http_stack->register_controller("^/timers$",
-                                      &reg_timeout_controller);
-      http_stack->register_controller("^/authentication-timeout$",
-                                      &auth_timeout_controller);
-      http_stack->register_controller("^/registrations?*$",
-                                      &deregistration_controller);
+      http_stack->register_handler("^/timers$",
+                                      &reg_timeout_handler);
+      http_stack->register_handler("^/authentication-timeout$",
+                                      &auth_timeout_handler);
+      http_stack->register_handler("^/registrations?*$",
+                                      &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
@@ -1520,9 +1563,11 @@ int main(int argc, char *argv[])
     }
   }
 
+#endif
   // Wait here until the quite semaphore is signaled.
   sem_wait(&term_sem);
 
+#if 0
   if (opt.scscf_enabled)
   {
     try
@@ -1535,6 +1580,7 @@ int main(int argc, char *argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
+#endif
 
   stop_stack();
   // We must unregister stack modules here because this terminates the
@@ -1542,6 +1588,11 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
+  delete proxy;
+  delete app_sproutlet;
+  delete app;
+
+#if 0
   if (opt.scscf_enabled)
   {
     destroy_subscription();
@@ -1576,6 +1627,8 @@ int main(int argc, char *argv[])
     delete scscf_selector;
     delete icscf_acr_factory;
   }
+
+#endif
   destroy_options();
   destroy_stack();
 

@@ -37,7 +37,9 @@
 #ifndef CONSTANTS_H_
 #define CONSTANTS_H_
 
+extern "C" {
 #include <pjsip.h>
+}
 
 const pj_str_t STR_DIVERSION = pj_str((char *)"Diversion");
 const pj_str_t STR_SUPPORTED = pj_str((char *)"Supported");

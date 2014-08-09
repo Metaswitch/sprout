@@ -151,6 +151,7 @@ BasicProxy::UASTsx* ICSCFProxy::create_uas_tsx()
 ICSCFProxy::UASTsx::UASTsx(BasicProxy* proxy) :
   BasicProxy::UASTsx(proxy),
   _router(NULL),
+  _hss_query_success(false),
   _acr(NULL),
   _in_dialog(false)
 {
@@ -173,6 +174,7 @@ ICSCFProxy::UASTsx::~UASTsx()
 pj_status_t ICSCFProxy::UASTsx::init(pjsip_rx_data* rdata)
 {
   // Create an ACR if ACR generation is enabled.
+  _trail = get_trail(rdata);
   _acr = create_acr(rdata);
 
   // Do the BasicProxy initialization first.
@@ -325,6 +327,7 @@ int ICSCFProxy::UASTsx::calculate_targets()
   if (status_code == PJSIP_SC_OK)
   {
     // Found a suitable S-CSCF.
+    _hss_query_success = true;
 
     if (_case == SessionCase::REGISTER)
     {
@@ -366,13 +369,13 @@ int ICSCFProxy::UASTsx::calculate_targets()
 
 /// Handles a response to an associated UACTsx.
 void ICSCFProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
-                                                pjsip_rx_data *rdata)
+                                                pjsip_tx_data *tdata)
 {
   // Pass the response to the ACR for reporting.
-  _acr->rx_response(rdata->msg_info.msg, rdata->pkt_info.timestamp);
+  _acr->rx_response(tdata->msg, tdata->rx_timestamp);
 
   // Pass the response on to the BasicProxy method.
-  BasicProxy::UASTsx::on_new_client_response(uac_tsx, rdata);
+  BasicProxy::UASTsx::on_new_client_response(uac_tsx, tdata);
 }
 
 
@@ -383,10 +386,10 @@ void ICSCFProxy::UASTsx::on_final_response()
   if (_tsx != NULL)
   {
     bool retried = false;
-    if (_best_rsp->msg->line.status.code >= 300)
+    if ((_hss_query_success) && (_final_rsp->msg->line.status.code >= 300))
     {
       // Request rejected, see if we can/should do a retry.
-      retried = retry_to_alternate_scscf(_best_rsp->msg->line.status.code);
+      retried = retry_to_alternate_scscf(_final_rsp->msg->line.status.code);
     }
 
     if (!retried)
@@ -422,7 +425,8 @@ void ICSCFProxy::UASTsx::on_tx_response(pjsip_tx_data* tdata)
 
 /// Called when a request is transmitted on an associated client transaction.
 /// Handles interactions with the ACR for the request if one is allocated.
-void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata)
+void ICSCFProxy::UASTsx::on_tx_client_request(pjsip_tx_data* tdata,
+                                              UACTsx* uac_tsx)
 {
   _acr->tx_request(tdata->msg);
 }
@@ -486,7 +490,7 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
       // We found a suitable alternate S-CSCF and have programmed it as a
       // target, so action the retry.
       LOG_INFO("I-CSCF retrying request to alternate S-CSCF");
-      forward_request();
+      forward_to_targets();
     }
     else
     {
@@ -502,9 +506,9 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
         {
           // The HSS has returned a negative response to the user registration
           // request - I-CSCF should respond with 403.
-          _best_rsp->msg->line.status.code = PJSIP_SC_FORBIDDEN;
-          _best_rsp->msg->line.status.reason =
-                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
+          _final_rsp->msg->line.status.code = PJSIP_SC_FORBIDDEN;
+          _final_rsp->msg->line.status.reason =
+                     *pjsip_get_status_text(_final_rsp->msg->line.status.code);
         }
         else
         {
@@ -513,11 +517,10 @@ bool ICSCFProxy::UASTsx::retry_to_alternate_scscf(int rsp_status)
           // capabilitires, or the HSS is temporarily unavailable). There was at
           // least one valid S-CSCF (as this is retry processing). The I-CSCF
           //  must return 504 (TS 24.229, 5.3.1.3) in this case.
-          _best_rsp->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
-          _best_rsp->msg->line.status.reason =
-                       *pjsip_get_status_text(_best_rsp->msg->line.status.code);
+          _final_rsp->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
+          _final_rsp->msg->line.status.reason =
+                     *pjsip_get_status_text(_final_rsp->msg->line.status.code);
         }
-        pjsip_tx_data_invalidate_msg(_best_rsp);
       }
     }
   }

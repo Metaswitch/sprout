@@ -139,7 +139,7 @@ TEST_F(UtilsTest, Escape)
   EXPECT_EQ("", actual);
 
   actual = Utils::url_escape("The quick brown fox \";'$?&=%\n\377");
-  EXPECT_EQ("The%20quick%20brown%20fox%20%22%3B'%24%3F%26%3D%25\n\377", actual);
+  EXPECT_EQ("The%20quick%20brown%20fox%20%22%3B%27%24%3F%26%3D%25\n\377", actual);
 
   string input;
   string expected;
@@ -147,7 +147,8 @@ TEST_F(UtilsTest, Escape)
   {
     char c = (char)i;
     input.push_back(c);
-    if (string(" \"$#%&+,/:;<=>?@[\\]^`{|}~").find(c) == string::npos)
+    if ((string("!#$&'()*+,/:;=?@[]").find(c) == string::npos) &&
+        (string(" \"%<>\\^`{|}~").find(c) == string::npos))
     {
       expected.push_back(c);
     }
@@ -161,6 +162,18 @@ TEST_F(UtilsTest, Escape)
 
   actual = Utils::url_escape(input);
   EXPECT_EQ(expected, actual);
+}
+
+TEST_F(UtilsTest, Unescape)
+{
+  // The only rule for url_unescape is that it should do the opposite
+  // of url_escape.
+
+  for (char c = 1; c < 127; c++)
+  {
+    std::string original(10, c);
+    EXPECT_EQ(original, Utils::url_unescape(Utils::url_escape(original)));
+  }
 }
 
 TEST_F(UtilsTest, Trim)

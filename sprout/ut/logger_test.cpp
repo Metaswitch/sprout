@@ -126,29 +126,29 @@ TEST_F(LoggerTest, Mainline)
   char linebuf[1024];
   char* line;
 
-  f = fopen("/tmp/logtest_20121220_2300.txt", "r");
+  f = fopen("/tmp/logtest_20121220T230000Z.txt", "r");
   ASSERT_TRUE(f != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
-  EXPECT_STREQ("20-12-2012 23:59:30.123 Some data goes here\n", line);
+  EXPECT_STREQ("20-12-2012 23:59:30.123 UTC Some data goes here\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
   EXPECT_STREQ("Some more data goes there\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
   EXPECT_TRUE(line == NULL);
   fclose(f);
 
-  f = fopen("/tmp/logtest_20121221_0000.txt", "r");
+  f = fopen("/tmp/logtest_20121221T000000Z.txt", "r");
   ASSERT_TRUE(f != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
-  EXPECT_STREQ("21-12-2012 00:00:10.345 And on the next day\n", line);
+  EXPECT_STREQ("21-12-2012 00:00:10.345 UTC And on the next day\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
-  EXPECT_STREQ("21-12-2012 00:06:00.456 And yet more of course\n", line);
+  EXPECT_STREQ("21-12-2012 00:06:00.456 UTC And yet more of course\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
   EXPECT_TRUE(line == NULL);
   fclose(f);
 
   log.write("Foo\n");
   // Not flushed yet
-  f = fopen("/tmp/logtest_20121221_0000.txt", "r");
+  f = fopen("/tmp/logtest_20121221T000000Z.txt", "r");
   ASSERT_TRUE(f != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
   ASSERT_TRUE(line != NULL);
@@ -163,16 +163,16 @@ TEST_F(LoggerTest, Mainline)
   log.write("Bar\n");
   EXPECT_EQ(Logger::ADD_TIMESTAMPS | Logger::FLUSH_ON_WRITE, log.get_flags());
 
-  f = fopen("/tmp/logtest_20121221_0000.txt", "r");
+  f = fopen("/tmp/logtest_20121221T000000Z.txt", "r");
   ASSERT_TRUE(f != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
   ASSERT_TRUE(line != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
   ASSERT_TRUE(line != NULL);
   line = fgets(linebuf, sizeof(linebuf), f);
-  EXPECT_STREQ("21-12-2012 00:06:00.456 Foo\n", line);
+  EXPECT_STREQ("21-12-2012 00:06:00.456 UTC Foo\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
-  EXPECT_STREQ("21-12-2012 00:12:10.000 Bar\n", line);
+  EXPECT_STREQ("21-12-2012 00:12:10.000 UTC Bar\n", line);
   line = fgets(linebuf, sizeof(linebuf), f);
   EXPECT_TRUE(line == NULL);
   fclose(f);
@@ -184,6 +184,6 @@ TEST_F(LoggerTest, RealTime)
   log.write("Wossat it sez for da test\n");
   log.flush();
 
-  int rc = system("grep '^[0-3][0-9]-[0-1][0-9]-[0-9][0-9][0-9][0-9] ..:..:..\\.... Wossat it sez for da test' /tmp/logtest_*.txt >/dev/null");
+  int rc = system("grep '^[0-3][0-9]-[0-1][0-9]-[0-9][0-9][0-9][0-9] ..:..:..\\.... UTC Wossat it sez for da test' /tmp/logtest_*.txt >/dev/null");
   EXPECT_EQ(0, WEXITSTATUS(rc));
 }

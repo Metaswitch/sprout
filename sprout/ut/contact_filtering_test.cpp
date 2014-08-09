@@ -501,7 +501,7 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilterWithEvent)
   EXPECT_EQ((unsigned)0, reject_headers.size());
 
   pjsip_accept_contact_hdr* new_accept = accept_headers[0];
-  
+
   EXPECT_TRUE(new_accept->required_match);
   EXPECT_FALSE(new_accept->explicit_match);
 
@@ -623,7 +623,7 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 
   EXPECT_EQ((unsigned)1, targets.size());
   EXPECT_FALSE(targets[0].deprioritized);
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
@@ -651,7 +651,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 
   // Since we explicitely deny supporting "MESSAGE" this contact is skipped.
   EXPECT_EQ((unsigned)0, targets.size());
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
@@ -682,7 +682,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
   // is deprioritized.
   EXPECT_EQ((unsigned)1, targets.size());
   EXPECT_TRUE(targets[0].deprioritized);
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
@@ -723,7 +723,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 
   EXPECT_EQ((unsigned)1, targets.size());
   EXPECT_FALSE(targets[0].deprioritized);
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
@@ -764,7 +764,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
   // the target is deprioritized.
   EXPECT_EQ((unsigned)1, targets.size());
   EXPECT_TRUE(targets[0].deprioritized);
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
@@ -781,7 +781,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 
   // Add an Accept-Contact header that triggers a YES match
   pj_str_t header_name = pj_str((char*)"Accept-Contact");
-  char* header_value = (char*)"*;+sip.other=\"#6\";explicit;required";
+  char* header_value = (char*)"*;+sip.other=\"#6\";explicit;require";
   pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
     pjsip_parse_hdr(pool,
                     &header_name,
@@ -804,7 +804,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
   // Since the Accept-Header specifies a value that the binding doesn't
   // the target is deprioritized.
   EXPECT_EQ((unsigned)0, targets.size());
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
@@ -846,7 +846,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
   // Since the Accept-Header specifies a value that the binding doesn't
   // the target is deprioritized.
   EXPECT_EQ((unsigned)0, targets.size());
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
@@ -886,7 +886,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
   // Since the Accept-Header specifies a value that the binding doesn't
   // the target is deprioritized.
   EXPECT_EQ((unsigned)1, targets.size());
-  
+
   delete aor_data;
 }
 TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
@@ -902,7 +902,7 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
     std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
     RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
-    
+
     // Change the features on some of the bindings.
     if (ii % 2 == 0)
     {
@@ -931,7 +931,7 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
                     NULL);
   ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
   pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
-  header_value = (char*)"*;+sip.other=\"<string>\";explicit;required";
+  header_value = (char*)"*;+sip.other=\"<string>\";explicit;require";
   accept_hdr = (pjsip_accept_contact_hdr*)
     pjsip_parse_hdr(pool,
                     &header_name,
@@ -952,6 +952,6 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
                              1);
 
   EXPECT_EQ((unsigned)5, targets.size());
-  
+
   delete aor_data;
 }

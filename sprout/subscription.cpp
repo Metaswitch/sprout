@@ -68,8 +68,10 @@ static ACRFactory* acr_factory;
 
 static AnalyticsLogger* analytics;
 
+static int max_expires;
+
 /// Default value for a subscription expiry. RFC3860 has this as 3761 seconds.
-static const int DEFAULT_SUBSCRIPION_EXPIRES = 3761;
+static const int DEFAULT_SUBSCRIPTION_EXPIRES = 3761;
 
 uint32_t id_deployment = 0;
 uint32_t id_instance = 0;
@@ -240,7 +242,14 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       subscription->_from_tag = PJUtils::pj_str_to_string(&from->tag);
 
       // Calculate the expiry period for the subscription.
-      expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+      expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
+
+      if (expiry > max_expires)
+      {
+        // Expiry is too long, set it to the maximum.
+        expiry = max_expires;
+      }
+
       subscription->_expires = now + expiry;
       std::map<std::string, RegStore::AoR::Binding> bindings;
 
@@ -266,12 +275,12 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
           state = NotifyUtils::SubscriptionState::TERMINATED;
         }
 
-        status = NotifyUtils::create_notify(tdata_notify, subscription, aor, 
+        status = NotifyUtils::create_notify(tdata_notify, subscription, aor,
                                             (*aor_data)->_notify_cseq, bindings,
-                                            NotifyUtils::DocState::FULL, 
+                                            NotifyUtils::DocState::FULL,
                                             NotifyUtils::RegistrationState::ACTIVE,
-                                            NotifyUtils::ContactState::ACTIVE, 
-                                            NotifyUtils::ContactEvent::REGISTERED, 
+                                            NotifyUtils::ContactState::ACTIVE,
+                                            NotifyUtils::ContactEvent::REGISTERED,
                                             state, expiry);
       }
 
@@ -304,7 +313,13 @@ void process_subscription_request(pjsip_rx_data* rdata)
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
   pjsip_msg *msg = rdata->msg_info.msg;
   pjsip_expires_hdr* expires = (pjsip_expires_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_EXPIRES, NULL);
-  int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPION_EXPIRES;
+  int expiry = (expires != NULL) ? expires->ivalue : DEFAULT_SUBSCRIPTION_EXPIRES;
+
+  if (expiry > max_expires)
+  {
+    // Expiry is too long, set it to the maximum.
+    expiry = max_expires;
+  }
 
   if ((!PJSIP_URI_SCHEME_IS_SIP(uri)) && (!PJSIP_URI_SCHEME_IS_TEL(uri)))
   {
@@ -313,10 +328,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string error_msg = "Subscribe failed as using invalid URI Scheme";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -353,10 +366,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // that's been registered for emergency service.
     LOG_ERROR("Rejecting subscribe request from emergency registration");
 
-    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
     // Can't log the public ID as the subscribe has failed too early
-    std::string error_msg = "Subscribe failed as using emergency registration";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
@@ -399,7 +410,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
   SAS::report_marker(calling_dn);
 
-  PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+  PJUtils::mark_sas_call_branch_ids(trail, NULL, rdata->msg_info.msg);
 
   // Query the HSS for the associated URIs.
   std::vector<std::string> uris;
@@ -536,7 +547,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
     set_trail(tdata_notify, trail);
-    status = PJUtils::send_request(tdata_notify);
+    status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 
     if (status != PJ_SUCCESS)
     {
@@ -561,78 +572,93 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
 {
   SAS::TrailId trail = get_trail(rdata);
 
-  if ((rdata->tp_info.transport->local_name.port == stack_data.scscf_port) &&
-      !(pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) &&
-      ((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri)) ||
-       (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
-      (PJUtils::check_route_headers(rdata)))
+  if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
-    // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
-    // whether it should be processed by this module or passed up to an AS.
-    pjsip_msg *msg = rdata->msg_info.msg;
+    // Not an S-CSCF, so don't handle SUBSCRIBEs.
+    return PJ_FALSE; // LCOV_EXCL_LINE
+  }
 
-    // A valid subscription must have the Event header set to "reg". This is case-sensitive
-    pj_str_t event_name = pj_str("Event");
-    pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
+  if (pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method()))
+  {
+    // This isn't a SUBSCRIBE, so this module can't process it.
+    return PJ_FALSE;
+  }
 
-    if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
+  if (!((PJUtils::is_home_domain(rdata->msg_info.msg->line.req.uri) ||
+         (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
+        PJUtils::check_route_headers(rdata)))
+  {
+    LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
+    SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
+    SAS::report_event(event);
+    return PJ_FALSE;
+  }
+
+  // SUBSCRIBE request targeted at the home domain or specifically at this node. Check
+  // whether it should be processed by this module or passed up to an AS.
+  pjsip_msg *msg = rdata->msg_info.msg;
+
+  // A valid subscription must have the Event header set to "reg". This is case-sensitive
+  pj_str_t event_name = pj_str("Event");
+  pjsip_event_hdr* event = (pjsip_event_hdr*)pjsip_msg_find_hdr_by_name(msg, &event_name, NULL);
+
+  if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
+  {
+    // The Event header is missing or doesn't match "reg"
+    LOG_DEBUG("Rejecting subscription request with invalid event header");
+
+    SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
+    if (event)
     {
-      // The Event header is missing or doesn't match "reg"
-      LOG_DEBUG("Rejecting subscription request with invalid event header");
+      char event_hdr_str[256];
+      memset(event_hdr_str, 0, 256);
+      pjsip_hdr_print_on(event, event_hdr_str, 255);
+      sas_event.add_var_param(event_hdr_str);
+    }
+    SAS::report_event(sas_event);
 
-      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-      std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Event header is invalid or missing - it should be 'reg'";
-      event.add_var_param(error_msg);
+    return PJ_FALSE;
+  }
+
+  // Accept header may be present - if so must include the application/reginfo+xml
+  pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
+  if (accept)
+  {
+    bool found = false;
+    pj_str_t reginfo = pj_str("application/reginfo+xml");
+    for (uint32_t i = 0; i < accept->count; i++)
+    {
+      if (!pj_strcmp(accept->values + i, &reginfo))
+      {
+        found = true;
+      }
+    }
+
+    if (!found)
+    {
+      // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
+      LOG_DEBUG("Rejecting subscription request with invalid accept header");
+      char accept_hdr_str[256];
+      memset(accept_hdr_str, 0, 256);
+      pjsip_hdr_print_on(accept, accept_hdr_str, 255);
+      SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_ACCEPT, 0);
+      event.add_var_param(accept_hdr_str);
       SAS::report_event(event);
 
       return PJ_FALSE;
     }
-
-    // Accept header may be present - if so must include the application/reginfo+xml
-    pjsip_accept_hdr* accept = (pjsip_accept_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_ACCEPT, NULL);
-    if (accept)
-    {
-      bool found = false;
-      pj_str_t reginfo = pj_str("application/reginfo+xml");
-      for (uint32_t i = 0; i < accept->count; i++)
-      {
-        if (!pj_strcmp(accept->values + i, &reginfo))
-        {
-          found = true;
-        }
-      }
-
-      if (!found)
-      {
-        // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-        LOG_DEBUG("Rejecting subscription request with invalid accept header");
-
-        SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-        std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as the Accepts header is invalid - if it's present it should be 'application/reginfo+xml'";
-        event.add_var_param(error_msg);
-        SAS::report_event(event);
-
-        return PJ_FALSE;
-      }
-    }
-
-    process_subscription_request(rdata);
-    return PJ_TRUE;
   }
 
-  SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY, 0);
-  std::string error_msg = "SUBSCRIBE rejected by the S-CSCF as it wasn't targeted at the home domain or this node";
-  event.add_var_param(error_msg);
-  SAS::report_event(event);
-
-  return PJ_FALSE;
+  process_subscription_request(rdata);
+  return PJ_TRUE;
 }
 
 pj_status_t init_subscription(RegStore* registrar_store,
                               RegStore* remote_reg_store,
                               HSSConnection* hss_connection,
                               ACRFactory* rfacr_factory,
-                              AnalyticsLogger* analytics_logger)
+                              AnalyticsLogger* analytics_logger,
+                              int cfg_max_expires)
 {
   pj_status_t status;
 
@@ -641,6 +667,7 @@ pj_status_t init_subscription(RegStore* registrar_store,
   hss = hss_connection;
   acr_factory = rfacr_factory;
   analytics = analytics_logger;
+  max_expires = cfg_max_expires;
 
   status = pjsip_endpt_register_module(stack_data.endpt, &mod_subscription);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
