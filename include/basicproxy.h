@@ -371,6 +371,9 @@ protected:
   /// until at least one downstream node has sent a 100 Trying response.
   bool _delay_trying;
 
+  /// The pjsip endpoint this proxy is associated with.
+  pjsip_endpoint* _endpt;
+
   friend class UASTsx;
   friend class UACTsx;
 

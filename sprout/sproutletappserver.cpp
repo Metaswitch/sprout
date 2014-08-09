@@ -198,17 +198,17 @@ pj_pool_t* SproutletAppServerTsxHelper::get_pool(const pjsip_msg* msg)
   return _helper->get_pool(msg);
 }
 
-bool SproutletAppServerTsxHelper::schedule_timer(int id, void* context, int duration)
+bool SproutletAppServerTsxHelper::schedule_timer(void* context, TimerID& id, int duration)
 {
-  return _helper->schedule_timer(id, context, duration);
+  return _helper->schedule_timer(context, id, duration);
 }
 
-void SproutletAppServerTsxHelper::cancel_timer(int id)
+void SproutletAppServerTsxHelper::cancel_timer(TimerID id)
 {
   _helper->cancel_timer(id);
 }
 
-bool SproutletAppServerTsxHelper::timer_running(int id)
+bool SproutletAppServerTsxHelper::timer_running(TimerID id)
 {
   return _helper->timer_running(id);
 }
@@ -312,4 +312,8 @@ void SproutletAppServerShimTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_
   _app_tsx->on_cancel(status_code);
 }
 
-
+/// Called when a programmed timer expires.
+void SproutletAppServerShimTsx::on_timer_expiry(void* context)
+{
+  _app_tsx->on_timer_expiry(context);
+}

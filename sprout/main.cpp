@@ -1506,7 +1506,6 @@ int main(int argc, char *argv[])
       return 1;
     }
   }
-#endif
 
   // Create an App Server.
   AppServer* app = new SampleForkAS();
