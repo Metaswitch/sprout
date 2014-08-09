@@ -392,7 +392,10 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
-  _acr->rx_response(rsp);
+  if (_acr != NULL) 
+  {
+    _acr->rx_response(rsp);
+  }
 
 #if 0
   if (_liveness_timer.id == LIVENESS_TIMER)
@@ -404,6 +407,14 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 #endif
 
   int st_code = rsp->line.status.code;
+
+  if (st_code == SIP_STATUS_FLOW_FAILED) 
+  {
+    // The edge proxy / P-CSCF has reported that this flow has failed.
+    // We should remove the binding from the registration store so we don't
+    // try it again.
+    // @TODO - this code has been removed from stateful_proxy, not sure why???
+  }
 
   if (_as_chain_link.is_set()) 
   {
@@ -432,21 +443,19 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         {
           apply_terminating_services(req);
         }
+
+        // Free off the response as we no longer need it.
+        free_msg(rsp);
       }
     }
   }
 
-  if (rsp->line.status.code == SIP_STATUS_FLOW_FAILED) 
+  if (rsp != NULL) 
   {
-    // The edge proxy / P-CSCF has reported that this flow has failed.
-    // We should remove the binding from the registration store so we don't
-    // try it again.
-    // @TODO - this code has been removed from stateful_proxy, not sure why???
+    // Forward the response upstream.  The proxy layer will aggregate responses
+    // if required.
+    send_response(rsp);
   }
-
-  // Forward the response upstream.  The proxy layer will aggregate responses
-  // if required.
-  send_response(rsp);
 }
 
 
