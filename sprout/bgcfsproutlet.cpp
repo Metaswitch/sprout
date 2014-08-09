@@ -100,6 +100,11 @@ BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
 /// Tsx destructor (may also cause ACRs to be sent).
 BGCFSproutletTsx::~BGCFSproutletTsx()
 {
+  if (_acr != NULL) 
+  {
+    _acr->send_message();
+  }
+
   delete _acr;
 }
 
@@ -161,17 +166,23 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void BGCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  // Pass the transmitted request to the ACR to update the accounting
-  // information.
-  _acr->tx_request(req);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted request to the ACR to update the accounting
+    // information.
+    _acr->tx_request(req);
+  }
 }
 
 
 void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  // Pass the received response to the ACR.
-  // @TODO - timestamp from response???
-  _acr->rx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the received response to the ACR.
+    // @TODO - timestamp from response???
+    _acr->rx_response(rsp);
+  }
 
   // Forward the response upstream.  The proxy layer will aggregate responses
   // if required.
@@ -181,9 +192,12 @@ void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp) 
 {
-  // Pass the transmitted response to the ACR to update the accounting
-  // information.
-  _acr->tx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted response to the ACR to update the accounting
+    // information.
+    _acr->tx_response(rsp);
+  }
 }
 
 

@@ -114,6 +114,12 @@ ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
 /// REGISTER-handling Tsx destructor (may also cause ACRs to be sent).
 ICSCFSproutletRegTsx::~ICSCFSproutletRegTsx()
 {
+  if (_acr != NULL) 
+  {
+    // Send the ACR for this transaction.
+    _acr->send_message();
+  }
+
   delete _acr;
   delete _router;
 }
@@ -223,17 +229,23 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 
 void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req)
 {
-  // Pass the transmitted request to the ACR to update the accounting
-  // information.
-  _acr->tx_request(req);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted request to the ACR to update the accounting
+    // information.
+    _acr->tx_request(req);
+  }
 }
 
 
 void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  // Pass the received response to the ACR.
-  // @TODO - timestamp from response???
-  _acr->rx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the received response to the ACR.
+    // @TODO - timestamp from response???
+    _acr->rx_response(rsp);
+  }
 
   // Check if this reqponse is one that we are allowed to retry the HSS lookup
   // for.  See TS 24.229 - section 5.3.1.3.
@@ -320,9 +332,12 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp) 
 {
-  // Pass the transmitted response to the ACR to update the accounting
-  // information.
-  _acr->tx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted response to the ACR to update the accounting
+    // information.
+    _acr->tx_response(rsp);
+  }
 }
 
 
@@ -359,6 +374,11 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
 /// REGISTER-handling Tsx destructor (may also cause ACRs to be sent).
 ICSCFSproutletTsx::~ICSCFSproutletTsx()
 {
+  if (_acr != NULL) 
+  {
+    _acr->send_message();
+  }
+
   delete _acr;
   delete _router;
 }
@@ -444,17 +464,23 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  // Pass the transmitted request to the ACR to update the accounting
-  // information.
-  _acr->tx_request(req);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted request to the ACR to update the accounting
+    // information.
+    _acr->tx_request(req);
+  }
 }
 
 
 void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  // Pass the received response to the ACR.
-  // @TODO - timestamp from response???
-  _acr->rx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the received response to the ACR.
+    // @TODO - timestamp from response???
+    _acr->rx_response(rsp);
+  }
 
   // Check if this response is one that we are allowed to retry the HSS lookup
   // for.  See TS 24.229 - section 5.3.1.3.
@@ -525,9 +551,12 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
 void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp) 
 {
-  // Pass the transmitted response to the ACR to update the accounting
-  // information.
-  _acr->tx_response(rsp);
+  if (_acr != NULL) 
+  {
+    // Pass the transmitted response to the ACR to update the accounting
+    // information.
+    _acr->tx_response(rsp);
+  }
 }
 
 
