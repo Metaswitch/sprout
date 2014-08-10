@@ -1,5 +1,5 @@
 /**
- * @file callservices.cpp MMTel call services implementation
+ * @file mmtel.cpp MMTel call service implementation
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,8 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
 #include <string>
 #include <vector>
 #include <boost/algorithm/string/predicate.hpp>
@@ -45,10 +43,8 @@
 #include "pjutils.h"
 #include "pjmedia.h"
 #include "sproutsasevent.h"
-#include "stateful_proxy.h"
-#include "callservices.h"
-#include "simservs.h"
-#include "hssconnection.h"
+#include "mmtel.h"
+#include "constants.h"
 
 using namespace rapidxml;
 
@@ -61,36 +57,83 @@ using namespace rapidxml;
 #define PRIVACY_H_NONE     0x00000010
 #define PRIVACY_H_CRITICAL 0x00000020
 
-
-const std::string CallServices::MMTEL_URI_PREFIX = "sip:mmtel.";
-
-
-// Call Services constructor
-CallServices::CallServices(XDMConnection *xdm_client) : _xdmc(xdm_client)
+/// Get a new MmtelTsx.
+AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
+                                 pjsip_msg* req)
 {
+  MmtelTsx* mmtel_tsx = new MmtelTsx(helper, req, _xdmc);
+  return mmtel_tsx;
 }
 
-
-CallServices::~CallServices()
+/// Constructor for the MmtelTsx.
+MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
+                   pjsip_msg* msg,
+                   XDMConnection *xdm_client) :
+  AppServerTsx(helper),
+  _xdmc(xdm_client)
 {
+  _country_code = "1";
+
+  pjsip_routing_hdr* served_user_hdr =
+    (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&served_user_hdr->name_addr);
+  std::string served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+
+  pjsip_param* sescase = pjsip_param_find(&served_user_hdr->other_param, &STR_SESCASE);
+  if ((sescase != NULL) &&
+      (pj_stricmp(&sescase->value, &STR_ORIG) == 0))
+  {
+    _originating = true;
+  }
+  else
+  {
+    _originating = false;
+  }
+
+  _method = msg->line.req.method.id;
+
+  _user_services = get_user_services(served_user, trail());
+
+  if (!_originating)
+  {
+    _ringing = false;
+    // Determine the media type conditions, in case they're needed later.
+    if (msg->line.req.method.id == PJSIP_INVITE_METHOD)
+    {
+      _media_conditions = get_media_type_conditions(msg);
+    }
+    else
+    {
+      _media_conditions = 0;
+    }
+  }
 }
 
-
-/// Is this a URI of the MMTEL "callservices" AS?
-/// MMTEL AS URIs consist of the MMTEL URI prefix followed by a valid home domain.
-bool CallServices::is_mmtel(std::string uri)
+/// Destructor for the MmtelTsx.
+MmtelTsx::~MmtelTsx()
 {
-  return boost::starts_with(uri, MMTEL_URI_PREFIX) &&
-         PJUtils::is_home_domain(uri.substr(MMTEL_URI_PREFIX.length()));
-}
+  if (_no_reply_timer != 0)
+  {
+    cancel_timer(_no_reply_timer);
+  }
 
+  if (_late_redirect_msg != NULL)
+  {
+    free_msg(_late_redirect_msg);
+  }
+
+  if (_user_services != NULL)
+  {
+    delete _user_services;
+  }
+}
 
 // Get the user services (simservs) configuration if relevant and present.
 //
 // @returns The simservs object if it is relevant and present.  If there is
 // no simservs configuration for the user, returns a default simservs object
 // with all services disabled.
-simservs *CallServices::get_user_services(std::string public_id, SAS::TrailId trail)
+simservs* MmtelTsx::get_user_services(std::string public_id, SAS::TrailId trail)
 {
   // Fetch the user's simservs configuration from the XDMS
   LOG_DEBUG("Fetching simservs configuration for %s", public_id.c_str());
@@ -107,10 +150,146 @@ simservs *CallServices::get_user_services(std::string public_id, SAS::TrailId tr
   return user_services;
 }
 
+// Apply Mmtel processing on initial invite.
+void MmtelTsx::on_initial_request(pjsip_msg* msg)
+{
+  pjsip_status_code rc = PJSIP_SC_OK;
+  pj_pool_t* pool = get_pool(msg);
+
+  if (_originating)
+  {
+    rc = apply_ob_privacy(msg, pool);
+
+    if (rc == PJSIP_SC_OK)
+    {
+      rc = apply_ob_call_barring(msg);
+    }
+  }
+  else
+  {
+    rc = apply_ib_privacy(msg, pool);
+
+    if (rc == PJSIP_SC_OK)
+    {
+      rc = apply_call_diversion(msg, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    }
+
+    if (rc == PJSIP_SC_OK)
+    {
+      rc = apply_ib_call_barring(msg);
+    }
+  }
+
+  finish_processing(msg, rc);
+}
+
+// Apply terminating Mmtel processing on receiving a response.
+void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
+{
+  pjsip_status_code rc = PJSIP_SC_OK;
+  pj_pool_t* pool = get_pool(msg);
+  pjsip_status_code code = (pjsip_status_code)msg->line.status.code;
+
+  if (code < 200)
+  {
+    switch (code)
+    {
+    case PJSIP_SC_RINGING:
+      _ringing = true;
+
+      // Consider starting the no-reply timer.  First, check call diversion is
+      // enabled.
+      if ((_no_reply_timer == 0) &&
+          (_user_services != NULL) &&
+          (_user_services->cdiv_enabled()))
+      {
+        // Now spin through the rules looking for one that requires no answer but
+        // is also satisfied by our media conditions.
+        const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
+        for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
+             rule != cdiv_rules->end();
+             rule++)
+        {
+          LOG_DEBUG("Considering rule - conditions 0x%x, target %s", rule->conditions(), rule->forward_target().c_str());
+          if ((rule->conditions() & simservs::Rule::CONDITION_NO_ANSWER) &&
+              ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
+          {
+            // We found a suitable rule.  Start the no-reply timer.
+            bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
+            if (status != PJ_SUCCESS)
+            {
+              // Log this failure, but don't fail the call - there's no point.
+              LOG_WARNING("Failed to set no-reply timer - status %d", status);
+            }
+            else
+            {
+              _late_redirect_fork_id = fork_id;
+              _late_redirect_msg = clone_request(msg);
+            }
+            break;
+          }
+        }
+      }
+      break;
+
+    case PJSIP_SC_MOVED_TEMPORARILY:
+    {
+      // Handle 302 redirect by parsing the contact header and diverting to that
+      // address.
+      pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
+      if (contact_hdr != NULL)
+      {
+        rc = PJUtils::redirect(msg, contact_hdr->uri, pool, code);
+
+        // If we have a 18X, send a provisional response. Final responses will
+        // be handled higher up.
+        if (rc < 200)
+        {
+          pjsip_msg* rsp = create_response(msg, rc);
+          send_response(rsp);
+        }
+      }
+      break;
+    }
+
+    default:
+      // Do nothing.
+      break;
+    }
+  }
+  else
+  {
+    // We've got a final response, so there's no point in running the no-reply timer any longer.
+    if (_no_reply_timer != 0)
+    {
+      cancel_timer(_no_reply_timer);
+    }
+
+    rc = apply_call_diversion(msg, condition_from_status(code) | _media_conditions, code);
+  }
+
+  finish_processing(msg, rc);
+}
+
+void MmtelTsx::finish_processing(pjsip_msg*& msg,
+                                 pjsip_status_code rc)
+{
+  if (rc <= PJSIP_SC_OK)
+  {
+    send_request(msg);
+  }
+  else
+  {
+    pjsip_msg* rsp = create_response(msg, rc);
+    free_msg(msg);
+    send_response(rsp);
+  }
+}
+
 // Parse a privacy header into a bitfield.
 //
 // @returns Bitfield of privacy fields that were in the header.
-int CallServices::parse_privacy_headers(pjsip_generic_array_hdr *header_array)
+int MmtelTsx::parse_privacy_headers(pjsip_generic_array_hdr *header_array)
 {
   int rc = 0;
 
@@ -157,7 +336,7 @@ int CallServices::parse_privacy_headers(pjsip_generic_array_hdr *header_array)
 // Create a privacy header from a bitfield of privacy fields.
 //
 // @returns Nothing.
-void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fields)
+void MmtelTsx::build_privacy_header(pjsip_msg* msg, pj_pool_t* pool, int privacy_fields)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
 
@@ -166,12 +345,12 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
     return;
   }
 
-  pjsip_generic_array_hdr *new_header = pjsip_generic_array_hdr_create(tx_data->pool, &privacy_hdr_name);
+  pjsip_generic_array_hdr *new_header = pjsip_generic_array_hdr_create(pool, &privacy_hdr_name);
 
   if (privacy_fields & PRIVACY_H_ID)
   {
     LOG_DEBUG("Adding 'id' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "id");
     new_header->count++;
@@ -180,7 +359,7 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
   if (privacy_fields & PRIVACY_H_HEADER)
   {
     LOG_DEBUG("Adding 'header' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "header");
     new_header->count++;
@@ -189,7 +368,7 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
   if (privacy_fields & PRIVACY_H_SESSION)
   {
     LOG_DEBUG("Adding 'session' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "session");
     new_header->count++;
@@ -198,7 +377,7 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
   if (privacy_fields & PRIVACY_H_USER)
   {
     LOG_DEBUG("Adding 'user' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "user");
     new_header->count++;
@@ -207,7 +386,7 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
   if (privacy_fields & PRIVACY_H_NONE)
   {
     LOG_DEBUG("Adding 'none' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "none");
     new_header->count++;
@@ -216,19 +395,19 @@ void CallServices::build_privacy_header(pjsip_tx_data *tx_data, int privacy_fiel
   if (privacy_fields & PRIVACY_H_CRITICAL)
   {
     LOG_DEBUG("Adding 'critical' privacy field");
-    pj_strdup2(tx_data->pool,
+    pj_strdup2(pool,
                &new_header->values[new_header->count],
                "critical");
     new_header->count++;
   }
 
-  pjsip_msg_add_hdr(tx_data->msg, (pjsip_hdr *)new_header);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr *)new_header);
 }
 
 // Gets the media types specified in the SDP on the message.
 //
 // @returns Conditions corresponding to the media types.
-unsigned int CallServices::get_media_type_conditions(pjsip_msg *msg)
+unsigned int MmtelTsx::get_media_type_conditions(pjsip_msg *msg)
 {
   unsigned int media_type_conditions = 0;
 
@@ -239,7 +418,7 @@ unsigned int CallServices::get_media_type_conditions(pjsip_msg *msg)
       (!pj_stricmp2(&msg->body->content_type.subtype, "sdp")))
   {
     // Parse the SDP, using a temporary pool.
-    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "CallServices", 1024, 512, NULL);
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "Mmtel", 1024, 512, NULL);
     pjmedia_sdp_session *sdp_sess;
     if (pjmedia_sdp_parse(tmp_pool, (char *)msg->body->data, msg->body->len, &sdp_sess) == PJ_SUCCESS)
     {
@@ -267,40 +446,28 @@ unsigned int CallServices::get_media_type_conditions(pjsip_msg *msg)
   return media_type_conditions;
 }
 
-// Call services base constructor
-CallServices::CallServiceBase::CallServiceBase(std::string country_code, UASTransaction* uas_data) :
-  _country_code(country_code),
-  _uas_data(uas_data)
-{
-}
-
-// Call services base destructor
-CallServices::CallServiceBase::~CallServiceBase()
-{
-}
-
 // Apply call barring, using the supplied rules (as defined in 3GPP TS 24.611 v11.2.0)
 //
 // @returns true if the call may still proceed, false otherwise.
-bool CallServices::CallServiceBase::apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
-                                                       pjsip_tx_data *tx_data)
+pjsip_status_code MmtelTsx::apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
+                                               pjsip_msg* msg)
 {
   // If one of the matching rules evaluates to allow=true then the resulting value shall be allow=true
   // and the call continues normally, otherwise the result shall be allow=false and the call will be barred.
   //   -- 3GPP TS 24.611 v11.2.0
   bool rule_matched = false;
-  bool allow_call = false;
+  pjsip_status_code rc = PJSIP_SC_DECLINE;
   for (std::vector<simservs::CBRule>::const_iterator rule = ruleset->begin();
        rule != ruleset->end();
        rule++)
   {
-    if (check_cb_rule(*rule, tx_data->msg))
+    if (check_cb_rule(*rule, msg))
     {
       rule_matched = true;
       if (rule->allow_call())
       {
         LOG_DEBUG("Call barring rule allows call to continue");
-        allow_call = true;
+        rc = PJSIP_SC_OK;
         break;
       }
     }
@@ -311,25 +478,24 @@ bool CallServices::CallServiceBase::apply_call_barring(const std::vector<simserv
   if (!rule_matched)
   {
     LOG_DEBUG("No call barring rules matched, call continues");
-    allow_call = true;
+    rc = PJSIP_SC_OK;
   }
 
   // When the AS providing the OCB service rejects a communication, the AS shall send an indication to the
   // calling user by sending a 603 (Decline) response.
   //   -- 3GPP TS 25.611 v11.2.0
-  if (!allow_call)
+  if (rc != PJSIP_SC_OK)
   {
     LOG_DEBUG("Call rejected by call barring");
-    _uas_data->send_response(PJSIP_SC_DECLINE);
   }
 
-  return allow_call;
+  return rc;
 }
 
 // Determine if an arbitary rule's conditions apply to a call.
 //
 // @return true if the rule should be applied (i.e. the conditions hold)
-bool CallServices::CallServiceBase::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg)
+bool MmtelTsx::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg)
 {
   bool rule_matches = true;
   int conditions = rule.conditions();
@@ -399,33 +565,11 @@ bool CallServices::CallServiceBase::check_cb_rule(const simservs::CBRule& rule, 
   return rule_matches;
 }
 
-// Originating Call Services constructor.
-CallServices::Originating::Originating(CallServices* callServices,
-                                       UASTransaction* uas_data,
-                                       pjsip_msg* msg,
-                                       std::string served_user) :  //< Public ID of served user
-  CallServices::CallServiceBase("1", uas_data)
-{
-  _user_services = callServices->get_user_services(served_user, uas_data->trail());
-}
-
-CallServices::Originating::~Originating()
-{
-  delete _user_services;
-}
-
-// Apply originating call service processing on initial invite.
-//
-// @returns true if the call should proceed, false otherwise.
-bool CallServices::Originating::on_initial_invite(pjsip_tx_data* tx_data)
-{
-  return apply_privacy(tx_data) && apply_ob_call_barring(tx_data);
-}
 
 // Applies privacy services as an originating AS.
 //
 // @returns true if the call should proceed, false otherwise
-bool CallServices::Originating::apply_privacy(pjsip_tx_data *tx_data)
+pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
 
@@ -441,13 +585,13 @@ bool CallServices::Originating::apply_privacy(pjsip_tx_data *tx_data)
     LOG_DEBUG("Originating Identification Presentation Restriction enabled");
 
     // Extract the privacy header
-    privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(tx_data->msg, &privacy_hdr_name, NULL);
+    privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(msg, &privacy_hdr_name, NULL);
 
     int privacy_hdrs = 0;
     if (privacy_hdr_array)
     {
       // Extract the privacy headers that currently exist, unrecognized headers will be stripped out
-      privacy_hdrs = CallServices::parse_privacy_headers(privacy_hdr_array);
+      privacy_hdrs = MmtelTsx::parse_privacy_headers(privacy_hdr_array);
       pj_list_erase(privacy_hdr_array);
     }
 
@@ -481,154 +625,30 @@ bool CallServices::Originating::apply_privacy(pjsip_tx_data *tx_data)
     }
 
     // Construct the new privacy header
-    CallServices::build_privacy_header(tx_data, privacy_hdrs);
+    MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
   }
 
-  return true;
+  return PJSIP_SC_OK;
 }
 
 // Apply originating call barring (as defined in 3GPP TS 24.611 v11.2.0)
 //
 // @returns true if the call may still proceed, false otherwise.
-bool CallServices::Originating::apply_ob_call_barring(pjsip_tx_data *tx_data)
+pjsip_status_code MmtelTsx::apply_ob_call_barring(pjsip_msg* msg)
 {
   if (!_user_services->outbound_cb_enabled())
   {
     LOG_DEBUG("Outbound call barring disabled");
-    return true;
+    return PJSIP_SC_OK;
   }
 
-  return apply_call_barring(_user_services->outbound_cb_rules(), tx_data);
-}
-
-// Terminating Call Services constructor.
-CallServices::Terminating::Terminating(CallServices* callServices,
-                                       UASTransaction* uas_data,
-                                       pjsip_msg* msg,
-                                       std::string served_user) :  //< Public ID of served user
-  CallServices::CallServiceBase("1", uas_data),
-  _ringing(false)
-{
-  _user_services = callServices->get_user_services(served_user, uas_data->trail());
-
-  // Determine the media type conditions, in case they're needed later.
-  if (msg->line.req.method.id == PJSIP_INVITE_METHOD)
-  {
-    _media_conditions = CallServices::get_media_type_conditions(msg);
-  }
-  else
-  {
-    _media_conditions = 0;
-  }
-
-  // Set up the no-reply timer.
-  memset(&_no_reply_timer, 0, sizeof(pj_timer_entry));
-  _no_reply_timer.user_data = this;
-  _no_reply_timer.cb = no_reply_timer_pop;
-}
-
-CallServices::Terminating::~Terminating()
-{
-  if (_no_reply_timer.id != 0)
-  {
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_no_reply_timer);
-    _no_reply_timer.id = 0;
-  }
-
-  if (_user_services != NULL)
-  {
-    delete _user_services;
-  }
-}
-
-// Apply terminating call service processing on initial invite.
-//
-// @returns True if the call should proceed, false otherwise.
-bool CallServices::Terminating::on_initial_invite(pjsip_tx_data *tx_data)
-{
-  return apply_privacy(tx_data) &&
-         apply_call_diversion(_media_conditions, 0) &&
-         apply_ib_call_barring(tx_data);
-}
-
-// Apply terminating call service processing on receiving a response.
-//
-// @returns True if the call should proceed, false otherwise.
-bool CallServices::Terminating::on_response(pjsip_msg *msg)
-{
-  int code = msg->line.status.code;
-  switch (code)
-  {
-  case PJSIP_SC_RINGING:
-    _ringing = true;
-
-    // Consider starting the no-reply timer.  First, check call diversion is
-    // enabled.
-    if ((_no_reply_timer.id == 0) &&
-        (_user_services != NULL) &&
-        (_user_services->cdiv_enabled()))
-    {
-      // Now spin through the rules looking for one that requires no answer but
-      // is also satisfied by our media conditions.
-      const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
-      for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
-           rule != cdiv_rules->end();
-           rule++)
-      {
-        LOG_DEBUG("Considering rule - conditions 0x%x, target %s", rule->conditions(), rule->forward_target().c_str());
-        if ((rule->conditions() & simservs::Rule::CONDITION_NO_ANSWER) &&
-            ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
-        {
-          // We found a suitable rule.  Start the no-reply timer.
-          _no_reply_timer.id = 1;
-          pj_time_val delay;
-          delay.sec = _user_services->cdiv_no_reply_timer();
-          delay.msec = 0;
-          pj_status_t status = pjsip_endpt_schedule_timer(stack_data.endpt, &_no_reply_timer, &delay);
-          if (status != PJ_SUCCESS)
-          {
-            // Log this failure, but don't fail the call - there's no point.
-            LOG_WARNING("Failed to set no-reply timer - status %d", status);
-          }
-          break;
-        }
-      }
-    }
-    break;
-
-  case PJSIP_SC_MOVED_TEMPORARILY:
-    // Handle 302 redirect by parsing the contact header and diverting to that
-    // address.
-    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
-    if (contact_hdr != NULL)
-    {
-      return _uas_data->redirect(contact_hdr->uri, code);
-    }
-    break;
-  }
-  return true;
-}
-
-// Apply terminating call service processing on receiving a final response.
-//
-// @returns True if the call should proceed, false otherwise.
-bool CallServices::Terminating::on_final_response(pjsip_tx_data *tx_data)
-{
-  // We've got a final response, so there's no point in running the no-reply timer any longer.
-  if (_no_reply_timer.id != 0)
-  {
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_no_reply_timer);
-    _no_reply_timer.id = 0;
-  }
-
-  int code = tx_data->msg->line.status.code;
-  return apply_call_diversion(condition_from_status(code) | _media_conditions, code);
+  return apply_call_barring(_user_services->outbound_cb_rules(), msg);
 }
 
 // Apply privacy services as a terminating AS.
 //
 // @returns true if the call may proceed, false otherwise.
-bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
+pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
   static const pj_str_t call_info_hdr_name = pj_str("Call-Info");
@@ -642,18 +662,18 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
   pjsip_generic_array_hdr *privacy_hdr_array = NULL;
 
   int privacy_hdrs = 0;
-  privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(tx_data->msg, &privacy_hdr_name, NULL);
+  privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(msg, &privacy_hdr_name, NULL);
   if (privacy_hdr_array)
   {
-    privacy_hdrs = CallServices::parse_privacy_headers(privacy_hdr_array);
+    privacy_hdrs = MmtelTsx::parse_privacy_headers(privacy_hdr_array);
     pj_list_erase(privacy_hdr_array);
   }
 
   if (privacy_hdrs & PRIVACY_H_NONE)
   {
     LOG_DEBUG("Privacy 'none' requested, no prvacy applied");
-    CallServices::build_privacy_header(tx_data, privacy_hdrs);
-    return true;
+    MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
+    return PJSIP_SC_OK;
   }
 
   if (privacy_hdrs & PRIVACY_H_HEADER)
@@ -673,7 +693,7 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
                                             &organization_hdr_name };
     for (unsigned int ii = 0; ii < sizeof(headers_to_remove) / sizeof(pj_str_t *); ii++)
     {
-      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(tx_data->msg, headers_to_remove[ii], NULL);
+      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, headers_to_remove[ii], NULL);
       if (hdr)
       {
         pj_list_erase(hdr);
@@ -689,8 +709,7 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
   if ((privacy_hdrs & PRIVACY_H_SESSION) && (privacy_hdrs & PRIVACY_H_CRITICAL))
   {
     LOG_WARNING("Critical session privacy requested but is not supported, call rejected");
-    _uas_data->send_response(PJSIP_SC_SERVICE_UNAVAILABLE);
-    return false;
+    return PJSIP_SC_SERVICE_UNAVAILABLE;
   }
 
   if (privacy_hdrs & PRIVACY_H_USER)
@@ -711,7 +730,7 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
                                             &in_reply_to_hdr_name };
     for (unsigned int ii = 0; ii < sizeof(headers_to_remove) / sizeof(pj_str_t *); ii++)
     {
-      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(tx_data->msg, headers_to_remove[ii], NULL);
+      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, headers_to_remove[ii], NULL);
       if (hdr)
       {
         pj_list_erase(hdr);
@@ -720,20 +739,20 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
 
     // Convert the From: header to the anonymous one (as specified in RFC3323), note that we must keep the tag the same so the call can
     // be corellated.
-    pjsip_from_hdr *from_header = PJSIP_MSG_FROM_HDR(tx_data->msg);
-    pjsip_name_addr *anonymous_name_addr = pjsip_name_addr_create(tx_data->pool);
+    pjsip_from_hdr *from_header = PJSIP_MSG_FROM_HDR(msg);
+    pjsip_name_addr *anonymous_name_addr = pjsip_name_addr_create(pool);
     pj_strset2(&anonymous_name_addr->display, "Anonymous");
-    anonymous_name_addr->uri = (pjsip_uri *)pjsip_sip_uri_create(tx_data->pool, 0);
+    anonymous_name_addr->uri = (pjsip_uri *)pjsip_sip_uri_create(pool, 0);
     pjsip_sip_uri *anonymous_sip_uri = (pjsip_sip_uri *)anonymous_name_addr->uri;
     pj_strset2(&anonymous_sip_uri->user, "anonymous");
     pj_strset2(&anonymous_sip_uri->host, "anonymous.invalid");
-    pjsip_name_addr_assign(tx_data->pool, (pjsip_name_addr *)from_header->uri, anonymous_name_addr);
+    pjsip_name_addr_assign(pool, (pjsip_name_addr *)from_header->uri, anonymous_name_addr);
   }
 
   if (privacy_hdrs & PRIVACY_H_ID)
   {
     LOG_DEBUG("Applying 'id' privacy");
-    pjsip_hdr *p_asserted_identity_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(tx_data->msg, &p_asserted_identity_hdr_name, NULL);
+    pjsip_hdr *p_asserted_identity_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, &p_asserted_identity_hdr_name, NULL);
     if (p_asserted_identity_hdr)
     {
       pj_list_erase(p_asserted_identity_hdr);
@@ -741,23 +760,23 @@ bool CallServices::Terminating::apply_privacy(pjsip_tx_data *tx_data)
   }
 
   // Construct the new privacy header
-  CallServices::build_privacy_header(tx_data, privacy_hdrs);
+  MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
 
-  return true;
+  return PJSIP_SC_OK;
 }
 
 // Apply call diversion services as a terminating AS.
 //
 // @returns true if the call may proceed as-is, false otherwise.
-bool CallServices::Terminating::apply_call_diversion(unsigned int conditions, int code)
+pjsip_status_code MmtelTsx::apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
 {
-  bool rc = true;
+  pjsip_status_code rc = PJSIP_SC_OK;
   // If this is an INVITE and call diversion is enabled, check the rules.
-  if ((_uas_data->method() == PJSIP_INVITE_METHOD) &&
+  if ((_method == PJSIP_INVITE_METHOD) &&
       (_user_services != NULL) &&
       (_user_services->cdiv_enabled()))
   {
-    rc = check_call_diversion_rules(conditions, code);
+    rc = check_call_diversion_rules(msg, conditions, code);
   }
   return rc;
 }
@@ -766,8 +785,10 @@ bool CallServices::Terminating::apply_call_diversion(unsigned int conditions, in
 // divert the call if so.
 //
 // @returns true if the call may proceed as-is, false otherwise.
-bool CallServices::Terminating::check_call_diversion_rules(unsigned int conditions, int code)
+pjsip_status_code MmtelTsx::check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
 {
+  pjsip_status_code rc = PJSIP_SC_OK;
+  pj_pool_t* pool = get_pool(msg);
   const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
   for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
        rule != cdiv_rules->end();
@@ -777,17 +798,25 @@ bool CallServices::Terminating::check_call_diversion_rules(unsigned int conditio
     if ((rule->conditions() & ~conditions) == 0)
     {
       LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-      return _uas_data->redirect(rule->forward_target(), code);
+      rc = PJUtils::redirect(msg, rule->forward_target(), pool, code);
+
+      // If we have a 18X, send a provisional response. Final responses will
+      // be handled higher up.
+      if (rc < 200)
+      {
+        pjsip_msg* rsp = create_response(msg, rc);
+        send_response(rsp);
+      }
     }
   }
-  return true;
+  return rc;
 }
 
 // Determine the condition corresponding to the specified code, as specified by
 // 3GPP TS 24.604.
 //
 // @returns Condition corresponding to the specified code.
-unsigned int CallServices::Terminating::condition_from_status(int code)
+unsigned int MmtelTsx::condition_from_status(int code)
 {
   unsigned int condition = 0;
   switch (code)
@@ -825,36 +854,30 @@ unsigned int CallServices::Terminating::condition_from_status(int code)
   return condition;
 }
 
-// Handles the no-reply timer popping.
-void CallServices::Terminating::no_reply_timer_pop()
+void MmtelTsx::on_timer_expiry(void* context)
 {
-  _uas_data->enter_context();
-  _no_reply_timer.id = 0;
-  apply_call_diversion(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-  _uas_data->exit_context();
+  // Cancel the original attempt and perform call forwarding to
+  // try a redirect.
+  cancel_fork(_late_redirect_fork_id);
+  pjsip_status_code rc = apply_call_diversion(_late_redirect_msg,
+                                              _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
+                                              PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+  finish_processing(_late_redirect_msg, rc);
 }
 
-// Handles the no-reply timer popping.
-//
-// This is just a wrapper for the member function.
-void CallServices::Terminating::no_reply_timer_pop(pj_timer_heap_t *timer_heap, pj_timer_entry *entry)
-{
-  ((CallServices::Terminating *)entry->user_data)->no_reply_timer_pop();
-}
-
-bool CallServices::Terminating::apply_ib_call_barring(pjsip_tx_data* tx_data)
+pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* msg)
 {
   if (!_user_services)
   {
     LOG_DEBUG("Terminating user not found, no Inbound call barring rules apply");
-    return true;
+    return PJSIP_SC_OK;
   }
 
   if (!_user_services->inbound_cb_enabled())
   {
     LOG_DEBUG("Inbound Call Barring disabled");
-    return true;
+    return PJSIP_SC_OK;
   }
 
-  return apply_call_barring(_user_services->inbound_cb_rules(), tx_data);
+  return apply_call_barring(_user_services->inbound_cb_rules(), msg);
 }

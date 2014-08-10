@@ -39,7 +39,7 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-                  callservices.cpp \
+                  mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
                   bgcfservice.cpp \
@@ -111,7 +111,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        options_test.cpp \
                        logger_test.cpp \
                        utils_test.cpp \
-                       callservices_test.cpp \
+                       mmtel_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \

@@ -115,7 +115,7 @@ extern "C" {
 #include "analyticslogger.h"
 #include "regstore.h"
 #include "stateful_proxy.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "constants.h"
 #include "enumservice.h"
 #include "bgcfservice.h"

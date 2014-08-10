@@ -68,7 +68,7 @@ extern "C" {
 #include "xdmconnection.h"
 #include "stateful_proxy.h"
 #include "websockets.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
 #include "authentication.h"

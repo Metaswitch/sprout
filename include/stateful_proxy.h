@@ -52,7 +52,7 @@ class UACTransaction;
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "regstore.h"
 #include "stack.h"
 #include "trustboundary.h"
