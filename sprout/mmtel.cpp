@@ -168,7 +168,7 @@ void MmtelTsx::on_initial_request(pjsip_msg* req)
 
     if (rc == PJSIP_SC_OK)
     {
-      rc = apply_call_diversion(req, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+      rc = apply_cdiv_on_req(req, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
     }
 
     if (rc == PJSIP_SC_OK)
@@ -177,25 +177,33 @@ void MmtelTsx::on_initial_request(pjsip_msg* req)
     }
   }
 
-  finish_processing(req, rc);
+  if (rc <= PJSIP_SC_OK)
+  {
+    send_request(req);
+  }
+  else
+  {
+    pjsip_msg* rsp = create_response(req, rc);
+    free_msg(req);
+    send_response(rsp);
+  }
 }
 
 // Apply terminating Mmtel processing on receiving a response.
 void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
 {
-  pjsip_status_code rc = PJSIP_SC_OK;
-  pj_pool_t* pool = get_pool(rsp);
   pjsip_status_code code = (pjsip_status_code)rsp->line.status.code;
 
-  if (code < 200)
+  if (code < PJSIP_SC_OK)
   {
-    switch (code)
+    // Forward provisional response.
+    send_response(rsp);
+
+    if (code == PJSIP_SC_RINGING)
     {
-    case PJSIP_SC_RINGING:
+      // Phone is ringing, so consider starting the no-reply timer.
       _ringing = true;
 
-      // Consider starting the no-reply timer.  First, check call diversion is
-      // enabled.
       if ((_no_reply_timer == 0) &&
           (_user_services != NULL) &&
           (_user_services->cdiv_enabled()))
@@ -207,7 +215,8 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
              rule != cdiv_rules->end();
              rule++)
         {
-          LOG_DEBUG("Considering rule - conditions 0x%x, target %s", rule->conditions(), rule->forward_target().c_str());
+          LOG_DEBUG("Considering rule - conditions 0x%x, target %s",
+                    rule->conditions(), rule->forward_target().c_str());
           if ((rule->conditions() & simservs::Rule::CONDITION_NO_ANSWER) &&
               ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
           {
@@ -226,31 +235,6 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
           }
         }
       }
-      break;
-
-    case PJSIP_SC_MOVED_TEMPORARILY:
-    {
-      // Handle 302 redirect by parsing the contact header and diverting to that
-      // address.
-      pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);;
-      if (contact_hdr != NULL)
-      {
-        rc = PJUtils::redirect(rsp, contact_hdr->uri, pool, code);
-
-        // If we have a 18X, send a provisional response. Final responses will
-        // be handled higher up.
-        if (rc < 200)
-        {
-          pjsip_msg* rsp = create_response(rsp, rc);
-          send_response(rsp);
-        }
-      }
-      break;
-    }
-
-    default:
-      // Do nothing.
-      break;
     }
   }
   else
@@ -261,24 +245,16 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
       cancel_timer(_no_reply_timer);
     }
 
-    rc = apply_call_diversion(rsp, condition_from_status(code) | _media_conditions, code);
-  }
-
-  finish_processing(rsp, rc);
-}
-
-void MmtelTsx::finish_processing(pjsip_msg*& req,
-                                 pjsip_status_code rc)
-{
-  if (rc <= PJSIP_SC_OK)
-  {
-    send_request(req);
-  }
-  else
-  {
-    pjsip_msg* rsp = create_response(req, rc);
-    free_msg(req);
-    send_response(rsp);
+    if ((code == PJSIP_SC_OK) ||
+        (!apply_cdiv_on_rsp(rsp, condition_from_status(code) | _media_conditions, code)))
+    {
+      // The request has not been redirected, so forward the response.
+      send_response(rsp);
+    }
+    else
+    {
+      free_msg(rsp);
+    }
   }
 }
 
@@ -761,51 +737,112 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* req, pj_pool_t* pool)
   return PJSIP_SC_OK;
 }
 
-// Apply call diversion services as a terminating AS.
+// Apply call diversion services to a request as a terminating AS.
 //
-// @returns true if the call may proceed as-is, false otherwise.
-pjsip_status_code MmtelTsx::apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
+// @returns PJSIP_SC_OK if the call may proceed as-is, false otherwise.
+pjsip_status_code MmtelTsx::apply_cdiv_on_req(pjsip_msg* req,
+                                              unsigned int conditions,
+                                              pjsip_status_code code)
 {
   pjsip_status_code rc = PJSIP_SC_OK;
-  // If this is an INVITE and call diversion is enabled, check the rules.
-  if ((_method == PJSIP_INVITE_METHOD) &&
-      (_user_services != NULL) &&
-      (_user_services->cdiv_enabled()))
+
+  std::string target = check_call_diversion_rules(conditions);
+
+  if (!target.empty()) 
   {
-    rc = check_call_diversion_rules(msg, conditions, code);
+    // Update the request for the redirect.
+    rc = PJUtils::redirect(req, target, get_pool(req), code);
+
+    if (rc == PJSIP_SC_OK) 
+    {
+      // Send a provisional response indicating the call is being forwarded.
+      pjsip_msg* rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
+      send_response(rsp);
+    }
   }
   return rc;
 }
 
-// Check call diversion rules to see if all conditions of any rule match, and
-// divert the call if so.
+// Apply call diversion services on receipt of a response.
 //
-// @returns true if the call may proceed as-is, false otherwise.
-pjsip_status_code MmtelTsx::check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code)
+bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
+                                 unsigned int conditions,
+                                 pjsip_status_code code)
 {
-  pjsip_status_code rc = PJSIP_SC_OK;
-  pj_pool_t* pool = get_pool(msg);
-  const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
-  for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
-       rule != cdiv_rules->end();
-       rule++)
-  {
-    LOG_DEBUG("Considering rule - conditions 0x%x (?= 0x%x), target %s", rule->conditions(), conditions, rule->forward_target().c_str());
-    if ((rule->conditions() & ~conditions) == 0)
-    {
-      LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-      rc = PJUtils::redirect(msg, rule->forward_target(), pool, code);
+  bool redirected = false;
+  std::string target;
 
-      // If we have a 18X, send a provisional response. Final responses will
-      // be handled higher up.
-      if (rc < 200)
+  if ((code == PJSIP_SC_MOVED_TEMPORARILY) &&
+      (rsp != NULL))
+  {
+    // Handle 302 redirect by parsing the contact header and diverting to that
+    // address.
+    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                                pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);
+    if (contact_hdr != NULL)
+    {
+      target = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, contact_hdr->uri);
+    }
+  }
+  else
+  {
+    // Check to see if CDIV rules trigger.
+    target = check_call_diversion_rules(conditions);
+
+  }
+
+  if (!target.empty()) 
+  {
+    // We have a target for the redirect, so get a copy of the original 
+    // request and update it for the redirect.
+    pjsip_msg* req = original_request();
+
+    if (PJUtils::redirect(req, target, get_pool(req), code) == PJSIP_SC_OK)
+    {
+      // Send a provisional response flagging that the call is being
+      // forwarded.
+      rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
+      send_response(rsp);
+
+      // Send the redirected request.
+      send_request(req);
+
+      redirected = true;
+    }
+    else
+    {
+      // Can't redirect the request.
+      free_msg(req);
+    }
+  }
+  return redirected;
+}
+
+// Check call diversion rules to see if all conditions of any rule match
+//
+// @returns The redirect target if a rule triggers, otherwise an empty string.
+//
+std::string MmtelTsx::check_call_diversion_rules(unsigned int conditions)
+{
+  if ((_method == PJSIP_INVITE_METHOD) &&
+      (_user_services != NULL) &&
+      (_user_services->cdiv_enabled()))
+  {
+    const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
+    for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
+         rule != cdiv_rules->end();
+         rule++)
+    {
+      LOG_DEBUG("Considering rule - conditions 0x%x (?= 0x%x), target %s",
+                rule->conditions(), conditions, rule->forward_target().c_str());
+      if ((rule->conditions() & ~conditions) == 0)
       {
-        pjsip_msg* rsp = create_response(msg, rc);
-        send_response(rsp);
+        LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
+        return rule->forward_target();
       }
     }
   }
-  return rc;
+  return "";
 }
 
 // Determine the condition corresponding to the specified code, as specified by
@@ -855,11 +892,16 @@ void MmtelTsx::on_timer_expiry(void* context)
   // Cancel the original attempt and perform call forwarding to
   // try a redirect.
   cancel_fork(_late_redirect_fork_id);
-  pjsip_msg* req = original_request();
-  pjsip_status_code rc = apply_call_diversion(req,
-                                              _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
-                                              PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-  finish_processing(req, rc);
+  if (!apply_cdiv_on_rsp(NULL,
+                         _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
+                         PJSIP_SC_TEMPORARILY_UNAVAILABLE))
+  {
+    // Failed to redirect the request, so send a failure response.
+    pjsip_msg* req = original_request();
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    free_msg(req);
+    send_response(rsp);
+  }
 }
 
 pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* req)

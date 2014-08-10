@@ -1698,7 +1698,7 @@ pjsip_status_code PJUtils::redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_po
   // headers), do the redirect.
   if (num_history_infos < MAX_HISTORY_INFOS)
   {
-    rc = PJSIP_SC_CALL_BEING_FORWARDED;
+    rc = PJSIP_SC_OK;
 
     // Add a Diversion header with the original request URI and the reason
     // for the diversion.

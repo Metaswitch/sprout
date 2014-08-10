@@ -1521,7 +1521,28 @@ int main(int argc, char *argv[])
     sproutlets.push_back(icscf_sproutlet);
   }
 
-  // Load any AppServers that should be collocated, eg.
+  if (opt.xdm_server != "")
+  {
+    // Create a connection to the XDMS.
+    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+    xdm_connection = new XDMConnection(opt.xdm_server,
+                                       http_resolver,
+                                       load_monitor,
+                                       stack_data.stats_aggregator);
+
+    if (xdm_connection == NULL)
+    {
+      LOG_ERROR("Failed to create XDM connection");
+      return 1;
+    }
+
+    // Load the MMTEL AppServer
+    AppServer* mmtel = new Mmtel("mmtel", xdm_connection);
+    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel);
+    sproutlets.push_back(mmtel_sproutlet);
+  }
+
+  // Load any other AppServers that should be collocated, eg.
   //   AppServer* app = new SampleForkAS();
   //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
   //   sproutlets.push_back(app_sproutlet);

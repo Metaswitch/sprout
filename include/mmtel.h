@@ -94,8 +94,6 @@ private:
 
   XDMConnection* _xdmc;
 
-  void finish_processing(pjsip_msg*& req, pjsip_status_code rc);
-
   simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 
   pjsip_status_code apply_ob_call_barring(pjsip_msg* req);
@@ -104,8 +102,9 @@ private:
                                        pjsip_msg* req);
   pjsip_status_code apply_ob_privacy(pjsip_msg* req, pj_pool_t* pool);
   pjsip_status_code apply_ib_privacy(pjsip_msg* req, pj_pool_t* pool);
-  pjsip_status_code apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
-  pjsip_status_code check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
+  pjsip_status_code apply_cdiv_on_req(pjsip_msg* req, unsigned int conditions, pjsip_status_code code);
+  bool apply_cdiv_on_rsp(pjsip_msg* rsp, unsigned int conditions, pjsip_status_code code);
+  std::string check_call_diversion_rules(unsigned int conditions);
   bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* req);
 
   unsigned int condition_from_status(int code);
