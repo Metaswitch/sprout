@@ -157,22 +157,22 @@ public:
   /// and restarted with the new duration and context parameter.
   ///
   /// @returns             - true/false indicating when the timer is programmed.
-  /// @param  id           - A unique identifier for the timer.
   /// @param  context      - Context parameter returned on the callback.
+  /// @param  id           - A unique identifier for the timer.
   /// @param  duration     - Timer duration in milliseconds.
-  virtual bool schedule_timer(int id, void* context, int duration);
+  virtual bool schedule_timer(void* context, TimerID& id, int duration);
 
   /// Cancels the timer with the specified identifier.  This is a no-op if
   /// there is no timer with this identifier running.
   ///
   /// @param  id           - The unique identifier for the timer.
-  virtual void cancel_timer(int id);
+  virtual void cancel_timer(TimerID id);
 
   /// Queries the state of a timer.
   ///
   /// @returns             - true if the timer is running, false otherwise.
   /// @param  id           - The unique identifier for the timer.
-  virtual bool timer_running(int id);
+  virtual bool timer_running(TimerID id);
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
@@ -233,6 +233,9 @@ public:
   /// Called if the original request is cancelled (either by a received
   /// CANCEL request or an error on the inbound transport).
   virtual void on_rx_cancel(int status_code, pjsip_msg* cancel_req);
+
+  /// Called if a programmed timer expires.
+  virtual void on_timer_expiry(void* context);
 
 private:
   SproutletAppServerTsxHelper* _app_server_helper;

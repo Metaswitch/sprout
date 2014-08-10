@@ -52,6 +52,7 @@
 
 class SproutletWrapper;
 
+
 class SproutletProxy : public BasicProxy
 {
 public:
@@ -64,7 +65,13 @@ public:
   /// Destructor.
   ~SproutletProxy();
 
+  /// Static callback for timers
+  static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
+
 protected:
+  /// Pre-declaration
+  class UASTsx;
+
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
@@ -84,11 +91,31 @@ protected:
   bool is_uri_local(pjsip_sip_uri* uri);
   bool is_host_local(pj_str_t* host);
 
+  /// Defintion of a timer set by an child sproutlet transaction.
+  struct SproutletTimerCallbackData
+  {
+    SproutletProxy* proxy;
+    SproutletProxy::UASTsx* uas_tsx;
+    SproutletWrapper* sproutlet_wrapper;
+    void* context;
+  };
+
+  bool schedule_timer(SproutletProxy::UASTsx* uas_tsx,
+                      SproutletWrapper* sproutlet_wrapper,
+                      void* context,
+                      TimerID& id,
+                      int duration);
+  void cancel_timer(TimerID id);
+  bool timer_running(TimerID id);
+  void on_timer_pop(SproutletProxy::UASTsx* uas_tsx,
+                    SproutletWrapper* sproutlet_wrapper,
+                    void* context);
+
   class UASTsx : public BasicProxy::UASTsx
   {
   public:
     /// Constructor.
-    UASTsx(BasicProxy* proxy);
+    UASTsx(SproutletProxy* proxy);
 
     /// Destructor.
     ~UASTsx();
@@ -101,6 +128,10 @@ protected:
 
     /// Handle a received CANCEL request.
     virtual void process_cancel_request(pjsip_rx_data* rdata);
+
+    /// Handle a timer pop.
+    void process_timer_pop(SproutletWrapper* tsx,
+                           void* context);
 
   protected:
     /// Handles a response to an associated UACTsx.
@@ -116,6 +147,10 @@ protected:
                     pjsip_tx_data* req);
 
     void schedule_requests();
+
+    bool schedule_timer(SproutletWrapper* tsx, void* context, TimerID& id, int duration);
+    void cancel_timer(TimerID id);
+    bool timer_running(TimerID id);
 
     void tx_response(SproutletWrapper* sproutlet,
                      pjsip_tx_data* rsp);
@@ -166,6 +201,9 @@ protected:
     } PendingRequest;
     std::queue<PendingRequest> _pending_req_q;
 
+    /// Parent proxy object
+    SproutletProxy* _sproutlet_proxy;
+
     friend class SproutletWrapper;
   };
 
@@ -214,9 +252,9 @@ public:
   void cancel_pending_forks(int reason=0);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
-  bool schedule_timer(int id, void* context, int duration);
-  void cancel_timer(int id);
-  bool timer_running(int id);
+  bool schedule_timer(void* context, TimerID& id, int duration);
+  void cancel_timer(TimerID id);
+  bool timer_running(TimerID id);
   SAS::TrailId trail() const;
 
 private:
@@ -224,6 +262,7 @@ private:
   void rx_response(pjsip_tx_data* rsp, int fork_id);
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
+  void on_timer_pop(void* context);
   void register_tdata(pjsip_tx_data* tdata);
 
   void process_actions();

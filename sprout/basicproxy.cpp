@@ -66,7 +66,8 @@ BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
-  _delay_trying(delay_trying)
+  _delay_trying(delay_trying), 
+  _endpt(endpt)
 {
 }
 

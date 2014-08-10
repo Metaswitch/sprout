@@ -1521,6 +1521,11 @@ int main(int argc, char *argv[])
     sproutlets.push_back(icscf_sproutlet);
   }
 
+  // Load any AppServers that should be collocated, eg.
+  //   AppServer* app = new SampleForkAS();
+  //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
+  //   sproutlets.push_back(app_sproutlet);
+
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
@@ -1534,6 +1539,7 @@ int main(int argc, char *argv[])
       return 1;
     }
   }
+
 
   status = start_stack();
   if (status != PJ_SUCCESS)

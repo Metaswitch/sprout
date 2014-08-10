@@ -56,6 +56,10 @@ class Sproutlet;
 class SproutletTsx;
 
 
+/// Typedefs for Sproutlet-specific types
+typedef intptr_t TimerID;
+
+
 /// The SproutletTsxHelper class handles the underlying service-related processing of
 /// a single transaction.  Once a service has been triggered as part of handling
 /// a transaction, the related SproutletTsxHelper is inspected to determine what should
@@ -175,22 +179,22 @@ public:
   /// and restarted with the new duration and context parameter.
   ///
   /// @returns             - true/false indicating when the timer is programmed.
-  /// @param  id           - A unique identifier for the timer.
   /// @param  context      - Context parameter returned on the callback.
+  /// @param  id           - The unique identifier for the timer.
   /// @param  duration     - Timer duration in milliseconds.
-  virtual bool schedule_timer(int id, void* context, int duration) = 0;
+  virtual bool schedule_timer(void* context, TimerID& id, int duration) = 0;
 
   /// Cancels the timer with the specified identifier.  This is a no-op if
   /// there is no timer with this identifier running.
   ///
   /// @param  id           - The unique identifier for the timer.
-  virtual void cancel_timer(int id) = 0;
+  virtual void cancel_timer(TimerID id) = 0;
 
   /// Queries the state of a timer.
   ///
   /// @returns             - true if the timer is running, false otherwise.
   /// @param  id           - The unique identifier for the timer. 
-  virtual bool timer_running(int id) = 0;
+  virtual bool timer_running(TimerID id) = 0;
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
@@ -278,10 +282,9 @@ public:
 
   /// Called when a timer programmed by the SproutletTsx expires.
   ///
-  /// @param  id           - The unique identifier for the timer.
   /// @param  context      - The context parameter specified when the timer
   ///                        was scheduled.
-  virtual void on_timer_expiry(int id, void* context) {}
+  virtual void on_timer_expiry(void* context) {}
 
 protected:
   /// Adds the service to the underlying SIP dialog with the specified dialog
@@ -400,24 +403,24 @@ protected:
   /// and restarted with the new duration and context parameter.
   ///
   /// @returns             - true/false indicating when the timer is programmed.
-  /// @param  id           - A unique identifier for the timer.
   /// @param  context      - Context parameter returned on the callback.
+  /// @param  id           - A unique identifier for the timer.
   /// @param  duration     - Timer duration in milliseconds.
-  bool schedule_timer(int id, void* context, int duration)
-    {return _helper->schedule_timer(id, context, duration);}
+  bool schedule_timer(void* context, TimerID& id, int duration)
+    {return _helper->schedule_timer(context, id, duration);}
 
   /// Cancels the timer with the specified identifier.  This is a no-op if
   /// there is no timer with this identifier running.
   ///
   /// @param  id           - The unique identifier for the timer.
-  void cancel_timer(int id)
+  void cancel_timer(TimerID id)
     {_helper->cancel_timer(id);}
 
   /// Queries the state of a timer.
   ///
   /// @returns             - true if the timer is running, false otherwise.
   /// @param  id           - The unique identifier for the timer.
-  bool timer_running(int id)
+  bool timer_running(TimerID id)
     {return _helper->timer_running(id);}
 
   /// Returns the SAS trail identifier that should be used for any SAS events
