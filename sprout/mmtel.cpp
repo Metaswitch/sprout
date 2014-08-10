@@ -67,19 +67,21 @@ AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
 
 /// Constructor for the MmtelTsx.
 MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
-                   pjsip_msg* msg,
+                   pjsip_msg* req,
                    XDMConnection *xdm_client) :
   AppServerTsx(helper),
   _xdmc(xdm_client)
 {
   _country_code = "1";
 
-  pjsip_routing_hdr* served_user_hdr =
-    (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_SERVED_USER, NULL);
+  pjsip_routing_hdr* served_user_hdr = (pjsip_routing_hdr*)
+                     pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
   pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&served_user_hdr->name_addr);
-  std::string served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+  std::string served_user =
+                         PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
 
-  pjsip_param* sescase = pjsip_param_find(&served_user_hdr->other_param, &STR_SESCASE);
+  pjsip_param* sescase =
+                 pjsip_param_find(&served_user_hdr->other_param, &STR_SESCASE);
   if ((sescase != NULL) &&
       (pj_stricmp(&sescase->value, &STR_ORIG) == 0))
   {
@@ -90,7 +92,7 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
     _originating = false;
   }
 
-  _method = msg->line.req.method.id;
+  _method = req->line.req.method.id;
 
   _user_services = get_user_services(served_user, trail());
 
@@ -98,9 +100,9 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
   {
     _ringing = false;
     // Determine the media type conditions, in case they're needed later.
-    if (msg->line.req.method.id == PJSIP_INVITE_METHOD)
+    if (req->line.req.method.id == PJSIP_INVITE_METHOD)
     {
-      _media_conditions = get_media_type_conditions(msg);
+      _media_conditions = get_media_type_conditions(req);
     }
     else
     {
@@ -115,11 +117,6 @@ MmtelTsx::~MmtelTsx()
   if (_no_reply_timer != 0)
   {
     cancel_timer(_no_reply_timer);
-  }
-
-  if (_late_redirect_msg != NULL)
-  {
-    free_msg(_late_redirect_msg);
   }
 
   if (_user_services != NULL)
@@ -151,44 +148,44 @@ simservs* MmtelTsx::get_user_services(std::string public_id, SAS::TrailId trail)
 }
 
 // Apply Mmtel processing on initial invite.
-void MmtelTsx::on_initial_request(pjsip_msg* msg)
+void MmtelTsx::on_initial_request(pjsip_msg* req)
 {
   pjsip_status_code rc = PJSIP_SC_OK;
-  pj_pool_t* pool = get_pool(msg);
+  pj_pool_t* pool = get_pool(req);
 
   if (_originating)
   {
-    rc = apply_ob_privacy(msg, pool);
+    rc = apply_ob_privacy(req, pool);
 
     if (rc == PJSIP_SC_OK)
     {
-      rc = apply_ob_call_barring(msg);
+      rc = apply_ob_call_barring(req);
     }
   }
   else
   {
-    rc = apply_ib_privacy(msg, pool);
+    rc = apply_ib_privacy(req, pool);
 
     if (rc == PJSIP_SC_OK)
     {
-      rc = apply_call_diversion(msg, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+      rc = apply_call_diversion(req, _media_conditions, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
     }
 
     if (rc == PJSIP_SC_OK)
     {
-      rc = apply_ib_call_barring(msg);
+      rc = apply_ib_call_barring(req);
     }
   }
 
-  finish_processing(msg, rc);
+  finish_processing(req, rc);
 }
 
 // Apply terminating Mmtel processing on receiving a response.
-void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
+void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
 {
   pjsip_status_code rc = PJSIP_SC_OK;
-  pj_pool_t* pool = get_pool(msg);
-  pjsip_status_code code = (pjsip_status_code)msg->line.status.code;
+  pj_pool_t* pool = get_pool(rsp);
+  pjsip_status_code code = (pjsip_status_code)rsp->line.status.code;
 
   if (code < 200)
   {
@@ -224,7 +221,6 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
             else
             {
               _late_redirect_fork_id = fork_id;
-              _late_redirect_msg = clone_request(msg);
             }
             break;
           }
@@ -236,16 +232,16 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
     {
       // Handle 302 redirect by parsing the contact header and diverting to that
       // address.
-      pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, NULL);;
+      pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);;
       if (contact_hdr != NULL)
       {
-        rc = PJUtils::redirect(msg, contact_hdr->uri, pool, code);
+        rc = PJUtils::redirect(rsp, contact_hdr->uri, pool, code);
 
         // If we have a 18X, send a provisional response. Final responses will
         // be handled higher up.
         if (rc < 200)
         {
-          pjsip_msg* rsp = create_response(msg, rc);
+          pjsip_msg* rsp = create_response(rsp, rc);
           send_response(rsp);
         }
       }
@@ -265,23 +261,23 @@ void MmtelTsx::on_response(pjsip_msg* msg, int fork_id)
       cancel_timer(_no_reply_timer);
     }
 
-    rc = apply_call_diversion(msg, condition_from_status(code) | _media_conditions, code);
+    rc = apply_call_diversion(rsp, condition_from_status(code) | _media_conditions, code);
   }
 
-  finish_processing(msg, rc);
+  finish_processing(rsp, rc);
 }
 
-void MmtelTsx::finish_processing(pjsip_msg*& msg,
+void MmtelTsx::finish_processing(pjsip_msg*& req,
                                  pjsip_status_code rc)
 {
   if (rc <= PJSIP_SC_OK)
   {
-    send_request(msg);
+    send_request(req);
   }
   else
   {
-    pjsip_msg* rsp = create_response(msg, rc);
-    free_msg(msg);
+    pjsip_msg* rsp = create_response(req, rc);
+    free_msg(req);
     send_response(rsp);
   }
 }
@@ -336,7 +332,7 @@ int MmtelTsx::parse_privacy_headers(pjsip_generic_array_hdr *header_array)
 // Create a privacy header from a bitfield of privacy fields.
 //
 // @returns Nothing.
-void MmtelTsx::build_privacy_header(pjsip_msg* msg, pj_pool_t* pool, int privacy_fields)
+void MmtelTsx::build_privacy_header(pjsip_msg* req, pj_pool_t* pool, int privacy_fields)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
 
@@ -401,7 +397,7 @@ void MmtelTsx::build_privacy_header(pjsip_msg* msg, pj_pool_t* pool, int privacy
     new_header->count++;
   }
 
-  pjsip_msg_add_hdr(msg, (pjsip_hdr *)new_header);
+  pjsip_msg_add_hdr(req, (pjsip_hdr *)new_header);
 }
 
 // Gets the media types specified in the SDP on the message.
@@ -450,7 +446,7 @@ unsigned int MmtelTsx::get_media_type_conditions(pjsip_msg *msg)
 //
 // @returns true if the call may still proceed, false otherwise.
 pjsip_status_code MmtelTsx::apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
-                                               pjsip_msg* msg)
+                                               pjsip_msg* req)
 {
   // If one of the matching rules evaluates to allow=true then the resulting value shall be allow=true
   // and the call continues normally, otherwise the result shall be allow=false and the call will be barred.
@@ -461,7 +457,7 @@ pjsip_status_code MmtelTsx::apply_call_barring(const std::vector<simservs::CBRul
        rule != ruleset->end();
        rule++)
   {
-    if (check_cb_rule(*rule, msg))
+    if (check_cb_rule(*rule, req))
     {
       rule_matched = true;
       if (rule->allow_call())
@@ -495,7 +491,7 @@ pjsip_status_code MmtelTsx::apply_call_barring(const std::vector<simservs::CBRul
 // Determine if an arbitary rule's conditions apply to a call.
 //
 // @return true if the rule should be applied (i.e. the conditions hold)
-bool MmtelTsx::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg)
+bool MmtelTsx::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* req)
 {
   bool rule_matches = true;
   int conditions = rule.conditions();
@@ -512,7 +508,7 @@ bool MmtelTsx::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg)
     // Detect international calls, this requires the request URI to be a TEL URI or a SIP URI with a 'phone'
     // parameter set.  Then we need to look at the country code to determine if we're going international.
     std::string dialed_number;
-    pjsip_uri *uri = msg->line.req.uri;
+    pjsip_uri *uri = req->line.req.uri;
     if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
       LOG_DEBUG("TEL: Number dialed");
@@ -569,7 +565,7 @@ bool MmtelTsx::check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg)
 // Applies privacy services as an originating AS.
 //
 // @returns true if the call should proceed, false otherwise
-pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool)
+pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* req, pj_pool_t* pool)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
 
@@ -585,7 +581,7 @@ pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool)
     LOG_DEBUG("Originating Identification Presentation Restriction enabled");
 
     // Extract the privacy header
-    privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(msg, &privacy_hdr_name, NULL);
+    privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(req, &privacy_hdr_name, NULL);
 
     int privacy_hdrs = 0;
     if (privacy_hdr_array)
@@ -625,7 +621,7 @@ pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool)
     }
 
     // Construct the new privacy header
-    MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
+    MmtelTsx::build_privacy_header(req, pool, privacy_hdrs);
   }
 
   return PJSIP_SC_OK;
@@ -634,7 +630,7 @@ pjsip_status_code MmtelTsx::apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool)
 // Apply originating call barring (as defined in 3GPP TS 24.611 v11.2.0)
 //
 // @returns true if the call may still proceed, false otherwise.
-pjsip_status_code MmtelTsx::apply_ob_call_barring(pjsip_msg* msg)
+pjsip_status_code MmtelTsx::apply_ob_call_barring(pjsip_msg* req)
 {
   if (!_user_services->outbound_cb_enabled())
   {
@@ -642,13 +638,13 @@ pjsip_status_code MmtelTsx::apply_ob_call_barring(pjsip_msg* msg)
     return PJSIP_SC_OK;
   }
 
-  return apply_call_barring(_user_services->outbound_cb_rules(), msg);
+  return apply_call_barring(_user_services->outbound_cb_rules(), req);
 }
 
 // Apply privacy services as a terminating AS.
 //
 // @returns true if the call may proceed, false otherwise.
-pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
+pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* req, pj_pool_t* pool)
 {
   static const pj_str_t privacy_hdr_name = pj_str("Privacy");
   static const pj_str_t call_info_hdr_name = pj_str("Call-Info");
@@ -662,7 +658,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
   pjsip_generic_array_hdr *privacy_hdr_array = NULL;
 
   int privacy_hdrs = 0;
-  privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(msg, &privacy_hdr_name, NULL);
+  privacy_hdr_array = (pjsip_generic_array_hdr *)pjsip_msg_find_hdr_by_name(req, &privacy_hdr_name, NULL);
   if (privacy_hdr_array)
   {
     privacy_hdrs = MmtelTsx::parse_privacy_headers(privacy_hdr_array);
@@ -672,7 +668,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
   if (privacy_hdrs & PRIVACY_H_NONE)
   {
     LOG_DEBUG("Privacy 'none' requested, no prvacy applied");
-    MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
+    MmtelTsx::build_privacy_header(req, pool, privacy_hdrs);
     return PJSIP_SC_OK;
   }
 
@@ -693,7 +689,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
                                             &organization_hdr_name };
     for (unsigned int ii = 0; ii < sizeof(headers_to_remove) / sizeof(pj_str_t *); ii++)
     {
-      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, headers_to_remove[ii], NULL);
+      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(req, headers_to_remove[ii], NULL);
       if (hdr)
       {
         pj_list_erase(hdr);
@@ -730,7 +726,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
                                             &in_reply_to_hdr_name };
     for (unsigned int ii = 0; ii < sizeof(headers_to_remove) / sizeof(pj_str_t *); ii++)
     {
-      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, headers_to_remove[ii], NULL);
+      pjsip_hdr *hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(req, headers_to_remove[ii], NULL);
       if (hdr)
       {
         pj_list_erase(hdr);
@@ -739,7 +735,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
 
     // Convert the From: header to the anonymous one (as specified in RFC3323), note that we must keep the tag the same so the call can
     // be corellated.
-    pjsip_from_hdr *from_header = PJSIP_MSG_FROM_HDR(msg);
+    pjsip_from_hdr *from_header = PJSIP_MSG_FROM_HDR(req);
     pjsip_name_addr *anonymous_name_addr = pjsip_name_addr_create(pool);
     pj_strset2(&anonymous_name_addr->display, "Anonymous");
     anonymous_name_addr->uri = (pjsip_uri *)pjsip_sip_uri_create(pool, 0);
@@ -752,7 +748,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
   if (privacy_hdrs & PRIVACY_H_ID)
   {
     LOG_DEBUG("Applying 'id' privacy");
-    pjsip_hdr *p_asserted_identity_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(msg, &p_asserted_identity_hdr_name, NULL);
+    pjsip_hdr *p_asserted_identity_hdr = (pjsip_hdr *)pjsip_msg_find_hdr_by_name(req, &p_asserted_identity_hdr_name, NULL);
     if (p_asserted_identity_hdr)
     {
       pj_list_erase(p_asserted_identity_hdr);
@@ -760,7 +756,7 @@ pjsip_status_code MmtelTsx::apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool)
   }
 
   // Construct the new privacy header
-  MmtelTsx::build_privacy_header(msg, pool, privacy_hdrs);
+  MmtelTsx::build_privacy_header(req, pool, privacy_hdrs);
 
   return PJSIP_SC_OK;
 }
@@ -859,13 +855,14 @@ void MmtelTsx::on_timer_expiry(void* context)
   // Cancel the original attempt and perform call forwarding to
   // try a redirect.
   cancel_fork(_late_redirect_fork_id);
-  pjsip_status_code rc = apply_call_diversion(_late_redirect_msg,
+  pjsip_msg* req = original_request();
+  pjsip_status_code rc = apply_call_diversion(req,
                                               _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,
                                               PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-  finish_processing(_late_redirect_msg, rc);
+  finish_processing(req, rc);
 }
 
-pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* msg)
+pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* req)
 {
   if (!_user_services)
   {
@@ -879,5 +876,5 @@ pjsip_status_code MmtelTsx::apply_ib_call_barring(pjsip_msg* msg)
     return PJSIP_SC_OK;
   }
 
-  return apply_call_barring(_user_services->inbound_cb_rules(), msg);
+  return apply_call_barring(_user_services->inbound_cb_rules(), req);
 }

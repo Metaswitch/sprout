@@ -74,7 +74,7 @@ class MmtelTsx : public AppServerTsx
 {
 public:
   MmtelTsx(AppServerTsxHelper* helper,
-           pjsip_msg* msg,
+           pjsip_msg* req,
            XDMConnection* xdm_client);
   ~MmtelTsx();
 
@@ -90,29 +90,28 @@ private:
   bool _ringing;
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
-  pjsip_msg* _late_redirect_msg;
   TimerID _no_reply_timer;
 
   XDMConnection* _xdmc;
 
-  void finish_processing(pjsip_msg*& msg, pjsip_status_code rc);
+  void finish_processing(pjsip_msg*& req, pjsip_status_code rc);
 
   simservs *get_user_services(std::string public_id, SAS::TrailId trail);
 
-  pjsip_status_code apply_ob_call_barring(pjsip_msg* msg);
-  pjsip_status_code apply_ib_call_barring(pjsip_msg* msg);
+  pjsip_status_code apply_ob_call_barring(pjsip_msg* req);
+  pjsip_status_code apply_ib_call_barring(pjsip_msg* req);
   pjsip_status_code apply_call_barring(const std::vector<simservs::CBRule>* ruleset,
-                          pjsip_msg* msg);
-  pjsip_status_code apply_ob_privacy(pjsip_msg* msg, pj_pool_t* pool);
-  pjsip_status_code apply_ib_privacy(pjsip_msg* msg, pj_pool_t* pool);
+                                       pjsip_msg* req);
+  pjsip_status_code apply_ob_privacy(pjsip_msg* req, pj_pool_t* pool);
+  pjsip_status_code apply_ib_privacy(pjsip_msg* req, pj_pool_t* pool);
   pjsip_status_code apply_call_diversion(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
   pjsip_status_code check_call_diversion_rules(pjsip_msg* msg, unsigned int conditions, pjsip_status_code code);
-  bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* msg);
+  bool check_cb_rule(const simservs::CBRule& rule, pjsip_msg* req);
 
   unsigned int condition_from_status(int code);
   static int parse_privacy_headers(pjsip_generic_array_hdr *header_array);
-  static void build_privacy_header(pjsip_msg* msg, pj_pool_t* pool, int fields);
-  static unsigned int get_media_type_conditions(pjsip_msg *msg);
+  static void build_privacy_header(pjsip_msg* req, pj_pool_t* pool, int fields);
+  static unsigned int get_media_type_conditions(pjsip_msg *req);
 
   void no_reply_timer_pop();
 };
