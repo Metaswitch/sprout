@@ -377,10 +377,13 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
   if (_acr != NULL) 
   {
     _acr->send_message();
+    delete _acr;
   }
 
-  delete _acr;
-  delete _router;
+  if (_router != NULL) 
+  {
+    delete _router;
+  }
 }
 
 
