@@ -139,6 +139,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     {
       // For initial requests, the service can be encoded in the URI host name
       // or the URI user name.
+      LOG_DEBUG("Initial request");
       sproutlet = service_from_host(uri);
 
       if (sproutlet == NULL) 
@@ -150,6 +151,7 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     {
       // For in-dialog requests, the services (and dialog identifiers) are 
       // encoded in a URI parameter.
+      LOG_DEBUG("In-dialog request");
       sproutlet = service_from_params(uri);
     }
 
@@ -166,10 +168,11 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     // No service identifier in the Route URI, so check for a default service
     // for the port.  We can only do this if there is either no route header
     // or the URI in the Route header corresponds to our hostname.
+    LOG_DEBUG("No Sproutlet found using service name or host");
     if ((route == NULL) ||
         (is_uri_local(route->name_addr.uri)))
     {
-      LOG_DEBUG("No service identifier, so look for default service for port %d", port);
+      LOG_DEBUG("Find default service for port %d", port);
       std::map<int, Sproutlet*>::iterator i = _port_map.find(port);
       if (i != _port_map.end()) 
       {
@@ -249,11 +252,13 @@ Sproutlet* SproutletProxy::service_from_params(pjsip_sip_uri* uri)
   Sproutlet* sproutlet = NULL;
 
   // Find the services parameter in the URI.
+  LOG_DEBUG("Look for Sproutlet service parameter");
   pjsip_param* p = pjsip_param_find(&uri->other_param, &STR_SERVICE);
 
   if (p != NULL) 
   {
     // Get the first service in the list.
+    LOG_DEBUG("Found services - %.*s", p->value.slen, p->value.ptr);
     pj_str_t service_str = p->value;
 
     // Scan for a separator between services.
@@ -287,6 +292,7 @@ Sproutlet* SproutletProxy::service_from_params(pjsip_sip_uri* uri)
   return sproutlet;
 }
 
+#if 0
 /// Adds a Record-Route header for this node if one has not already been
 /// added, and encoded the specified service and dialog identifier in the
 /// header.
@@ -339,6 +345,32 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   pj_strdup2(tdata->pool, &p->value, services.c_str());
   LOG_DEBUG("%s", PJUtils::hdr_to_string(hrr).c_str());
 }
+#else
+/// Adds a Record-Route header for this node encoding the specified service
+/// and dialog identifier in the header.
+void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
+                                      const std::string& service_name,
+                                      const std::string& dialog_id)
+{
+  LOG_DEBUG("Add Record-Route %s:%s", service_name.c_str(), dialog_id.c_str());
+
+  // Construct and add the Record-Route header.
+  LOG_DEBUG("Add new Record-Route header");
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool, _uri);
+  _uri->lr_param = 1;
+  pjsip_route_hdr* hrr = pjsip_rr_hdr_create(tdata->pool);
+  hrr->name_addr.uri = (pjsip_uri*)uri;
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hrr);
+
+  LOG_DEBUG("Add services parameter");
+  pjsip_param* p = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+  pj_strdup(tdata->pool, &p->name, &STR_SERVICE);
+  pj_list_insert_before(&uri->other_param, p);
+  std::string services = service_name + '/' + dialog_id;
+  pj_strdup2(tdata->pool, &p->value, services.c_str());
+  LOG_DEBUG("%s", PJUtils::hdr_to_string(hrr).c_str());
+}
+#endif
 
 
 bool SproutletProxy::is_uri_local(pjsip_uri* uri)

@@ -79,7 +79,9 @@ public:
                  RegStore* remote_store,
                  HSSConnection* hss,
                  EnumService* enum_service,
-                 ACRFactory* acr_factory);
+                 ACRFactory* acr_factory,
+                 bool user_phone,
+                 bool global_only_lookups);
   ~SCSCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);

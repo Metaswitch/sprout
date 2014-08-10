@@ -57,17 +57,18 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                RegStore* remote_store,
                                HSSConnection* hss,
                                EnumService* enum_service,
-                               ACRFactory* acr_factory) :
+                               ACRFactory* acr_factory,
+                               bool user_phone,
+                               bool global_only_lookups) :
   Sproutlet("scscf", port),
   _store(store), 
   _remote_store(remote_store),
   _hss(hss),
   _enum_service(enum_service),
   _acr_factory(acr_factory),
-  _global_only_lookups(false),
-  _user_phone(false)
+  _global_only_lookups(global_only_lookups),
+  _user_phone(user_phone)
 {
-
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
@@ -178,27 +179,33 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
   std::string user;
   std::string uri;
 
-  // Determine whether we have a SIP URI or a tel URI
-  if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
+  if (_enum_service != NULL) 
   {
-    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req->line.req.uri)->user);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri))
-  {
-    user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
-  }
+    // ENUM is enabled.
+    LOG_DEBUG("ENUM is enabled");
 
-  // Check whether we have a global number or whether we allow
-  // ENUM lookups for local numbers
-  if ((is_user_global(user)) || (!_global_only_lookups))
-  {
-    // Perform an ENUM lookup if we have a tel URI, or if we have
-    // a SIP URI which is being treated as a phone number
-    if ((PJUtils::is_uri_phone_number(req->line.req.uri)) ||
-        ((!_user_phone) && (is_user_numeric(user))))
+    // Determine whether we have a SIP URI or a tel URI
+    if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
-      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      uri = _enum_service->lookup_uri_from_user(user, trail);
+      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req->line.req.uri)->user);
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri))
+    {
+      user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
+    }
+
+    // Check whether we have a global number or whether we allow
+    // ENUM lookups for local numbers
+    if ((is_user_global(user)) || (!_global_only_lookups))
+    {
+      // Perform an ENUM lookup if we have a tel URI, or if we have
+      // a SIP URI which is being treated as a phone number
+      if ((PJUtils::is_uri_phone_number(req->line.req.uri)) ||
+          ((!_user_phone) && (is_user_numeric(user))))
+      {
+        LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+        uri = _enum_service->lookup_uri_from_user(user, trail);
+      }
     }
   }
 
@@ -385,7 +392,10 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
-  _acr->rx_response(rsp);
+  if (_acr != NULL) 
+  {
+    _acr->rx_response(rsp);
+  }
 
 #if 0
   if (_liveness_timer.id == LIVENESS_TIMER)
@@ -397,6 +407,14 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 #endif
 
   int st_code = rsp->line.status.code;
+
+  if (st_code == SIP_STATUS_FLOW_FAILED) 
+  {
+    // The edge proxy / P-CSCF has reported that this flow has failed.
+    // We should remove the binding from the registration store so we don't
+    // try it again.
+    // @TODO - this code has been removed from stateful_proxy, not sure why???
+  }
 
   if (_as_chain_link.is_set()) 
   {
@@ -425,21 +443,19 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         {
           apply_terminating_services(req);
         }
+
+        // Free off the response as we no longer need it.
+        free_msg(rsp);
       }
     }
   }
 
-  if (rsp->line.status.code == SIP_STATUS_FLOW_FAILED) 
+  if (rsp != NULL) 
   {
-    // The edge proxy / P-CSCF has reported that this flow has failed.
-    // We should remove the binding from the registration store so we don't
-    // try it again.
-    // @TODO - this code has been removed from stateful_proxy, not sure why???
+    // Forward the response upstream.  The proxy layer will aggregate responses
+    // if required.
+    send_response(rsp);
   }
-
-  // Forward the response upstream.  The proxy layer will aggregate responses
-  // if required.
-  send_response(rsp);
 }
 
 
