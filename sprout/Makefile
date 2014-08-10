@@ -39,6 +39,7 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
+									callservices.cpp \
                   mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
