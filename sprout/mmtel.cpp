@@ -70,26 +70,37 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
                    pjsip_msg* req,
                    XDMConnection *xdm_client) :
   AppServerTsx(helper),
+  _no_reply_timer(0),
   _xdmc(xdm_client)
 {
   _country_code = "1";
 
-  pjsip_routing_hdr* served_user_hdr = (pjsip_routing_hdr*)
-                     pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
-  pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&served_user_hdr->name_addr);
-  std::string served_user =
-                         PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+  std::string served_user;
 
-  pjsip_param* sescase =
-                 pjsip_param_find(&served_user_hdr->other_param, &STR_SESCASE);
-  if ((sescase != NULL) &&
-      (pj_stricmp(&sescase->value, &STR_ORIG) == 0))
+  pjsip_routing_hdr* psu_hdr = (pjsip_routing_hdr*)
+                     pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
+  if (psu_hdr != NULL)
   {
-    _originating = true;
+    LOG_DEBUG("Found P-Served-User header: %s",
+              PJUtils::hdr_to_string(psu_hdr).c_str());
+    pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&psu_hdr->name_addr);
+    served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+
+    pjsip_param* sescase = pjsip_param_find(&psu_hdr->other_param, &STR_SESCASE);
+    if ((sescase != NULL) &&
+        (pj_stricmp(&sescase->value, &STR_ORIG) == 0))
+    {
+      _originating = true;
+    }
+    else
+    {
+      _originating = false;
+    }
   }
   else
   {
-    _originating = false;
+    LOG_DEBUG("Failed to find P-Served-User header");
+    //@TODO
   }
 
   _method = req->line.req.method.id;
@@ -117,6 +128,7 @@ MmtelTsx::~MmtelTsx()
   if (_no_reply_timer != 0)
   {
     cancel_timer(_no_reply_timer);
+    _no_reply_timer = 0;
   }
 
   if (_user_services != NULL)
@@ -197,6 +209,7 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
   if (code < PJSIP_SC_OK)
   {
     // Forward provisional response.
+    LOG_DEBUG("Forward provisional response");
     send_response(rsp);
 
     if (code == PJSIP_SC_RINGING)
@@ -222,7 +235,7 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
           {
             // We found a suitable rule.  Start the no-reply timer.
             bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
-            if (status != PJ_SUCCESS)
+            if (!status)
             {
               // Log this failure, but don't fail the call - there's no point.
               LOG_WARNING("Failed to set no-reply timer - status %d", status);
@@ -243,16 +256,19 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
     if (_no_reply_timer != 0)
     {
       cancel_timer(_no_reply_timer);
+      _no_reply_timer = 0;
     }
 
     if ((code == PJSIP_SC_OK) ||
         (!apply_cdiv_on_rsp(rsp, condition_from_status(code) | _media_conditions, code)))
     {
       // The request has not been redirected, so forward the response.
+      LOG_DEBUG("Request has not been redirected, so forward response upstream");
       send_response(rsp);
     }
     else
     {
+      // The request has been redirected, so discard the response.
       free_msg(rsp);
     }
   }
@@ -788,7 +804,6 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
   {
     // Check to see if CDIV rules trigger.
     target = check_call_diversion_rules(conditions);
-
   }
 
   if (!target.empty()) 
@@ -801,6 +816,7 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
     {
       // Send a provisional response flagging that the call is being
       // forwarded.
+      LOG_DEBUG("Redirect request");
       rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
       send_response(rsp);
 
@@ -891,6 +907,8 @@ void MmtelTsx::on_timer_expiry(void* context)
 {
   // Cancel the original attempt and perform call forwarding to
   // try a redirect.
+  LOG_INFO("CDIV on no answer timer expired");
+  _no_reply_timer = 0;
   cancel_fork(_late_redirect_fork_id);
   if (!apply_cdiv_on_rsp(NULL,
                          _media_conditions | simservs::Rule::CONDITION_NO_ANSWER,

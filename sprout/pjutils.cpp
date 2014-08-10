@@ -1659,7 +1659,7 @@ pjsip_status_code PJUtils::redirect(pjsip_msg* msg, std::string target, pj_pool_
   {
     // Target URI was badly formed, so continue processing the call without
     // the redirect.
-    return PJSIP_SC_OK;
+    return code;
   }
 
   return redirect_int(msg, target_uri, pool, code);
