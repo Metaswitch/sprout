@@ -281,6 +281,7 @@ private:
   SproutletTsx* _sproutlet;
 
   std::string _service_name;
+  std::string _service_host;
 
   /// Immutable reference to the original request.  A mutable clone of this
   /// is passed to the Sproutlet.

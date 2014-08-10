@@ -204,7 +204,7 @@ public:
                                 pjsip_msg* req);
 
   /// Constructor.
-  SproutletAppServerShim(AppServer* app);
+  SproutletAppServerShim(AppServer* app, const std::string& service_host="");
 
 private:
   AppServer* _app;

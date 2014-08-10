@@ -76,8 +76,12 @@ SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
        ++i) 
   {
     std::string service_name = (*i)->service_name();
-    std::string service_host = service_name + "." +
-                               std::string(_uri->host.ptr, _uri->host.slen);
+    std::string service_host = (*i)->service_host();
+    if (service_host.empty()) 
+    {
+      service_host = service_name + "." +
+                                  std::string(_uri->host.ptr, _uri->host.slen);
+    }
 
     LOG_DEBUG("Add service name map %s", service_name.c_str());
     _service_name_map[service_name] = *i;
@@ -871,6 +875,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // Offer the Sproutlet the chance to handle this transaction.
     _sproutlet = sproutlet->get_tsx(this, req->msg);
     _service_name = sproutlet->service_name();
+    _service_host = sproutlet->service_host();
   }
   else
   {
@@ -934,7 +939,10 @@ SproutletWrapper::~SproutletWrapper()
 {
   // Destroy the SproutletTsx.
   LOG_DEBUG("Destroying SproutletWrapper %p", this);
-  delete _sproutlet;
+  if (_sproutlet != NULL) 
+  {
+    delete _sproutlet;
+  }
 
   if (_req != NULL) 
   {
@@ -983,9 +991,9 @@ pjsip_msg* SproutletWrapper::original_request()
     return NULL;
   }
 
-  // Remove the top Route header from the request if it refers to this node.
-  // The Sproutlet can inspect the route_hdr API if required using the
-  // route_hdr() API, but cannot manipulate it.
+  // Remove the top Route header from the request if it refers to this node or
+  // this Sproutlet.  The Sproutlet can inspect the route_hdr API if required
+  // using the route_hdr() API, but cannot manipulate it.
   pjsip_route_hdr* hr = (pjsip_route_hdr*)
                            pjsip_msg_find_hdr(clone->msg, PJSIP_H_ROUTE, NULL);
   if ((hr != NULL) &&
@@ -1575,19 +1583,30 @@ bool SproutletWrapper::is_uri_local(pjsip_uri* uri) const
   {
     pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
     pj_str_t host = sip_uri->host;
-    char* sep = pj_strchr(&host, '.');
-    if (sep != NULL)
+
+    if (!_service_host.empty()) 
     {
-      host.slen = sep - host.ptr;
-      if (!pj_stricmp2(&host, _service_name.c_str())) 
+      if (!pj_stricmp2(&host, _service_host.c_str())) 
       {
-        // The first part of the domain is the service name, so check that
-        // the rest of the URI is local.
-        host.ptr = sep + 1;
-        host.slen = sip_uri->host.slen - (sep + 1 - sip_uri->host.ptr);
-        if (_proxy->is_host_local(&host)) 
+        return true;
+      }
+    }
+    else
+    {
+      char* sep = pj_strchr(&host, '.');
+      if (sep != NULL)
+      {
+        host.slen = sep - host.ptr;
+        if (!pj_stricmp2(&host, _service_name.c_str())) 
         {
-          return true;
+          // The first part of the domain is the service name, so check that
+          // the rest of the URI is local.
+          host.ptr = sep + 1;
+          host.slen = sip_uri->host.slen - (sep + 1 - sip_uri->host.ptr);
+          if (_proxy->is_host_local(&host)) 
+          {
+            return true;
+          }
         }
       }
     }

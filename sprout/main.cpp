@@ -1449,12 +1449,13 @@ int main(int argc, char *argv[])
     {
       // Create a local I-CSCF URI by replacing the S-CSCF port number in the
       // S-CSCF URI with the I-CSCF port number.
-      size_t pos = scscf_uri.find_first_of(std::to_string(opt.scscf_port));
+      icscf_uri = scscf_uri;
+      size_t pos = icscf_uri.find_first_of(std::to_string(opt.scscf_port));
       if (pos != std::string::npos) 
       {
-        icscf_uri = scscf_uri.replace(pos,
-                                      std::to_string(opt.scscf_port).length(),
-                                      std::to_string(opt.icscf_port));
+        icscf_uri.replace(pos,
+                          std::to_string(opt.scscf_port).length(),
+                          std::to_string(opt.icscf_port));
       }
       else
       {
@@ -1538,7 +1539,7 @@ int main(int argc, char *argv[])
 
     // Load the MMTEL AppServer
     AppServer* mmtel = new Mmtel("mmtel", xdm_connection);
-    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel);
+    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel, "mmtel." + opt.home_domain);
     sproutlets.push_back(mmtel_sproutlet);
   }
 

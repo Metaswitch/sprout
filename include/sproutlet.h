@@ -473,11 +473,17 @@ public:
   /// Returns the default port for this service.
   int port() const { return _port; }
 
+  /// Returns the host name of this service.
+  const std::string service_host() const { return _service_host; }
+
 protected:
   /// Constructor.
-  Sproutlet(const std::string& service_name, int port) :
+  Sproutlet(const std::string& service_name,
+            int port=0,
+            const std::string& service_host="") :
     _service_name(service_name),
-    _port(port)
+    _port(port),
+    _service_host(service_host)
   {
   }
 
@@ -487,6 +493,10 @@ private:
 
   /// The default port for this service (0 if no default).
   const int _port;
+
+  /// The host name of this service.
+  const std::string _service_host;
+
 };
 
 #endif
