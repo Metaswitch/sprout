@@ -68,6 +68,13 @@ public:
   /// transaction.
   void store_onward_route(pjsip_msg* req);
 
+  /// Returns a mutable clone of the original request.  This can be modified 
+  /// and sent by the application using the send_request call.
+  ///
+  /// @returns             - A clone of the original request message.
+  ///
+  virtual pjsip_msg* original_request();
+
   /// Adds the service to the underlying SIP dialog with the specified dialog
   /// identifier.
   ///
