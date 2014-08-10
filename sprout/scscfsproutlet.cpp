@@ -69,6 +69,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone)
 {
+  LOG_DEBUG("S-CSCF URI = %s", scscf_uri.c_str());
+
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
@@ -862,25 +864,34 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
            odi_value.c_str(),
            _as_chain_link.to_string().c_str());
 
+
   // Set P-Served-User, including session case and registration
   // state, per RFC5502 and the extension in 3GPP TS 24.229
   // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
   // step 5 s5.4.3.3 step 4c.
-  std::string psu_string = "<" +
-                           _as_chain_link.served_user() +
-                           ">;sescase=" +
-                           _session_case->to_string();
+  PJUtils::remove_hdr(req, &STR_P_SERVED_USER);
+  pj_pool_t* pool = get_pool(req);
+  pjsip_routing_hdr* psu_hdr = identity_hdr_create(pool, STR_P_SERVED_USER);
+  psu_hdr->name_addr.uri = 
+                  PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
+  pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+  pj_strdup2(pool, &p->name, "sescase");
+  pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
+  pj_list_insert_before(&psu_hdr->other_param, p);
   if (_session_case != &SessionCase::OriginatingCdiv)
   {
-    psu_string.append(";regstate=");
-    psu_string.append(_as_chain_link.is_registered() ? "reg" : "unreg");
+    p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup2(pool, &p->name, "regstate");
+    if (_as_chain_link.is_registered()) 
+    {
+      pj_strdup2(pool, &p->value, "reg");
+    }
+    else
+    {
+      pj_strdup2(pool, &p->value, "unreg");
+    }
+    pj_list_insert_before(&psu_hdr->other_param, p);
   }
-  pj_str_t psu_str = pj_strdup3(get_pool(req), psu_string.c_str());
-  PJUtils::remove_hdr(req, &STR_P_SERVED_USER);
-  pjsip_generic_string_hdr* psu_hdr =
-                            pjsip_generic_string_hdr_create(get_pool(req),
-                                                            &STR_P_SERVED_USER,
-                                                            &psu_str);
   pjsip_msg_add_hdr(req, (pjsip_hdr*)psu_hdr);
 
   // Add the application server URI as the next Route header.
