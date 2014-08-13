@@ -368,8 +368,6 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     // Retry-After header with a zero length timeout.
     LOG_DEBUG("Rejected request due to overload");
 
-    pjsip_from_hdr* from = (pjsip_from_hdr*)rdata->msg_info.from;
-    pjsip_to_hdr* to = (pjsip_to_hdr*)rdata->msg_info.to;
     pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
 
     SAS::TrailId trail = get_trail(rdata);
@@ -383,22 +381,7 @@ static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
     event.add_static_param(load_monitor->get_rate_limit());
     SAS::report_event(event);
 
-    if (from)
-    {
-     SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
-     pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(from->uri);
-     calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
-     SAS::report_marker(calling_dn);
-    }
-
-    if (to)
-    {
-      SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
-      pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(to->uri);
-      called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
-      SAS::report_marker(called_dn);
-
-    }
+    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
 
     if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
         ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||

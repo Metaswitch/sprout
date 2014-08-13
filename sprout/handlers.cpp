@@ -47,6 +47,8 @@ extern "C" {
 #include "regstore.h"
 #include "ifchandler.h"
 #include "registration_utils.h"
+#include "stack.h"
+#include "pjutils.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
                                     std::string aor_id, RegStore* current_store,
@@ -130,9 +132,17 @@ void RegistrationTimeoutTask::run()
 
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
-  calling_dn.add_var_param(_aor_id);
-  SAS::report_marker(calling_dn);
+
+  // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
+  // out of the URI.
+  SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
+  sip_all_register.add_var_param(_aor_id);
+  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "RegistrationTimeoutTask::run", 1024, 512, NULL);
+  pjsip_uri* uri = PJUtils::uri_from_string(_aor_id, tmp_pool);
+  pj_str_t user = PJUtils::user_from_uri(uri);
+  sip_all_register.add_var_param(user.slen, user.ptr);
+  SAS::report_marker(sip_all_register);
+  pj_pool_release(tmp_pool); uri = NULL; user.slen = 0;
 
   handle_response();
 
@@ -153,9 +163,17 @@ void AuthTimeoutTask::run()
 
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-  SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
-  calling_dn.add_var_param(_impu);
-  SAS::report_marker(calling_dn);
+
+  // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
+  // out of the URI.
+  SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
+  sip_all_register.add_var_param(_impu);
+  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "AuthTimeoutTask::run", 1024, 512, NULL);
+  pjsip_uri* uri = PJUtils::uri_from_string(_impu, tmp_pool);
+  pj_str_t user = PJUtils::user_from_uri(uri);
+  sip_all_register.add_var_param(user.slen, user.ptr);
+  SAS::report_marker(sip_all_register);
+  pj_pool_release(tmp_pool); uri = NULL; user.slen = 0;
 
   HTTPCode rc = handle_response(_req.body());
 
