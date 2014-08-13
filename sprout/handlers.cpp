@@ -134,15 +134,18 @@ void RegistrationTimeoutTask::run()
   SAS::report_marker(start_marker);
 
   // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
-  // out of the URI.
+  // out of the URI.  We do this in a block to ensure that temporarily-allocated
+  // memory can't leak out.
   SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
   sip_all_register.add_var_param(_aor_id);
-  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "RegistrationTimeoutTask::run", 1024, 512, NULL);
-  pjsip_uri* uri = PJUtils::uri_from_string(_aor_id, tmp_pool);
-  pj_str_t user = PJUtils::user_from_uri(uri);
-  sip_all_register.add_var_param(user.slen, user.ptr);
+  {
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "RegistrationTimeoutTask::run", 1024, 512, NULL);
+    pjsip_uri* uri = PJUtils::uri_from_string(_aor_id, tmp_pool);
+    pj_str_t user = PJUtils::user_from_uri(uri);
+    sip_all_register.add_var_param(user.slen, user.ptr);
+    pj_pool_release(tmp_pool);
+  }
   SAS::report_marker(sip_all_register);
-  pj_pool_release(tmp_pool); uri = NULL; user.slen = 0;
 
   handle_response();
 
@@ -165,15 +168,18 @@ void AuthTimeoutTask::run()
   SAS::report_marker(start_marker);
 
   // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
-  // out of the URI.
+  // out of the URI.  We do this in a block to ensure that temporarily-allocated
+  // memory can't leak out.
   SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
   sip_all_register.add_var_param(_impu);
-  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "AuthTimeoutTask::run", 1024, 512, NULL);
-  pjsip_uri* uri = PJUtils::uri_from_string(_impu, tmp_pool);
-  pj_str_t user = PJUtils::user_from_uri(uri);
-  sip_all_register.add_var_param(user.slen, user.ptr);
+  {
+    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "AuthTimeoutTask::run", 1024, 512, NULL);
+    pjsip_uri* uri = PJUtils::uri_from_string(_impu, tmp_pool);
+    pj_str_t user = PJUtils::user_from_uri(uri);
+    sip_all_register.add_var_param(user.slen, user.ptr);
+    pj_pool_release(tmp_pool);
+  }
   SAS::report_marker(sip_all_register);
-  pj_pool_release(tmp_pool); uri = NULL; user.slen = 0;
 
   HTTPCode rc = handle_response(_req.body());
 

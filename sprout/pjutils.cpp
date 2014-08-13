@@ -1492,6 +1492,19 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     }
   }
 
+  // Work out which method we have.
+  bool is_register = false;
+  bool is_subscribe = false;
+  bool is_notify = false;
+  if (method != NULL)
+  {
+    is_register = (method->id == PJSIP_REGISTER_METHOD);
+    is_subscribe = ((method->id == PJSIP_OTHER_METHOD) &&
+                    (pj_strcmp2(&method->name, "SUBSCRIBE") == 0));
+    is_notify = ((method->id == PJSIP_OTHER_METHOD) &&
+                 (pj_strcmp2(&method->name, "NOTIFY") == 0));
+  }
+
   // Get the To and From URIs.
   pjsip_uri* to_uri = NULL;
   bool has_to_tag = false;
@@ -1509,12 +1522,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
   }
 
   // Look at the method to decide which marker to use.
-  bool is_subscribe = ((method->id == PJSIP_OTHER_METHOD) &&
-                       (pj_strcmp2(&method->name, "SUBSCRIBE") == 0));
-  bool is_notify = ((method->id == PJSIP_OTHER_METHOD) &&
-                    (pj_strcmp2(&method->name, "NOTIFY") == 0));
-  if ((method != NULL) &&
-      (method->id == PJSIP_REGISTER_METHOD))
+  if (is_register)
   {
     // For REGISTERs, report the To URI in the SIP_ALL_REGISTER marker.
     if (to_uri != NULL)
@@ -1527,8 +1535,7 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       SAS::report_marker(sip_all_register);
     }
   }
-  else if ((method != NULL) &&
-           (is_subscribe || is_notify))
+  else if (is_subscribe || is_notify)
   {
     // For SUBSCRIBEs and NOTIFYs, report the To URI in the SIP_SUBSCRIBE_NOTIFY marker.
     if (to_uri != NULL)
