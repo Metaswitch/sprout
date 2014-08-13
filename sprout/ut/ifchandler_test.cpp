@@ -662,7 +662,7 @@ TEST_F(IfcHandlerTest, SesCase0)
              "    <SPT>\n"
              "      <ConditionNegated>0</ConditionNegated>\n"
              "      <Group>0</Group>\n"
-             "      <SessionCase>0</Method>\n"
+             "      <SessionCase>0</SessionCase>\n"
              "      <Extension></Extension>\n"
              "    </SPT>\n"
              "  </TriggerPoint>\n",
@@ -678,7 +678,7 @@ TEST_F(IfcHandlerTest, SesCase1)
              "    <SPT>\n"
              "      <ConditionNegated>0</ConditionNegated>\n"
              "      <Group>0</Group>\n"
-             "      <SessionCase>1</Method>\n"
+             "      <SessionCase>1</SessionCase>\n"
              "      <Extension></Extension>\n"
              "    </SPT>\n"
              "  </TriggerPoint>\n",
@@ -694,7 +694,7 @@ TEST_F(IfcHandlerTest, SesCase2)
              "    <SPT>\n"
              "      <ConditionNegated>0</ConditionNegated>\n"
              "      <Group>0</Group>\n"
-             "      <SessionCase>2</Method>\n"
+             "      <SessionCase>2</SessionCase>\n"
              "      <Extension></Extension>\n"
              "    </SPT>\n"
              "  </TriggerPoint>\n",
@@ -710,7 +710,7 @@ TEST_F(IfcHandlerTest, SesCase3)
              "    <SPT>\n"
              "      <ConditionNegated>0</ConditionNegated>\n"
              "      <Group>0</Group>\n"
-             "      <SessionCase>3</Method>\n"
+             "      <SessionCase>3</SessionCase>\n"
              "      <Extension></Extension>\n"
              "    </SPT>\n"
              "  </TriggerPoint>\n",
@@ -726,7 +726,7 @@ TEST_F(IfcHandlerTest, SesCase4)
              "    <SPT>\n"
              "      <ConditionNegated>0</ConditionNegated>\n"
              "      <Group>0</Group>\n"
-             "      <SessionCase>4</Method>\n"
+             "      <SessionCase>4</SessionCase>\n"
              "      <Extension></Extension>\n"
              "    </SPT>\n"
              "  </TriggerPoint>\n",
@@ -742,7 +742,7 @@ TEST_F(IfcHandlerTest, SesCaseGarbage)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SessionCase>ORIGINATING_REGISTERED</Method>\n"
+         "      <SessionCase>ORIGINATING_REGISTERED</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -761,7 +761,7 @@ TEST_F(IfcHandlerTest, SesCaseRange1)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SessionCase>-1</Method>\n"
+         "      <SessionCase>-1</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -780,7 +780,7 @@ TEST_F(IfcHandlerTest, SesCaseRange2)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>0</Group>\n"
-         "      <SessionCase>5</Method>\n"
+         "      <SessionCase>5</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -867,7 +867,7 @@ TEST_F(IfcHandlerTest, And2)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>99</Group>\n"
-         "      <SessionCase>0</Method>\n"
+         "      <SessionCase>0</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -896,7 +896,7 @@ TEST_F(IfcHandlerTest, AndSubOr1)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>99</Group>\n"
-         "      <SessionCase>0</Method>\n"
+         "      <SessionCase>0</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -989,7 +989,7 @@ TEST_F(IfcHandlerTest, Or2)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>99</Group>\n"
-         "      <SessionCase>0</Method>\n"
+         "      <SessionCase>0</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
@@ -1018,7 +1018,7 @@ TEST_F(IfcHandlerTest, OrSubAnd1)
          "    <SPT>\n"
          "      <ConditionNegated>0</ConditionNegated>\n"
          "      <Group>99</Group>\n"
-         "      <SessionCase>0</Method>\n"
+         "      <SessionCase>0</SessionCase>\n"
          "      <Extension></Extension>\n"
          "    </SPT>\n"
          "  </TriggerPoint>\n",
