@@ -50,6 +50,7 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 #include "custom_headers.h"
+#include "sasevent.h"
 
 static const int DEFAULT_RETRIES = 5;
 static const int DEFAULT_BLACKLIST_DURATION = 30;
@@ -1453,5 +1454,127 @@ void PJUtils::put_unary_param(pjsip_param* params_list,
     param = PJ_POOL_ZALLOC_T(pool, pjsip_param);
     param->name = *name;
     pj_list_push_back(params_list, param);
+  }
+}
+
+pj_str_t PJUtils::user_from_uri(pjsip_uri* uri)
+{
+  if (PJSIP_URI_SCHEME_IS_SIP(uri) ||
+      PJSIP_URI_SCHEME_IS_SIPS(uri))
+  {
+    return ((pjsip_sip_uri*)uri)->user;
+  }
+  else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    return ((pjsip_tel_uri*)uri)->number;
+  }
+  else
+  {
+    // If it's neither of the above, just use the URI's "content".
+    return ((pjsip_other_uri*)uri)->content;
+  }
+}
+
+void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
+{
+  // Get the method.  On the request, this is on the request line.  On the
+  // response, it is in the CSeq header.
+  pjsip_method* method = NULL;
+  if (msg->type == PJSIP_REQUEST_MSG)
+  {
+    method = &msg->line.req.method;
+  }
+  else
+  {
+    pjsip_cseq_hdr* cseq_hdr = PJSIP_MSG_CSEQ_HDR(msg);
+    if (cseq_hdr != NULL)
+    {
+      method = &cseq_hdr->method;
+    }
+  }
+
+  // Work out which method we have.
+  bool is_register = false;
+  bool is_subscribe = false;
+  bool is_notify = false;
+  if (method != NULL)
+  {
+    is_register = (method->id == PJSIP_REGISTER_METHOD);
+    is_subscribe = ((method->id == PJSIP_OTHER_METHOD) &&
+                    (pj_strcmp2(&method->name, "SUBSCRIBE") == 0));
+    is_notify = ((method->id == PJSIP_OTHER_METHOD) &&
+                 (pj_strcmp2(&method->name, "NOTIFY") == 0));
+  }
+
+  // Get the To and From URIs.
+  pjsip_uri* to_uri = NULL;
+  bool has_to_tag = false;
+  pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(msg);
+  if (to_hdr != NULL)
+  {
+    to_uri = (pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri);
+    has_to_tag = (to_hdr->tag.slen != 0);
+  }
+  pjsip_uri* from_uri = NULL;
+  pjsip_from_hdr* from_hdr = PJSIP_MSG_FROM_HDR(msg);
+  if (from_hdr != NULL)
+  {
+    from_uri = (pjsip_uri*)pjsip_uri_get_uri(from_hdr->uri);
+  }
+
+  // Look at the method to decide which marker to use.
+  if (is_register)
+  {
+    // For REGISTERs, report the To URI in the SIP_ALL_REGISTER marker.
+    if (to_uri != NULL)
+    {
+      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      pj_str_t to_user = user_from_uri(to_uri);
+      SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
+      sip_all_register.add_var_param(to_uri_str);
+      sip_all_register.add_var_param(to_user.slen, to_user.ptr);
+      SAS::report_marker(sip_all_register);
+    }
+  }
+  else if (is_subscribe || is_notify)
+  {
+    // For SUBSCRIBEs and NOTIFYs, report the To URI in the SIP_SUBSCRIBE_NOTIFY marker.
+    if (to_uri != NULL)
+    {
+      std::string to_uri_str = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, to_uri);
+      pj_str_t to_user = user_from_uri(to_uri);
+      SAS::Marker sip_subscribe_notify(trail, MARKER_ID_SIP_SUBSCRIBE_NOTIFY, 1u);
+      // The static parameter contains the type of request - 1 for SUBSCRIBE and 2 for
+      // NOTIFY.
+      sip_subscribe_notify.add_static_param(is_subscribe ?
+                                            SASEvent::SubscribeNotifyType::SUBSCRIBE :
+                                            SASEvent::SubscribeNotifyType::NOTIFY);
+      sip_subscribe_notify.add_var_param(to_uri_str);
+      sip_subscribe_notify.add_var_param(to_user.slen, to_user.ptr);
+      SAS::report_marker(sip_subscribe_notify);
+    }
+  }
+  else
+  {
+    // For all other methods, just default to reporting the To URI in the CALLED_DN and
+    // the From URI in the CALLING_DN marker.  However, only do this if we're not in
+    // dialog (check the To tag).
+    if (!has_to_tag)
+    {
+      if (to_uri != NULL)
+      {
+        pj_str_t to_user = user_from_uri(to_uri);
+        SAS::Marker called_dn(trail, MARKER_ID_CALLED_DN, 1u);
+        called_dn.add_var_param(to_user.slen, to_user.ptr);
+        SAS::report_marker(called_dn);
+      }
+      if (from_uri != NULL)
+      {
+        pj_str_t from_user = user_from_uri(from_uri);
+        SAS::Marker calling_dn(trail, MARKER_ID_CALLING_DN, 1u);
+        calling_dn.add_var_param(from_user.slen, from_user.ptr);
+        SAS::report_marker(calling_dn);
+      }
+    }
   }
 }

@@ -213,6 +213,10 @@ void put_unary_param(pjsip_param* params_list,
                      const pj_str_t* name,
                      pj_pool_t* pool);
 
+pj_str_t user_from_uri(pjsip_uri* uri);
+
+void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
+
 } // namespace PJUtils
 
 #endif
