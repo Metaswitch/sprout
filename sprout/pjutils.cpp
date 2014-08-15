@@ -50,6 +50,7 @@ extern "C" {
 #include "log.h"
 #include "constants.h"
 #include "custom_headers.h"
+#include "sasevent.h"
 
 static const int DEFAULT_RETRIES = 5;
 static const int DEFAULT_BLACKLIST_DURATION = 30;
@@ -1545,7 +1546,9 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
       SAS::Marker sip_subscribe_notify(trail, MARKER_ID_SIP_SUBSCRIBE_NOTIFY, 1u);
       // The static parameter contains the type of request - 1 for SUBSCRIBE and 2 for
       // NOTIFY.
-      sip_subscribe_notify.add_static_param(is_subscribe ? 1 : 2);
+      sip_subscribe_notify.add_static_param(is_subscribe ?
+                                            SASEvent::SubscribeNotifyType::SUBSCRIBE :
+                                            SASEvent::SubscribeNotifyType::NOTIFY);
       sip_subscribe_notify.add_var_param(to_uri_str);
       sip_subscribe_notify.add_var_param(to_user.slen, to_user.ptr);
       SAS::report_marker(sip_subscribe_notify);

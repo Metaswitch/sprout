@@ -109,6 +109,23 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
 }
 
 //LCOV_EXCL_START - don't want to actually run the handlers in the UT
+static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_str)
+{
+  // Parse the SIP URI and get the username from it.
+  pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "handlers", 1024, 512, NULL);
+  pjsip_uri* uri = PJUtils::uri_from_string(uri_str, tmp_pool);
+  pj_str_t user = PJUtils::user_from_uri(uri);
+
+  // Create and report the marker.
+  SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
+  sip_all_register.add_var_param(uri_str);
+  sip_all_register.add_var_param(user.slen, user.ptr);
+  SAS::report_marker(sip_all_register);
+
+  // Remember to release the temporary pool.
+  pj_pool_release(tmp_pool);
+}
+
 void RegistrationTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
@@ -133,19 +150,7 @@ void RegistrationTimeoutTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
-  // out of the URI.  We do this in a block to ensure that temporarily-allocated
-  // memory can't leak out.
-  SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
-  sip_all_register.add_var_param(_aor_id);
-  {
-    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "RegistrationTimeoutTask::run", 1024, 512, NULL);
-    pjsip_uri* uri = PJUtils::uri_from_string(_aor_id, tmp_pool);
-    pj_str_t user = PJUtils::user_from_uri(uri);
-    sip_all_register.add_var_param(user.slen, user.ptr);
-    pj_pool_release(tmp_pool);
-  }
-  SAS::report_marker(sip_all_register);
+  report_sip_all_register_marker(trail(), _aor_id);
 
   handle_response();
 
@@ -167,19 +172,7 @@ void AuthTimeoutTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  // Add a SIP_ALL_REGISTER marker.  For this, we need to parse the username
-  // out of the URI.  We do this in a block to ensure that temporarily-allocated
-  // memory can't leak out.
-  SAS::Marker sip_all_register(trail(), MARKER_ID_SIP_ALL_REGISTER, 1u);
-  sip_all_register.add_var_param(_impu);
-  {
-    pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "AuthTimeoutTask::run", 1024, 512, NULL);
-    pjsip_uri* uri = PJUtils::uri_from_string(_impu, tmp_pool);
-    pj_str_t user = PJUtils::user_from_uri(uri);
-    sip_all_register.add_var_param(user.slen, user.ptr);
-    pj_pool_release(tmp_pool);
-  }
-  SAS::report_marker(sip_all_register);
+  report_sip_all_register_marker(trail(), _impu);
 
   HTTPCode rc = handle_response(_req.body());
 
