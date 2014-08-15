@@ -111,6 +111,7 @@ public:
   ~ICSCFSproutletTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
+  virtual void on_rx_in_dialog_request(pjsip_msg* req);
   virtual void on_tx_request(pjsip_msg* req);
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_tx_response(pjsip_msg* rsp);
@@ -131,6 +132,7 @@ public:
   ~ICSCFSproutletRegTsx();
 
   virtual void on_rx_initial_request(pjsip_msg* req);
+  virtual void on_rx_in_dialog_request(pjsip_msg* req);
   virtual void on_tx_request(pjsip_msg* req);
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_tx_response(pjsip_msg* rsp);

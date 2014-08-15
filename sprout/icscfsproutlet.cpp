@@ -227,6 +227,14 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
 }
 
 
+void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
+  // handle as an initial request.
+  on_rx_initial_request(req);
+}
+
+
 void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req)
 {
   if (_acr != NULL) 
@@ -462,6 +470,14 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     free_msg(req);
     free_msg(_cloned_req);
   }
+}
+
+
+void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
+{
+  // I-CSCF shouldn't need to handle in-dialog requests, but it happens, so
+  // handle as an initial request.
+  on_rx_initial_request(req);
 }
 
 
