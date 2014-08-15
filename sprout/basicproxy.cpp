@@ -1646,7 +1646,8 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
       pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
                                                      _tsx->last_tx,
                                                      st_code);
-      set_trail(cancel, get_trail(_tsx));
+
+      set_trail(cancel, _trail);
 
       if (_tsx->transport != NULL)
       {
@@ -1658,7 +1659,7 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
         pjsip_tx_data_set_transport(cancel, &tp_selector);
       }
 
-      pj_status_t status = pjsip_endpt_send_request(stack_data.endpt, cancel, -1, NULL, NULL);
+      pj_status_t status = PJUtils::send_request(cancel, 1);
       if (status != PJ_SUCCESS)
       {
         LOG_ERROR("Error sending CANCEL, %s",                           //LCOV_EXCL_LINE
