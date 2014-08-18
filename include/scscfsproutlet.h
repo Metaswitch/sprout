@@ -163,7 +163,7 @@ public:
   virtual void on_tx_request(pjsip_msg* req);
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_tx_response(pjsip_msg* rsp);
-  virtual void on_cancel(int status_code, pjsip_msg* req);
+  virtual void on_rx_cancel(int status_code, pjsip_msg* req);
   virtual void on_timer_expiry(void* context);
 
 private:
@@ -234,6 +234,9 @@ private:
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
   SCSCFSproutlet* _scscf;
+
+  /// Flag indicating if the transaction has been cancelled.
+  bool _cancelled;
 
   /// The session case for this service hop (originating, terminating or
   /// originating-cdiv).

@@ -86,6 +86,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
 /// SCSCFSproutlet destructor.
 SCSCFSproutlet::~SCSCFSproutlet()
 {
+  delete _as_chain_table;
 }
 
 
@@ -262,6 +263,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf) :
   SproutletTsx(helper),
   _scscf(scscf),
+  _cancelled(false),
   _session_case(NULL),
   _as_chain_link(),
   _hss_data_cached(false),
@@ -429,7 +431,8 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       // The AS chain isn't complete, so the response must be from an
       // application server.  Check to see if we need to trigger default
       // handling.
-      if (((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
+      if ((!_cancelled) &&
+          ((st_code == PJSIP_SC_REQUEST_TIMEOUT) ||
            (PJSIP_IS_STATUS_IN_CLASS(st_code, 500))) &&
           (_as_chain_link.continue_session()))
       {
@@ -473,9 +476,11 @@ void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 }
 
 
-void SCSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
+void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
 {
   LOG_INFO("S-CSCF received CANCEL");
+
+  _cancelled = true;
 
   if ((status_code == PJSIP_SC_REQUEST_TERMINATED) &&
       (cancel_req != NULL))
