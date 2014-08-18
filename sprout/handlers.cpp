@@ -114,13 +114,21 @@ static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_s
   // Parse the SIP URI and get the username from it.
   pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "handlers", 1024, 512, NULL);
   pjsip_uri* uri = PJUtils::uri_from_string(uri_str, tmp_pool);
-  pj_str_t user = PJUtils::user_from_uri(uri);
 
-  // Create and report the marker.
-  SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-  sip_all_register.add_var_param(uri_str);
-  sip_all_register.add_var_param(user.slen, user.ptr);
-  SAS::report_marker(sip_all_register);
+  if (uri != NULL)
+  {
+    pj_str_t user = PJUtils::user_from_uri(uri);
+
+    // Create and report the marker.
+    SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
+    sip_all_register.add_var_param(uri_str);
+    sip_all_register.add_var_param(user.slen, user.ptr);
+    SAS::report_marker(sip_all_register);
+  }
+  else
+  {
+    LOG_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
+  }
 
   // Remember to release the temporary pool.
   pj_pool_release(tmp_pool);
@@ -172,9 +180,8 @@ void AuthTimeoutTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  report_sip_all_register_marker(trail(), _impu);
-
   HTTPCode rc = handle_response(_req.body());
+  report_sip_all_register_marker(trail(), _impu);
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
