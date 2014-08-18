@@ -245,7 +245,7 @@ VGFLAGS = --suppressions=$(VG_SUPPRESS) \
 # Define JUSTTEST=<testname> to test just that test.  Easier than
 # passing the --gtest_filter in EXTRA_TEST_ARGS.
 ifdef JUSTTEST
-  EXTRA_TEST_ARGS ?= --gtest_filter=*$(JUSTTEST)*
+  EXTRA_TEST_ARGS ?= --gtest_filter=$(JUSTTEST)
 endif
 
 include ${MK_DIR}/platform.mk
