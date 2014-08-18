@@ -127,13 +127,13 @@ TEST_F(ContactFilteringMatchFeatureTest, MatchBoolean)
 }
 TEST_F(ContactFilteringMatchFeatureTest, MatchNegBoolean)
 {
-  Feature matcher("!+sip.boolean", "");
-  Feature matchee("!+sip.boolean", "");
+  Feature matcher("+sip.boolean", "FALSE");
+  Feature matchee("+sip.boolean", "FALSE");
   EXPECT_EQ(YES, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, NoMatchBoolean)
 {
-  Feature matcher("!+sip.boolean", "");
+  Feature matcher("+sip.boolean", "FALSE");
   Feature matchee("+sip.boolean", "");
   EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
@@ -225,7 +225,7 @@ public:
   void SetUp()
   {
     pj_str_t header_name = pj_str((char*)"Accept-Contact");
-    char* header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;!+sip.negated";
+    char* header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;+sip.negated=\"!world\"";
     accept_hdr = (pjsip_accept_contact_hdr*)
       pjsip_parse_hdr(pool,
                       &header_name,
@@ -234,7 +234,7 @@ public:
                       NULL);
     ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
     header_name = pj_str((char*)"Reject-Contact");
-    header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;!+sip.negated";
+    header_value = (char*)"*;+sip.string=\"<hello>\";+sip.numeric=\"#4\";+sip.boolean;+sip.token=hello;+sip.negated=\"!world\"";
     reject_hdr = (pjsip_reject_contact_hdr*)
       pjsip_parse_hdr(pool,
                       &header_name,
@@ -257,7 +257,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -267,7 +267,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -276,9 +276,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalAccept)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["!+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "FALSE";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -290,7 +290,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -301,7 +301,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingExplicitAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -311,9 +311,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingExplicitAccept)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["!+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "FALSE";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -325,7 +325,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingRequiredAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -336,7 +336,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingRequiredAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -346,9 +346,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingRequiredAccept)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["!+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "FALSE";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -361,7 +361,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingRequiredExplicitAccept)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -373,7 +373,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingRequiredExplicitAccept)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -384,9 +384,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingRequiredExplicitAccept)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["!+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "FALSE";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
@@ -397,7 +397,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalReject)
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, reject_hdr));
 }
@@ -407,7 +407,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalReject)
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
   contact_feature_set["+sip.boolean"] = "";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }
@@ -416,9 +416,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalReject)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["!+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "FALSE";
   contact_feature_set["+sip.token"] = "hello";
-  contact_feature_set["!+sip.negated"] = "";
+  contact_feature_set["+sip.negated"] = "!world";
 
   EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }

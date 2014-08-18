@@ -264,32 +264,21 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
 
     // For boolean features the name may be prefixed with ! to indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
-    std::string feature_value = PJUtils::pj_str_to_unquoted_string(&feature_param->value);
+    std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
+    LOG_DEBUG("Trying to match Accept-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
-    std::string negated_feature_name;
-    if (feature_name[0] == '!')
-    {
-      negated_feature_name.erase(0, 1); // Drop the first character
-    }
-    else
-    {
-      negated_feature_name = "!" + feature_name;
-    }
 
     // Now find the Contact's version of this feature (using either name).
     FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
-    if (contact_feature == contact_feature_set.end())
-    {
-      contact_feature = contact_feature_set.find(negated_feature_name);
-    }
 
     // Now attempt to compare the two features.
     if (contact_feature == contact_feature_set.end())
     {
       // Not specified, can't say either way if the feature is a match.
       feature_match_rc = UNKNOWN;
+      LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
     else
     {
@@ -358,32 +347,21 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     // For boolean features the name may be prefixed with ! to
     // indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
-    std::string feature_value = PJUtils::pj_str_to_unquoted_string(&feature_param->value);
+    std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
+    LOG_DEBUG("Trying to match Reject-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
-    std::string negated_feature_name;
-    if (feature_name[0] == '!')
-    {
-      negated_feature_name.erase(0, 1); // Drop the first character
-    }
-    else
-    {
-      negated_feature_name = "!" + feature_name;
-    }
 
     // Now find the Contact's version of this feature (using either name).
     FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
-    if (contact_feature == contact_feature_set.end())
-    {
-      contact_feature = contact_feature_set.find(negated_feature_name);
-    }
 
     // Now attempt to compare the two features.
     if (contact_feature == contact_feature_set.end())
     {
       // Not specified, can't say either way if the feature is a match.
       rc = UNKNOWN;
+      LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
     else
     {
@@ -401,38 +379,53 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
   return rc;
 }
 
-MatchResult match_feature(const Feature& matcher,
-                          const Feature& matchee)
+MatchResult match_feature(Feature matcher,
+                          Feature matchee)
 {
   MatchResult rc;
+  bool invert_matcher = false;
+  bool invert_matchee = false;
+  LOG_DEBUG("Matching parameter '%s' - Accept-Contact/Reject-Contact value '%s', Contact value '%s'",
+            matcher.first.c_str(),
+            matcher.second.c_str(),
+            matchee.second.c_str());
 
-  // Start off with boolean features (these have no value)
   if (matcher.second.empty())
   {
-    if (!matchee.second.empty())
-    {
-      // Matcher says boolean, matchee says valued... can't compare
-      rc = UNKNOWN;
-    }
-    else
-    {
-      // Compare the names (this distinguishes between !name and name).
-      if (matcher.first == matchee.first)
-      {
-        rc = YES;
-      }
-      else
-      {
-        rc = NO;
-      }
-    }
+    matcher.second = "TRUE";
   }
-  else if (matchee.second.empty())
+
+  if (matchee.second.empty())
   {
-    // Matchee is boolean but matcher is not.   Can't compare.
-    rc = UNKNOWN;
+    matchee.second = "TRUE";
   }
-  else if (matcher.second[0] == '<')
+
+  // Unquote the values, as they don't matter
+  if ((matcher.second.front() == '"') && (matcher.second.back() == '"'))
+  {
+    matcher.second = matcher.second.substr(1, (matcher.second.size() - 2));
+  }
+  if ((matchee.second.front() == '"') && (matchee.second.back() == '"'))
+  {
+    matchee.second = matchee.second.substr(1, (matchee.second.size() - 2));
+  }
+
+  // Unquote the values, as they don't matter
+  if (matcher.second.front() == '!')
+  {
+    LOG_DEBUG("Matcher is negated by ! prefix");
+    matcher.second = matcher.second.substr(1, (matcher.second.size() - 1));
+    invert_matcher = true;
+  }
+
+  if (matchee.second.front() == '!')
+  {
+    LOG_DEBUG("Matchee is negated by ! prefix");
+    matchee.second = matchee.second.substr(1, (matchee.second.size() - 1));
+    invert_matchee = true;
+  }
+
+  if (matcher.second[0] == '<')
   {
     // Matcher is checking for string literal...
     if (matchee.second[0] == '<')
@@ -480,6 +473,34 @@ MatchResult match_feature(const Feature& matcher,
     {
       rc = match_tokens(matcher.second, matchee.second);
     }
+  }
+
+  LOG_DEBUG("invert_matcher %d, invert_matchee %d", invert_matcher, invert_matchee);
+  if (invert_matcher != invert_matchee)
+  {
+    if (rc == YES)
+    {
+      LOG_DEBUG("Inverting match due to '!' prefix");
+      rc = NO;
+    }
+    else if (rc == NO)
+    {
+      LOG_DEBUG("Inverting match due to '!' prefix");
+      rc = YES;
+    }
+  }
+
+  if (rc == UNKNOWN)
+  {
+    LOG_DEBUG("Can't tell whether they match");
+  }
+  else if (rc == NO)
+  {
+    LOG_DEBUG("Parameter does not match");
+  }
+  else if (rc == YES)
+  {
+    LOG_DEBUG("Parameter matches");
   }
 
   return rc;
