@@ -1028,7 +1028,7 @@ SproutletWrapper::~SproutletWrapper()
 
   if (!_packets.empty()) 
   {
-    LOG_WARNING("Sproutlet %s leaked %d messages - reclaiming", _packets.size());
+    LOG_WARNING("Sproutlet %s leaked %d messages - reclaiming", _id.c_str(), _packets.size());
     for (Packets::iterator it = _packets.begin(); it != _packets.end(); ++it)
     {
       LOG_WARNING("  Leaked message - %s", pjsip_tx_data_get_info(it->second));
