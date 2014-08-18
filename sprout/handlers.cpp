@@ -108,24 +108,32 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
   return true;
 }
 
-//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 static void report_sip_all_register_marker(SAS::TrailId trail, std::string uri_str)
 {
   // Parse the SIP URI and get the username from it.
   pj_pool_t* tmp_pool = pj_pool_create(&stack_data.cp.factory, "handlers", 1024, 512, NULL);
   pjsip_uri* uri = PJUtils::uri_from_string(uri_str, tmp_pool);
-  pj_str_t user = PJUtils::user_from_uri(uri);
 
-  // Create and report the marker.
-  SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
-  sip_all_register.add_var_param(uri_str);
-  sip_all_register.add_var_param(user.slen, user.ptr);
-  SAS::report_marker(sip_all_register);
+  if (uri != NULL)
+  {
+    pj_str_t user = PJUtils::user_from_uri(uri);
+
+    // Create and report the marker.
+    SAS::Marker sip_all_register(trail, MARKER_ID_SIP_ALL_REGISTER, 1u);
+    sip_all_register.add_var_param(uri_str);
+    sip_all_register.add_var_param(user.slen, user.ptr);
+    SAS::report_marker(sip_all_register);
+  }
+  else
+  {
+    LOG_WARNING("Could not raise SAS REGISTER marker for unparseable URI '%s'", uri_str.c_str());
+  }
 
   // Remember to release the temporary pool.
   pj_pool_release(tmp_pool);
 }
 
+//LCOV_EXCL_START - don't want to actually run the handlers in the UT
 void RegistrationTimeoutTask::run()
 {
   if (_req.method() != htp_method_POST)
@@ -150,8 +158,6 @@ void RegistrationTimeoutTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  report_sip_all_register_marker(trail(), _aor_id);
-
   handle_response();
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
@@ -171,8 +177,6 @@ void AuthTimeoutTask::run()
 
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
-
-  report_sip_all_register_marker(trail(), _impu);
 
   HTTPCode rc = handle_response(_req.body());
 
@@ -255,6 +259,7 @@ void RegistrationTimeoutTask::handle_response()
   }
 
   delete aor_data;
+  report_sip_all_register_marker(trail(), _aor_id);
 }
 
 RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
@@ -516,6 +521,18 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     return HTTP_BAD_RESULT;
   }
 
+  if ((json_body.isMember("impu")) &&
+      ((json_body)["impu"].isString()))
+  {
+    _impu = json_body.get("impu", "").asString();
+    report_sip_all_register_marker(trail(), _impu);
+  }
+  else
+  {
+    LOG_ERROR("IMPU not available in JSON");
+    return HTTP_BAD_RESULT;
+  }
+
   if ((json_body.isMember("impi")) &&
       ((json_body)["impi"].isString()))
   {
@@ -524,17 +541,6 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPI not available in JSON");
-    return HTTP_BAD_RESULT;
-  }
-
-  if ((json_body.isMember("impu")) &&
-      ((json_body)["impu"].isString()))
-  {
-    _impu = json_body.get("impu", "").asString();
-  }
-  else
-  {
-    LOG_ERROR("IMPU not available in JSON");
     return HTTP_BAD_RESULT;
   }
 
