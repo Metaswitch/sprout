@@ -365,7 +365,7 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   // Construct and add the Record-Route header.
   LOG_DEBUG("Add new Record-Route header");
   pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool, _uri);
-  _uri->lr_param = 1;
+  uri->lr_param = 1;
   pjsip_route_hdr* hrr = pjsip_rr_hdr_create(tdata->pool);
   hrr->name_addr.uri = (pjsip_uri*)uri;
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hrr);
@@ -416,7 +416,7 @@ bool SproutletProxy::schedule_timer(SproutletProxy::UASTsx* uas_tsx,
   pj_timer_entry* tentry = new pj_timer_entry();
   memset(tentry, 0, sizeof(*tentry));
 
-  SproutletTimerCallbackData* tdata = (SproutletTimerCallbackData*)malloc(sizeof(*tdata));
+  SproutletTimerCallbackData* tdata = new SproutletTimerCallbackData;
   tdata->uas_tsx = uas_tsx;
   tdata->sproutlet_wrapper = sproutlet_wrapper;
   tdata->context = context;
@@ -612,7 +612,8 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if ((_root != NULL) &&
       (_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
       ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-       (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
+       (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
+       (event->body.tsx_state.type == PJSIP_EVENT_USER)))         
   {
     // Notify the root Sproutlet of the error.
     _root->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
@@ -876,6 +877,9 @@ void SproutletProxy::UASTsx::tx_terminate(SproutletWrapper* upstream,
     // Break the upstream and downstream linkage between the Sproutlets.
     _dmap_sproutlet.erase(i);
     _umap.erase(i->second);
+
+    // Check to see if we can destroy the UASTsx.
+    check_destroy();
   }
   else
   {
@@ -1022,9 +1026,15 @@ SproutletWrapper::~SproutletWrapper()
     pjsip_tx_data_dec_ref(_req);
   }
 
-  assert(_packets.empty());
-  assert(_send_requests.empty());
-  assert(_send_responses.empty());
+  if (!_packets.empty()) 
+  {
+    LOG_WARNING("Sproutlet %s leaked %d messages - reclaiming", _packets.size());
+    for (Packets::iterator it = _packets.begin(); it != _packets.end(); ++it)
+    {
+      LOG_WARNING("  Leaked message - %s", pjsip_tx_data_get_info(it->second));
+      pjsip_tx_data_dec_ref(it->second);
+    }
+  }
 }
 
 const std::string& SproutletWrapper::service_name() const
@@ -1404,10 +1414,9 @@ void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
 
 void SproutletWrapper::rx_error(int status_code)
 {
-  LOG_VERBOSE("%s received error %d (%s)",
-              _id.c_str(), pjsip_get_status_text(status_code));
+  LOG_VERBOSE("%s received error %d", _id.c_str(), status_code);
   _sproutlet->on_rx_cancel(status_code, NULL);
-  //cancel_pending_forks();
+  cancel_pending_forks();
   process_actions();
 }
 

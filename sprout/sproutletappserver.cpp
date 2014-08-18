@@ -88,6 +88,19 @@ pjsip_msg* SproutletAppServerTsxHelper::original_request()
   return _helper->original_request();
 }
 
+/// Returns the top Route header from the original incoming request.  This
+/// can be inpsected by the app server, but should not be modified.  Note that
+/// this Route header is removed from the request passed to the app server on
+/// the on_*_request calls.
+///
+/// @returns             - A pointer to a read-only copy of the top Route
+///                        header from the received request.
+///
+const pjsip_route_hdr* SproutletAppServerTsxHelper::route_hdr() const
+{
+  return _helper->route_hdr();
+}
+
 /// Adds the service to the underlying SIP dialog with the specified dialog
 /// identifier.
 ///
