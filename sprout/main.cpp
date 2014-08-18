@@ -1380,12 +1380,6 @@ int main(int argc, char *argv[])
                                          stack_data.stats_aggregator);
     }
 
-    if (xdm_connection != NULL)
-    {
-      LOG_STATUS("Creating call services handler");
-      // Create MMTEL Sproutlet.
-    }
-
     if (opt.auth_enabled)
     {
       // Create an AV store using the local store and initialise the authentication
