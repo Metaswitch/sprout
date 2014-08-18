@@ -60,7 +60,6 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
-                  icscfproxy.cpp \
                   icscfrouter.cpp \
                   scscfselector.cpp	\
                   acr.cpp \
@@ -112,7 +111,6 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        options_test.cpp \
                        logger_test.cpp \
                        utils_test.cpp \
-                       mmtel_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
@@ -124,7 +122,6 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
-                       icscfproxy_test.cpp \
                        icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
@@ -242,6 +239,7 @@ VGFLAGS = --suppressions=$(VG_SUPPRESS) \
           --leak-check=full \
           --track-origins=yes \
           --malloc-fill=cc \
+					--num-callers=40 \
           --free-fill=df
 
 # Define JUSTTEST=<testname> to test just that test.  Easier than
