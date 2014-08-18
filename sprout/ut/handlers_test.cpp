@@ -41,6 +41,7 @@
 #include "handlers.h"
 #include "gtest/gtest.h"
 #include "basetest.hpp"
+#include "siptest.hpp"
 #include "regstore.h"
 #include "localstore.h"
 #include "fakehssconnection.hpp"
@@ -49,7 +50,7 @@
 
 using namespace std;
 
-class RegistrationTimeoutTasksTest : public BaseTest
+class RegistrationTimeoutTasksTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -61,6 +62,11 @@ class RegistrationTimeoutTasksTest : public BaseTest
   RegistrationTimeoutTask::Config* chronos_config;
 
   RegistrationTimeoutTask* handler;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase(false);
+  }
 
   void SetUp()
   {
@@ -144,7 +150,7 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-class DeregistrationTaskTest : public BaseTest
+class DeregistrationTaskTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -157,6 +163,11 @@ class DeregistrationTaskTest : public BaseTest
 
   DeregistrationTask* handler;
 
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase(false);
+  }
+
   void SetUp()
   {
     chronos_connection = new FakeChronosConnection();
@@ -168,9 +179,6 @@ class DeregistrationTaskTest : public BaseTest
     handler = new DeregistrationTask(*req, deregistration_config, 0);
 
     stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
-    // The expiry tests require pjsip, so initialise for this test
-    init_pjsip_logging(99, false, "");
-    init_pjsip();
   }
 
   void TearDown()
@@ -182,7 +190,6 @@ class DeregistrationTaskTest : public BaseTest
     delete store; store = NULL;
     delete local_data_store; local_data_store = NULL;
     delete chronos_connection; chronos_connection = NULL;
-    term_pjsip();
   }
 };
 
@@ -271,7 +278,7 @@ TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
   ASSERT_EQ(status, 400);
 }
 
-class AuthTimeoutTest : public BaseTest
+class AuthTimeoutTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
   LocalStore* local_data_store;
@@ -283,6 +290,11 @@ class AuthTimeoutTest : public BaseTest
   AuthTimeoutTask::Config* chronos_config;
 
   AuthTimeoutTask* handler;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase(false);
+  }
 
   void SetUp()
   {
