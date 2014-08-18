@@ -414,6 +414,15 @@ TEST_F(AuthTimeoutTest, NoIMPU)
   ASSERT_EQ(status, 400);
 }
 
+TEST_F(AuthTimeoutTest, CorruptIMPU)
+{
+  std::string body = "{\"impi\": \"test@example.com\", \"impu\": \"I am not a URI\", \"nonce\": \"abcdef\"}";
+  int status = handler->handle_response(body);
+
+  ASSERT_EQ(status, 500);
+}
+
+
 TEST_F(AuthTimeoutTest, NoIMPI)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"nonce\": \"abcdef\"}";
