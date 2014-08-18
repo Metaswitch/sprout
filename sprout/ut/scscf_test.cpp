@@ -428,13 +428,7 @@ public:
     pjsip_tsx_layer_dump(true);
 
     // Terminate all transactions
-    list<pjsip_transaction*> tsxs = get_all_tsxs();
-    for (list<pjsip_transaction*>::iterator it2 = tsxs.begin();
-         it2 != tsxs.end();
-         ++it2)
-    {
-      pjsip_tsx_terminate(*it2, PJSIP_SC_SERVICE_UNAVAILABLE);
-    }
+    terminate_all_tsxs(PJSIP_SC_SERVICE_UNAVAILABLE);
 
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
