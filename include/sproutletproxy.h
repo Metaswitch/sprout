@@ -63,7 +63,7 @@ public:
                  const std::list<Sproutlet*>& sproutlets);
 
   /// Destructor.
-  ~SproutletProxy();
+  virtual ~SproutletProxy();
 
   /// Static callback for timers
   static void on_timer_pop(pj_timer_heap_t* th, pj_timer_entry* tentry);
@@ -159,7 +159,10 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
-    /// Gets the need target Sproutlet for the message by analysing the top
+    void tx_terminate(SproutletWrapper* upstream,
+                      int fork_id);
+
+    /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg, int port);
 
@@ -240,6 +243,7 @@ public:
   /// the following.
   void add_to_dialog(const std::string& dialog_id="");
   pjsip_msg* original_request();
+  const char* msg_info(pjsip_msg*);
   const pjsip_route_hdr* route_hdr() const;
   const std::string& dialog_id() const;
   pjsip_msg* clone_request(pjsip_msg* req);
@@ -283,6 +287,10 @@ private:
   std::string _service_name;
   std::string _service_host;
 
+  /// Identifier for this SproutletTsx instance - currently a concatenation
+  /// of the service name and the address of the object.
+  std::string _id;
+
   /// Immutable reference to the original request.  A mutable clone of this
   /// is passed to the Sproutlet.
   pjsip_tx_data* _req;
@@ -309,7 +317,7 @@ private:
 
   /// Vector keeping track of the status of each fork.  The state field can
   /// only ever take a subset of the values defined by PJSIP - NULL, CALLING,
-  /// PROCEEDING and COMPLETED.
+  /// PROCEEDING and TERMINATED.
   typedef struct
   {
     pjsip_tsx_state_e state;

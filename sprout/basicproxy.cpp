@@ -630,6 +630,7 @@ void BasicProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
   if (_tsx == NULL)
   {
     // ACK request, so no response to wait for.
+    LOG_DEBUG("ACK transaction is complete");
     on_tsx_complete();
     _pending_destroy = true;
   }
@@ -1387,6 +1388,7 @@ void BasicProxy::UASTsx::exit_context()
   _context_count--;
   if ((_context_count == 0) && (_pending_destroy))
   {
+    LOG_DEBUG("Transaction (%p) suiciding");
     delete this;
   }
   else if (_lock != NULL)
@@ -1642,28 +1644,37 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
     LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
-      LOG_DEBUG("Sending CANCEL request");
-      pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
-                                                     _tsx->last_tx,
-                                                     st_code);
-
-      set_trail(cancel, _trail);
-
-      if (_tsx->transport != NULL)
+      if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD) 
       {
-        // The transaction being cancelled has already selected a transport,
-        // so make sure the CANCEL uses this transport as well.
-        pjsip_tpselector tp_selector;
-        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-        tp_selector.u.transport = _tsx->transport;
-        pjsip_tx_data_set_transport(cancel, &tp_selector);
+        LOG_DEBUG("Sending CANCEL request");
+        pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
+                                                       _tsx->last_tx,
+                                                       st_code);
+
+        set_trail(cancel, _trail);
+
+        if (_tsx->transport != NULL)
+        {
+          // The transaction being cancelled has already selected a transport,
+          // so make sure the CANCEL uses this transport as well.
+          pjsip_tpselector tp_selector;
+          tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+          tp_selector.u.transport = _tsx->transport;
+          pjsip_tx_data_set_transport(cancel, &tp_selector);
+        }
+
+        pj_status_t status = PJUtils::send_request(cancel, 1);
+        if (status != PJ_SUCCESS)
+        {
+          LOG_ERROR("Error sending CANCEL, %s",                           //LCOV_EXCL_LINE
+                    PJUtils::pj_status_to_string(status).c_str());        //LCOV_EXCL_LINE
+        }
       }
-
-      pj_status_t status = PJUtils::send_request(cancel, 1);
-      if (status != PJ_SUCCESS)
+      else
       {
-        LOG_ERROR("Error sending CANCEL, %s",                           //LCOV_EXCL_LINE
-                  PJUtils::pj_status_to_string(status).c_str());        //LCOV_EXCL_LINE
+        // Non-INVITE transaction, so terminate the transaction immediately.
+        LOG_DEBUG("Terminate transaction immediately");
+        pjsip_tsx_terminate(_tsx, st_code);
       }
     }
 

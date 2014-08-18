@@ -106,6 +106,7 @@ public:
   /// @returns             - The dialog identifier attached to this service,
   ///                        either by this SproutletTsx instance
   ///                        or by an earlier transaction in the same dialog.
+  ///
   virtual const std::string& dialog_id() const = 0;
 
   /// Clones the request.  This is typically used when forking a request if
@@ -114,6 +115,7 @@ public:
   ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
+  ///
   virtual pjsip_msg* clone_request(pjsip_msg* req) = 0;
 
   /// Create a response from a given request, this response can be passed to
@@ -124,6 +126,7 @@ public:
   /// @param  req          - The request to build a response for.
   /// @param  status_code  - The SIP status code for the response.
   /// @param  status_text  - The text part of the status line.
+  ///
   virtual pjsip_msg* create_response(pjsip_msg* req,
                                      pjsip_status_code status_code,
                                      const std::string& status_text="") = 0;
@@ -141,6 +144,7 @@ public:
   ///
   /// @param  req          - The request message to use for forwarding.  If NULL
   ///                        the original request message is used.
+  ///
   virtual int send_request(pjsip_msg*& req) = 0;
 
   /// Indicate that the response should be forwarded following standard routing
@@ -150,12 +154,22 @@ public:
   /// This function may be called while handling any response.
   ///
   /// @param  rsp          - The response message to use for forwarding.
+  ///
   virtual void send_response(pjsip_msg*& rsp) = 0;
 
-  /// Cancels a forked INVITE request by sending a CANCEL request.
+  /// Cancels a forked request.  For INVITE requests, this causes a CANCEL
+  /// to be sent, so the Sproutlet must wait for the final response.  For
+  /// non-INVITE requests the fork is terminated immediately.
   ///
-  /// @param fork_id       - The identifier of the fork to CANCEL.
+  /// @param fork_id       - The identifier of the fork to cancel.
+  ///
   virtual void cancel_fork(int fork_id, int reason=0) = 0;
+
+  /// Cancels all pending forked requests by either sending a CANCEL request
+  /// (for INVITE requests) or terminating the transaction (for non-INVITE
+  /// requests).
+  ///
+  virtual void cancel_pending_forks(int reason=0) = 0;
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
@@ -163,6 +177,7 @@ public:
   /// API).
   ///
   /// @param  msg          - The message to free.
+  ///
   virtual void free_msg(pjsip_msg*& msg) = 0;
 
   /// Returns the pool corresponding to a message.  This pool can then be used
@@ -170,6 +185,7 @@ public:
   ///
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
+  ///
   virtual pj_pool_t* get_pool(const pjsip_msg* msg) = 0;
 
   /// Schedules a timer with the specified identifier and expiry period.
@@ -182,22 +198,26 @@ public:
   /// @param  context      - Context parameter returned on the callback.
   /// @param  id           - The unique identifier for the timer.
   /// @param  duration     - Timer duration in milliseconds.
+  ///
   virtual bool schedule_timer(void* context, TimerID& id, int duration) = 0;
 
   /// Cancels the timer with the specified identifier.  This is a no-op if
   /// there is no timer with this identifier running.
   ///
   /// @param  id           - The unique identifier for the timer.
+  ///
   virtual void cancel_timer(TimerID id) = 0;
 
   /// Queries the state of a timer.
   ///
   /// @returns             - true if the timer is running, false otherwise.
   /// @param  id           - The unique identifier for the timer. 
+  ///
   virtual bool timer_running(TimerID id) = 0;
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
+  ///
   virtual SAS::TrailId trail() const = 0;
 
 };
@@ -321,6 +341,7 @@ protected:
   /// @returns             - The dialog identifier attached to this service,
   ///                        either by this SproutletTsx instance
   ///                        or by an earlier transaction in the same dialog.
+  ///
   const std::string& dialog_id() const
     {return _helper->dialog_id();}
 
@@ -329,6 +350,7 @@ protected:
   ///
   /// @returns             - The cloned request message.
   /// @param  req          - The request message to clone.
+  ///
   pjsip_msg* clone_request(pjsip_msg* req)
     {return _helper->clone_request(req);}
 
@@ -340,6 +362,7 @@ protected:
   /// @param  req          - The request to build a response for.
   /// @param  status_code  - The SIP status code for the response.
   /// @param  status_text  - The text part of the status line.
+  ///
   virtual pjsip_msg* create_response(pjsip_msg* req,
                                      pjsip_status_code status_code,
                                      const std::string& status_text="")
@@ -360,6 +383,7 @@ protected:
   ///
   /// @returns             - The ID of this forwarded request
   /// @param  req          - The request message to use for forwarding.
+  ///
   int send_request(pjsip_msg*& req)
     {return _helper->send_request(req);}
 
@@ -370,14 +394,25 @@ protected:
   /// This function may be called while handling any response.
   ///
   /// @param  rsp          - The response message to use for forwarding.
+  ///
   void send_response(pjsip_msg*& rsp)
     {_helper->send_response(rsp);}
 
-  /// Cancels a forked INVITE request by sending a CANCEL request.
+  /// Cancels a forked request.  For INVITE requests, this causes a CANCEL
+  /// to be sent, so the Sproutlet must wait for the final response.  For
+  /// non-INVITE requests the fork is terminated immediately.
   ///
-  /// @param fork_id       - The identifier of the fork to CANCEL.
+  /// @param fork_id       - The identifier of the fork to cancel.
+  ///
   void cancel_fork(int fork_id, int reason=0)
     {_helper->cancel_fork(fork_id, reason);}
+
+  /// Cancels all pending forked requests by either sending a CANCEL request
+  /// (for INVITE requests) or terminating the transaction (for non-INVITE
+  /// requests).
+  ///
+  void cancel_pending_forks(int reason=0)
+    {_helper->cancel_pending_forks(reason);}
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
@@ -385,6 +420,7 @@ protected:
   /// API).
   ///
   /// @param  msg          - The message to free.
+  ///
   void free_msg(pjsip_msg*& msg)
     {return _helper->free_msg(msg);}
 
@@ -393,6 +429,7 @@ protected:
   ///
   /// @returns             - The pool corresponding to this message.
   /// @param  msg          - The message.
+  ///
   pj_pool_t* get_pool(const pjsip_msg* msg)
     {return _helper->get_pool(msg);}
 
@@ -406,6 +443,7 @@ protected:
   /// @param  context      - Context parameter returned on the callback.
   /// @param  id           - A unique identifier for the timer.
   /// @param  duration     - Timer duration in milliseconds.
+  ///
   bool schedule_timer(void* context, TimerID& id, int duration)
     {return _helper->schedule_timer(context, id, duration);}
 
@@ -413,6 +451,7 @@ protected:
   /// there is no timer with this identifier running.
   ///
   /// @param  id           - The unique identifier for the timer.
+  ///
   void cancel_timer(TimerID id)
     {_helper->cancel_timer(id);}
 
@@ -420,11 +459,13 @@ protected:
   ///
   /// @returns             - true if the timer is running, false otherwise.
   /// @param  id           - The unique identifier for the timer.
+  ///
   bool timer_running(TimerID id)
     {return _helper->timer_running(id);}
 
   /// Returns the SAS trail identifier that should be used for any SAS events
   /// related to this service invocation.
+  ///
   SAS::TrailId trail() const
     {return _helper->trail();}
 

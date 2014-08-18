@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -138,8 +135,6 @@ TEST_F(AsChainTest, Basics)
   EXPECT_EQ(&as_chain2, res._as_chain);
   EXPECT_EQ(1u, res._index);
   EXPECT_TRUE(res.complete());
-
-  CallServices calls(NULL);  // Not valid, but good enough for this UT.
 }
 
 TEST_F(AsChainTest, AsInvocation)
@@ -173,7 +168,6 @@ TEST_F(AsChainTest, AsInvocation)
   pj_status_t status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  AsChainLink::Disposition disposition;
   std::string server_name;
 
   // Nothing to invoke. Just proceed.

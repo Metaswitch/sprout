@@ -176,7 +176,7 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
 
 /// Attempt ENUM lookup if appropriate.
 std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
-                                                SAS::TrailId trail)
+                                                  SAS::TrailId trail)
 {
   std::string user;
   std::string uri;
@@ -190,10 +190,12 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     if (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri))
     {
       user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req->line.req.uri)->user);
+      LOG_DEBUG("SIP URI - user = %s", user.c_str());
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri))
     {
       user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
+      LOG_DEBUG("TEL URI - user = %s", user.c_str());
     }
 
     // Check whether we have a global number or whether we allow
@@ -202,6 +204,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     {
       // Perform an ENUM lookup if we have a tel URI, or if we have
       // a SIP URI which is being treated as a phone number
+      LOG_DEBUG("Global number or look-ups allowed for non-global numbers");
       if ((PJUtils::is_uri_phone_number(req->line.req.uri)) ||
           ((!_user_phone) && (is_user_numeric(user))))
       {
@@ -267,7 +270,8 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _ifcs(),
   _acr(NULL),
   _target_aor(),        
-  _target_bindings()               
+  _target_bindings(),
+  _liveness_timer(0)
 {
   LOG_DEBUG("S-CSCF Transaction (%p) created", this);
 }
@@ -287,6 +291,13 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
   {
     _as_chain_link.release();
   }
+
+  if (_liveness_timer != 0) 
+  {
+    cancel_timer(_liveness_timer);
+  }
+
+  _target_bindings.clear();
 }
 
 
@@ -343,17 +354,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   else
   {
     // No AS chain set, so don't apply services to the request.
-#if 0
-    // Default action is to try to route following remaining Route headers or
-    // to the RequestURI.
-    LOG_INFO("Route request without applying services");
-    send_request(req);
-#else
     // Default action is to route the request directly to the BGCF.
     LOG_INFO("Route request to BGCF without applying services");
     route_to_bgcf(req);
-#endif
-
   }
 }
 
@@ -399,14 +402,12 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     _acr->rx_response(rsp);
   }
 
-#if 0
-  if (_liveness_timer.id == LIVENESS_TIMER)
+  if (_liveness_timer != 0)
   {
     // The liveness timer is running on this request, so cancel it.
-    _liveness_timer.id = 0;
-    pjsip_endpt_cancel_timer(stack_data.endpt, &_liveness_timer);
+    cancel_timer(_liveness_timer);
+    _liveness_timer = 0;
   }
-#endif
 
   int st_code = rsp->line.status.code;
 
@@ -916,12 +917,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
   // Forward the request.
   send_request(req);
 
-#if 0
   // Start the liveness timer for the AS.
-  _liveness_timer.id = LIVENESS_TIMER;
-  pj_time_val delay = {_as_chain_link.as_timeout(), 0};
-  pjsip_endpt_schedule_timer(stack_data.endpt, &_liveness_timer, &delay);
-#endif
+  if (!schedule_timer(NULL, _liveness_timer, _as_chain_link.as_timeout() * 1000))
+  {
+    LOG_WARNING("Failed to start liveness timer");
+  }
 }
 
 
@@ -1245,10 +1245,10 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
 }
 
 
+/// Ensures the request carries a Session-Expires header with an appropriate
+/// duration so the UAs at either end of the session send keepalives.
 void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
 {
-  // Ensure that Session-Expires is added to the message to enable the session
-  // timer on the UEs.
   pjsip_session_expires_hdr* session_expires =
     (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(req,
                                                            &STR_SESSION_EXPIRES,
@@ -1259,4 +1259,44 @@ void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
     pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
   }
   session_expires->expires = stack_data.default_session_expires;
+}
+
+
+/// Handles liveness timer expiry.
+void SCSCFSproutletTsx::on_timer_expiry(void* context)
+{
+  _liveness_timer = 0;
+
+  if (_as_chain_link.is_set()) 
+  {
+    // The request was routed to a downstream AS, so cancel any outstanding
+    // forks.
+    cancel_pending_forks();
+
+    if (_as_chain_link.continue_session())
+    {
+      // The AS either timed out or returned a 5xx error, and default
+      // handling is set to continue.
+      LOG_DEBUG("Trigger default_handling=CONTINUE processing");
+      _as_chain_link = _as_chain_link.next();
+      pjsip_msg* req = original_request();
+      if (_session_case->is_originating()) 
+      {
+        apply_originating_services(req);
+      }
+      else
+      {
+        apply_terminating_services(req);
+      }
+    }
+    else
+    {
+      // Build and send a timeout response upstream.
+      pjsip_msg* req = original_request();
+      pjsip_msg* rsp = create_response(req,
+                                       PJSIP_SC_REQUEST_TIMEOUT);
+      free_msg(req);
+      send_response(rsp);
+    }
+  }
 }

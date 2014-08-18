@@ -47,11 +47,14 @@
 #include "analyticslogger.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
+#include "fakexdmconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
 #include "scscfsproutlet.h"
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
+#include "sproutletappserver.h"
+#include "mmtel.h"
 #include "sproutletproxy.h"
 
 using namespace std;
@@ -334,8 +337,8 @@ public:
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_stateful_proxy_scscf.json"));
-
     _bgcf_service = new BgcfService(string(UT_DIR).append("/test_stateful_proxy_bgcf.json"));
+    _xdm_connection = new FakeXDMConnection();
 
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
@@ -362,10 +365,15 @@ public:
                                         _bgcf_service,
                                         _acr_factory);
 
+    // Create the MMTEL AppServer.
+    _mmtel = new Mmtel("mmtel", _xdm_connection);
+    _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, "mmtel.homedomain");
+
     // Create the SproutletProxy.
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_scscf_sproutlet);
     sproutlets.push_back(_bgcf_sproutlet);
+    sproutlets.push_back(_mmtel_sproutlet);
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain:5058",
@@ -381,6 +389,8 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _proxy; _proxy = NULL;
+    delete _mmtel_sproutlet; _mmtel_sproutlet = NULL;
+    delete _mmtel; _mmtel = NULL;
     delete _bgcf_sproutlet; _bgcf_sproutlet = NULL;
     delete _scscf_sproutlet; _scscf_sproutlet = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
@@ -392,6 +402,7 @@ public:
     delete _hss_connection; _hss_connection = NULL;
     delete _enum_service; _enum_service = NULL;
     delete _bgcf_service; _bgcf_service = NULL;
+    delete _xdm_connection; _xdm_connection = NULL;
     SipTest::TearDownTestCase();
   }
 
@@ -446,12 +457,15 @@ protected:
   static RegStore* _store;
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
+  static FakeXDMConnection* _xdm_connection;
   static BgcfService* _bgcf_service;
   static EnumService* _enum_service;
   static ACRFactory* _acr_factory;
   static SCSCFSelector* _scscf_selector;
   static SCSCFSproutlet* _scscf_sproutlet;
   static BGCFSproutlet* _bgcf_sproutlet;
+  static Mmtel* _mmtel;
+  static SproutletAppServerShim* _mmtel_sproutlet;
   static SproutletProxy* _proxy;
 
   void doTestHeaders(TransportFlow* tpA,
@@ -483,12 +497,15 @@ FakeChronosConnection* SCSCFTest::_chronos_connection;
 RegStore* SCSCFTest::_store;
 AnalyticsLogger* SCSCFTest::_analytics;
 FakeHSSConnection* SCSCFTest::_hss_connection;
+FakeXDMConnection* SCSCFTest::_xdm_connection;
 BgcfService* SCSCFTest::_bgcf_service;
 EnumService* SCSCFTest::_enum_service;
 ACRFactory* SCSCFTest::_acr_factory;
 SCSCFSelector* SCSCFTest::_scscf_selector;
 SCSCFSproutlet* SCSCFTest::_scscf_sproutlet;
 BGCFSproutlet* SCSCFTest::_bgcf_sproutlet;
+Mmtel* SCSCFTest::_mmtel;
+SproutletAppServerShim* SCSCFTest::_mmtel_sproutlet;
 SproutletProxy* SCSCFTest::_proxy;
 
 using SP::Message;
@@ -3446,6 +3463,9 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
+  set_user_phone(false);
+  set_global_only_lookups(false);
+
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
@@ -3619,7 +3639,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-#if 0
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -3639,7 +3658,6 @@ TEST_F(SCSCFTest, MmtelCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-#endif
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -3753,7 +3771,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-#if 0
   _xdm_connection->put("sip:6505551234@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -3773,7 +3790,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-#endif
   _hss_connection->set_impu_result("sip:6505555678@homedomain", "call", "UNREGISTERED",
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505555678@homedomain</Identity></PublicIdentity>
@@ -3822,7 +3838,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-#if 0
   _xdm_connection->put("sip:6505555678@homedomain",
                        R"(<?xml version="1.0" encoding="UTF-8"?>
                           <simservs xmlns="http://uri.etsi.org/ngn/params/xml/simservs/xcap" xmlns:cp="urn:ietf:params:xml:ns:common-policy">
@@ -3842,7 +3857,6 @@ TEST_F(SCSCFTest, MmtelDoubleCdiv)
                             <incoming-communication-barring active="false"/>
                             <outgoing-communication-barring active="false"/>
                           </simservs>)");  // "
-#endif
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5308,6 +5322,9 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   // Save the request for later.
   pjsip_tx_data* target_rq = pop_txdata();
 
+  // Bono sends an immediate 100 Trying response.
+  inject_msg(respond_to_txdata(target_rq, 100), &tpBono);
+
   // The terminating UE doesn't respond so eventually the transaction will time
   // out.  To force this to happen in the right way, we send a CANCEL chasing
   // the original transaction (which is what Bono will do if the transaction
@@ -5501,10 +5518,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   // having to handle MESSAGE retransmits.
   inject_msg(respond_to_txdata(message_txdata, 100), &tpAS);
 
-  // Sprout forwards the 100 Trying back to the originating UE.  This is a bug!
-  ASSERT_EQ(1, txdata_count());
-  free_txdata();
-
   // Advance time by a second so we have good enough control over the order
   // the transactions time out.
   cwtest_advance_time_ms(1000L);
@@ -5550,10 +5563,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   // having to handle MESSAGE retransmits.
   inject_msg(respond_to_txdata(message_txdata, 100), &tpAS);
 
-  // Sprout forwards the 100 Trying back to AS1.  This is a bug!
-  ASSERT_EQ(1, txdata_count());
-  free_txdata();
-
   // Advance time by a second so we have good enough control over the order
   // the transactions time out.
   cwtest_advance_time_ms(1000L);
@@ -5593,16 +5602,12 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
   // having to handle MESSAGE retransmits.
   inject_msg(respond_to_current_txdata(100), &tpBono);
 
-  // Sprout forwards the 100 Trying back to AS1.  This is a bug!
-  ASSERT_EQ(1, txdata_count());
-  free_txdata();
-
   // Advance the time so the delayed 100 Trying responses are sent by Sprout
   // (should happen 3.5 seconds after the MESSAGE was first received, so we'll
   // advance to just over that time).
   cwtest_advance_time_ms(1550L);
   poll();
-#if 0
+#if 1
   ASSERT_EQ(1, txdata_count());
   RespMatcher(100).matches(current_txdata()->msg);
   tpBono.expect_target(current_txdata(), true);
@@ -5611,7 +5616,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 
   cwtest_advance_time_ms(1000L);
   poll();
-#if 0
+#if 1
   ASSERT_EQ(1, txdata_count());
   RespMatcher(100).matches(current_txdata()->msg);
   tpAS.expect_target(current_txdata(), true);
@@ -5620,7 +5625,7 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 
   cwtest_advance_time_ms(1000L);
   poll();
-#if 0
+#if 1
   ASSERT_EQ(1, txdata_count());
   RespMatcher(100).matches(current_txdata()->msg);
   tpAS.expect_target(current_txdata(), true);

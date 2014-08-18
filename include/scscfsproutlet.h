@@ -164,6 +164,7 @@ public:
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_tx_response(pjsip_msg* rsp);
   virtual void on_cancel(int status_code, pjsip_msg* req);
+  virtual void on_timer_expiry(void* context);
 
 private:
   /// Determines the session case and the served user for the request,
@@ -255,6 +256,10 @@ private:
   /// (as defined in RFC5626) indicating the binding is no longer valid.
   std::string _target_aor;
   std::vector<std::string> _target_bindings;
+
+  /// Liveness timer used for determining when an application server is not
+  /// responding.
+  TimerID _liveness_timer;
 
   static const int MAX_FORKING = 10;
 };
