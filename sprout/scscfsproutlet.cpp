@@ -594,6 +594,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       if (lookup_ifcs(served_user, ifcs))
       {
         LOG_DEBUG("Creating originating CDIV AS chain");
+        _as_chain_link.release();
         _as_chain_link = create_as_chain(ifcs, served_user);
 
         if (stack_data.record_route_on_diversion)
@@ -758,7 +759,8 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
                                                  trail(),
                                                  ifcs,
                                                  _acr);
-  LOG_DEBUG("UASTransaction %p linked to AsChain %s", this, ret.to_string().c_str());
+  LOG_DEBUG("S-CSCF sproutlet transaction %p linked to AsChain %s",
+            this, ret.to_string().c_str());
   return ret;
 }
 
