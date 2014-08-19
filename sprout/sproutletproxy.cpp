@@ -612,8 +612,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if ((_root != NULL) &&
       (_tsx->state == PJSIP_TSX_STATE_TERMINATED) &&
       ((event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-       (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
-       (event->body.tsx_state.type == PJSIP_EVENT_USER)))         
+       (event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR)))
   {
     // Notify the root Sproutlet of the error.
     _root->rx_error(PJSIP_SC_REQUEST_TIMEOUT);
@@ -625,12 +624,6 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
   if (_tsx->state == PJSIP_TSX_STATE_DESTROYED)
   {
     LOG_DEBUG("%s - UAS tsx destroyed", _tsx->obj_name);
-    if (_tsx->method.id == PJSIP_INVITE_METHOD)
-    {
-      // INVITE transaction has been terminated.  If there are any
-      // pending UAC transactions they should be cancelled.
-      cancel_pending_uac_tsx(0, true);
-    }
     _proxy->unbind_transaction(_tsx);
     _tsx = NULL;
 
@@ -1630,6 +1623,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   if (rsp->msg->line.status.code >= PJSIP_SC_OK) 
   {
     _complete = true;
+    cancel_pending_forks();
   }
 
   // Forward the response upstream.
