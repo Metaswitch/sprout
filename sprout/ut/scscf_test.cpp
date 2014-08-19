@@ -1645,6 +1645,9 @@ TEST_F(SCSCFTest, TestForkedFlow)
   RespMatcher(183, "early").matches(out);
   free_txdata();
 
+  // Send 100 back from another one of them
+  inject_msg(respond_to_txdata(_tdata[_uris[2]], 100));
+
   // Send 200 OK from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 200, "bbb"));
   poll();
@@ -1713,6 +1716,9 @@ TEST_F(SCSCFTest, TestForkedFlow2)
   out = current_txdata()->msg;
   RespMatcher(183).matches(out);
   free_txdata();
+
+  // Send 100 back from one of them
+  inject_msg(respond_to_txdata(_tdata[_uris[2]], 100));
 
   // Send final error from another of them
   inject_msg(respond_to_txdata(_tdata[_uris[1]], 404));
