@@ -3555,28 +3555,7 @@ void UASTransaction::log_on_tsx_start(const pjsip_rx_data* rdata)
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  // We shouldn't report calling/called DNs for in-dialog requests
-  // (i.e. ones that have a To header with a tag), as these may have
-  // the To and From headers in the opposite direction
-  if ((_analytics.to == NULL) ||
-      (_analytics.to->tag.slen == 0))
-  {
-    if (_analytics.from)
-    {
-      SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
-      pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(_analytics.from->uri);
-      calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
-      SAS::report_marker(calling_dn);
-    }
-
-    if (_analytics.to)
-    {
-      SAS::Marker called_dn(trail(), MARKER_ID_CALLED_DN, 1u);
-      pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(_analytics.to->uri);
-      called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
-      SAS::report_marker(called_dn);
-    }
-  }
+  PJUtils::report_sas_to_from_markers(trail(), rdata->msg_info.msg);
 
   if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
       ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||

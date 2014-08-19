@@ -1202,21 +1202,7 @@ void BasicProxy::UASTsx::on_tsx_start(const pjsip_rx_data* rdata)
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  if (rdata->msg_info.from != NULL)
-  {
-    SAS::Marker calling_dn(trail(), MARKER_ID_CALLING_DN, 1u);
-    pjsip_sip_uri* calling_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.from->uri);
-    calling_dn.add_var_param(calling_uri->user.slen, calling_uri->user.ptr);
-    SAS::report_marker(calling_dn);
-  }
-
-  if (rdata->msg_info.to != NULL)
-  {
-    SAS::Marker called_dn(trail(), MARKER_ID_CALLED_DN, 1u);
-    pjsip_sip_uri* called_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(rdata->msg_info.to->uri);
-    called_dn.add_var_param(called_uri->user.slen, called_uri->user.ptr);
-    SAS::report_marker(called_dn);
-  }
+  PJUtils::report_sas_to_from_markers(trail(), rdata->msg_info.msg);
 
   if ((rdata->msg_info.msg->line.req.method.id == PJSIP_REGISTER_METHOD) ||
       ((pjsip_method_cmp(&rdata->msg_info.msg->line.req.method, pjsip_get_subscribe_method())) == 0) ||

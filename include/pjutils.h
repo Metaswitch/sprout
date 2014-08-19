@@ -237,13 +237,16 @@ void put_unary_param(pjsip_param* params_list,
                      const pj_str_t* name,
                      pj_pool_t* pool);
 
-
 pjsip_status_code redirect(pjsip_msg* msg, std::string target, pj_pool_t* pool, pjsip_status_code code);
 pjsip_status_code redirect(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code);
 pjsip_status_code redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code);
 
 pjsip_history_info_hdr* create_history_info_hdr(pjsip_uri* target, pj_pool_t* pool);
 void update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, int code);
+
+pj_str_t user_from_uri(pjsip_uri* uri);
+
+void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
 
 } // namespace PJUtils
 

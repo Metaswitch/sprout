@@ -1282,10 +1282,10 @@ void SproutletWrapper::free_msg(pjsip_msg*& msg)
     return;
   }
 
+  deregister_tdata(it->second);
+
   LOG_DEBUG("Free message %s", it->second->obj_name);
   pjsip_tx_data_dec_ref(it->second);
-
-  _packets.erase(msg);
 
   // Finish up
   msg = NULL;
@@ -1413,6 +1413,13 @@ void SproutletWrapper::register_tdata(pjsip_tx_data* tdata)
   _packets[tdata->msg] = tdata;
 }
 
+void SproutletWrapper::deregister_tdata(pjsip_tx_data* tdata)
+{
+  LOG_DEBUG("Removing message %p => txdata %p mapping",
+            tdata->msg, tdata);
+  _packets.erase(tdata->msg);
+}
+
 /// Process actions required by a Sproutlet
 void SproutletWrapper::process_actions()
 {
@@ -1505,6 +1512,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     // this response.
     LOG_DEBUG("Discard stale response %s (%s)",
               pjsip_tx_data_get_info(rsp), rsp->obj_name);
+    deregister_tdata(rsp);
     pjsip_tx_data_dec_ref(rsp);
     return;
   }
@@ -1514,6 +1522,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     // We will already have sent a locally generated 100 Trying response, so
     // don't forward this one.
     LOG_DEBUG("Discard 100/INVITE response (%s)", rsp->obj_name);
+    deregister_tdata(rsp);
     pjsip_tx_data_dec_ref(rsp);
     return;
   }
@@ -1535,6 +1544,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     {
       LOG_DEBUG("Discard previous best response %s (%s)",
                 pjsip_tx_data_get_info(_best_rsp), _best_rsp->obj_name);
+      deregister_tdata(_best_rsp);
       pjsip_tx_data_dec_ref(_best_rsp);
     }
     _best_rsp = rsp;
@@ -1554,6 +1564,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
       {
         LOG_DEBUG("Discard previous best response %s (%s)",
                   pjsip_tx_data_get_info(_best_rsp), _best_rsp->obj_name);
+        deregister_tdata(_best_rsp);
         pjsip_tx_data_dec_ref(_best_rsp);
       }
 
@@ -1563,6 +1574,7 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     {
       LOG_DEBUG("Discard response %s (%s) - we already have a better one",
                 pjsip_tx_data_get_info(rsp), rsp->obj_name);
+      deregister_tdata(rsp);
       pjsip_tx_data_dec_ref(rsp);
     }
   }
@@ -1598,6 +1610,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   _sproutlet->on_tx_request(req->msg, fork_id);
 
   // Forward the request downstream.
+  deregister_tdata(req);
   _proxy_tsx->tx_request(this, fork_id, req);
 }
 
@@ -1613,6 +1626,7 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   }
 
   // Forward the response upstream.
+  deregister_tdata(rsp);
   _proxy_tsx->tx_response(this, rsp);
 }
 

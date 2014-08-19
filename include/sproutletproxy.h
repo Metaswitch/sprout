@@ -268,6 +268,7 @@ private:
   void rx_error(int status_code);
   void on_timer_pop(void* context);
   void register_tdata(pjsip_tx_data* tdata);
+  void deregister_tdata(pjsip_tx_data* tdata);
 
   void process_actions();
   void aggregate_response(pjsip_tx_data* rsp);
