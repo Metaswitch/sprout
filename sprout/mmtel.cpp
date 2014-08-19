@@ -71,6 +71,7 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
                    XDMConnection *xdm_client) :
   AppServerTsx(helper),
   _no_reply_timer(0),
+  _cdiv_targets(),
   _xdmc(xdm_client)
 {
   _country_code = "1";
@@ -851,9 +852,11 @@ std::string MmtelTsx::check_call_diversion_rules(unsigned int conditions)
     {
       LOG_DEBUG("Considering rule - conditions 0x%x (?= 0x%x), target %s",
                 rule->conditions(), conditions, rule->forward_target().c_str());
-      if ((rule->conditions() & ~conditions) == 0)
+      if (((rule->conditions() & ~conditions) == 0) &&
+          (_cdiv_targets.find(rule->forward_target()) == _cdiv_targets.end()))
       {
         LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
+        _cdiv_targets.insert(rule->forward_target());
         return rule->forward_target();
       }
     }

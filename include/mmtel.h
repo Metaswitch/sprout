@@ -91,6 +91,7 @@ private:
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
   TimerID _no_reply_timer;
+  std::unordered_set<std::string> _cdiv_targets;
 
   XDMConnection* _xdmc;
 
