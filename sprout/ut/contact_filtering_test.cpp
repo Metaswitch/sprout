@@ -215,6 +215,41 @@ TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesToken)
   Feature matchee("+sip.crazy", "<hello>");
   EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
 }
+TEST_F(ContactFilteringMatchFeatureTest, MatchList)
+{
+  Feature matcher("+sip.crazy", "goldfish,goodbye");
+  Feature matchee("+sip.crazy", "hello,goodbye");
+
+  // Expect a match because there's overlap - "goodbye" is in both lists.
+  EXPECT_EQ(YES, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, NoMatchList)
+{
+  Feature matcher("+sip.crazy", "hello");
+  Feature matchee("+sip.crazy", "yellow,goodbye");
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, NoMatchListNegated)
+{
+  Feature matcher("+sip.crazy", "!hello,goodbye");
+  Feature matchee("+sip.crazy", "hello");
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, MatchListNegated)
+{
+  Feature matcher("+sip.crazy", "!goodbye");
+  Feature matchee("+sip.crazy", "hello,goodbye");
+
+  // Expect a match because there's overlap - "!goodbye" matches
+  // anything that isn't "goodbye", including "hello".
+  EXPECT_EQ(YES, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, SubstringMatch)
+{
+  Feature matcher("+sip.crazy", "iama");
+  Feature matchee("+sip.crazy", "iamalongstring");
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
+}
 
 class ContactFilteringPrebuiltHeadersFixture : public ContactFilteringTest
 {

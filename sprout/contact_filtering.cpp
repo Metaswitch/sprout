@@ -383,8 +383,6 @@ MatchResult match_feature(Feature matcher,
                           Feature matchee)
 {
   MatchResult rc;
-  bool invert_matcher = false;
-  bool invert_matchee = false;
   LOG_DEBUG("Matching parameter '%s' - Accept-Contact/Reject-Contact value '%s', Contact value '%s'",
             matcher.first.c_str(),
             matcher.second.c_str(),
@@ -408,21 +406,6 @@ MatchResult match_feature(Feature matcher,
   if ((matchee.second.front() == '"') && (matchee.second.back() == '"'))
   {
     matchee.second = matchee.second.substr(1, (matchee.second.size() - 2));
-  }
-
-  // Unquote the values, as they don't matter
-  if (matcher.second.front() == '!')
-  {
-    LOG_DEBUG("Matcher is negated by ! prefix");
-    matcher.second = matcher.second.substr(1, (matcher.second.size() - 1));
-    invert_matcher = true;
-  }
-
-  if (matchee.second.front() == '!')
-  {
-    LOG_DEBUG("Matchee is negated by ! prefix");
-    matchee.second = matchee.second.substr(1, (matchee.second.size() - 1));
-    invert_matchee = true;
   }
 
   if (matcher.second[0] == '<')
@@ -472,21 +455,6 @@ MatchResult match_feature(Feature matcher,
     else
     {
       rc = match_tokens(matcher.second, matchee.second);
-    }
-  }
-
-  LOG_DEBUG("invert_matcher %d, invert_matchee %d", invert_matcher, invert_matchee);
-  if (invert_matcher != invert_matchee)
-  {
-    if (rc == YES)
-    {
-      LOG_DEBUG("Inverting match due to '!' prefix");
-      rc = NO;
-    }
-    else if (rc == NO)
-    {
-      LOG_DEBUG("Inverting match due to '!' prefix");
-      rc = YES;
     }
   }
 
@@ -598,32 +566,29 @@ MatchResult match_tokens(const std::string& matcher,
   std::transform(matchee_tokens.begin(), matchee_tokens.end(),
                  matchee_tokens.begin(), string_to_lowercase);
 
-  // Sort the lists (so we can use set_intersection later)
-  std::sort(matcher_tokens.begin(), matcher_tokens.end());
-  std::sort(matchee_tokens.begin(), matchee_tokens.end());
-
-  // Find the intersection.  The API for set_intersection makes no
-  // sense.  Basically you pass it two ordered ranges and a start
-  // point for output and it writes matching entries into the output
-  // interator.  It returns the end iterator for what it wrote out so
-  // you can resize() down to just the intersection (as we do) and
-  // then check the length to see if the intersection was non-empty.
-  std::vector<std::string> intersection(matcher_tokens.size() +
-                                        matchee_tokens.size());
-  std::vector<std::string>::iterator it;
-  it = std::set_intersection(matcher_tokens.begin(), matcher_tokens.end(),
-                             matchee_tokens.begin(), matchee_tokens.end(),
-                             intersection.begin());
-  intersection.resize(it - intersection.begin());
-
-  if (intersection.size() != 0)
+  for (std::vector<std::string>::iterator token1 = matcher_tokens.begin();
+       token1 != matcher_tokens.end();
+       token1++)
   {
-    return YES;
+    for (std::vector<std::string>::iterator token2 = matchee_tokens.begin();
+         token2 != matchee_tokens.end();
+         token2++) {
+      if (*token1 == *token2) {
+        // We match if there is any overlap between the two sets.
+        return YES;
+      }
+      if ((*token1)[0] == '!')
+      {
+        std::string token1_without_negation = token1->substr(1, std::string::npos);
+        LOG_DEBUG("Comparing negation of %s to %s", token1_without_negation.c_str(), token2->c_str());
+        if (token1_without_negation != *token2) {
+          return YES;
+        }
+      }
+    }
   }
-  else
-  {
-    return NO;
-  }
+
+  return NO;
 }
 
 // Trim a list of targets to contain at most `max_targets`.
