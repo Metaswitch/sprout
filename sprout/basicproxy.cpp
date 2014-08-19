@@ -1021,10 +1021,10 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       on_tx_response(tdata);
       pjsip_tsx_send_msg(_tsx, tdata);
     }
-    else if (status_code == 200)
+    else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
     {
-      // 200 OK.
-      LOG_DEBUG("%s - Forward 200 OK response", name());
+      // 2xx.
+      LOG_DEBUG("%s - Forward 2xx response", name());
 
       // Send this response immediately as a final response.
       if (_final_rsp != NULL)

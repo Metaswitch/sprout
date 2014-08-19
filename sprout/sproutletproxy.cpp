@@ -495,7 +495,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
     Sproutlet* sproutlet =
                    target_sproutlet(_req->msg,
                                     rdata->tp_info.transport->local_name.port);
-    _root = new SproutletWrapper((SproutletProxy*)_proxy,
+    _root = new SproutletWrapper(_sproutlet_proxy,
                                  this,
                                  sproutlet,
                                  _req,
@@ -637,7 +637,7 @@ void SproutletProxy::UASTsx::on_tsx_state(pjsip_event* event)
 
 Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg, int port)
 {
-  return ((SproutletProxy*)_proxy)->target_sproutlet(msg, port);
+  return _sproutlet_proxy->target_sproutlet(msg, port);
 }
 
 
@@ -645,7 +645,7 @@ void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
                                               const std::string& service_name,
                                               const std::string& dialog_id)
 {
-  ((SproutletProxy*)_proxy)->add_record_route(tdata, service_name, dialog_id);
+  _sproutlet_proxy->add_record_route(tdata, service_name, dialog_id);
 }
 
 
@@ -674,41 +674,34 @@ void SproutletProxy::UASTsx::schedule_requests()
     {
       // Found a local Sproutlet to handle the request, so create a
       // SproutletWrapper.
-      SproutletWrapper* downstream = new SproutletWrapper((SproutletProxy*)_proxy,
+      SproutletWrapper* downstream = new SproutletWrapper(_sproutlet_proxy,
                                                           this,
                                                           sproutlet,
                                                           req.req,
                                                           trail());
 
-      if (downstream != NULL) 
-      {
-        // Set up the mappings.
-        _dmap_sproutlet[req.upstream] = downstream;
-        _umap[(void*)downstream] = req.upstream;
+      // Set up the mappings.
+      _dmap_sproutlet[req.upstream] = downstream;
+      _umap[(void*)downstream] = req.upstream;
 
-        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD) 
+      if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD) 
+      {
+        // Send an immediate 100 Trying response to the upstream
+        // Sproutlet.
+        pjsip_tx_data* trying;
+        pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                      req.req,
+                                                      PJSIP_SC_TRYING,
+                                                      NULL,
+                                                      &trying);
+        if (status == PJ_SUCCESS) 
         {
-          // Send an immediate 100 Trying response to the upstream
-          // Sproutlet.
-          pjsip_tx_data* trying;
-          pj_status_t status = PJUtils::create_response(stack_data.endpt,
-                                                        req.req,
-                                                        PJSIP_SC_TRYING,
-                                                        NULL,
-                                                        &trying);
-          if (status == PJ_SUCCESS) 
-          {
-            req.upstream.first->rx_response(trying, req.upstream.second);
-          }
+          req.upstream.first->rx_response(trying, req.upstream.second);
         }
+      }
 
-        // Pass the request to the downstream sproutlet.
-        downstream->rx_request(req.req);
-      }
-      else
-      {
-        // @TODO
-      }
+      // Pass the request to the downstream sproutlet.
+      downstream->rx_request(req.req);
     }
     else
     {
@@ -784,11 +777,11 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
           (PJSIP_IS_STATUS_IN_CLASS(st_code, 200)))
       {
         // Terminate the UAS transaction (this needs to be done
-        // manually for INVITE 200 OK response, otherwise the
+        // manually for INVITE 2xx response, otherwise the
         // transaction layer will wait for an ACK).  This will also
         // cause all other pending UAC transactions to be cancelled.
         LOG_DEBUG("%s - Terminate UAS INVITE transaction", _tsx->obj_name);
-        pjsip_tsx_terminate(_tsx, 200);
+        pjsip_tsx_terminate(_tsx, st_code);
       }
     }
   }
@@ -960,16 +953,9 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
 
   _in_dialog = (PJSIP_MSG_TO_HDR(req->msg)->tag.slen > 0);
 
-  // Set up the dialog identifier, either by extracting it from the Route header
-  // (on an in-dialog request), or by creating a default.
-  if (!_in_dialog) 
+  if (_in_dialog) 
   {
-    // Initial request, create default.
-    // @TODO
-  }
-  else
-  {
-    // In-dialog request, so pull from top Route header.
+    // In-dialog request, so pull dialog identifier from top Route header.
     LOG_DEBUG("In-dialog request");
     pjsip_route_hdr* hr = (pjsip_route_hdr*)
                              pjsip_msg_find_hdr(req->msg, PJSIP_H_ROUTE, NULL);
@@ -1539,10 +1525,10 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
     LOG_DEBUG("Forward 1xx response");
     tx_response(rsp);
   }
-  else if (status_code == 200)
+  else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 200))
   {
-    // 200 OK.
-    LOG_DEBUG("Forward 200 OK response");
+    // 2xx response.
+    LOG_DEBUG("Forward 2xx response");
 
     // Send this response immediately as a final response.
     if (_best_rsp != NULL)

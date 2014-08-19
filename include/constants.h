@@ -71,6 +71,7 @@ const pj_str_t STR_ORIG = pj_str((char*)"orig");
 const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");
 const pj_str_t STR_P_C_V = pj_str((char*)"P-Charging-Vector");
 const pj_str_t STR_P_C_F_A = pj_str((char*)"P-Charging-Function-Addresses");
+const pj_str_t STR_P_CALLED_PARTY_ID = pj_str((char*)"P-Called-Party-ID");
 const pj_str_t STR_DIGEST = pj_str((char*)"Digest");
 const pj_str_t STR_MD5 = pj_str((char*)"MD5");
 const pj_str_t STR_AKAV1_MD5 = pj_str((char*)"AKAv1-MD5");

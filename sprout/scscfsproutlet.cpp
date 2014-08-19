@@ -61,6 +61,9 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                bool user_phone,
                                bool global_only_lookups) :
   Sproutlet("scscf", port),
+  _scscf_uri(NULL),
+  _icscf_uri(NULL),
+  _bgcf_uri(NULL),
   _store(store), 
   _remote_store(remote_store),
   _hss(hss),
@@ -69,13 +72,31 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone)
 {
-  LOG_DEBUG("S-CSCF URI = %s", scscf_uri.c_str());
+  LOG_DEBUG("Creating S-CSCF Sproutlet");
+  LOG_DEBUG("  S-CSCF URI = %s", scscf_uri.c_str());
+  LOG_DEBUG("  I-CSCF URI = %s", icscf_uri.c_str());
+  LOG_DEBUG("  BGCF   URI = %s", bgcf_uri.c_str());
 
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
-  _icscf_uri = PJUtils::uri_from_string(icscf_uri, stack_data.pool, false);
+  if (_scscf_uri == NULL) 
+  {
+    LOG_ERROR("Invalid S-CSCF URI %s", scscf_uri.c_str());
+  }
   _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
+  if (_bgcf_uri == NULL) 
+  {
+    LOG_ERROR("Invalid BGCF URI %s", bgcf_uri.c_str());
+  }
+  if (icscf_uri != "") 
+  {
+    _icscf_uri = PJUtils::uri_from_string(icscf_uri, stack_data.pool, false);
+    if (_icscf_uri != NULL) 
+    {
+      LOG_ERROR("Invalid I-CSCF URI %s", icscf_uri.c_str());
+    }
+  }
 
   // Create an AS Chain table for maintaining the mapping from ODI tokens to
   // AS chains (and links in those chains).
@@ -1008,7 +1029,7 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   {
     // The Request-URI indicates an non-home domain, so forward the request
     // to the domain in the Request-URI unchanged.
-    LOG_INFO("Route request to RequestURI %s",
+    LOG_INFO("Route request to Request-URI %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, req_uri).c_str());
     send_request(req);
   }
@@ -1016,11 +1037,13 @@ void SCSCFSproutletTsx::route_to_target(pjsip_msg* req)
   {
     // The Request-URI contains a home domain, so route to any UE bindings
     // in the registration store.
+    LOG_INFO("Route request to registered UE bindings");
     route_to_ue_bindings(req);
   }
   else
   {
     // The RequestURI contains a Tel URI???
+    LOG_INFO("Rejecting request with Tel: URI");
     pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND);
     send_response(rsp);
     free_msg(req);
@@ -1037,24 +1060,15 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
   // Add a P-Called-Party-ID header containing the public user identity,
   // replacing any existing header.
-  static const pj_str_t called_party_id_hdr_name = pj_str("P-Called-Party-ID");
-  pjsip_hdr* hdr = (pjsip_hdr*)
-                         pjsip_msg_find_hdr_by_name(req,
-                                                    &called_party_id_hdr_name,
-                                                    NULL);
-  if (hdr)
-  {
-    pj_list_erase(hdr);
-  }
-
+  pj_pool_t* pool = get_pool(req);
+  PJUtils::remove_hdr(req, &STR_P_CALLED_PARTY_ID);
   std::string name_addr_str("<" + public_id + ">");
   pj_str_t called_party_id;
-  pj_strdup2(get_pool(req),
-             &called_party_id,
-             name_addr_str.c_str());
-  hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(get_pool(req),
-                                                    &called_party_id_hdr_name,
-                                                    &called_party_id);
+  pj_strdup2(pool, &called_party_id, name_addr_str.c_str());
+  pjsip_hdr* hdr = (pjsip_hdr*)
+                        pjsip_generic_string_hdr_create(pool,
+                                                        &STR_P_CALLED_PARTY_ID,
+                                                        &called_party_id);
   pjsip_msg_add_hdr(req, hdr);
 
   // Determine the canonical public ID, and look up the set of associated
@@ -1085,7 +1099,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   filter_bindings_to_targets(aor,
                              aor_data,
                              req,
-                             get_pool(req),
+                             pool,
                              MAX_FORKING,
                              targets,
                              trail());
@@ -1106,10 +1120,11 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     {
       // Clone for all but the last request.
       pjsip_msg* to_send = (ii == targets.size() - 1) ? req : clone_request(req);
+      pool = get_pool(to_send);
 
       // Set up the Rquest URI.
       to_send->line.req.uri = (pjsip_uri*)
-                           pjsip_uri_clone(get_pool(to_send), targets[ii].uri); 
+                                        pjsip_uri_clone(pool, targets[ii].uri); 
 
       // Copy across the path URIs in to Route headers.
       for (std::list<pjsip_uri*>::const_iterator j = targets[ii].paths.begin();
@@ -1118,20 +1133,15 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       {
         pjsip_sip_uri* path_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*j);
         PJUtils::add_route_header(to_send,
-                                  (pjsip_sip_uri*)pjsip_uri_clone(get_pool(to_send),
+                                  (pjsip_sip_uri*)pjsip_uri_clone(pool,
                                                                   path_uri),
-                                  get_pool(to_send));
+                                  pool);
       }
 
       // Forward the request and remember the binding identifier used for this
       // in case we get a Flow Failed response.
       int fork_id = send_request(to_send);
-
-      if (_target_bindings.size() < (size_t)(fork_id + 1)) 
-      {
-        _target_bindings.resize(fork_id + 1);
-      }
-      _target_bindings[fork_id] = targets[ii].binding_id;
+      _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
     }
   }
 

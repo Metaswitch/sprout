@@ -51,7 +51,7 @@ extern "C" {
 }
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include "pjutils.h"
 #include "enumservice.h"
@@ -258,7 +258,7 @@ private:
   /// used in cases where a request fails with a Flow Failed status code 
   /// (as defined in RFC5626) indicating the binding is no longer valid.
   std::string _target_aor;
-  std::vector<std::string> _target_bindings;
+  std::unordered_map<int, std::string> _target_bindings;
 
   /// Liveness timer used for determining when an application server is not
   /// responding.
