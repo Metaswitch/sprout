@@ -118,7 +118,7 @@ protected:
     UASTsx(SproutletProxy* proxy);
 
     /// Destructor.
-    ~UASTsx();
+    virtual ~UASTsx();
 
     /// Initializes the UAS transaction.
     virtual pj_status_t init(pjsip_rx_data* rdata);
