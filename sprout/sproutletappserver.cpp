@@ -297,6 +297,7 @@ SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletTsxHelper* sproutl
 SproutletAppServerShimTsx::~SproutletAppServerShimTsx()
 {
   delete _app_server_helper;
+  delete _app_tsx;
 }
 
 /// Called for an initial request (dialog-initiating or out-of-dialog) with
