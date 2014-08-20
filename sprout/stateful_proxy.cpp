@@ -1164,9 +1164,12 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if (upstream_conn_pool != NULL)
   {
     target_p->transport = upstream_conn_pool->get_connection();
-    pj_memcpy(&target_p->remote_addr,
-              &target_p->transport->key.rem_addr,
-              sizeof(pj_sockaddr));
+    if (target_p->transport != NULL) 
+    {
+      pj_memcpy(&target_p->remote_addr,
+                &target_p->transport->key.rem_addr,
+                sizeof(pj_sockaddr));
+    }
   }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
