@@ -1282,10 +1282,12 @@ void SproutletWrapper::free_msg(pjsip_msg*& msg)
     return;
   }
 
-  deregister_tdata(it->second);
+  pjsip_tx_data* tdata = it->second;
 
-  LOG_DEBUG("Free message %s", it->second->obj_name);
-  pjsip_tx_data_dec_ref(it->second);
+  deregister_tdata(tdata);
+
+  LOG_DEBUG("Free message %s", tdata->obj_name);
+  pjsip_tx_data_dec_ref(tdata);
 
   // Finish up
   msg = NULL;
