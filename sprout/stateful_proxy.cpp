@@ -653,7 +653,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         tdata->dest_info.addr.entry[0].type =
                            (pjsip_transport_type_e)target->transport->key.type;
         pj_memcpy(&tdata->dest_info.addr.entry[0].addr,
-                  &target->transport->key.rem_addr,
+                  &target->remote_addr,
                   sizeof(pj_sockaddr));
         tdata->dest_info.addr.entry[0].addr_len =
              (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
@@ -1462,7 +1462,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         *target = new Target();
         (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
         (*target)->transport = tgt_flow->transport();
-        pj_memcpy(&(*target)->remote_addr, &tgt_flow->remote_addr(), sizeof(pj_sockaddr));
+        pj_memcpy(&(*target)->remote_addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
         pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
