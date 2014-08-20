@@ -39,7 +39,7 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-									callservices.cpp \
+                  callservices.cpp \
                   mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
@@ -78,7 +78,7 @@ TARGET_SOURCES := logger.cpp \
                   sproutletappserver.cpp \
                   scscfsproutlet.cpp \
                   bgcfsproutlet.cpp \
-                  icscfsproutlet.cpp
+                  icscfsproutlet.cpp \
                   contact_filtering.cpp \
                   localroaming.cpp
 
@@ -135,7 +135,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
-											 scscf_test.cpp
+                       scscf_test.cpp \
                        localroaming_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.

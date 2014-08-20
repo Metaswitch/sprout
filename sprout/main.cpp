@@ -92,6 +92,7 @@ extern "C" {
 #include "scscfsproutlet.h"
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
+#include "localroaming.h"
 
 enum OptionTypes
 {
@@ -1445,7 +1446,7 @@ int main(int argc, char *argv[])
       // S-CSCF URI with the I-CSCF port number.
       icscf_uri = scscf_uri;
       size_t pos = icscf_uri.find_first_of(std::to_string(opt.scscf_port));
-      if (pos != std::string::npos) 
+      if (pos != std::string::npos)
       {
         icscf_uri.replace(pos,
                           std::to_string(opt.scscf_port).length(),
@@ -1474,7 +1475,7 @@ int main(int argc, char *argv[])
                                          scscf_acr_factory,
                                          opt.enforce_user_phone,
                                          opt.enforce_global_only_lookups);
-    if (scscf_sproutlet == NULL) 
+    if (scscf_sproutlet == NULL)
     {
       LOG_ERROR("Failed to create S-CSCF Sproutlet");
       return 1;
@@ -1484,7 +1485,7 @@ int main(int argc, char *argv[])
     BGCFSproutlet* bgcf_sproutlet = new BGCFSproutlet(0,
                                                       bgcf_service,
                                                       bgcf_acr_factory);
-    if (bgcf_sproutlet == NULL) 
+    if (bgcf_sproutlet == NULL)
     {
       LOG_ERROR("Failed to create BGCF Sproutlet");
       return 1;
@@ -1497,7 +1498,7 @@ int main(int argc, char *argv[])
   {
     // Create the S-CSCF selector.
     scscf_selector = new SCSCFSelector();
-    if (scscf_selector == NULL) 
+    if (scscf_selector == NULL)
     {
       LOG_ERROR("Failed to create S-CSCF selector");
       return 1;
@@ -1542,6 +1543,11 @@ int main(int argc, char *argv[])
   //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
   //   sproutlets.push_back(app_sproutlet);
 
+  // Create a Gemini App Server.
+  AppServer* gemini = new LocalRoamingAppServer("gemini");
+  Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini, "gemini." + opt.home_domain);
+  sproutlets.push_back(gemini_sproutlet);
+
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
@@ -1549,7 +1555,7 @@ int main(int argc, char *argv[])
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
                                          std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen),
                                          sproutlets);
-    if (sproutlet_proxy == NULL) 
+    if (sproutlet_proxy == NULL)
     {
       LOG_ERROR("Failed to create SproutletProxy");
       return 1;
@@ -1620,8 +1626,8 @@ int main(int argc, char *argv[])
   unregister_stack_modules();
 
   // Destroy the Sproutlet Proxy and any Sproutlets.
-  delete sproutlet_proxy; 
-  while (!sproutlets.empty()) 
+  delete sproutlet_proxy;
+  while (!sproutlets.empty())
   {
     delete sproutlets.front();
     sproutlets.pop_front();
