@@ -64,6 +64,7 @@ struct Target
   pjsip_uri* uri;
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
+  pj_sock_addr remote_addr;
   int liveness_timeout;
   uint32_t contact_q1000_value;
   bool deprioritized;

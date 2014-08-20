@@ -1164,6 +1164,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if (upstream_conn_pool != NULL)
   {
     target_p->transport = upstream_conn_pool->get_connection();
+    pj_memcpy(&target_p->remote_addr,
+              &target_p->transport->key.rem_addr,
+              sizeof(pj_sockaddr));
   }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
@@ -1459,6 +1462,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         *target = new Target();
         (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
         (*target)->transport = tgt_flow->transport();
+        pj_memcpy(&(*target)->remote_addr, &tgt_flow->remote_addr(), sizeof(pj_sockaddr));
         pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
@@ -4163,7 +4167,7 @@ void UACTransaction::set_target(const struct Target& target)
 
     _tdata->dest_info.addr.count = 1;
     _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
-    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.remote_addr, sizeof(pj_sockaddr));
     _tdata->dest_info.addr.entry[0].addr_len =
          (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
          sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
