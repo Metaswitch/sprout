@@ -1118,6 +1118,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if (upstream_conn_pool != NULL)
   {
     target_p->transport = upstream_conn_pool->get_connection();
+    pj_memcpy(&target_p->remote_addr,
+              &target_p->transport->key.rem_addr,
+              sizeof(pj_sockaddr));
   }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
@@ -1410,18 +1413,11 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         // This must be a request for a client, so make sure it is routed
         // over the appropriate flow.
         LOG_DEBUG("Inbound request for client with flow identifier in Route header");
-        pjsip_tpselector tp_selector;
-        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-        tp_selector.u.transport = tgt_flow->transport();
-        pjsip_tx_data_set_transport(tdata, &tp_selector);
-
-        tdata->dest_info.addr.count = 1;
-        tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)tgt_flow->transport()->key.type;
-        pj_memcpy(&tdata->dest_info.addr.entry[0].addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
-        tdata->dest_info.addr.entry[0].addr_len =
-             (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
-             sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
-        tdata->dest_info.cur_addr = 0;
+        *target = new Target();
+        (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
+        (*target)->transport = tgt_flow->transport();
+        pj_memcpy(&(*target)->remote_addr, &tgt_flow->remote_addr(), sizeof(pj_sockaddr));
+        pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
 
@@ -4102,7 +4098,7 @@ void UACTransaction::set_target(const struct Target& target)
 
     _tdata->dest_info.addr.count = 1;
     _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
-    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.remote_addr, sizeof(pj_sockaddr));
     _tdata->dest_info.addr.entry[0].addr_len =
          (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
          sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
