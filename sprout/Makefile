@@ -218,6 +218,9 @@ LDFLAGS += -lmemcached \
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas
 
+# Include memento if desired
+LDFLAGS += -lmemento -lthrift -lcassandra
+
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
 

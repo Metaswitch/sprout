@@ -93,13 +93,19 @@ extern "C" {
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
 #include "localroaming.h"
+#include "mementoappserver.h"
+#include "call_list_store.h"
 
 enum OptionTypes
 {
   OPT_DEFAULT_SESSION_EXPIRES=256+1,
   OPT_ADDITIONAL_HOME_DOMAINS,
   OPT_EMERGENCY_REG_ACCEPTED,
-  OPT_SUB_MAX_EXPIRES
+  OPT_SUB_MAX_EXPIRES,
+  OPT_MAX_CALL_LIST_LENGTH,
+  OPT_MEMENTO_THREADS,
+  OPT_CALL_LIST_TTL,
+  OPT_MEMENTO_ENABLED
 };
 
 struct options
@@ -153,6 +159,10 @@ struct options
   int                    http_threads;
   std::string            billing_cdf;
   pj_bool_t              emerg_reg_accepted;
+  int                    max_call_list_length;
+  int                    memento_threads;
+  int                    call_list_ttl;
+  pj_bool_t              memento_enabled;
   int                    worker_threads;
   pj_bool_t              log_to_file;
   std::string            log_directory;
@@ -203,6 +213,10 @@ struct options
     { "http_threads",      required_argument, 0, 'q'},
     { "billing-cdf",       required_argument, 0, 'B'},
     { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
+    { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+    { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
+    { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
+    { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
     { "log-level",         required_argument, 0, 'L'},
     { "daemon",            no_argument,       0, 'd'},
     { "interactive",       no_argument,       0, 't'},
@@ -317,6 +331,12 @@ static void usage(void)
        "                            WARNING: If this is enabled, all emergency registrations are accepted,\n"
        "                            but they are not policed.\n"
        "                            This parameter is only intended to be enabled during testing.\n"
+       "     --max-call-list-length N\n"
+       "                            Maximum number of complete call list entries to store. If this is 0,\n"
+       "                            then there is no limit (default: 0)\n"
+       "     --memento-threads N    Number of Memento threads (default: 25)\n"
+       "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
+       "     --memento-enabled      Whether the memento AS is enabled (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -737,14 +757,36 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
 
     case OPT_DEFAULT_SESSION_EXPIRES:
       options->default_session_expires = atoi(pj_optarg);
-      LOG_INFO(
-              "Default session expiry set to %d",
-              options->default_session_expires);
+      LOG_INFO("Default session expiry set to %d",
+               options->default_session_expires);
       break;
 
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
       LOG_INFO("Emergency registrations accepted");
+      break;
+
+    case OPT_MAX_CALL_LIST_LENGTH:
+      options->max_call_list_length = atoi(pj_optarg);
+      LOG_INFO("Max call list length set to %d",
+               options->max_call_list_length);
+      break;
+
+    case OPT_MEMENTO_THREADS:
+      options->memento_threads = atoi(pj_optarg);
+      LOG_INFO("Number of memento threads set to %d",
+               options->memento_threads);
+      break;
+
+    case OPT_CALL_LIST_TTL:
+      options->call_list_ttl = atoi(pj_optarg);
+      LOG_INFO("Call list TTL set to %d",
+               options->call_list_ttl);
+      break;
+
+    case OPT_MEMENTO_ENABLED:
+      options->memento_enabled = PJ_TRUE;
+      LOG_INFO("Memento AS is enabled");
       break;
 
     case 'h':
@@ -960,6 +1002,7 @@ int main(int argc, char *argv[])
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
+  CallListStore::Store* call_list_store = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
 
@@ -1015,6 +1058,10 @@ int main(int argc, char *argv[])
   opt.http_threads = 1;
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
+  opt.max_call_list_length = 0;
+  opt.memento_threads = 25;
+  opt.call_list_ttl = 604800;
+  opt.memento_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1169,6 +1216,14 @@ int main(int argc, char *argv[])
       (!opt.enum_file.empty()))
   {
     LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
+  }
+
+  if ((opt.memento_enabled) &&
+      ((opt.max_call_list_length == 0) &&
+      (opt.call_list_ttl == 0)))
+  {
+    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
+    return 1;
   }
 
   // Ensure our random numbers are unpredictable.
@@ -1548,6 +1603,30 @@ int main(int argc, char *argv[])
   Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini, "gemini." + opt.home_domain);
   sproutlets.push_back(gemini_sproutlet);
 
+  if (opt.memento_enabled)
+  {
+    call_list_store = new CallListStore::Store();
+    call_list_store->initialize();
+    call_list_store->configure("localhost", 9160);
+    CassandraStore::ResultCode store_rc = call_list_store->start();
+
+    if (store_rc != CassandraStore::OK)
+    {
+      LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
+      return 1;
+    }
+
+    // Create a Memento Server.
+    memento_app_server = new MementoAppServer("memento",
+                                              call_list_store,
+                                              opt.home_domain,
+                                              opt.max_call_list_length,
+                                              opt.memento_threads,
+                                              opt.call_list_ttl);
+    Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento, "memento." + opt.home_domain);
+    sproutlets.push_back(gemini_sproutlet);
+  }
+
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
@@ -1632,6 +1711,7 @@ int main(int argc, char *argv[])
     delete sproutlets.front();
     sproutlets.pop_front();
   }
+  delete call_list_store;
 
   if (opt.scscf_enabled)
   {
