@@ -75,6 +75,8 @@ public:
 
   std::string default_identity();
 
+  std::string service_route(const std::string& identity);
+
   void set_identity(const pjsip_uri* uri, bool is_default, int expires);
 
   void dec_ref();
@@ -129,6 +131,7 @@ private:
     std::string name_addr;
     int expires;
     bool default_id;
+    std::string service_route;
   };
 
   typedef std::unordered_map<std::string, struct AuthId> auth_id_map;
