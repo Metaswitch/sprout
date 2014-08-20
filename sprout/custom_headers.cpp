@@ -234,7 +234,7 @@ pjsip_hdr_vptr identity_hdr_vptr =
 
 
 /// Custom create, clone and print functions used for the P-Associated-URI,
-/// P-Asserted-Identity and P-Preferred-Identity headers
+/// P-Asserted-Identity, P-Preferred-Identity, and P-Served-User headers
 pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name)
 {
   void* mem = pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));

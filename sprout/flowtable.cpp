@@ -381,6 +381,27 @@ std::string Flow::default_identity()
 }
 
 
+/// Returns the service route for the specified identity on this flow.
+std::string Flow::service_route(const std::string& identity)
+{
+  std::string route;
+
+  pthread_mutex_lock(&_flow_lock);
+
+  auth_id_map::const_iterator i = _authorized_ids.find(identity);
+
+  if (i != _authorized_ids.end())
+  {
+    // Found the corresponding identity.
+    route = i->second.service_route;
+  }
+
+  pthread_mutex_unlock(&_flow_lock);
+
+  return route;
+}
+
+
 /// Sets the specified identities as authorized for this flow.
 void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
 {

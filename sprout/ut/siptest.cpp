@@ -732,6 +732,49 @@ list<pjsip_transaction*> SipTest::get_all_tsxs()
   return ret;
 }
 
+void SipTest::terminate_all_tsxs(int status_code)
+{
+  // Terminates all the unterminated transactions.  This has to be done
+  // by scanning for the first unterminated transaction and terminating it,
+  // until there are no unterminated transactions left in the list.  This is
+  // because it is possible for terminating one transaction to kick off a
+  // retry.
+  LOG_DEBUG("Terminate outstanding transactions");
+  mod_tsx_layer_t* mod_tsx_layer = (mod_tsx_layer_t*)pjsip_tsx_layer_instance();
+  pj_hash_table_t* htable = mod_tsx_layer->htable;
+
+  while (true) 
+  {
+    // Scan through the list of transactions until we find an unterminated one.
+    pj_hash_iterator_t itbuf;
+    pj_mutex_lock(mod_tsx_layer->mutex);
+    pjsip_transaction* tsx = NULL;
+    for (pj_hash_iterator_t* it = pj_hash_first(htable, &itbuf);
+         it != NULL;
+         it = pj_hash_next(htable, it)) 
+    {
+      tsx = (pjsip_transaction*)pj_hash_this(htable, it);
+      if ((tsx->state != PJSIP_TSX_STATE_TERMINATED) &&
+          (tsx->state != PJSIP_TSX_STATE_DESTROYED))
+      {
+        break;
+      }
+      tsx = NULL;
+    }
+    pj_mutex_unlock(mod_tsx_layer->mutex);
+
+    if (tsx == NULL) 
+    {
+      // No more unterminated transactions.
+      break;
+    }
+
+    pjsip_tsx_terminate(tsx, status_code);
+  }
+  pj_mutex_unlock(mod_tsx_layer->mutex);
+}
+
+
 void SipTest::expect_target(const char* type_name, const char* addr, int port, pjsip_tx_data* tdata)
 {
   // Goes to the right place.  It's OK to test the remote host like

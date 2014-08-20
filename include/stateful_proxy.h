@@ -244,7 +244,7 @@ private:
   pjsip_tx_data*       _req;       //< Request to forward on to next element.
   pjsip_tx_data*       _best_rsp;  //< Response to send back to caller.
   TrustBoundary*       _trust;     //< Trust-boundary processing for this B2BUA to apply.
-#define MAX_FORKING 10
+  static const int MAX_FORKING = 10;
   UACTransaction*      _uac_data[MAX_FORKING];
   struct
   {

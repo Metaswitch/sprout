@@ -44,9 +44,10 @@
 #include "siptest.hpp"
 #include "utils.h"
 #include "test_utils.hpp"
-#include "icscfproxy.h"
+#include "icscfsproutlet.h"
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
+#include "sproutletproxy.h"
 
 using namespace std;
 using testing::StrEq;
@@ -55,8 +56,8 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-/// ABC for fixtures for ICSCFProxyTest.
-class ICSCFProxyTestBase : public SipTest
+/// ABC for fixtures for ICSCFSproutletTest.
+class ICSCFSproutletTestBase : public SipTest
 {
 public:
   /// TX data for testing.  Will be cleaned up.  Each message in a
@@ -68,16 +69,21 @@ public:
   {
     SipTest::SetUpTestCase(false);
 
-    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
+    _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
 
-    _icscf_proxy = new ICSCFProxy(stack_data.endpt,
-                                  stack_data.icscf_port,
-                                  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
-                                  _hss_connection,
-                                  _acr_factory,
-                                  _scscf_selector);
+    _icscf_sproutlet = new ICSCFSproutlet(stack_data.icscf_port,
+                                          _hss_connection,
+                                          _acr_factory,
+                                          _scscf_selector);
+    std::list<Sproutlet*> sproutlets;
+    sproutlets.push_back(_icscf_sproutlet);
+
+    _icscf_proxy = new SproutletProxy(stack_data.endpt,
+                                      PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
+                                      "sip:homedomain:" + std::to_string(stack_data.icscf_port),
+                                      sproutlets);
 
     // Schedule timers.
     SipTest::poll();
@@ -89,19 +95,20 @@ public:
     // objects that might handle any callbacks!
     pjsip_tsx_layer_destroy();
     delete _icscf_proxy; _icscf_proxy = NULL;
+    delete _icscf_sproutlet; _icscf_sproutlet = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
     SipTest::TearDownTestCase();
   }
 
-  ICSCFProxyTestBase()
+  ICSCFSproutletTestBase()
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     _hss_connection->flush_all();
   }
 
-  ~ICSCFProxyTestBase()
+  ~ICSCFSproutletTestBase()
   {
     pjsip_tsx_layer_dump(true);
 
@@ -278,22 +285,24 @@ protected:
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
-  static ICSCFProxy* _icscf_proxy;
+  static Sproutlet* _icscf_sproutlet;
+  static SproutletProxy* _icscf_proxy;
 
 };
 
-ACRFactory* ICSCFProxyTestBase::_acr_factory;
-FakeHSSConnection* ICSCFProxyTestBase::_hss_connection;
-SCSCFSelector* ICSCFProxyTestBase::_scscf_selector;
-ICSCFProxy* ICSCFProxyTestBase::_icscf_proxy;
+ACRFactory* ICSCFSproutletTestBase::_acr_factory;
+FakeHSSConnection* ICSCFSproutletTestBase::_hss_connection;
+SCSCFSelector* ICSCFSproutletTestBase::_scscf_selector;
+Sproutlet* ICSCFSproutletTestBase::_icscf_sproutlet;
+SproutletProxy* ICSCFSproutletTestBase::_icscf_proxy;
 
 
-class ICSCFProxyTest : public ICSCFProxyTestBase
+class ICSCFSproutletTest : public ICSCFSproutletTestBase
 {
 public:
   static void SetUpTestCase()
   {
-    ICSCFProxyTestBase::SetUpTestCase();
+    ICSCFSproutletTestBase::SetUpTestCase();
 
     // Set up DNS mappings for some S-CSCFs.
     add_host_mapping("scscf1.homedomain", "10.10.10.1");
@@ -305,14 +314,14 @@ public:
 
   static void TearDownTestCase()
   {
-    ICSCFProxyTestBase::TearDownTestCase();
+    ICSCFSproutletTestBase::TearDownTestCase();
   }
 
-  ICSCFProxyTest()
+  ICSCFSproutletTest()
   {
   }
 
-  ~ICSCFProxyTest()
+  ~ICSCFSproutletTest()
   {
   }
 
@@ -321,7 +330,7 @@ protected:
 
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSServerName)
 {
   // Tests routing of REGISTER requests when the HSS responses with a server
   // name.  There are two cases tested here - one where the impi is defaulted
@@ -437,7 +446,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSServerName)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSCaps)
 {
   // Tests routing of REGISTER requests when the HSS responses with
   // capabilities.  There are two cases tested here - one where the impi
@@ -562,7 +571,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCaps)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSCapsNoMatch)
 {
   // Tests routing of REGISTER requests when the HSS responses with
   // capabilities and there are no suitable S-CSCFs.
@@ -610,7 +619,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSCapsNoMatch)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
+TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPAB)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error to the REGISTER request.
@@ -702,7 +711,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPAB)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPABAndServerName)
+TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPABAndServerName)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error to the REGISTER request.
@@ -778,7 +787,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterSCSCFReturnedCAPABAndServerName)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSRetry)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error to the REGISTER request.
@@ -872,7 +881,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSRetry)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSNoRetry)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a non-retryable error to the REGISTER request.
@@ -939,7 +948,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNoRetry)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleRetry)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error, and the second selected S-CSCF also
@@ -1051,7 +1060,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleRetry)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleDefaultCapabs)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
   // responds with a retryable error, and the CAPAB request to the HSS
@@ -1141,7 +1150,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSMultipleDefaultCapabs)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSFail)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSFail)
 {
   // Tests routing of REGISTER requests when the HSS responds to the
   // registration status lookup with an error.  This test case uses disallowed
@@ -1186,7 +1195,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSFail)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSBadResponse)
 {
   // Tests various cases where the HSS response either fails or is malformed.
   pjsip_tx_data* tdata;
@@ -1321,7 +1330,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSBadResponse)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
+TEST_F(ICSCFSproutletTest, RouteRegisterAllSCSCFsTimeOut)
 {
   // Tests routing of REGISTER requests when all the valid S-CSCFs
   // respond with a 480 to the I-CSCF.
@@ -1413,7 +1422,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterAllSCSCFsTimeOut)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteRegisterHSSNotFound)
+TEST_F(ICSCFSproutletTest, RouteRegisterHSSNotFound)
 {
   // Tests routing of REGISTER requests when the HSS CAPAB request fails
   pjsip_tx_data* tdata;
@@ -1481,7 +1490,7 @@ TEST_F(ICSCFProxyTest, RouteRegisterHSSNotFound)
   delete tp;
 }
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteHSSServerName)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSServerName)
 {
   pjsip_tx_data* tdata;
 
@@ -1551,7 +1560,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSServerName)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCaps)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCaps)
 {
   pjsip_tx_data* tdata;
 
@@ -1622,7 +1631,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCaps)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCapsNoMatch)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSCapsNoMatch)
 {
   pjsip_tx_data* tdata;
 
@@ -1674,7 +1683,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSCapsNoMatch)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteHSSRetry)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
 {
   pjsip_tx_data* tdata;
 
@@ -1776,7 +1785,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSRetry)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
 {
   // Tests originating call when HSS request fails.
 
@@ -1853,7 +1862,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteHSSFail)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteCancel)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
 {
   // Tests handling of a CANCEL requests after an INVITE has been forwarded.
 
@@ -1918,8 +1927,9 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteCancel)
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
   inject_msg(msg2.get_request(), tp);
 
-  // Expect both a 200 OK response to the CANCEL and a forwarded CANCEL.
-  ASSERT_EQ(2, txdata_count());
+  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as 
+  // no provisional response has yet been received.
+  ASSERT_EQ(1, txdata_count());
 
   // Check the 200 OK.
   tdata = current_txdata();
@@ -1927,8 +1937,13 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteCancel)
   RespMatcher(200).matches(tdata->msg);
   tp->expect_target(tdata);
   free_txdata();
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 100 Trying response to the INVITE, triggering the onward CANCEL.
+  inject_msg(respond_to_txdata(invite_tdata, 100));
 
   // Check the CANCEL is forwarded.
+  ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   expect_target("TCP", "10.10.10.1", 5058, tdata);
   ReqMatcher r2("CANCEL");
@@ -1962,7 +1977,7 @@ TEST_F(ICSCFProxyTest, RouteOrigInviteCancel)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteTermInviteHSSServerName)
+TEST_F(ICSCFSproutletTest, RouteTermInviteHSSServerName)
 {
   pjsip_tx_data* tdata;
 
@@ -2032,7 +2047,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSServerName)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteTermInviteHSSCaps)
+TEST_F(ICSCFSproutletTest, RouteTermInviteHSSCaps)
 {
   pjsip_tx_data* tdata;
 
@@ -2103,7 +2118,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSCaps)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
+TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
 {
   pjsip_tx_data* tdata;
 
@@ -2236,38 +2251,7 @@ TEST_F(ICSCFProxyTest, RouteTermInviteHSSRetry)
 }
 
 
-TEST_F(ICSCFProxyTest, WrongPort)
-{
-  // Tests that the I-CSCF does not process requests not sent to the
-  // I-CSCF port.
-
-  // Create a TCP connection to the S-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.scscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a INVITE request with orig in the Route header and a P-Served-User
-  // header.
-  Message msg1;
-  msg1._method = "INVITE";
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
-  msg1._route = "Route: <sip:homedomain>";
-  inject_msg(msg1.get_request(), tp);
-
-  // Expecting no output as I-CSCF module will ignore the message and since
-  // there are no other modules loaded, PJSIP will drop it silently.
-  ASSERT_EQ(0, txdata_count());
-
-  delete tp;
-}
-
-
-TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
+TEST_F(ICSCFSproutletTest, ProxyAKARegisterChallenge)
 {
   // Tests that routing a REGISTER 401 repsonse with an AKA challenge does not
   // change the contents of the www-authenticate header (this was sprout
@@ -2325,7 +2309,7 @@ TEST_F(ICSCFProxyTest, ProxyAKARegisterChallenge)
 }
 
 
-TEST_F(ICSCFProxyTest, RequestErrors)
+TEST_F(ICSCFSproutletTest, RequestErrors)
 {
   // Tests various errors on requests.
 
@@ -2385,7 +2369,7 @@ TEST_F(ICSCFProxyTest, RequestErrors)
 }
 
 
-TEST_F(ICSCFProxyTest, RouteOrigInviteBadServerName)
+TEST_F(ICSCFSproutletTest, RouteOrigInviteBadServerName)
 {
   pjsip_tx_data* tdata;
 

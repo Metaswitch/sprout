@@ -412,8 +412,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Request looks sane, so clone the request to create transmit data.
-  status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
+  if (tdata == NULL)
   {
     LOG_ERROR("Failed to clone request to forward");
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
@@ -617,6 +617,52 @@ void process_tsx_request(pjsip_rx_data* rdata)
     {
       downstream_acr->rx_request(tdata->msg);
       downstream_acr->tx_request(tdata->msg);
+    }
+
+    if (target != NULL) 
+    {
+      // Target has already been selected for the request, so set it up on the
+      // request.
+      tdata->msg->line.req.uri = target->uri;
+
+      // If the target is routing to the upstream device (we're acting as an access
+      // proxy), strip any extra loose routes on the message to prevent accidental
+      // double routing.
+      if (target->upstream_route)
+      {
+        LOG_DEBUG("Stripping loose routes from proxied message");
+
+        // Tight loop to strip all route headers.
+        while (pjsip_msg_find_remove_hdr(tdata->msg,
+                                         PJSIP_H_ROUTE,
+                                         NULL) != NULL)
+        {
+          // Tight loop.
+        };
+      }
+
+      if (target->transport != NULL)
+      {
+        // The target includes a selected transport, so set it here.
+        pjsip_tpselector tp_selector;
+        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
+        tp_selector.u.transport = target->transport;
+        pjsip_tx_data_set_transport(tdata, &tp_selector);
+
+        tdata->dest_info.addr.count = 1;
+        tdata->dest_info.addr.entry[0].type =
+                           (pjsip_transport_type_e)target->transport->key.type;
+        pj_memcpy(&tdata->dest_info.addr.entry[0].addr,
+                  &target->remote_addr,
+                  sizeof(pj_sockaddr));
+        tdata->dest_info.addr.entry[0].addr_len =
+             (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
+             sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
+        tdata->dest_info.cur_addr = 0;
+
+        // Remove the reference to the transport added when it was chosen.
+        pjsip_transport_dec_ref(target->transport);
+      }
     }
 
     status = PJUtils::send_request_stateless(tdata);
@@ -1118,6 +1164,9 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   if (upstream_conn_pool != NULL)
   {
     target_p->transport = upstream_conn_pool->get_connection();
+    pj_memcpy(&target_p->remote_addr,
+              &target_p->transport->key.rem_addr,
+              sizeof(pj_sockaddr));
   }
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
@@ -1410,18 +1459,11 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         // This must be a request for a client, so make sure it is routed
         // over the appropriate flow.
         LOG_DEBUG("Inbound request for client with flow identifier in Route header");
-        pjsip_tpselector tp_selector;
-        tp_selector.type = PJSIP_TPSELECTOR_TRANSPORT;
-        tp_selector.u.transport = tgt_flow->transport();
-        pjsip_tx_data_set_transport(tdata, &tp_selector);
-
-        tdata->dest_info.addr.count = 1;
-        tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)tgt_flow->transport()->key.type;
-        pj_memcpy(&tdata->dest_info.addr.entry[0].addr, tgt_flow->remote_addr(), sizeof(pj_sockaddr));
-        tdata->dest_info.addr.entry[0].addr_len =
-             (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
-             sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
-        tdata->dest_info.cur_addr = 0;
+        *target = new Target();
+        (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
+        (*target)->transport = tgt_flow->transport();
+        pj_memcpy(&((*target)->remote_addr), tgt_flow->remote_addr(), sizeof(pj_sockaddr));
+        pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
 
@@ -1445,45 +1487,48 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // Check if we have any Route headers.  If so, we'll follow them.  If not,
-    // we get to choose where to route to, so route upstream to sprout.
-    void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-    if (top_route)
+    if (*target == NULL) 
     {
-      // We already have Route headers, so just build a target that mirrors
-      // the current request URI.
-      *target = new Target();
-      (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
-    }
-    else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-             PJUtils::is_uri_local(tdata->msg->line.req.uri))
-    {
-      // Route the request upstream to Sprout.
-      proxy_route_upstream(rdata, tdata, trust, target);
-    }
-
-    // Work out the next hop target for the message.  This will either be the
-    // URI in the top route header, or the request URI.
-    pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
-
-    if ((ibcf) &&
-        (tgt_flow == NULL) &&
-        (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
-    {
-      // Check if the message is destined for a SIP trunk
-      LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
-                ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
-      pj_sockaddr dest;
-      if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)next_hop)->host, &dest) == PJ_SUCCESS)
+      // Check if we have any Route headers.  If so, we'll follow them.  If not,
+      // we get to choose where to route to, so route upstream to sprout.
+      void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
+      if (top_route)
       {
-        // Target host name is an IP address, so check against the IBCF trusted
-        // peers.
-        LOG_DEBUG("Parsed destination as an IP address, so check against trusted peers list");
-        if (ibcf_trusted_peer(dest))
+        // We already have Route headers, so just build a target that mirrors
+        // the current request URI.
+        *target = new Target();
+        (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
+      }
+      else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+               PJUtils::is_uri_local(tdata->msg->line.req.uri))
+      {
+        // Route the request upstream to Sprout.
+        proxy_route_upstream(rdata, tdata, trust, target);
+      }
+
+      // Work out the next hop target for the message.  This will either be the
+      // URI in the top route header, or the request URI.
+      pjsip_uri* next_hop = PJUtils::next_hop(tdata->msg);
+
+      if ((ibcf) &&
+          (tgt_flow == NULL) &&
+          (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
+      {
+        // Check if the message is destined for a SIP trunk
+        LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
+                  ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
+        pj_sockaddr dest;
+        if (pj_sockaddr_parse(pj_AF_UNSPEC(), 0, &((pjsip_sip_uri*)next_hop)->host, &dest) == PJ_SUCCESS)
         {
-          LOG_DEBUG("Destination is a SIP trunk");
-          *trust = &TrustBoundary::OUTBOUND_TRUNK;
-          pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+          // Target host name is an IP address, so check against the IBCF trusted
+          // peers.
+          LOG_DEBUG("Parsed destination as an IP address, so check against trusted peers list");
+          if (ibcf_trusted_peer(dest))
+          {
+            LOG_DEBUG("Destination is a SIP trunk");
+            *trust = &TrustBoundary::OUTBOUND_TRUNK;
+            pjsip_msg_find_remove_hdr(tdata->msg, PJSIP_H_AUTHORIZATION, NULL);
+          }
         }
       }
     }
@@ -2903,7 +2948,8 @@ AsChainLink::Disposition UASTransaction::apply_services(Target*& target)
 
   while (true)
   {
-    disposition = _as_chain_links.back().on_initial_request(_req, server_name);
+    _as_chain_links.back().on_initial_request(_req->msg, server_name);
+    disposition = server_name.empty() ? AsChainLink::Disposition::Complete : AsChainLink::Disposition::Skip;
 
     if ((call_services_handler) &&
         (disposition == AsChainLink::Disposition::Skip) &&
@@ -3641,6 +3687,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", ii);
       uac_tdata = PJUtils::clone_tdata(_req);
+      PJUtils::add_top_via(uac_tdata);
 
       if (uac_tdata == NULL)
       {
@@ -4100,7 +4147,7 @@ void UACTransaction::set_target(const struct Target& target)
 
     _tdata->dest_info.addr.count = 1;
     _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
-    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.remote_addr, sizeof(pj_sockaddr));
     _tdata->dest_info.addr.entry[0].addr_len =
          (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
          sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);

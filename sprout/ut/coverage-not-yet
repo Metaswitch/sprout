@@ -42,6 +42,13 @@ dnsresolver.cpp
 flowtable.cpp
 sipresolver.cpp
 acr.cpp
+sproutletproxy.cpp
+sproutletappserver.cpp
+mmtel.cpp
+basicproxy.cpp
+bgcfsproutlet.cpp
+icscfsproutlet.cpp
+scscfsproutlet.cpp
 
 # Tested as part of homestead
 modules/cpp-common/src/httpstack_utils.cpp

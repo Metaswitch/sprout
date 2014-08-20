@@ -64,6 +64,7 @@ struct Target
   pjsip_uri* uri;
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
+  pj_sockaddr remote_addr;
   int liveness_timeout;
   uint32_t contact_q1000_value;
   bool deprioritized;
@@ -321,8 +322,8 @@ public:
                                      Ifcs& ifcs,
                                      ACR* acr);
 
-  Disposition on_initial_request(pjsip_tx_data* tdata,
-                                 std::string& server_name);
+  void on_initial_request(pjsip_msg* msg,
+                          std::string& server_name);
 
 private:
   friend class AsChainTable;

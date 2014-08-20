@@ -56,7 +56,6 @@ extern "C" {
 #include "stack.h"
 #include "memcachedstore.h"
 #include "hssconnection.h"
-#include "ifchandler.h"
 #include "registrar.h"
 #include "registration_utils.h"
 #include "constants.h"
@@ -72,8 +71,6 @@ static HSSConnection* hss;
 
 // Factory for create ACR messages for Rf billing flows.
 static ACRFactory* acr_factory;
-
-static IfcHandler* ifchandler;
 
 static AnalyticsLogger* analytics;
 
@@ -982,7 +979,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
                            HSSConnection* hss_connection,
                            AnalyticsLogger* analytics_logger,
                            ACRFactory* rfacr_factory,
-                           IfcHandler* ifchandler_ref,
                            int cfg_max_expires)
 {
   pj_status_t status;
@@ -991,7 +987,6 @@ pj_status_t init_registrar(RegStore* registrar_store,
   remote_store = remote_reg_store;
   hss = hss_connection;
   analytics = analytics_logger;
-  ifchandler = ifchandler_ref;
   max_expires = cfg_max_expires;
   acr_factory = rfacr_factory;
 

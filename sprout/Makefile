@@ -39,7 +39,8 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-                  callservices.cpp \
+									callservices.cpp \
+                  mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
                   bgcfservice.cpp \
@@ -59,7 +60,6 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
-                  icscfproxy.cpp \
                   icscfrouter.cpp \
                   scscfselector.cpp	\
                   acr.cpp \
@@ -73,7 +73,12 @@ TARGET_SOURCES := logger.cpp \
                   httpstack_utils.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
-                  contact_filtering.cpp
+                  contact_filtering.cpp \
+                  sproutletproxy.cpp \
+                  sproutletappserver.cpp \
+                  scscfsproutlet.cpp \
+                  bgcfsproutlet.cpp \
+                  icscfsproutlet.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -106,7 +111,6 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        options_test.cpp \
                        logger_test.cpp \
                        utils_test.cpp \
-                       callservices_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
@@ -118,7 +122,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
-                       icscfproxy_test.cpp \
+                       icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
@@ -128,7 +132,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
-                       appserver_test.cpp
+                       appserver_test.cpp \
+											 scscf_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -234,12 +239,13 @@ VGFLAGS = --suppressions=$(VG_SUPPRESS) \
           --leak-check=full \
           --track-origins=yes \
           --malloc-fill=cc \
+					--num-callers=40 \
           --free-fill=df
 
 # Define JUSTTEST=<testname> to test just that test.  Easier than
 # passing the --gtest_filter in EXTRA_TEST_ARGS.
 ifdef JUSTTEST
-  EXTRA_TEST_ARGS ?= --gtest_filter=*$(JUSTTEST)*
+  EXTRA_TEST_ARGS ?= --gtest_filter=$(JUSTTEST)
 endif
 
 include ${MK_DIR}/platform.mk
@@ -328,7 +334,7 @@ vg-check: vg
 
 .PHONY: vg_raw
 vg_raw: build_test | $(TEST_OUT_DIR)
-	-valgrind --gen-suppressions=all $(VGFLAGS) \
+	-valgrind --gen-suppressions=all --show-reachable=yes $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean

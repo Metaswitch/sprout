@@ -218,6 +218,9 @@ protected:
   /// Get a list of all current transactions.
   std::list<pjsip_transaction*> get_all_tsxs();
 
+  /// Terminate all unterminated transactions.
+  void terminate_all_tsxs(int status_code);
+
   /// Expect that the given message is sent on the expected transport
   /// type/address/port.  The address is specified as a numeric string
   /// (e.g., dotted-decimal).

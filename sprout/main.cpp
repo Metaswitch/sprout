@@ -68,7 +68,7 @@ extern "C" {
 #include "xdmconnection.h"
 #include "stateful_proxy.h"
 #include "websockets.h"
-#include "callservices.h"
+#include "mmtel.h"
 #include "subscription.h"
 #include "registrar.h"
 #include "authentication.h"
@@ -83,10 +83,15 @@ extern "C" {
 #include "memcachedstore.h"
 #include "localstore.h"
 #include "scscfselector.h"
-#include "icscfproxy.h"
 #include "chronosconnection.h"
 #include "handlers.h"
 #include "httpstack.h"
+#include "sproutlet.h"
+#include "sproutletappserver.h"
+#include "sproutletproxy.h"
+#include "scscfsproutlet.h"
+#include "icscfsproutlet.h"
+#include "bgcfsproutlet.h"
 
 enum OptionTypes
 {
@@ -931,8 +936,6 @@ int main(int argc, char *argv[])
 
   HSSConnection* hss_connection = NULL;
   XDMConnection* xdm_connection = NULL;
-  CallServices* call_services = NULL;
-  IfcHandler* ifc_handler = NULL;
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   EnumService* enum_service = NULL;
@@ -948,7 +951,6 @@ int main(int argc, char *argv[])
   RegStore* remote_reg_store = NULL;
   AvStore* av_store = NULL;
   SCSCFSelector* scscf_selector = NULL;
-  ICSCFProxy* icscf_proxy = NULL;
   ChronosConnection* chronos_connection = NULL;
   HttpConnection* ralf_connection = NULL;
   ACRFactory* scscf_acr_factory = NULL;
@@ -957,6 +959,8 @@ int main(int argc, char *argv[])
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
+  SproutletProxy* sproutlet_proxy = NULL;
+  std::list<Sproutlet*> sproutlets;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -1158,17 +1162,7 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-  if (opt.icscf_enabled)
-  {
-    // Create the SCSCFSelector.
     scscf_selector = new SCSCFSelector();
-
-    if (scscf_selector == NULL)
-    {
-      LOG_ERROR("Failed to load S-CSCF capabilities configuration for I-CSCF");
-      return 1;
-    }
-  }
 
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
@@ -1296,150 +1290,6 @@ int main(int argc, char *argv[])
                                                http_resolver);
   }
 
-  if (opt.scscf_enabled)
-  {
-    if (opt.store_servers != "")
-    {
-      // Use memcached store.
-      LOG_STATUS("Using memcached compatible store with ASCII protocol");
-      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
-      if (opt.remote_store_servers != "")
-      {
-        // Use remote memcached store too.
-        LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
-      }
-    }
-    else
-    {
-      // Use local store.
-      LOG_STATUS("Using local store");
-      local_data_store = (Store*)new LocalStore();
-    }
-
-    if (local_data_store == NULL)
-    {
-      LOG_ERROR("Failed to connect to data store");
-      exit(0);
-    }
-
-    // Create local and optionally remote registration data stores.
-    local_reg_store = new RegStore(local_data_store, chronos_connection);
-    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
-
-    if (opt.xdm_server != "")
-    {
-      // Create a connection to the XDMS.
-      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-      xdm_connection = new XDMConnection(opt.xdm_server,
-                                         http_resolver,
-                                         load_monitor,
-                                         stack_data.stats_aggregator);
-    }
-
-    if (xdm_connection != NULL)
-    {
-      LOG_STATUS("Creating call services handler");
-      call_services = new CallServices(xdm_connection);
-    }
-
-    if (hss_connection != NULL)
-    {
-      LOG_STATUS("Initializing iFC handler");
-      ifc_handler = new IfcHandler();
-    }
-
-    if (opt.auth_enabled)
-    {
-      // Create an AV store using the local store and initialise the authentication
-      // module.  We don't create a AV store using the remote data store as
-      // Authentication Vectors are only stored for a short period after the
-      // relevant challenge is sent.
-      LOG_STATUS("Initialise S-CSCF authentication module");
-      av_store = new AvStore(local_data_store);
-      status = init_authentication(opt.auth_realm,
-                                   av_store,
-                                   hss_connection,
-                                   chronos_connection,
-                                   scscf_acr_factory,
-                                   analytics_logger);
-    }
-
-    // Create Enum and BGCF services required for S-CSCF.
-    if (!opt.enum_server.empty())
-    {
-      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    bgcf_service = new BgcfService();
-
-    // Launch the registrar.
-    status = init_registrar(local_reg_store,
-                            remote_reg_store,
-                            hss_connection,
-                            analytics_logger,
-                            scscf_acr_factory,
-                            ifc_handler,
-                            opt.reg_max_expires);
-
-    if (status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Failed to enable S-CSCF registrar");
-      return 1;
-    }
-
-    // Launch the subscription module.
-    status = init_subscription(local_reg_store,
-                               remote_reg_store,
-                               hss_connection,
-                               scscf_acr_factory,
-                               analytics_logger,
-                               opt.sub_max_expires);
-
-    if (status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Failed to enable subscription module");
-      return 1;
-    }
-
-    // Launch stateful proxy as S-CSCF.
-    status = init_stateful_proxy(local_reg_store,
-                                 remote_reg_store,
-                                 call_services,
-                                 ifc_handler,
-                                 false,
-                                 "",
-                                 0,
-                                 0,
-                                 0,
-                                 false,
-                                 "",
-                                 analytics_logger,
-                                 enum_service,
-                                 opt.enforce_user_phone,
-                                 opt.enforce_global_only_lookups,
-                                 bgcf_service,
-                                 hss_connection,
-                                 scscf_acr_factory,
-                                 bgcf_acr_factory,
-                                 icscf_acr_factory,
-                                 opt.external_icscf_uri,
-                                 quiescing_mgr,
-                                 scscf_selector,
-                                 opt.icscf_enabled,
-                                 opt.scscf_enabled,
-                                 false);
-
-    if (status != PJ_SUCCESS)
-    {
-      LOG_ERROR("Failed to enable S-CSCF proxy");
-      return 1;
-    }
-  }
-
   if (opt.pcscf_enabled)
   {
     // Launch stateful proxy as P-CSCF.
@@ -1489,22 +1339,223 @@ int main(int argc, char *argv[])
     }
   }
 
+  if (opt.scscf_enabled)
+  {
+    if (opt.store_servers != "")
+    {
+      // Use memcached store.
+      LOG_STATUS("Using memcached compatible store with ASCII protocol");
+      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+      if (opt.remote_store_servers != "")
+      {
+        // Use remote memcached store too.
+        LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
+        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+      }
+    }
+    else
+    {
+      // Use local store.
+      LOG_STATUS("Using local store");
+      local_data_store = (Store*)new LocalStore();
+    }
+
+    if (local_data_store == NULL)
+    {
+      LOG_ERROR("Failed to connect to data store");
+      exit(0);
+    }
+
+    // Create local and optionally remote registration data stores.
+    local_reg_store = new RegStore(local_data_store, chronos_connection);
+    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
+
+    if (opt.xdm_server != "")
+    {
+      // Create a connection to the XDMS.
+      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+      xdm_connection = new XDMConnection(opt.xdm_server,
+                                         http_resolver,
+                                         load_monitor,
+                                         stack_data.stats_aggregator);
+    }
+
+    if (opt.auth_enabled)
+    {
+      // Create an AV store using the local store and initialise the authentication
+      // module.  We don't create a AV store using the remote data store as
+      // Authentication Vectors are only stored for a short period after the
+      // relevant challenge is sent.
+      LOG_STATUS("Initialise S-CSCF authentication module");
+      av_store = new AvStore(local_data_store);
+      status = init_authentication(opt.auth_realm,
+                                   av_store,
+                                   hss_connection,
+                                   chronos_connection,
+                                   scscf_acr_factory,
+                                   analytics_logger);
+    }
+
+    // Create Enum and BGCF services required for S-CSCF.
+    if (!opt.enum_server.empty())
+    {
+      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
+    }
+    else if (!opt.enum_file.empty())
+    {
+      enum_service = new JSONEnumService(opt.enum_file);
+    }
+    bgcf_service = new BgcfService();
+
+    // Launch the registrar.
+    status = init_registrar(local_reg_store,
+                            remote_reg_store,
+                            hss_connection,
+                            analytics_logger,
+                            scscf_acr_factory,
+                            opt.reg_max_expires);
+
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to enable S-CSCF registrar");
+      return 1;
+    }
+
+    // Launch the subscription module.
+    status = init_subscription(local_reg_store,
+                               remote_reg_store,
+                               hss_connection,
+                               scscf_acr_factory,
+                               analytics_logger,
+                               opt.sub_max_expires);
+
+    if (status != PJ_SUCCESS)
+    {
+      LOG_ERROR("Failed to enable subscription module");
+      return 1;
+    }
+
+    // Create the S-CSCF and BGCF Sproutlets.
+    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen);
+    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
+    std::string icscf_uri;
+    if (opt.icscf_enabled)
+    {
+      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
+      // S-CSCF URI with the I-CSCF port number.
+      icscf_uri = scscf_uri;
+      size_t pos = icscf_uri.find_first_of(std::to_string(opt.scscf_port));
+      if (pos != std::string::npos) 
+      {
+        icscf_uri.replace(pos,
+                          std::to_string(opt.scscf_port).length(),
+                          std::to_string(opt.icscf_port));
+      }
+      else
+      {
+        // No port number, so best we can do is strap icscf. on the front.
+        icscf_uri = "sip:icscf." + scscf_uri.substr(4);
+      }
+    }
+    else
+    {
+      icscf_uri = opt.external_icscf_uri;
+    }
+
+    SCSCFSproutlet* scscf_sproutlet =
+                      new SCSCFSproutlet(scscf_uri,
+                                         icscf_uri,
+                                         bgcf_uri,
+                                         opt.scscf_port,
+                                         local_reg_store,
+                                         remote_reg_store,
+                                         hss_connection,
+                                         enum_service,
+                                         scscf_acr_factory,
+                                         opt.enforce_user_phone,
+                                         opt.enforce_global_only_lookups);
+    if (scscf_sproutlet == NULL) 
+    {
+      LOG_ERROR("Failed to create S-CSCF Sproutlet");
+      return 1;
+    }
+    sproutlets.push_back(scscf_sproutlet);
+
+    BGCFSproutlet* bgcf_sproutlet = new BGCFSproutlet(0,
+                                                      bgcf_service,
+                                                      bgcf_acr_factory);
+    if (bgcf_sproutlet == NULL) 
+    {
+      LOG_ERROR("Failed to create BGCF Sproutlet");
+      return 1;
+    }
+
+    sproutlets.push_back(bgcf_sproutlet);
+  }
+
   if (opt.icscf_enabled)
   {
-    // Launch I-CSCF proxy.
-    icscf_proxy = new ICSCFProxy(stack_data.endpt,
-                                 stack_data.icscf_port,
-                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
-                                 hss_connection,
-                                 icscf_acr_factory,
-                                 scscf_selector);
-
-    if (icscf_proxy == NULL)
+    // Create the S-CSCF selector.
+    scscf_selector = new SCSCFSelector();
+    if (scscf_selector == NULL) 
     {
-      LOG_ERROR("Failed to enable I-CSCF proxy");
+      LOG_ERROR("Failed to create S-CSCF selector");
+      return 1;
+    }
+
+    // Create the I-CSCF sproutlet.
+    ICSCFSproutlet* icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
+                                                         hss_connection,
+                                                         icscf_acr_factory,
+                                                         scscf_selector);
+    if (icscf_sproutlet == NULL)
+    {
+      LOG_ERROR("Failed to create I-CSCF Sproutlet");
+      return 1;
+    }
+    sproutlets.push_back(icscf_sproutlet);
+  }
+
+  if (opt.xdm_server != "")
+  {
+    // Create a connection to the XDMS.
+    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
+    xdm_connection = new XDMConnection(opt.xdm_server,
+                                       http_resolver,
+                                       load_monitor,
+                                       stack_data.stats_aggregator);
+
+    if (xdm_connection == NULL)
+    {
+      LOG_ERROR("Failed to create XDM connection");
+      return 1;
+    }
+
+    // Load the MMTEL AppServer
+    AppServer* mmtel = new Mmtel("mmtel", xdm_connection);
+    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel, "mmtel." + opt.home_domain);
+    sproutlets.push_back(mmtel_sproutlet);
+  }
+
+  // Load any other AppServers that should be collocated, eg.
+  //   AppServer* app = new SampleForkAS();
+  //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
+  //   sproutlets.push_back(app_sproutlet);
+
+  if (!sproutlets.empty())
+  {
+    // There are Sproutlets loaded, so start the Sproutlet proxy.
+    sproutlet_proxy = new SproutletProxy(stack_data.endpt,
+                                         PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
+                                         std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen),
+                                         sproutlets);
+    if (sproutlet_proxy == NULL) 
+    {
+      LOG_ERROR("Failed to create SproutletProxy");
       return 1;
     }
   }
+
 
   status = start_stack();
   if (status != PJ_SUCCESS)
@@ -1568,6 +1619,14 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
+  // Destroy the Sproutlet Proxy and any Sproutlets.
+  delete sproutlet_proxy; 
+  while (!sproutlets.empty()) 
+  {
+    delete sproutlets.front();
+    sproutlets.pop_front();
+  }
+
   if (opt.scscf_enabled)
   {
     destroy_subscription();
@@ -1576,9 +1635,6 @@ int main(int argc, char *argv[])
     {
       destroy_authentication();
     }
-    destroy_stateful_proxy();
-    delete ifc_handler;
-    delete call_services;
     delete hss_connection;
     delete xdm_connection;
     delete enum_service;
@@ -1598,10 +1654,10 @@ int main(int argc, char *argv[])
   }
   if (opt.icscf_enabled)
   {
-    delete icscf_proxy;
     delete scscf_selector;
     delete icscf_acr_factory;
   }
+
   destroy_options();
   destroy_stack();
 
