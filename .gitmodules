@@ -55,3 +55,6 @@
 [submodule "modules/gemini"]
 	path = modules/gemini
 	url = git@github.com:Metaswitch/gemini.git
+[submodule "modules/memento"]
+	path = modules/memento
+	url = git@github.com:Metaswitch/memento
