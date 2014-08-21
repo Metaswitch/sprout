@@ -191,10 +191,6 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   pj_str_t route_hdr_name = pj_str((char *)"Route");
   PJUtils::remove_hdr(req, &route_hdr_name);
 
-  // Since we may retry the request on a negative response, clone the original
-  // request now.
-  _cloned_req = clone_request(req);
-
   // Create an UAR router to handle the HSS interactions and S-CSCF
   // selection.
   _router = (ICSCFRouter*)new ICSCFUARouter(_icscf->get_hss_connection(),
@@ -222,7 +218,6 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
-    free_msg(_cloned_req);
   }
 }
 
@@ -255,18 +250,19 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     _acr->rx_response(rsp);
   }
 
-  // Check if this reqponse is one that we are allowed to retry the HSS lookup
+  // Check if this response is one that we are allowed to retry the HSS lookup
   // for.  See TS 24.229 - section 5.3.1.3.
   //
   // Note we support service restoration, so integrity-protected settings in
   // Authorization header are immaterial).
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
-  LOG_DEBUG("Check retry conditions for REGISTER request, status code = %d",
-            rsp_status);
-  if ((rsp_status >= 300) && 
-      ((rsp_status <= 399) ||
-       (rsp_status == PJSIP_SC_REQUEST_TIMEOUT) ||
-       (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE)))
+  const ForkState& fork_status = fork_state(fork_id);
+  LOG_DEBUG("Check retry conditions for REGISTER, status = %d, S-CSCF %sresponsive",
+            rsp_status,
+            (fork_status.error_state != NONE) ? "not" : "");
+  if ((PJSIP_IS_STATUS_IN_CLASS(rsp_status, 300)) ||
+      (fork_status.error_state != NONE) ||
+      (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
   {
     // Indeed it is, first log to SAS.
     LOG_DEBUG("Attempt retry to alternate S-CSCF for REGISTER request");
@@ -279,19 +275,15 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
     // Now we can simply reuse the UA router we made on the initial request.
     pjsip_sip_uri* scscf_sip_uri = NULL;
-    int status_code = _router->get_scscf(get_pool(_cloned_req), scscf_sip_uri);
+    pjsip_msg* req = original_request();
+    int status_code = _router->get_scscf(get_pool(req), scscf_sip_uri);
 
     if (status_code == PJSIP_SC_OK)
     {
       LOG_DEBUG("Found SCSCF for REGISTER");
 
-      // Re-clone the request for future retries.
-      pjsip_msg* tmp_clone = clone_request(_cloned_req);
-
-      // Send the old clone as a new fork and save off the new clone.
-      _cloned_req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
-      send_request(_cloned_req);
-      _cloned_req = tmp_clone;
+      req->line.req.uri = (pjsip_uri*)scscf_sip_uri;
+      send_request(req);
 
       // We're not forwarding this response upstream.
       free_msg(rsp);
@@ -321,7 +313,6 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       }
 
       // We're done, no more retries.
-      free_msg(_cloned_req);
       send_response(rsp);
     }
   }
@@ -329,10 +320,6 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   {
     // Provisional, successful or non-retryable response, simply forward on
     // upstream.  If this is a final response, there will be no more retries.
-    if (rsp_status >= 200)
-    {
-      free_msg(_cloned_req);
-    }
     send_response(rsp);
   }
 }
@@ -428,10 +415,6 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
   }
 
-  // Since we may retry the request on a negative response, clone the original
-  // request now.
-  _cloned_req = clone_request(req);
-
   // Create an LIR router to handle the HSS interactions and S-CSCF
   // selection.
   _router = (ICSCFRouter*)new ICSCFLIRouter(_icscf->get_hss_connection(),
@@ -468,7 +451,6 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
-    free_msg(_cloned_req);
   }
 }
 
@@ -502,14 +484,15 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   }
 
   // Check if this response is one that we are allowed to retry the HSS lookup
-  // for.  See TS 24.229 - section 5.3.1.3.
+  // for.  See TS 24.229 - section 5.3.2.2.
   //
   // Note we support service restoration, so integrity-protected settings in
   // Authorization header are immaterial).
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
-  LOG_DEBUG("Check retry conditions for non-REGISTER request, status code = %d",
-            rsp_status);
-  if (rsp_status == PJSIP_SC_REQUEST_TIMEOUT)
+  const ForkState& fork_status = fork_state(fork_id);
+  LOG_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
+            (fork_status.error_state != NONE) ? "not" : "");
+  if (fork_status.error_state != NONE)
   {
     // Indeed it it, first log to SAS.
     LOG_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
@@ -522,7 +505,9 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
     // Now we can simply reuse the UA router we made on the initial request.
     pjsip_sip_uri* scscf_sip_uri = NULL;
-    int status_code = _router->get_scscf(get_pool(_cloned_req), scscf_sip_uri);
+    pjsip_msg* req = original_request();
+    pj_pool_t* pool = get_pool(req);
+    int status_code = _router->get_scscf(pool, scscf_sip_uri);
 
     if (status_code == PJSIP_SC_OK)
     {
@@ -531,38 +516,27 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       if (_originating)
       {
         // Add the `orig` parameter.
-        pjsip_param* orig_param = PJ_POOL_ALLOC_T(get_pool(_cloned_req),
-                                                  pjsip_param);
-        pj_strdup(get_pool(_cloned_req), &orig_param->name, &STR_ORIG);
+        pjsip_param* orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+        pj_strdup(pool, &orig_param->name, &STR_ORIG);
         orig_param->value.slen = 0;
         pj_list_insert_after(&scscf_sip_uri->other_param, orig_param);
       }
 
-      // Re-clone the request for future retries.
-      pjsip_msg* tmp_clone = clone_request(_cloned_req);
-
-      // Send the old clone as a new fork and save off the new clone.
-      PJUtils::add_route_header(_cloned_req, scscf_sip_uri, get_pool(_cloned_req));
-      send_request(_cloned_req);
-      _cloned_req = tmp_clone;
+      PJUtils::add_route_header(req, scscf_sip_uri, pool);
+      send_request(req);
 
       // We're not forwarding this response upstream.
       free_msg(rsp);
     }
     else
     {
-      free_msg(_cloned_req);
       send_response(rsp);
     }
   }
   else
   {
     // Provisional, successful or non-retryable response, simply forward on
-    // upstream.  If this is a final response there will be not more retrying.
-    if (rsp_status >= 200)
-    {
-      free_msg(_cloned_req);
-    }
+    // upstream.
     send_response(rsp);
   }
 }

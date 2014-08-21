@@ -64,6 +64,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _refs(1),  // for the initial chain link being returned
   _as_info(ifcs.size() + 1),
   _odi_tokens(),
+  _responsive(ifcs.size() + 1),
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
@@ -236,7 +237,7 @@ void AsChainLink::on_response(int status_code)
   {
     // The AS has returned a 100 Trying response, which means it must be
     // viewed as responsive.
-    _responsive = true;
+    _as_chain->_responsive[_index] = true;
   }
   else if (status_code >= PJSIP_SC_OK)
   {
@@ -314,7 +315,12 @@ AsChainLink AsChainTable::lookup(const std::string& token)
   }
   else
   {
+    // Found the AsChainLink.  Add a reference to the AsChain.
     it->second._as_chain->inc_ref();
+
+    // Flag that the AS corresponding to the previous link in the chain has
+    // effectively responded.
+    it->second._as_chain->_responsive[it->second._index - 1] = true;
     pthread_mutex_unlock(&_lock);
     return it->second;
   }

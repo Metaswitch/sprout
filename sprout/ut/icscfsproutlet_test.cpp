@@ -1738,16 +1738,11 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSRetry)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 408 Request Timeout response.
-  inject_msg(respond_to_current_txdata(408));
-
-  // Catch the ACK to the 408 response
-  ASSERT_EQ(2, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.1", 5058, tdata);
-  ReqMatcher r2("ACK");
-  r2.matches(tdata->msg);
+  // Kill the TCP connection to the S-CSCF to force a retry.
+  terminate_tcp_transport(tdata->tp_info.transport);
   free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
 
   // The HSS is queried a second time for capabilities.  This time S-CSCF
   // scscf4.homedomain is selected.
@@ -2174,17 +2169,11 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 408 Request Timeout response.
-  inject_msg(respond_to_current_txdata(408));
-  //poll();
-
-  // Expecting an ACK to the 408 and a retried INVITE
-  ASSERT_EQ(2, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.1", 5058, tdata);
-  ReqMatcher r2("ACK");
-  r2.matches(tdata->msg);
+  // Kill the TCP connection to the S-CSCF to force a retry.
+  terminate_tcp_transport(tdata->tp_info.transport);
   free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
 
   // I-CSCF does another HSS location query for capabilities.  This time
   // scscf3 is selected.
@@ -2203,17 +2192,11 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
   rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Send a 408 Request Timeout response.
-  inject_msg(respond_to_current_txdata(408));
-  //poll();
-
-  // Expecting an ACK to the 408 and a retried INVITE
-  ASSERT_EQ(2, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.3", 5058, tdata);
-  ReqMatcher r4("ACK");
-  r4.matches(tdata->msg);
+  // Kill the TCP connection to the S-CSCF to force a retry.
+  terminate_tcp_transport(tdata->tp_info.transport);
   free_txdata();
+  cwtest_advance_time_ms(6000);
+  poll();
 
   // I-CSCF does another HSS location query for capabilities.  This time
   // scscf4 is selected.

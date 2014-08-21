@@ -132,6 +132,9 @@ protected:
     pj_sockaddr _rem_addr;
   };
 
+  /// Terminate a TCP transport immediately.
+  void terminate_tcp_transport(pjsip_transport* tp);
+
   /// Add DNS A records to map hostname to a set of IP addresses.  The
   /// list of addresses should be comma separated.
   static void add_host_mapping(const string& hostname, const string& addresses);
