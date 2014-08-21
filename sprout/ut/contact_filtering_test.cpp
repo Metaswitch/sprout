@@ -296,6 +296,17 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalAccept)
 
   EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
+TEST_F(ContactFilteringMatchFeatureSetTest, QuotedMatchingNormalAccept)
+{
+  FeatureSet contact_feature_set;
+  contact_feature_set["+sip.string"] = "\"<hello>\"";
+  contact_feature_set["+sip.numeric"] = "\"#4\"";
+  contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["+sip.token"] = "\"hello\"";
+  contact_feature_set["+sip.negated"] = "\"!world\"";
+
+  EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
+}
 TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalAccept)
 {
   FeatureSet contact_feature_set;
