@@ -1617,14 +1617,14 @@ int main(int argc, char *argv[])
     }
 
     // Create a Memento Server.
-    memento_app_server = new MementoAppServer("memento",
+    AppServer* memento = new MementoAppServer("memento",
                                               call_list_store,
                                               opt.home_domain,
                                               opt.max_call_list_length,
                                               opt.memento_threads,
                                               opt.call_list_ttl);
     Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento, "memento." + opt.home_domain);
-    sproutlets.push_back(gemini_sproutlet);
+    sproutlets.push_back(memento_sproutlet);
   }
 
   if (!sproutlets.empty())
