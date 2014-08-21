@@ -572,8 +572,10 @@ MatchResult match_tokens(const std::string& matcher,
   {
     for (std::vector<std::string>::iterator token2 = matchee_tokens.begin();
          token2 != matchee_tokens.end();
-         token2++) {
-      if (*token1 == *token2) {
+         token2++)
+    {
+      if (*token1 == *token2)
+      {
         // We match if there is any overlap between the two sets.
         return YES;
       }
@@ -581,7 +583,8 @@ MatchResult match_tokens(const std::string& matcher,
       {
         std::string token1_without_negation = token1->substr(1, std::string::npos);
         LOG_DEBUG("Comparing negation of %s to %s", token1_without_negation.c_str(), token2->c_str());
-        if (token1_without_negation != *token2) {
+        if (token1_without_negation != *token2)
+        {
           return YES;
         }
       }
