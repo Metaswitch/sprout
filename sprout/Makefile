@@ -39,7 +39,7 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-									callservices.cpp \
+                  callservices.cpp \
                   mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
@@ -78,7 +78,9 @@ TARGET_SOURCES := logger.cpp \
                   sproutletappserver.cpp \
                   scscfsproutlet.cpp \
                   bgcfsproutlet.cpp \
-                  icscfsproutlet.cpp
+                  icscfsproutlet.cpp \
+                  contact_filtering.cpp \
+                  localroaming.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -133,7 +135,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
-											 scscf_test.cpp
+                       scscf_test.cpp \
+                       localroaming_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -165,14 +168,16 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/cpp-common/test_utils \
             -I${ROOT}/modules/app-servers/include \
             -I${ROOT}/modules/app-servers/test \
+            -I${ROOT}/modules/gemini/include \
             -I${ROOT}/sprout/ut \
+            -I${ROOT}/modules/gemini/src/ut \
             -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src
 
 # Production build:
 #
@@ -213,6 +218,9 @@ LDFLAGS += -lmemcached \
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas
 
+# Include memento if desired
+LDFLAGS += -lmemento -lthrift -lcassandra
+
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
 
@@ -232,7 +240,7 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 #
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/cpp-common/include/|^ut/|^usr/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \
