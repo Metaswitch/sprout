@@ -375,7 +375,7 @@ private:
 
   static const int TOKEN_LENGTH = 10;
 
-  /// Map from token to pair of (AsChain, index).
-  std::map<std::string, AsChainLink> _t2c_map;
+  /// Map from ODI token to pair of (AsChain, index).
+  std::map<std::string, AsChainLink> _odi_token_map;
   pthread_mutex_t _lock;
 };

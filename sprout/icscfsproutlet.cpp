@@ -259,7 +259,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   const ForkState& fork_status = fork_state(fork_id);
   LOG_DEBUG("Check retry conditions for REGISTER, status = %d, S-CSCF %sresponsive",
             rsp_status,
-            (fork_status.error_state != NONE) ? "not" : "");
+            (fork_status.error_state != NONE) ? "not " : "");
   if ((PJSIP_IS_STATUS_IN_CLASS(rsp_status, 300)) ||
       (fork_status.error_state != NONE) ||
       (rsp_status == PJSIP_SC_TEMPORARILY_UNAVAILABLE))
@@ -491,7 +491,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
   const ForkState& fork_status = fork_state(fork_id);
   LOG_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
-            (fork_status.error_state != NONE) ? "not" : "");
+            (fork_status.error_state != NONE) ? "not " : "");
   if (fork_status.error_state != NONE)
   {
     // Indeed it it, first log to SAS.

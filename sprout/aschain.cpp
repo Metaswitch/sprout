@@ -278,7 +278,7 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
     std::string token;
     Utils::create_random_token(TOKEN_LENGTH, token);
     tokens.push_back(token);
-    _t2c_map[token] = AsChainLink(as_chain, i);
+    _odi_token_map[token] = AsChainLink(as_chain, i);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -293,7 +293,7 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
        it != tokens.end();
        ++it)
   {
-    _t2c_map.erase(*it);
+    _odi_token_map.erase(*it);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -307,8 +307,9 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
 AsChainLink AsChainTable::lookup(const std::string& token)
 {
   pthread_mutex_lock(&_lock);
-  std::map<std::string, AsChainLink>::const_iterator it = _t2c_map.find(token);
-  if (it == _t2c_map.end())
+  std::map<std::string, AsChainLink>::const_iterator it =
+                                                    _odi_token_map.find(token);
+  if (it == _odi_token_map.end())
   {
     pthread_mutex_unlock(&_lock);
     return AsChainLink(NULL, 0);
@@ -316,12 +317,13 @@ AsChainLink AsChainTable::lookup(const std::string& token)
   else
   {
     // Found the AsChainLink.  Add a reference to the AsChain.
-    it->second._as_chain->inc_ref();
+    const AsChainLink& as_chain_link = it->second;
+    as_chain_link._as_chain->inc_ref();
 
     // Flag that the AS corresponding to the previous link in the chain has
     // effectively responded.
-    it->second._as_chain->_responsive[it->second._index - 1] = true;
+    as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
     pthread_mutex_unlock(&_lock);
-    return it->second;
+    return as_chain_link;
   }
 }
