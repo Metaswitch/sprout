@@ -125,11 +125,16 @@ protected:
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_tx_data *tdata);
 
+    /// Notification that an client transaction is not responding.
+    virtual void on_client_not_responding(UACTsx* uac_tsx,
+                                          pjsip_event_id_e event);
+
     /// Notification that a response is being transmitted on this transaction.
     virtual void on_tx_response(pjsip_tx_data* tdata);
 
     /// Notification that a request is being transmitted to a client.
     virtual void on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_tsx);
+
 
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UASTsx still
@@ -280,9 +285,6 @@ protected:
     /// Cancels the pending transaction, using the specified status code in the
     /// Reason header.
     virtual void cancel_pending_tsx(int st_code);
-
-    /// Builds and sends a timeout response upstream.
-    virtual void send_timeout_response();
 
     /// Attempts a retry of the request.
     virtual bool retry_request();
