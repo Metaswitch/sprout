@@ -332,6 +332,11 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
   }
 }
 
+void SipTest::terminate_tcp_transport(pjsip_transport* tp)
+{
+  fake_tcp_init_shutdown((struct fake_tcp_transport*)tp, PJ_SUCCESS);
+}
+
 void SipTest::add_host_mapping(const string& hostname, const string& addresses)
 {
   // Add the required records to the cache.  Records are added with a very,

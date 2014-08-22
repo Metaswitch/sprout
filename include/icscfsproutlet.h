@@ -120,7 +120,6 @@ public:
 private:
   ICSCFSproutlet* _icscf;
   ACR* _acr;
-  pjsip_msg* _cloned_req;
   ICSCFRouter* _router;
   bool _originating;
 };
@@ -141,7 +140,6 @@ public:
 private:
   ICSCFSproutlet* _icscf;
   ACR* _acr;
-  pjsip_msg* _cloned_req;
   ICSCFRouter* _router;
 };
 

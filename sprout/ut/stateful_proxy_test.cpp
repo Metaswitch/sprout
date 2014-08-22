@@ -7114,41 +7114,11 @@ TEST_F(IscTest, OriginatingTerminatingMessageASTimeout)
   ASSERT_EQ(1, txdata_count());
   free_txdata();
 
-  // Advance the time so the delayed 100 Trying responses are sent by Sprout
-  // (should happen 3.5 seconds after the MESSAGE was first received, so we'll
-  // advance to just over that time).
-  cwtest_advance_time_ms(1550L);
-  poll();
-#if 0
-  ASSERT_EQ(1, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  tpBono.expect_target(current_txdata(), true);
-  free_txdata();
-#endif
-
-  cwtest_advance_time_ms(1000L);
-  poll();
-#if 0
-  ASSERT_EQ(1, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  tpAS.expect_target(current_txdata(), true);
-  free_txdata();
-#endif
-
-  cwtest_advance_time_ms(1000L);
-  poll();
-#if 0
-  ASSERT_EQ(1, txdata_count());
-  RespMatcher(100).matches(current_txdata()->msg);
-  tpAS.expect_target(current_txdata(), true);
-  free_txdata();
-#endif
-
   // Now advance the time so the first transaction times out.  This should
   // happen 64*T1=32 seconds after the initial request.  Since we've already
-  // advanced time by just over 5.5 seconds, we just need to advance by
-  // another 26.5 seconds.
-  cwtest_advance_time_ms(26500L);
+  // advanced time by just over 2 seconds, we just need to advance by
+  // another 30 seconds.
+  cwtest_advance_time_ms(30000L);
   poll();
 
   // Sprout should send a 408 response on the original transaction.

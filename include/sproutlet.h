@@ -59,6 +59,13 @@ class SproutletTsx;
 /// Typedefs for Sproutlet-specific types
 typedef intptr_t TimerID;
 
+typedef enum {NONE, TIMEOUT, TRANSPORT_ERROR} ForkErrorState;
+
+struct ForkState
+{
+  pjsip_tsx_state_e tsx_state;
+  ForkErrorState error_state;
+};
 
 /// The SproutletTsxHelper class handles the underlying service-related processing of
 /// a single transaction.  Once a service has been triggered as part of handling
@@ -170,6 +177,16 @@ public:
   /// requests).
   ///
   virtual void cancel_pending_forks(int reason=0) = 0;
+
+  /// Returns the current status of a downstream fork, including the
+  /// transaction state and whether a timeout or transport error has been
+  /// detected on the fork.
+  ///
+  /// @returns             - ForkState structure containing transaction and 
+  ///                        error status for the fork.
+  /// @param  fork_id      - The identifier of the fork.
+  ///
+  virtual const ForkState& fork_state(int fork_id) = 0;
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must
@@ -413,6 +430,17 @@ protected:
   ///
   void cancel_pending_forks(int reason=0)
     {_helper->cancel_pending_forks(reason);}
+
+  /// Returns the current status of a downstream fork, including the
+  /// transaction state and whether a timeout or transport error has been
+  /// detected on the fork.
+  ///
+  /// @returns             - ForkState structure containing transaction and 
+  ///                        error status for the fork.
+  /// @param  fork_id      - The identifier of the fork.
+  ///
+  const ForkState& fork_state(int fork_id)
+    {return _helper->fork_state(fork_id);}
 
   /// Frees the specified message.  Received responses or messages that have
   /// been cloned with add_target are owned by the AppServerTsx.  It must

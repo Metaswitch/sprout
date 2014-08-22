@@ -1085,6 +1085,37 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
 }
 
 
+/// Notification that a client transaction is not responding.
+void BasicProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
+                                                  pjsip_event_id_e event)
+{
+  if (_tsx != NULL)
+  {
+    enter_context();
+
+    // UAC transaction has timed out or hit a transport error.  If
+    // we've not received a response from on any other UAC
+    // transactions then keep this as the best response.
+    LOG_DEBUG("%s - client transaction not responding", uac_tsx->name());
+
+    if (--_pending_responses == 0)
+    {
+      // Received responses on every UAC transaction, so
+      // send the best response on the UAS transaction.
+      LOG_DEBUG("%s - No more pending responses, so send response on UAC tsx", name());
+      on_final_response();
+    }
+
+    // Disconnect the UAC data from the UAS data so no further
+    // events get passed between the two.
+    LOG_DEBUG("%s - Disconnect UAS tsx from UAC tsx", uac_tsx->name());
+    dissociate(uac_tsx);
+
+    exit_context();
+  }
+}
+
+
 /// Notification that the underlying PJSIP transaction has changed state.
 ///
 /// After calling this, the caller must not assume that the UASTsx still
@@ -1610,7 +1641,7 @@ void BasicProxy::UACTsx::send_request()
     if ((_uas_tsx != NULL) &&
         (_tdata->msg->line.req.method.id != PJSIP_ACK_METHOD))
     {
-      send_timeout_response();
+      _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TRANSPORT_ERROR);
     }
     //LCOV_EXCL_STOP
   }
@@ -1765,7 +1796,7 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           SAS::report_event(sas_event);
         }
         // LCOV_EXCL_STOP - no timeouts in UT
-        send_timeout_response();
+        _uas_tsx->on_client_not_responding(this, event->body.tsx_state.type);
       }
     }
   }
@@ -1780,29 +1811,6 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   }
 
   exit_context();
-}
-
-
-/// Builds and sends a timeout response upstream for this UAC transaction.
-void BasicProxy::UACTsx::send_timeout_response()
-{
-  pjsip_tx_data* tdata;
-  pj_status_t status = PJUtils::create_response(stack_data.endpt,
-                                                _tdata,
-                                                PJSIP_SC_REQUEST_TIMEOUT,
-                                                NULL,
-                                                &tdata);
-  if (status != PJ_SUCCESS)
-  {
-    // LCOV_EXCL_START
-    LOG_ERROR("Error creating response, %s",
-              PJUtils::pj_status_to_string(status).c_str());
-    // LCOV_EXCL_STOP
-  }
-  else
-  {
-    _uas_tsx->on_new_client_response(this, tdata);
-  }
 }
 
 

@@ -52,7 +52,6 @@
 
 class SproutletWrapper;
 
-
 class SproutletProxy : public BasicProxy
 {
 public:
@@ -137,6 +136,10 @@ protected:
     /// Handles a response to an associated UACTsx.
     virtual void on_new_client_response(UACTsx* uac_tsx,
                                         pjsip_tx_data *tdata);
+
+    /// Notification that an client transaction is not responding.
+    virtual void on_client_not_responding(UACTsx* uac_tsx,
+                                          pjsip_event_id_e event);
 
     virtual void on_tsx_state(pjsip_event* event);
 
@@ -254,6 +257,7 @@ public:
   void send_response(pjsip_msg*& rsp); 
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
+  const ForkState& fork_state(int fork_id);
   void free_msg(pjsip_msg*& msg);
   pj_pool_t* get_pool(const pjsip_msg* msg);
   bool schedule_timer(void* context, TimerID& id, int duration);
@@ -266,6 +270,7 @@ private:
   void rx_response(pjsip_tx_data* rsp, int fork_id);
   void rx_cancel(pjsip_tx_data* cancel);
   void rx_error(int status_code);
+  void rx_fork_error(pjsip_event_id_e event, int fork_id);
   void on_timer_pop(void* context);
   void register_tdata(pjsip_tx_data* tdata);
   void deregister_tdata(pjsip_tx_data* tdata);
@@ -321,7 +326,7 @@ private:
   /// PROCEEDING and TERMINATED.
   typedef struct
   {
-    pjsip_tsx_state_e state;
+    ForkState state;
     pjsip_tx_data* req;
     bool pending_cancel;
     int cancel_reason;

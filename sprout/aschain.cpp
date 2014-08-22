@@ -64,6 +64,7 @@ AsChain::AsChain(AsChainTable* as_chain_table,
   _refs(1),  // for the initial chain link being returned
   _as_info(ifcs.size() + 1),
   _odi_tokens(),
+  _responsive(ifcs.size() + 1),
   _session_case(session_case),
   _served_user(served_user),
   _is_registered(is_registered),
@@ -236,7 +237,7 @@ void AsChainLink::on_response(int status_code)
   {
     // The AS has returned a 100 Trying response, which means it must be
     // viewed as responsive.
-    _responsive = true;
+    _as_chain->_responsive[_index] = true;
   }
   else if (status_code >= PJSIP_SC_OK)
   {
@@ -277,7 +278,7 @@ void AsChainTable::register_(AsChain* as_chain, std::vector<std::string>& tokens
     std::string token;
     Utils::create_random_token(TOKEN_LENGTH, token);
     tokens.push_back(token);
-    _t2c_map[token] = AsChainLink(as_chain, i);
+    _odi_token_map[token] = AsChainLink(as_chain, i);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -292,7 +293,7 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
        it != tokens.end();
        ++it)
   {
-    _t2c_map.erase(*it);
+    _odi_token_map.erase(*it);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -306,16 +307,23 @@ void AsChainTable::unregister(std::vector<std::string>& tokens)
 AsChainLink AsChainTable::lookup(const std::string& token)
 {
   pthread_mutex_lock(&_lock);
-  std::map<std::string, AsChainLink>::const_iterator it = _t2c_map.find(token);
-  if (it == _t2c_map.end())
+  std::map<std::string, AsChainLink>::const_iterator it =
+                                                    _odi_token_map.find(token);
+  if (it == _odi_token_map.end())
   {
     pthread_mutex_unlock(&_lock);
     return AsChainLink(NULL, 0);
   }
   else
   {
-    it->second._as_chain->inc_ref();
+    // Found the AsChainLink.  Add a reference to the AsChain.
+    const AsChainLink& as_chain_link = it->second;
+    as_chain_link._as_chain->inc_ref();
+
+    // Flag that the AS corresponding to the previous link in the chain has
+    // effectively responded.
+    as_chain_link._as_chain->_responsive[as_chain_link._index - 1] = true;
     pthread_mutex_unlock(&_lock);
-    return it->second;
+    return as_chain_link;
   }
 }
