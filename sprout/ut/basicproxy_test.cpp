@@ -514,7 +514,6 @@ protected:
 };
 
 
-
 TEST_F(BasicProxyTest, RouteOnRouteHeaders)
 {
   // Tests routing of requests on normal loose routing Route headers.
@@ -691,8 +690,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
 
   delete tp;
 }
-
-
 
 
 TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
@@ -2041,6 +2038,75 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
 }
 
 
+TEST_F(BasicProxyTest, StatelessForwardLargeACK)
+{
+  // Tests stateless forwarding of a large ACK where the onward hop is
+  // over UDP.  This tests that switching to TCP works.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+
+  // Send an ACK with Route headers traversing the proxy, with a large message
+  // body.  The second Route header specifies UDP transport.
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=UDP;lr>";
+  msg._body = std::string(1300, '!');
+  inject_msg(msg.get_request(), tp);
+
+  // Request is forwarded to the node in the second Route header, over TCP
+  // not UDP.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Create a UDP flow and force this as a target for bob@homedomain.
+  TransportFlow* tp2 = new TransportFlow(TransportFlow::Protocol::UDP,
+                                        stack_data.scscf_port,
+                                        "5.6.7.8",
+                                        49322);
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@5.6.7.8:49322;transport=UDP",
+                                tp2->transport());
+
+  // Send an ACK with no Route headers directed at bob@homedomain, with a
+  // large message body.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@homedomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "homedomain";
+  msg._via = tp->to_string(false);
+  msg._body = std::string(1300, '!');
+  inject_msg(msg.get_request(), tp);
+
+  // Request is forwarded to the UDP flow, not switched to TCP.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp2->expect_target(tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp2;
+  delete tp;
+
+}
+
+
 TEST_F(BasicProxyTest, LateCancel)
 {
   // Tests CANCELing a request after the request has completed.
@@ -2852,6 +2918,7 @@ TEST_F(BasicProxyTest, RetryFailed)
 
   delete tp;
 }
+
 
 TEST_F(BasicProxyTest, NonInvite100Trying)
 {
