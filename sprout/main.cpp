@@ -1500,7 +1500,8 @@ int main(int argc, char *argv[])
       // Create a local I-CSCF URI by replacing the S-CSCF port number in the
       // S-CSCF URI with the I-CSCF port number.
       icscf_uri = scscf_uri;
-      size_t pos = icscf_uri.find_first_of(std::to_string(opt.scscf_port));
+      size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
+
       if (pos != std::string::npos)
       {
         icscf_uri.replace(pos,

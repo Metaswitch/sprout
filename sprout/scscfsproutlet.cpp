@@ -92,7 +92,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   if (icscf_uri != "") 
   {
     _icscf_uri = PJUtils::uri_from_string(icscf_uri, stack_data.pool, false);
-    if (_icscf_uri != NULL) 
+    if (_icscf_uri == NULL) 
     {
       LOG_ERROR("Invalid I-CSCF URI %s", icscf_uri.c_str());
     }
