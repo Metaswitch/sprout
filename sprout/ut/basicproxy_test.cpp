@@ -2953,3 +2953,94 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
   delete tp;
 }
 
+
+TEST_F(BasicProxyTest, ContentHeaders)
+{
+  // Tests handling of Content-Length and Content-Type headers (mainly to
+  // verify fixes to problems that resulted in multiple Content-Length and
+  // Content-Type headers.
+
+  pjsip_tx_data* tdata;
+  char buf[1000];
+  int len;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Send an ACK with Route headers traversing the proxy, with no message body
+  // and check it comes out the other side with only one Content-Length
+  // header and no Content-Type header.
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // To force the problem to show up we need to print the message to a buffer
+  // and parse it back.  Arguably we should do this for every message in the UTs.
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 0", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  // Send an ACK with Route headers traversing the proxy, with no message body
+  // and a Content-Type header, and check it comes out the other side with
+  // only one Content-Length header (with length zero) and the Content-Type
+  // header intact.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "text/html";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 0", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("Content-Type: text/html", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  // Send an ACK with Route headers traversing the proxy, with a message body
+  // and a Content-Type header, and check it comes out the other side with
+  // only one Content-Length header (with the right length) and the Content-Type
+  // header intact.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "application/sdp";
+  msg._body = "v=0\r\no=alice 53655765 2353687637 IN IP4 pc33.atlanta.com\r\ns=-\r\nt=0 0\r\nc=IN IP4 pc33.atlanta.com\r\nm=audio 3456 RTP/AVP 0 1 3 99\r\na=rtpmap:0 PCMU/8000\r\n\r\n";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 152", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("Content-Type: application/sdp", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  delete tp;
+}
+
+
