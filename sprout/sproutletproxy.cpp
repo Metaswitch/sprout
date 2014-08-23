@@ -1707,7 +1707,7 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
 
     // Store a reference to the request.
     LOG_DEBUG("%s store reference to non-ACK request %s on fork %d",
-              _id.c_str(), pjsip_tx_data_get_info(req));
+              _id.c_str(), pjsip_tx_data_get_info(req), fork_id);
     pjsip_tx_data_add_ref(req);
     _forks[fork_id].req = req;
   }
