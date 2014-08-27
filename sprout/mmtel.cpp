@@ -205,73 +205,81 @@ void MmtelTsx::on_initial_request(pjsip_msg* req)
 // Apply terminating Mmtel processing on receiving a response.
 void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
 {
-  pjsip_status_code code = (pjsip_status_code)rsp->line.status.code;
-
-  if (code < PJSIP_SC_OK)
+  // We only do processing on a response if this is the terminating side.
+  if (!_originating)
   {
-    // Forward provisional response.
-    LOG_DEBUG("Forward provisional response");
-    send_response(rsp);
+    pjsip_status_code code = (pjsip_status_code)rsp->line.status.code;
 
-    if (code == PJSIP_SC_RINGING)
+    if (code < PJSIP_SC_OK)
     {
-      // Phone is ringing, so consider starting the no-reply timer.
-      _ringing = true;
+      // Forward provisional response.
+      LOG_DEBUG("Forward provisional response");
+      send_response(rsp);
 
-      if ((_no_reply_timer == 0) &&
-          (_user_services != NULL) &&
-          (_user_services->cdiv_enabled()))
+      if (code == PJSIP_SC_RINGING)
       {
-        // Now spin through the rules looking for one that requires no answer but
-        // is also satisfied by our media conditions.
-        const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
-        for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
-             rule != cdiv_rules->end();
-             rule++)
+        // Phone is ringing, so consider starting the no-reply timer.
+        _ringing = true;
+
+        if ((_no_reply_timer == 0) &&
+            (_user_services != NULL) &&
+            (_user_services->cdiv_enabled()))
         {
-          LOG_DEBUG("Considering rule - conditions 0x%x, target %s",
-                    rule->conditions(), rule->forward_target().c_str());
-          if ((rule->conditions() & simservs::Rule::CONDITION_NO_ANSWER) &&
-              ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
+          // Now spin through the rules looking for one that requires no answer but
+          // is also satisfied by our media conditions.
+          const std::vector<simservs::CDIVRule>* cdiv_rules = _user_services->cdiv_rules();
+          for (std::vector<simservs::CDIVRule>::const_iterator rule = cdiv_rules->begin();
+               rule != cdiv_rules->end();
+               rule++)
           {
-            // We found a suitable rule.  Start the no-reply timer.
-            bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
-            if (!status)
+            LOG_DEBUG("Considering rule - conditions 0x%x, target %s",
+                      rule->conditions(), rule->forward_target().c_str());
+            if ((rule->conditions() & simservs::Rule::CONDITION_NO_ANSWER) &&
+                ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
             {
-              // Log this failure, but don't fail the call - there's no point.
-              LOG_WARNING("Failed to set no-reply timer - status %d", status);
+              // We found a suitable rule.  Start the no-reply timer.
+              bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
+              if (!status)
+              {
+                // Log this failure, but don't fail the call - there's no point.
+                LOG_WARNING("Failed to set no-reply timer - status %d", status);
+              }
+              else
+              {
+                _late_redirect_fork_id = fork_id;
+              }
+              break;
             }
-            else
-            {
-              _late_redirect_fork_id = fork_id;
-            }
-            break;
           }
         }
+      }
+    }
+    else
+    {
+      // We've got a final response, so there's no point in running the no-reply timer any longer.
+      if (_no_reply_timer != 0)
+      {
+        cancel_timer(_no_reply_timer);
+        _no_reply_timer = 0;
+      }
+
+      if ((code == PJSIP_SC_OK) ||
+          (!apply_cdiv_on_rsp(rsp, condition_from_status(code) | _media_conditions, code)))
+      {
+        // The request has not been redirected, so forward the response.
+        LOG_DEBUG("Request has not been redirected, so forward response upstream");
+        send_response(rsp);
+      }
+      else
+      {
+        // The request has been redirected, so discard the response.
+        free_msg(rsp);
       }
     }
   }
   else
   {
-    // We've got a final response, so there's no point in running the no-reply timer any longer.
-    if (_no_reply_timer != 0)
-    {
-      cancel_timer(_no_reply_timer);
-      _no_reply_timer = 0;
-    }
-
-    if ((code == PJSIP_SC_OK) ||
-        (!apply_cdiv_on_rsp(rsp, condition_from_status(code) | _media_conditions, code)))
-    {
-      // The request has not been redirected, so forward the response.
-      LOG_DEBUG("Request has not been redirected, so forward response upstream");
-      send_response(rsp);
-    }
-    else
-    {
-      // The request has been redirected, so discard the response.
-      free_msg(rsp);
-    }
+    send_response(rsp);
   }
 }
 
@@ -798,7 +806,7 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
                                 pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);
     if (contact_hdr != NULL)
     {
-      target = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, contact_hdr->uri);
+      target = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, (pjsip_uri*)pjsip_uri_get_uri(contact_hdr->uri));
     }
   }
   else
