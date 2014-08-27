@@ -1091,6 +1091,7 @@ static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip
 /// Create a simple target routing the call to Sprout.
 static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
+                                 Flow* src_flow,
                                  TrustBoundary **trust,
                                  Target** target)
 {
@@ -1098,9 +1099,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // a target with the existing request URI and a path to the upstream
   // proxy and stripping any loose routes that might have been added by the
   // UA.
-  LOG_INFO("Route request to upstream proxy %.*s",
-      ((pjsip_sip_uri*)upstream_proxy)->host.slen,
-      ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
@@ -1123,54 +1121,80 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
   }
 
-  // Route upstream.
-  pjsip_routing_hdr* route_hdr;
-  pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool,
-                                                                upstream_proxy);
+  std::string service_route;
 
-  // Maybe mark it as originating, so Sprout knows to
-  // apply originating handling.
-  //
-  // In theory, on the access side, the UE ought to have
-  // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-  // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header"
-  //
-  // When working on the IBCF side, the provided route will not have
-  // orig set, so we won't set in on the route upstream ether.
-  //
-  // When working as a load-balancer for a third-party P-CSCF, trust the
-  // orig parameter of the top-most Route header.
-  pjsip_param* orig_param = NULL;
-
-  // Check the rdata here, as the Route header may have been stripped
-  // from the cloned tdata.
-  if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
+  if (src_flow != NULL) 
   {
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
-    orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
-  }
-
-  if (orig_param ||
-      (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
-  {
-    LOG_DEBUG("Mark originating");
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-    pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
-    pj_strdup2(tdata->pool, &orig_param->value, "");
-    pj_list_insert_after(&upstream_uri->other_param, orig_param);
-  }
-
-  // Select a transport for the request.
-  if (upstream_conn_pool != NULL)
-  {
-    target_p->transport = upstream_conn_pool->get_connection();
-    if (target_p->transport != NULL) 
+    // See if we have a service route for the served user of the request.
+    LOG_DEBUG("Request received on authentication flow - check for Service-Route");
+    pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
+    if (served_user != NULL) 
     {
-      pj_memcpy(&target_p->remote_addr,
-                &target_p->transport->key.rem_addr,
-                sizeof(pj_sockaddr));
+      service_route = src_flow->service_route(PJUtils::public_id_from_uri(served_user));
+      LOG_DEBUG("Stored Service-Route for served user = %s", service_route.c_str());
     }
   }
+
+  pjsip_routing_hdr* route_hdr;
+  pjsip_sip_uri* upstream_uri;
+
+  if (service_route != "") 
+  {
+    // We have a service route, so add it as a Route header.
+    upstream_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(service_route, tdata->pool, false);
+  }
+  else
+  {
+    // Route to default upstream proxy.
+    upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool, upstream_proxy);
+
+    // Maybe mark it as originating, so Sprout knows to
+    // apply originating handling.
+    //
+    // In theory, on the access side, the UE ought to have
+    // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+    // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header"
+    //
+    // When working on the IBCF side, the provided route will not have
+    // orig set, so we won't set in on the route upstream ether.
+    //
+    // When working as a load-balancer for a third-party P-CSCF, trust the
+    // orig parameter of the top-most Route header.
+    pjsip_param* orig_param = NULL;
+
+    // Check the rdata here, as the Route header may have been stripped
+    // from the cloned tdata.
+    if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
+    {
+      pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
+      orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+    }
+
+    if (orig_param ||
+        (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
+    {
+      LOG_DEBUG("Mark originating");
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(tdata->pool, &orig_param->value, "");
+      pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    }
+
+    // Select a transport for the request.
+    if (upstream_conn_pool != NULL)
+    {
+      target_p->transport = upstream_conn_pool->get_connection();
+      if (target_p->transport != NULL) 
+      {
+        pj_memcpy(&target_p->remote_addr,
+                  &target_p->transport->key.rem_addr,
+                  sizeof(pj_sockaddr));
+      }
+    }
+  }
+
+  LOG_INFO("Route request to upstream proxy %s",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)upstream_uri).c_str());
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
@@ -1289,7 +1313,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     // Until we support routing, all REGISTER requests should be sent to the upstream sprout
     // for processing.
-    proxy_route_upstream(rdata, tdata, trust, target);
+    proxy_route_upstream(rdata, tdata, NULL, trust, target);
 
     // Do standard route header processing for the request.  This may
     // remove the top route header if it corresponds to this node.
@@ -1506,7 +1530,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
                PJUtils::is_uri_local(tdata->msg->line.req.uri))
       {
         // Route the request upstream to Sprout.
-        proxy_route_upstream(rdata, tdata, trust, target);
+        proxy_route_upstream(rdata, tdata, src_flow, trust, target);
       }
 
       // Work out the next hop target for the message.  This will either be the
@@ -2082,6 +2106,20 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
         LOG_DEBUG("Maximum contact expiry is %d", max_expires);
 
+        // Find the Service-Route header so we can record this with each
+        // authorized identity.
+        std::string service_route;
+        pjsip_route_hdr* h_sr = (pjsip_route_hdr*)
+                               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                          &STR_SERVICE_ROUTE,
+                                                          NULL);
+
+        if (h_sr != NULL)
+        {
+          service_route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                 h_sr->name_addr.uri);
+        }
+
         // Go through the list of URIs covered by this registration setting
         // them on the flow.  This is either the list in the P-Associated-URI
         // header, if supplied, or the URI in the To header.
@@ -2096,11 +2134,14 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
           bool is_default = true;
           while (p_assoc_uri != NULL)
           {
-            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr, is_default, max_expires);
+            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr,
+                                    service_route,
+                                    is_default,
+                                    max_expires);
             p_assoc_uri = (pjsip_route_hdr*)
-                        pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                   &STR_P_ASSOCIATED_URI,
-                                                   p_assoc_uri->next);
+                              pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                         &STR_P_ASSOCIATED_URI,
+                                                         p_assoc_uri->next);
             is_default = false;
           }
         }
@@ -2108,7 +2149,10 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         {
           // Use URI in To header as authenticated URIs.
           LOG_DEBUG("No P-Associated-URI, use URI in To header.");
-          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri, true, max_expires);
+          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri,
+                                  service_route,
+                                  true,
+                                  max_expires);
         }
 
         // Decrement the reference to the flow data

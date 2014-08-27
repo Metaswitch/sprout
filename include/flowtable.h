@@ -77,7 +77,10 @@ public:
 
   std::string service_route(const std::string& identity);
 
-  void set_identity(const pjsip_uri* uri, bool is_default, int expires);
+  void set_identity(const pjsip_uri* uri,
+                    const std::string& service_route,
+                    bool is_default,
+                    int expires);
 
   void dec_ref();
 
