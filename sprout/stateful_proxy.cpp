@@ -2071,21 +2071,13 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
+  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
   {
-    // The response has a Path header in it, so parse this to a URI so we can
-    // check for a flow token.  Extract the field to a null terminated string
-    // first since we can't guarantee it is null terminated in the message,
-    // and pjsip_parse_uri requires a null terminated string.
-    pj_str_t hvalue;
-    pj_strdup_with_null(rdata->tp_info.pool, &hvalue, &path_hdr->hvalue);
-    pjsip_sip_uri* path_uri = (pjsip_sip_uri*)
-                                      pjsip_parse_uri(rdata->tp_info.pool,
-                                                      hvalue.ptr,
-                                                      hvalue.slen,
-                                                      0);
+    // The response has a Path header in it, so extract the URI so we can
+    // check for a flow token.
+    pjsip_sip_uri* path_uri = (pjsip_sip_uri*)path_hdr->name_addr.uri;
 
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
@@ -4938,15 +4930,10 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
     pj_list_insert_after(&path_uri->other_param, ob_node);
   }
 
-  // Render the URI as a string.
-  char buf[500];
-  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR, path_uri, buf, sizeof(buf));
-  pj_str_t path = {buf, len};
-
   // Add the path header.
-  pjsip_hdr* path_hdr = (pjsip_hdr*)
-               pjsip_generic_string_hdr_create(tdata->pool, &STR_PATH, &path);
-  pjsip_msg_insert_first_hdr(tdata->msg, path_hdr);
+  pjsip_routing_hdr* path_hdr = identity_hdr_create(tdata->pool, STR_PATH);
+  path_hdr->name_addr.uri = (pjsip_uri*)path_uri;
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)path_hdr);
 
   return PJ_SUCCESS;
 }
