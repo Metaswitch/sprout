@@ -1126,7 +1126,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
-  if (session_expires) 
+  if (session_expires)
   {
     // In general proxied messages should have Session-Expires headers added,
     // except if we are simply forwarding without applying any services.
@@ -1584,6 +1584,18 @@ TEST_F(SCSCFTest, TestValidBGCFRoute)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainvalid"), hdrs);
 }
 
+TEST_F(SCSCFTest, TestValidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainanglebracket";
+  add_host_mapping("domainanglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainanglebracket"), hdrs);
+}
+
 TEST_F(SCSCFTest, TestInvalidBGCFRoute)
 {
   SCOPED_TRACE("");
@@ -1592,7 +1604,7 @@ TEST_F(SCSCFTest, TestInvalidBGCFRoute)
   msg._todomain = "domainnotasipuri";
   add_host_mapping("domainnotasipuri", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*bgcf@domainnotasipuri.*"), hdrs);
+  doSlowFailureFlow(msg, 500);
 }
 
 /// Test a forked flow - setup phase.

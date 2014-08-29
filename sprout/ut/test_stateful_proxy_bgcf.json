@@ -4,6 +4,10 @@
             "domain" : "domainvalid",
             "route" : ["sip:10.0.0.1:5060;transport=TCP"]
         },
+        {   "name" : "Valid SIP URI with <>",
+            "domain" : "domainanglebracket",
+            "route" : ["<sip:10.0.0.1:5060;transport=TCP>"]
+        },
         {   "name" : "Route includes an invalid SIP URI",
             "domain" : "domainnotasipuri",
             "route" : ["sip:10.0.0.1:5060","10.0.0.1:5060"]
