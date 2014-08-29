@@ -543,9 +543,9 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
   EXPECT_TRUE(binding_to_target(aor,
@@ -567,9 +567,9 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 }
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
   Target target;
@@ -582,9 +582,9 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 }
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");
   Target target;
@@ -603,7 +603,7 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -630,7 +630,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -658,7 +658,7 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
   binding->_params.erase("methods");
@@ -689,7 +689,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -730,7 +730,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -771,7 +771,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -811,7 +811,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -853,7 +853,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
@@ -893,7 +893,7 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 {
   std::string aor = "sip:user@domain.com";
 
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
 
   for (int ii = 0;
        ii < 20;

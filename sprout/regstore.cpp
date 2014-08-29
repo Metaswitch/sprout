@@ -109,7 +109,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
-    aor_data = deserialize_aor(data);
+    aor_data = deserialize_aor(aor_id, data);
     aor_data->_cas = cas;
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
 
@@ -120,7 +120,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   else if (status == Store::Status::NOT_FOUND)
   {
     // Data store didn't find the record, so create a new blank record.
-    aor_data = new AoR();
+    aor_data = new AoR(aor_id);
 
     SAS::Event event(trail, SASEvent::REGSTORE_GET_NEW, 0);
     event.add_var_param(aor_id);
@@ -445,11 +445,11 @@ std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 
 
 /// Deserialize the contents of an AoR
-RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
+RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
 {
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
 
-  AoR* aor_data = new AoR();
+  AoR* aor_data = new AoR(aor_id);
 
   int num_bindings;
   iss.read((char *)&num_bindings, sizeof(int));
@@ -542,11 +542,12 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
 }
 
 /// Default constructor.
-RegStore::AoR::AoR() :
+RegStore::AoR::AoR(std::string sip_uri) :
   _notify_cseq(1),
   _bindings(),
   _subscriptions(),
-  _cas(0)
+  _cas(0),
+  _uri(sip_uri)
 {
 }
 
@@ -647,7 +648,7 @@ RegStore::AoR::Binding* RegStore::AoR::get_binding(const std::string& binding_id
   else
   {
     // No existing binding with this id, so create a new one.
-    b = new Binding;
+    b = new Binding(&_uri);
     b->_expires = 0;
     _bindings.insert(std::make_pair(binding_id, b));
   }
