@@ -1130,8 +1130,10 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
     if (served_user != NULL) 
     {
-      service_route = src_flow->service_route(PJUtils::public_id_from_uri(served_user));
-      LOG_DEBUG("Stored Service-Route for served user = %s", service_route.c_str());
+      std::string user = PJUtils::public_id_from_uri(served_user);
+      service_route = src_flow->service_route(user);
+      LOG_VERBOSE("Found Service-Route for served user %s - %s",
+                  user.c_str(), service_route.c_str());
     }
   }
 
