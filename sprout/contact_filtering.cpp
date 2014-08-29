@@ -102,6 +102,16 @@ void filter_bindings_to_targets(const std::string& aor,
     bool rejected = false;
     bool deprioritized = false;
 
+    if (msg->type == PJSIP_REQUEST_MSG)
+    {
+      std::string gruu = binding->second->gruu(pool);
+      std::string requri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
+      if ((requri.find(";gr=") != std::string::npos) && (requri != gruu))
+      {
+        rejected = true;
+      }
+    }
+
     for (std::vector<pjsip_reject_contact_hdr*>::iterator reject = reject_headers.begin();
          reject != reject_headers.end() && (!rejected);
          ++reject)

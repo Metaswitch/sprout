@@ -35,6 +35,7 @@
 #include "gtest/gtest.h"
 #include "contact_filtering.h"
 #include "pjsip.h"
+#include "pjutils.h"
 
 // Defined in sip_parser.c in pjSIP
 void init_sip_parser(void);
@@ -889,6 +890,7 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 
   delete aor_data;
 }
+
 TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 {
   std::string aor = "sip:user@domain.com";
@@ -952,6 +954,74 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
                              1);
 
   EXPECT_EQ((unsigned)5, targets.size());
+
+  delete aor_data;
+}
+
+TEST_F(ContactFilteringFullStackTest, GRUU)
+{
+  std::string aor = "sip:user@domain.com";
+
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+
+  for (int ii = 0;
+       ii < 20;
+       ii++)
+  {
+    std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
+    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    create_binding(*binding);
+
+    // Change the features on some of the bindings.
+    if (ii % 2 == 0)
+    {
+      binding->_params["+sip.other"] = "<string>";
+    }
+    if (ii % 3 == 0)
+    {
+      binding->_params["+sip.other2"] = "#5";
+    }
+    binding->_expires = ii * 100;
+  }
+
+  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+  ASSERT_NE((pjsip_msg*)NULL, msg);
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+  msg->line.req.uri = PJUtils::uri_from_string("sip:user@domain.com;gr=abcd", pool);
+
+  // Add some Accept headers to eliminate some bindings and
+  // de-prioritize others.
+  pj_str_t header_name = pj_str((char*)"Accept-Contact");
+  char* header_value = (char*)"*;+sip.other2=\"#5\";explicit";
+  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+  header_value = (char*)"*;+sip.other=\"<string>\";explicit;require";
+  accept_hdr = (pjsip_accept_contact_hdr*)
+    pjsip_parse_hdr(pool,
+                    &header_name,
+                    header_value,
+                    strlen(header_value),
+                    NULL);
+  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)0, targets.size());
 
   delete aor_data;
 }
