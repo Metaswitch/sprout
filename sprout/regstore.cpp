@@ -731,3 +731,27 @@ RegStore::Connector::~Connector()
 {
 }
 
+std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool)
+{
+  if (_params["+sip.instance"].empty())
+  {
+    return "";
+  }
+
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
+  pjsip_param gr_param;
+  gr_param.name = pj_str("gr");
+  pj_cstr(&gr_param.value, _params["+sip.instance"].c_str());
+  if (*gr_param.value.ptr == '"')
+  {
+    gr_param.value.ptr++;
+    gr_param.value.slen -= 2;
+  }
+  if (*gr_param.value.ptr == '<')
+  {
+    gr_param.value.ptr++;
+    gr_param.value.slen -= 2;
+  }
+  pj_list_push_back((pj_list_type*)&uri->other_param, (pj_list_type*)&gr_param);
+  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)uri);
+}

@@ -136,6 +136,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
                        scscf_test.cpp \
+                       gruu_test.cpp \
                        localroaming_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.

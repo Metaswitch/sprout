@@ -38,6 +38,10 @@
 #ifndef REGSTORE_H__
 #define REGSTORE_H__
 
+extern "C" {
+#include <pj/pool.h>
+}
+
 #include <string>
 #include <list>
 #include <map>
@@ -106,6 +110,8 @@ public:
 
       /// Whether this is an emergency registration.
       bool _emergency_registration;
+
+      std::string gruu(pj_pool_t* pool);
     };
 
     /// @class RegStore::AoR::Subscription
