@@ -112,6 +112,7 @@ public:
       bool _emergency_registration;
 
       std::string gruu(pj_pool_t* pool);
+      std::string gruu_quoted(pj_pool_t* pool);
     };
 
     /// @class RegStore::AoR::Subscription

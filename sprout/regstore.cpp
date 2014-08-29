@@ -755,3 +755,16 @@ std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool)
   pj_list_push_back((pj_list_type*)&uri->other_param, (pj_list_type*)&gr_param);
   return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)uri);
 }
+
+std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool)
+{
+  std::string unquoted_gruu = gruu(pool);
+  if (unquoted_gruu.empty())
+  {
+    return "";
+  }
+  std::string ret = "\"";
+  ret += unquoted_gruu;
+  ret += "\"";
+  return ret;
+}

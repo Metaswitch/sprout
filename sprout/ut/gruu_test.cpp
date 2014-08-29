@@ -118,3 +118,19 @@ TEST_F(GRUUTest, NoInstanceID)
   create_binding(binding, "");
   ASSERT_EQ("", binding.gruu(pool));
 }
+
+TEST_F(GRUUTest, NeedsEscapingQuoted)
+{
+  std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding, "hel;lo");
+  ASSERT_EQ("\"sip:user@domain.com;gr=hel%3blo\"", binding.gruu_quoted(pool));
+}
+
+TEST_F(GRUUTest, NoInstanceIDQuoted)
+{
+  std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding, "");
+  ASSERT_EQ("", binding.gruu_quoted(pool));
+}
