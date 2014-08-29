@@ -360,19 +360,21 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           // "path" entry in the Supported header but we don't do so on the assumption
           // that the edge proxy knows what it's doing.
           binding->_path_headers.clear();
-          pjsip_generic_string_hdr* path_hdr =
-            (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+          pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
+                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
 
           while (path_hdr)
           {
-            std::string path = PJUtils::pj_str_to_string(&path_hdr->hvalue);
+            std::string path = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                      path_hdr->name_addr.uri);
             LOG_DEBUG("Path header %s", path.c_str());
 
             // Extract all the paths from this header.
             Utils::split_string(path, ',', binding->_path_headers, 0, true);
 
             // Look for the next header.
-            path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
+            path_hdr = (pjsip_routing_hdr*)
+                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
           }
 
           binding->_cid = cid;
@@ -844,8 +846,8 @@ void process_register_request(pjsip_rx_data* rdata)
   }
 
   // Deal with path header related fields in the response.
-  pjsip_generic_string_hdr* path_hdr =
-    (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
+  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
+                              pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
   if ((path_hdr != NULL) &&
       (!aor_data->bindings().empty()))
   {
@@ -861,8 +863,10 @@ void process_register_request(pjsip_rx_data* rdata)
   // bindings have expired.
   while (path_hdr)
   {
-    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, path_hdr));
-    path_hdr = (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
+    pjsip_msg_add_hdr(tdata->msg,
+                      (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, path_hdr));
+    path_hdr = (pjsip_routing_hdr*)
+                    pjsip_msg_find_hdr_by_name(msg, &STR_PATH, path_hdr->next);
   }
 
   // Add the Service-Route header.  It isn't safe to do this with the
