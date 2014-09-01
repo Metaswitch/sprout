@@ -194,6 +194,18 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
 
+    std::string gruu = binding->second.gruu(pool);
+    if (!gruu.empty())
+    {
+      pj_str_t pj_gruu;
+      pj_cstr(&pj_gruu, gruu.c_str());
+      LOG_DEBUG("Create pub_gruu node");
+
+      pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_PUB_GRUU);
+      pj_strdup(pool, &gruu_node->content, &pj_gruu);
+      pj_xml_add_node(gruu_node, contact_node);
+    }
+
     // Add the contact node to the registration node
     pj_xml_add_node(reg_node, contact_node);
   }

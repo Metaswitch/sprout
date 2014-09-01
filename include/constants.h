@@ -104,6 +104,8 @@ const pj_str_t STR_REJECT_CONTACT = pj_str((char*)"Reject-Contact");
 const pj_str_t STR_REJECT_CONTACT_SHORT = pj_str((char*)"j");
 const pj_str_t STR_ALLOW_EVENTS = pj_str((char*)"Allow-Events");
 const pj_str_t STR_SESCASE = pj_str((char*)"sescase");
+const pj_str_t STR_GR = pj_str((char*)"gr");
+const pj_str_t STR_PUB_GRUU = pj_str((char*)"pub-gruu");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");

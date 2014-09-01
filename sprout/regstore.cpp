@@ -731,17 +731,20 @@ RegStore::Connector::~Connector()
 {
 }
 
-std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool)
+std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool) const
 {
-  if (_params["+sip.instance"].empty())
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
+
+  if ((_params.find("+sip.instance") == _params.cend()) ||
+      (uri == NULL) ||
+      !PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     return "";
   }
 
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
   pjsip_param gr_param;
   gr_param.name = pj_str("gr");
-  pj_cstr(&gr_param.value, _params["+sip.instance"].c_str());
+  pj_cstr(&gr_param.value, _params.at("+sip.instance").c_str());
   if (*gr_param.value.ptr == '"')
   {
     gr_param.value.ptr++;
@@ -756,7 +759,7 @@ std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool)
   return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)uri);
 }
 
-std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool)
+std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool) const
 {
   std::string unquoted_gruu = gruu(pool);
   if (unquoted_gruu.empty())

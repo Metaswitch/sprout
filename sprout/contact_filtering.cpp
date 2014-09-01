@@ -102,11 +102,12 @@ void filter_bindings_to_targets(const std::string& aor,
     bool rejected = false;
     bool deprioritized = false;
 
-    if (msg->type == PJSIP_REQUEST_MSG)
+    if (msg->type == PJSIP_REQUEST_MSG && (msg->line.req.uri != NULL) && PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri))
     {
       std::string gruu = binding->second->gruu(pool);
+      pjsip_param* gr_param = pjsip_param_find(&((pjsip_sip_uri*)msg->line.req.uri)->other_param, &STR_GR);
       std::string requri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
-      if ((requri.find(";gr=") != std::string::npos) && (requri != gruu))
+      if ((gr_param != NULL) && (requri != gruu))
       {
         rejected = true;
       }
