@@ -84,6 +84,14 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
   pj_xml_node *contact_node;
   pj_xml_attr *attr;
 
+  // Quick fix to avoid instance-ids wrapped in angle brackets from
+  // causing invalid XML
+  if (*id->ptr == '<')
+  {
+    id->ptr += 1;
+    id->slen -= 2;
+  }
+
   contact_node = pj_xml_node_new(pool, &STR_CONTACT);
 
   // Contact node requires an id, state and event
@@ -199,11 +207,11 @@ pj_xml_node* notify_create_reg_state_xml(
     {
       pj_str_t pj_gruu;
       pj_cstr(&pj_gruu, gruu.c_str());
-      LOG_DEBUG("Create pub_gruu node");
+      LOG_DEBUG("Create pub-gruu node");
 
       pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_PUB_GRUU);
       pj_strdup(pool, &gruu_node->content, &pj_gruu);
-      pj_xml_add_node(gruu_node, contact_node);
+      pj_xml_add_node(contact_node, gruu_node);
     }
 
     // Add the contact node to the registration node
