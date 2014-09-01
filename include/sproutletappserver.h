@@ -195,10 +195,15 @@ public:
   /// related to this service invocation.
   virtual SAS::TrailId trail() const;
 
+  /// Get a URI that routes to this App Server.
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool) const;
+
 private:
   SproutletTsxHelper* _helper;
   pj_pool_t* _pool;
   pjsip_route_hdr _route_set;
+  bool _record_routed;
+  std::string _rr_param_value;
 };
 
 class SproutletAppServerShim : public Sproutlet

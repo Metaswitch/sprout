@@ -355,7 +355,6 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   pj_strdup2(tdata->pool, &p->value, services.c_str());
   LOG_DEBUG("%s", PJUtils::hdr_to_string(hrr).c_str());
 }
-#else
 /// Adds a Record-Route header for this node encoding the specified service
 /// and dialog identifier in the header.
 void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
@@ -684,14 +683,6 @@ Sproutlet* SproutletProxy::UASTsx::target_sproutlet(pjsip_msg* msg, int port)
 }
 
 
-void SproutletProxy::UASTsx::add_record_route(pjsip_tx_data* tdata,
-                                              const std::string& service_name,
-                                              const std::string& dialog_id)
-{
-  _sproutlet_proxy->add_record_route(tdata, service_name, dialog_id);
-}
-
-
 void SproutletProxy::UASTsx::tx_request(SproutletWrapper* upstream,
                                         int fork_id,
                                         pjsip_tx_data* req)
@@ -952,14 +943,11 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _proxy_tsx(proxy_tsx),
   _sproutlet(NULL),
   _service_name(""),
-  _service_host(""),
+//  _service_host(""),
   _id(""),
   _packets(),
   _send_requests(),
   _send_responses(),
-  _in_dialog(false),
-  _dialog_id(""),
-  _record_routed(false),
   _pending_sends(0),
   _pending_responses(0),
   _best_rsp(NULL),
@@ -972,7 +960,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // Offer the Sproutlet the chance to handle this transaction.
     _sproutlet = sproutlet->get_tsx(this, req->msg);
     _service_name = sproutlet->service_name();
-    _service_host = sproutlet->service_host();
+    //_service_host = sproutlet->service_host();
   }
   else
   {
@@ -993,43 +981,6 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   _id = id.str();
   LOG_VERBOSE("Created Sproutlet %s for %s",
               _id.c_str(), pjsip_tx_data_get_info(req));
-
-  _in_dialog = (PJSIP_MSG_TO_HDR(req->msg)->tag.slen > 0);
-
-  if (_in_dialog) 
-  {
-    // In-dialog request, so pull dialog identifier from top Route header.
-    LOG_DEBUG("In-dialog request");
-    pjsip_route_hdr* hr = (pjsip_route_hdr*)
-                             pjsip_msg_find_hdr(req->msg, PJSIP_H_ROUTE, NULL);
-    if ((hr != NULL) &&
-        (PJSIP_URI_SCHEME_IS_SIP(hr->name_addr.uri)))
-    {
-      pjsip_sip_uri* uri = (pjsip_sip_uri*)hr->name_addr.uri;
-      pjsip_param* p =
-             pjsip_param_find(&uri->other_param, &SproutletProxy::STR_SERVICE);
-      if (p != NULL) 
-      {
-        // Found the service parameter, so extract the dialog identifier from
-        // the first service.
-        pj_str_t service_str = p->value;
-
-        // Remove all subsequent services.
-        char* sep = pj_strchr(&service_str, '&');
-        service_str.slen = (sep != NULL) ?
-                                    (sep - service_str.ptr) : service_str.slen;
-
-        // Find the dialog identifier if it is encoded.
-        sep = pj_strchr(&service_str, '/');
-        if (sep != NULL) 
-        {
-          _dialog_id = std::string(sep + 1,
-                                   service_str.slen - (sep + 1 - service_str.ptr));
-        }
-      }
-    }
-    LOG_DEBUG("Dialog identifier = %s", _dialog_id.c_str());
-  }
 }
 
 SproutletWrapper::~SproutletWrapper()
@@ -1067,22 +1018,6 @@ const std::string& SproutletWrapper::service_name() const
 //
 // UASTsx::SproutletWrapper overloads.
 //
-
-void SproutletWrapper::add_to_dialog(const std::string& dialog_id)
-{
-  if (_record_routed)
-  {
-    LOG_WARNING("A sproutlet has attempted to add itself to the dialog multiple times, only the last dialog_id will be used");
-  }
-
-  _record_routed = true;
-  _dialog_id = dialog_id;
-}
-
-const std::string& SproutletWrapper::dialog_id() const
-{
-  return _dialog_id;
-}
 
 /// Returns a mutable clone of the original request suitable for forwarding
 /// or as the basis for constructing a response.
@@ -1573,13 +1508,6 @@ void SproutletWrapper::process_actions()
       _send_requests.erase(i);
 
       LOG_DEBUG("Processing request %p, fork = %d", tdata, fork_id);
-
-      if (_record_routed) 
-      {
-        // The Sproutlet has requested that we Record-Route on this dialog, so
-        // add a Record-Route header.
-        _proxy_tsx->add_record_route(tdata, _service_name, _dialog_id);
-      }
 
       tx_request(tdata, fork_id);
     }

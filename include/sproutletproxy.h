@@ -74,17 +74,22 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
-  /// Gets the need target Sproutlet for the message by analysing the top
+  /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
   Sproutlet* target_sproutlet(pjsip_msg* req, int port);
+
+  /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
+  /// a message targeted at that URI would arrive at the given Sproutlet).
+  bool does_uri_match_sproutlet(pjsip_uri* uri,
+                                Sproutlet* sproutlet);
+
+  /// Create a URI that routes to a given Sproutlet.
+  pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
+                                      Sproutlet* sproutlet);
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
-
-  void add_record_route(pjsip_tx_data* tdata,
-                        const std::string& service_name,
-                        const std::string& dialog_id);
 
   bool is_uri_local(pjsip_uri* uri);
   bool is_uri_local(pjsip_sip_uri* uri);
@@ -168,10 +173,6 @@ protected:
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg, int port);
-
-    void add_record_route(pjsip_tx_data* tdata,
-                          const std::string& service_name,
-                          const std::string& dialog_id);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
@@ -264,6 +265,8 @@ public:
   void cancel_timer(TimerID id);
   bool timer_running(TimerID id);
   SAS::TrailId trail() const;
+  bool is_uri_reflexive(const pjsip_uri*) const;
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -309,11 +312,6 @@ private:
 
   typedef std::list<pjsip_tx_data*> Responses;
   Responses _send_responses;
-
-  bool _in_dialog;
-
-  std::string _dialog_id;
-  bool _record_routed;
 
   int _pending_sends;
   int _pending_responses;

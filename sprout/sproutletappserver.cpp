@@ -45,7 +45,9 @@
 
 SproutletAppServerTsxHelper::SproutletAppServerTsxHelper(SproutletTsxHelper* helper) :
   _helper(helper),
-  _pool(NULL)
+  _pool(NULL),
+  _record_routed(false),
+  _rr_param_value("")
 {
   // Create a small pool to hold the onward Route for the request.
   _pool = pj_pool_create(&stack_data.cp.factory,
@@ -110,7 +112,8 @@ const pjsip_route_hdr* SproutletAppServerTsxHelper::route_hdr() const
 ///
 void SproutletAppServerTsxHelper::add_to_dialog(const std::string& dialog_id)
 {
-  _helper->add_to_dialog(dialog_id);
+  _record_routed = true;
+  _rr_param_value = dialog_id;
 }
 
 /// Returns the dialog identifier for this service.
@@ -120,7 +123,7 @@ void SproutletAppServerTsxHelper::add_to_dialog(const std::string& dialog_id)
 ///                        or by an earlier transaction in the same dialog.
 const std::string& SproutletAppServerTsxHelper::dialog_id() const
 {
-  return _helper->dialog_id();
+  return _rr_param_value;
 }
 
 /// Clones the request.  This is typically used when forking a request if
@@ -166,6 +169,8 @@ pjsip_msg* SproutletAppServerTsxHelper::create_response(pjsip_msg* req,
 /// @param  req          - The request message to use for forwarding.
 int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
 {
+  pj_pool_t* pool = get_pool(req);
+
   // We don't allow app servers to handle Route headers, so remove all
   // existing Route headers from the request and restore the onward route set
   // stored from the original request.
@@ -176,9 +181,27 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
   {
     LOG_DEBUG("Restore header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
-    pjsip_msg_add_hdr(req, (pjsip_hdr*)pjsip_hdr_clone(get_pool(req), hroute));
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)pjsip_hdr_clone(pool, hroute));
     hroute = hroute->next;
   }
+
+  // If the app-server has requested to be record routed for this dialog,
+  // add that record route now.
+  if (_record_routed)
+  {
+    pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup2(pool, &param->name, "dialog_id");
+    pj_strdup2(pool, &param->value, _rr_param_value.c_str());
+
+    pjsip_sip_uri* uri = get_reflexive_uri(pool);
+    pj_list_insert_before(&uri->other_param, param);
+
+    pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+    rr->name_addr.uri = (pjsip_uri*)uri;
+
+    pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)rr);
+  }
+
   return _helper->send_request(req);
 }
 
@@ -241,6 +264,11 @@ bool SproutletAppServerTsxHelper::timer_running(TimerID id)
 SAS::TrailId SproutletAppServerTsxHelper::trail() const
 {
   return _helper->trail();
+}
+
+pjsip_sip_uri* SproutletAppServerTsxHelper::get_reflexive_uri(pj_pool_t* pool) const
+{
+  return _helper->get_reflexive_uri(pool);
 }
 
 /// Constructor.

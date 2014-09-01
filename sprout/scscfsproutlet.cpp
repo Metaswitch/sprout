@@ -621,7 +621,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Add service to dialog - originating Cdiv");
-          add_to_dialog("charge-orig");
+          add_record_route(req, "charge-orig");
         }
       }
       else
@@ -641,11 +641,11 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         LOG_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating()) 
         {
-          add_to_dialog("charge-term");
+          add_record_route(req, "charge-term");
         }
         else
         {
-          add_to_dialog("charge-orig");
+          add_record_route(req, "charge-orig");
         }
       }
     }
@@ -675,7 +675,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_to_dialog("charge-term");
+          add_record_route(req, "charge-term");
         }
       }
       else if (_session_case->is_originating())
@@ -683,7 +683,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          add_to_dialog("charge-orig");
+          add_record_route(req, "charge-orig");
         }
       }
     }
@@ -819,7 +819,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       LOG_DEBUG("Add service to dialog - end of originating handling");
-      add_to_dialog("charge-orig");
+      add_record_route(req, "charge-orig");
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -873,7 +873,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating) 
     {
       LOG_DEBUG("Add service to dialog - end of terminating handling");
-      add_to_dialog("charge-term");
+      add_record_route(req, "charge-term");
     }
 
     // Route the call to the appropriate target.
@@ -1276,6 +1276,47 @@ void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
     pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
   }
   session_expires->expires = stack_data.default_session_expires;
+}
+
+
+/// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed will
+/// be attached to the Record-Route and can be used to recover the billing
+/// scope that is in use on subsequent in-dialog messages.
+void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
+                                         const std::string& billing_scope)
+{
+  pj_pool_t* pool = get_pool(msg);
+
+  pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+  pj_strdup(pool, &param->name, &STR_BILLING_SCOPE);
+  pj_strdup2(pool, &param->value, billing_scope.c_str());
+
+  pjsip_sip_uri* uri = get_reflexive_uri(pool);
+  pj_list_insert_before(&uri->other_param, param);
+
+  pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+  rr->name_addr.uri = (pjsip_uri*)uri;
+
+  pjsip_msg_insert_first_hdr(msg, (pjsip_hdr*)rr);
+}
+
+
+/// Retrieve the billing scope for an in-dialog message.
+void SCSCFSproutletTsx::get_billing_scope(std::string& billing_scope)
+{
+  const pjsip_route_hdr* route = route_hdr();
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+  pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                        &STR_BILLING_SCOPE);
+  if (param != NULL)
+  {
+    billing_scope = PJUtils::pj_str_to_string(&param->value);
+  }
+  else
+  {
+    LOG_WARNING("Billing scope unknown, assuming originating only");
+    billing_scope = "charge-orig";
+  }
 }
 
 

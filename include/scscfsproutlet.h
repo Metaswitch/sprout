@@ -231,6 +231,16 @@ private:
   /// exchange periodic session refresh messages.
   void add_session_expires(pjsip_msg* req);
 
+  /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
+  /// will be attached to the Record-Route and can be used to recover the
+  /// billing scope that is in use on subsequent in-dialog messages.
+  void add_record_route(pjsip_msg* msg,
+                        const std::string& billing_scope);
+
+  /// Retrieve the billing scope for the incoming message.  This should have been
+  /// set during session initiation.
+  void get_billing_scope(std::string& billing_scope);
+
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
   SCSCFSproutlet* _scscf;
