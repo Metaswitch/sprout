@@ -937,13 +937,13 @@ void SproutletProxy::UASTsx::check_destroy()
 SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
                                    SproutletProxy::UASTsx* proxy_tsx,
                                    Sproutlet* sproutlet,
+                                   const std::string& sproutlet_alias,
                                    pjsip_tx_data* req,
                                    SAS::TrailId trail_id) :
   _proxy(proxy),
   _proxy_tsx(proxy_tsx),
   _sproutlet(NULL),
   _service_name(""),
-//  _service_host(""),
   _id(""),
   _packets(),
   _send_requests(),
@@ -960,7 +960,6 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
     // Offer the Sproutlet the chance to handle this transaction.
     _sproutlet = sproutlet->get_tsx(this, sproutlet_alias, req->msg);
     _service_name = sproutlet->service_name();
-    //_service_host = sproutlet->service_host();
   }
   else
   {

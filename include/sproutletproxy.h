@@ -234,6 +234,7 @@ public:
   SproutletWrapper(SproutletProxy* proxy,
                    SproutletProxy::UASTsx* proxy_tsx,
                    Sproutlet* sproutlet,
+                   const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    SAS::TrailId trail_id);
 
@@ -284,8 +285,6 @@ private:
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
-
-  bool is_uri_local(pjsip_uri* uri) const;
 
   SproutletProxy* _proxy;
 
