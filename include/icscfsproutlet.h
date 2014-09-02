@@ -74,7 +74,9 @@ public:
 
   virtual ~ICSCFSproutlet();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                        const std::string& alias,
+                        pjsip_msg* req);
 
 private:
 

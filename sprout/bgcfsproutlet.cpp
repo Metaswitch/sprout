@@ -64,7 +64,9 @@ BGCFSproutlet::~BGCFSproutlet()
 
 /// Creates a BGCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
-SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+                                     const std::string& alias,
+                                     pjsip_msg* req)
 {
   return (SproutletTsx*)new BGCFSproutletTsx(helper, this);
 }

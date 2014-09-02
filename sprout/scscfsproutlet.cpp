@@ -113,7 +113,9 @@ SCSCFSproutlet::~SCSCFSproutlet()
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.
-SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+                                      const std::string& alias, 
+                                      pjsip_msg* req)
 {
   return (SproutletTsx*)new SCSCFSproutletTsx(helper, this);
 }

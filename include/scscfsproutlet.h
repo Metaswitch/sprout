@@ -84,7 +84,9 @@ public:
                  bool global_only_lookups);
   ~SCSCFSproutlet();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                        const std::string& alias,
+                        pjsip_msg* req);
 
   void set_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }

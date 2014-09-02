@@ -214,8 +214,10 @@ public:
   ///
   /// @param  helper        - The service helper to use to perform
   ///                         the underlying service-related processing.
+  /// @param  alias         - Ignored.
   /// @param  req           - The received request message.
   virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                                const std::string& alias,
                                 pjsip_msg* req);
 
   /// Constructor.

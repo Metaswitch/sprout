@@ -958,7 +958,7 @@ SproutletWrapper::SproutletWrapper(SproutletProxy* proxy,
   if (sproutlet != NULL) 
   {
     // Offer the Sproutlet the chance to handle this transaction.
-    _sproutlet = sproutlet->get_tsx(this, req->msg);
+    _sproutlet = sproutlet->get_tsx(this, sproutlet_alias, req->msg);
     _service_name = sproutlet->service_name();
     //_service_host = sproutlet->service_host();
   }
@@ -1037,7 +1037,7 @@ pjsip_msg* SproutletWrapper::original_request()
   pjsip_route_hdr* hr = (pjsip_route_hdr*)
                            pjsip_msg_find_hdr(clone->msg, PJSIP_H_ROUTE, NULL);
   if ((hr != NULL) &&
-      (is_uri_local(hr->name_addr.uri)))
+      (is_uri_reflexive(hr->name_addr.uri)))
   {
     LOG_DEBUG("Remove top Route header %s", PJUtils::hdr_to_string(hr).c_str());
     pj_list_erase(hr);
@@ -1067,7 +1067,7 @@ const pjsip_route_hdr* SproutletWrapper::route_hdr() const
     pjsip_route_hdr* hr = (pjsip_route_hdr*)
                             pjsip_msg_find_hdr(_req->msg, PJSIP_H_ROUTE, NULL);
     if ((hr != NULL) &&
-        (is_uri_local(hr->name_addr.uri)))
+        (is_uri_reflexive(hr->name_addr.uri)))
     {
       return hr;
     }
@@ -1730,50 +1730,3 @@ int SproutletWrapper::compare_sip_sc(int sc1, int sc2)
     return -1;
   }
 }
-
-/// Checks whether the specified URI is "owned" by this system.  The URI is
-/// considered local if the domain is either equal to the base URI domain, or
-/// the service name prepended to the base URI domain.
-bool SproutletWrapper::is_uri_local(pjsip_uri* uri) const
-{
-  if (_proxy->is_uri_local(uri)) 
-  {
-    return true;
-  }
-  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
-  {
-    pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-    pj_str_t host = sip_uri->host;
-
-    if (!_service_host.empty()) 
-    {
-      if (!pj_stricmp2(&host, _service_host.c_str())) 
-      {
-        return true;
-      }
-    }
-    else
-    {
-      char* sep = pj_strchr(&host, '.');
-      if (sep != NULL)
-      {
-        host.slen = sep - host.ptr;
-        if (!pj_stricmp2(&host, _service_name.c_str())) 
-        {
-          // The first part of the domain is the service name, so check that
-          // the rest of the URI is local.
-          host.ptr = sep + 1;
-          host.slen = sip_uri->host.slen - (sep + 1 - sip_uri->host.ptr);
-          if (_proxy->is_host_local(&host)) 
-          {
-            return true;
-          }
-        }
-      }
-    }
-  }
-
-  return _proxy->is_uri_local(uri);
-}
-
-

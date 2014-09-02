@@ -536,8 +536,11 @@ public:
   ///
   /// @param  helper        - The service helper to use to perform
   ///                         the underlying service-related processing.
+  /// @param  alias         - The alias of this Sproutlet that matched the
+  ///                         incoming request.
   /// @param  req           - The received request message.
   virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                                const std::string& service_name,
                                 pjsip_msg* req) = 0;
 
   /// Returns the name of this service.
