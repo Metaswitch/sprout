@@ -91,8 +91,6 @@ protected:
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  bool is_uri_local(pjsip_uri* uri);
-  bool is_uri_local(pjsip_sip_uri* uri);
   bool is_host_local(pj_str_t* host);
 
   /// Defintion of a timer set by an child sproutlet transaction.

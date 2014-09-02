@@ -180,7 +180,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req, int port)
     // or the URI in the Route header corresponds to our hostname.
     LOG_DEBUG("No Sproutlet found using service name or host");
     if ((route == NULL) ||
-        (is_uri_local(route->name_addr.uri)))
+        (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri) &&
+         (is_host_local(&((pjsip_sip_uri*)route->name_addr.uri)->host))))
     {
       LOG_DEBUG("Find default service for port %d", port);
       std::map<int, Sproutlet*>::iterator i = _port_map.find(port);
@@ -380,23 +381,6 @@ void SproutletProxy::add_record_route(pjsip_tx_data* tdata,
   LOG_DEBUG("%s", PJUtils::hdr_to_string(hrr).c_str());
 }
 #endif
-
-
-bool SproutletProxy::is_uri_local(pjsip_uri* uri)
-{
-  if (PJSIP_URI_SCHEME_IS_SIP(uri)) 
-  {
-    return is_uri_local((pjsip_sip_uri*)uri);
-  }
-  return false;
-}
-
-
-bool SproutletProxy::is_uri_local(pjsip_sip_uri* uri)
-{
-  pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
-  return is_host_local(&sip_uri->host);
-}
 
 
 bool SproutletProxy::is_host_local(pj_str_t* host)
