@@ -80,7 +80,7 @@ TARGET_SOURCES := logger.cpp \
                   bgcfsproutlet.cpp \
                   icscfsproutlet.cpp \
                   contact_filtering.cpp \
-                  localroaming.cpp
+                  mobiletwinned.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -137,7 +137,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        appserver_test.cpp \
                        scscf_test.cpp \
                        gruu_test.cpp \
-                       localroaming_test.cpp
+                       mobiletwinned_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

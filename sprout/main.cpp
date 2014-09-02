@@ -92,7 +92,7 @@ extern "C" {
 #include "scscfsproutlet.h"
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
-#include "localroaming.h"
+#include "mobiletwinned.h"
 #include "mementoappserver.h"
 #include "call_list_store.h"
 
@@ -1612,8 +1612,8 @@ int main(int argc, char *argv[])
   if (opt.gemini_enabled)
   {
     // Create a Gemini App Server.
-    AppServer* gemini = new LocalRoamingAppServer("gemini");
-    Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini, "gemini." + opt.home_domain);
+    AppServer* gemini = new MobileTwinnedAppServer("mobile-twinned");
+    Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini);
     sproutlets.push_back(gemini_sproutlet);
   }
 
@@ -1637,7 +1637,7 @@ int main(int argc, char *argv[])
                                               opt.max_call_list_length,
                                               opt.memento_threads,
                                               opt.call_list_ttl);
-    Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento, "memento." + opt.home_domain);
+    Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento);
     sproutlets.push_back(memento_sproutlet);
   }
 

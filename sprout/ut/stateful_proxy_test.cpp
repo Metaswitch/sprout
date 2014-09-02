@@ -2278,7 +2278,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   else
   {
     xoToken = actual.substr(6);
-    string expect = "";
+    string expect = "<";
     expect.append(msg._toscheme)
       .append(":.*@")
       .append(str_pj(stack_data.local_host))
@@ -2286,7 +2286,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
       .append(boost::lexical_cast<string>(stack_data.pcscf_trusted_port))
       .append(";transport=TCP")
       .append(";lr")
-      .append(firstHop ? ";ob" : "");
+      .append(firstHop ? ";ob>" : ">");
     EXPECT_THAT(xoToken, MatchesRegex(expect));
 
     // Get the bare token as just the user part of the URI.
@@ -3064,7 +3064,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   Message msg;
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
-  string route = string("Route: <").append(token).append(">");
+  string route = string("Route: ").append(token);
 
   // Strip PANI outbound - leaving the trust zone.
   doTestHeaders(_tp_default, false, &tp, true, msg, route, false, false, true, false, false);
@@ -3106,7 +3106,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoProxyOut)
   Message msg;
   msg._todomain = "10.83.18.38:36530;transport=tcp";
   msg._via = "10.99.88.11:12345";
-  string route = string("Route: <").append(token).append(">");
+  string route = string("Route: ").append(token);
 
   // Don't care which transport we come back on, as long as it goes to
   // the right address.
