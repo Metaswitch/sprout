@@ -205,6 +205,13 @@ public:
   ///
   virtual pj_pool_t* get_pool(const pjsip_msg* msg) = 0;
 
+  /// Returns a brief one line summary of the message.
+  ///
+  /// @returns             - Message information
+  /// @param  msg          - The message
+  ///
+  virtual const char* msg_info(pjsip_msg* msg) = 0;
+
   /// Schedules a timer with the specified identifier and expiry period.
   /// The on_timer_expiry callback will be called back with the timer identity
   /// and context parameter when the timer expires.  If the identifier 
@@ -460,6 +467,14 @@ protected:
   ///
   pj_pool_t* get_pool(const pjsip_msg* msg)
     {return _helper->get_pool(msg);}
+
+  /// Returns a brief one line summary of the message.
+  ///
+  /// @returns             - Message information
+  /// @param  msg          - The message
+  ///
+  const char* msg_info(pjsip_msg* msg)
+    {return _helper->msg_info(msg);}
 
   /// Schedules a timer with the specified identifier and expiry period.
   /// The on_timer_expiry callback will be called back with the timer identity

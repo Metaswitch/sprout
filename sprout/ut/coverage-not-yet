@@ -42,10 +42,8 @@ dnsresolver.cpp
 flowtable.cpp
 sipresolver.cpp
 acr.cpp
-sproutletproxy.cpp
 sproutletappserver.cpp
 mmtel.cpp
-basicproxy.cpp
 bgcfsproutlet.cpp
 icscfsproutlet.cpp
 scscfsproutlet.cpp

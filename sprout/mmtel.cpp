@@ -238,7 +238,7 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
                 ((rule->conditions() & ~(_media_conditions | simservs::Rule::CONDITION_NO_ANSWER)) == 0))
             {
               // We found a suitable rule.  Start the no-reply timer.
-              bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer());
+              bool status = schedule_timer(NULL, _no_reply_timer, _user_services->cdiv_no_reply_timer() * 1000);
               if (!status)
               {
                 // Log this failure, but don't fail the call - there's no point.
