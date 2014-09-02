@@ -70,7 +70,8 @@ public:
     public:
       Binding(std::string* address_of_record): _address_of_record(address_of_record) {};
 
-      /// The address of record, e.g. "sip:name@example.com"
+      /// The address of record, e.g. "sip:name@example.com". Defined
+      /// as a pointer rather than a reference to allow assignment to work.
       std::string* _address_of_record;
 
       /// The registered contact URI, e.g.,

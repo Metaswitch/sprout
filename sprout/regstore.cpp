@@ -731,6 +731,8 @@ RegStore::Connector::~Connector()
 {
 }
 
+// Generates the public GRUU for this binding from the address of record and
+// instance-id. Returns "" if this binding has no GRUU.
 std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool) const
 {
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
@@ -739,26 +741,34 @@ std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool) const
       (uri == NULL) ||
       !PJSIP_URI_SCHEME_IS_SIP(uri))
   {
+    // GRUUs are only valid for SIP URIs with an instance-id.
     return "";
   }
 
   pjsip_param gr_param;
   gr_param.name = pj_str("gr");
   pj_cstr(&gr_param.value, _params.at("+sip.instance").c_str());
+
+  // instance-ids are often of the form '"<urn:..."' - convert that to
+  // just 'urn:...'
   if (*gr_param.value.ptr == '"')
   {
     gr_param.value.ptr++;
     gr_param.value.slen -= 2;
   }
+
   if (*gr_param.value.ptr == '<')
   {
     gr_param.value.ptr++;
     gr_param.value.slen -= 2;
   }
+
   pj_list_push_back((pj_list_type*)&uri->other_param, (pj_list_type*)&gr_param);
   return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)uri);
 }
 
+// Utility method to return the public GRUU surrounded by quotes.
+// Returns "" if this binding has no GRUU.
 std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool) const
 {
   std::string unquoted_gruu = gruu(pool);
@@ -766,8 +776,6 @@ std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool) const
   {
     return "";
   }
-  std::string ret = "\"";
-  ret += unquoted_gruu;
-  ret += "\"";
-  return ret;
+
+  return "\"" + unquoted_gruu + "\"";
 }

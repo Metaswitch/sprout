@@ -830,6 +830,10 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_list_insert_before(&contact->other_param, new_param);
         }
 
+        // The pub-gruu parameter on the Contact header is calculated
+        // from the instance-id, to avoid unnecessary storage in
+        // memcached.
+
         std::string gruu = binding->gruu_quoted(tdata->pool);
         if (!gruu.empty()) {
           pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
