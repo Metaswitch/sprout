@@ -99,7 +99,7 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
   pj_xml_add_attr(contact_node, attr);
   attr = pj_xml_attr_new(pool, &STR_STATE, state);
   pj_xml_add_attr(contact_node, attr);
-  attr = pj_xml_attr_new(pool, &STR_EVENT, event);
+  attr = pj_xml_attr_new(pool, &STR_EVENT_LOWER, event);
   pj_xml_add_attr(contact_node, attr);
 
   return contact_node;
@@ -126,6 +126,8 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Add attributes to the doc
   attr = pj_xml_attr_new(pool, &STR_XMLNS_NAME, &STR_XMLNS_VAL);
+  pj_xml_add_attr(doc, attr);
+  attr = pj_xml_attr_new(pool, &STR_XMLNS_GRUU_NAME, &STR_XMLNS_GRUU_VAL);
   pj_xml_add_attr(doc, attr);
   attr = pj_xml_attr_new(pool, &STR_XMLNS_XSI_NAME, &STR_XMLNS_XSI_VAL);
   pj_xml_add_attr(doc, attr);
@@ -209,8 +211,9 @@ pj_xml_node* notify_create_reg_state_xml(
       pj_cstr(&pj_gruu, gruu.c_str());
       LOG_DEBUG("Create pub-gruu node");
 
-      pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_PUB_GRUU);
-      pj_strdup(pool, &gruu_node->content, &pj_gruu);
+      pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
+      attr = pj_xml_attr_new(pool, &STR_URI, &pj_gruu);
+      pj_xml_add_attr(gruu_node, attr);
       pj_xml_add_node(contact_node, gruu_node);
     }
 
