@@ -385,7 +385,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             std::string pname = PJUtils::pj_str_to_string(&p->name);
             std::string pvalue = PJUtils::pj_str_to_string(&p->value);
-            binding->_params[pname] = pvalue;
+            // Skip parameters that must not be user-specified
+            if (pname != "pub-gruu")
+            {
+              binding->_params[pname] = pvalue;
+            }
             p = p->next;
           }
 
