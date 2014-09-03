@@ -205,7 +205,7 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_xml_add_node(contact_node, uri_node);
 
     pj_str_t gruu = binding->second.pub_gruu_pj_str(pool);
-    if (gruu.slen == 0)
+    if (gruu.slen != 0)
     {
       LOG_DEBUG("Create pub-gruu node");
 
