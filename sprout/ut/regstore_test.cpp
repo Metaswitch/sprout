@@ -337,7 +337,7 @@ TEST_F(RegStoreTest, CopyTests)
   delete copy; copy = NULL;
 
   // Test AoR assignment.
-  copy = new RegStore::AoR();
+  copy = new RegStore::AoR("sip:name@example.com");
   *copy = *aor_data1;
   EXPECT_EQ(1u, copy->bindings().size());
   EXPECT_EQ(1u, copy->subscriptions().size());

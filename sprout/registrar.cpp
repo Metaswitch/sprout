@@ -387,7 +387,11 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
           {
             std::string pname = PJUtils::pj_str_to_string(&p->name);
             std::string pvalue = PJUtils::pj_str_to_string(&p->value);
-            binding->_params[pname] = pvalue;
+            // Skip parameters that must not be user-specified
+            if (pname != "pub-gruu")
+            {
+              binding->_params[pname] = pvalue;
+            }
             p = p->next;
           }
 
@@ -825,6 +829,20 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_strdup2(tdata->pool, &new_param->value, j->second.c_str());
           pj_list_insert_before(&contact->other_param, new_param);
         }
+
+        // The pub-gruu parameter on the Contact header is calculated
+        // from the instance-id, to avoid unnecessary storage in
+        // memcached.
+
+        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+        if (!gruu.empty())
+        {
+          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+          pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+          pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+          pj_list_insert_before(&contact->other_param, new_param);
+        }
+
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
       }
       else
