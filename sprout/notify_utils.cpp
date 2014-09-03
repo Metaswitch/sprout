@@ -204,15 +204,13 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
 
-    std::string gruu = binding->second.gruu(pool);
-    if (!gruu.empty())
+    pj_str_t gruu = binding->second.pub_gruu_pj_str(pool);
+    if (gruu.slen == 0)
     {
-      pj_str_t pj_gruu;
-      pj_cstr(&pj_gruu, gruu.c_str());
       LOG_DEBUG("Create pub-gruu node");
 
       pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
-      attr = pj_xml_attr_new(pool, &STR_URI, &pj_gruu);
+      attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
       pj_xml_add_attr(gruu_node, attr);
       pj_xml_add_node(contact_node, gruu_node);
     }

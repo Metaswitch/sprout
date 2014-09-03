@@ -932,7 +932,7 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
   delete aor_data;
 }
 
-TEST_F(ContactFilteringFullStackTest, GRUU)
+TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
 {
   RegStore::AoR* aor_data = new RegStore::AoR(aor);
 
@@ -944,42 +944,11 @@ TEST_F(ContactFilteringFullStackTest, GRUU)
     RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
     create_binding(*binding);
 
-    // Change the features on some of the bindings.
-    if (ii % 2 == 0)
-    {
-      binding->_params["+sip.other"] = "<string>";
-    }
-    if (ii % 3 == 0)
-    {
-      binding->_params["+sip.other2"] = "#5";
-    }
     binding->_expires = ii * 100;
   }
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
   msg->line.req.uri = PJUtils::uri_from_string("sip:user@domain.com;gr=abcd", pool);
-
-  // Add some Accept headers to eliminate some bindings and
-  // de-prioritize others.
-  pj_str_t header_name = pj_str((char*)"Accept-Contact");
-  char* header_value = (char*)"*;+sip.other2=\"#5\";explicit";
-  pjsip_accept_contact_hdr* accept_hdr = (pjsip_accept_contact_hdr*)
-    pjsip_parse_hdr(pool,
-                    &header_name,
-                    header_value,
-                    strlen(header_value),
-                    NULL);
-  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
-  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
-  header_value = (char*)"*;+sip.other=\"<string>\";explicit;require";
-  accept_hdr = (pjsip_accept_contact_hdr*)
-    pjsip_parse_hdr(pool,
-                    &header_name,
-                    header_value,
-                    strlen(header_value),
-                    NULL);
-  ASSERT_NE((pjsip_accept_contact_hdr*)NULL, accept_hdr);
-  pjsip_msg_add_hdr(msg, (pjsip_hdr*)accept_hdr);
 
   TargetList targets;
 
@@ -992,6 +961,48 @@ TEST_F(ContactFilteringFullStackTest, GRUU)
                              1);
 
   EXPECT_EQ((unsigned)0, targets.size());
+
+  delete aor_data;
+}
+
+TEST_F(ContactFilteringFullStackTest, GRUUMatch)
+{
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+
+  for (int ii = 0;
+       ii < 20;
+       ii++)
+  {
+    std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
+    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    create_binding(*binding);
+
+    // Change the features on some of the bindings.
+    if (ii == 2)
+    {
+      binding->_params["+sip.instance"] = "<abcd>";
+    }
+    if (ii == 3)
+    {
+      binding->_params["+sip.instance"] = "<abcde>";
+    }
+    binding->_expires = ii * 100;
+  }
+
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+  msg->line.req.uri = PJUtils::uri_from_string("sip:user@domain.com;gr=abcd", pool);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)1, targets.size());
 
   delete aor_data;
 }

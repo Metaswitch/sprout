@@ -63,6 +63,7 @@ extern "C" {
 #include "pjutils.h"
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
+#include "constants.h"
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
@@ -733,7 +734,7 @@ RegStore::Connector::~Connector()
 
 // Generates the public GRUU for this binding from the address of record and
 // instance-id. Returns "" if this binding has no GRUU.
-std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool) const
+pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 {
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
 
@@ -742,40 +743,60 @@ std::string RegStore::AoR::Binding::gruu(pj_pool_t* pool) const
       !PJSIP_URI_SCHEME_IS_SIP(uri))
   {
     // GRUUs are only valid for SIP URIs with an instance-id.
-    return "";
+    return NULL;
   }
 
-  pjsip_param gr_param;
-  gr_param.name = pj_str("gr");
-  pj_cstr(&gr_param.value, _params.at("+sip.instance").c_str());
+  pjsip_param* gr_param = (pjsip_param*) pj_pool_alloc(pool, sizeof(pjsip_param));
+  gr_param->name = STR_GR;
+  pj_strdup2(pool, &gr_param->value, _params.at("+sip.instance").c_str());
 
   // instance-ids are often of the form '"<urn:..."' - convert that to
   // just 'urn:...'
-  if (*gr_param.value.ptr == '"')
+  if (*(gr_param->value.ptr) == '"')
   {
-    gr_param.value.ptr++;
-    gr_param.value.slen -= 2;
+    gr_param->value.ptr++;
+    gr_param->value.slen -= 2;
   }
 
-  if (*gr_param.value.ptr == '<')
+  if (*(gr_param->value.ptr) == '<')
   {
-    gr_param.value.ptr++;
-    gr_param.value.slen -= 2;
+    gr_param->value.ptr++;
+    gr_param->value.slen -= 2;
   }
 
-  pj_list_push_back((pj_list_type*)&uri->other_param, (pj_list_type*)&gr_param);
-  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)uri);
+  pj_list_push_back((pj_list_type*)&(uri->other_param), (pj_list_type*)gr_param);
+  return uri;
+}
+
+// Utility method to return the public GRUU as a string.
+// Returns "" if this binding has no GRUU.
+pj_str_t RegStore::AoR::Binding::pub_gruu_pj_str(pj_pool_t* pool) const
+{
+  pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
+
+  if (pub_gruu_uri == NULL)
+  {
+    return pj_str("");
+  }
+
+  return PJUtils::uri_to_pj_str(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri, pool);
 }
 
 // Utility method to return the public GRUU surrounded by quotes.
 // Returns "" if this binding has no GRUU.
-std::string RegStore::AoR::Binding::gruu_quoted(pj_pool_t* pool) const
+std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
-  std::string unquoted_gruu = gruu(pool);
-  if (unquoted_gruu.empty())
+  pj_str_t unquoted_pub_gruu = pub_gruu_pj_str(pool);
+
+  if (unquoted_pub_gruu.slen == 0)
   {
     return "";
   }
 
-  return "\"" + unquoted_gruu + "\"";
+  std::string ret;
+  ret.reserve(unquoted_pub_gruu.slen + 2);
+  ret.append("\"");
+  ret.append(unquoted_pub_gruu.ptr, unquoted_pub_gruu.slen);
+  ret.append("\"");
+  return ret;
 }

@@ -40,6 +40,7 @@
 
 extern "C" {
 #include <pj/pool.h>
+#include <pjsip.h>
 }
 
 #include <string>
@@ -112,8 +113,9 @@ public:
       /// Whether this is an emergency registration.
       bool _emergency_registration;
 
-      std::string gruu(pj_pool_t* pool) const;
-      std::string gruu_quoted(pj_pool_t* pool) const;
+      pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
+      pj_str_t pub_gruu_pj_str(pj_pool_t* pool) const;
+      std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
     };
 
     /// @class RegStore::AoR::Subscription

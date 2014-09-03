@@ -834,8 +834,9 @@ void process_register_request(pjsip_rx_data* rdata)
         // from the instance-id, to avoid unnecessary storage in
         // memcached.
 
-        std::string gruu = binding->gruu_quoted(tdata->pool);
-        if (!gruu.empty()) {
+        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+        if (!gruu.empty())
+        {
           pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
           pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
           pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
