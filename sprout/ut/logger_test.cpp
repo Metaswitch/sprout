@@ -187,3 +187,23 @@ TEST_F(LoggerTest, RealTime)
   int rc = system("grep '^[0-3][0-9]-[0-1][0-9]-[0-9][0-9][0-9][0-9] ..:..:..\\.... UTC Wossat it sez for da test' /tmp/logtest_*.txt >/dev/null");
   EXPECT_EQ(0, WEXITSTATUS(rc));
 }
+
+TEST_F(LoggerTest, LongLine)
+{
+  // Logging long lines should cause them to be truncated, and a
+  // message saying so to be logged
+
+  Logger2 log("/tmp", "logtest");
+  std::string long_line(9000, 'a');
+  long_line += "should not see this";
+  Logger* prev = Log::setLogger(&log);
+  Log::write(1, "", 0, "%s", long_line.c_str());
+  log.flush();
+  Log::setLogger(prev);
+
+  int rc = system("grep 'truncated' /tmp/logtest_*.txt >/dev/null");
+  EXPECT_EQ(0, WEXITSTATUS(rc));
+
+  int rc2 = system("grep 'should not see this' /tmp/logtest_*.txt >/dev/null");
+  EXPECT_EQ(1, WEXITSTATUS(rc2));
+}
