@@ -1607,6 +1607,28 @@ TEST_F(SCSCFTest, TestInvalidBGCFRoute)
   doSlowFailureFlow(msg, 500);
 }
 
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracket";
+  add_host_mapping("domainnotasipurianglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
+}
+
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddrMix)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracketmix";
+  add_host_mapping("domainnotasipurianglebracketmix", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
+}
+
 /// Test a forked flow - setup phase.
 void SCSCFTest::setupForkedFlow(SP::Message& msg)
 {

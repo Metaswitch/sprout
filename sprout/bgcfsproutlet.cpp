@@ -132,8 +132,9 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
          ii != bgcf_routes.end();
          ++ii)
     {
-      pjsip_uri* route_uri = (pjsip_uri*)pjsip_uri_get_uri(
-                         PJUtils::uri_from_string(*ii, get_pool(req), PJ_TRUE));
+      pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, get_pool(req), PJ_TRUE);
+      route_uri = (route_uri == NULL) ? route_uri :
+                                        (pjsip_uri*)pjsip_uri_get_uri(route_uri);
 
       if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
       {
