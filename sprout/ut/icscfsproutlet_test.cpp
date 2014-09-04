@@ -83,6 +83,8 @@ public:
     _icscf_proxy = new SproutletProxy(stack_data.endpt,
                                       PJSIP_MOD_PRIORITY_UA_PROXY_LAYER,
                                       "sip:homedomain:" + std::to_string(stack_data.icscf_port),
+                                      std::unordered_set<std::string>(),
+                                      std::unordered_set<std::string>(),
                                       sproutlets);
 
     // Schedule timers.

@@ -342,7 +342,7 @@ protected:
   /// @returns             - The SIP URI.
   /// @param  pool         - A pool to allocate the URI from.
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool)
-    {return get_reflexive_uri(pool);}
+    {return _helper->get_reflexive_uri(pool);}
 
   /// Check if a given URI would be routed to the current Sproutlet if it was
   /// recieved as the top Route header on a request.  This can be used to
@@ -553,8 +553,8 @@ public:
   const std::string service_host() const { return _service_host; }
 
   /// Returns the aliases of this service.
-  const std::list<std::string> aliases() const
-    { return _aliases; }
+  virtual const std::list<std::string> aliases() const
+    { return std::list<std::string>(); }
 
 protected:
   /// Constructor.
@@ -563,8 +563,7 @@ protected:
             const std::string& service_host="") :
     _service_name(service_name),
     _port(port),
-    _service_host(service_host),
-    _aliases()
+    _service_host(service_host)
   {
   }
 
@@ -577,9 +576,6 @@ private:
 
   /// The host name of this service.
   const std::string _service_host;
-
-  /// Aliases of this service.
-  const std::list<std::string> _aliases;
 };
 
 #endif

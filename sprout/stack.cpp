@@ -1066,10 +1066,9 @@ pj_status_t init_stack(const std::string& system_name,
   // Parse the list of alias host names.
   if (alias_hosts != "")
   {
-    std::list<std::string> hosts;
-    Utils::split_string(alias_hosts, ',', hosts, 0, true);
-    for (std::list<std::string>::iterator it = hosts.begin();
-         it != hosts.end();
+    Utils::split_string(alias_hosts, ',', stack_data.aliases, 0, true);
+    for (std::list<std::string>::iterator it = stack_data.aliases.begin();
+         it != stack_data.aliases.end();
          ++it)
     {
       pj_strdup2(stack_data.pool, &stack_data.name[stack_data.name_cnt], it->c_str());
