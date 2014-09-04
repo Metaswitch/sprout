@@ -276,7 +276,6 @@ public:
   bool timer_running(TimerID id);
   SAS::TrailId trail() const;
   bool is_uri_reflexive(const pjsip_uri*) const;
-  bool is_uri_local(const pjsip_uri*) const;
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
 
 private:
@@ -295,6 +294,7 @@ private:
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
+  bool is_uri_local(const pjsip_uri*) const;
 
   SproutletProxy* _proxy;
 
