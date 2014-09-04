@@ -84,6 +84,14 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
   pj_xml_node *contact_node;
   pj_xml_attr *attr;
 
+  // Quick fix to avoid instance-ids wrapped in angle brackets from
+  // causing invalid XML
+  if (*id->ptr == '<')
+  {
+    id->ptr += 1;
+    id->slen -= 2;
+  }
+
   contact_node = pj_xml_node_new(pool, &STR_CONTACT);
 
   // Contact node requires an id, state and event
@@ -91,7 +99,7 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
   pj_xml_add_attr(contact_node, attr);
   attr = pj_xml_attr_new(pool, &STR_STATE, state);
   pj_xml_add_attr(contact_node, attr);
-  attr = pj_xml_attr_new(pool, &STR_EVENT, event);
+  attr = pj_xml_attr_new(pool, &STR_EVENT_LOWER, event);
   pj_xml_add_attr(contact_node, attr);
 
   return contact_node;
@@ -118,6 +126,8 @@ pj_xml_node* notify_create_reg_state_xml(
 
   // Add attributes to the doc
   attr = pj_xml_attr_new(pool, &STR_XMLNS_NAME, &STR_XMLNS_VAL);
+  pj_xml_add_attr(doc, attr);
+  attr = pj_xml_attr_new(pool, &STR_XMLNS_GRUU_NAME, &STR_XMLNS_GRUU_VAL);
   pj_xml_add_attr(doc, attr);
   attr = pj_xml_attr_new(pool, &STR_XMLNS_XSI_NAME, &STR_XMLNS_XSI_VAL);
   pj_xml_add_attr(doc, attr);
@@ -193,6 +203,17 @@ pj_xml_node* notify_create_reg_state_xml(
     uri_node = pj_xml_node_new(pool, &STR_URI);
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
+
+    pj_str_t gruu = binding->second.pub_gruu_pj_str(pool);
+    if (gruu.slen != 0)
+    {
+      LOG_DEBUG("Create pub-gruu node");
+
+      pj_xml_node* gruu_node = pj_xml_node_new(pool, &STR_XML_PUB_GRUU);
+      attr = pj_xml_attr_new(pool, &STR_URI, &gruu);
+      pj_xml_add_attr(gruu_node, attr);
+      pj_xml_add_node(contact_node, gruu_node);
+    }
 
     // Add the contact node to the registration node
     pj_xml_add_node(reg_node, contact_node);

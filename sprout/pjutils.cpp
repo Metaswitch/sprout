@@ -199,7 +199,6 @@ std::string PJUtils::pj_str_to_unquoted_string(const pj_str_t* pjstr)
   return ret;
 }
 
-
 std::string PJUtils::pj_status_to_string(const pj_status_t status)
 {
   char errmsg[PJ_ERR_MSG_SIZE];
@@ -647,7 +646,7 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
 {
   pjsip_tx_data* clone = NULL;
   pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
-  if (status == PJ_SUCCESS) 
+  if (status == PJ_SUCCESS)
   {
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, rdata->msg_info.msg);
@@ -664,7 +663,7 @@ pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
 {
   pjsip_tx_data* clone = NULL;
   pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
-  if (status == PJ_SUCCESS) 
+  if (status == PJ_SUCCESS)
   {
     pjsip_tx_data_add_ref(clone);
     clone->msg = pjsip_msg_clone(clone->pool, tdata->msg);
@@ -731,7 +730,7 @@ pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
   // Set status code and reason text.
   msg->line.status.code = st_code;
   if (st_text != NULL)
-  {                                                                
+  {
     pj_strdup(tdata->pool, &msg->line.status.reason, st_text);
   }
   else
@@ -849,7 +848,7 @@ pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
   pjsip_tx_data* cancel;
   pj_status_t status = pjsip_endpt_create_cancel(endpt, tdata, &cancel);
 
-  if (status != PJ_SUCCESS) 
+  if (status != PJ_SUCCESS)
   {
     return NULL;
   }
@@ -1613,6 +1612,13 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
   return ((uri != NULL) &&
           ((PJSIP_URI_SCHEME_IS_TEL(uri) ||
            (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
+}
+
+bool PJUtils::is_uri_gruu(pjsip_uri* uri)
+{
+  return ((uri != NULL) &&
+          (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+          (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_GR)));
 }
 
 // Return true if there are no route headers, or there is exactly one,
