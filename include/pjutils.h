@@ -246,6 +246,8 @@ void update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, in
 
 pj_str_t user_from_uri(pjsip_uri* uri);
 
+bool is_uri_gruu(pjsip_uri* uri);
+
 void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
 
 } // namespace PJUtils
