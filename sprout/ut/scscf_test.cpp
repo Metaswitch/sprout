@@ -1464,13 +1464,20 @@ TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
+
+  // Even though "+15108580271" is configured for ENUM, the presence
+  // of a GRUU parameter should indicate to Sprout that this wasn't
+  // a string of dialled digits - so we won't do an ENUM lookup and
+  // will route to the local subscriber.
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestGRUUFailure)
 {
+  // Identical to TestNoEnumWhenGRUU, except that the registered
+  // binding in this test has a different instance-id ("abcde" nor
+  // "abcd"), so the GRUU doesn't match and the call should fail with
+  // a 480 error.
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
@@ -1482,9 +1489,7 @@ TEST_F(SCSCFTest, TestGRUUFailure)
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  list<HeaderMatcher> hdrs;
-  // Skip the ACK and BYE on this request by setting the last
-  // parameter to false, as we're only testing Sprout functionality
+
   doSlowFailureFlow(msg, 480);
 }
 
