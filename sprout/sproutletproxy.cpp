@@ -62,13 +62,11 @@ const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
 SproutletProxy::SproutletProxy(pjsip_endpoint* endpt,
                                int priority,
                                const std::string& root_uri,
-                               const std::unordered_set<std::string>& addresses,
-                               const std::unordered_set<std::string>& domains,
+                               const std::unordered_set<std::string>& host_aliases,
                                const std::list<Sproutlet*>& sproutlets) :
   BasicProxy(endpt, "mod-sproutlet-controller", priority, false),
   _root_uri(NULL),
-  _addresses(addresses),
-  _domains(domains),
+  _host_aliases(host_aliases),
   _sproutlets(sproutlets)
 {
   /// Store the URI of this SproutletProxy - this is used for Record-Routing.
@@ -120,7 +118,8 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
 
   // TODO: Once the registrar and subscription managers are Sproutlets, this should
   // consider the ReqURI if there's no top Route header.
-  if (route != NULL)
+  if ((route != NULL) &&
+      PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
   {
     LOG_DEBUG("Found top Route header: %s ", PJUtils::hdr_to_string(route).c_str());
     pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
@@ -344,18 +343,8 @@ bool SproutletProxy::is_host_local(const pj_str_t* host)
     rc = true;
   }
 
-  for (std::unordered_set<std::string>::iterator it = _addresses.begin();
-       (rc != true) && (it != _addresses.end());
-       ++it)
-  {
-    if (!pj_stricmp2(host, it->c_str()))
-    {
-      rc = true;
-    }
-  }
-
-  for (std::unordered_set<std::string>::iterator it = _domains.begin();
-       (rc != true) && (it != _domains.end());
+  for (std::unordered_set<std::string>::iterator it = _host_aliases.begin();
+       (rc != true) && (it != _host_aliases.end());
        ++it)
   {
     if (!pj_stricmp2(host, it->c_str()))

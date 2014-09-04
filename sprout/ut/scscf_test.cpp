@@ -378,7 +378,6 @@ public:
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain:5058",
                                 std::unordered_set<std::string>(),
-                                std::unordered_set<std::string>(),
                                 sproutlets);
 
     // Schedule timers.

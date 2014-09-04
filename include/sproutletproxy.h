@@ -60,14 +60,12 @@ public:
   ///
   /// @param  endpt         - The pjsip endpoint to associate with.
   /// @param  priority      - The pjsip priority to load at.
-  /// @param  addresses     - The IP addresses that refer to this proxy.
-  /// @param  domains       - Domains that refer to this proxy.
+  /// @param  host_aliases  - The IP addresses/domains that refer to this proxy.
   /// @param  sproutlets    - Sproutlets to load in this proxy.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
                  const std::string& root_uri,
-                 const std::unordered_set<std::string>& addresses,
-                 const std::unordered_set<std::string>& domains,
+                 const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets);
 
   /// Destructor.
@@ -224,8 +222,7 @@ protected:
   };
 
   pjsip_sip_uri* _root_uri;
-  std::unordered_set<std::string> _addresses;
-  std::unordered_set<std::string> _domains;
+  std::unordered_set<std::string> _host_aliases;
 
   std::list<Sproutlet*> _sproutlets;
 

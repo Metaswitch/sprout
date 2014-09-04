@@ -195,10 +195,11 @@ public:
   /// related to this service invocation.
   virtual SAS::TrailId trail() const;
 
+private:
+
   /// Get a URI that routes to this App Server.
   pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool) const;
 
-private:
   SproutletTsxHelper* _helper;
   pj_pool_t* _pool;
   pjsip_route_hdr _route_set;
