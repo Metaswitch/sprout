@@ -45,7 +45,7 @@
 #include "bgcfsproutlet.h"
 #include <fstream>
 
-/// BGCFSproutlet constructor.                           
+/// BGCFSproutlet constructor.
 BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
                              ACRFactory* acr_factory) :
@@ -102,7 +102,7 @@ BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
 /// Tsx destructor (may also cause ACRs to be sent).
 BGCFSproutletTsx::~BGCFSproutletTsx()
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     _acr->send_message();
   }
@@ -168,7 +168,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
 void BGCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
@@ -179,7 +179,7 @@ void BGCFSproutletTsx::on_tx_request(pjsip_msg* req)
 
 void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the received response to the ACR.
     // @TODO - timestamp from response???
@@ -192,9 +192,9 @@ void BGCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp) 
+void BGCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.

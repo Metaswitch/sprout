@@ -25,7 +25,7 @@ public:
     // Clone the request and redirect it to an external number
     pjsip_msg* clone = clone_request(req);
 
-    if (PJSIP_URI_SCHEME_IS_SIP(clone->line.req.uri)) 
+    if (PJSIP_URI_SCHEME_IS_SIP(clone->line.req.uri))
     {
       LOG_DEBUG("Forking request to external number");
       pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)clone->line.req.uri;
@@ -42,7 +42,7 @@ public:
     send_request(req);
   }
 };
- 
+
 
 class SampleForkAS : public AppServer
 {

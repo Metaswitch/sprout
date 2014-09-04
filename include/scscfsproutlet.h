@@ -235,13 +235,13 @@ private:
 
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the
-  /// billing scope that is in use on subsequent in-dialog messages.
+  /// billing role that is in use on subsequent in-dialog messages.
   void add_record_route(pjsip_msg* msg,
-                        const std::string& billing_scope);
+                        const std::string& billing_role);
 
-  /// Retrieve the billing scope for the incoming message.  This should have been
+  /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  void get_billing_scope(std::string& billing_scope);
+  void get_billing_role(std::string& billing_role);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
@@ -267,7 +267,7 @@ private:
   ACR* _acr;
 
   /// State information when the request is routed to UE bindings.  This is
-  /// used in cases where a request fails with a Flow Failed status code 
+  /// used in cases where a request fails with a Flow Failed status code
   /// (as defined in RFC5626) indicating the binding is no longer valid.
   std::string _target_aor;
   std::unordered_map<int, std::string> _target_bindings;
@@ -275,6 +275,10 @@ private:
   /// Liveness timer used for determining when an application server is not
   /// responding.
   TimerID _liveness_timer;
+
+  /// Track if this transaction has already record-routed itself to prevent
+  /// us accidentally record routing twice.
+  bool _record_routed;
 
   static const int MAX_FORKING = 10;
 };
