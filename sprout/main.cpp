@@ -1644,9 +1644,20 @@ int main(int argc, char *argv[])
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
+    std::unordered_set<std::string> host_aliases;
+    host_aliases.insert(opt.local_host);
+    host_aliases.insert(opt.public_host);
+    host_aliases.insert(opt.home_domain);
+    host_aliases.insert(stack_data.home_domains.begin(),
+                        stack_data.home_domains.end());
+    host_aliases.insert(stack_data.aliases.begin(),
+                        stack_data.aliases.end());
+
     sproutlet_proxy = new SproutletProxy(stack_data.endpt,
                                          PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+3,
-                                         std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen),
+                                         std::string(stack_data.scscf_uri.ptr,
+                                                     stack_data.scscf_uri.slen),
+                                         host_aliases,
                                          sproutlets);
     if (sproutlet_proxy == NULL)
     {
@@ -1654,7 +1665,6 @@ int main(int argc, char *argv[])
       return 1;
     }
   }
-
 
   status = start_stack();
   if (status != PJ_SUCCESS)

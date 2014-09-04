@@ -377,6 +377,7 @@ public:
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain:5058",
+                                std::unordered_set<std::string>(),
                                 sproutlets);
 
     // Schedule timers.
@@ -3075,12 +3076,12 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
   free_txdata();
 }
 
@@ -3101,14 +3102,14 @@ TEST_F(SCSCFTest, RecordRoutingTestStartAndEnd)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
 }
@@ -3139,16 +3140,16 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
 
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
@@ -3161,8 +3162,8 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
 TEST_F(SCSCFTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
 }
 
 // Test that even when Sprout is configured to Record-Route itself on each
@@ -3172,11 +3173,11 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
   stack_data.record_route_on_every_hop = false;
 }
 

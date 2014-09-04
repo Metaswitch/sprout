@@ -45,7 +45,9 @@
 
 SproutletAppServerTsxHelper::SproutletAppServerTsxHelper(SproutletTsxHelper* helper) :
   _helper(helper),
-  _pool(NULL)
+  _pool(NULL),
+  _record_routed(false),
+  _rr_param_value("")
 {
   // Create a small pool to hold the onward Route for the request.
   _pool = pj_pool_create(&stack_data.cp.factory,
@@ -68,7 +70,7 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
   LOG_DEBUG("Store onward route-set for request");
   pjsip_route_hdr* hroute = (pjsip_route_hdr*)
                                 pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-  while (hroute != NULL) 
+  while (hroute != NULL)
   {
     LOG_DEBUG("Store header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
@@ -78,7 +80,7 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
   }
 }
 
-/// Returns a mutable clone of the original request.  This can be modified 
+/// Returns a mutable clone of the original request.  This can be modified
 /// and sent by the application using the send_request call.
 ///
 /// @returns             - A clone of the original request message.
@@ -110,7 +112,8 @@ const pjsip_route_hdr* SproutletAppServerTsxHelper::route_hdr() const
 ///
 void SproutletAppServerTsxHelper::add_to_dialog(const std::string& dialog_id)
 {
-  _helper->add_to_dialog(dialog_id);
+  _record_routed = true;
+  _rr_param_value = dialog_id;
 }
 
 /// Returns the dialog identifier for this service.
@@ -120,7 +123,7 @@ void SproutletAppServerTsxHelper::add_to_dialog(const std::string& dialog_id)
 ///                        or by an earlier transaction in the same dialog.
 const std::string& SproutletAppServerTsxHelper::dialog_id() const
 {
-  return _helper->dialog_id();
+  return _rr_param_value;
 }
 
 /// Clones the request.  This is typically used when forking a request if
@@ -158,7 +161,7 @@ pjsip_msg* SproutletAppServerTsxHelper::create_response(pjsip_msg* req,
 /// original upstream request and may also be called during response processing
 /// or an original request to create a late fork.  When processing an in-dialog
 /// request this function may only be called once.
-/// 
+///
 /// This function may be called while processing initial requests,
 /// in-dialog requests and cancels but not during response handling.
 ///
@@ -166,19 +169,39 @@ pjsip_msg* SproutletAppServerTsxHelper::create_response(pjsip_msg* req,
 /// @param  req          - The request message to use for forwarding.
 int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
 {
+  pj_pool_t* pool = get_pool(req);
+
   // We don't allow app servers to handle Route headers, so remove all
   // existing Route headers from the request and restore the onward route set
   // stored from the original request.
-  while (pjsip_msg_find_remove_hdr(req, PJSIP_H_ROUTE, NULL) != NULL); 
+  while (pjsip_msg_find_remove_hdr(req, PJSIP_H_ROUTE, NULL) != NULL);
 
   pjsip_route_hdr* hroute = _route_set.next;
   while ((hroute != NULL) && (hroute != &_route_set))
   {
     LOG_DEBUG("Restore header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
-    pjsip_msg_add_hdr(req, (pjsip_hdr*)pjsip_hdr_clone(get_pool(req), hroute));
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)pjsip_hdr_clone(pool, hroute));
     hroute = hroute->next;
   }
+
+  // If the app-server has requested to be record routed for this dialog,
+  // add that record route now.
+  if (_record_routed)
+  {
+    pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup2(pool, &param->name, "dialog_id");
+    pj_strdup2(pool, &param->value, _rr_param_value.c_str());
+
+    pjsip_sip_uri* uri = get_reflexive_uri(pool);
+    pj_list_insert_before(&uri->other_param, param);
+
+    pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+    rr->name_addr.uri = (pjsip_uri*)uri;
+
+    pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)rr);
+  }
+
   return _helper->send_request(req);
 }
 
@@ -186,7 +209,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
 /// Indicate that the response should be forwarded following standard routing
 /// rules.  Note that, if this service created multiple forks, the responses
 /// will be aggregated before being sent downstream.
-/// 
+///
 /// This function may be called while handling any response.
 ///
 /// @param  rsp          - The response message to use for forwarding.
@@ -243,6 +266,11 @@ SAS::TrailId SproutletAppServerTsxHelper::trail() const
   return _helper->trail();
 }
 
+pjsip_sip_uri* SproutletAppServerTsxHelper::get_reflexive_uri(pj_pool_t* pool) const
+{
+  return _helper->get_reflexive_uri(pool);
+}
+
 /// Constructor.
 SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
                                                const std::string& service_host) :
@@ -256,8 +284,10 @@ SproutletAppServerShim::SproutletAppServerShim(AppServer* app,
 ///
 /// @param  helper        - The service helper to use to perform
 ///                         the underlying service-related processing.
+/// @param  alias         - Ignored.
 /// @param  req           - The received request message.
 SproutletTsx* SproutletAppServerShim::get_tsx(SproutletTsxHelper* helper,
+                                              const std::string& alias,
                                               pjsip_msg* req)
 {
   SproutletTsx* tsx = NULL;
@@ -278,14 +308,14 @@ SproutletTsx* SproutletAppServerShim::get_tsx(SproutletTsxHelper* helper,
   tsx = new SproutletAppServerShimTsx(helper,
                                       shim_helper,
                                       app_tsx);
-  
+
   return tsx;
 }
 
 /// Constructor.
 SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletTsxHelper* sproutlet_helper,
                                                      SproutletAppServerTsxHelper*& app_server_helper,
-                                                     AppServerTsx* app_tsx) : 
+                                                     AppServerTsx* app_tsx) :
   SproutletTsx(sproutlet_helper),
   _app_server_helper(app_server_helper),
   _app_tsx(app_tsx)

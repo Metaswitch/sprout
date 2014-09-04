@@ -64,11 +64,11 @@ public:
   /// Destructor.
   virtual ~SproutletAppServerTsxHelper();
 
-  /// Stores the onward route for this transaction ready to apply to 
+  /// Stores the onward route for this transaction ready to apply to
   /// transaction.
   void store_onward_route(pjsip_msg* req);
 
-  /// Returns a mutable clone of the original request.  This can be modified 
+  /// Returns a mutable clone of the original request.  This can be modified
   /// and sent by the application using the send_request call.
   ///
   /// @returns             - A clone of the original request message.
@@ -130,7 +130,7 @@ public:
   /// original upstream request and may also be called during response processing
   /// or an original request to create a late fork.  When processing an in-dialog
   /// request this function may only be called once.
-  /// 
+  ///
   /// This function may be called while processing initial requests,
   /// in-dialog requests and cancels but not during response handling.
   ///
@@ -141,7 +141,7 @@ public:
   /// Indicate that the response should be forwarded following standard routing
   /// rules.  Note that, if this service created multiple forks, the responses
   /// will be aggregated before being sent downstream.
-  /// 
+  ///
   /// This function may be called while handling any response.
   ///
   /// @param  rsp          - The response message to use for forwarding.
@@ -169,7 +169,7 @@ public:
 
   /// Schedules a timer with the specified identifier and expiry period.
   /// The on_timer_expiry callback will be called back with the timer identity
-  /// and context parameter when the timer expires.  If the identifier 
+  /// and context parameter when the timer expires.  If the identifier
   /// corresponds to a timer that is already running, the timer will be stopped
   /// and restarted with the new duration and context parameter.
   ///
@@ -196,9 +196,15 @@ public:
   virtual SAS::TrailId trail() const;
 
 private:
+
+  /// Get a URI that routes to this App Server.
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool) const;
+
   SproutletTsxHelper* _helper;
   pj_pool_t* _pool;
   pjsip_route_hdr _route_set;
+  bool _record_routed;
+  std::string _rr_param_value;
 };
 
 class SproutletAppServerShim : public Sproutlet
@@ -209,8 +215,10 @@ public:
   ///
   /// @param  helper        - The service helper to use to perform
   ///                         the underlying service-related processing.
+  /// @param  alias         - Ignored.
   /// @param  req           - The received request message.
   virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                                const std::string& alias,
                                 pjsip_msg* req);
 
   /// Constructor.
@@ -234,7 +242,7 @@ public:
   /// Called for an initial request (dialog-initiating or out-of-dialog) with
   /// the original received request for the transaction.
   ///
-  /// This function stores all but the top Route header from the request, so 
+  /// This function stores all but the top Route header from the request, so
   /// they can be restored on any requests sent onward by the AS.
   virtual void on_rx_initial_request(pjsip_msg* req);
 

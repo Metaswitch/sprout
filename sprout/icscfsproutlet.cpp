@@ -77,7 +77,9 @@ ICSCFSproutlet::~ICSCFSproutlet()
 
 /// Creates a ICSCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
-SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+                                      const std::string& alias,
+                                      pjsip_msg* req)
 {
   if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
   {

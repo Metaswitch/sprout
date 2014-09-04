@@ -84,7 +84,9 @@ public:
                  bool global_only_lookups);
   ~SCSCFSproutlet();
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req);
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                        const std::string& alias,
+                        pjsip_msg* req);
 
   void set_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
@@ -231,6 +233,16 @@ private:
   /// exchange periodic session refresh messages.
   void add_session_expires(pjsip_msg* req);
 
+  /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
+  /// will be attached to the Record-Route and can be used to recover the
+  /// billing role that is in use on subsequent in-dialog messages.
+  void add_record_route(pjsip_msg* msg,
+                        const std::string& billing_role);
+
+  /// Retrieve the billing role for the incoming message.  This should have been
+  /// set during session initiation.
+  void get_billing_role(std::string& billing_role);
+
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
   SCSCFSproutlet* _scscf;
@@ -255,7 +267,7 @@ private:
   ACR* _acr;
 
   /// State information when the request is routed to UE bindings.  This is
-  /// used in cases where a request fails with a Flow Failed status code 
+  /// used in cases where a request fails with a Flow Failed status code
   /// (as defined in RFC5626) indicating the binding is no longer valid.
   std::string _target_aor;
   std::unordered_map<int, std::string> _target_bindings;
@@ -263,6 +275,10 @@ private:
   /// Liveness timer used for determining when an application server is not
   /// responding.
   TimerID _liveness_timer;
+
+  /// Track if this transaction has already record-routed itself to prevent
+  /// us accidentally record routing twice.
+  bool _record_routed;
 
   static const int MAX_FORKING = 10;
 };
