@@ -63,6 +63,7 @@ extern "C" {
 #include "pjutils.h"
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
+#include "constants.h"
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
@@ -109,7 +110,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
-    aor_data = deserialize_aor(data);
+    aor_data = deserialize_aor(aor_id, data);
     aor_data->_cas = cas;
     LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
 
@@ -120,7 +121,7 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   else if (status == Store::Status::NOT_FOUND)
   {
     // Data store didn't find the record, so create a new blank record.
-    aor_data = new AoR();
+    aor_data = new AoR(aor_id);
 
     SAS::Event event(trail, SASEvent::REGSTORE_GET_NEW, 0);
     event.add_var_param(aor_id);
@@ -445,11 +446,11 @@ std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 
 
 /// Deserialize the contents of an AoR
-RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
+RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
 {
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
 
-  AoR* aor_data = new AoR();
+  AoR* aor_data = new AoR(aor_id);
 
   int num_bindings;
   iss.read((char *)&num_bindings, sizeof(int));
@@ -542,11 +543,12 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& s)
 }
 
 /// Default constructor.
-RegStore::AoR::AoR() :
+RegStore::AoR::AoR(std::string sip_uri) :
   _notify_cseq(1),
   _bindings(),
   _subscriptions(),
-  _cas(0)
+  _cas(0),
+  _uri(sip_uri)
 {
 }
 
@@ -647,7 +649,7 @@ RegStore::AoR::Binding* RegStore::AoR::get_binding(const std::string& binding_id
   else
   {
     // No existing binding with this id, so create a new one.
-    b = new Binding;
+    b = new Binding(&_uri);
     b->_expires = 0;
     _bindings.insert(std::make_pair(binding_id, b));
   }
@@ -730,3 +732,71 @@ RegStore::Connector::~Connector()
 {
 }
 
+// Generates the public GRUU for this binding from the address of record and
+// instance-id. Returns "" if this binding has no GRUU.
+pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
+{
+  pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
+
+  if ((_params.find("+sip.instance") == _params.cend()) ||
+      (uri == NULL) ||
+      !PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // GRUUs are only valid for SIP URIs with an instance-id.
+    return NULL;
+  }
+
+  pjsip_param* gr_param = (pjsip_param*) pj_pool_alloc(pool, sizeof(pjsip_param));
+  gr_param->name = STR_GR;
+  pj_strdup2(pool, &gr_param->value, _params.at("+sip.instance").c_str());
+
+  // instance-ids are often of the form '"<urn:..."' - convert that to
+  // just 'urn:...'
+  if (*(gr_param->value.ptr) == '"')
+  {
+    gr_param->value.ptr++;
+    gr_param->value.slen -= 2;
+  }
+
+  if (*(gr_param->value.ptr) == '<')
+  {
+    gr_param->value.ptr++;
+    gr_param->value.slen -= 2;
+  }
+
+  pj_list_push_back((pj_list_type*)&(uri->other_param), (pj_list_type*)gr_param);
+  return uri;
+}
+
+// Utility method to return the public GRUU as a string.
+// Returns "" if this binding has no GRUU.
+pj_str_t RegStore::AoR::Binding::pub_gruu_pj_str(pj_pool_t* pool) const
+{
+  pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
+
+  if (pub_gruu_uri == NULL)
+  {
+    return pj_str("");
+  }
+
+  return PJUtils::uri_to_pj_str(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri, pool);
+}
+
+// Utility method to return the public GRUU surrounded by quotes.
+// Returns "" if this binding has no GRUU.
+std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
+{
+  pj_str_t unquoted_pub_gruu = pub_gruu_pj_str(pool);
+
+  if (unquoted_pub_gruu.slen == 0)
+  {
+    return "";
+  }
+
+  std::string ret;
+  ret.reserve(unquoted_pub_gruu.slen + 2);
+  ret.append("\"");
+  ret.append(unquoted_pub_gruu.ptr, unquoted_pub_gruu.slen);
+  ret.append("\"");
+  return ret;
+}

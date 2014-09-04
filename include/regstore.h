@@ -38,6 +38,11 @@
 #ifndef REGSTORE_H__
 #define REGSTORE_H__
 
+extern "C" {
+#include <pj/pool.h>
+#include <pjsip.h>
+}
+
 #include <string>
 #include <list>
 #include <map>
@@ -64,6 +69,12 @@ public:
     class Binding
     {
     public:
+      Binding(std::string* address_of_record): _address_of_record(address_of_record) {};
+
+      /// The address of record, e.g. "sip:name@example.com". Defined
+      /// as a pointer rather than a reference to allow assignment to work.
+      std::string* _address_of_record;
+
       /// The registered contact URI, e.g.,
       /// "sip:2125551212@192.168.0.1:55491;transport=TCP;rinstance=fad34fbcdea6a931"
       std::string _uri;
@@ -101,6 +112,10 @@ public:
 
       /// Whether this is an emergency registration.
       bool _emergency_registration;
+
+      pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
+      pj_str_t pub_gruu_pj_str(pj_pool_t* pool) const;
+      std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
     };
 
     /// @class RegStore::AoR::Subscription
@@ -138,7 +153,7 @@ public:
     };
 
     /// Default Constructor.
-    AoR();
+    AoR(std::string sip_uri);
 
     /// Destructor.
     ~AoR();
@@ -204,6 +219,9 @@ public:
     /// Zero for a new record that has not yet been written to a store.
     uint64_t _cas;
 
+    // SIP URI for this AoR
+    std::string _uri;
+
     /// Store code is allowed to manipulate bindings and subscriptions directly.
     friend class RegStore;
   };
@@ -226,7 +244,7 @@ public:
                       SAS::TrailId trail);
 
     std::string serialize_aor(AoR* aor_data);
-    AoR* deserialize_aor(const std::string& s);
+    AoR* deserialize_aor(const std::string& aor_id, const std::string& s);
 
     Store* _data_store;
 
