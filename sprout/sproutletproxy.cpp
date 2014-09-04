@@ -393,7 +393,9 @@ bool SproutletProxy::is_uri_local(pjsip_uri* uri)
   {
     return is_uri_local((pjsip_sip_uri*)uri);
   }
+  //LCOV_EXCL_START
   return false;
+  //LCOV_EXCL_STOP
 }
 
 
@@ -908,36 +910,6 @@ void SproutletProxy::UASTsx::tx_cancel(SproutletWrapper* upstream,
 }
 
 
-void SproutletProxy::UASTsx::tx_terminate(SproutletWrapper* upstream,
-                                          int fork_id)
-{
-  LOG_DEBUG("Process termination from %s on fork %d",
-            upstream->service_name().c_str(), fork_id);
-  DMap<SproutletWrapper*>::iterator i =
-                       _dmap_sproutlet.find(std::make_pair(upstream, fork_id));
-
-  if (i != _dmap_sproutlet.end()) 
-  {
-    // Break the upstream and downstream linkage between the Sproutlets.
-    _dmap_sproutlet.erase(i);
-    _umap.erase(i->second);
-
-    // Check to see if we can destroy the UASTsx.
-    check_destroy();
-  }
-  else
-  {
-    DMap<UACTsx*>::iterator j = _dmap_uac.find(std::make_pair(upstream, fork_id));
-    if (j != _dmap_uac.end()) 
-    {
-      // Terminate the UAC transaction.
-      UACTsx* uac_tsx = j->second;
-      uac_tsx->cancel_pending_tsx(PJSIP_SC_REQUEST_TIMEOUT);
-    }
-  }
-}
-
-
 /// Checks to see if the UASTsx can be destroyed.  It is only safe to destroy
 /// the UASTsx when all the Sproutlet's have completed their processing, which
 /// only occurs when all the linkages are broken.
@@ -1299,17 +1271,6 @@ void SproutletWrapper::cancel_fork(int fork_id, int reason)
       _forks[fork_id].pending_cancel = true;
       _forks[fork_id].cancel_reason = reason;
     }
-    else
-    {
-      // The fork is still pending a final response to a non-INVITE request,
-      // so we can terminate it immediately.
-      LOG_VERBOSE("%s terminating fork %d immediately", _id.c_str(), fork_id);
-      --_pending_responses;
-      _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
-      pjsip_tx_data_dec_ref(_forks[fork_id].req);
-      _forks[fork_id].req = NULL;
-      _proxy_tsx->tx_terminate(this, fork_id);
-    }
   }
 }
 
@@ -1326,17 +1287,6 @@ void SproutletWrapper::cancel_pending_forks(int reason)
         LOG_VERBOSE("%s cancelling fork %d, reason = %d", _id.c_str(), ii, reason);
         _forks[ii].pending_cancel = true;
         _forks[ii].cancel_reason = reason;
-      }
-      else
-      {
-        // The fork is still pending a final response to a non-INVITE request,
-        // so we can terminate it immediately.
-        LOG_VERBOSE("%s terminating fork %d immediately", _id.c_str(), ii);
-        --_pending_responses;
-        _forks[ii].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
-        pjsip_tx_data_dec_ref(_forks[ii].req);
-        _forks[ii].req = NULL;
-        _proxy_tsx->tx_terminate(this, ii);
       }
     }
   }

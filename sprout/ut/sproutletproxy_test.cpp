@@ -652,6 +652,9 @@ TEST_F(SproutletProxyTest, NullSproutlet)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
 }
 
@@ -713,6 +716,9 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarder)
   tp->expect_target(tdata);
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
 
   delete tp;
 }
@@ -832,6 +838,9 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
 }
 
@@ -867,7 +876,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Request is forked to two different users at the host in the RequestURI.
+  // Request is forked to NUM_FORKS different users at the host in the RequestURI.
   ASSERT_EQ(NUM_FORKS, txdata_count());
 
   // Check the forked requests - RequestURI should be updated, Route header should
@@ -920,8 +929,215 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
     EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
     inject_msg(respond_to_txdata(tdata, 200));
     free_txdata();
-    inject_msg(respond_to_txdata(req[ii], 487));
   }
+
+  for (int ii = 1; ii < NUM_FORKS; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 487));
+    ASSERT_EQ(1, txdata_count());
+    tdata = current_txdata();
+    expect_target("TCP", "10.10.20.1", 5060, tdata);
+    ReqMatcher("ACK").matches(tdata->msg);
+    free_txdata();
+  }
+
+  // All done!
+  req.clear();
+  ASSERT_EQ(0, txdata_count());
+
+  // Repeat the same sequence with a MESSAGE request.
+  Message msg2;
+  msg2._method = "MESSAGE";
+  msg2._requri = "sip:bob@proxy1.awaydomain";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:forker.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg2.get_request(), tp);
+
+  // Request is forked to NUM_FORKS different users at the host in the RequestURI.
+  ASSERT_EQ(NUM_FORKS, txdata_count());
+
+  // Check the forked requests - RequestURI should be updated, Route header should
+  // be stripped and no Record-Route headers added.
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    req.push_back(pop_txdata());
+    expect_target("TCP", "10.10.20.1", 5060, req[ii]);
+    ReqMatcher("MESSAGE").matches(req[ii]->msg);
+    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+              str_uri(req[ii]->msg->line.req.uri));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
+  }
+
+  // Send a 486 Busy Here response from fork one and check that this isn't
+  // forwarded.
+  inject_msg(respond_to_txdata(req[0], 486));
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 200 OK response from one of the forks and check that this is 
+  // forwarded immediately.
+  // are cancelled.
+  inject_msg(respond_to_txdata(req[1], 200));
+  ASSERT_EQ(1, txdata_count());
+
+  // Check the 200 OK.
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // The other forks are cancelled internally, but since this wasn't an INVITE
+  // transaction, no CANCELs are sent.
+  ASSERT_EQ(0, txdata_count());
+
+  // Send in responses on the other forks and check these are absorbed.
+  for (int ii = 2; ii < NUM_FORKS; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 404));
+    ASSERT_EQ(0, txdata_count());
+  }
+
+  // All done!
+  req.clear();
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+
+TEST_F(SproutletProxyTest, CancelForking)
+{
+  // Tests CANCEL processing of a request sent via a forking Sproutlet.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the forking Sproutlet.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:forker.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(NUM_FORKS + 1, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forked to NUM_FORKS different users at the host in the RequestURI.
+  ASSERT_EQ(NUM_FORKS, txdata_count());
+
+  // Check the forked requests - RequestURI should be updated, Route header should
+  // be stripped and no Record-Route headers added - and send 100 Trying
+  // responses.
+  std::vector<pjsip_tx_data*> req;
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    req.push_back(pop_txdata());
+    expect_target("TCP", "10.10.20.1", 5060, req[ii]);
+    ReqMatcher("INVITE").matches(req[ii]->msg);
+    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+              str_uri(req[ii]->msg->line.req.uri));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
+    inject_msg(respond_to_txdata(req[ii], 100));
+  }
+
+  // Send 180 Ringing responses on each fork and check they are passed
+  // through unchanged.
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 180));
+    ASSERT_EQ(1, txdata_count());
+    tdata = current_txdata();
+    RespMatcher(180).matches(tdata->msg);
+    tp->expect_target(tdata);
+    free_txdata();
+  }
+
+  // Receive a 408 timeout response on the first fork, and check it is absorbed.
+  inject_msg(respond_to_txdata(req[0], 408));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+#if 0
+  // Receive a 486 Busy Here response on the second fork, and check it is absorbed.
+  inject_msg(respond_to_txdata(req[1], 486));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+#endif
+
+  // Send a CANCEL for the original INVITE.
+  msg1._method = "CANCEL";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expect a 200 OK response to the CANCEL and CANCELs on the remaining forks.
+  ASSERT_EQ(NUM_FORKS, txdata_count());
+
+  tdata = current_txdata();
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  for (int ii = 1; ii < NUM_FORKS; ++ii) 
+  {
+    tdata = current_txdata();
+    expect_target("TCP", "10.10.20.1", 5060, tdata);
+    ReqMatcher("CANCEL").matches(tdata->msg);
+    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+              str_uri(tdata->msg->line.req.uri));
+    EXPECT_EQ("", get_headers(tdata->msg, "Route"));
+    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+    inject_msg(respond_to_txdata(tdata, 200));
+    free_txdata();
+  }
+
+  // Send in 487 responses for all but the last fork.
+  for (int ii = 1; ii < NUM_FORKS - 1; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 487));
+    tdata = current_txdata();
+    expect_target("TCP", "10.10.20.1", 5060, tdata);
+    ReqMatcher("ACK").matches(tdata->msg);
+    free_txdata();
+  }
+
+  // Send in a 486 response for the last fork.
+  inject_msg(respond_to_txdata(req[NUM_FORKS - 1], 486));
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Catch the final 487 response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher(487).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // All done!
+  req.clear();
+  ASSERT_EQ(0, txdata_count());
 
   delete tp;
 }
@@ -1018,6 +1234,44 @@ TEST_F(SproutletProxyTest, SproutletDelayRedirect)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  // Second time around we do the same with a MESSAGE and have the response
+  // come in before the redirect timer expires.
+  Message msg2;
+  msg2._method = "MESSAGE";
+  msg2._requri = "sip:bob@awaydomain";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false);
+  msg2._route = "Route: <sip:delayredirect.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  inject_msg(msg2.get_request(), tp);
+
+  // Request is forwarded to the node in the second Route header.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("MESSAGE").matches(tdata->msg);
+  EXPECT_EQ("sip:bob@awaydomain", str_uri(tdata->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy1.awaydomain;transport=TCP;lr>",
+            get_headers(tdata->msg, "Route"));
+  EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+
+  // Send a 200 OK response to the MESSAGE.  This will stop the redirect
+  // timer.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the 200 OK response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(200).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
 }
 
@@ -1049,7 +1303,111 @@ TEST_F(SproutletProxyTest, SproutletErrors)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
   delete tp;
+}
+
+
+TEST_F(SproutletProxyTest, UASError)
+{
+  // Tests handling of errors on the UAS side of a Sproutlet transaction.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing the forking Sproutlet.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:forker.proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(NUM_FORKS + 1, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Request is forked to NUM_FORKS different users at the host in the RequestURI.
+  ASSERT_EQ(NUM_FORKS, txdata_count());
+
+  // Check the forked requests - RequestURI should be updated, Route header should
+  // be stripped and no Record-Route headers added - and send 100 Trying
+  // responses.
+  std::vector<pjsip_tx_data*> req;
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    req.push_back(pop_txdata());
+    expect_target("TCP", "10.10.20.1", 5060, req[ii]);
+    ReqMatcher("INVITE").matches(req[ii]->msg);
+    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+              str_uri(req[ii]->msg->line.req.uri));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Route"));
+    EXPECT_EQ("", get_headers(req[ii]->msg, "Record-Route"));
+    inject_msg(respond_to_txdata(req[ii], 100));
+  }
+
+  // Send 180 Ringing responses on each fork and check they are passed
+  // through unchanged.
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 180));
+    ASSERT_EQ(1, txdata_count());
+    tdata = current_txdata();
+    RespMatcher(180).matches(tdata->msg);
+    tp->expect_target(tdata);
+    free_txdata();
+  }
+
+  // Advance the time so the UAS transaction times out.
+  //cwtest_advance_time_ms(40000L);
+  //poll();
+
+  // Terminate the incoming transport to force a transport error on the UAS
+  // transaction.
+  delete tp;
+  poll();
+
+  ASSERT_EQ(NUM_FORKS, txdata_count());
+
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    tdata = current_txdata();
+    expect_target("TCP", "10.10.20.1", 5060, tdata);
+    ReqMatcher("CANCEL").matches(tdata->msg);
+    EXPECT_EQ("sip:bob-" + std::to_string(ii) + "@proxy1.awaydomain:5060;transport=TCP",
+              str_uri(tdata->msg->line.req.uri));
+    EXPECT_EQ("", get_headers(tdata->msg, "Route"));
+    EXPECT_EQ("", get_headers(tdata->msg, "Record-Route"));
+    inject_msg(respond_to_txdata(tdata, 200));
+    free_txdata();
+  }
+
+  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  {
+    inject_msg(respond_to_txdata(req[ii], 487));
+    tdata = current_txdata();
+    expect_target("TCP", "10.10.20.1", 5060, tdata);
+    ReqMatcher("ACK").matches(tdata->msg);
+    free_txdata();
+  }
+
+  // All done!
+  req.clear();
+  ASSERT_EQ(0, txdata_count());
 }
 
 
