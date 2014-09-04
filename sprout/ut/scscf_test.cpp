@@ -1627,6 +1627,18 @@ TEST_F(SCSCFTest, TestValidBGCFRoute)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainvalid"), hdrs);
 }
 
+TEST_F(SCSCFTest, TestValidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainanglebracket";
+  add_host_mapping("domainanglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainanglebracket"), hdrs);
+}
+
 TEST_F(SCSCFTest, TestInvalidBGCFRoute)
 {
   SCOPED_TRACE("");
@@ -1635,7 +1647,29 @@ TEST_F(SCSCFTest, TestInvalidBGCFRoute)
   msg._todomain = "domainnotasipuri";
   add_host_mapping("domainnotasipuri", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*bgcf@domainnotasipuri.*"), hdrs);
+  doSlowFailureFlow(msg, 500);
+}
+
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracket";
+  add_host_mapping("domainnotasipurianglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
+}
+
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddrMix)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracketmix";
+  add_host_mapping("domainnotasipurianglebracketmix", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
 }
 
 /// Test a forked flow - setup phase.
