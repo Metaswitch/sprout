@@ -1126,7 +1126,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
-  if (session_expires) 
+  if (session_expires)
   {
     // In general proxied messages should have Session-Expires headers added,
     // except if we are simply forwarding without applying any services.
@@ -1448,6 +1448,44 @@ TEST_F(SCSCFTest, TestEnumExternalSuccess)
   // Skip the ACK and BYE on this request by setting the last
   // parameter to false, as we're only testing Sprout functionality
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain += ";gr=abcd";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestGRUUFailure)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain += ";gr=abcd";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // Skip the ACK and BYE on this request by setting the last
+  // parameter to false, as we're only testing Sprout functionality
+  doSlowFailureFlow(msg, 480);
 }
 
 TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
