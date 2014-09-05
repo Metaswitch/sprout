@@ -377,6 +377,7 @@ public:
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:homedomain:5058",
+                                std::unordered_set<std::string>(),
                                 sproutlets);
 
     // Schedule timers.
@@ -1126,7 +1127,7 @@ void SCSCFTest::doSuccessfulFlow(Message& msg,
   ReqMatcher req("INVITE");
   ASSERT_NO_FATAL_FAILURE(req.matches(out));
 
-  if (session_expires) 
+  if (session_expires)
   {
     // In general proxied messages should have Session-Expires headers added,
     // except if we are simply forwarding without applying any services.
@@ -1450,6 +1451,49 @@ TEST_F(SCSCFTest, TestEnumExternalSuccess)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs, false);
 }
 
+TEST_F(SCSCFTest, TestNoEnumWhenGRUU)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcd");
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain += ";gr=abcd";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+
+  // Even though "+15108580271" is configured for ENUM, the presence
+  // of a GRUU parameter should indicate to Sprout that this wasn't
+  // a string of dialled digits - so we won't do an ENUM lookup and
+  // will route to the local subscriber.
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestGRUUFailure)
+{
+  // Identical to TestNoEnumWhenGRUU, except that the registered
+  // binding in this test has a different instance-id ("abcde" nor
+  // "abcd"), so the GRUU doesn't match and the call should fail with
+  // a 480 error.
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  register_uri(_store, _hss_connection, "+15108580271", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob", 30, "abcde");
+
+  Message msg;
+  msg._to = "+15108580271";
+  msg._todomain += ";gr=abcd";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+
+  doSlowFailureFlow(msg, 480);
+}
+
 TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 {
   SCOPED_TRACE("");
@@ -1584,6 +1628,18 @@ TEST_F(SCSCFTest, TestValidBGCFRoute)
   doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainvalid"), hdrs);
 }
 
+TEST_F(SCSCFTest, TestValidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainanglebracket";
+  add_host_mapping("domainanglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:bgcf@domainanglebracket"), hdrs);
+}
+
 TEST_F(SCSCFTest, TestInvalidBGCFRoute)
 {
   SCOPED_TRACE("");
@@ -1592,7 +1648,29 @@ TEST_F(SCSCFTest, TestInvalidBGCFRoute)
   msg._todomain = "domainnotasipuri";
   add_host_mapping("domainnotasipuri", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*bgcf@domainnotasipuri.*"), hdrs);
+  doSlowFailureFlow(msg, 500);
+}
+
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddr)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracket";
+  add_host_mapping("domainnotasipurianglebracket", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
+}
+
+TEST_F(SCSCFTest, TestInvalidBGCFRouteNameAddrMix)
+{
+  SCOPED_TRACE("");
+  Message msg;
+  msg._to = "bgcf";
+  msg._todomain = "domainnotasipurianglebracketmix";
+  add_host_mapping("domainnotasipurianglebracketmix", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 500);
 }
 
 /// Test a forked flow - setup phase.
@@ -2998,12 +3076,12 @@ TEST_F(SCSCFTest, RecordRoutingTest)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
   free_txdata();
 }
 
@@ -3024,14 +3102,14 @@ TEST_F(SCSCFTest, RecordRoutingTestStartAndEnd)
   // - AS4's Record-Route
   // - on end of terminating handling
 
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
   stack_data.record_route_on_completion_of_originating = false;
   stack_data.record_route_on_initiation_of_terminating = false;
 }
@@ -3062,16 +3140,16 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
   // AS3, we'd have two - one for conclusion of originating processing
   // and one for initiation of terminating processing) but we don't
   // split originating and terminating handling like that yet.
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:6.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
                       "Record-Route: <sip:5.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:4.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
                       "Record-Route: <sip:1.2.3.4>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", true);
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", true);
 
   stack_data.record_route_on_initiation_of_terminating = false;
   stack_data.record_route_on_completion_of_originating = false;
@@ -3084,8 +3162,8 @@ TEST_F(SCSCFTest, RecordRoutingTestEachHop)
 TEST_F(SCSCFTest, RecordRoutingTestCollapse)
 {
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
 }
 
 // Test that even when Sprout is configured to Record-Route itself on each
@@ -3095,11 +3173,11 @@ TEST_F(SCSCFTest, RecordRoutingTestCollapseEveryHop)
 {
   stack_data.record_route_on_every_hop = true;
   // Expect 1 Record-Route
-  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-term>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>\r\n"
-                      "Record-Route: <sip:homedomain:5058;lr;service=scscf/charge-orig>", false);
+  doFourAppServerFlow("Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-term>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>\r\n"
+                      "Record-Route: <sip:homedomain:5058;lr;service=scscf;billing-role=charge-orig>", false);
   stack_data.record_route_on_every_hop = false;
 }
 

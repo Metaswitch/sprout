@@ -196,9 +196,15 @@ public:
   virtual SAS::TrailId trail() const;
 
 private:
+
+  /// Get a URI that routes to this App Server.
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool) const;
+
   SproutletTsxHelper* _helper;
   pj_pool_t* _pool;
   pjsip_route_hdr _route_set;
+  bool _record_routed;
+  std::string _rr_param_value;
 };
 
 class SproutletAppServerShim : public Sproutlet
@@ -209,8 +215,10 @@ public:
   ///
   /// @param  helper        - The service helper to use to perform
   ///                         the underlying service-related processing.
+  /// @param  alias         - Ignored.
   /// @param  req           - The received request message.
   virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                                const std::string& alias,
                                 pjsip_msg* req);
 
   /// Constructor.

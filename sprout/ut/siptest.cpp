@@ -551,7 +551,13 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
+void SipTest::register_uri(RegStore* store,
+                           FakeHSSConnection* hss,
+                           const std::string& user,
+                           const std::string& domain,
+                           const std::string& contact,
+                           int lifetime,
+                           std::string instance_id)
 {
   string uri("sip:");
   uri.append(user).append("@").append(domain);
@@ -567,6 +573,10 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
   binding->_emergency_registration = false;
+  if (!instance_id.empty())
+  {
+    binding->_params["+sip.instance"] = instance_id;
+  }
   bool ret = store->set_aor_data(uri, aor, false, 0);
   delete aor;
   EXPECT_TRUE(ret);
@@ -748,7 +758,7 @@ void SipTest::terminate_all_tsxs(int status_code)
   mod_tsx_layer_t* mod_tsx_layer = (mod_tsx_layer_t*)pjsip_tsx_layer_instance();
   pj_hash_table_t* htable = mod_tsx_layer->htable;
 
-  while (true) 
+  while (true)
   {
     // Scan through the list of transactions until we find an unterminated one.
     pj_hash_iterator_t itbuf;
@@ -756,7 +766,7 @@ void SipTest::terminate_all_tsxs(int status_code)
     pjsip_transaction* tsx = NULL;
     for (pj_hash_iterator_t* it = pj_hash_first(htable, &itbuf);
          it != NULL;
-         it = pj_hash_next(htable, it)) 
+         it = pj_hash_next(htable, it))
     {
       tsx = (pjsip_transaction*)pj_hash_this(htable, it);
       if ((tsx->state != PJSIP_TSX_STATE_TERMINATED) &&
@@ -768,7 +778,7 @@ void SipTest::terminate_all_tsxs(int status_code)
     }
     pj_mutex_unlock(mod_tsx_layer->mutex);
 
-    if (tsx == NULL) 
+    if (tsx == NULL)
     {
       // No more unterminated transactions.
       break;

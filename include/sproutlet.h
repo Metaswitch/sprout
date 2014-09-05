@@ -49,6 +49,7 @@ extern "C" {
 #include <stdint.h>
 }
 
+#include <list>
 #include "sas.h"
 
 class SproutletTsxHelper;
@@ -82,15 +83,6 @@ public:
   /// Virtual destructor.
   virtual ~SproutletTsxHelper() {}
 
-  /// Adds the service to the underlying SIP dialog with the specified dialog
-  /// identifier.
-  ///
-  /// @param  dialog_id    - The dialog identifier to be used for this service.
-  ///                        If omitted, a default unique identifier is created
-  ///                        using parameters from the SIP request.
-  ///
-  virtual void add_to_dialog(const std::string& dialog_id="") = 0;
-
   /// Returns a mutable clone of the original request.  This can be modified 
   /// and sent by the Sproutlet using the send_request call.
   ///
@@ -108,13 +100,23 @@ public:
   ///
   virtual const pjsip_route_hdr* route_hdr() const = 0;
 
-  /// Returns the dialog identifier for this service.
+  /// Returns a URI that could be used to route back to the current Sproutlet.
+  /// This URI may contain pre-loaded parameters that should not be modified
+  /// by the calling code (or the URI may cease to route as expected).
   ///
-  /// @returns             - The dialog identifier attached to this service,
-  ///                        either by this SproutletTsx instance
-  ///                        or by an earlier transaction in the same dialog.
+  /// @returns             - The SIP URI.
+  /// @param  pool         - A pool to allocate the URI from.
+  virtual pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool) const = 0;
+
+  /// Check if a given URI would be routed to the current Sproutlet if it was
+  /// recieved as the top Route header on a request.  This can be used to
+  /// locate a Sproutlet in a Route set.
   ///
-  virtual const std::string& dialog_id() const = 0;
+  /// If the URI is not a SIP URI, this function returns FALSE.
+  ///
+  /// @returns             - Whether the URI is reflexive.
+  /// @param  uri          - The URI to check.
+  virtual bool is_uri_reflexive(const pjsip_uri* uri) const = 0;
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork or for storing
@@ -331,15 +333,6 @@ public:
   virtual void on_timer_expiry(void* context) {}
 
 protected:
-  /// Adds the service to the underlying SIP dialog with the specified dialog
-  /// identifier.
-  ///
-  /// @param  dialog_id    - The dialog identifier to be used for this service.
-  ///                        If omitted, a default unique identifier is created
-  ///                        using parameters from the SIP request.
-  ///
-  void add_to_dialog(const std::string& dialog_id="")
-    {_helper->add_to_dialog(dialog_id);}
 
   /// Returns a mutable clone of the original request.  This can be modified 
   /// and sent by the Sproutlet using the send_request call.
@@ -348,6 +341,26 @@ protected:
   ///
   pjsip_msg* original_request()
     {return _helper->original_request();}
+
+  /// Returns a URI that could be used to route back to the current Sproutlet.
+  /// This URI may contain pre-loaded parameters that should not be modified
+  /// by the calling code (or the URI may cease to route as expected).
+  ///
+  /// @returns             - The SIP URI.
+  /// @param  pool         - A pool to allocate the URI from.
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t* pool)
+    {return _helper->get_reflexive_uri(pool);}
+
+  /// Check if a given URI would be routed to the current Sproutlet if it was
+  /// recieved as the top Route header on a request.  This can be used to
+  /// locate a Sproutlet in a Route set.
+  ///
+  /// If the URI is not a SIP URI, this function returns FALSE.
+  ///
+  /// @returns             - Whether the URI is reflexive.
+  /// @param  uri          - The URI to check.
+  bool is_uri_reflexive(const pjsip_uri* uri)
+    {return _helper->is_uri_reflexive(uri);}
 
   /// Returns the top Route header from the original incoming request.  This
   /// can be inpsected by the Sproutlet, but should not be modified.  Note that
@@ -359,15 +372,6 @@ protected:
   ///
   const pjsip_route_hdr* route_hdr() const
     {return _helper->route_hdr();}
-
-  /// Returns the dialog identifier for this service.
-  ///
-  /// @returns             - The dialog identifier attached to this service,
-  ///                        either by this SproutletTsx instance
-  ///                        or by an earlier transaction in the same dialog.
-  ///
-  const std::string& dialog_id() const
-    {return _helper->dialog_id();}
 
   /// Clones the request.  This is typically used when forking a request if
   /// different request modifications are required on each fork.
@@ -547,8 +551,11 @@ public:
   ///
   /// @param  helper        - The service helper to use to perform
   ///                         the underlying service-related processing.
+  /// @param  alias         - The alias of this Sproutlet that matched the
+  ///                         incoming request.
   /// @param  req           - The received request message.
   virtual SproutletTsx* get_tsx(SproutletTsxHelper* helper,
+                                const std::string& service_name,
                                 pjsip_msg* req) = 0;
 
   /// Returns the name of this service.
@@ -559,6 +566,10 @@ public:
 
   /// Returns the host name of this service.
   const std::string service_host() const { return _service_host; }
+
+  /// Returns the aliases of this service.
+  virtual const std::list<std::string> aliases() const
+    { return std::list<std::string>(); }
 
 protected:
   /// Constructor.
@@ -580,7 +591,6 @@ private:
 
   /// The host name of this service.
   const std::string _service_host;
-
 };
 
 #endif

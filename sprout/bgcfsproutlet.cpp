@@ -64,7 +64,9 @@ BGCFSproutlet::~BGCFSproutlet()
 
 /// Creates a BGCFSproutletTsx instance for performing BGCF service processing
 /// on a request.
-SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper,
+                                     const std::string& alias,
+                                     pjsip_msg* req)
 {
   return (SproutletTsx*)new BGCFSproutletTsx(helper, this);
 }
@@ -132,18 +134,26 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
          ii != bgcf_routes.end();
          ++ii)
     {
-      pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, get_pool(req));
-      if (route_uri != NULL)
+      pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, get_pool(req), PJ_TRUE);
+      route_uri = (route_uri == NULL) ? route_uri :
+                                        (pjsip_uri*)pjsip_uri_get_uri(route_uri);
+
+      if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
       {
         PJUtils::add_route_header(req, (pjsip_sip_uri*)route_uri, get_pool(req));
       }
       else
       {
+        LOG_WARNING("Configured route (%s) isn't a valid SIP URI", (*ii).c_str());
+
         pjsip_msg* rsp = create_response(req, PJSIP_SC_INTERNAL_SERVER_ERROR);
         send_response(rsp);
         free_msg(req);
+
+        return;
       }
     }
+
     send_request(req);
   }
   else

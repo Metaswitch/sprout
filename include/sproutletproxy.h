@@ -44,6 +44,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <list>
 
 #include "basicproxy.h"
@@ -56,9 +57,15 @@ class SproutletProxy : public BasicProxy
 {
 public:
   /// Constructor.
+  ///
+  /// @param  endpt         - The pjsip endpoint to associate with.
+  /// @param  priority      - The pjsip priority to load at.
+  /// @param  host_aliases  - The IP addresses/domains that refer to this proxy.
+  /// @param  sproutlets    - Sproutlets to load in this proxy.
   SproutletProxy(pjsip_endpoint* endpt,
                  int priority,
-                 const std::string& uri,
+                 const std::string& root_uri,
+                 const std::unordered_set<std::string>& host_aliases,
                  const std::list<Sproutlet*>& sproutlets);
 
   /// Destructor.
@@ -74,21 +81,26 @@ protected:
   /// Create Sproutlet UAS transaction objects.
   BasicProxy::UASTsx* create_uas_tsx();
 
-  /// Gets the need target Sproutlet for the message by analysing the top
+  /// Gets the next target Sproutlet for the message by analysing the top
   /// Route header.
-  Sproutlet* target_sproutlet(pjsip_msg* req, int port);
+  Sproutlet* target_sproutlet(pjsip_msg* req, int port, std::string& alias);
+
+  /// Compare a SIP URI to a Sproutlet to see if they are a match (e.g.
+  /// a message targeted at that URI would arrive at the given Sproutlet).
+  bool does_uri_match_sproutlet(const pjsip_uri* uri,
+                                Sproutlet* sproutlet,
+                                std::string& alias);
+
+  /// Create a URI that routes to a given Sproutlet.
+  pjsip_sip_uri* create_sproutlet_uri(pj_pool_t* pool,
+                                      Sproutlet* sproutlet) const;
 
   Sproutlet* service_from_host(pjsip_sip_uri* uri);
   Sproutlet* service_from_user(pjsip_sip_uri* uri);
   Sproutlet* service_from_params(pjsip_sip_uri* uri);
 
-  void add_record_route(pjsip_tx_data* tdata,
-                        const std::string& service_name,
-                        const std::string& dialog_id);
-
-  bool is_uri_local(pjsip_uri* uri);
-  bool is_uri_local(pjsip_sip_uri* uri);
-  bool is_host_local(pj_str_t* host);
+  bool is_uri_local(const pjsip_uri* uri);
+  bool is_host_local(const pj_str_t* host);
 
   /// Defintion of a timer set by an child sproutlet transaction.
   struct SproutletTimerCallbackData
@@ -164,11 +176,7 @@ protected:
 
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
-    Sproutlet* target_sproutlet(pjsip_msg* msg, int port);
-
-    void add_record_route(pjsip_tx_data* tdata,
-                          const std::string& service_name,
-                          const std::string& dialog_id);
+    Sproutlet* target_sproutlet(pjsip_msg* msg, int port, std::string& alias);
 
     /// Checks to see if it is safe to destroy the UASTsx.
     void check_destroy();
@@ -210,11 +218,10 @@ protected:
     friend class SproutletWrapper;
   };
 
-  pjsip_sip_uri* _uri;
+  pjsip_sip_uri* _root_uri;
+  std::unordered_set<std::string> _host_aliases;
 
-  std::map<std::string, Sproutlet*> _service_name_map;
-  std::map<std::string, Sproutlet*> _service_host_map;
-  std::map<int, Sproutlet*> _port_map;
+  std::list<Sproutlet*> _sproutlets;
 
   static const pj_str_t STR_SERVICE;
 
@@ -230,6 +237,7 @@ public:
   SproutletWrapper(SproutletProxy* proxy,
                    SproutletProxy::UASTsx* proxy_tsx,
                    Sproutlet* sproutlet,
+                   const std::string& sproutlet_alias,
                    pjsip_tx_data* req,
                    SAS::TrailId trail_id);
 
@@ -261,6 +269,8 @@ public:
   void cancel_timer(TimerID id);
   bool timer_running(TimerID id);
   SAS::TrailId trail() const;
+  bool is_uri_reflexive(const pjsip_uri*) const;
+  pjsip_sip_uri* get_reflexive_uri(pj_pool_t*) const;
 
 private:
   void rx_request(pjsip_tx_data* req);
@@ -278,14 +288,15 @@ private:
   void tx_response(pjsip_tx_data* rsp);
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
-
-  bool is_uri_local(pjsip_uri* uri) const;
+  bool is_uri_local(const pjsip_uri*) const;
 
   SproutletProxy* _proxy;
 
   SproutletProxy::UASTsx* _proxy_tsx;
 
-  SproutletTsx* _sproutlet;
+  Sproutlet* _sproutlet;
+
+  SproutletTsx* _sproutlet_tsx;
 
   std::string _service_name;
   std::string _service_host;
@@ -306,11 +317,6 @@ private:
 
   typedef std::list<pjsip_tx_data*> Responses;
   Responses _send_responses;
-
-  bool _in_dialog;
-
-  std::string _dialog_id;
-  bool _record_routed;
 
   int _pending_sends;
   int _pending_responses;
