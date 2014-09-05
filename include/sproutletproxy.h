@@ -251,7 +251,7 @@ public:
                              pjsip_status_code status_code,
                              const std::string& status_text="");
   int send_request(pjsip_msg*& req);
-  void send_response(pjsip_msg*& rsp); 
+  void send_response(pjsip_msg*& rsp);
   void cancel_fork(int fork_id, int reason=0);
   void cancel_pending_forks(int reason=0);
   const ForkState& fork_state(int fork_id);

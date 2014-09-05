@@ -68,7 +68,7 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
   LOG_DEBUG("Store onward route-set for request");
   pjsip_route_hdr* hroute = (pjsip_route_hdr*)
                                 pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-  while (hroute != NULL) 
+  while (hroute != NULL)
   {
     LOG_DEBUG("Store header: %s",
               PJUtils::hdr_to_string((pjsip_hdr*)hroute).c_str());
@@ -78,7 +78,7 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
   }
 }
 
-/// Returns a mutable clone of the original request.  This can be modified 
+/// Returns a mutable clone of the original request.  This can be modified
 /// and sent by the application using the send_request call.
 ///
 /// @returns             - A clone of the original request message.
@@ -158,7 +158,7 @@ pjsip_msg* SproutletAppServerTsxHelper::create_response(pjsip_msg* req,
 /// original upstream request and may also be called during response processing
 /// or an original request to create a late fork.  When processing an in-dialog
 /// request this function may only be called once.
-/// 
+///
 /// This function may be called while processing initial requests,
 /// in-dialog requests and cancels but not during response handling.
 ///
@@ -169,7 +169,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
   // We don't allow app servers to handle Route headers, so remove all
   // existing Route headers from the request and restore the onward route set
   // stored from the original request.
-  while (pjsip_msg_find_remove_hdr(req, PJSIP_H_ROUTE, NULL) != NULL); 
+  while (pjsip_msg_find_remove_hdr(req, PJSIP_H_ROUTE, NULL) != NULL);
 
   pjsip_route_hdr* hroute = _route_set.next;
   while ((hroute != NULL) && (hroute != &_route_set))
@@ -186,7 +186,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
 /// Indicate that the response should be forwarded following standard routing
 /// rules.  Note that, if this service created multiple forks, the responses
 /// will be aggregated before being sent downstream.
-/// 
+///
 /// This function may be called while handling any response.
 ///
 /// @param  rsp          - The response message to use for forwarding.
@@ -278,14 +278,14 @@ SproutletTsx* SproutletAppServerShim::get_tsx(SproutletTsxHelper* helper,
   tsx = new SproutletAppServerShimTsx(helper,
                                       shim_helper,
                                       app_tsx);
-  
+
   return tsx;
 }
 
 /// Constructor.
 SproutletAppServerShimTsx::SproutletAppServerShimTsx(SproutletTsxHelper* sproutlet_helper,
                                                      SproutletAppServerTsxHelper*& app_server_helper,
-                                                     AppServerTsx* app_tsx) : 
+                                                     AppServerTsx* app_tsx) :
   SproutletTsx(sproutlet_helper),
   _app_server_helper(app_server_helper),
   _app_tsx(app_tsx)

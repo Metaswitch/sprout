@@ -255,7 +255,7 @@ private:
   ACR* _acr;
 
   /// State information when the request is routed to UE bindings.  This is
-  /// used in cases where a request fails with a Flow Failed status code 
+  /// used in cases where a request fails with a Flow Failed status code
   /// (as defined in RFC5626) indicating the binding is no longer valid.
   std::string _target_aor;
   std::unordered_map<int, std::string> _target_bindings;

@@ -1475,7 +1475,7 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
     _forks[fork_id].req = NULL;
     --_pending_responses;
 
-    if (status == PJ_SUCCESS) 
+    if (status == PJ_SUCCESS)
     {
       // Pass the response to the application.
       register_tdata(rsp);

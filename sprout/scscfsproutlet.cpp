@@ -48,7 +48,7 @@
 #include "contact_filtering.h"
 #include "scscfsproutlet.h"
 
-/// SCSCFSproutlet constructor.                           
+/// SCSCFSproutlet constructor.
 SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
@@ -64,7 +64,7 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   _scscf_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
-  _store(store), 
+  _store(store),
   _remote_store(remote_store),
   _hss(hss),
   _enum_service(enum_service),
@@ -80,19 +80,19 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
   _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
-  if (_scscf_uri == NULL) 
+  if (_scscf_uri == NULL)
   {
     LOG_ERROR("Invalid S-CSCF URI %s", scscf_uri.c_str());
   }
   _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
-  if (_bgcf_uri == NULL) 
+  if (_bgcf_uri == NULL)
   {
     LOG_ERROR("Invalid BGCF URI %s", bgcf_uri.c_str());
   }
-  if (icscf_uri != "") 
+  if (icscf_uri != "")
   {
     _icscf_uri = PJUtils::uri_from_string(icscf_uri, stack_data.pool, false);
-    if (_icscf_uri == NULL) 
+    if (_icscf_uri == NULL)
     {
       LOG_ERROR("Invalid I-CSCF URI %s", icscf_uri.c_str());
     }
@@ -203,7 +203,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
   std::string user;
   std::string uri;
 
-  if (_enum_service != NULL) 
+  if (_enum_service != NULL)
   {
     // ENUM is enabled.
     LOG_DEBUG("ENUM is enabled");
@@ -279,7 +279,7 @@ bool SCSCFSproutlet::is_user_global(const std::string& user)
   return false;
 }
 
-                   
+
 SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
                                      SCSCFSproutlet* scscf) :
   SproutletTsx(helper),
@@ -292,7 +292,7 @@ SCSCFSproutletTsx::SCSCFSproutletTsx(SproutletTsxHelper* helper,
   _uris(),
   _ifcs(),
   _acr(NULL),
-  _target_aor(),        
+  _target_aor(),
   _target_bindings(),
   _liveness_timer(0)
 {
@@ -310,12 +310,12 @@ SCSCFSproutletTsx::~SCSCFSproutletTsx()
     delete _acr;
   }
 
-  if (_as_chain_link.is_set()) 
+  if (_as_chain_link.is_set())
   {
     _as_chain_link.release();
   }
 
-  if (_liveness_timer != 0) 
+  if (_liveness_timer != 0)
   {
     cancel_timer(_liveness_timer);
   }
@@ -338,7 +338,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // services.
   status_code = determine_served_user(req);
 
-  if (_acr == NULL) 
+  if (_acr == NULL)
   {
     // No ACR found or created while determining the served user, so create
     // a new one.
@@ -351,7 +351,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // @TODO - request timestamp???
   _acr->rx_request(req);
 
-  if (status_code != PJSIP_SC_OK) 
+  if (status_code != PJSIP_SC_OK)
   {
     // Failed to determine the served user for a request we should provide
     // services on, so reject the request.
@@ -361,11 +361,11 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     send_response(rsp);
     free_msg(req);
   }
-  else if (_as_chain_link.is_set()) 
+  else if (_as_chain_link.is_set())
   {
     // AS chain is set up, so must apply services to the request.
     LOG_INFO("Found served user, so apply services");
-    if (_session_case->is_originating()) 
+    if (_session_case->is_originating())
     {
       apply_originating_services(req);
     }
@@ -405,7 +405,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
 void SCSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
@@ -420,7 +420,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   // Pass the received response to the ACR.
   // @TODO - timestamp from response???
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     _acr->rx_response(rsp);
   }
@@ -434,7 +434,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
   int st_code = rsp->line.status.code;
 
-  if (st_code == SIP_STATUS_FLOW_FAILED) 
+  if (st_code == SIP_STATUS_FLOW_FAILED)
   {
     // The edge proxy / P-CSCF has reported that this flow has failed.
     // We should remove the binding from the registration store so we don't
@@ -442,7 +442,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // @TODO - this code has been removed from stateful_proxy, not sure why???
   }
 
-  if (_as_chain_link.is_set()) 
+  if (_as_chain_link.is_set())
   {
     // Pass the response code to the controlling AsChain for accounting.
     _as_chain_link.on_response(st_code);
@@ -462,7 +462,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
         LOG_DEBUG("Trigger default_handling=CONTINUE processing");
         _as_chain_link = _as_chain_link.next();
         pjsip_msg* req = original_request();
-        if (_session_case->is_originating()) 
+        if (_session_case->is_originating())
         {
           apply_originating_services(req);
         }
@@ -477,7 +477,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
   }
 
-  if (rsp != NULL) 
+  if (rsp != NULL)
   {
     // Forward the response upstream.  The proxy layer will aggregate responses
     // if required.
@@ -486,9 +486,9 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp) 
+void SCSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.
@@ -639,7 +639,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       if (stack_data.record_route_on_every_hop)
       {
         LOG_DEBUG("Add service to dialog - AS hop");
-        if (_session_case->is_terminating()) 
+        if (_session_case->is_terminating())
         {
           add_to_dialog("charge-term");
         }
@@ -804,9 +804,9 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
   std::string server_name;
   _as_chain_link.on_initial_request(req, server_name);
 
-  if (!server_name.empty()) 
+  if (!server_name.empty())
   {
-    // We've should have identified an application server to be invoked, so 
+    // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
     route_to_as(req, server_name);
   }
@@ -858,9 +858,9 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
   std::string server_name;
   _as_chain_link.on_initial_request(req, server_name);
 
-  if (!server_name.empty()) 
+  if (!server_name.empty())
   {
-    // We've should have identified an application server to be invoked, so 
+    // We've should have identified an application server to be invoked, so
     // encode the app server hop and the return hop in Route headers.
     route_to_as(req, server_name);
   }
@@ -870,7 +870,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     // request processing.
     LOG_INFO("Completed applying originating services");
 
-    if (stack_data.record_route_on_completion_of_terminating) 
+    if (stack_data.record_route_on_completion_of_terminating)
     {
       LOG_DEBUG("Add service to dialog - end of terminating handling");
       add_to_dialog("charge-term");
@@ -901,7 +901,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
   PJUtils::remove_hdr(req, &STR_P_SERVED_USER);
   pj_pool_t* pool = get_pool(req);
   pjsip_routing_hdr* psu_hdr = identity_hdr_create(pool, STR_P_SERVED_USER);
-  psu_hdr->name_addr.uri = 
+  psu_hdr->name_addr.uri =
                   PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
   pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
   pj_strdup2(pool, &p->name, "sescase");
@@ -911,7 +911,7 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
   {
     p = PJ_POOL_ALLOC_T(pool, pjsip_param);
     pj_strdup2(pool, &p->name, "regstate");
-    if (_as_chain_link.is_registered()) 
+    if (_as_chain_link.is_registered())
     {
       pj_strdup2(pool, &p->value, "reg");
     }
@@ -958,10 +958,10 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
 {
   const pjsip_uri* icscf_uri = _scscf->icscf_uri();
 
-  if (icscf_uri != NULL) 
+  if (icscf_uri != NULL)
   {
     // I-CSCF is enabled, so route to it.
-    LOG_INFO("Routing to I-CSCF %s", 
+    LOG_INFO("Routing to I-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, icscf_uri).c_str());
     PJUtils::add_route_header(req,
                               (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req), icscf_uri),
@@ -1104,7 +1104,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                              targets,
                              trail());
 
-  if (targets.empty()) 
+  if (targets.empty())
   {
     // No valid target bindings for this request, so reject it.
     pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
@@ -1116,7 +1116,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     // Fork the request to the bindings, and remember the AoR used to query
     // the registration store and the binding identifier for each fork.
     _target_aor = aor;
-    for (size_t ii = 0; ii < targets.size(); ++ii) 
+    for (size_t ii = 0; ii < targets.size(); ++ii)
     {
       // Clone for all but the last request.
       pjsip_msg* to_send = (ii == targets.size() - 1) ? req : clone_request(req);
@@ -1124,12 +1124,12 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
       // Set up the Rquest URI.
       to_send->line.req.uri = (pjsip_uri*)
-                                        pjsip_uri_clone(pool, targets[ii].uri); 
+                                        pjsip_uri_clone(pool, targets[ii].uri);
 
       // Copy across the path URIs in to Route headers.
       for (std::list<pjsip_uri*>::const_iterator j = targets[ii].paths.begin();
            j != targets[ii].paths.end();
-           ++j) 
+           ++j)
       {
         pjsip_sip_uri* path_uri = (pjsip_sip_uri*)pjsip_uri_get_uri(*j);
         PJUtils::add_route_header(to_send,
@@ -1201,7 +1201,7 @@ pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
 /// the HSS and stores cached values. Returns true on success, false on failure.
 bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
 {
-  if (!_hss_data_cached) 
+  if (!_hss_data_cached)
   {
     // We haven't previous read data from the HSS, so read it now.
     if (_scscf->read_hss_data(public_id, _registered, _uris, _ifcs, trail()))
@@ -1284,7 +1284,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 {
   _liveness_timer = 0;
 
-  if (_as_chain_link.is_set()) 
+  if (_as_chain_link.is_set())
   {
     // The request was routed to a downstream AS, so cancel any outstanding
     // forks.
@@ -1297,7 +1297,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
       LOG_DEBUG("Trigger default_handling=CONTINUE processing");
       _as_chain_link = _as_chain_link.next();
       pjsip_msg* req = original_request();
-      if (_session_case->is_originating()) 
+      if (_session_case->is_originating())
       {
         apply_originating_services(req);
       }
