@@ -1064,10 +1064,13 @@ pj_status_t init_stack(const std::string& system_name,
   // Note that we no longer consider 127.0.0.1 and localhost as aliases.
 
   // Parse the list of alias host names.
+  stack_data.aliases = std::unordered_set<std::string>();
   if (alias_hosts != "")
   {
-    Utils::split_string(alias_hosts, ',', stack_data.aliases, 0, true);
-    for (std::list<std::string>::iterator it = stack_data.aliases.begin();
+    std::list<std::string> aliases;
+    Utils::split_string(alias_hosts, ',', aliases, 0, true);
+    stack_data.aliases.insert(aliases.begin(), aliases.end());
+    for (std::unordered_set<std::string>::iterator it = stack_data.aliases.begin();
          it != stack_data.aliases.end();
          ++it)
     {
