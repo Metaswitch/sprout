@@ -174,9 +174,6 @@ protected:
                    int fork_id,
                    pjsip_tx_data* cancel);
 
-    void tx_terminate(SproutletWrapper* upstream,
-                      int fork_id);
-
     /// Gets the next target Sproutlet for the message by analysing the top
     /// Route header.
     Sproutlet* target_sproutlet(pjsip_msg* msg, int port, std::string& alias);

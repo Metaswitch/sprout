@@ -1494,25 +1494,27 @@ BasicProxy::UACTsx::~UACTsx()
 
   if (_tsx != NULL)
   {
-    _proxy->unbind_transaction(_tsx);                                   //LCOV_EXCL_LINE
+    _proxy->unbind_transaction(_tsx);                         //LCOV_EXCL_LINE
   }
 
   if (_uas_tsx != NULL)
   {
-    _uas_tsx->dissociate(this);                                         //LCOV_EXCL_LINE
+    _uas_tsx->dissociate(this);                               //LCOV_EXCL_LINE
   }
 
   if (_tdata != NULL)
   {
-    pjsip_tx_data_dec_ref(_tdata);                                      //LCOV_EXCL_LINE
-    _tdata = NULL;                                                      //LCOV_EXCL_LINE
+    //LCOV_EXCL_START
+    pjsip_tx_data_dec_ref(_tdata);
+    _tdata = NULL;
+    //LCOV_EXCL_STOP
   }
 
   if ((_tsx != NULL) &&
       (_tsx->state != PJSIP_TSX_STATE_TERMINATED) &&
       (_tsx->state != PJSIP_TSX_STATE_DESTROYED))
   {
-    pjsip_tsx_terminate(_tsx, PJSIP_SC_INTERNAL_SERVER_ERROR);          //LCOV_EXCL_LINE
+    pjsip_tsx_terminate(_tsx, PJSIP_SC_INTERNAL_SERVER_ERROR);//LCOV_EXCL_LINE
   }
 
   _tsx = NULL;
@@ -1546,8 +1548,10 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
                                    &_tsx);
     if (status != PJ_SUCCESS)
     {
-      LOG_DEBUG("Failed to create PJSIP UAC transaction");              //LCOV_EXCL_LINE
-      return status;                                                    //LCOV_EXCL_LINE
+      //LCOV_EXCL_START
+      LOG_DEBUG("Failed to create PJSIP UAC transaction");
+      return status;
+      //LCOV_EXCL_STOP
     }
 
     // Set up the PJSIP transaction user module data to refer to the associated
@@ -1683,15 +1687,19 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
         pj_status_t status = PJUtils::send_request(cancel, 1);
         if (status != PJ_SUCCESS)
         {
-          LOG_ERROR("Error sending CANCEL, %s",                           //LCOV_EXCL_LINE
-                    PJUtils::pj_status_to_string(status).c_str());        //LCOV_EXCL_LINE
+          //LCOV_EXCL_START
+          LOG_ERROR("Error sending CANCEL, %s",
+                    PJUtils::pj_status_to_string(status).c_str());
+          //LCOV_EXCL_STOP
         }
       }
       else
       {
         // Non-INVITE transaction, so terminate the transaction immediately.
+        //LCOV_EXCL_START
         LOG_DEBUG("Terminate transaction immediately");
         pjsip_tsx_terminate(_tsx, st_code);
+        //LCOV_EXCL_STOP
       }
     }
 
