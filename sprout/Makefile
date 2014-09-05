@@ -136,7 +136,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        contact_filtering_test.cpp \
                        appserver_test.cpp \
                        scscf_test.cpp \
-											 sproutletproxy_test.cpp \
+                       sproutletproxy_test.cpp \
                        gruu_test.cpp \
                        mobiletwinned_test.cpp
 

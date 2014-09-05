@@ -63,7 +63,7 @@ public:
   {
   }
 
-  MOCK_METHOD2(get_tsx, SproutletTsx*(SproutletTsxHelper*, pjsip_msg*));
+  MOCK_METHOD3(get_tsx, SproutletTsx*(SproutletTsxHelper*, const std::string&, pjsip_msg*));
 };
 
 
@@ -97,12 +97,22 @@ public:
   FakeSproutlet(const std::string& service_name, int port, const std::string& service_host) :
     Sproutlet(service_name, port, service_host)
   {
+    _aliases.push_back("alias");
   }
 
-  SproutletTsx* get_tsx(SproutletTsxHelper* helper, pjsip_msg* req)
+  SproutletTsx* get_tsx(SproutletTsxHelper* helper, const std::string& alias, pjsip_msg* req)
   {
     return (SproutletTsx*)new T(helper);
   }
+
+  const std::list<std::string> aliases() const
+  {
+    return _aliases;
+  }
+
+private:
+
+  std::list<std::string> _aliases;
 };
 
 template <int S>
@@ -133,16 +143,39 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    if (RR) 
+    if (RR)
     {
-      add_to_dialog("1");
+      pj_pool_t* pool = get_pool(req);
+      pjsip_sip_uri* uri = get_reflexive_uri(pool);
+      pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
+      rr->name_addr.uri = (pjsip_uri*)uri;
+
+      // Add a parameter
+      pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup2(pool, &param->name, "hello");
+      pj_strdup2(pool, &param->value, "world");
+      pj_list_insert_before(&uri->other_param, param);
+
+      pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)rr);
     }
     send_request(req);
   }
 
   void on_rx_in_dialog_request(pjsip_msg* req)
   {
-    EXPECT_EQ("1", dialog_id());
+    const pjsip_route_hdr* route = route_hdr();
+    pj_str_t param_name = pj_str((char*)"hello");
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+
+    EXPECT_TRUE(is_uri_reflexive((pjsip_uri*)uri));
+
+    // Check the parameter
+    pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                          &param_name);
+    ASSERT_NE((pjsip_param*)NULL, param);
+    std::string param_value(param->value.ptr, param->value.slen);
+    EXPECT_EQ(param_value, "world");
+
     send_request(req);
   }
 
@@ -163,7 +196,7 @@ public:
 
   void on_rx_initial_request(pjsip_msg* req)
   {
-    for (int ii = 0; ii < N; ++ii) 
+    for (int ii = 0; ii < N; ++ii)
     {
       pjsip_msg* clone = clone_request(req);
       pj_pool_t* pool = get_pool(clone);
@@ -216,7 +249,7 @@ class FakeSproutletTsxDelayRedirect : public SproutletTsx
 
   void on_timer_expiry(void* context)
   {
-    if (_tid != 0) 
+    if (_tid != 0)
     {
       _tid = 0;
 
@@ -321,10 +354,15 @@ public:
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxDelayRedirect<1> >("delayredirect", 0, ""));
     _sproutlets.push_back(new FakeSproutlet<FakeSproutletTsxBad >("bad", 0, ""));
 
+    // Create a host alias.
+    std::unordered_set<std::string> host_aliases;
+    host_aliases.insert("proxy1.homedomain-alias");
+
     // Create the Sproutlet proxy.
     _proxy = new SproutletProxy(stack_data.endpt,
                                 PJSIP_MOD_PRIORITY_UA_PROXY_LAYER+1,
                                 "sip:proxy1.homedomain",
+                                host_aliases,
                                 _sproutlets);
 
     // Schedule timers.
@@ -770,7 +808,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
             get_headers(tdata->msg, "Route"));
 
   // Check a Record-Route header has been added.
-  EXPECT_EQ("Record-Route: <sip:proxy1.homedomain;lr;service=fwdrr/1>",
+  EXPECT_EQ("Record-Route: <sip:proxy1.homedomain;lr;service=fwdrr;hello=world>",
             get_headers(tdata->msg, "Record-Route"));
 
   // Send a 200 OK response.
@@ -784,6 +822,8 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
   free_txdata();
 
   // Send an ACK with the appropriate Route headers and RequestURI.
+  //
+  // Use aliases in the Record-Route headers to ensure we still route properly.
   Message msg2;
   msg2._method = "ACK";
   msg2._requri = "sip:bob@awaydomain";
@@ -791,7 +831,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForwarderRR)
   msg2._to = "sip:bob@awaydomain";
   msg2._to_tag = "abcdefg";
   msg2._via = tp->to_string(false) + "2";
-  msg2._route = "Route: <sip:proxy1.homedomain;lr;service=fwdrr/1>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg2._route = "Route: <sip:proxy1.homedomain-alias;lr;service=alias;hello=world>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
   inject_msg(msg2.get_request(), tp);
 
   // Check the ACK is forwarded.
@@ -883,7 +923,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   // be stripped and no Record-Route headers added - and send 100 Trying
   // responses.
   std::vector<pjsip_tx_data*> req;
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
@@ -897,7 +937,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
 
   // Send 180 Ringing responses on each fork and check they are passed
   // through unchanged.
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 180));
     ASSERT_EQ(1, txdata_count());
@@ -918,7 +958,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   tp->expect_target(tdata);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii) 
+  for (int ii = 1; ii < NUM_FORKS; ++ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -931,7 +971,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
     free_txdata();
   }
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii) 
+  for (int ii = 1; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 487));
     ASSERT_EQ(1, txdata_count());
@@ -960,7 +1000,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
 
   // Check the forked requests - RequestURI should be updated, Route header should
   // be stripped and no Record-Route headers added.
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
@@ -976,7 +1016,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   inject_msg(respond_to_txdata(req[0], 486));
   ASSERT_EQ(0, txdata_count());
 
-  // Send a 200 OK response from one of the forks and check that this is 
+  // Send a 200 OK response from one of the forks and check that this is
   // forwarded immediately.
   // are cancelled.
   inject_msg(respond_to_txdata(req[1], 200));
@@ -993,7 +1033,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   ASSERT_EQ(0, txdata_count());
 
   // Send in responses on the other forks and check these are absorbed.
-  for (int ii = 2; ii < NUM_FORKS; ++ii) 
+  for (int ii = 2; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 404));
     ASSERT_EQ(0, txdata_count());
@@ -1045,7 +1085,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   // be stripped and no Record-Route headers added - and send 100 Trying
   // responses.
   std::vector<pjsip_tx_data*> req;
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
@@ -1059,7 +1099,7 @@ TEST_F(SproutletProxyTest, CancelForking)
 
   // Send 180 Ringing responses on each fork and check they are passed
   // through unchanged.
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 180));
     ASSERT_EQ(1, txdata_count());
@@ -1077,16 +1117,6 @@ TEST_F(SproutletProxyTest, CancelForking)
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-#if 0
-  // Receive a 486 Busy Here response on the second fork, and check it is absorbed.
-  inject_msg(respond_to_txdata(req[1], 486));
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.20.1", 5060, tdata);
-  ReqMatcher("ACK").matches(tdata->msg);
-  free_txdata();
-#endif
-
   // Send a CANCEL for the original INVITE.
   msg1._method = "CANCEL";
   inject_msg(msg1.get_request(), tp);
@@ -1098,7 +1128,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii) 
+  for (int ii = 1; ii < NUM_FORKS; ++ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1112,7 +1142,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   }
 
   // Send in 487 responses for all but the last fork.
-  for (int ii = 1; ii < NUM_FORKS - 1; ++ii) 
+  for (int ii = 1; ii < NUM_FORKS - 1; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 487));
     tdata = current_txdata();
@@ -1348,7 +1378,7 @@ TEST_F(SproutletProxyTest, UASError)
   // be stripped and no Record-Route headers added - and send 100 Trying
   // responses.
   std::vector<pjsip_tx_data*> req;
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     req.push_back(pop_txdata());
     expect_target("TCP", "10.10.20.1", 5060, req[ii]);
@@ -1362,7 +1392,7 @@ TEST_F(SproutletProxyTest, UASError)
 
   // Send 180 Ringing responses on each fork and check they are passed
   // through unchanged.
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 180));
     ASSERT_EQ(1, txdata_count());
@@ -1383,7 +1413,7 @@ TEST_F(SproutletProxyTest, UASError)
 
   ASSERT_EQ(NUM_FORKS, txdata_count());
 
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1396,7 +1426,7 @@ TEST_F(SproutletProxyTest, UASError)
     free_txdata();
   }
 
-  for (int ii = 0; ii < NUM_FORKS; ++ii) 
+  for (int ii = 0; ii < NUM_FORKS; ++ii)
   {
     inject_msg(respond_to_txdata(req[ii], 487));
     tdata = current_txdata();

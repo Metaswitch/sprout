@@ -178,8 +178,10 @@ bool SproutletProxy::does_uri_match_sproutlet(const pjsip_uri* uri,
 {
   if (!PJSIP_URI_SCHEME_IS_SIP(uri))
   {
+    // LCOV_EXCL_START
     LOG_DEBUG("Sproutlet's cannot match non-SIP URIs");
     return false;
+    // LCOV_EXCL_STOP
   }
 
   // Now we know we have a SIP URI, cast to one.
