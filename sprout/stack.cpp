@@ -855,7 +855,6 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Get ports and host names specified on options.  If local host was not
   // specified, use the host name returned by pj_gethostname.
-  memset(&stack_data, 0, sizeof(stack_data));
   char* local_host_cstr = strdup(local_host.c_str());
   char* public_host_cstr = strdup(public_host.c_str());
   char* home_domain_cstr = strdup(home_domain.c_str());

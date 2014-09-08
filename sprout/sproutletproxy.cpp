@@ -708,9 +708,21 @@ void SproutletProxy::UASTsx::schedule_requests()
     }
     else
     {
-      // No local Sproutlet, so route the request externally.
+      // No local Sproutlet, proxy the request.
+      LOG_DEBUG("No local sproutlet matches request");
+      pjsip_route_hdr* rhdr = (pjsip_route_hdr*)
+        pjsip_msg_find_hdr(req.req->msg, PJSIP_H_ROUTE, NULL);
+      if ((rhdr != NULL) &&
+          PJSIP_URI_SCHEME_IS_SIP(rhdr->name_addr.uri) &&
+          (_sproutlet_proxy->is_host_local(&((pjsip_sip_uri*)rhdr->name_addr.uri)->host)))
+      {
+        // Top route is local, strip it.
+        pj_list_erase(rhdr);
+      }
+
       size_t index;
       PJUtils::add_top_via(req.req);
+
       pj_status_t status = allocate_uac(req.req, index);
 
       if (status == PJ_SUCCESS)
