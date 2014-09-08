@@ -619,7 +619,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       downstream_acr->tx_request(tdata->msg);
     }
 
-    if (target != NULL) 
+    if (target != NULL)
     {
       // Target has already been selected for the request, so set it up on the
       // request.
@@ -664,6 +664,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
         pjsip_transport_dec_ref(target->transport);
       }
     }
+
+    // Add a via header for ACKs (this is handled in init_uac_transactions
+    // for other methods)
+    PJUtils::add_top_via(tdata);
 
     status = PJUtils::send_request_stateless(tdata);
 
@@ -1123,12 +1127,12 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
 
   std::string service_route;
 
-  if (src_flow != NULL) 
+  if (src_flow != NULL)
   {
     // See if we have a service route for the served user of the request.
     LOG_DEBUG("Request received on authentication flow - check for Service-Route");
     pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
-    if (served_user != NULL) 
+    if (served_user != NULL)
     {
       std::string user = PJUtils::public_id_from_uri(served_user);
       service_route = src_flow->service_route(user);
@@ -1140,7 +1144,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   pjsip_routing_hdr* route_hdr;
   pjsip_sip_uri* upstream_uri;
 
-  if (service_route != "") 
+  if (service_route != "")
   {
     // We have a service route, so add it as a Route header.
     upstream_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(service_route, tdata->pool, false);
@@ -1186,7 +1190,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     if (upstream_conn_pool != NULL)
     {
       target_p->transport = upstream_conn_pool->get_connection();
-      if (target_p->transport != NULL) 
+      if (target_p->transport != NULL)
       {
         pj_memcpy(&target_p->remote_addr,
                   &target_p->transport->key.rem_addr,
@@ -1516,7 +1520,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    if (*target == NULL) 
+    if (*target == NULL)
     {
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
