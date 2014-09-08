@@ -1340,6 +1340,43 @@ TEST_F(SproutletProxyTest, SproutletErrors)
 }
 
 
+TEST_F(SproutletProxyTest, UnrecognisedSproutlet)
+{
+  // Tests error handling in SproutletProxy.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a request with a Route header referencing a made-up Sproutlet.
+  Message msg1;
+  msg1._method = "MESSAGE";
+  msg1._requri = "sip:bob@awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:fwd@proxy1.homedomain;transport=TCP;lr>\r\n"
+                "Route: <sip:unrecognised@proxy1.homedomain;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // SproutletProxy would route based on ReqURI and route to awaydomain.
+  // This fails DNS lookup so the request id rejected with a 503.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(503).matches(tdata->msg);
+  free_txdata();
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+
+
 TEST_F(SproutletProxyTest, UASError)
 {
   // Tests handling of errors on the UAS side of a Sproutlet transaction.
