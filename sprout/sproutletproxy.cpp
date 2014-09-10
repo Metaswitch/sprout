@@ -470,7 +470,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
       else
       {
         // There is no top Route header in the request, so forwarding it will
-        // result in a loop.  There is no option other than rejecting the
+        // result in a loop.  There is no option other than to reject the
         // request.
         LOG_INFO("Reject request");
         status = PJ_ENOTSUP;
