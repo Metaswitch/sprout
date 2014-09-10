@@ -1358,16 +1358,32 @@ TEST_F(SproutletProxyTest, UnrecognisedSproutlet)
   msg1._from = "sip:alice@homedomain";
   msg1._to = "sip:bob@awaydomain";
   msg1._via = tp->to_string(false);
-  msg1._route = "Route: <sip:fwd@proxy1.homedomain;transport=TCP;lr>\r\n"
-                "Route: <sip:unrecognised@proxy1.homedomain;transport=TCP;lr>";
+  msg1._route = "Route: <sip:unrecognised@proxy1.homedomain;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
   // SproutletProxy would route based on ReqURI and route to awaydomain.
-  // This fails DNS lookup so the request id rejected with a 503.
+  // This fails DNS lookup so the request is rejected with a 503.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
   RespMatcher(503).matches(tdata->msg);
+  free_txdata();
+
+  // Inject a request with no Route header.
+  Message msg2;
+  msg2._method = "MESSAGE";
+  msg2._requri = "sip:bob@awaydomain";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false);
+  inject_msg(msg2.get_request(), tp);
+
+  // SproutletProxy doesn't find a Route header, so can't select a suitable
+  // Sproutlet, so rejects the request.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(500).matches(tdata->msg);
   free_txdata();
 
   // All done!
