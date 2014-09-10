@@ -462,7 +462,7 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
       if (route != NULL)
       {
         // There is a top Route header in the request, which by definition
-        // cause the request to be routed to this node, so remove it and
+        // caused the request to be routed to this node, so remove it and
         // allow the request to be forwarded.
         LOG_INFO("Remove top Route header and forward request");
         pj_list_erase(route);
