@@ -452,12 +452,40 @@ pj_status_t SproutletProxy::UASTsx::init(pjsip_rx_data* rdata)
                    target_sproutlet(_req->msg,
                                     rdata->tp_info.transport->local_name.port,
                                     alias);
-    _root = new SproutletWrapper(_sproutlet_proxy,
-                                 this,
-                                 sproutlet,
-                                 alias,
-                                 _req,
-                                 trail());
+
+    if (sproutlet == NULL)
+    {
+      // Failed to find a target Sproutlet for this request, so we need to
+      // decide what to do.
+      pjsip_route_hdr* route = (pjsip_route_hdr*)
+                  pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_ROUTE, NULL);
+      if (route != NULL)
+      {
+        // There is a top Route header in the request, which by definition
+        // cause the request to be routed to this node, so remove it and
+        // allow the request to be forwarded.
+        LOG_INFO("Remove top Route header and forward request");
+        pj_list_erase(route);
+      }
+      else
+      {
+        // There is no top Route header in the request, so forwarding it will
+        // result in a loop.  There is no option other than rejecting the
+        // request.
+        LOG_INFO("Reject request");
+        status = PJ_ENOTSUP;
+      }
+    }
+
+    if (status == PJ_SUCCESS)
+    {
+      _root = new SproutletWrapper(_sproutlet_proxy,
+                                   this,
+                                   sproutlet,
+                                   alias,
+                                   _req,
+                                   trail());
+    }
   }
 
   return status;
@@ -710,16 +738,6 @@ void SproutletProxy::UASTsx::schedule_requests()
     {
       // No local Sproutlet, proxy the request.
       LOG_DEBUG("No local sproutlet matches request");
-      pjsip_route_hdr* rhdr = (pjsip_route_hdr*)
-        pjsip_msg_find_hdr(req.req->msg, PJSIP_H_ROUTE, NULL);
-      if ((rhdr != NULL) &&
-          PJSIP_URI_SCHEME_IS_SIP(rhdr->name_addr.uri) &&
-          (_sproutlet_proxy->is_host_local(&((pjsip_sip_uri*)rhdr->name_addr.uri)->host)))
-      {
-        // Top route is local, strip it.
-        pj_list_erase(rhdr);
-      }
-
       size_t index;
       PJUtils::add_top_via(req.req);
 
