@@ -965,9 +965,18 @@ SproutletWrapper::~SproutletWrapper()
 
   if (_req != NULL)
   {
-    LOG_DEBUG("Free original request %s (%s)",
-              pjsip_tx_data_get_info(_req), _req->obj_name);
+    LOG_DEBUG("Free original request %s (%p)",
+              pjsip_tx_data_get_info(_req), _req);
     pjsip_tx_data_dec_ref(_req);
+  }
+
+  if (_best_rsp != NULL)
+  {
+    //LCOV_EXCL_START
+    LOG_DEBUG("Free unsent best response %s (%p)",
+              pjsip_tx_data_get_info(_best_rsp), _best_rsp);
+    pjsip_tx_data_dec_ref(_best_rsp);
+    //LCOV_EXCL_STOP
   }
 
   if (!_packets.empty())
@@ -1139,7 +1148,7 @@ int SproutletWrapper::send_request(pjsip_msg*& req)
               _id.c_str(), pjsip_tx_data_get_info(it->second), fork_id);
 
   // Move the clone out of the clones list.
-  _packets.erase(req);
+  deregister_tdata(it->second);
 
   // Finish up
   req = NULL;
@@ -1169,7 +1178,7 @@ void SproutletWrapper::send_response(pjsip_msg*& rsp)
   _send_responses.push_back(it->second);
 
   // Move the clone out of the clones list.
-  _packets.erase(rsp);
+  deregister_tdata(it->second);
 
   // Finish up
   rsp = NULL;
@@ -1469,6 +1478,7 @@ void SproutletWrapper::process_actions()
     // send this best response upstream.
     LOG_DEBUG("All UAC responded");
     tx_response(_best_rsp);
+    _best_rsp = NULL;
   }
 
   if (!_complete)
@@ -1560,10 +1570,10 @@ void SproutletWrapper::aggregate_response(pjsip_tx_data* rsp)
                 pjsip_tx_data_get_info(_best_rsp), _best_rsp->obj_name);
       deregister_tdata(_best_rsp);
       pjsip_tx_data_dec_ref(_best_rsp);
+      _best_rsp = NULL;
     }
-    _best_rsp = rsp;
 
-    tx_response(_best_rsp);
+    tx_response(rsp);
   }
   else
   {
@@ -1627,7 +1637,6 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   _sproutlet_tsx->on_tx_request(req->msg, fork_id);
 
   // Forward the request downstream.
-  deregister_tdata(req);
   _proxy_tsx->tx_request(this, fork_id, req);
 }
 
@@ -1643,7 +1652,6 @@ void SproutletWrapper::tx_response(pjsip_tx_data* rsp)
   }
 
   // Forward the response upstream.
-  deregister_tdata(rsp);
   _proxy_tsx->tx_response(this, rsp);
 }
 
