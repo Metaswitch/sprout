@@ -250,6 +250,12 @@ bool is_uri_gruu(pjsip_uri* uri);
 
 void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
 
+void add_pcfa_header(pjsip_msg* msg,
+                     pj_pool_t* pool,
+                     const std::deque<std::string>& ccfs,
+                     const std::deque<std::string>& ecfs,
+                     const bool replace);
+
 } // namespace PJUtils
 
 #endif
