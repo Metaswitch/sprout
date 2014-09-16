@@ -417,7 +417,15 @@ void process_subscription_request(pjsip_rx_data* rdata)
 
   // Subscriber must have already registered to be making a subscribe
   std::string state;
-  HTTPCode http_code = hss->get_registration_data(public_id, state, ifc_map, uris, trail);
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  HTTPCode http_code = hss->get_registration_data(public_id,
+                                                  state,
+                                                  ifc_map,
+                                                  uris,
+                                                  ccfs,
+                                                  ecfs,
+                                                  trail);
   if ((http_code != HTTP_OK) || (state != "REGISTERED"))
   {
     // We failed to get the list of associated URIs.  This indicates that the
@@ -458,7 +466,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Get the system time in seconds for calculating absolute expiry times.
   int now = time(NULL);
 
-  // Write to the local store, checking the remote store if there is no entry locally. If the write to the local store succeeds, then write to the remote store.
+  // Write to the local store, checking the remote store if there is no entry locally.
+  // If the write to the local store succeeds, then write to the remote store.
   pjsip_tx_data* tdata_notify = NULL;
   RegStore::AoR* aor_data = NULL;
   std::string subscription_id;
@@ -545,6 +554,13 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
+    // Add a P-Charging-Function-Addresses header to the NOTIFY if one isn't
+    // already present containing the charging addresses returned by the HSS.
+    PJUtils::add_pcfa_header(tdata_notify->msg,
+                             tdata_notify->pool,
+                             ccfs,
+                             ecfs,
+                             false);
     set_trail(tdata_notify, trail);
     status = PJUtils::send_request(tdata_notify, 0, NULL, NULL, true);
 

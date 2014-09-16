@@ -569,7 +569,17 @@ void process_register_request(pjsip_rx_data* rdata)
   SAS::report_event(event);
 
   std::string regstate;
-  HTTPCode http_code = hss->update_registration_state(public_id, private_id, HSSConnection::REG, regstate, ifc_map, uris, trail);
+  std::deque<std::string> ccfs;
+  std::deque<std::string> ecfs;
+  HTTPCode http_code = hss->update_registration_state(public_id,
+                                                      private_id,
+                                                      HSSConnection::REG,
+                                                      regstate,
+                                                      ifc_map,
+                                                      uris,
+                                                      ccfs,
+                                                      ecfs,
+                                                      trail);
   if ((http_code != HTTP_OK) || (regstate != HSSConnection::STATE_REGISTERED))
   {
     // We failed to register this subscriber at the HSS.  This indicates that the
@@ -905,6 +915,9 @@ void process_register_request(pjsip_rx_data* rdata)
     pau->name_addr.uri = PJUtils::uri_from_string(*it, tdata->pool);
     pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pau);
   }
+
+  // Add a PCFA header.
+  PJUtils::add_pcfa_header(tdata->msg, tdata->pool, ccfs, ecfs, true);
 
   // Pass the response to the ACR.
   acr->tx_response(tdata->msg);

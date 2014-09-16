@@ -179,6 +179,8 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    bool& registered,
                                    std::vector<std::string>& uris,
                                    Ifcs& ifcs,
+                                   std::deque<std::string>& ccfs,
+                                   std::deque<std::string>& ecfs,
                                    SAS::TrailId trail)
 {
   std::string regstate;
@@ -190,6 +192,8 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    regstate,
                                                    ifc_map,
                                                    uris,
+                                                   ccfs,
+                                                   ecfs,
                                                    trail);
   ifcs = ifc_map[public_id];
   registered = (regstate == HSSConnection::STATE_REGISTERED);
@@ -372,6 +376,13 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // AS chain is set up, so must apply services to the request.
     LOG_INFO("Found served user, so apply services");
+
+    // First add a P-Charging-Function-Addresses header if one is
+    // not already present for some reason. We only do this if we have
+    // the charging addresses cached (which we should do). We do this
+    // for originating and terminating services.
+    PJUtils::add_pcfa_header(req, get_pool(req), _ccfs, _ecfs, false);
+
     if (_session_case->is_originating())
     {
       apply_originating_services(req);
@@ -447,6 +458,13 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // We should remove the binding from the registration store so we don't
     // try it again.
     // @TODO - this code has been removed from stateful_proxy, not sure why???
+  }
+  else if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
+  {
+    // Final response. Add a P-Charging-Function-Addresses header if one is
+    // not already present for some reason. We only do this if we have
+    // the charging addresses cached (which we should do).
+    PJUtils::add_pcfa_header(rsp, get_pool(rsp), _ccfs, _ecfs, false);
   }
 
   if (_as_chain_link.is_set())
@@ -1211,7 +1229,13 @@ bool SCSCFSproutletTsx::get_data_from_hss(std::string public_id)
   if (!_hss_data_cached)
   {
     // We haven't previous read data from the HSS, so read it now.
-    if (_scscf->read_hss_data(public_id, _registered, _uris, _ifcs, trail()))
+    if (_scscf->read_hss_data(public_id,
+                              _registered,
+                              _uris,
+                              _ifcs,
+                              _ccfs,
+                              _ecfs,
+                              trail()))
     {
       _hss_data_cached = true;
     }

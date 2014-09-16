@@ -208,7 +208,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
   assert(status == PJ_SUCCESS);
 
   // Expires header based on 200 OK response
-  //
   pjsip_expires_hdr_create(tdata->pool, expires);
   pjsip_expires_hdr* expires_hdr = pjsip_expires_hdr_create(tdata->pool, expires);
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
@@ -217,13 +216,14 @@ void send_register_to_as(pjsip_rx_data *received_register,
   // TODO: Set P-Charging-Function-Addresses header based on HSS values
 
   if (received_register && ok_response) {
-    // Copy P-Access-Network-Info and P-Visited-Network-Id from original message
+    // Copy P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Vector
+    // from original message
     PJUtils::clone_header(&STR_P_A_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
     PJUtils::clone_header(&STR_P_V_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
-
-    // Copy P-Charging-Vector or P-Charging-Function-Addresses from original message
     PJUtils::clone_header(&STR_P_C_V, received_register->msg_info.msg, tdata->msg, tdata->pool);
-    PJUtils::clone_header(&STR_P_C_F_A, received_register->msg_info.msg, tdata->msg, tdata->pool);
+
+    // Copy P-Charging-Function-Addresses from the OK response.
+    PJUtils::clone_header(&STR_P_C_F_A, ok_response->msg, tdata->msg, tdata->pool);
 
     // Generate a message body based on Filter Criteria values
     char buf[MAX_SIP_MSG_SIZE];
