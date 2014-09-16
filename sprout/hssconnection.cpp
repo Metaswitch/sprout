@@ -237,6 +237,8 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
                           std::vector<std::string>& associated_uris,
+                          std::deque<std::string>& ccfs,
+                          std::deque<std::string>& ecfs,
                           bool allowNoIMS)
 {
   rapidxml::xml_node<>* sp = NULL;
@@ -299,6 +301,46 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
       }
     }
   }
+
+  rapidxml::xml_node<>* cas = cw->first_node("ChargingAddresses");
+
+  if (cas)
+  {
+    rapidxml::xml_node<>* ccf = NULL;
+    rapidxml::xml_node<>* ecf = NULL;
+
+    for (ccf = cas->first_node("CCF"); ccf != NULL; ccf = ccf->next_sibling("CCF"))
+    {
+      // We only expect up to two CCFs. Make sure the CCF with priority 1 is
+      // at the front of the deque.
+      if (strcmp(ccf->first_attribute("priority")->value(), "1"))
+      {
+        LOG_DEBUG("Found primary CCF from HSS XML - %s", ccf->value());
+        ccfs.push_front(ccf->value());
+      }
+      else
+      {
+        LOG_DEBUG("Found secondary CCF from HSS XML - %s", ccf->value());
+        ccfs.push_back(ccf->value());
+      }
+    }
+
+    for (ecf = cas->first_node("ECF"); ecf != NULL; ecf = ecf->next_sibling("ECF"))
+    {
+      // We only expect up to two ECFs. Make sure the ECF with priority 1 is
+      // at the front of the deque.
+      if (strcmp(ecf->first_attribute("priority")->value(), "1"))
+      {
+        LOG_DEBUG("Found primary ECF from HSS XML - %s", ecf->value());
+        ecfs.push_front(ecf->value());
+      }
+      else
+      {
+        LOG_DEBUG("Found secondary ECF from HSS XML - %s", ecf->value());
+        ecfs.push_back(ecf->value());
+      }
+    }
+  }
   return true;
 }
 
@@ -312,17 +354,42 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
                                                   const std::string& private_user_identity,
                                                   const std::string& type,
+                                                  std::string& regstate,
+                                                  std::map<std::string, Ifcs >& ifcs_map,
+                                                  std::vector<std::string>& associated_uris,
+                                                  SAS::TrailId trail)
+{
+  std::deque<std::string> unused_ccfs;
+  std::deque<std::string> unused_ecfs;
+  return update_registration_state(public_user_identity,
+                                   private_user_identity,
+                                   type,
+                                   regstate,
+                                   ifcs_map,
+                                   associated_uris,
+                                   unused_ccfs,
+                                   unused_ecfs,
+                                   trail);
+}
+
+HTTPCode HSSConnection::update_registration_state(const std::string& public_user_identity,
+                                                  const std::string& private_user_identity,
+                                                  const std::string& type,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   std::vector<std::string>& associated_uris,
                                                   SAS::TrailId trail)
 {
   std::string unused;
+  std::deque<std::string> unused_ccfs;
+  std::deque<std::string> unused_ecfs;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
                                    type,
                                    unused,
                                    ifcs_map,
                                    associated_uris,
+                                   unused_ccfs,
+                                   unused_ecfs,
                                    trail);
 }
 
@@ -334,12 +401,16 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
   std::map<std::string, Ifcs > ifcs_map;
   std::vector<std::string> associated_uris;
   std::string unused;
+  std::deque<std::string> unused_ccfs;
+  std::deque<std::string> unused_ecfs;
   return update_registration_state(public_user_identity,
                                    private_user_identity,
                                    type,
                                    unused,
                                    ifcs_map,
                                    associated_uris,
+                                   unused_ccfs,
+                                   unused_ecfs,
                                    trail);
 }
 
@@ -350,6 +421,8 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
                                                   std::string& regstate,
                                                   std::map<std::string, Ifcs >& ifcs_map,
                                                   std::vector<std::string>& associated_uris,
+                                                  std::deque<std::string>& ccfs,
+                                                  std::deque<std::string>& ecfs,
                                                   SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -397,13 +470,32 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     return http_code;
   }
 
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, false) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, ccfs, ecfs, false) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
                                               std::string& regstate,
                                               std::map<std::string, Ifcs >& ifcs_map,
                                               std::vector<std::string>& associated_uris,
+                                              SAS::TrailId trail)
+{
+  std::deque<std::string> unused_ccfs;
+  std::deque<std::string> unused_ecfs;
+  return get_registration_data(public_user_identity,
+                               regstate,
+                               ifcs_map,
+                               associated_uris,
+                               unused_ccfs,
+                               unused_ecfs,
+                               trail);
+}
+
+HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
+                                              std::string& regstate,
+                                              std::map<std::string, Ifcs >& ifcs_map,
+                                              std::vector<std::string>& associated_uris,
+                                              std::deque<std::string>& ccfs,
+                                              std::deque<std::string>& ecfs,
                                               SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -447,7 +539,7 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   // Return whether the XML was successfully decoded. The XML can be decoded and
   // not return any IFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of IFCs.
-  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, true) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return decode_homestead_xml(root, regstate, ifcs_map, associated_uris, ccfs, ecfs, true) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 
