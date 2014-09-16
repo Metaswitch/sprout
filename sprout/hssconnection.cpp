@@ -289,7 +289,6 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
 
     for (public_id = sp->first_node("PublicIdentity"); public_id != NULL; public_id = public_id->next_sibling("PublicIdentity"))
     {
-
       rapidxml::xml_node<>* identity = public_id->first_node("Identity");
       if (identity)
       {
@@ -313,7 +312,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
     {
       // We only expect up to two CCFs. Make sure the CCF with priority 1 is
       // at the front of the deque.
-      if (strcmp(ccf->first_attribute("priority")->value(), "1"))
+      if (!strcmp(ccf->first_attribute("priority")->value(), "1"))
       {
         LOG_DEBUG("Found primary CCF from HSS XML - %s", ccf->value());
         ccfs.push_front(ccf->value());
@@ -329,7 +328,7 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
     {
       // We only expect up to two ECFs. Make sure the ECF with priority 1 is
       // at the front of the deque.
-      if (strcmp(ecf->first_attribute("priority")->value(), "1"))
+      if (!strcmp(ecf->first_attribute("priority")->value(), "1"))
       {
         LOG_DEBUG("Found primary ECF from HSS XML - %s", ecf->value());
         ecfs.push_front(ecf->value());

@@ -1935,7 +1935,8 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
   pjsip_p_c_f_a_hdr* pcfa_hdr =
     (pjsip_p_c_f_a_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
 
-  if ((pcfa_hdr == NULL) || (replace))
+  if (((pcfa_hdr == NULL) || (replace)) &&
+      ((!ccfs.empty()) || (!ecfs.empty())))
   {
     if (pcfa_hdr != NULL)
     {
