@@ -66,7 +66,7 @@ BasicProxy::BasicProxy(pjsip_endpoint* endpt,
                        bool delay_trying) :
   _mod_proxy(this, endpt, name, priority, PJMODULE_MASK_PROXY),
   _mod_tu(this, endpt, name + "-tu", priority, PJMODULE_MASK_TU),
-  _delay_trying(delay_trying), 
+  _delay_trying(delay_trying),
   _endpt(endpt)
 {
 }
@@ -494,7 +494,7 @@ BasicProxy::UASTsx::~UASTsx()
     // LCOV_EXCL_STOP
   }
 
-  if (_lock != NULL) 
+  if (_lock != NULL)
   {
     pj_grp_lock_release(_lock);
     pj_grp_lock_dec_ref(_lock);
@@ -611,7 +611,7 @@ void BasicProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
     }
   }
 
-  if (status_code == PJSIP_SC_OK) 
+  if (status_code == PJSIP_SC_OK)
   {
     // Now set up the data structures and transactions required to
     // process the request and send it.
@@ -636,7 +636,7 @@ void BasicProxy::UASTsx::process_tsx_request(pjsip_rx_data* rdata)
   }
   else if (status_code != PJSIP_SC_OK)
   {
-    // Failed to forward the request, so send a response with the appropriate 
+    // Failed to forward the request, so send a response with the appropriate
     // status code.
     send_response(status_code);
   }
@@ -866,7 +866,7 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
     // Set the target information in the request.
     Target* target = _targets.front();
     _targets.pop_front();
-    set_req_target(uac_tdata, target); 
+    set_req_target(uac_tdata, target);
     delete target;
 
     // Forward the request.
@@ -876,7 +876,7 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
     LOG_DEBUG("Sending request, pending %d sends and %d responses",
               _pending_sends, _pending_responses);
     status = forward_request(uac_tdata, index);
-    if (status != PJ_SUCCESS) 
+    if (status != PJ_SUCCESS)
     {
       // @TODO - handle errors better!!
       // LCOV_EXCL_START
@@ -1193,7 +1193,7 @@ void BasicProxy::UASTsx::send_response(int st_code, const pj_str_t* st_text)
                                                     st_code,
                                                     st_text,
                                                     &prov_rsp);
-      if (status == PJ_SUCCESS) 
+      if (status == PJ_SUCCESS)
       {
         set_trail(prov_rsp, trail());
         on_tx_response(prov_rsp);
@@ -1519,7 +1519,7 @@ BasicProxy::UACTsx::~UACTsx()
 
   _tsx = NULL;
 
-  if (_lock != NULL) 
+  if (_lock != NULL)
   {
     pj_grp_lock_release(_lock);
     pj_grp_lock_dec_ref(_lock);
@@ -1534,7 +1534,7 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 
   _trail = _uas_tsx->trail();
 
-  if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD) 
+  if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Use the lock associated with the PJSIP UAS transaction.
     _lock = _uas_tsx->_lock;
@@ -1665,7 +1665,7 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
     LOG_DEBUG("Found transaction %s status=%d", name(), _tsx->status_code);
     if (_tsx->status_code < 200)
     {
-      if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD) 
+      if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD)
       {
         LOG_DEBUG("Sending CANCEL request");
         pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
@@ -1745,12 +1745,12 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
         retrying = retry_request();
       }
       else if ((_tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
-               (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
+               (_tsx->status_code == PJSIP_SC_SERVICE_UNAVAILABLE))
       {
-        // The server returned a 5xx error.  We don't blacklist in this case
+        // The server returned a 503 error.  We don't blacklist in this case
         // as it may indicated a transient overload condition, but we can
         // retry to an alternate server if one is available.
-        LOG_DEBUG("Server return 5xx error");
+        LOG_DEBUG("Server return 503 error");
         retrying = retry_request();
       }
     }
@@ -1900,7 +1900,7 @@ bool BasicProxy::UACTsx::retry_request()
 /// exit_context must be called before the end of the method.
 void BasicProxy::UACTsx::enter_context()
 {
-  if (_lock != NULL) 
+  if (_lock != NULL)
   {
     // Take the group lock.
     pj_grp_lock_acquire(_lock);

@@ -4375,9 +4375,9 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         retrying = retry_request();
       }
       else if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
-               (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
+               (_tsx->status_code == PJSIP_SC_SERVICE_UNAVAILABLE))
       {
-        // The server returned a 5xx error.  We don't blacklist in this case
+        // The server returned a 503 error.  We don't blacklist in this case
         // as it may indicated a transient overload condition, but we can
         // retry to an alternate server if one is available.
         retrying = retry_request();
