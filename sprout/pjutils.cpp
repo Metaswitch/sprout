@@ -1926,11 +1926,11 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
 // Add a P-Charging-Function-Addresses header to a SIP message. The header is
 // added if it doesn't already exist, and replaced when the replace flag is
 // set to TRUE.
-void add_pcfa_header(pjsip_msg* msg,
-                     pj_pool_t* pool,
-                     const std::deque<std::string>& ccfs,
-                     const std::deque<std::string>& ecfs,
-                     const bool replace)
+void PJUtils::add_pcfa_header(pjsip_msg* msg,
+                              pj_pool_t* pool,
+                              const std::deque<std::string>& ccfs,
+                              const std::deque<std::string>& ecfs,
+                              const bool replace)
 {
   pjsip_p_c_f_a_hdr* pcfa_hdr =
     (pjsip_p_c_f_a_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);

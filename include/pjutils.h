@@ -51,6 +51,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include <deque>
 #include "sas.h"
 #include "sipresolver.h"
 
