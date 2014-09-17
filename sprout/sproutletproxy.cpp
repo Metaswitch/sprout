@@ -45,7 +45,6 @@ extern "C" {
 #include <pjlib.h>
 #include <stdint.h>
 #include <pjsip-simple/evsub.h>
-#include <pjsip-simple/evsub_msg.h>
 }
 
 #include <sstream>
