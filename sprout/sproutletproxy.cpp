@@ -44,6 +44,8 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include <pjsip-simple/evsub.h>
+#include <pjsip-simple/evsub_msg.h>
 }
 
 #include <sstream>
@@ -116,13 +118,31 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
 
 
-  // TODO: Once the registrar and subscription managers are Sproutlets, this should
-  // consider the ReqURI if there's no top Route header.
-  if ((route != NULL) &&
-      PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+  pjsip_sip_uri* uri = NULL;
+  if (route == NULL)
   {
-    LOG_DEBUG("Found top Route header: %s ", PJUtils::hdr_to_string(route).c_str());
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+    // TODO: Once the registrar and subscription managers are Sproutlets, this should
+    // consider the ReqURI regardess of the method.
+    if ((pjsip_method_cmp(&req->line.req.method, &pjsip_register_method) != 0) &&
+        (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()) != 0) &&
+        (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)))
+    {
+      uri = (pjsip_sip_uri*)req->line.req.uri;
+    }
+  }
+  else
+  {
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+    {
+      uri = (pjsip_sip_uri*)route->name_addr.uri;
+    }
+  }
+
+  if (uri != NULL)
+  {
+    LOG_DEBUG("Found next routable URI: %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                     (pjsip_uri*)uri).c_str());
 
     for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
          it != _sproutlets.end();
@@ -140,6 +160,10 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
       // No port was specified, so use the URI port instead.
       port = uri->port;
     }
+  }
+  else
+  {
+    LOG_DEBUG("Next route for message cannot be a sproutlet");
   }
 
   if ((sproutlet == NULL) &&
