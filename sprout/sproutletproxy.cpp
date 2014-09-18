@@ -1344,7 +1344,7 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
   }
 
   // We consider an ACK transaction to be complete immediately after the
-  // sproutelet's actions have been processed, regardless of whether the
+  // sproutlet's actions have been processed, regardless of whether the
   // sproutlet forwarded the ACK (some sproutlets are unable to in certain
   // situations).
   bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
