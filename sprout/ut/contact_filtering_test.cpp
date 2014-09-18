@@ -84,41 +84,41 @@ pjsip_endpoint* ContactFilteringTest::endpt;
 typedef ContactFilteringTest ContactFilteringMatchNumericTest;
 TEST_F(ContactFilteringMatchNumericTest, MatchingIntegerWithInteger) { EXPECT_EQ(YES, match_numeric("#1.5", "#1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithInteger) { EXPECT_EQ(NO, match_numeric("#1.5", "#2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5", "#<=2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithLessThan) { EXPECT_EQ(YES, match_numeric("#1.5", "#<=2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithLessThan) { EXPECT_EQ(NO, match_numeric("#2.5", "#<=1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#2.5", "#>=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#2.5", "#>=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#1.5", "#>=2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingIntegerWithRange) { EXPECT_EQ(YES, match_numeric("#1.5", "#0.5:2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingIntegerWithRange) { EXPECT_EQ(NO, match_numeric("#1.5", "#2.5:3.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithInteger) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithInteger) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#>=1.5", "#<=2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithLessThan) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#<=2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithLessThan) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#<=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#>=2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#>=2.5", "#>=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#>=2.5", "#>=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingGreaterThanWithRange) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#2.5:3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#>=1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingGreaterThanWithRange) { EXPECT_EQ(YES, match_numeric("#>=1.5", "#0.5:2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingGreaterThanWithRange) { EXPECT_EQ(NO, match_numeric("#>=2.5", "#0.5:1.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithInteger) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithInteger) { EXPECT_EQ(NO, match_numeric("#<=1.5", "#2.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#<=2.5", "#>=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#>=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#<=2.5", "#>=3.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithLessThan) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#<=1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#<=2.5", "#<=3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithLessThan) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#<=3.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingLessThanWithRange) { EXPECT_EQ(YES, match_numeric("#<=2.5", "#0.5:1.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#<=1.5", "#0.5:2.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingLessThanWithRange) { EXPECT_EQ(YES, match_numeric("#<=1.5", "#0.5:2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingLessThanWithRange) { EXPECT_EQ(NO, match_numeric("#<=0.5", "#1.5:2.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithInteger) { EXPECT_EQ(YES, match_numeric("#1.5:3.5", "#2.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithInteger) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithGreaterThan) { EXPECT_EQ(UNKNOWN, match_numeric("#2.5:3.5", "#>=1.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithGreaterThan) { EXPECT_EQ(YES, match_numeric("#2.5:3.5", "#>=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithGreaterThan) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#>=3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithLessThan) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5:2.5", "#<=3.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithLessThan) { EXPECT_EQ(YES, match_numeric("#1.5:2.5", "#<=3.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithLessThan) { EXPECT_EQ(NO, match_numeric("#2.5:3.5", "#<=1.5")); }
 TEST_F(ContactFilteringMatchNumericTest, MatchingRangeWithRange) { EXPECT_EQ(YES, match_numeric("#1.5:4.5", "#2.5:3.5")); }
-TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithRange) { EXPECT_EQ(UNKNOWN, match_numeric("#1.5:3.5", "#2.5:4.5")); }
+TEST_F(ContactFilteringMatchNumericTest, MaybeMatchingRangeWithRange) { EXPECT_EQ(YES, match_numeric("#1.5:3.5", "#2.5:4.5")); }
 TEST_F(ContactFilteringMatchNumericTest, NonMatchingRangeWithRange) { EXPECT_EQ(NO, match_numeric("#1.5:2.5", "#3.5:4.5")); }
 
 TEST_F(ContactFilteringMatchNumericTest, InvalidNumericRandom) { EXPECT_THROW(match_numeric("banana", "#1.5"), FeatureParseError); }
@@ -190,7 +190,7 @@ TEST_F(ContactFilteringMatchFeatureTest, MaybeMatchNumeric)
 {
   Feature matcher("+sip.numeric", "#5");
   Feature matchee("+sip.numeric", "#>=3");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(YES, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, NoMatchNumeric)
 {
@@ -202,31 +202,31 @@ TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypes)
 {
   Feature matcher("+sip.crazy", "#5");
   Feature matchee("+sip.crazy", "<hello>");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesBool1)
 {
   Feature matcher("+sip.crazy", "");
   Feature matchee("+sip.crazy", "<hello>");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesBool2)
 {
   Feature matcher("+sip.crazy", "#5");
   Feature matchee("+sip.crazy", "");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesString)
 {
   Feature matcher("+sip.crazy", "<hello>");
   Feature matchee("+sip.crazy", "hello");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, UnknownMatchDifferentTypesToken)
 {
   Feature matcher("+sip.crazy", "hello");
   Feature matchee("+sip.crazy", "<hello>");
-  EXPECT_EQ(UNKNOWN, match_feature(matcher, matchee));
+  EXPECT_EQ(NO, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, MatchList)
 {
@@ -255,6 +255,30 @@ TEST_F(ContactFilteringMatchFeatureTest, MatchListNegated)
 
   // Expect a match because there's overlap - "!goodbye" matches
   // anything that isn't "goodbye", including "hello".
+  EXPECT_EQ(YES, match_feature(matcher, matchee));
+}
+TEST_F(ContactFilteringMatchFeatureTest, MatchListDoubleNegation)
+{
+  Feature matcher("+sip.crazy", "hello");
+  Feature matchee("+sip.crazy", "!goodbye,!hello");
+
+  // Expect a match because there's overlap - "!goodbye" matches
+  // anything that isn't "goodbye", including "hello".
+  EXPECT_EQ(YES, match_feature(matcher, matchee));
+
+  Feature matcher2("+sip.crazy", "goodbye");
+  Feature matchee2("+sip.crazy", "!goodbye,!hello,");
+
+  EXPECT_EQ(YES, match_feature(matcher2, matchee2));
+}
+TEST_F(ContactFilteringMatchFeatureTest, MatchListNegationInBoth)
+{
+  Feature matcher("+sip.crazy", "!hello");
+  Feature matchee("+sip.crazy", "!goodbye");
+
+  // Expect a match because there's overlap - "!goodbye" matches
+  // anything that isn't "goodbye", and "!hello" matches anything that
+  // isn't "hello", so anything else (e.g. "wassup") could match both.
   EXPECT_EQ(YES, match_feature(matcher, matchee));
 }
 TEST_F(ContactFilteringMatchFeatureTest, SubstringMatch)
@@ -303,7 +327,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MatchingNormalAccept)
   FeatureSet contact_feature_set;
   contact_feature_set["+sip.string"] = "<hello>";
   contact_feature_set["+sip.numeric"] = "#4";
-  contact_feature_set["+sip.boolean"] = "";
+  contact_feature_set["+sip.boolean"] = "TRUE"; // equivalent to no value
   contact_feature_set["+sip.token"] = "hello";
   contact_feature_set["+sip.negated"] = "!world";
 
@@ -339,7 +363,8 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalAccept)
   contact_feature_set["+sip.token"] = "hello";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
+  // No match - +sip.boolean does not match
+  EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, MatchingExplicitAccept)
 {
@@ -362,7 +387,8 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingExplicitAccept)
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
+  // No match - +sip.token is not present but this is an explicit match
+  EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingExplicitAccept)
 {
@@ -374,7 +400,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingExplicitAccept)
   contact_feature_set["+sip.token"] = "hello";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
+  EXPECT_EQ(NO, match_feature_sets(contact_feature_set, accept_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, MatchingRequiredAccept)
 {
@@ -397,7 +423,9 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingRequiredAccept)
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(UNKNOWN, match_feature_sets(contact_feature_set, accept_hdr));
+  // Match - +sip.token isn't in this feature predicate but explicit
+  // isn't present
+  EXPECT_EQ(YES, match_feature_sets(contact_feature_set, accept_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingRequiredAccept)
 {
@@ -468,7 +496,7 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalReject)
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
+  EXPECT_EQ(YES, match_feature_sets(contact_feature_set, reject_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalReject)
 {
@@ -698,7 +726,9 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
                              targets,
                              1);
 
-  // Since we explicitely deny supporting "MESSAGE" this contact is skipped.
+  // Since we explicitly say that only INVITE and OPTIONS are
+  // supported, and implicit preferences have their "require" flag
+  // set, this contact is skipped.
   EXPECT_EQ((unsigned)0, targets.size());
 
   delete aor_data;
@@ -723,10 +753,11 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
                              targets,
                              1);
 
-  // Since we don't explicitely deny supporting "MESSAGE" this contact
-  // is deprioritized.
+  // Since we don't explicitly include a "methods" parameter, and
+  // implicit preferences don't have their explicit flag set, nothing
+  // happens to this contact.
   EXPECT_EQ((unsigned)1, targets.size());
-  EXPECT_TRUE(targets[0].deprioritized);
+  EXPECT_FALSE(targets[0].deprioritized);
 
   delete aor_data;
 }
@@ -767,6 +798,7 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 
   delete aor_data;
 }
+
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
   RegStore::AoR* aor_data = new RegStore::AoR(aor);

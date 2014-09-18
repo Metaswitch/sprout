@@ -155,18 +155,19 @@ void filter_bindings_to_targets(const std::string& aor,
          ++accept)
     {
       MatchResult accept_rc = match_feature_sets(binding->second->_params, *accept);
-
       if (accept_rc == NO)
       {
-        LOG_DEBUG("Rejecting Contact: header matching Accept-Contact header");
-        // TODO SAS log.
-        rejected = true;
-      }
-      else if (accept_rc == UNKNOWN)
-      {
-        LOG_DEBUG("Deprioritizing Contact: header matching Accept-Contact header");
-        // TODO SAS log.
-        deprioritized = true;
+        if ((*accept)->required_match) {
+          LOG_DEBUG("Rejecting Contact: header matching Accept-Contact header");
+          // TODO SAS log.
+          rejected = true;
+        }
+        else
+        {
+          LOG_DEBUG("Deprioritizing Contact: header matching Accept-Contact header");
+          // TODO SAS log.
+          deprioritized = true;
+        }
       }
     }
 
@@ -311,13 +312,11 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
 
   // Iterate over the parameters on the Accept-Contact header, we can drop out
   // early if the main match value ever drops to NO since there's no way it will
-  // change to UNKNOWN or YES afterwards.
+  // change to YES afterwards.
   for (pjsip_param* feature_param = accept->feature_set.next;
        (feature_param != &accept->feature_set) && (rc != NO);
        feature_param = feature_param->next)
   {
-    MatchResult feature_match_rc;
-
     // For boolean features the name may be prefixed with ! to indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
     std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
@@ -333,55 +332,21 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     if (contact_feature == contact_feature_set.end())
     {
       // Not specified, can't say either way if the feature is a match.
-      feature_match_rc = UNKNOWN;
-      LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
+      if (accept->explicit_match)
+      {
+        rc = NO;
+        LOG_DEBUG("Parameter %s is not in the Contact parameters and is explicitly required", feature_name.c_str());
+      }
+      else
+      {
+        rc = YES;
+        LOG_DEBUG("Parameter %s is not in the Contact parameters but is not explicitly required", feature_name.c_str());
+      }
     }
     else
     {
-      feature_match_rc = match_feature(feature,
-                                       *contact_feature);
-    }
-
-    // Our treatment of UNKNOWN in the feature matches is determined by
-    // the explicit and required parameters on the header.
-    if (feature_match_rc == UNKNOWN)
-    {
-      if (accept->explicit_match)
-      {
-        if (accept->required_match)
-        {
-          rc = NO;
-        }
-        else
-        {
-          rc = UNKNOWN;
-        }
-      }
-      else
-      {
-        if (accept->required_match)
-        {
-          rc = UNKNOWN;
-        }
-        else
-        {
-          // rc is unchanged.
-        }
-      }
-    }
-
-    // The treatment of NO in the feature match is determined by the
-    // required parameter on the header.
-    if (feature_match_rc == NO)
-    {
-      if (accept->required_match)
-      {
-        rc = NO;
-      }
-      else
-      {
-        rc = UNKNOWN;
-      }
+      rc = match_feature(feature,
+                         *contact_feature);
     }
   }
 
@@ -416,7 +381,7 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     if (contact_feature == contact_feature_set.end())
     {
       // Not specified, can't say either way if the feature is a match.
-      rc = UNKNOWN;
+      rc = YES;
       LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
     else
@@ -424,12 +389,6 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
       rc = match_feature(feature,
                          *contact_feature);
     }
-  }
-
-  // Reject-Contact filters are always YES or NO.
-  if (rc == UNKNOWN)
-  {
-    rc = NO;
   }
 
   return rc;
@@ -481,8 +440,9 @@ MatchResult match_feature(Feature matcher,
     }
     else
     {
-      // ...but matchee isn't
-      rc = UNKNOWN;
+      // ...but matchee isn't, so no possible feature collection could
+      // match both
+      rc = NO;
     }
   }
   else if (matcher.second[0] == '#')
@@ -496,7 +456,7 @@ MatchResult match_feature(Feature matcher,
     else
     {
       // ...but the matchee is not
-      rc = UNKNOWN;
+      rc = NO;
     }
   }
   else
@@ -506,7 +466,7 @@ MatchResult match_feature(Feature matcher,
         (matchee.second[0] == '<'))
     {
       // ...but the matchee is not
-      rc = UNKNOWN;
+      rc = NO;
     }
     else
     {
@@ -514,17 +474,13 @@ MatchResult match_feature(Feature matcher,
     }
   }
 
-  if (rc == UNKNOWN)
+  if (rc == NO)
   {
-    LOG_DEBUG("Can't tell whether they match");
-  }
-  else if (rc == NO)
-  {
-    LOG_DEBUG("Parameter does not match");
+    LOG_DEBUG("No possible feature collection could match this parameter in both feature predicates");
   }
   else if (rc == YES)
   {
-    LOG_DEBUG("Parameter matches");
+    LOG_DEBUG("A feature collection could match this parameter in both feature predicates");
   }
 
   return rc;
@@ -581,7 +537,7 @@ MatchResult match_numeric(const std::string& matcher,
     }
     else if (matcher_range.maximum >= matchee_range.minimum)
     {
-      rc = UNKNOWN;
+      rc = YES;
     }
     else
     {
@@ -590,7 +546,7 @@ MatchResult match_numeric(const std::string& matcher,
   }
   else if (matcher_range.minimum <= matchee_range.maximum)
   {
-    rc = UNKNOWN;
+    rc = YES;
   }
   else
   {
@@ -635,11 +591,21 @@ MatchResult match_tokens(const std::string& matcher,
         // We match if there is any overlap between the two sets.
         return YES;
       }
+
       if ((*token1)[0] == '!')
       {
         std::string token1_without_negation = token1->substr(1, std::string::npos);
         LOG_DEBUG("Comparing negation of %s to %s", token1_without_negation.c_str(), token2->c_str());
         if (token1_without_negation != *token2)
+        {
+          return YES;
+        }
+      }
+      if ((*token2)[0] == '!')
+      {
+        std::string token2_without_negation = token2->substr(1, std::string::npos);
+        LOG_DEBUG("Comparing negation of %s to %s", token2_without_negation.c_str(), token1->c_str());
+        if (token2_without_negation != *token1)
         {
           return YES;
         }
