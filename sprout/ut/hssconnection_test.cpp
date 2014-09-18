@@ -93,8 +93,8 @@ class HssConnectionTest : public BaseTest
       "<ChargingAddresses>"
         "<CCF priority=\"1\">ccf1</CCF>"
         "<CCF priority=\"2\">ccf2</CCF>"
-        "<ECF priority=\"1\">ecf1</ECF>"
         "<ECF priority=\"2\">ecf2</ECF>"
+        "<ECF priority=\"1\">ecf1</ECF>"
       "</ChargingAddresses>"
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")] =

@@ -233,6 +233,23 @@ HTTPCode HSSConnection::get_xml_object(const std::string& path,
 }
 
 
+bool compare_charging_addrs(const rapidxml::xml_node<>* ca1,
+                            const rapidxml::xml_node<>* ca2)
+{
+  // Compare the nodes on the basis of their priority attribute. A lower value is
+  // higher priority.
+  if (std::stoi(ca1->first_attribute("priority")->value()) <
+        std::stoi(ca2->first_attribute("priority")->value()))
+  {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+}
+
+
 bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
                           std::string& regstate,
                           std::map<std::string, Ifcs >& ifcs_map,
@@ -301,47 +318,58 @@ bool decode_homestead_xml(std::shared_ptr<rapidxml::xml_document<> > root,
     }
   }
 
-  rapidxml::xml_node<>* cas = cw->first_node("ChargingAddresses");
+  rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");
 
-  if (cas)
+  if (charging_addrs_node)
   {
     rapidxml::xml_node<>* ccf = NULL;
+    std::vector<rapidxml::xml_node<>*> xml_ccfs;
     rapidxml::xml_node<>* ecf = NULL;
+    std::vector<rapidxml::xml_node<>*> xml_ecfs;
 
-    for (ccf = cas->first_node("CCF"); ccf != NULL; ccf = ccf->next_sibling("CCF"))
+    // Save off all of the CCF nodes so that we can sort them based on their
+    // priority attribute.
+    for (ccf = charging_addrs_node->first_node("CCF");
+         ccf != NULL;
+         ccf = ccf->next_sibling("CCF"))
     {
-      // We only expect up to two CCFs. Make sure the CCF with priority 1 is
-      // at the front of the deque.
-      if (!strcmp(ccf->first_attribute("priority")->value(), "1"))
-      {
-        LOG_DEBUG("Found primary CCF from HSS XML - %s", ccf->value());
-        ccfs.push_front(ccf->value());
-      }
-      else
-      {
-        LOG_DEBUG("Found secondary CCF from HSS XML - %s", ccf->value());
-        ccfs.push_back(ccf->value());
-      }
+      xml_ccfs.push_back(ccf);
     }
 
-    for (ecf = cas->first_node("ECF"); ecf != NULL; ecf = ecf->next_sibling("ECF"))
+    // Sort them and add them to ccfs in order.
+    std::sort(xml_ccfs.begin(), xml_ccfs.end(), compare_charging_addrs);
+
+    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ccfs.begin();
+         it != xml_ccfs.end();
+         ++it)
     {
-      // We only expect up to two ECFs. Make sure the ECF with priority 1 is
-      // at the front of the deque.
-      if (!strcmp(ecf->first_attribute("priority")->value(), "1"))
-      {
-        LOG_DEBUG("Found primary ECF from HSS XML - %s", ecf->value());
-        ecfs.push_front(ecf->value());
-      }
-      else
-      {
-        LOG_DEBUG("Found secondary ECF from HSS XML - %s", ecf->value());
-        ecfs.push_back(ecf->value());
-      }
+      LOG_DEBUG("Found CCF: %s", (*it)->value());
+      ccfs.push_back((*it)->value());
+    }
+
+    // Save off all of the ECF nodes so that we can sort them based on their
+    // priority attribute.
+    for (ecf = charging_addrs_node->first_node("ECF");
+         ecf != NULL;
+         ecf = ecf->next_sibling("ECF"))
+    {
+      xml_ecfs.push_back(ecf);
+    }
+
+    // Sort them and add them to ecfs in order.
+    std::sort(xml_ecfs.begin(), xml_ecfs.end(), compare_charging_addrs);
+
+    for (std::vector<rapidxml::xml_node<>*>::iterator it = xml_ecfs.begin();
+         it != xml_ecfs.end();
+         ++it)
+    {
+      LOG_DEBUG("Found ECF: %s", (*it)->value());
+      ecfs.push_back((*it)->value());
     }
   }
   return true;
 }
+
 
 /// Retrieve user's subscription data from the HSS, filling in the associated
 //  URIs in the associated_uris output parameter and the Ifcs object

@@ -541,6 +541,17 @@ void process_subscription_request(pjsip_rx_data* rdata)
                                                         NULL);
   pj_strdup2(tdata->pool, &to->tag, subscription_id.c_str());
 
+  // Add a P-Charging-Function-Addresses header to the successful SUBSCRIBE
+  // response containing the charging addresses returned by the HSS.
+  if (st_code == PJSIP_SC_OK)
+  {
+    PJUtils::add_pcfa_header(tdata->msg,
+                             tdata->pool,
+                             ccfs,
+                             ecfs,
+                             false);
+  }
+
   // Pass the response to the ACR.
   acr->tx_response(tdata->msg);
 
@@ -554,8 +565,8 @@ void process_subscription_request(pjsip_rx_data* rdata)
   // Send the Notify
   if (tdata_notify != NULL && notify_status == PJ_SUCCESS)
   {
-    // Add a P-Charging-Function-Addresses header to the NOTIFY if one isn't
-    // already present containing the charging addresses returned by the HSS.
+    // Add a P-Charging-Function-Addresses header to the NOTIFY containing the
+    // charging addresses returned by the HSS.
     PJUtils::add_pcfa_header(tdata_notify->msg,
                              tdata_notify->pool,
                              ccfs,

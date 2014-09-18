@@ -213,7 +213,6 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)expires_hdr);
 
   // TODO: modify orig-ioi of P-Charging-Vector and remove term-ioi
-  // TODO: Set P-Charging-Function-Addresses header based on HSS values
 
   if (received_register && ok_response) {
     // Copy P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Vector
