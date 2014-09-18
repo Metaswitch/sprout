@@ -1922,3 +1922,60 @@ void PJUtils::report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg)
     }
   }
 }
+
+// Add a P-Charging-Function-Addresses header to a SIP message. The header is
+// added if it doesn't already exist, and replaced when the replace flag is
+// set to TRUE.
+void PJUtils::add_pcfa_header(pjsip_msg* msg,
+                              pj_pool_t* pool,
+                              const std::deque<std::string>& ccfs,
+                              const std::deque<std::string>& ecfs,
+                              const bool replace)
+{
+  pjsip_p_c_f_a_hdr* pcfa_hdr =
+    (pjsip_p_c_f_a_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
+
+  if (((pcfa_hdr == NULL) || (replace)) &&
+      ((!ccfs.empty()) || (!ecfs.empty())))
+  {
+    if (pcfa_hdr != NULL)
+    {
+      LOG_INFO("Replacing existing PCFA header");
+      PJUtils::remove_hdr(msg, &STR_P_C_F_A);
+      pcfa_hdr = NULL;
+    }
+    else
+    {
+      LOG_INFO("Adding new PCFA header");
+    }
+
+    pcfa_hdr = pjsip_p_c_f_a_hdr_create(pool);
+
+    for (std::deque<std::string>::const_iterator it = ccfs.begin();
+         it != ccfs.end();
+         ++it)
+    {
+      LOG_DEBUG("Adding CCF %s to PCFA header", it->c_str());
+      pjsip_param* new_param =
+        (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
+      new_param->name = STR_CCF;
+      new_param->value = pj_strdup3(pool, it->c_str());
+
+      pj_list_insert_before(&pcfa_hdr->ccf, new_param);
+    }
+
+    for (std::deque<std::string>::const_iterator it = ecfs.begin();
+         it != ecfs.end();
+         ++it)
+    {
+      LOG_DEBUG("Adding ECF %s to PCFA header", it->c_str());
+      pjsip_param* new_param =
+        (pjsip_param*)pj_pool_alloc(pool, sizeof(pjsip_param));
+      new_param->name = STR_ECF;
+      new_param->value = pj_strdup3(pool, it->c_str());
+
+      pj_list_insert_before(&pcfa_hdr->ecf, new_param);
+    }
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)pcfa_hdr);
+  }
+}

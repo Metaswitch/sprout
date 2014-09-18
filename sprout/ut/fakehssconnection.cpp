@@ -70,7 +70,7 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
 {
   std::string url = "/impu/" + Utils::url_escape(impu) + "/reg-data" + extra_params;
 
-  if (subxml.compare("") == 0)
+  if (subxml.empty())
   {
     subxml = ("<IMSSubscription><ServiceProfile>\n"
               "<PublicIdentity><Identity>"+impu+"</Identity></PublicIdentity>"
@@ -79,9 +79,15 @@ void FakeHSSConnection::set_impu_result(const std::string& impu,
               "</ServiceProfile></IMSSubscription>");
   }
 
+  std::string chargingaddrsxml = ("<ChargingAddresses>\n"
+                                  "  <CCF priority=\"1\">ccf1</CCF>\n"
+                                  "  <ECF priority=\"1\">ecf1</ECF>\n"
+                                  "  <ECF priority=\"2\">ecf2</ECF>\n"
+                                  "</ChargingAddresses>");
+
   std::string result = ("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                         "<ClearwaterRegData><RegistrationState>" + state + "</RegistrationState>"
-                        + subxml + "</ClearwaterRegData>");
+                        + subxml + chargingaddrsxml + "</ClearwaterRegData>");
 
   _results[UrlBody(url, (type.empty() ? "" : "{\"reqtype\": \""+type+"\"}"))] = result;
 }
