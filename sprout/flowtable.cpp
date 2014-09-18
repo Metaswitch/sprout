@@ -381,8 +381,32 @@ std::string Flow::default_identity()
 }
 
 
+/// Returns the service route for the specified identity on this flow.
+std::string Flow::service_route(const std::string& identity)
+{
+  std::string route;
+
+  pthread_mutex_lock(&_flow_lock);
+
+  auth_id_map::const_iterator i = _authorized_ids.find(identity);
+
+  if (i != _authorized_ids.end())
+  {
+    // Found the corresponding identity.
+    route = i->second.service_route;
+  }
+
+  pthread_mutex_unlock(&_flow_lock);
+
+  return route;
+}
+
+
 /// Sets the specified identities as authorized for this flow.
-void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
+void Flow::set_identity(const pjsip_uri* uri,
+                        const std::string& service_route,
+                        bool is_default,
+                        int expires)
 {
   int now = time(NULL);
 
@@ -408,6 +432,9 @@ void Flow::set_identity(const pjsip_uri* uri, bool is_default, int expires)
 
     // Store the name_addr rendered from the received URI.
     aid.name_addr = PJUtils::uri_to_string(PJSIP_URI_IN_FROMTO_HDR, uri);
+
+    // Store the service route for this identity.
+    aid.service_route = service_route;
 
     // Update the expiry time.
     aid.expires = expires;

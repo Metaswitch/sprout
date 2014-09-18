@@ -92,10 +92,14 @@ void BgcfService::update_routes()
           Json::Value route_vals = route["route"];
           std::string domain = route["domain"].asString();
 
+          LOG_DEBUG("Add route for %s", domain.c_str());
+
           for (size_t jj = 0; jj < route_vals.size(); ++jj)
           {
             Json::Value route_val = route_vals[(int)jj];
-            route_vec.push_back(route_val.asString());
+            std::string route_uri = route_val.asString();
+            LOG_DEBUG("  %s", route_uri.c_str());
+            route_vec.push_back(route_uri);
           }
 
           new_routes.insert(std::make_pair(domain, route_vec));
@@ -119,6 +123,7 @@ void BgcfService::update_routes()
     LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
   }
 }
+
 BgcfService::~BgcfService()
 {
   // Destroy the updater (if it was created).

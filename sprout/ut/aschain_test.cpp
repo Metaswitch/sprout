@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -47,7 +44,7 @@
 #include "stack.h"
 
 #include "aschain.h"
-#include "callservices.h"
+#include "mmtel.h"
 
 using namespace std;
 using testing::MatchesRegex;
@@ -138,8 +135,6 @@ TEST_F(AsChainTest, Basics)
   EXPECT_EQ(&as_chain2, res._as_chain);
   EXPECT_EQ(1u, res._index);
   EXPECT_TRUE(res.complete());
-
-  CallServices calls(NULL);  // Not valid, but good enough for this UT.
 }
 
 TEST_F(AsChainTest, AsInvocation)
@@ -173,18 +168,15 @@ TEST_F(AsChainTest, AsInvocation)
   pj_status_t status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
   ASSERT_EQ(PJ_SUCCESS, status);
 
-  AsChainLink::Disposition disposition;
   std::string server_name;
 
   // Nothing to invoke. Just proceed.
-  disposition = as_chain_link.on_initial_request(tdata, server_name);
-  EXPECT_EQ(AsChainLink::Disposition::Complete, disposition);
+  as_chain_link.on_initial_request(tdata->msg, server_name);
   EXPECT_EQ(server_name, "");
 
   // Invoke external AS on originating side.
   LOG_DEBUG("ODI %s", as_chain_link2.to_string().c_str());
-  disposition = as_chain_link2.on_initial_request(tdata, server_name);
-  EXPECT_EQ(AsChainLink::Disposition::Skip, disposition);
+  as_chain_link2.on_initial_request(tdata->msg, server_name);
   EXPECT_EQ(server_name, "sip:pancommunicon.cw-ngv.com");
 }
 

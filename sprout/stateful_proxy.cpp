@@ -412,8 +412,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   }
 
   // Request looks sane, so clone the request to create transmit data.
-  status = PJUtils::create_request_fwd(stack_data.endpt, rdata, NULL, NULL, 0, &tdata);
-  if (status != PJ_SUCCESS)
+  tdata = PJUtils::clone_msg(stack_data.endpt, rdata);
+  if (tdata == NULL)
   {
     LOG_ERROR("Failed to clone request to forward");
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
@@ -619,7 +619,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
       downstream_acr->tx_request(tdata->msg);
     }
 
-    if (target != NULL) 
+    if (target != NULL)
     {
       // Target has already been selected for the request, so set it up on the
       // request.
@@ -653,7 +653,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         tdata->dest_info.addr.entry[0].type =
                            (pjsip_transport_type_e)target->transport->key.type;
         pj_memcpy(&tdata->dest_info.addr.entry[0].addr,
-                  &target->transport->key.rem_addr,
+                  &target->remote_addr,
                   sizeof(pj_sockaddr));
         tdata->dest_info.addr.entry[0].addr_len =
              (tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
@@ -664,6 +664,10 @@ void process_tsx_request(pjsip_rx_data* rdata)
         pjsip_transport_dec_ref(target->transport);
       }
     }
+
+    // Add a via header for ACKs (this is handled in init_uac_transactions
+    // for other methods)
+    PJUtils::add_top_via(tdata);
 
     status = PJUtils::send_request_stateless(tdata);
 
@@ -1091,6 +1095,7 @@ static void extract_preferred_identities(pjsip_tx_data* tdata, std::vector<pjsip
 /// Create a simple target routing the call to Sprout.
 static void proxy_route_upstream(pjsip_rx_data* rdata,
                                  pjsip_tx_data* tdata,
+                                 Flow* src_flow,
                                  TrustBoundary **trust,
                                  Target** target)
 {
@@ -1098,9 +1103,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
   // a target with the existing request URI and a path to the upstream
   // proxy and stripping any loose routes that might have been added by the
   // UA.
-  LOG_INFO("Route request to upstream proxy %.*s",
-      ((pjsip_sip_uri*)upstream_proxy)->host.slen,
-      ((pjsip_sip_uri*)upstream_proxy)->host.ptr);
   *target = new Target();
   Target* target_p = *target;
   target_p->upstream_route = PJ_TRUE;
@@ -1123,48 +1125,82 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     target_p->uri = (pjsip_uri*)tdata->msg->line.req.uri;
   }
 
-  // Route upstream.
+  std::string service_route;
+
+  if (src_flow != NULL)
+  {
+    // See if we have a service route for the served user of the request.
+    LOG_DEBUG("Request received on authentication flow - check for Service-Route");
+    pjsip_uri* served_user = PJUtils::orig_served_user(tdata->msg);
+    if (served_user != NULL)
+    {
+      std::string user = PJUtils::public_id_from_uri(served_user);
+      service_route = src_flow->service_route(user);
+      LOG_VERBOSE("Found Service-Route for served user %s - %s",
+                  user.c_str(), service_route.c_str());
+    }
+  }
+
   pjsip_routing_hdr* route_hdr;
-  pjsip_sip_uri* upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool,
-                                                                upstream_proxy);
+  pjsip_sip_uri* upstream_uri;
 
-  // Maybe mark it as originating, so Sprout knows to
-  // apply originating handling.
-  //
-  // In theory, on the access side, the UE ought to have
-  // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
-  // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header"
-  //
-  // When working on the IBCF side, the provided route will not have
-  // orig set, so we won't set in on the route upstream ether.
-  //
-  // When working as a load-balancer for a third-party P-CSCF, trust the
-  // orig parameter of the top-most Route header.
-  pjsip_param* orig_param = NULL;
-
-  // Check the rdata here, as the Route header may have been stripped
-  // from the cloned tdata.
-  if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
+  if (service_route != "")
   {
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
-    orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+    // We have a service route, so add it as a Route header.
+    upstream_uri = (pjsip_sip_uri*)PJUtils::uri_from_string(service_route, tdata->pool, false);
+  }
+  else
+  {
+    // Route to default upstream proxy.
+    upstream_uri = (pjsip_sip_uri*)pjsip_uri_clone(tdata->pool, upstream_proxy);
+
+    // Maybe mark it as originating, so Sprout knows to
+    // apply originating handling.
+    //
+    // In theory, on the access side, the UE ought to have
+    // done this itself - see 3GPP TS 24.229 s5.1.1.2.1 200-OK d and
+    // s5.1.2A.1.1 "The UE shall build a proper preloaded Route header"
+    //
+    // When working on the IBCF side, the provided route will not have
+    // orig set, so we won't set in on the route upstream ether.
+    //
+    // When working as a load-balancer for a third-party P-CSCF, trust the
+    // orig parameter of the top-most Route header.
+    pjsip_param* orig_param = NULL;
+
+    // Check the rdata here, as the Route header may have been stripped
+    // from the cloned tdata.
+    if (PJUtils::is_top_route_local(rdata->msg_info.msg, &route_hdr))
+    {
+      pjsip_sip_uri* uri = (pjsip_sip_uri*)route_hdr->name_addr.uri;
+      orig_param = pjsip_param_find(&uri->other_param, &STR_ORIG);
+    }
+
+    if (orig_param ||
+        (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
+    {
+      LOG_DEBUG("Mark originating");
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+      pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
+      pj_strdup2(tdata->pool, &orig_param->value, "");
+      pj_list_insert_after(&upstream_uri->other_param, orig_param);
+    }
+
+    // Select a transport for the request.
+    if (upstream_conn_pool != NULL)
+    {
+      target_p->transport = upstream_conn_pool->get_connection();
+      if (target_p->transport != NULL)
+      {
+        pj_memcpy(&target_p->remote_addr,
+                  &target_p->transport->key.rem_addr,
+                  sizeof(pj_sockaddr));
+      }
+    }
   }
 
-  if (orig_param ||
-      (*trust == &TrustBoundary::INBOUND_EDGE_CLIENT))
-  {
-    LOG_DEBUG("Mark originating");
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-    pj_strdup(tdata->pool, &orig_param->name, &STR_ORIG);
-    pj_strdup2(tdata->pool, &orig_param->value, "");
-    pj_list_insert_after(&upstream_uri->other_param, orig_param);
-  }
-
-  // Select a transport for the request.
-  if (upstream_conn_pool != NULL)
-  {
-    target_p->transport = upstream_conn_pool->get_connection();
-  }
+  LOG_INFO("Route request to upstream proxy %s",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, (pjsip_uri*)upstream_uri).c_str());
 
   target_p->paths.push_back((pjsip_uri*)upstream_uri);
 }
@@ -1283,7 +1319,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     // Until we support routing, all REGISTER requests should be sent to the upstream sprout
     // for processing.
-    proxy_route_upstream(rdata, tdata, trust, target);
+    proxy_route_upstream(rdata, tdata, NULL, trust, target);
 
     // Do standard route header processing for the request.  This may
     // remove the top route header if it corresponds to this node.
@@ -1459,6 +1495,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         *target = new Target();
         (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
         (*target)->transport = tgt_flow->transport();
+        pj_memcpy(&((*target)->remote_addr), tgt_flow->remote_addr(), sizeof(pj_sockaddr));
         pjsip_transport_add_ref((*target)->transport);
 
         *trust = &TrustBoundary::OUTBOUND_EDGE_CLIENT;
@@ -1483,8 +1520,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // remove the top route header if it corresponds to this node.
     proxy_process_routing(tdata);
 
-    // If we haven't already decided where to route the request, do so now.
-    if (*target == NULL) 
+    if (*target == NULL)
     {
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
@@ -1496,11 +1532,11 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
         *target = new Target();
         (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
       }
-      else if ((PJUtils::is_home_domain(tdata->msg->line.req.uri)) ||
-               (PJUtils::is_uri_local(tdata->msg->line.req.uri)))
+      else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+               PJUtils::is_uri_local(tdata->msg->line.req.uri))
       {
-        // We've not already decided to route the request Route the request upstream to Sprout.
-        proxy_route_upstream(rdata, tdata, trust, target);
+        // Route the request upstream to Sprout.
+        proxy_route_upstream(rdata, tdata, src_flow, trust, target);
       }
 
       // Work out the next hop target for the message.  This will either be the
@@ -2039,21 +2075,13 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
   // Check to see if the REGISTER response contains a Path header.  If so
   // this is a signal that the registrar accepted the REGISTER and so
   // authenticated the client.
-  pjsip_generic_string_hdr* path_hdr = (pjsip_generic_string_hdr*)
+  pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg, &STR_PATH, NULL);
   if (path_hdr != NULL)
   {
-    // The response has a Path header in it, so parse this to a URI so we can
-    // check for a flow token.  Extract the field to a null terminated string
-    // first since we can't guarantee it is null terminated in the message,
-    // and pjsip_parse_uri requires a null terminated string.
-    pj_str_t hvalue;
-    pj_strdup_with_null(rdata->tp_info.pool, &hvalue, &path_hdr->hvalue);
-    pjsip_sip_uri* path_uri = (pjsip_sip_uri*)
-                                      pjsip_parse_uri(rdata->tp_info.pool,
-                                                      hvalue.ptr,
-                                                      hvalue.slen,
-                                                      0);
+    // The response has a Path header in it, so extract the URI so we can
+    // check for a flow token.
+    pjsip_sip_uri* path_uri = (pjsip_sip_uri*)path_hdr->name_addr.uri;
 
     if ((path_uri != NULL) &&
         (path_uri->user.slen > 0))
@@ -2076,6 +2104,20 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         int max_expires = PJUtils::max_expires(rdata->msg_info.msg, 300);
         LOG_DEBUG("Maximum contact expiry is %d", max_expires);
 
+        // Find the Service-Route header so we can record this with each
+        // authorized identity.
+        std::string service_route;
+        pjsip_route_hdr* h_sr = (pjsip_route_hdr*)
+                               pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                          &STR_SERVICE_ROUTE,
+                                                          NULL);
+
+        if (h_sr != NULL)
+        {
+          service_route = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                                 h_sr->name_addr.uri);
+        }
+
         // Go through the list of URIs covered by this registration setting
         // them on the flow.  This is either the list in the P-Associated-URI
         // header, if supplied, or the URI in the To header.
@@ -2090,11 +2132,14 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
           bool is_default = true;
           while (p_assoc_uri != NULL)
           {
-            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr, is_default, max_expires);
+            flow_data->set_identity((pjsip_uri*)&p_assoc_uri->name_addr,
+                                    service_route,
+                                    is_default,
+                                    max_expires);
             p_assoc_uri = (pjsip_route_hdr*)
-                        pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
-                                                   &STR_P_ASSOCIATED_URI,
-                                                   p_assoc_uri->next);
+                              pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                         &STR_P_ASSOCIATED_URI,
+                                                         p_assoc_uri->next);
             is_default = false;
           }
         }
@@ -2102,7 +2147,10 @@ static void proxy_process_register_response(pjsip_rx_data* rdata)
         {
           // Use URI in To header as authenticated URIs.
           LOG_DEBUG("No P-Associated-URI, use URI in To header.");
-          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri, true, max_expires);
+          flow_data->set_identity(PJSIP_MSG_TO_HDR(rdata->msg_info.msg)->uri,
+                                  service_route,
+                                  true,
+                                  max_expires);
         }
 
         // Decrement the reference to the flow data
@@ -2945,7 +2993,8 @@ AsChainLink::Disposition UASTransaction::apply_services(Target*& target)
 
   while (true)
   {
-    disposition = _as_chain_links.back().on_initial_request(_req, server_name);
+    _as_chain_links.back().on_initial_request(_req->msg, server_name);
+    disposition = server_name.empty() ? AsChainLink::Disposition::Complete : AsChainLink::Disposition::Skip;
 
     if ((call_services_handler) &&
         (disposition == AsChainLink::Disposition::Skip) &&
@@ -3683,6 +3732,7 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       // First UAC transaction can use existing tdata, others must clone.
       LOG_DEBUG("Allocating transaction and data for target %d", ii);
       uac_tdata = PJUtils::clone_tdata(_req);
+      PJUtils::add_top_via(uac_tdata);
 
       if (uac_tdata == NULL)
       {
@@ -4142,7 +4192,7 @@ void UACTransaction::set_target(const struct Target& target)
 
     _tdata->dest_info.addr.count = 1;
     _tdata->dest_info.addr.entry[0].type = (pjsip_transport_type_e)target.transport->key.type;
-    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.transport->key.rem_addr, sizeof(pj_sockaddr));
+    pj_memcpy(&_tdata->dest_info.addr.entry[0].addr, &target.remote_addr, sizeof(pj_sockaddr));
     _tdata->dest_info.addr.entry[0].addr_len =
          (_tdata->dest_info.addr.entry[0].addr.addr.sa_family == pj_AF_INET()) ?
          sizeof(pj_sockaddr_in) : sizeof(pj_sockaddr_in6);
@@ -4325,9 +4375,9 @@ void UACTransaction::on_tsx_state(pjsip_event* event)
         retrying = retry_request();
       }
       else if ((event->body.tsx_state.tsx->state == PJSIP_TSX_STATE_COMPLETED) &&
-               (PJSIP_IS_STATUS_IN_CLASS(_tsx->status_code, 500)))
+               (_tsx->status_code == PJSIP_SC_SERVICE_UNAVAILABLE))
       {
-        // The server returned a 5xx error.  We don't blacklist in this case
+        // The server returned a 503 error.  We don't blacklist in this case
         // as it may indicated a transient overload condition, but we can
         // retry to an alternate server if one is available.
         retrying = retry_request();
@@ -4884,15 +4934,10 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
     pj_list_insert_after(&path_uri->other_param, ob_node);
   }
 
-  // Render the URI as a string.
-  char buf[500];
-  int len = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR, path_uri, buf, sizeof(buf));
-  pj_str_t path = {buf, len};
-
   // Add the path header.
-  pjsip_hdr* path_hdr = (pjsip_hdr*)
-               pjsip_generic_string_hdr_create(tdata->pool, &STR_PATH, &path);
-  pjsip_msg_insert_first_hdr(tdata->msg, path_hdr);
+  pjsip_routing_hdr* path_hdr = identity_hdr_create(tdata->pool, STR_PATH);
+  path_hdr->name_addr.uri = (pjsip_uri*)path_uri;
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)path_hdr);
 
   return PJ_SUCCESS;
 }

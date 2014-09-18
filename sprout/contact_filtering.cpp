@@ -37,6 +37,7 @@
 #include "contact_filtering.h"
 #include "constants.h"
 #include "pjutils.h"
+#include "sproutsasevent.h"
 
 #include <limits>
 #include <boost/algorithm/string.hpp>
@@ -95,12 +96,47 @@ void filter_bindings_to_targets(const std::string& aor,
   // Iterate over the Bindings, checking if they're valid and creating a target
   // if so.
   const RegStore::AoR::Bindings bindings = aor_data->bindings();
+  int bindings_rejected_due_to_gruu = 0;
+  bool request_uri_is_gruu = false;
+  std::string requri;
+
+  if ((PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri) && (pjsip_param_find(&((pjsip_sip_uri*)msg->line.req.uri)->other_param, &STR_GR) != NULL)))
+  {
+    request_uri_is_gruu = true;
+    LOG_DEBUG("Request-URI has 'gr' param, so GRUU matching will be done");
+  }
+
   for (RegStore::AoR::Bindings::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
   {
+    LOG_DEBUG("Performing contact filtering on binding %s", binding->first.c_str());
     bool rejected = false;
     bool deprioritized = false;
+
+    if (request_uri_is_gruu)
+    {
+      pjsip_sip_uri* pub_gruu = binding->second->pub_gruu(pool);
+      if ((pub_gruu == NULL) ||
+          (pjsip_uri_cmp(PJSIP_URI_IN_REQ_URI,
+                         msg->line.req.uri,
+                         pub_gruu) != PJ_SUCCESS))
+      {
+        rejected = true;
+        bindings_rejected_due_to_gruu++;
+        if (pub_gruu != NULL)
+        {
+        LOG_DEBUG("GRUU %s did not match Request-URI %s",
+                  PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu).c_str(),
+                  PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri).c_str());
+        }
+        else
+        {
+        LOG_DEBUG("Binding without GRUU did not match Request-URI %s",
+                  PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri).c_str());
+        }
+      }
+    }
 
     for (std::vector<pjsip_reject_contact_hdr*>::iterator reject = reject_headers.begin();
          reject != reject_headers.end() && (!rejected);
@@ -151,6 +187,26 @@ void filter_bindings_to_targets(const std::string& aor,
         targets.push_back(target);
       }
     }
+  }
+
+  if (request_uri_is_gruu)
+  {
+    LOG_DEBUG("%d of %d bindings rejected because a GRUU was specified", bindings_rejected_due_to_gruu, bindings.size());
+    SAS::Event event(trail, SASEvent::GRUU_FILTERING, 0);
+    event.add_static_param(bindings_rejected_due_to_gruu);
+    event.add_static_param(bindings.size());
+    SAS::report_event(event);
+  }
+
+  SAS::Event event(trail, SASEvent::BINDINGS_FROM_TARGETS, 0);
+  event.add_static_param(targets.size());
+  event.add_static_param(bindings.size());
+  SAS::report_event(event);
+
+  if (targets.empty())
+  {
+    SAS::Event event(trail, SASEvent::ALL_BINDINGS_FILTERED, 0);
+    SAS::report_event(event);
   }
 
   // Prune the excess targets to prevent over-forking.

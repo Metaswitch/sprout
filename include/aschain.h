@@ -64,6 +64,7 @@ struct Target
   pjsip_uri* uri;
   std::list<pjsip_uri*> paths;
   pjsip_transport* transport;
+  pj_sockaddr remote_addr;
   int liveness_timeout;
   uint32_t contact_q1000_value;
   bool deprioritized;
@@ -157,6 +158,11 @@ private:
   /// ODI tokens, one for each step.
   std::vector<std::string> _odi_tokens;
 
+  /// Vector keeping track of whether particular app servers have responded
+  /// (either by sending a response to the original request, or forwarding
+  /// the request back).
+  std::vector<bool> _responsive;
+
   const SessionCase& _session_case;
   const std::string _served_user;
   const bool _is_registered;
@@ -179,7 +185,6 @@ public:
   AsChainLink() :
     _as_chain(NULL),
     _index(0u),
-    _responsive(false),
     _default_handling(SESSION_CONTINUED)
   {
   }
@@ -283,7 +288,7 @@ public:
   /// a timeout or 5xx error from the AS.
   bool continue_session() const
   {
-    return (_default_handling == SESSION_CONTINUED) && (!_responsive);
+    return (_default_handling == SESSION_CONTINUED) && (!_as_chain->_responsive[_index]);
   }
 
   /// Called on receipt of each response from the AS.
@@ -321,8 +326,8 @@ public:
                                      Ifcs& ifcs,
                                      ACR* acr);
 
-  Disposition on_initial_request(pjsip_tx_data* tdata,
-                                 std::string& server_name);
+  void on_initial_request(pjsip_msg* msg,
+                          std::string& server_name);
 
 private:
   friend class AsChainTable;
@@ -330,7 +335,6 @@ private:
   AsChainLink(AsChain* as_chain, size_t index) :
     _as_chain(as_chain),
     _index(index),
-    _responsive(false),
     _default_handling(SESSION_CONTINUED)
   {
   }
@@ -340,11 +344,6 @@ private:
 
   /// The index of this link in the AsChain.
   size_t _index;
-
-  /// Indicates whether or not the AS is responsive (ie. whether it has
-  /// returned a 100 Trying response or forwarded the request back to the
-  /// S-CSCF.
-  bool _responsive;
 
   /// The configured Default Handling configured on the relevant iFC.
   DefaultHandling _default_handling;
@@ -376,7 +375,7 @@ private:
 
   static const int TOKEN_LENGTH = 10;
 
-  /// Map from token to pair of (AsChain, index).
-  std::map<std::string, AsChainLink> _t2c_map;
+  /// Map from ODI token to pair of (AsChain, index).
+  std::map<std::string, AsChainLink> _odi_token_map;
   pthread_mutex_t _lock;
 };

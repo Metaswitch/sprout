@@ -132,6 +132,9 @@ protected:
     pj_sockaddr _rem_addr;
   };
 
+  /// Terminate a TCP transport immediately.
+  void terminate_tcp_transport(pjsip_transport* tp);
+
   /// Add DNS A records to map hostname to a set of IP addresses.  The
   /// list of addresses should be comma separated.
   static void add_host_mapping(const string& hostname, const string& addresses);
@@ -170,7 +173,7 @@ protected:
   static SipTest* _current_instance;
 
   /// Register the specified URI.
-  void register_uri(RegStore* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600);
+  void register_uri(RegStore* store, FakeHSSConnection* hss, const string& user, const string& domain, const string& contact, int lifetime = 3600, string instance_id="");
 
   /// Build an incoming SIP packet.
   pjsip_rx_data* build_rxdata(const string& msg, TransportFlow* tp = _tp_default, pj_pool_t* rdata_pool = NULL);
@@ -217,6 +220,9 @@ protected:
 
   /// Get a list of all current transactions.
   std::list<pjsip_transaction*> get_all_tsxs();
+
+  /// Terminate all unterminated transactions.
+  void terminate_all_tsxs(int status_code);
 
   /// Expect that the given message is sent on the expected transport
   /// type/address/port.  The address is specified as a numeric string

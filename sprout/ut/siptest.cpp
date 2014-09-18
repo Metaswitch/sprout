@@ -332,6 +332,11 @@ void SipTest::TransportFlow::expect_target(const pjsip_tx_data* tdata, bool stri
   }
 }
 
+void SipTest::terminate_tcp_transport(pjsip_transport* tp)
+{
+  fake_tcp_init_shutdown((struct fake_tcp_transport*)tp, PJ_SUCCESS);
+}
+
 void SipTest::add_host_mapping(const string& hostname, const string& addresses)
 {
   // Add the required records to the cache.  Records are added with a very,
@@ -546,7 +551,13 @@ void SipTest::log_pjsip_msg(const char* description, pjsip_msg* msg)
   }
 }
 
-void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::string& user, const std::string& domain, const std::string& contact, int lifetime)
+void SipTest::register_uri(RegStore* store,
+                           FakeHSSConnection* hss,
+                           const std::string& user,
+                           const std::string& domain,
+                           const std::string& contact,
+                           int lifetime,
+                           std::string instance_id)
 {
   string uri("sip:");
   uri.append(user).append("@").append(domain);
@@ -562,6 +573,10 @@ void SipTest::register_uri(RegStore* store, FakeHSSConnection* hss, const std::s
   binding->_expires = time(NULL) + lifetime;
   binding->_priority = 1000;
   binding->_emergency_registration = false;
+  if (!instance_id.empty())
+  {
+    binding->_params["+sip.instance"] = instance_id;
+  }
   bool ret = store->set_aor_data(uri, aor, false, 0);
   delete aor;
   EXPECT_TRUE(ret);
@@ -731,6 +746,49 @@ list<pjsip_transaction*> SipTest::get_all_tsxs()
   pj_mutex_unlock(mod_tsx_layer->mutex);
   return ret;
 }
+
+void SipTest::terminate_all_tsxs(int status_code)
+{
+  // Terminates all the unterminated transactions.  This has to be done
+  // by scanning for the first unterminated transaction and terminating it,
+  // until there are no unterminated transactions left in the list.  This is
+  // because it is possible for terminating one transaction to kick off a
+  // retry.
+  LOG_DEBUG("Terminate outstanding transactions");
+  mod_tsx_layer_t* mod_tsx_layer = (mod_tsx_layer_t*)pjsip_tsx_layer_instance();
+  pj_hash_table_t* htable = mod_tsx_layer->htable;
+
+  while (true)
+  {
+    // Scan through the list of transactions until we find an unterminated one.
+    pj_hash_iterator_t itbuf;
+    pj_mutex_lock(mod_tsx_layer->mutex);
+    pjsip_transaction* tsx = NULL;
+    for (pj_hash_iterator_t* it = pj_hash_first(htable, &itbuf);
+         it != NULL;
+         it = pj_hash_next(htable, it))
+    {
+      tsx = (pjsip_transaction*)pj_hash_this(htable, it);
+      if ((tsx->state != PJSIP_TSX_STATE_TERMINATED) &&
+          (tsx->state != PJSIP_TSX_STATE_DESTROYED))
+      {
+        break;
+      }
+      tsx = NULL;
+    }
+    pj_mutex_unlock(mod_tsx_layer->mutex);
+
+    if (tsx == NULL)
+    {
+      // No more unterminated transactions.
+      break;
+    }
+
+    pjsip_tsx_terminate(tsx, status_code);
+  }
+  pj_mutex_unlock(mod_tsx_layer->mutex);
+}
+
 
 void SipTest::expect_target(const char* type_name, const char* addr, int port, pjsip_tx_data* tdata)
 {

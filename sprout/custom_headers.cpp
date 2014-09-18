@@ -234,7 +234,7 @@ pjsip_hdr_vptr identity_hdr_vptr =
 
 
 /// Custom create, clone and print functions used for the P-Associated-URI,
-/// P-Asserted-Identity and P-Preferred-Identity headers
+/// P-Asserted-Identity, P-Preferred-Identity, and P-Served-User headers
 pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name)
 {
   void* mem = pj_pool_alloc(pool, sizeof(pjsip_routing_hdr));
@@ -293,7 +293,7 @@ int identity_hdr_print(pjsip_routing_hdr* hdr,
   *buf++ = ':';
   *buf++ = ' ';
 
-  printed = pjsip_uri_print(PJSIP_URI_IN_FROMTO_HDR,
+  printed = pjsip_uri_print(PJSIP_URI_IN_ROUTING_HDR,
                             &hdr->name_addr,
                             buf,
                             endbuf-buf);
@@ -468,6 +468,103 @@ pjsip_hdr* parse_hdr_p_served_user(pjsip_parse_ctx *ctx)
   pjsip_parse_end_hdr_imp(scanner);
 
   return (pjsip_hdr*)hdr;
+}
+
+
+/// Custom parser for Service-Route header.  This is registered with PJSIP when
+/// we initialize the stack.
+pjsip_hdr* parse_hdr_service_route(pjsip_parse_ctx *ctx)
+{
+  // The Service-Route header is a comma separated list of name-addrs
+  // so we parse it to multiple header structures, using the pjsip_route_hdr
+  // structure for each.  Note that Service-Route may have parameters
+  // after the name-addr.
+  pjsip_route_hdr *first = NULL;
+  pj_scanner *scanner = ctx->scanner;
+
+  do
+  {
+    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_SERVICE_ROUTE);
+    if (!first)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+
+    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+    while (*scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);    // Consume ;
+      pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
+      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
+      pj_list_insert_before(&hdr->other_param, p);
+    }
+
+    if (*scanner->curptr == ',')
+    {
+      pj_scan_get_char(scanner);
+    }
+    else
+    {
+      break;
+    }
+  } while (1);
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)first;
+}
+
+
+/// Custom parser for Path header.  This is registered with PJSIP when
+/// we initialize the stack.
+pjsip_hdr* parse_hdr_path(pjsip_parse_ctx *ctx)
+{
+  // The Path header is a comma separated list of name-addrs so we parse it
+  // to multiple header structures, using the pjsip_route_hdr structure for
+  // each.  Note that Path may have parameters after the name-addr.
+  pjsip_route_hdr *first = NULL;
+  pj_scanner *scanner = ctx->scanner;
+
+  do
+  {
+    pjsip_route_hdr *hdr = identity_hdr_create(ctx->pool, STR_PATH);
+    if (!first)
+    {
+      first = hdr;
+    }
+    else
+    {
+      pj_list_insert_before(first, hdr);
+    }
+    pjsip_name_addr *temp = pjsip_parse_name_addr_imp(scanner, ctx->pool);
+
+    pj_memcpy(&hdr->name_addr, temp, sizeof(*temp));
+
+    while (*scanner->curptr == ';')
+    {
+      pj_scan_get_char(scanner);    // Consume ;
+      pjsip_param *p = PJ_POOL_ALLOC_T(ctx->pool, pjsip_param);
+      pjsip_parse_param_imp(scanner, ctx->pool, &p->name, &p->value, 0);
+      pj_list_insert_before(&hdr->other_param, p);
+    }
+
+    if (*scanner->curptr == ',')
+    {
+      pj_scan_get_char(scanner);
+    }
+    else
+    {
+      break;
+    }
+  } while (1);
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)first;
 }
 
 
@@ -1200,6 +1297,10 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("P-Charging-Function-Addresses", NULL, &parse_hdr_p_charging_function_addresses);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("P-Served-User", NULL, &parse_hdr_p_served_user);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Service-Route", NULL, &parse_hdr_service_route);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Path", NULL, &parse_hdr_path);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Session-Expires", NULL, &parse_hdr_session_expires);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);

@@ -43,8 +43,8 @@
 #include "constants.h"
 #include "siptest.hpp"
 #include "utils.h"
+#include "basicproxy.h"
 #include "test_utils.hpp"
-#include "icscfproxy.h"
 #include "fakehssconnection.hpp"
 #include "faketransport_tcp.hpp"
 #include "test_interposer.hpp"
@@ -514,7 +514,6 @@ protected:
 };
 
 
-
 TEST_F(BasicProxyTest, RouteOnRouteHeaders)
 {
   // Tests routing of requests on normal loose routing Route headers.
@@ -691,8 +690,6 @@ TEST_F(BasicProxyTest, RouteOnRouteHeadersWithTelURI)
 
   delete tp;
 }
-
-
 
 
 TEST_F(BasicProxyTest, RouteOnRequestURIDomain)
@@ -2041,6 +2038,75 @@ TEST_F(BasicProxyTest, StatelessForwardACK)
 }
 
 
+TEST_F(BasicProxyTest, StatelessForwardLargeACK)
+{
+  // Tests stateless forwarding of a large ACK where the onward hop is
+  // over UDP.  This tests that switching to TCP works.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+
+  // Send an ACK with Route headers traversing the proxy, with a large message
+  // body.  The second Route header specifies UDP transport.
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=UDP;lr>";
+  msg._body = std::string(1300, '!');
+  inject_msg(msg.get_request(), tp);
+
+  // Request is forwarded to the node in the second Route header, over TCP
+  // not UDP.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.20.1", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Create a UDP flow and force this as a target for bob@homedomain.
+  TransportFlow* tp2 = new TransportFlow(TransportFlow::Protocol::UDP,
+                                        stack_data.scscf_port,
+                                        "5.6.7.8",
+                                        49322);
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@5.6.7.8:49322;transport=UDP",
+                                tp2->transport());
+
+  // Send an ACK with no Route headers directed at bob@homedomain, with a
+  // large message body.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@homedomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "homedomain";
+  msg._via = tp->to_string(false);
+  msg._body = std::string(1300, '!');
+  inject_msg(msg.get_request(), tp);
+
+  // Request is forwarded to the UDP flow, not switched to TCP.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp2->expect_target(tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp2;
+  delete tp;
+
+}
+
+
 TEST_F(BasicProxyTest, LateCancel)
 {
   // Tests CANCELing a request after the request has completed.
@@ -2853,6 +2919,7 @@ TEST_F(BasicProxyTest, RetryFailed)
   delete tp;
 }
 
+
 TEST_F(BasicProxyTest, NonInvite100Trying)
 {
   // Tests 100 Trying for non-INVITEs.
@@ -2952,4 +3019,359 @@ TEST_F(BasicProxyTest, NonInvite100Trying)
 
   delete tp;
 }
+
+
+TEST_F(BasicProxyTest, ContentHeaders)
+{
+  // Tests handling of Content-Length and Content-Type headers (mainly to
+  // verify fixes to problems that resulted in multiple Content-Length and
+  // Content-Type headers.
+
+  pjsip_tx_data* tdata;
+  char buf[1000];
+  int len;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Send an ACK with Route headers traversing the proxy, with no message body
+  // and check it comes out the other side with only one Content-Length
+  // header and no Content-Type header.
+  Message msg;
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+
+  // To force the problem to show up we need to print the message to a buffer
+  // and parse it back.  Arguably we should do this for every message in the UTs.
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 0", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  // Send an ACK with Route headers traversing the proxy, with no message body
+  // and a Content-Type header, and check it comes out the other side with
+  // only one Content-Length header (with length zero) and the Content-Type
+  // header intact.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "text/html";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 0", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("Content-Type: text/html", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  // Send an ACK with Route headers traversing the proxy, with a message body
+  // and a Content-Type header, and check it comes out the other side with
+  // only one Content-Length header (with the right length) and the Content-Type
+  // header intact.
+  msg._method = "ACK";
+  msg._requri = "sip:bob@awaydomain";
+  msg._from = "alice";
+  msg._to = "bob";
+  msg._todomain = "awaydomain";
+  msg._via = tp->to_string(false);
+  msg._route = "Route: <sip:127.0.0.1;transport=TCP;lr>\r\nRoute: <sip:proxy1.awaydomain;transport=TCP;lr>";
+  msg._content_type = "application/sdp";
+  msg._body = "v=0\r\no=alice 53655765 2353687637 IN IP4 pc33.atlanta.com\r\ns=-\r\nt=0 0\r\nc=IN IP4 pc33.atlanta.com\r\nm=audio 3456 RTP/AVP 0 1 3 99\r\na=rtpmap:0 PCMU/8000\r\n\r\n";
+  inject_msg(msg.get_request(), tp);
+
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  len = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
+  tdata->msg = pjsip_parse_msg(tdata->pool, buf, len, NULL);
+  EXPECT_EQ("Content-Length: 152", get_headers(tdata->msg, "Content-Length"));
+  EXPECT_EQ("Content-Type: application/sdp", get_headers(tdata->msg, "Content-Type"));
+  free_txdata();
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, InviteTimerCExpiryCancelled)
+{
+  // Tests expiry of Timer C on an INVITE transaction.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Add a test target for bob@homedomain.
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node1.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy1.homedomain;transport=TCP;lr"));
+
+  // Inject a request with a Route header referring to this node and a
+  // RequestURI with a URI in the home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@homedomain;transport=TCP";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and a forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Catch the request forwarded to node1.homedomain via proxy1.homedomain.
+  pjsip_tx_data* tdata1 = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, tdata1);
+  ReqMatcher("INVITE").matches(tdata1->msg);
+  EXPECT_EQ("sip:bob@node1.homedomain;transport=TCP",
+            str_uri(tdata1->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy1.homedomain;transport=TCP;lr>",
+            get_headers(tdata1->msg, "Route"));
+
+  // Send a 100 Trying.
+  inject_msg(respond_to_txdata(tdata1, 100));
+  ASSERT_EQ(0, txdata_count());
+
+  // The transaction timers are no longer running, but Timer C is running, so
+  // advance time so that timer C expires.
+  cwtest_advance_time_ms(180000);
+  poll();
+
+  // Expect a CANCEL on the outstanding transaction and send a 200 OK response.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, tdata);
+  ReqMatcher("CANCEL").matches(tdata->msg);
+  inject_msg(respond_to_current_txdata(200));
+
+  // Send a 487 response to the original INVITE transaction and check this
+  // is ACKed and passed through.
+  inject_msg(respond_to_txdata(tdata1, 487));
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(487).matches(tdata->msg);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp;
+}
+
+TEST_F(BasicProxyTest, InviteTimerCExpiryRace)
+{
+  // Tests expiry of Timer C on an INVITE transaction where the CANCEL loses
+  // the race with a final response from the downstream node.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Add a test target for bob@homedomain.
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node1.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy1.homedomain;transport=TCP;lr"));
+
+  // Inject a request with a Route header referring to this node and a
+  // RequestURI with a URI in the home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@homedomain;transport=TCP";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and a forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Catch the request forwarded to node1.homedomain via proxy1.homedomain.
+  pjsip_tx_data* tdata1 = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, tdata1);
+  ReqMatcher("INVITE").matches(tdata1->msg);
+  EXPECT_EQ("sip:bob@node1.homedomain;transport=TCP",
+            str_uri(tdata1->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy1.homedomain;transport=TCP;lr>",
+            get_headers(tdata1->msg, "Route"));
+
+  // Send a 100 Trying.
+  inject_msg(respond_to_txdata(tdata1, 100));
+  ASSERT_EQ(0, txdata_count());
+
+  // The transaction timers are no longer running, but Timer C is running, so
+  // advance time so that timer C expires.
+  cwtest_advance_time_ms(180000);
+  poll();
+
+  // Expect a CANCEL on the outstanding transaction, but don't respond immediately.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* cancel = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, cancel);
+  ReqMatcher("CANCEL").matches(cancel->msg);
+
+  // Send a 408 response to the original INVITE transaction and check this
+  // is ACKed and passed through.
+  inject_msg(respond_to_txdata(tdata1, 408));
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(408).matches(tdata->msg);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  // Delay briefly to allow the INVITE transactions to be completed and destroyed
+  cwtest_advance_time_ms(1000);
+  poll();
+
+  // Send in a late CANCEL failure response, and check that this is absorbed
+  inject_msg(respond_to_txdata(cancel, 481));
+  ASSERT_EQ(0, txdata_count());
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, InviteTimerCExpiryCancelTimeout)
+{
+  // Tests expiry of Timer C on an INVITE transaction where the CANCEL
+  // times out.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Add a test target for bob@homedomain.
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node1.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy1.homedomain;transport=TCP;lr"));
+
+  // Inject a request with a Route header referring to this node and a
+  // RequestURI with a URI in the home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@homedomain;transport=TCP";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and a forwarded INVITE.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Catch the request forwarded to node1.homedomain via proxy1.homedomain.
+  pjsip_tx_data* tdata1 = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, tdata1);
+  ReqMatcher("INVITE").matches(tdata1->msg);
+  EXPECT_EQ("sip:bob@node1.homedomain;transport=TCP",
+            str_uri(tdata1->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy1.homedomain;transport=TCP;lr>",
+            get_headers(tdata1->msg, "Route"));
+
+  // Send a 100 Trying.
+  inject_msg(respond_to_txdata(tdata1, 100));
+  ASSERT_EQ(0, txdata_count());
+
+  // The transaction timers are no longer running, but Timer C is running, so
+  // advance time so that timer C expires.
+  cwtest_advance_time_ms(180000);
+  poll();
+
+  // Expect a CANCEL on the outstanding transaction, but don't respond immediately.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* cancel = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, cancel);
+  ReqMatcher("CANCEL").matches(cancel->msg);
+
+  // Advance time so the CANCEL transaction times out.
+  cwtest_advance_time_ms(32000);
+  poll();
+
+  // Receive a 487 response to the original INVITE transaction.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(487).matches(tdata->msg);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp;
+}
+
 

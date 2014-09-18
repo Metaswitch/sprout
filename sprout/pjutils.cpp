@@ -199,13 +199,20 @@ std::string PJUtils::pj_str_to_unquoted_string(const pj_str_t* pjstr)
   return ret;
 }
 
-
 std::string PJUtils::pj_status_to_string(const pj_status_t status)
 {
   char errmsg[PJ_ERR_MSG_SIZE];
 
   pj_strerror(status, errmsg, sizeof(errmsg));
   return std::string(errmsg);
+}
+
+
+std::string PJUtils::hdr_to_string(void* hdr)
+{
+  char buf[500];
+  int len = pjsip_hdr_print_on((pjsip_hdr*)hdr, buf, sizeof(buf));
+  return std::string(buf, len);
 }
 
 
@@ -534,6 +541,16 @@ void PJUtils::add_record_route(pjsip_tx_data* tdata,
   LOG_DEBUG("Added Record-Route header, URI = %s", uri_to_string(PJSIP_URI_IN_ROUTING_HDR, rr->name_addr.uri).c_str());
 }
 
+/// Add a Route header with the specified URI.
+void PJUtils::add_route_header(pjsip_msg* msg,
+                               pjsip_sip_uri* uri,
+                               pj_pool_t* pool)
+{
+  pjsip_route_hdr* hroute = pjsip_route_hdr_create(pool);
+  hroute->name_addr.uri = (pjsip_uri*)uri;
+  uri->lr_param = 1;            // Always use loose routing.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)hroute);
+}
 
 /// Remove all existing copies of a header.  The header to delete must
 /// not be one that has an abbreviation.
@@ -624,6 +641,39 @@ int PJUtils::max_expires(pjsip_msg* msg, int default_expires)
 }
 
 
+pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
+                                  pjsip_rx_data* rdata)
+{
+  pjsip_tx_data* clone = NULL;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
+  if (status == PJ_SUCCESS)
+  {
+    pjsip_tx_data_add_ref(clone);
+    clone->msg = pjsip_msg_clone(clone->pool, rdata->msg_info.msg);
+    set_trail(clone, get_trail(rdata));
+    LOG_DEBUG("Cloned %s to %s", pjsip_rx_data_get_info(rdata), clone->obj_name);
+
+  }
+  return clone;
+}
+
+
+pjsip_tx_data* PJUtils::clone_msg(pjsip_endpoint* endpt,
+                                  pjsip_tx_data* tdata)
+{
+  pjsip_tx_data* clone = NULL;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &clone);
+  if (status == PJ_SUCCESS)
+  {
+    pjsip_tx_data_add_ref(clone);
+    clone->msg = pjsip_msg_clone(clone->pool, tdata->msg);
+    set_trail(clone, get_trail(tdata));
+    LOG_DEBUG("Cloned %s to %s", tdata->obj_name, clone->obj_name);
+  }
+  return clone;
+}
+
+
 pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
                                      const pjsip_rx_data* rdata,
                                      int st_code,
@@ -631,10 +681,10 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
                                      pjsip_tx_data** p_tdata)
 {
   pj_status_t status = pjsip_endpt_create_response(endpt,
-                       rdata,
-                       st_code,
-                       st_text,
-                       p_tdata);
+                                                   rdata,
+                                                   st_code,
+                                                   st_text,
+                                                   p_tdata);
   if (status == PJ_SUCCESS)
   {
     // Copy the SAS trail across from the request.
@@ -647,6 +697,107 @@ pj_status_t PJUtils::create_response(pjsip_endpoint* endpt,
 
   }
   return status;
+}
+
+
+/// Creates a response to the message in the supplied pjsip_tx_data structure.
+pj_status_t PJUtils::create_response(pjsip_endpoint *endpt,
+                                     const pjsip_tx_data *req_tdata,
+                                     int st_code,
+                                     const pj_str_t* st_text,
+                                     pjsip_tx_data **p_tdata)
+{
+  pjsip_msg* req_msg = req_tdata->msg;
+
+  // Create a new transmit buffer.
+  pjsip_tx_data *tdata;
+  pj_status_t status = pjsip_endpt_create_tdata(endpt, &tdata);
+  if (status != PJ_SUCCESS)
+  {
+    return status;
+  }
+
+  // Set initial reference count to 1.
+  pjsip_tx_data_add_ref(tdata);
+
+  // Copy the SAS trail across from the request.
+  set_trail(tdata, get_trail(req_tdata));
+
+  // Create new response message.
+  pjsip_msg* msg = pjsip_msg_create(tdata->pool, PJSIP_RESPONSE_MSG);
+  tdata->msg = msg;
+
+  // Set status code and reason text.
+  msg->line.status.code = st_code;
+  if (st_text != NULL)
+  {
+    pj_strdup(tdata->pool, &msg->line.status.reason, st_text);
+  }
+  else
+  {
+    msg->line.status.reason = *pjsip_get_status_text(st_code);
+  }
+
+  // Set TX data attributes.
+  tdata->rx_timestamp = req_tdata->rx_timestamp;
+
+  // Copy all the via headers in order.
+  pjsip_via_hdr* top_via = NULL;
+  pjsip_via_hdr* via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, NULL);
+  while (via)
+  {
+    pjsip_via_hdr *new_via;
+
+    new_via = (pjsip_via_hdr*)pjsip_hdr_clone(tdata->pool, via);
+    if (top_via == NULL)
+    {
+      top_via = new_via;
+    }
+
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)new_via);
+    via = (pjsip_via_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_VIA, via->next);
+  }
+
+  // Copy all Record-Route headers, in order.
+  pjsip_rr_hdr* rr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_RECORD_ROUTE, NULL);
+  while (rr)
+  {
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, rr));
+    rr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(req_msg, PJSIP_H_RECORD_ROUTE, rr->next);
+  }
+
+  // Copy Call-ID header.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CID_HDR(req_msg)));
+
+  // Copy From header.
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_FROM_HDR(req_msg)));
+
+  // Copy To header. */
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_TO_HDR(req_msg)));
+
+  // Must add To tag in the response (Section 8.2.6.2), except if this is
+  // 100 (Trying) response. Same tag must be created for the same request
+  // (e.g. same tag in provisional and final response). The easiest way
+  // to do this is to derive the tag from Via branch parameter (or to
+  // use it directly).
+  pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(msg);
+  if ((to_hdr->tag.slen == 0) &&
+      (st_code > 100) &&
+      (top_via))
+  {
+    to_hdr->tag = top_via->branch_param;
+  }
+
+  // Copy CSeq header. */
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)pjsip_hdr_clone(tdata->pool, PJSIP_MSG_CSEQ_HDR(req_msg)));
+
+  // Some headers should always be copied onto responses, like charging headers
+  PJUtils::clone_header(&STR_P_C_V, req_msg, msg, tdata->pool);
+  PJUtils::clone_header(&STR_P_C_F_A, req_msg, msg, tdata->pool);
+
+  *p_tdata = tdata;
+
+  return PJ_SUCCESS;
 }
 
 
@@ -689,6 +840,26 @@ pj_status_t PJUtils::create_response_fwd(pjsip_endpoint* endpt,
   return status;
 }
 
+
+pjsip_tx_data* PJUtils::create_cancel(pjsip_endpoint* endpt,
+                                      pjsip_tx_data* tdata,
+                                      int reason_code)
+{
+  pjsip_tx_data* cancel;
+  pj_status_t status = pjsip_endpt_create_cancel(endpt, tdata, &cancel);
+
+  if (status != PJ_SUCCESS)
+  {
+    return NULL;
+  }
+
+  if (reason_code != 0)
+  {
+    add_reason(cancel, reason_code);
+  }
+
+  return cancel;
+}
 
 /// Resolves a destination.
 void PJUtils::resolve(const std::string& name,
@@ -1306,13 +1477,6 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   // Copy the trail identifier to the cloned message.
   set_trail(cloned_tdata, get_trail(tdata));
 
-  if (tdata->msg->type == PJSIP_REQUEST_MSG)
-  {
-    // Substitute the branch value in the top Via header with a unique
-    // branch identifier.
-    generate_new_branch_id(cloned_tdata);
-  }
-
   // If the original message already had a specified transport set this
   // on the clone.  (Must use pjsip_tx_data_set_transport to ensure
   // reference counts get updated.)
@@ -1330,6 +1494,32 @@ pjsip_tx_data* PJUtils::clone_tdata(pjsip_tx_data* tdata)
   return cloned_tdata;
 }
 
+void PJUtils::add_top_via(pjsip_tx_data* tdata)
+{
+  // Add a new Via header with a unique branch identifier.
+  pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
+  pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
+  generate_new_branch_id(tdata);
+}
+
+void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)
+{
+  char reason_val_str[100];
+  const pj_str_t* reason_text = pjsip_get_status_text(reason_code);
+  snprintf(reason_val_str,
+           sizeof(reason_val_str),
+           "SIP ;cause=%d ;text=\"%.*s\"",
+           reason_code,
+           (int)reason_text->slen,
+           reason_text->ptr);
+  pj_str_t reason_name = pj_str("Reason");
+  pj_str_t reason_val = pj_str(reason_val_str);
+  pjsip_hdr* reason_hdr =
+                      (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
+                                                                  &reason_name,
+                                                                  &reason_val);
+  pjsip_msg_add_hdr(tdata->msg, reason_hdr);
+}
 
 bool PJUtils::compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs)
 {
@@ -1424,6 +1614,13 @@ bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
            (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
 }
 
+bool PJUtils::is_uri_gruu(pjsip_uri* uri)
+{
+  return ((uri != NULL) &&
+          (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+          (pjsip_param_find(&((pjsip_sip_uri*)uri)->other_param, &STR_GR)));
+}
+
 // Return true if there are no route headers, or there is exactly one,
 // which is local
 bool PJUtils::check_route_headers(pjsip_rx_data* rdata)
@@ -1454,6 +1651,153 @@ void PJUtils::put_unary_param(pjsip_param* params_list,
     param = PJ_POOL_ZALLOC_T(pool, pjsip_param);
     param->name = *name;
     pj_list_push_back(params_list, param);
+  }
+}
+
+/// Redirects the call to the specified target, for the reason specified in the
+// status code.
+//
+// @returns whether the call should continue as it was.
+pjsip_status_code PJUtils::redirect(pjsip_msg* msg, std::string target, pj_pool_t* pool, pjsip_status_code code)
+{
+  pjsip_uri* target_uri = PJUtils::uri_from_string(target, pool);
+
+  if (target_uri == NULL)
+  {
+    // Target URI was badly formed, so continue processing the call without
+    // the redirect.
+    return code;
+  }
+
+  return redirect_int(msg, target_uri, pool, code);
+}
+
+/// Redirects the call to the specified target, for the reason specified in the
+// status code.
+//
+// @returns whether the call should continue as it was (always false).
+pjsip_status_code PJUtils::redirect(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code)
+{
+  return redirect_int(msg, (pjsip_uri*)pjsip_uri_clone(pool, target), pool, code);
+}
+
+pjsip_status_code PJUtils::redirect_int(pjsip_msg* msg, pjsip_uri* target, pj_pool_t* pool, pjsip_status_code code)
+{
+  static const pj_str_t STR_HISTORY_INFO = pj_str("History-Info");
+  static const int MAX_HISTORY_INFOS = 5;
+
+  // Default the code to 480 Temporarily Unavailable.
+  code = (code != 0) ? code : PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+  pjsip_status_code rc = code;
+
+  // Count the number of existing History-Info headers.
+  int num_history_infos = 0;
+  pjsip_history_info_hdr* prev_history_info_hdr = NULL;
+  for (pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_HISTORY_INFO, NULL);
+       hdr != NULL;
+       hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_HISTORY_INFO, hdr->next))
+  {
+    ++num_history_infos;
+    prev_history_info_hdr = (pjsip_history_info_hdr*)hdr;
+  }
+
+  // If we haven't already had too many redirections (i.e. History-Info
+  // headers), do the redirect.
+  if (num_history_infos < MAX_HISTORY_INFOS)
+  {
+    rc = PJSIP_SC_OK;
+
+    // Add a Diversion header with the original request URI and the reason
+    // for the diversion.
+    std::string div = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, msg->line.req.uri);
+    div += ";reason=";
+    div += (code == PJSIP_SC_BUSY_HERE) ? "user-busy" :
+      (code == PJSIP_SC_TEMPORARILY_UNAVAILABLE) ? "no-answer" :
+      (code == PJSIP_SC_NOT_FOUND) ? "out-of-service" :
+      (code == 0) ? "unconditional" :
+      "unknown";
+    pj_str_t sdiv;
+    pjsip_generic_string_hdr* diversion =
+      pjsip_generic_string_hdr_create(pool,
+                                      &STR_DIVERSION,
+                                      pj_cstr(&sdiv, div.c_str()));
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)diversion);
+
+    // Create or update a History-Info header for the old target.
+    if (prev_history_info_hdr == NULL)
+    {
+      prev_history_info_hdr = create_history_info_hdr(msg->line.req.uri, pool);
+      prev_history_info_hdr->index = pj_str("1");
+      pjsip_msg_add_hdr(msg, (pjsip_hdr*)prev_history_info_hdr);
+    }
+
+    update_history_info_reason(((pjsip_name_addr*)(prev_history_info_hdr->uri))->uri, pool, code);
+
+    // Set up the new target URI.
+    msg->line.req.uri = target;
+
+    // Create a History-Info header for the new target.
+    pjsip_history_info_hdr* history_info_hdr = create_history_info_hdr(target, pool);
+
+    // Set up the index parameter.  This is the previous value suffixed with ".1".
+    history_info_hdr->index.slen = prev_history_info_hdr->index.slen + 2;
+    history_info_hdr->index.ptr = (char*)pj_pool_alloc(pool, history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr, prev_history_info_hdr->index.ptr, prev_history_info_hdr->index.slen);
+    pj_memcpy(history_info_hdr->index.ptr + prev_history_info_hdr->index.slen, ".1", 2);
+
+    pjsip_msg_add_hdr(msg, (pjsip_hdr*)history_info_hdr);
+  }
+
+  return rc;
+}
+
+pjsip_history_info_hdr* PJUtils::create_history_info_hdr(pjsip_uri* target, pj_pool_t* pool)
+{
+  // Create a History-Info header.
+  pjsip_history_info_hdr* history_info_hdr = pjsip_history_info_hdr_create(pool);
+
+  // Clone the URI and set up its parameters.
+  pjsip_uri* history_info_uri = (pjsip_uri*)pjsip_uri_clone(pool, (pjsip_uri*)pjsip_uri_get_uri(target));
+  pjsip_name_addr* history_info_name_addr_uri = pjsip_name_addr_create(pool);
+  history_info_name_addr_uri->uri = history_info_uri;
+  history_info_hdr->uri = (pjsip_uri*)history_info_name_addr_uri;
+
+  return history_info_hdr;
+}
+
+void PJUtils::update_history_info_reason(pjsip_uri* history_info_uri, pj_pool_t* pool, int code)
+{
+  static const pj_str_t STR_REASON = pj_str("Reason");
+  static const pj_str_t STR_SIP = pj_str("SIP");
+  static const pj_str_t STR_CAUSE = pj_str("cause");
+  static const pj_str_t STR_TEXT = pj_str("text");
+
+  if (PJSIP_URI_SCHEME_IS_SIP(history_info_uri))
+  {
+    // Set up the Reason parameter - this is always "SIP".
+    pjsip_sip_uri* history_info_sip_uri = (pjsip_sip_uri*)history_info_uri;
+    if (pj_list_empty(&history_info_sip_uri->other_param))
+    {
+      pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_REASON;
+      param->value = STR_SIP;
+
+      pj_list_insert_after(&history_info_sip_uri->other_param, (pj_list_type*)param);
+
+      // Now add the cause parameter.
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_CAUSE;
+      char cause_text[4];
+      sprintf(cause_text, "%u", code);
+      pj_strdup2(pool, &param->value, cause_text);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+
+      // Finally add the text parameter.
+      param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      param->name = STR_TEXT;
+      param->value = *pjsip_get_status_text(code);
+      pj_list_insert_after(&history_info_sip_uri->other_param, param);
+    }
   }
 }
 

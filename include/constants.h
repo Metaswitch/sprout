@@ -37,7 +37,9 @@
 #ifndef CONSTANTS_H_
 #define CONSTANTS_H_
 
+extern "C" {
 #include <pjsip.h>
+}
 
 const pj_str_t STR_DIVERSION = pj_str((char *)"Diversion");
 const pj_str_t STR_SUPPORTED = pj_str((char *)"Supported");
@@ -69,6 +71,7 @@ const pj_str_t STR_ORIG = pj_str((char*)"orig");
 const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");
 const pj_str_t STR_P_C_V = pj_str((char*)"P-Charging-Vector");
 const pj_str_t STR_P_C_F_A = pj_str((char*)"P-Charging-Function-Addresses");
+const pj_str_t STR_P_CALLED_PARTY_ID = pj_str((char*)"P-Called-Party-ID");
 const pj_str_t STR_DIGEST = pj_str((char*)"Digest");
 const pj_str_t STR_MD5 = pj_str((char*)"MD5");
 const pj_str_t STR_AKAV1_MD5 = pj_str((char*)"AKAv1-MD5");
@@ -80,6 +83,7 @@ const pj_str_t STR_P_PROFILE_KEY = pj_str((char*)"P-Profile-Key");
 const pj_str_t STR_APPLICATION = pj_str((char*)"application");
 const pj_str_t STR_SDP = pj_str((char*)"sdp");
 const pj_str_t STR_EVENT = pj_str((char*)"Event");
+const pj_str_t STR_EVENT_LOWER = pj_str((char*)"event");
 const pj_str_t STR_EVENTS = pj_str((char*)"events");
 const pj_str_t STR_EVENT_SHORT = pj_str((char*)"o");
 const pj_str_t STR_X = pj_str((char*)"X");
@@ -100,6 +104,10 @@ const pj_str_t STR_ACCEPT_CONTACT_SHORT = pj_str((char*)"a");
 const pj_str_t STR_REJECT_CONTACT = pj_str((char*)"Reject-Contact");
 const pj_str_t STR_REJECT_CONTACT_SHORT = pj_str((char*)"j");
 const pj_str_t STR_ALLOW_EVENTS = pj_str((char*)"Allow-Events");
+const pj_str_t STR_SESCASE = pj_str((char*)"sescase");
+const pj_str_t STR_BILLING_ROLE = pj_str((char*)"billing-role");
+const pj_str_t STR_GR = pj_str((char*)"gr");
+const pj_str_t STR_XML_PUB_GRUU = pj_str((char*)"gr:pub-gruu");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
@@ -148,6 +156,8 @@ const pj_str_t STR_TIMEOUT = pj_str((char*)"timeout");
 const pj_str_t STR_REGINFO = pj_str((char*)"reginfo");
 const pj_str_t STR_XMLNS_NAME = pj_str((char*)"xmlns");
 const pj_str_t STR_XMLNS_VAL = pj_str((char*)"urn:ietf:params:xml:ns:reginfo");
+const pj_str_t STR_XMLNS_GRUU_NAME = pj_str((char*)"xmlns:gr");
+const pj_str_t STR_XMLNS_GRUU_VAL = pj_str((char*)"urn:ietf:params:xml:ns:gruuinfo");
 const pj_str_t STR_VERSION = pj_str((char*)"version");
 const pj_str_t STR_VERSION_VAL = pj_str((char*)"0");
 const pj_str_t STR_XMLNS_XSI_NAME = pj_str((char*)"xmlns:xsi");

@@ -40,6 +40,7 @@ TARGET_SOURCES := logger.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
+                  mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
                   bgcfservice.cpp \
@@ -59,7 +60,6 @@ TARGET_SOURCES := logger.cpp \
                   load_monitor.cpp \
                   counter.cpp \
                   basicproxy.cpp \
-                  icscfproxy.cpp \
                   icscfrouter.cpp \
                   scscfselector.cpp	\
                   acr.cpp \
@@ -73,7 +73,14 @@ TARGET_SOURCES := logger.cpp \
                   httpstack_utils.cpp \
                   handlers.cpp \
                   ipv6utils.cpp \
-                  contact_filtering.cpp
+                  contact_filtering.cpp \
+                  sproutletproxy.cpp \
+                  sproutletappserver.cpp \
+                  scscfsproutlet.cpp \
+                  bgcfsproutlet.cpp \
+                  icscfsproutlet.cpp \
+                  contact_filtering.cpp \
+                  mobiletwinned.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -106,7 +113,6 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        options_test.cpp \
                        logger_test.cpp \
                        utils_test.cpp \
-                       callservices_test.cpp \
                        aschain_test.cpp \
                        sessioncase_test.cpp \
                        ifchandler_test.cpp \
@@ -118,7 +124,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        flow_test.cpp \
                        load_monitor_test.cpp \
                        counter_test.cpp \
-                       icscfproxy_test.cpp \
+                       icscfsproutlet_test.cpp \
                        basicproxy_test.cpp \
                        scscfselector_test.cpp \
                        acr_test.cpp \
@@ -128,7 +134,11 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        httpresolver_test.cpp \
                        mock_sas.cpp \
                        contact_filtering_test.cpp \
-                       appserver_test.cpp
+                       appserver_test.cpp \
+                       scscf_test.cpp \
+                       sproutletproxy_test.cpp \
+                       gruu_test.cpp \
+                       mobiletwinned_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
@@ -160,14 +170,16 @@ CPPFLAGS += -I${ROOT}/include \
             -I${ROOT}/modules/cpp-common/test_utils \
             -I${ROOT}/modules/app-servers/include \
             -I${ROOT}/modules/app-servers/test \
+            -I${ROOT}/modules/gemini/include \
             -I${ROOT}/sprout/ut \
+            -I${ROOT}/modules/gemini/src/ut \
             -I${ROOT}/usr/include \
             -I${ROOT}/modules/rapidjson/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src
 
 # Production build:
 #
@@ -208,6 +220,9 @@ LDFLAGS += -lmemcached \
 # Test build fakes out cURL
 LDFLAGS_BUILD += -lcurl -lsas
 
+# Include memento if desired
+LDFLAGS += -lmemento -lthrift -lcassandra
+
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
 
@@ -227,19 +242,20 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 #
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/cpp-common/include/|^ut/|^usr/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \
           --leak-check=full \
           --track-origins=yes \
           --malloc-fill=cc \
+					--num-callers=40 \
           --free-fill=df
 
 # Define JUSTTEST=<testname> to test just that test.  Easier than
 # passing the --gtest_filter in EXTRA_TEST_ARGS.
 ifdef JUSTTEST
-  EXTRA_TEST_ARGS ?= --gtest_filter=*$(JUSTTEST)*
+  EXTRA_TEST_ARGS ?= --gtest_filter=$(JUSTTEST)
 endif
 
 include ${MK_DIR}/platform.mk
@@ -259,13 +275,13 @@ test: run_test coverage vg coverage-check vg-check
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test
-run_test: build_test | $(TEST_OUT_DIR)
+run_test: | build_test
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
 	$(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: coverage
-coverage: | $(TEST_OUT_DIR)
+coverage: | run_test
 	$(GCOVR) $(COVERAGEFLAGS) --xml > $(COVERAGE_XML)
 
 # Check that we have 100% coverage of all files except those that we
@@ -274,7 +290,7 @@ coverage: | $(TEST_OUT_DIR)
 # The string "Marking build unstable" is recognised by the CI scripts
 # and if it is found the build is marked unstable.
 .PHONY: coverage-check
-coverage-check: coverage
+coverage-check: | coverage
 	@xmllint --xpath '//class[@line-rate!="1.0"]/@filename' $(COVERAGE_XML) \
 		| tr ' ' '\n' \
 		| grep filename= \
@@ -292,11 +308,11 @@ coverage-check: coverage
 # instead of line info in report.  *.gcov files generated in current directory
 # if you need to see full detail.
 .PHONY: coverage_raw
-coverage_raw: | $(TEST_OUT_DIR)
+coverage_raw: | run_test
 	$(GCOVR) $(COVERAGEFLAGS) --keep
 
 .PHONY: debug
-debug: build_test
+debug: | build_test
 	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
@@ -306,7 +322,7 @@ debug: build_test
 # Test failure should not lead to build failure - instead we observe
 # test failure from Jenkins.
 .PHONY: vg
-vg: build_test | $(TEST_OUT_DIR)
+vg: | build_test
 	-valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
@@ -315,7 +331,7 @@ vg: build_test | $(TEST_OUT_DIR)
 # The output file will contain <error><kind>ERROR</kind></error>, or 'XPath set is empty'
 # if there are no errors.
 .PHONY: vg-check
-vg-check: vg
+vg-check: | vg
 	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \
 		sed -e 's#<kind>##g' | \
 		sed -e 's#</kind>#\n#g' | \
@@ -327,8 +343,8 @@ vg-check: vg
 	fi
 
 .PHONY: vg_raw
-vg_raw: build_test | $(TEST_OUT_DIR)
-	-valgrind --gen-suppressions=all $(VGFLAGS) \
+vg_raw: | build_test
+	-valgrind --gen-suppressions=all --show-reachable=yes $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean

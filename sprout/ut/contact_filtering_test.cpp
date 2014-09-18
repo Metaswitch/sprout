@@ -35,6 +35,7 @@
 #include "gtest/gtest.h"
 #include "contact_filtering.h"
 #include "pjsip.h"
+#include "pjutils.h"
 
 // Defined in sip_parser.c in pjSIP
 void init_sip_parser(void);
@@ -46,6 +47,17 @@ public:
   static pj_caching_pool caching_pool;
   static pj_pool_t* pool;
   static pjsip_endpoint* endpt;
+  pjsip_msg* msg;
+  std::string aor;
+  pjsip_uri* aor_uri;
+
+  ContactFilteringTest()
+  {
+    msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
+    aor = "sip:user@domain.com";
+    aor_uri = PJUtils::uri_from_string(aor, pool);
+    msg->line.req.uri = aor_uri;
+  };
 
   static void SetUpTestCase()
   {
@@ -55,6 +67,7 @@ public:
     pjsip_endpt_create(&caching_pool.factory, NULL, &endpt);
     pool = pj_pool_create(&caching_pool.factory, "contact-filtering-test", 4000, 4000, NULL);
   };
+
   static void TearDownTestCase()
   {
     pj_pool_release(pool); pool = NULL;
@@ -474,8 +487,6 @@ TEST_F(ContactFilteringImplicitFiltersTest, AddImplicitFilter)
 {
   std::vector<pjsip_accept_contact_hdr*>accept_headers;
   std::vector<pjsip_reject_contact_hdr*>reject_headers;
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
 
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
@@ -589,9 +600,9 @@ class ContactFilteringBindingToTargetTest : public ContactFilteringCreateBinding
 
 TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   Target target;
   EXPECT_TRUE(binding_to_target(aor,
@@ -613,9 +624,9 @@ TEST_F(ContactFilteringBindingToTargetTest, SimpleConversion)
 }
 TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._uri = "banana";
   Target target;
@@ -628,9 +639,9 @@ TEST_F(ContactFilteringBindingToTargetTest, InvalidURI)
 }
 TEST_F(ContactFilteringBindingToTargetTest, InvalidPath)
 {
-  RegStore::AoR::Binding binding;
-  create_binding(binding);
   std::string aor = "sip:user@domain.com";
+  RegStore::AoR::Binding binding(&aor);
+  create_binding(binding);
   std::string binding_id = "<sip:user@10.1.2.3>";
   binding._path_headers.push_back("banana");
   Target target;
@@ -647,14 +658,10 @@ class ContactFilteringFullStackTest :
 
 TEST_F(ContactFilteringFullStackTest, NoFiltering)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   TargetList targets;
@@ -674,14 +681,10 @@ TEST_F(ContactFilteringFullStackTest, NoFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   // Pick a method the contact doesn't support
   msg->line.req.method.name = pj_str((char*)"MESSAGE");
 
@@ -702,15 +705,11 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFiltering)
 }
 TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
   binding->_params.erase("methods");
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   // Pick a method the contact doesn't support
   msg->line.req.method.name = pj_str((char*)"MESSAGE");
 
@@ -733,14 +732,10 @@ TEST_F(ContactFilteringFullStackTest, ImplicitFilteringDeprioritize)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add an Accept-Contact header that triggers a YES match
@@ -774,14 +769,10 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringYesMatch)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add an Accept-Contact header that triggers a YES match
@@ -815,14 +806,10 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringUnknownMatch)
 }
 TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add an Accept-Contact header that triggers a YES match
@@ -855,14 +842,10 @@ TEST_F(ContactFilteringFullStackTest, ExplicitFilteringNoMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add an Accept-Contact header that triggers a YES match
@@ -897,14 +880,10 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringMatch)
 }
 TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
   RegStore::AoR::Binding* binding = aor_data->get_binding("<sip:user@10.1.2.3>");
   create_binding(*binding);
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add an Accept-Contact header that triggers a YES match
@@ -935,11 +914,10 @@ TEST_F(ContactFilteringFullStackTest, RejectFilteringNoMatch)
 
   delete aor_data;
 }
+
 TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
 {
-  std::string aor = "sip:user@domain.com";
-
-  RegStore::AoR* aor_data = new RegStore::AoR();
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
 
   for (int ii = 0;
        ii < 20;
@@ -961,8 +939,6 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
     binding->_expires = ii * 100;
   }
 
-  pjsip_msg* msg = pjsip_msg_create(pool, PJSIP_REQUEST_MSG);
-  ASSERT_NE((pjsip_msg*)NULL, msg);
   msg->line.req.method.name = pj_str((char*)"INVITE");
 
   // Add some Accept headers to eliminate some bindings and
@@ -998,6 +974,81 @@ TEST_F(ContactFilteringFullStackTest, LotsOfBindings)
                              1);
 
   EXPECT_EQ((unsigned)5, targets.size());
+
+  delete aor_data;
+}
+
+TEST_F(ContactFilteringFullStackTest, GRUUNoMatch)
+{
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+
+  for (int ii = 0;
+       ii < 20;
+       ii++)
+  {
+    std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
+    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    create_binding(*binding);
+
+    binding->_expires = ii * 100;
+  }
+
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+  msg->line.req.uri = PJUtils::uri_from_string("sip:user@domain.com;gr=abcd", pool);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)0, targets.size());
+
+  delete aor_data;
+}
+
+TEST_F(ContactFilteringFullStackTest, GRUUMatch)
+{
+  RegStore::AoR* aor_data = new RegStore::AoR(aor);
+
+  for (int ii = 0;
+       ii < 20;
+       ii++)
+  {
+    std::string binding_id = "sip:user" + std::to_string(ii) + "@domain.com";
+    RegStore::AoR::Binding* binding = aor_data->get_binding(binding_id);
+    create_binding(*binding);
+
+    // Change the features on some of the bindings.
+    if (ii == 2)
+    {
+      binding->_params["+sip.instance"] = "<abcd>";
+    }
+    if (ii == 3)
+    {
+      binding->_params["+sip.instance"] = "<abcde>";
+    }
+    binding->_expires = ii * 100;
+  }
+
+  msg->line.req.method.name = pj_str((char*)"INVITE");
+  msg->line.req.uri = PJUtils::uri_from_string("sip:user@domain.com;gr=abcd", pool);
+
+  TargetList targets;
+
+  filter_bindings_to_targets(aor,
+                             aor_data,
+                             msg,
+                             pool,
+                             5,
+                             targets,
+                             1);
+
+  EXPECT_EQ((unsigned)1, targets.size());
 
   delete aor_data;
 }
