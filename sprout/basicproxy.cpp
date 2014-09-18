@@ -1859,11 +1859,21 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
            (_tsx != NULL) &&
            (_uas_tsx != NULL))
   {
-    LOG_DEBUG("Event on CANCEL transaction");
-    if ((event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
-        (event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
-        ((event->body.tsx_state.type == PJSIP_EVENT_RX_MSG) &&
-         (event->body.tsx_state.src.rdata->msg_info.msg->line.status.code != PJSIP_SC_OK)))
+    LOG_DEBUG("%s event on CANCEL transaction",
+              pjsip_event_str(event->body.tsx_state.type));
+    if ((event->body.tsx_state.type == PJSIP_EVENT_RX_MSG) &&
+        (event->body.tsx_state.src.rdata->msg_info.msg->line.status.code == PJSIP_SC_OK))
+    {
+      // 200 OK response to the CANCEL request, so everything is good.  We need
+      // to unlink the CANCEL PJSIP transaction as we're not interested in
+      // subsequent events.
+      LOG_DEBUG("200 OK response to CANCEL");
+      _proxy->unbind_transaction(_cancel_tsx);
+      _cancel_tsx = NULL;
+    }
+    else if ((event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
+             (event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+             (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG))
     {
       LOG_INFO("CANCEL failed, transaction in state %s",
                pjsip_tsx_state_str(_tsx->state));
@@ -1881,6 +1891,9 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
                                                       &rsp);
         if (status == PJ_SUCCESS)
         {
+          // Remove the top Via header (we must do this as we built the response
+          // from a request where we've added an extra Via).
+          pjsip_msg_find_remove_hdr(rsp->msg, PJSIP_H_VIA, NULL);
           _uas_tsx->on_new_client_response(this, rsp);
         }
       }
