@@ -375,7 +375,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
       pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, digest["qop"].asCString());
-      hdr->challenge.digest.stale = PJ_FALSE;
+      hdr->challenge.digest.stale = stale;
     }
 
     // Add the header to the message.
