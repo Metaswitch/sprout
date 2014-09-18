@@ -1709,8 +1709,8 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
         // make sure this is using the same group lock.
         pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
                                                    cancel,
-                                                  _lock,
-                                                  &_cancel_tsx);
+                                                   _lock,
+                                                   &_cancel_tsx);
         if (status == PJ_SUCCESS)
         {
           // Set up the PJSIP transaction user module data on the cancel
@@ -1762,7 +1762,8 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // transaction.
   if ((event->body.tsx_state.tsx == _tsx) && (_uas_tsx != NULL))
   {
-    LOG_DEBUG("Event on current UAC transaction");
+    LOG_DEBUG("%s event on current UAC transaction",
+              pjsip_event_str(event->body.tsx_state.type));
     bool retrying = false;
 
     if ((_timer_c.id == TIMER_C) &&
