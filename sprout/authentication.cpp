@@ -262,6 +262,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
 }
 
 void create_challenge(pjsip_authorization_hdr* auth_hdr,
+                      pj_bool_t stale,
                       std::string resync,
                       pjsip_rx_data* rdata,
                       pjsip_tx_data* tdata)
@@ -339,7 +340,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
       hdr->challenge.digest.qop = STR_AUTH;
-      hdr->challenge.digest.stale = PJ_FALSE;
+      hdr->challenge.digest.stale = stale;
 
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
@@ -542,8 +543,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       (*av)["tombstone"] = Json::Value("true");
       bool rc = av_store->set_av(impi, nonce, av, cas, trail);
 
-
-      if (!rc) {
+      if (!rc)
+      {
         // LCOV_EXCL_START
         LOG_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
                   impi.c_str(),
@@ -592,7 +593,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
         }
       }
 
-
       if (status == PJ_SUCCESS)
       {
         // Request authentication completed, so let the message through to
@@ -634,6 +634,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     // found in the store (so request is likely stale), so must issue
     // challenge.
     LOG_DEBUG("No authentication information in request or stale nonce, so reject with challenge");
+    pj_bool_t stale = (status == PJSIP_EAUTHACCNOTFOUND);
 
     sc = PJSIP_SC_UNAUTHORIZED;
     status = PJUtils::create_response(stack_data.endpt, rdata, sc, NULL, &tdata);
@@ -648,7 +649,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // LCOV_EXCL_STOP
     }
 
-    create_challenge(auth_hdr, resync, rdata, tdata);
+    create_challenge(auth_hdr, stale, resync, rdata, tdata);
   }
   else
   {
