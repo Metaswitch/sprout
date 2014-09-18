@@ -275,7 +275,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddressesIPv6)
     written = hdr->vptr->print_on(hdr, buf, i);
     i++;
   }
-  EXPECT_EQ(written, 105);
+  EXPECT_EQ(written, 84);
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.22.42.18;ccf=[FD5F:5D21:845:1C27:FF00::42:105]", buf);
 }
 
@@ -330,7 +330,7 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddressesOneIPv6)
     written = hdr->vptr->print_on(hdr, buf, i);
     i++;
   }
-  EXPECT_EQ(written, 105);
+  EXPECT_EQ(written, 69);
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=[fd5f:5d21:845:1c27:ff00:0:42:105]", buf);
 }
 
