@@ -962,14 +962,25 @@ public:
   }
 };
 
+/// Unregisters HTTP threads with PJSIP on termination.  PJSIP doesn't actually
+/// need to be called in this case, but we do need to free off the thread
+/// descriptor block that was allocated when the thread was registered.
+void unreg_httpthread_with_pjsip(void* thread_desc)
+{
+  delete thread_desc;
+}
+
+/// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
 void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 {
-  pj_thread_desc thread_desc;
+  pj_thread_desc* thread_desc = new pj_thread_desc;
   pj_thread_t *thread = 0;
+
+  pthread_cleanup_push(unreg_httpthread_with_pjsip, thread_desc);
 
   if (!pj_thread_is_registered())
   {
-    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", *thread_desc, &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
     {
