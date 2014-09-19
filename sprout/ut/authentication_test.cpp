@@ -603,7 +603,6 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
 
   // Extract the nonce, nc, cnonce and qop fields from the WWW-Authenticate header.
   std::string auth = get_headers(tdata->msg, "WWW-Authenticate");
-  printf("%s", auth.c_str());
   std::map<std::string, std::string> auth_params;
   parse_www_authenticate(auth, auth_params);
   EXPECT_NE("", auth_params["nonce"]);
