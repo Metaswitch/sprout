@@ -44,6 +44,7 @@ extern "C" {
 #include <pjlib-util.h>
 #include <pjlib.h>
 #include <stdint.h>
+#include <pjsip-simple/evsub.h>
 }
 
 #include <sstream>
@@ -116,13 +117,31 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
 
 
-  // TODO: Once the registrar and subscription managers are Sproutlets, this should
-  // consider the ReqURI if there's no top Route header.
-  if ((route != NULL) &&
-      PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+  pjsip_sip_uri* uri = NULL;
+  if (route == NULL)
   {
-    LOG_DEBUG("Found top Route header: %s ", PJUtils::hdr_to_string(route).c_str());
-    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+    // TODO: Once the registrar and subscription managers are Sproutlets, this should
+    // consider the ReqURI regardess of the method.
+    if ((pjsip_method_cmp(&req->line.req.method, &pjsip_register_method) != 0) &&
+        (pjsip_method_cmp(&req->line.req.method, pjsip_get_subscribe_method()) != 0) &&
+        (PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)))
+    {
+      uri = (pjsip_sip_uri*)req->line.req.uri;
+    }
+  }
+  else
+  {
+    if (PJSIP_URI_SCHEME_IS_SIP(route->name_addr.uri))
+    {
+      uri = (pjsip_sip_uri*)route->name_addr.uri;
+    }
+  }
+
+  if (uri != NULL)
+  {
+    LOG_DEBUG("Found next routable URI: %s",
+              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                     (pjsip_uri*)uri).c_str());
 
     for (std::list<Sproutlet*>::iterator it = _sproutlets.begin();
          it != _sproutlets.end();
@@ -140,6 +159,10 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
       // No port was specified, so use the URI port instead.
       port = uri->port;
     }
+  }
+  else
+  {
+    LOG_DEBUG("Next route for message cannot be a sproutlet");
   }
 
   if ((sproutlet == NULL) &&
@@ -1320,7 +1343,13 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
                 _id.c_str(), msg_info(clone));
     _sproutlet_tsx->on_rx_in_dialog_request(clone);
   }
-  process_actions();
+
+  // We consider an ACK transaction to be complete immediately after the
+  // sproutlet's actions have been processed, regardless of whether the
+  // sproutlet forwarded the ACK (some sproutlets are unable to in certain
+  // situations).
+  bool complete_after_actions = (req->msg->line.req.method.id == PJSIP_ACK_METHOD);
+  process_actions(complete_after_actions);
 }
 
 void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
@@ -1349,7 +1378,7 @@ void SproutletWrapper::rx_response(pjsip_tx_data* rsp, int fork_id)
     --_pending_responses;
   }
   _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
-  process_actions();
+  process_actions(false);
 }
 
 void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
@@ -1359,7 +1388,7 @@ void SproutletWrapper::rx_cancel(pjsip_tx_data* cancel)
                            cancel->msg);
   pjsip_tx_data_dec_ref(cancel);
   cancel_pending_forks();
-  process_actions();
+  process_actions(false);
 }
 
 void SproutletWrapper::rx_error(int status_code)
@@ -1371,7 +1400,7 @@ void SproutletWrapper::rx_error(int status_code)
   // Consider the transaction to be complete as no final response should be
   // sent upstream.
   _complete = true;
-  process_actions();
+  process_actions(false);
 }
 
 void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
@@ -1416,7 +1445,7 @@ void SproutletWrapper::rx_fork_error(pjsip_event_id_e event, int fork_id)
       // Pass the response to the application.
       register_tdata(rsp);
       _sproutlet_tsx->on_rx_response(rsp->msg, fork_id);
-      process_actions();
+      process_actions(false);
     }
   }
 }
@@ -1425,7 +1454,7 @@ void SproutletWrapper::on_timer_pop(void* context)
 {
   LOG_DEBUG("Timer has popped");
   _sproutlet_tsx->on_timer_expiry(context);
-  process_actions();
+  process_actions(false);
 }
 
 void SproutletWrapper::register_tdata(pjsip_tx_data* tdata)
@@ -1443,7 +1472,7 @@ void SproutletWrapper::deregister_tdata(pjsip_tx_data* tdata)
 }
 
 /// Process actions required by a Sproutlet
-void SproutletWrapper::process_actions()
+void SproutletWrapper::process_actions(bool complete_after_actions)
 {
   LOG_DEBUG("Processing actions from sproutlet - %d responses, %d requests",
             _send_responses.size(), _send_requests.size());
@@ -1501,6 +1530,11 @@ void SproutletWrapper::process_actions()
         tx_cancel(ii);
       }
     }
+  }
+
+  if (complete_after_actions)
+  {
+    _complete = true;
   }
 
   if ((_complete) &&
@@ -1616,9 +1650,6 @@ void SproutletWrapper::tx_request(pjsip_tx_data* req, int fork_id)
   {
     // ACK request, so no response expected.
     _forks[fork_id].state.tsx_state = PJSIP_TSX_STATE_TERMINATED;
-
-    // We can consider the processing of this Sproutlet to be complete now.
-    _complete = true;
   }
 
   // Notify the sproutlet that the request is being sent downstream.

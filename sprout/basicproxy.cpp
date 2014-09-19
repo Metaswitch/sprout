@@ -1415,6 +1415,8 @@ void BasicProxy::UASTsx::exit_context()
   }
 }
 
+
+/// Cancel the trying timer.
 void BasicProxy::UASTsx::cancel_trying_timer()
 {
   pthread_mutex_lock(&_trying_timer_lock);
@@ -1428,6 +1430,7 @@ void BasicProxy::UASTsx::cancel_trying_timer()
 
   pthread_mutex_unlock(&_trying_timer_lock);
 }
+
 
 /// Handle the trying timer expiring on this transaction.
 void BasicProxy::UASTsx::trying_timer_expired()
@@ -1456,6 +1459,7 @@ void BasicProxy::UASTsx::trying_timer_expired()
   exit_context();
 }
 
+
 /// Static method called by PJSIP when a trying timer expires.  The instance
 /// is stored in the user_data field of the timer entry.
 void BasicProxy::UASTsx::trying_timer_callback(pj_timer_heap_t *timer_heap, struct pj_timer_entry *entry)
@@ -1465,6 +1469,7 @@ void BasicProxy::UASTsx::trying_timer_callback(pj_timer_heap_t *timer_heap, stru
     ((BasicProxy::UASTsx*)entry->user_data)->trying_timer_expired();
   }
 }
+
 
 /// UACTsx constructor
 BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
@@ -1478,13 +1483,17 @@ BasicProxy::UACTsx::UACTsx(BasicProxy* proxy,
   _tdata(NULL),
   _servers(),
   _current_server(0),
+  _cancel_tsx(NULL),
+  _timer_c(),
   _trail(0),
   _pending_destroy(false),
   _context_count(0)
 {
   // Don't put any initialization that can fail here, implement in init()
   // instead.
+  pj_timer_entry_init(&_timer_c, 0, this, timer_expired);
 }
+
 
 /// UACTsx destructor
 BasicProxy::UACTsx::~UACTsx()
@@ -1492,9 +1501,16 @@ BasicProxy::UACTsx::~UACTsx()
   LOG_DEBUG("BasicProxy::UACTsx destructor (%p)", this);
   pj_assert(_context_count == 0);
 
+  stop_timer_c();
+
   if (_tsx != NULL)
   {
     _proxy->unbind_transaction(_tsx);                         //LCOV_EXCL_LINE
+  }
+
+  if (_cancel_tsx != NULL)
+  {
+    _proxy->unbind_transaction(_cancel_tsx);                  //LCOV_EXCL_LINE
   }
 
   if (_uas_tsx != NULL)
@@ -1518,6 +1534,7 @@ BasicProxy::UACTsx::~UACTsx()
   }
 
   _tsx = NULL;
+  _cancel_tsx = NULL;
 
   if (_lock != NULL)
   {
@@ -1626,6 +1643,11 @@ void BasicProxy::UACTsx::send_request()
     {
       // Send non-ACK request statefully.
       status = pjsip_tsx_send_msg(_tsx, _tdata);
+
+      if (status == PJ_SUCCESS)
+      {
+        start_timer_c();
+      }
     }
   }
 
@@ -1671,7 +1693,6 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
         pjsip_tx_data *cancel = PJUtils::create_cancel(stack_data.endpt,
                                                        _tsx->last_tx,
                                                        st_code);
-
         set_trail(cancel, _trail);
 
         if (_tsx->transport != NULL)
@@ -1684,7 +1705,22 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           pjsip_tx_data_set_transport(cancel, &tp_selector);
         }
 
-        pj_status_t status = PJUtils::send_request(cancel, 1);
+        // Create a PJSIP UAC transaction on which to send the CANCEL, and
+        // make sure this is using the same group lock.
+        pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
+                                                   cancel,
+                                                   _lock,
+                                                   &_cancel_tsx);
+        if (status == PJ_SUCCESS)
+        {
+          // Set up the PJSIP transaction user module data on the cancel
+          // transaction to refer to this UACTsx object.
+          _proxy->bind_transaction(this, _cancel_tsx);
+
+          // Send the CANCEL on the new transaction.
+          status = pjsip_tsx_send_msg(_cancel_tsx, cancel);
+        }
+
         if (status != PJ_SUCCESS)
         {
           //LCOV_EXCL_START
@@ -1726,7 +1762,18 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
   // transaction.
   if ((event->body.tsx_state.tsx == _tsx) && (_uas_tsx != NULL))
   {
+    LOG_DEBUG("%s event on current UAC transaction",
+              pjsip_event_str(event->body.tsx_state.type));
     bool retrying = false;
+
+    if ((_timer_c.id == TIMER_C) &&
+        ((_tsx->state == PJSIP_TSX_STATE_COMPLETED) ||
+         (_tsx->state == PJSIP_TSX_STATE_TERMINATED)))
+    {
+      // Transaction has completed or terminated with Timer C running, so
+      // cancel the timer.
+      stop_timer_c();
+    }
 
     if (!_servers.empty())
     {
@@ -1808,6 +1855,50 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
       }
     }
   }
+  else if ((event->body.tsx_state.tsx == _cancel_tsx) &&
+           (_tsx != NULL) &&
+           (_uas_tsx != NULL))
+  {
+    LOG_DEBUG("%s event on CANCEL transaction",
+              pjsip_event_str(event->body.tsx_state.type));
+    if ((event->body.tsx_state.type == PJSIP_EVENT_RX_MSG) &&
+        (event->body.tsx_state.src.rdata->msg_info.msg->line.status.code == PJSIP_SC_OK))
+    {
+      // 200 OK response to the CANCEL request, so everything is good.  We need
+      // to unlink the CANCEL PJSIP transaction as we're not interested in
+      // subsequent events.
+      LOG_DEBUG("200 OK response to CANCEL");
+      _proxy->unbind_transaction(_cancel_tsx);
+      _cancel_tsx = NULL;
+    }
+    else if ((event->body.tsx_state.type == PJSIP_EVENT_TRANSPORT_ERROR) ||
+             (event->body.tsx_state.type == PJSIP_EVENT_TIMER) ||
+             (event->body.tsx_state.type == PJSIP_EVENT_RX_MSG))
+    {
+      LOG_INFO("CANCEL failed, transaction in state %s",
+               pjsip_tsx_state_str(_tsx->state));
+      if ((_tsx->state != PJSIP_TSX_STATE_COMPLETED) &&
+          (_tsx->state != PJSIP_TSX_STATE_TERMINATED))
+      {
+        // CANCEL failed for a transaction which is still active, so terminate
+        // the transaction immediately and send a 487 response upstream.
+        //pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TERMINATED);
+        pjsip_tx_data* rsp;
+        pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                      _tdata,
+                                                      PJSIP_SC_REQUEST_TERMINATED,
+                                                      NULL,
+                                                      &rsp);
+        if (status == PJ_SUCCESS)
+        {
+          // Remove the top Via header (we must do this as we built the response
+          // from a request where we've added an extra Via).
+          pjsip_msg_find_remove_hdr(rsp->msg, PJSIP_H_VIA, NULL);
+          _uas_tsx->on_new_client_response(this, rsp);
+        }
+      }
+    }
+  }
 
   if ((event->body.tsx_state.tsx == _tsx) &&
       (_tsx->state == PJSIP_TSX_STATE_DESTROYED))
@@ -1874,6 +1965,9 @@ bool BasicProxy::UACTsx::retry_request()
         // Successfully sent the retry.
         LOG_INFO("Retrying request to alternate target");
         retrying = true;
+
+        // Start Timer C again.
+        start_timer_c();
       }
       else
       {
@@ -1933,6 +2027,78 @@ void BasicProxy::UACTsx::exit_context()
   {
     // Release the group lock.
     pj_grp_lock_release(_lock);
+  }
+}
+
+
+/// Start Timer C on the transaction.
+void BasicProxy::UACTsx::start_timer_c()
+{
+  LOG_DEBUG("Starting timer C");
+  _timer_c.id = TIMER_C;
+  pj_time_val delay = {180, 0};
+  pjsip_endpt_schedule_timer(stack_data.endpt, &_timer_c, &delay);
+}
+
+
+/// Stop Timer C on the transaction.
+void BasicProxy::UACTsx::stop_timer_c()
+{
+  if (_timer_c.id == TIMER_C)
+  {
+    LOG_DEBUG("Stopping timer C");
+    pjsip_endpt_cancel_timer(stack_data.endpt, &_timer_c);
+    _timer_c.id = 0;
+  }
+}
+
+
+/// Called when timer C expires.
+void BasicProxy::UACTsx::timer_c_expired()
+{
+  _timer_c.id = 0;
+  if (_tsx != NULL)
+  {
+    LOG_DEBUG("Timer C expired");
+    if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
+        (_tsx->state == PJSIP_TSX_STATE_PROCEEDING))
+    {
+      // INVITE transaction in proceeding state, so send a CANCEL request.
+      // request.
+      LOG_INFO("Timer C expired, %.*s transaction in %s state, sending CANCEL",
+               _tsx->method.name.slen, _tsx->method.name.ptr,
+               pjsip_tsx_state_str(_tsx->state));
+      cancel_pending_tsx(0);
+    }
+    //LCOV_EXCL_START - RFC3261 says that Timer C can expire for a non-INVITE
+    // transaction, or an INVITE transaction in calling state, but it
+    // seems to be impossible to hit because Timer F will expire on the
+    // transaction well before Timer C expires.
+    else if ((_tsx->state == PJSIP_TSX_STATE_TRYING) ||
+             (_tsx->state == PJSIP_TSX_STATE_CALLING) ||
+             (_tsx->state == PJSIP_TSX_STATE_PROCEEDING))
+    {
+      // Either a non-INVITE transaction, or an INVITE transaction which
+      // hasn't yet received a 100 Trying response, so terminate the
+      // transaction and report this target as non-responsive.
+      LOG_INFO("Timer C expired, %.*s transaction in %s state, aborting",
+               _tsx->method.name.slen, _tsx->method.name.ptr,
+               pjsip_tsx_state_str(_tsx->state));
+      pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
+      _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TIMER);
+    }
+    //LCOV_EXCL_STOP
+  }
+}
+
+
+/// Static function called when a timer expires.
+void BasicProxy::UACTsx::timer_expired(pj_timer_heap_t *timer_heap,
+                                       struct pj_timer_entry *entry)
+{
+  if (entry->id == TIMER_C)
+  {
+    ((BasicProxy::UACTsx*)entry->user_data)->timer_c_expired();
   }
 }
 

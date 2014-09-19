@@ -116,6 +116,8 @@ private:
                      bool& registered,
                      std::vector<std::string>& uris,
                      Ifcs& ifcs,
+                     std::deque<std::string>& ccfs,
+                     std::deque<std::string>& ecfs,
                      SAS::TrailId trail);
 
   /// Translate RequestURI using ENUM service if appropriate.
@@ -262,6 +264,8 @@ private:
   bool _registered;
   std::vector<std::string> _uris;
   Ifcs _ifcs;
+  std::deque<std::string> _ccfs;
+  std::deque<std::string> _ecfs;
 
   /// The ACR allocated for this service hop.
   ACR* _acr;

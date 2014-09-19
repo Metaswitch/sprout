@@ -275,13 +275,13 @@ test: run_test coverage vg coverage-check vg-check
 #
 # Ignore failure here; it will be detected by Jenkins.
 .PHONY: run_test
-run_test: build_test | $(TEST_OUT_DIR)
+run_test: | build_test
 	rm -f $(TEST_XML)
 	rm -f $(OBJ_DIR_TEST)/*.gcda
 	$(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS) --gtest_output=xml:$(TEST_XML)
 
 .PHONY: coverage
-coverage: | $(TEST_OUT_DIR)
+coverage: | run_test
 	$(GCOVR) $(COVERAGEFLAGS) --xml > $(COVERAGE_XML)
 
 # Check that we have 100% coverage of all files except those that we
@@ -290,7 +290,7 @@ coverage: | $(TEST_OUT_DIR)
 # The string "Marking build unstable" is recognised by the CI scripts
 # and if it is found the build is marked unstable.
 .PHONY: coverage-check
-coverage-check: coverage
+coverage-check: | coverage
 	@xmllint --xpath '//class[@line-rate!="1.0"]/@filename' $(COVERAGE_XML) \
 		| tr ' ' '\n' \
 		| grep filename= \
@@ -308,11 +308,11 @@ coverage-check: coverage
 # instead of line info in report.  *.gcov files generated in current directory
 # if you need to see full detail.
 .PHONY: coverage_raw
-coverage_raw: | $(TEST_OUT_DIR)
+coverage_raw: | run_test
 	$(GCOVR) $(COVERAGEFLAGS) --keep
 
 .PHONY: debug
-debug: build_test
+debug: | build_test
 	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 # Don't run VG against death tests; they don't play nicely.
@@ -322,7 +322,7 @@ debug: build_test
 # Test failure should not lead to build failure - instead we observe
 # test failure from Jenkins.
 .PHONY: vg
-vg: build_test | $(TEST_OUT_DIR)
+vg: | build_test
 	-valgrind --xml=yes --xml-file=$(VG_XML) $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS) > $(VG_OUT) 2>&1
 
@@ -331,7 +331,7 @@ vg: build_test | $(TEST_OUT_DIR)
 # The output file will contain <error><kind>ERROR</kind></error>, or 'XPath set is empty'
 # if there are no errors.
 .PHONY: vg-check
-vg-check: vg
+vg-check: | vg
 	@xmllint --xpath '//error/kind' $(VG_XML) 2>&1 | \
 		sed -e 's#<kind>##g' | \
 		sed -e 's#</kind>#\n#g' | \
@@ -343,7 +343,7 @@ vg-check: vg
 	fi
 
 .PHONY: vg_raw
-vg_raw: build_test | $(TEST_OUT_DIR)
+vg_raw: | build_test
 	-valgrind --gen-suppressions=all --show-reachable=yes $(VGFLAGS) \
 	  $(TARGET_BIN_TEST) --gtest_filter='-*DeathTest*' $(EXTRA_TEST_ARGS)
 

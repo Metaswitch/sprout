@@ -135,7 +135,6 @@ protected:
     /// Notification that a request is being transmitted to a client.
     virtual void on_tx_client_request(pjsip_tx_data* tdata, UACTsx* uac_tsx);
 
-
     /// Notification that the underlying PJSIP transaction has changed state.
     /// After calling this, the caller must not assume that the UASTsx still
     /// exists - if the PJSIP transaction is being destroyed, this method will
@@ -304,7 +303,23 @@ protected:
     // must not assume that the transaction still exists.
     void exit_context();
 
+    /// Static function called when a timer expires.
+    static void timer_expired(pj_timer_heap_t *timer_heap,
+                              struct pj_timer_entry *entry);
+
   protected:
+    /// Returns the SAS trail identifier attached to the transaction.
+    SAS::TrailId trail() const { return _trail; }
+
+    /// Starts Timer C on the UAC transaction.
+    void start_timer_c();
+
+    /// Stops Timer C on the UAC transaction.
+    void stop_timer_c();
+
+    /// Called when timer C expires.
+    void timer_c_expired();
+
     /// Owning proxy object.
     BasicProxy* _proxy;
 
@@ -328,12 +343,18 @@ protected:
     /// after it has been passed to PJSIP for sending.
     pjsip_tx_data* _tdata;
 
-    /// Returns the SAS trail identifier attached to the transaction.
-    SAS::TrailId trail() const { return _trail; }
-
     /// The resolved server addresses for this transaction.
     std::vector<AddrInfo> _servers;
     int _current_server;
+
+    /// Pointer to the associated PJSIP UAC transaction used to send a
+    /// CANCEL request.  NULL if no CANCEL has been sent.
+    pjsip_transaction* _cancel_tsx;
+
+    /// Timer C timer entry.  This timer runs while the downstream UAC
+    /// transaction is active.  If the timer expires, the transaction is
+    /// either cancelled or reported as non-responsive.
+    pj_timer_entry _timer_c;
 
     SAS::TrailId _trail;
 
@@ -341,6 +362,8 @@ protected:
     int _context_count;
 
     friend class UASTsx;
+
+    static const int TIMER_C = 3;
   };
 
   void* get_from_transaction(pjsip_transaction* tsx);

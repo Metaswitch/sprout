@@ -83,22 +83,38 @@ public:
                              SAS::TrailId trail);
 
   HTTPCode update_registration_state(const std::string& public_user_identity,
-                               const std::string& private_user_identity,
-                               const std::string& type,
-                               std::string& regstate,
-                               std::map<std::string, Ifcs >& service_profiles,
-                               std::vector<std::string>& associated_uris,
-                               SAS::TrailId trail);
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::string& regstate,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
+                                     std::deque<std::string>& ccfs,
+                                     std::deque<std::string>& ecfs,
+                                     SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
-                               const std::string& private_user_identity,
-                               const std::string& type,
-                               SAS::TrailId trail);
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::string& regstate,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
+                                     SAS::TrailId trail);
   HTTPCode update_registration_state(const std::string& public_user_identity,
-                               const std::string& private_user_identity,
-                               const std::string& type,
-                               std::map<std::string, Ifcs >& service_profiles,
-                               std::vector<std::string>& associated_uris,
-                               SAS::TrailId trail);
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     SAS::TrailId trail);
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
+                                     SAS::TrailId trail);
+  HTTPCode get_registration_data(const std::string& public_user_identity,
+                                 std::string& regstate,
+                                 std::map<std::string, Ifcs >& service_profiles,
+                                 std::vector<std::string>& associated_uris,
+                                 std::deque<std::string>& ccfs,
+                                 std::deque<std::string>& ecfs,
+                                 SAS::TrailId trail);
   HTTPCode get_registration_data(const std::string& public_user_identity,
                                  std::string& regstate,
                                  std::map<std::string, Ifcs >& service_profiles,

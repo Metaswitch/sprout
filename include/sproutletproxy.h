@@ -282,7 +282,7 @@ private:
   void register_tdata(pjsip_tx_data* tdata);
   void deregister_tdata(pjsip_tx_data* tdata);
 
-  void process_actions();
+  void process_actions(bool complete_after_actions);
   void aggregate_response(pjsip_tx_data* rsp);
   void tx_request(pjsip_tx_data* req, int fork_id);
   void tx_response(pjsip_tx_data* rsp);
