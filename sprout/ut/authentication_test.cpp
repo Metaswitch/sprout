@@ -608,6 +608,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   EXPECT_NE("", auth_params["nonce"]);
   EXPECT_EQ("auth", auth_params["qop"]);
   EXPECT_EQ("MD5", auth_params["algorithm"]);
+  EXPECT_EQ("true", auth_params["stale"]);
   free_txdata();
 
   // Send a new REGISTER request with an authentication header including the
