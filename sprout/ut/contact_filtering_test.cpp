@@ -496,7 +496,10 @@ TEST_F(ContactFilteringMatchFeatureSetTest, MaybeMatchingNormalReject)
   contact_feature_set["+sip.boolean"] = "";
   contact_feature_set["+sip.negated"] = "!world";
 
-  EXPECT_EQ(YES, match_feature_sets(contact_feature_set, reject_hdr));
+  // If a term is in the Reject-Contact set but not the Contact set,
+  // that Reject-Contact predicate is discarded.
+
+  EXPECT_EQ(NO, match_feature_sets(contact_feature_set, reject_hdr));
 }
 TEST_F(ContactFilteringMatchFeatureSetTest, NonMatchingNormalReject)
 {
