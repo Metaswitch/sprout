@@ -399,10 +399,9 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
     // Now attempt to compare the two features.
     if (contact_feature == contact_feature_set.end())
     {
-      // The Contact header doesn't place restrictions on this
-      // feature, so any feature collection matching the
-      // Reject-Contact header will match both.
-      rc = YES;
+      // The Contact header doesn't contain this feature tag, so this
+      // Reject-Contact predicate is discarded.
+      rc = NO;
       LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
     else
