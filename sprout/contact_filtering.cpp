@@ -106,6 +106,7 @@ void filter_bindings_to_targets(const std::string& aor,
     LOG_DEBUG("Request-URI has 'gr' param, so GRUU matching will be done");
   }
 
+  // Loop over the bindings, trying to match each.
   for (RegStore::AoR::Bindings::const_iterator binding = bindings.begin();
        binding != bindings.end();
        ++binding)
@@ -114,6 +115,7 @@ void filter_bindings_to_targets(const std::string& aor,
     bool rejected = false;
     bool deprioritized = false;
 
+    // Perform GRUU filtering.
     if (request_uri_is_gruu)
     {
       pjsip_sip_uri* pub_gruu = binding->second->pub_gruu(pool);
@@ -138,6 +140,7 @@ void filter_bindings_to_targets(const std::string& aor,
       }
     }
 
+    // Perform Reject-Contact filtering.
     for (std::vector<pjsip_reject_contact_hdr*>::iterator reject = reject_headers.begin();
          reject != reject_headers.end() && (!rejected);
          ++reject)
@@ -150,6 +153,10 @@ void filter_bindings_to_targets(const std::string& aor,
       }
     }
 
+    // Perform Accept-Contact filtering. Unlike Reject-Contact
+    // headers, Accept-Contact headers have a "require" parameter,
+    // which determines whetner to reject or just deprioritise
+    // non-matching bindings.
     for (std::vector<pjsip_accept_contact_hdr*>::iterator accept = accept_headers.begin();
          accept != accept_headers.end() && (!rejected);
          ++accept)
@@ -190,6 +197,7 @@ void filter_bindings_to_targets(const std::string& aor,
     }
   }
 
+  // SAS logging now we know how many targets we have.
   if (request_uri_is_gruu)
   {
     LOG_DEBUG("%d of %d bindings rejected because a GRUU was specified", bindings_rejected_due_to_gruu, bindings.size());
@@ -266,7 +274,7 @@ bool binding_to_target(const std::string& aor,
   return valid;
 }
 
-// Add an automatically created feature set if none have been
+// Add an automatically created feature predicate if none have been
 // specified.
 void add_implicit_filters(const pjsip_msg* msg,
                           pj_pool_t* pool,
@@ -304,7 +312,15 @@ void add_implicit_filters(const pjsip_msg* msg,
   }
 }
 
-// Utility functions for comparing feature sets.
+// Compares the feature predicate in the Contact header with the
+// feature predicate in the Accept-Contact header. Under the RFC 3841
+// logic, two feature predicates match if there is any feature
+// collection which could satisfy them both. In the case of
+// Accept-Contact headers, if the "explicit" parameter is set, the
+// feature predicates only match if the Contact header includes all
+// the features in the Accept-Contact header (i.e. the list of feature
+// names in the Contact header must be a subset of the list in the
+// Accept-Contact header).
 MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
                                pjsip_accept_contact_hdr* accept)
 {
@@ -317,21 +333,22 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
        (feature_param != &accept->feature_set) && (rc != NO);
        feature_param = feature_param->next)
   {
-    // For boolean features the name may be prefixed with ! to indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
     std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
     LOG_DEBUG("Trying to match Accept-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
 
-    // Now find the Contact's version of this feature (using either name).
+    // Now find the Contact's version of this feature.
     FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
 
     // Now attempt to compare the two features.
     if (contact_feature == contact_feature_set.end())
     {
-      // Not specified, can't say either way if the feature is a match.
+      // Contact header doesn't contain a feature in the
+      // Accept-Contact header - should fail the match if "explicit"
+      // was specified.
       if (accept->explicit_match)
       {
         rc = NO;
@@ -353,6 +370,10 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
   return rc;
 }
 
+// Compares the feature predicate in the Reject-Contact header with the
+// feature predicate in the Accept-Contact header. Under the RFC 3841
+// logic, two feature predicates match if there is any feature
+// collection which could satisfy them both.
 MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
                                pjsip_reject_contact_hdr* reject)
 {
@@ -365,22 +386,22 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
        (feature_param != &reject->feature_set) && (rc == YES);
        feature_param = feature_param->next)
   {
-    // For boolean features the name may be prefixed with ! to
-    // indicate negation.
     std::string feature_name = PJUtils::pj_str_to_string(&feature_param->name);
     std::string feature_value = PJUtils::pj_str_to_string(&feature_param->value);
     LOG_DEBUG("Trying to match Reject-Contact parameter '%s' (value '%s')", feature_name.c_str(), feature_value.c_str());
 
     Feature feature(feature_name, feature_value);
 
-    // Now find the Contact's version of this feature (using either name).
+    // Now find the Contact's version of this feature.
     FeatureSet::const_iterator contact_feature;
     contact_feature = contact_feature_set.find(feature_name);
 
     // Now attempt to compare the two features.
     if (contact_feature == contact_feature_set.end())
     {
-      // Not specified, can't say either way if the feature is a match.
+      // The Contact header doesn't place restrictions on this
+      // feature, so any feature collection matching the
+      // Reject-Contact header will match both.
       rc = YES;
       LOG_DEBUG("Parameter %s is not in the Contact parameters", feature_name.c_str());
     }
@@ -394,6 +415,9 @@ MatchResult match_feature_sets(const FeatureSet& contact_feature_set,
   return rc;
 }
 
+// Compares a single term of a feature predicate in the
+// Accept/Reject-Contact header (the matcher) and in the Contact
+// header (the matchee).
 MatchResult match_feature(Feature matcher,
                           Feature matchee)
 {
@@ -403,6 +427,8 @@ MatchResult match_feature(Feature matcher,
             matcher.second.c_str(),
             matchee.second.c_str());
 
+  // Features with no value are boolean terms, equivalent to "TRUE"
+  // according to RFC 3841.
   if (matcher.second.empty())
   {
     matcher.second = "TRUE";
@@ -413,7 +439,7 @@ MatchResult match_feature(Feature matcher,
     matchee.second = "TRUE";
   }
 
-  // Unquote the values, as they don't matter
+  // Unquote the values, as they don't matter.
   if ((matcher.second.front() == '"') && (matcher.second.back() == '"'))
   {
     matcher.second = matcher.second.substr(1, (matcher.second.size() - 2));
@@ -428,13 +454,15 @@ MatchResult match_feature(Feature matcher,
     // Matcher is checking for string literal...
     if (matchee.second[0] == '<')
     {
-      // ...as is the matchee
+      // ...as is the matchee...
       if (matcher.second == matchee.second)
       {
+        // ...and it's the same string literal
         rc = YES;
       }
       else
       {
+        // ...but it's a different string literal
         rc = NO;
       }
     }
@@ -455,7 +483,8 @@ MatchResult match_feature(Feature matcher,
     }
     else
     {
-      // ...but the matchee is not
+      // The two feature predicates each require a term of different
+      // types, so no feature collection can match both.
       rc = NO;
     }
   }
@@ -465,7 +494,8 @@ MatchResult match_feature(Feature matcher,
     if ((matchee.second[0] == '#') ||
         (matchee.second[0] == '<'))
     {
-      // ...but the matchee is not
+      // The two feature predicates each require a term of different
+      // types, so no feature collection can match both.
       rc = NO;
     }
     else
@@ -578,6 +608,13 @@ MatchResult match_tokens(const std::string& matcher,
   std::transform(matchee_tokens.begin(), matchee_tokens.end(),
                  matchee_tokens.begin(), string_to_lowercase);
 
+  // Loop over both sets of tokens, to see whether a feature
+  // collection (i.e. a single token) could satisfy both predicates.
+  // Specifically, we want:
+  // * any token that is in both lists, or
+  // * any negation (i.e. !X, which in this context means "anything
+  // but X") and any token in the other list which matches that
+  // negation (i.e. anything but X, or any other negation).
   for (std::vector<std::string>::iterator token1 = matcher_tokens.begin();
        token1 != matcher_tokens.end();
        token1++)
@@ -592,6 +629,8 @@ MatchResult match_tokens(const std::string& matcher,
         return YES;
       }
 
+      // One token is a negation, ie. !X. If the other token is not
+      // equal to X, then that token satisfies both feature predicates.
       if ((*token1)[0] == '!')
       {
         std::string token1_without_negation = token1->substr(1, std::string::npos);
@@ -601,6 +640,7 @@ MatchResult match_tokens(const std::string& matcher,
           return YES;
         }
       }
+
       if ((*token2)[0] == '!')
       {
         std::string token2_without_negation = token2->substr(1, std::string::npos);
