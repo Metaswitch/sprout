@@ -393,6 +393,8 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
 
 void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
+  pj_pool_t* pool = get_pool(req);
+
   // Create an ACR for this transaction.
   _acr = _icscf->get_acr(trail());
   _acr->rx_request(req);
@@ -424,14 +426,19 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     pjsip_uri* uri = PJUtils::term_served_user(req);
     impu = PJUtils::public_id_from_uri(uri);
 
-    if ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
-        (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0))
+    if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
-      pjsip_tel_uri* tel_uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri);
-      if ((tel_uri != NULL) && (PJSIP_URI_SCHEME_IS_TEL(tel_uri)))
+      pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+      if (pj_strcmp2(&sip_uri->user_param, "phone") == 0)
       {
-        LOG_DEBUG("Change request URI from SIP URI to tel URI %s", impu.c_str());
-        req->line.req.uri = (pjsip_uri*)tel_uri;
+        pjsip_tel_uri* tel_uri = PJUtils::translate_sip_uri_to_tel_uri(sip_uri, pool);
+        if ((tel_uri != NULL) && (PJSIP_URI_SCHEME_IS_TEL(tel_uri)))
+        {
+          impu = PJUtils::public_id_from_uri((pjsip_uri*)tel_uri);
+          LOG_DEBUG("Change request URI from SIP URI to tel URI %s", impu.c_str());
+          req->line.req.uri = (pjsip_uri*)tel_uri;
+
+        }
       }
     }
   }
@@ -446,7 +453,6 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                             _originating);
 
   pjsip_sip_uri* scscf_sip_uri = NULL;
-  pj_pool_t* pool = get_pool(req);
   pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Set a flag indicating whether we want to look for a new S-CSCF. This
@@ -637,6 +643,7 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 
 bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
 {
+  bool found = false;
   std::string user = PJUtils::public_id_from_uri((pjsip_uri*)req->line.req.uri);
 
   // If we're enforcing global only lookups then check we have a global user.
@@ -653,7 +660,11 @@ bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
       {
         LOG_DEBUG("Update request URI to %s", new_uri.c_str());
         req->line.req.uri = req_uri;
-        return true;
+
+        // We need to change the IMPU stored on our LIR router so that when
+        // we next do an LIR we look up the new IMPU.
+        ((ICSCFLIRouter *)_router)->change_impu(new_uri);
+        found = true;
       }
       else
       {
@@ -662,5 +673,5 @@ bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
       }
     }
   }
-  return false;
+  return found;
 }

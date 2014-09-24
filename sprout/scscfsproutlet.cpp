@@ -228,7 +228,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
 
     // Check whether we have a global number or whether we allow
     // ENUM lookups for local numbers
-    if ((is_user_global(user)) || (!_global_only_lookups))
+    if ((PJUtils::is_user_global(user)) || (!_global_only_lookups))
     {
       // Perform an ENUM lookup if we have a tel URI, or if we have
       // a SIP URI which is being treated as a phone number.
@@ -273,20 +273,6 @@ bool SCSCFSproutlet::is_user_numeric(const std::string& user)
     }
   }
   return true;
-}
-
-
-// Determines whether a user string represents a global number.
-//
-// @returns true/false
-bool SCSCFSproutlet::is_user_global(const std::string& user)
-{
-  if (user.size() > 0 && user[0] == '+')
-  {
-    return true;
-  }
-
-  return false;
 }
 
 

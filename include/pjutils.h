@@ -257,7 +257,8 @@ void add_pcfa_header(pjsip_msg* msg,
                      const std::deque<std::string>& ecfs,
                      const bool replace);
 
-pjsip_tel_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri);
+pjsip_tel_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
+                                            pj_pool_t* pool);
 
 pj_bool_t is_user_global(const std::string& user);
 
