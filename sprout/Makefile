@@ -40,7 +40,6 @@ TARGET_SOURCES := logger.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
                   callservices.cpp \
-                  mmtel.cpp \
                   enumservice.cpp \
                   dnsresolver.cpp \
                   bgcfservice.cpp \
@@ -76,11 +75,7 @@ TARGET_SOURCES := logger.cpp \
                   contact_filtering.cpp \
                   sproutletproxy.cpp \
                   sproutletappserver.cpp \
-                  scscfsproutlet.cpp \
-                  bgcfsproutlet.cpp \
-                  icscfsproutlet.cpp \
-                  contact_filtering.cpp \
-                  mobiletwinned.cpp
+									pluginloader.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

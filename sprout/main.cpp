@@ -60,6 +60,7 @@ extern "C" {
 #include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
+#include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
@@ -87,14 +88,17 @@ extern "C" {
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
-#include "sproutletappserver.h"
 #include "sproutletproxy.h"
+#include "pluginloader.h"
+#if 0
+#include "sproutletappserver.h"
 #include "scscfsproutlet.h"
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
 #include "mobiletwinned.h"
 #include "mementoappserver.h"
 #include "call_list_store.h"
+#endif
 
 enum OptionTypes
 {
@@ -109,69 +113,6 @@ enum OptionTypes
   OPT_GEMINI_ENABLED
 };
 
-struct options
-{
-  bool                   pcscf_enabled;
-  int                    pcscf_untrusted_port;
-  int                    pcscf_trusted_port;
-  int                    webrtc_port;
-  std::string            upstream_proxy;
-  int                    upstream_proxy_port;
-  int                    upstream_proxy_connections;
-  int                    upstream_proxy_recycle;
-  pj_bool_t              ibcf;
-  bool                   scscf_enabled;
-  int                    scscf_port;
-  bool                   icscf_enabled;
-  int                    icscf_port;
-  std::string            external_icscf_uri;
-  int                    record_routing_model;
-  int                    default_session_expires;
-  std::string            local_host;
-  std::string            public_host;
-  std::string            home_domain;
-  std::string            additional_home_domains;
-  std::string            scscf_uri;
-  std::string            alias_hosts;
-  std::string            trusted_hosts;
-  pj_bool_t              auth_enabled;
-  std::string            auth_realm;
-  std::string            auth_config;
-  std::string            sas_server;
-  std::string            sas_system_name;
-  std::string            hss_server;
-  std::string            xdm_server;
-  std::string            chronos_service;
-  std::string            store_servers;
-  std::string            remote_store_servers;
-  std::string            ralf_server;
-  std::string            enum_server;
-  std::string            enum_suffix;
-  std::string            enum_file;
-  bool                   enforce_user_phone;
-  bool                   enforce_global_only_lookups;
-  pj_bool_t              analytics_enabled;
-  std::string            analytics_directory;
-  int                    reg_max_expires;
-  int                    sub_max_expires;
-  int                    pjsip_threads;
-  std::string            http_address;
-  int                    http_port;
-  int                    http_threads;
-  std::string            billing_cdf;
-  pj_bool_t              emerg_reg_accepted;
-  int                    max_call_list_length;
-  int                    memento_threads;
-  int                    call_list_ttl;
-  pj_bool_t              memento_enabled;
-  pj_bool_t              gemini_enabled;
-  int                    worker_threads;
-  pj_bool_t              log_to_file;
-  std::string            log_directory;
-  int                    log_level;
-  pj_bool_t              interactive;
-  pj_bool_t              daemon;
-};
 
   const static struct pj_getopt_option long_opt[] =
   {
@@ -962,13 +903,26 @@ public:
   }
 };
 
+/// Unregisters HTTP threads with PJSIP on termination.  PJSIP doesn't actually
+/// need to be called in this case, but we do need to free off the thread
+/// descriptor block that was allocated when the thread was registered.
+void unreg_httpthread_with_pjsip(void* thread_desc)
+{
+  delete (pj_thread_desc*)thread_desc;
+}
+
+/// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
 void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 {
+  //pj_thread_desc* thread_desc = new pj_thread_desc;
   pj_thread_desc thread_desc;
   pj_thread_t *thread = 0;
 
+  //pthread_cleanup_push(unreg_httpthread_with_pjsip, thread_desc);
+
   if (!pj_thread_is_registered())
   {
+    //pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", *thread_desc, &thread);
     pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
@@ -978,6 +932,17 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
+
+// Objects that must be shared with dynamically linked sproutlets must be
+// globally scoped.
+HSSConnection* hss_connection = NULL;
+RegStore* local_reg_store = NULL;
+RegStore* remote_reg_store = NULL;
+HttpConnection* ralf_connection = NULL;
+HttpResolver* http_resolver = NULL;
+ACRFactory* scscf_acr_factory = NULL;
+
+
 /*
  * main()
  */
@@ -986,32 +951,22 @@ int main(int argc, char *argv[])
   pj_status_t status;
   struct options opt;
 
-  HSSConnection* hss_connection = NULL;
-  XDMConnection* xdm_connection = NULL;
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  EnumService* enum_service = NULL;
-  BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
   LoadMonitor* load_monitor = NULL;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
-  HttpResolver* http_resolver = NULL;
   Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
-  RegStore* local_reg_store = NULL;
-  RegStore* remote_reg_store = NULL;
   AvStore* av_store = NULL;
-  SCSCFSelector* scscf_selector = NULL;
   ChronosConnection* chronos_connection = NULL;
-  HttpConnection* ralf_connection = NULL;
-  ACRFactory* scscf_acr_factory = NULL;
-  ACRFactory* bgcf_acr_factory = NULL;
-  ACRFactory* icscf_acr_factory = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
+#if 0
   CallListStore::Store* call_list_store = NULL;
+#endif
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
 
@@ -1220,8 +1175,6 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-    scscf_selector = new SCSCFSelector();
-
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
   {
@@ -1306,35 +1259,6 @@ int main(int argc, char *argv[])
                                        stack_data.stats_aggregator);
   }
 
-  if (ralf_connection != NULL)
-  {
-    // Rf billing is enabled, so create ACR factories.
-    if (opt.scscf_enabled)
-    {
-      // Create ACRFactory instances for the S-CSCF and BGCF.
-      scscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF);
-      bgcf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF);
-    }
-    if (opt.icscf_enabled)
-    {
-      // Create ACRFactory instance for the I-CSCF.
-      icscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, ICSCF);
-    }
-    if (opt.pcscf_enabled)
-    {
-      // Create ACRFactory instance for the P-CSCF.
-      pcscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF);
-    }
-  }
-  else
-  {
-    // Ralf is not enabled, so create a null ACRFactory for all components.
-    scscf_acr_factory = new ACRFactory();
-    bgcf_acr_factory = new ACRFactory();
-    icscf_acr_factory = new ACRFactory();
-    pcscf_acr_factory = new ACRFactory();
-  }
-
   if (opt.chronos_service != "")
   {
     std::string port_str = std::to_string(opt.http_port);
@@ -1358,6 +1282,11 @@ int main(int argc, char *argv[])
 
   if (opt.pcscf_enabled)
   {
+    // Create an ACR factory for the P-CSCF.
+    pcscf_acr_factory = (ralf_connection != NULL) ?
+                (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF) :
+                new ACRFactory();
+
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
                                  NULL,
@@ -1407,6 +1336,10 @@ int main(int argc, char *argv[])
 
   if (opt.scscf_enabled)
   {
+    scscf_acr_factory = (ralf_connection != NULL) ?
+                      (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF) :
+                      new ACRFactory();
+
     if (opt.store_servers != "")
     {
       // Use memcached store.
@@ -1436,16 +1369,6 @@ int main(int argc, char *argv[])
     local_reg_store = new RegStore(local_data_store, chronos_connection);
     remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
 
-    if (opt.xdm_server != "")
-    {
-      // Create a connection to the XDMS.
-      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-      xdm_connection = new XDMConnection(opt.xdm_server,
-                                         http_resolver,
-                                         load_monitor,
-                                         stack_data.stats_aggregator);
-    }
-
     if (opt.auth_enabled)
     {
       // Create an AV store using the local store and initialise the authentication
@@ -1461,17 +1384,6 @@ int main(int argc, char *argv[])
                                    scscf_acr_factory,
                                    analytics_logger);
     }
-
-    // Create Enum and BGCF services required for S-CSCF.
-    if (!opt.enum_server.empty())
-    {
-      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    bgcf_service = new BgcfService();
 
     // Launch the registrar.
     status = init_registrar(local_reg_store,
@@ -1500,115 +1412,18 @@ int main(int argc, char *argv[])
       LOG_ERROR("Failed to enable subscription module");
       return 1;
     }
-
-    // Create the S-CSCF and BGCF Sproutlets.
-    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
-    std::string icscf_uri;
-    if (opt.icscf_enabled)
-    {
-      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
-      // S-CSCF URI with the I-CSCF port number.
-      icscf_uri = scscf_uri;
-      size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
-
-      if (pos != std::string::npos)
-      {
-        icscf_uri.replace(pos,
-                          std::to_string(opt.scscf_port).length(),
-                          std::to_string(opt.icscf_port));
-      }
-      else
-      {
-        // No port number, so best we can do is strap icscf. on the front.
-        icscf_uri = "sip:icscf." + scscf_uri.substr(4);
-      }
-    }
-    else
-    {
-      icscf_uri = opt.external_icscf_uri;
-    }
-
-    SCSCFSproutlet* scscf_sproutlet =
-                      new SCSCFSproutlet(scscf_uri,
-                                         icscf_uri,
-                                         bgcf_uri,
-                                         opt.scscf_port,
-                                         local_reg_store,
-                                         remote_reg_store,
-                                         hss_connection,
-                                         enum_service,
-                                         scscf_acr_factory,
-                                         opt.enforce_user_phone,
-                                         opt.enforce_global_only_lookups);
-    if (scscf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create S-CSCF Sproutlet");
-      return 1;
-    }
-    sproutlets.push_back(scscf_sproutlet);
-
-    BGCFSproutlet* bgcf_sproutlet = new BGCFSproutlet(0,
-                                                      bgcf_service,
-                                                      bgcf_acr_factory);
-    if (bgcf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create BGCF Sproutlet");
-      return 1;
-    }
-
-    sproutlets.push_back(bgcf_sproutlet);
   }
 
-  if (opt.icscf_enabled)
-  {
-    // Create the S-CSCF selector.
-    scscf_selector = new SCSCFSelector();
-    if (scscf_selector == NULL)
-    {
-      LOG_ERROR("Failed to create S-CSCF selector");
-      return 1;
-    }
-
-    // Create the I-CSCF sproutlet.
-    ICSCFSproutlet* icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
-                                                         hss_connection,
-                                                         icscf_acr_factory,
-                                                         scscf_selector);
-    if (icscf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create I-CSCF Sproutlet");
-      return 1;
-    }
-    sproutlets.push_back(icscf_sproutlet);
-  }
-
-  if (opt.xdm_server != "")
-  {
-    // Create a connection to the XDMS.
-    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server,
-                                       http_resolver,
-                                       load_monitor,
-                                       stack_data.stats_aggregator);
-
-    if (xdm_connection == NULL)
-    {
-      LOG_ERROR("Failed to create XDM connection");
-      return 1;
-    }
-
-    // Load the MMTEL AppServer
-    AppServer* mmtel = new Mmtel("mmtel", xdm_connection);
-    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel, "mmtel." + opt.home_domain);
-    sproutlets.push_back(mmtel_sproutlet);
-  }
+  // Load the sproutlet plugins.
+  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
+  loader->load(sproutlets);
 
   // Load any other AppServers that should be collocated, eg.
   //   AppServer* app = new SampleForkAS();
   //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
   //   sproutlets.push_back(app_sproutlet);
 
+#if 0
   if (opt.gemini_enabled)
   {
     // Create a Gemini App Server.
@@ -1640,6 +1455,7 @@ int main(int argc, char *argv[])
     Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento);
     sproutlets.push_back(memento_sproutlet);
   }
+#endif
 
   if (!sproutlets.empty())
   {
@@ -1728,14 +1544,17 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
-  // Destroy the Sproutlet Proxy and any Sproutlets.
+  // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
-  while (!sproutlets.empty())
-  {
-    delete sproutlets.front();
-    sproutlets.pop_front();
-  }
+
+  // Unload any dynamically loaded sproutlets by deleting the loader.
+  delete loader;
+
+  // Delete any statically loaded sproutlets.
+
+#if 0
   delete call_list_store;
+#endif
 
   if (opt.scscf_enabled)
   {
@@ -1745,13 +1564,7 @@ int main(int argc, char *argv[])
     {
       destroy_authentication();
     }
-    delete hss_connection;
-    delete xdm_connection;
-    delete enum_service;
-    delete bgcf_service;
     delete chronos_connection;
-    delete scscf_acr_factory;
-    delete bgcf_acr_factory;
   }
   if (opt.pcscf_enabled)
   {
@@ -1762,11 +1575,8 @@ int main(int argc, char *argv[])
     destroy_stateful_proxy();
     delete pcscf_acr_factory;
   }
-  if (opt.icscf_enabled)
-  {
-    delete scscf_selector;
-    delete icscf_acr_factory;
-  }
+
+  delete hss_connection;
 
   destroy_options();
   destroy_stack();
@@ -1781,6 +1591,7 @@ int main(int argc, char *argv[])
   delete ralf_connection;
 
   delete sip_resolver;
+  delete http_resolver;
   delete dns_resolver;
 
   delete analytics_logger;
