@@ -967,7 +967,7 @@ public:
 /// descriptor block that was allocated when the thread was registered.
 void unreg_httpthread_with_pjsip(void* thread_desc)
 {
-  delete thread_desc;
+  delete (pj_thread_desc*)thread_desc;
 }
 
 /// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
