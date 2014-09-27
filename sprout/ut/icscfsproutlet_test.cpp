@@ -79,7 +79,8 @@ public:
                                           _acr_factory,
                                           _scscf_selector,
                                           _enum_service,
-                                          true);
+                                          true,
+                                          false);
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
@@ -2324,7 +2325,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
                                         49152);
 
   // Set up the HSS responses for the terminating location query.
-  _hss_connection->set_result("/impu/sip%3A16505551234%40198.147.226.2/location",
+  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40198.147.226.2/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -2457,7 +2458,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
 }
 
 
-TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetryEnum)
+TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 {
   pjsip_tx_data* tdata;
 
@@ -2468,21 +2469,16 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetryEnum)
                                         49152);
 
   // Set up the HSS responses for the terminating location query.
-  // Set up the HSS responses for the terminating location query.
   _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
-  _hss_connection->set_result("/impu/sip%3A16505551234%40198.147.226.2/location?auth-type=CAPAB",
-                              "{\"result-code\": 2001,"
-                              " \"mandatory-capabilities\": [567],"
-                              " \"optional-capabilities\": [789, 567]}");
 
-  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  // Inject an INVITE request to a sip URI representing a telephone number with a
+  // P-Served-User header.
   Message msg1;
   msg1._method = "INVITE";
-  msg1._toscheme = "tel";
+  msg1._requri = "sip:+16505551234@homedomain";
   msg1._to = "+16505551234";
-  msg1._todomain = "";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
                 tp->to_string(true) +
@@ -2516,52 +2512,6 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetryEnum)
   string rr = get_headers(tdata->msg, "Record-Route");
   ASSERT_EQ("", rr);
 
-  // Kill the TCP connection to the S-CSCF to force a retry.
-  terminate_tcp_transport(tdata->tp_info.transport);
-  free_txdata();
-  cwtest_advance_time_ms(6000);
-  poll();
-
-  // I-CSCF does another HSS location query for capabilities.  This time
-  // scscf3 is selected.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.3", 5058, tdata);
-  ReqMatcher r3("INVITE");
-  r3.matches(tdata->msg);
-
-  // Check that a Route header has been added routing the INVITE to the
-  // selected S-CSCF.  This must include the orig parameter.
-  route = get_headers(tdata->msg, "Route");
-  ASSERT_EQ("Route: <sip:scscf3.homedomain:5058;transport=TCP;lr>", route);
-
-  // Check that no Record-Route headers have been added.
-  rr = get_headers(tdata->msg, "Record-Route");
-  ASSERT_EQ("", rr);
-
-  // Kill the TCP connection to the S-CSCF to force a retry.
-  terminate_tcp_transport(tdata->tp_info.transport);
-  free_txdata();
-  cwtest_advance_time_ms(6000);
-  poll();
-
-  // I-CSCF does another HSS location query for capabilities.  This time
-  // scscf4 is selected.
-  ASSERT_EQ(1, txdata_count());
-  tdata = current_txdata();
-  expect_target("TCP", "10.10.10.4", 5058, tdata);
-  ReqMatcher r5("INVITE");
-  r5.matches(tdata->msg);
-
-  // Check that a Route header has been added routing the INVITE to the
-  // selected S-CSCF.  This must include the orig parameter.
-  route = get_headers(tdata->msg, "Route");
-  ASSERT_EQ("Route: <sip:scscf4.homedomain:5058;transport=TCP;lr>", route);
-
-  // Check that no Record-Route headers have been added.
-  rr = get_headers(tdata->msg, "Record-Route");
-  ASSERT_EQ("", rr);
-
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
 
@@ -2569,16 +2519,16 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetryEnum)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher r6(200);
-  r6.matches(tdata->msg);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
 
   free_txdata();
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
-  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location?auth-type=CAPAB");
 
   delete tp;
 }
+
 
 TEST_F(ICSCFSproutletTest, ProxyAKARegisterChallenge)
 {

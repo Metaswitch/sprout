@@ -1576,7 +1576,8 @@ int main(int argc, char *argv[])
                                                          icscf_acr_factory,
                                                          scscf_selector,
                                                          enum_service,
-                                                         opt.enforce_global_only_lookups);
+                                                         opt.enforce_global_only_lookups,
+                                                         opt.enforce_user_phone);
     if (icscf_sproutlet == NULL)
     {
       LOG_ERROR("Failed to create I-CSCF Sproutlet");

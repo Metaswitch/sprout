@@ -73,7 +73,8 @@ public:
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
-                 bool enforce_global_only_lookups);
+                 bool enforce_global_only_lookups,
+                 bool enforce_user_phone);
 
   virtual ~ICSCFSproutlet();
 
@@ -104,6 +105,11 @@ private:
     return _global_only_lookups;
   }
 
+  inline bool get_user_phone() const
+  {
+    return _user_phone;
+  }
+
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
   ACR* get_acr(SAS::TrailId trail);
@@ -120,6 +126,7 @@ private:
   EnumService* _enum_service;
 
   bool _global_only_lookups;
+  bool _user_phone;
 };
 
 
@@ -137,21 +144,16 @@ public:
   virtual void on_cancel(int status_code, pjsip_msg* req);
 
 private:
-  /// Whether or not we should attempt an ENUM lookup after failing
-  /// to find an S-CSCF. We should only do this if no S-CSCFs were found
-  /// and we are routing to a tel URI.
+  /// Determine whether a status code indicates that the S-CSCF wasn't
+  /// found.
   ///
-  /// @returns                    True if we should attempt an ENUM
-  ///                             translation, false otherwise.
+  /// @returns                    True/false.
   /// @param status_code          The status code returned from the S-CSCF
   ///                             lookup.
-  /// @param req                  The request.
-  inline bool attempt_enum_translation(const pjsip_status_code scscf_lookup,
-                                       const pjsip_msg* req)
+  inline bool scscf_not_found(const pjsip_status_code scscf_lookup)
   {
-    return ((scscf_lookup == PJSIP_SC_NOT_FOUND) &&
-            (!_originating) &&
-            (PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri)));
+    return ((scscf_lookup == PJSIP_SC_NOT_FOUND) ||
+            (scscf_lookup == PJSIP_SC_DOES_NOT_EXIST_ANYWHERE));
   }
 
   /// Perform an ENUM lookup. We only do this for requests containing tel
