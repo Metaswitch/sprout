@@ -1581,24 +1581,6 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
   doSlowFailureFlow(msg, 404);
 }
 
-TEST_F(SCSCFTest, TestEnumLocalTelURI)
-{
-  SCOPED_TRACE("");
-  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-
-  set_global_only_lookups(true);
-  Message msg;
-  msg._to = "16505551234";
-  msg._toscheme = "tel";
-  msg._todomain = "";
-  // We only do ENUM on originating calls
-  msg._route = "Route: <sip:homedomain;orig>";
-  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
-  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 484);
-}
-
 TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
 {
   SCOPED_TRACE("");
@@ -1613,7 +1595,8 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 484);
+  // Routed to the BGCF with the req URI unchanged.
+  doSuccessfulFlow(msg, testing::MatchesRegex(msg._requri), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
@@ -5923,4 +5906,3 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   msg.set_route(out);
   free_txdata();
 }
-
