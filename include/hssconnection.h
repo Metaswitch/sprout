@@ -88,6 +88,16 @@ public:
                                      std::string& regstate,
                                      std::map<std::string, Ifcs >& service_profiles,
                                      std::vector<std::string>& associated_uris,
+                                     std::vector<std::string>& aliases,
+                                     std::deque<std::string>& ccfs,
+                                     std::deque<std::string>& ecfs,
+                                     SAS::TrailId trail);
+  HTTPCode update_registration_state(const std::string& public_user_identity,
+                                     const std::string& private_user_identity,
+                                     const std::string& type,
+                                     std::string& regstate,
+                                     std::map<std::string, Ifcs >& service_profiles,
+                                     std::vector<std::string>& associated_uris,
                                      std::deque<std::string>& ccfs,
                                      std::deque<std::string>& ecfs,
                                      SAS::TrailId trail);

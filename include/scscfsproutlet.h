@@ -115,6 +115,7 @@ private:
   bool read_hss_data(const std::string& public_id,
                      bool& registered,
                      std::vector<std::string>& uris,
+                     std::vector<std::string>& aliases,
                      Ifcs& ifcs,
                      std::deque<std::string>& ccfs,
                      std::deque<std::string>& ecfs,
@@ -260,6 +261,7 @@ private:
   bool _hss_data_cached;
   bool _registered;
   std::vector<std::string> _uris;
+  std::vector<std::string> _aliases;
   Ifcs _ifcs;
   std::deque<std::string> _ccfs;
   std::deque<std::string> _ecfs;

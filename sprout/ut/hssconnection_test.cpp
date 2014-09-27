@@ -178,6 +178,88 @@ class HssConnectionTest : public BaseTest
       "<IMSSubscription>"
       "</IMSSubscription>"
       "</C>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid46/reg-data", "{\"reqtype\": \"call\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+      "<RegistrationState>REGISTERED</RegistrationState>"
+      "<IMSSubscription>"
+      "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:123@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>sip:456@example.com</Identity>"
+      "</PublicIdentity>"
+        "<InitialFilterCriteria>"
+          "<TriggerPoint>"
+            "<ConditionTypeCNF>0</ConditionTypeCNF>"
+            "<SPT>"
+              "<ConditionNegated>0</ConditionNegated>"
+              "<Group>0</Group>"
+              "<Method>INVITE</Method>"
+              "<Extension></Extension>"
+            "</SPT>"
+          "</TriggerPoint>"
+          "<ApplicationServer>"
+            "<ServerName>mmtel.narcissi.example.com</ServerName>"
+            "<DefaultHandling>0</DefaultHandling>"
+          "</ApplicationServer>"
+        "</InitialFilterCriteria>"
+      "</ServiceProfile>"
+      "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:321@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>pubid46</Identity>"
+      "</PublicIdentity>"
+        "<InitialFilterCriteria>"
+          "<TriggerPoint>"
+            "<ConditionTypeCNF>0</ConditionTypeCNF>"
+            "<SPT>"
+              "<ConditionNegated>0</ConditionNegated>"
+              "<Group>0</Group>"
+              "<Method>INVITE</Method>"
+              "<Extension></Extension>"
+            "</SPT>"
+          "</TriggerPoint>"
+          "<ApplicationServer>"
+            "<ServerName>mmtel.narcissi.example.com</ServerName>"
+            "<DefaultHandling>0</DefaultHandling>"
+          "</ApplicationServer>"
+        "</InitialFilterCriteria>"
+      "</ServiceProfile>"
+      "<ServiceProfile>"
+      "<PublicIdentity>"
+      "<Identity>sip:89@example.com</Identity>"
+      "</PublicIdentity>"
+      "<PublicIdentity>"
+      "<Identity>sip:67@example.com</Identity>"
+      "</PublicIdentity>"
+        "<InitialFilterCriteria>"
+          "<TriggerPoint>"
+            "<ConditionTypeCNF>0</ConditionTypeCNF>"
+            "<SPT>"
+              "<ConditionNegated>0</ConditionNegated>"
+              "<Group>0</Group>"
+              "<Method>INVITE</Method>"
+              "<Extension></Extension>"
+            "</SPT>"
+          "</TriggerPoint>"
+          "<ApplicationServer>"
+            "<ServerName>mmtel.narcissi.example.com</ServerName>"
+            "<DefaultHandling>0</DefaultHandling>"
+          "</ApplicationServer>"
+        "</InitialFilterCriteria>"
+      "</ServiceProfile>"
+      "</IMSSubscription>"
+      "<ChargingAddresses>"
+        "<CCF priority=\"1\">ccf1</CCF>"
+        "<CCF priority=\"2\">ccf2</CCF>"
+        "<ECF priority=\"2\">ecf2</ECF>"
+        "<ECF priority=\"1\">ecf1</ECF>"
+      "</ChargingAddresses>"
+      "</ClearwaterRegData>";
  }
 
   virtual ~HssConnectionTest()
@@ -379,4 +461,17 @@ TEST_F(HssConnectionTest, LocationNotFound)
   ASSERT_TRUE(actual == NULL);
   ASSERT_TRUE(rc == 404);
   delete actual;
+}
+
+TEST_F(HssConnectionTest, SimpleAliases)
+{
+  std::vector<std::string> aliases;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  std::vector<std::string> unused_vector;
+  std::deque<std::string> unused_deque;
+  _hss.update_registration_state("pubid46", "", HSSConnection::CALL, regstate, ifcs_map, unused_vector, aliases, unused_deque, unused_deque, 0);
+  ASSERT_EQ(2u, aliases.size());
+  EXPECT_EQ("sip:321@example.com", aliases[0]);
+  EXPECT_EQ("pubid46", aliases[1]);
 }
