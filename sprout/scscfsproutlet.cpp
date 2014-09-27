@@ -1198,7 +1198,7 @@ pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
       if (new_uri != NULL)
       {
         LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
-        uri = new_uri;
+        req->line.req.uri = new_uri;
       }
       else
       {
