@@ -935,12 +935,14 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
+LoadMonitor* load_monitor = NULL;
 HSSConnection* hss_connection = NULL;
 RegStore* local_reg_store = NULL;
 RegStore* remote_reg_store = NULL;
 HttpConnection* ralf_connection = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
+EnumService* enum_service = NULL;
 
 
 /*
@@ -954,7 +956,6 @@ int main(int argc, char *argv[])
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
   pthread_t quiesce_unquiesce_thread;
-  LoadMonitor* load_monitor = NULL;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
   Store* local_data_store = NULL;
@@ -1257,6 +1258,19 @@ int main(int argc, char *argv[])
                                        http_resolver,
                                        load_monitor,
                                        stack_data.stats_aggregator);
+  }
+
+  if (opt.scscf_enabled)
+  {
+    // Create ENUM service required for S-CSCF.
+    if (!opt.enum_server.empty())
+    {
+      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
+    }
+    else if (!opt.enum_file.empty())
+    {
+      enum_service = new JSONEnumService(opt.enum_file);
+    }
   }
 
   if (opt.chronos_service != "")

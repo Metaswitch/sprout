@@ -40,6 +40,7 @@
  */
 
 #include "cfgoptions.h"
+#include "sproutletplugin.h"
 #include "scscfsproutlet.h"
 
 class SCSCFPlugin : public SproutletPlugin
@@ -57,12 +58,12 @@ private:
 };
 
 /// Export the plug-in using the magic symbol "plugin-loader"
+extern "C" {
 SCSCFPlugin plugin_loader;
+}
 
 SCSCFPlugin::SCSCFPlugin() :
-  _scscf_sproutlet(NULL),
-  _acr_factory(NULL),
-  _enum_service(NULL)
+  _scscf_sproutlet(NULL)
 {
 }
 
@@ -106,16 +107,6 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    // Create ENUM service required for S-CSCF.
-    if (!opt.enum_server.empty())
-    {
-      _enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      _enum_service = new JSONEnumService(opt.enum_file);
-    }
-
     _scscf_sproutlet = new SCSCFSproutlet(scscf_uri,
                                           icscf_uri,
                                           bgcf_uri,
@@ -123,7 +114,7 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
                                           local_reg_store,
                                           remote_reg_store,
                                           hss_connection,
-                                          _enum_service,
+                                          enum_service,
                                           scscf_acr_factory,
                                           opt.enforce_user_phone,
                                           opt.enforce_global_only_lookups);
@@ -139,6 +130,5 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
-  delete _acr_factory;
   delete _enum_service;
 }

@@ -40,6 +40,9 @@
  */
 
 #include "cfgoptions.h"
+#include "acr.h"
+#include "sproutletplugin.h"
+#include "bgcfservice.h"
 #include "bgcfsproutlet.h"
 
 class BGCFPlugin : public SproutletPlugin
@@ -54,17 +57,19 @@ public:
 private:
   BGCFSproutlet* _bgcf_sproutlet;
   ACRFactory* _acr_factory;
-  BGCFService* _bgcf_service;
+  BgcfService* _bgcf_service;
 };
 
 /// Export the plug-in using the magic symbol "plugin-loader"
+extern "C" {
 BGCFPlugin plugin_loader;
+}
 
 
 BGCFPlugin::BGCFPlugin() :
   _bgcf_sproutlet(NULL),
   _acr_factory(NULL),
-  _scscf_selector(NULL)
+  _bgcf_service(NULL)
 {
 }
 
@@ -85,17 +90,17 @@ std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
     std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
 
     // Create BGCF service required for the BGCF Sproutlet.
-    bgcf_service = new BgcfService();
+    _bgcf_service = new BgcfService();
 
     // Create the BGCF ACR factory.
-    acr_factory = (ralf_connection != NULL) ?
+    _acr_factory = (ralf_connection != NULL) ?
                        (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF) :
                        new ACRFactory();
 
     // Create the Sproutlet.
-    bgcf_sproutlet = new BGCFSproutlet(0, bgcf_service, acr_factory);
+    _bgcf_sproutlet = new BGCFSproutlet(0, _bgcf_service, _acr_factory);
 
-    sproutlets.push_back(bgcf_sproutlet);
+    sproutlets.push_back(_bgcf_sproutlet);
   }
 
   return sproutlets;
@@ -104,7 +109,7 @@ std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
 /// Unloads the BGCF plug-in.
 void BGCFPlugin::unload()
 {
-  delete bgcf_sproutlet;
-  delete acr_factory;
-  delete bgcf_service;
+  delete _bgcf_sproutlet;
+  delete _acr_factory;
+  delete _bgcf_service;
 }

@@ -40,7 +40,8 @@
  */
 
 #include "cfgoptions.h"
-#include "sproutletappservershim.h"
+#include "sproutletplugin.h"
+#include "sproutletappserver.h"
 #include "mmtel.h"
 
 class MMTELASPlugin : public SproutletPlugin
@@ -59,7 +60,9 @@ private:
 };
 
 /// Export the plug-in using the magic symbol "plugin-loader"
+extern "C" {
 MMTELASPlugin plugin_loader;
+}
 
 
 MMTELASPlugin::MMTELASPlugin() :
@@ -88,8 +91,8 @@ std::list<Sproutlet*> MMTELASPlugin::load(struct options& opt)
                                         stack_data.stats_aggregator);
 
     // Load the MMTEL AppServer
-    _mmtel = new Mmtel("mmtel", xdm_connection);
-    _mmtel_sproutlet = new SproutletAppServerShim(mmtel, "mmtel." + opt.home_domain);
+    _mmtel = new Mmtel("mmtel", _xdm_connection);
+    _mmtel_sproutlet = new SproutletAppServerShim(_mmtel, "mmtel." + opt.home_domain);
     sproutlets.push_back(_mmtel_sproutlet);
   }
 

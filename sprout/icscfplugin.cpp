@@ -40,6 +40,8 @@
  */
 
 #include "cfgoptions.h"
+#include "sproutletplugin.h"
+#include "scscfselector.h"
 #include "icscfsproutlet.h"
 
 class ICSCFPlugin : public SproutletPlugin
@@ -58,7 +60,9 @@ private:
 };
 
 /// Export the plug-in using the magic symbol "plugin-loader"
+extern "C" {
 ICSCFPlugin plugin_loader;
+}
 
 ICSCFPlugin::ICSCFPlugin() :
   _icscf_sproutlet(NULL),
@@ -89,10 +93,10 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
     // Create the I-CSCF sproutlet.
     _icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
                                           hss_connection,
-                                          acr_factory,
-                                          scscf_selector);
+                                          _acr_factory,
+                                          _scscf_selector);
 
-    sproutlets.push_back(icscf_sproutlet);
+    sproutlets.push_back(_icscf_sproutlet);
   }
 
   return sproutlets;
@@ -103,5 +107,5 @@ void ICSCFPlugin::unload()
 {
   delete _icscf_sproutlet;
   delete _acr_factory;
-  delete _scscf_selector_service;
+  delete _scscf_selector;
 }

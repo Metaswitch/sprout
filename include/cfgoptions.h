@@ -44,6 +44,13 @@
 
 #include <string>
 
+#include "hssconnection.h"
+#include "regstore.h"
+#include "httpconnection.h"
+#include "httpresolver.h"
+#include "acr.h"
+#include "enumservice.h"
+
 struct options
 {
   bool                   pcscf_enabled;
@@ -107,5 +114,16 @@ struct options
   bool                   interactive;
   bool                   daemon;
 };
+
+// Objects that must be shared with dynamically linked sproutlets must be
+// globally scoped.
+extern LoadMonitor* load_monitor;
+extern HSSConnection* hss_connection;
+extern RegStore* local_reg_store;
+extern RegStore* remote_reg_store;
+extern HttpConnection* ralf_connection;
+extern HttpResolver* http_resolver;
+extern ACRFactory* scscf_acr_factory;
+extern EnumService* enum_service;
 
 #endif

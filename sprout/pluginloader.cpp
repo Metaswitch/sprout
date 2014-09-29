@@ -60,6 +60,8 @@ PluginLoader::~PluginLoader()
 /// Load the plug-ins, returning the resulting list of Sproutlets.
 void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
 {
+  LOG_STATUS("Loading plug-ins from %s", _path.c_str());
+
   DIR* d = opendir(_path.c_str());
 
   if (d != NULL)
@@ -69,7 +71,7 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
     {
       if (de->d_type == DT_REG)
       {
-        // Regular file, so attempt to load and configure any sproutlets in it.
+        // Regular file, so attempt to load any sproutlets in it.
         // (We don't bother checking the file name as this isn't a reliable
         // indication that the file is a shared object.)
         Plugin p;
@@ -78,28 +80,30 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         p.handle = NULL;
         p.plugin = NULL;
         LOG_STATUS("Attempt to load plug-in %s", p.name.c_str());
-        try
+
+        dlerror();
+        p.handle = dlopen(p.name.c_str(), RTLD_NOW);
+        if (p.handle != NULL)
         {
-          dlerror();
-          p.handle = dlopen(p.name.c_str(), RTLD_NOW);
-          p.plugin = (SproutletPlugin*)dlsym(p.handle, "plugin-loader");
+          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "plugin_loader"));
 
-          std::list<Sproutlet*> plugin_sproutlets = p.plugin->load(_opt);
-
-          for (std::list<Sproutlet*>::const_iterator i = plugin_sproutlets.begin();
-               i != plugin_sproutlets.end();
-               ++i)
+          if (p.plugin != NULL)
           {
-            try
+            std::list<Sproutlet*> plugin_sproutlets = p.plugin->load(_opt);
+
+            for (std::list<Sproutlet*>::const_iterator i = plugin_sproutlets.begin();
+                 i != plugin_sproutlets.end();
+                 ++i)
             {
               Sproutlet* s = *i;
-              LOG_STATUS("Sproutlet %s using API version %d",
+              LOG_DEBUG("Sproutlet %s using API version %d",
                          s->service_name().c_str(), s->api_version());
               if (api_supported(s->api_version()))
               {
                 // The API version required by the sproutlet is supported.
                 sproutlets.push_back(s);
-                LOG_STATUS("Loaded sproutlet %s", s->service_name().c_str());
+                LOG_STATUS("Loaded sproutlet %s using API version %d",
+                           s->service_name().c_str(), s->api_version());
               }
               else
               {
@@ -108,25 +112,18 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
                           s->service_name().c_str(), s->api_version());
               }
             }
-            catch (...)
-            {
-              LOG_ERROR("Exception loading Sproutlet object from plug-in %s",
-                        p.name.c_str());
-            }
           }
+        }
 
+        if (p.plugin != NULL)
+        {
           // Add shared object to the list of loaded plugins.
           _loaded.push_back(p);
         }
-        catch (...)
+        else
         {
-          LOG_ERROR("Exception loading Sproutlet plug-in %s - %s",
+          LOG_ERROR("Error loading Sproutlet plug-in %s - %s",
                     p.name.c_str(), dlerror());
-          if (p.plugin != NULL)
-          {
-            p.plugin->unload();
-          }
-
           if (p.handle != NULL)
           {
             dlclose(p.handle);
@@ -136,6 +133,8 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
     }
     closedir(d);
   }
+
+  LOG_STATUS("Finished loading plug-ins");
 }
 
 /// Unload all the loaded plug-ins.
