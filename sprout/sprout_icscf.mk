@@ -30,7 +30,7 @@ CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflag
 CPPFLAGS := $(filter-out -O2,$(CPPFLAGS))
 CPPFLAGS_BUILD += -O2
 
-LDFLAGS += -L${ROOT}/usr/lib -rdynamic -shared
+LDFLAGS += -L${ROOT}/usr/lib -shared
 
 include ${MK_DIR}/platform.mk
 
