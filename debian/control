@@ -23,7 +23,7 @@ Description: Debugging symbols for sprout-libs
 
 Package: sprout
 Architecture: any
-Depends: sprout-base, sprout-scscf, sprout-icscf, sprout-bgcf, sprout-mmtel
+Depends: sprout-base, sprout-scscf, sprout-icscf, sprout-bgcf, sprout-mmtel-as
 Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
 Description: sprout, the SIP Router
 
@@ -32,28 +32,74 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: sprout (= ${binary:Version})
-Recommends: gdb, sprout-base-dbg, sprout-scscf-dbg, sprout-icscf-dbg, sprout-bgcf-dbg, sprout-mmtel-dbg, sprout-libs-dbg, chronos-dbg
+Recommends: sprout-base-dbg, sprout-scscf-dbg, sprout-icscf-dbg, sprout-bgcf-dbg, sprout-mmtel-as-dbg
 Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-base
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5, chronos
 Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
-Description: sprout, the SIP Router
+Description: sprout-base, the SIP Router basic executable
 
 Package: sprout-base-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: sprout (= ${binary:Version})
+Depends: sprout-base (= ${binary:Version})
 Recommends: gdb, sprout-libs-dbg, chronos-dbg
 Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-scscf
 Architecture: any
 Depends: sprout-base
-Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
-Description: sprout, the SIP Router
+Suggests: sprout-scscf-dbg
+Description: sprout-scscf, the SIP Router S-CSCF plug-in
+
+Package: sprout-scscf-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout-scscf (= ${binary:Version})
+Description: Debugging symbols for sprout-scscf, the SIP Router S-CSCF plug-in
+
+Package: sprout-icscf
+Architecture: any
+Depends: sprout-base
+Suggests: sprout-icscf-dbg
+Description: sprout-icscf, the SIP Router I-CSCF plug-in
+
+Package: sprout-icscf-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout-icscf (= ${binary:Version})
+Description: Debugging symbols for sprout-icscf, the SIP Router I-CSCF plug-in
+
+Package: sprout-bgcf
+Architecture: any
+Depends: sprout-base
+Suggests: sprout-bgcf-dbg
+Description: sprout-bgcf, the SIP Router BGCF plug-in
+
+Package: sprout-bgcf-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout-bgcf (= ${binary:Version})
+Description: Debugging symbols for sprout-bgcf, the SIP Router BGCF plug-in
+
+Package: sprout-mmtel-as
+Architecture: any
+Depends: sprout-base
+Suggests: sprout-mmtel-as-dbg
+Description: sprout-mmtel-as, the SIP Router MMTEL Application Server plug-in
+
+Package: sprout-mmtel-as-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: sprout-mmtel-as (= ${binary:Version})
+Description: Debugging symbols for sprout-mmtel-as, the SIP Router MMTEL Application Server plug-in
 
 Package: bono
 Architecture: any
