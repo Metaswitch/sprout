@@ -130,9 +130,6 @@ private:
   ///                             or called party).
   ACR* get_acr(SAS::TrailId trail, Initiator initiator, NodeRole role);
 
-  bool is_user_numeric(const std::string& user);
-  bool is_user_global(const std::string& user);
-
   friend class SCSCFSproutletTsx;
 
   pjsip_uri* _scscf_uri;

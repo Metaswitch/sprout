@@ -56,6 +56,7 @@ extern "C" {
 #include "pjutils.h"
 #include "hssconnection.h"
 #include "scscfselector.h"
+#include "enumservice.h"
 #include "icscfrouter.h"
 #include "acr.h"
 #include "sproutlet.h"
@@ -70,7 +71,10 @@ public:
   ICSCFSproutlet(int port,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,
-                 SCSCFSelector* scscf_selector);
+                 SCSCFSelector* scscf_selector,
+                 EnumService* enum_service,
+                 bool enforce_global_only_lookups,
+                 bool enforce_user_phone);
 
   virtual ~ICSCFSproutlet();
 
@@ -91,6 +95,21 @@ private:
     return _scscf_selector;
   }
 
+  inline EnumService* get_enum_service() const
+  {
+    return _enum_service;
+  }
+
+  inline bool get_global_only_lookups() const
+  {
+    return _global_only_lookups;
+  }
+
+  inline bool get_user_phone() const
+  {
+    return _user_phone;
+  }
+
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
   ACR* get_acr(SAS::TrailId trail);
@@ -103,6 +122,11 @@ private:
   SCSCFSelector* _scscf_selector;
 
   ACRFactory* _acr_factory;
+
+  EnumService* _enum_service;
+
+  bool _global_only_lookups;
+  bool _user_phone;
 };
 
 
@@ -120,6 +144,28 @@ public:
   virtual void on_cancel(int status_code, pjsip_msg* req);
 
 private:
+  /// Determine whether a status code indicates that the S-CSCF wasn't
+  /// found.
+  ///
+  /// @returns                    True/false.
+  /// @param status_code          The status code returned from the S-CSCF
+  ///                             lookup.
+  inline bool scscf_not_found(const pjsip_status_code scscf_lookup)
+  {
+    return ((scscf_lookup == PJSIP_SC_NOT_FOUND) ||
+            (scscf_lookup == PJSIP_SC_DOES_NOT_EXIST_ANYWHERE));
+  }
+
+  /// Perform an ENUM lookup. We only do this for requests containing tel
+  /// URIs.
+  ///
+  /// @returns                    True if we succesfully translate the URI,
+  ///                             false otherwise.
+  /// @param req                  The request whose URI we are trying to
+  ///                             translate
+  /// @param pool                 A pool.
+  bool enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
+
   ICSCFSproutlet* _icscf;
   ACR* _acr;
   ICSCFRouter* _router;

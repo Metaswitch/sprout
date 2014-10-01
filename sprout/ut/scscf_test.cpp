@@ -1269,11 +1269,11 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   Message msg;
   msg._toscheme = "tel";
-  msg._to = "+16505551234";
+  msg._to = "16505551234";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestNoMoreForwards)

@@ -55,16 +55,25 @@ extern "C" {
 #include "scscfselector.h"
 #include "constants.h"
 
+/// Define a constant for the maximum number of ENUM lookups
+/// we want to do in I-CSCF termination processing.
+#define MAX_ENUM_LOOKUPS 2
 
 /// Constructor.
 ICSCFSproutlet::ICSCFSproutlet(int port,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
-                               SCSCFSelector* scscf_selector) :
+                               SCSCFSelector* scscf_selector,
+                               EnumService* enum_service,
+                               bool enforce_global_only_lookups,
+                               bool enforce_user_phone) :
   Sproutlet("icscf", port),
   _hss(hss),
   _scscf_selector(scscf_selector),
-  _acr_factory(acr_factory)
+  _acr_factory(acr_factory),
+  _enum_service(enum_service),
+  _global_only_lookups(enforce_global_only_lookups),
+  _user_phone(enforce_user_phone)
 {
 }
 
@@ -387,6 +396,8 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
 
 void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
+  pj_pool_t* pool = get_pool(req);
+
   // Create an ACR for this transaction.
   _acr = _icscf->get_acr(trail());
   _acr->rx_request(req);
@@ -415,6 +426,24 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // Terminating request.
     LOG_DEBUG("Terminating request");
     _originating = false;
+    pjsip_uri* uri = PJUtils::term_served_user(req);
+
+    // If the Req URI is a SIP URI with the user=phone parameter set, we should
+    // replace it with a tel URI, as per TS24.229 5.3.2.1.
+    if (PJSIP_URI_SCHEME_IS_SIP(uri))
+    {
+      pjsip_sip_uri* sip_uri = (pjsip_sip_uri*)uri;
+
+      if ((!pj_strcmp(&sip_uri->user_param, &STR_USER_PHONE)) &&
+          (PJUtils::is_user_numeric(sip_uri->user)) &&
+          (!PJUtils::is_uri_gruu(uri)))
+      {
+        LOG_DEBUG("Change request URI from SIP URI to tel URI");
+        req->line.req.uri =
+          PJUtils::translate_sip_uri_to_tel_uri(sip_uri, pool);
+      }
+    }
+
     impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
   }
 
@@ -427,10 +456,63 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                             impu,
                                             _originating);
 
-  // We have a router, query it for an S-CSCF to use.
   pjsip_sip_uri* scscf_sip_uri = NULL;
+
+  // Use the router we just created to query the HSS for an S-CSCF to use.
   pjsip_status_code status_code =
-    (pjsip_status_code)_router->get_scscf(get_pool(req), scscf_sip_uri);
+    (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+
+  if ((!_originating) && (scscf_not_found(status_code)))
+  {
+    LOG_DEBUG("Couldn't find an S-CSCF, attempt to translate the URI");
+    pjsip_uri* uri = PJUtils::term_served_user(req);
+
+    // For terminating processing, if the HSS indicates that the user does not
+    // exist, and if the request URI is a tel URI, try an ENUM translation. If
+    // this succeeds, go back to the HSS. See TS24.229, 5.3.2.1.
+    //
+    // Before doing that we should check whether the enforce_user_phone flag is
+    // set. If it isn't, and we have a numeric SIP URI, it is possible that
+    // this should have been a tel URI, so translate it and do the HSS lookup
+    // again.
+    if ((!_icscf->get_user_phone()) &&
+        (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+        (PJUtils::is_user_numeric(((pjsip_sip_uri*)uri)->user)) &&
+        (!PJUtils::is_uri_gruu(uri)))
+    {
+      LOG_DEBUG("enforce_user_phone set to false, try using a tel URI");
+      req->line.req.uri =
+        PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
+
+      // We need to change the IMPU stored on our LIR router so that when
+      // we do a new LIR we look up the new IMPU.
+      impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
+      ((ICSCFLIRouter *)_router)->change_impu(impu);
+      status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+    }
+
+    // If we still haven't found an S-CSCF, we can now try an ENUM lookup.
+    // We put this processing in a loop because in theory we may go round
+    // several times before finding an S-CSCF. In reality this is unlikely
+    // so we set MAX_ENUM_LOOKUPS to 2.
+    for (int ii = 0;
+         (ii < MAX_ENUM_LOOKUPS) && (scscf_not_found(status_code));
+         ++ii)
+    {
+      if ((PJSIP_URI_SCHEME_IS_TEL(uri)) &&
+          (enum_translate_tel_uri(req, pool)))
+      {
+        // If we successfully translate the req URI, we should look for an
+        // S-CSCF again.
+        status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+      }
+      else
+      {
+        // Can't translate the number, skip to the end of the loop.
+        ii = MAX_ENUM_LOOKUPS;
+      }
+    }
+  }
 
   if (status_code == PJSIP_SC_OK)
   {
@@ -571,4 +653,40 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 
     delete acr;
   }
+}
+
+bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
+{
+  bool found = false;
+  std::string user =
+    PJUtils::pj_str_to_string(&((pjsip_tel_uri*)req->line.req.uri)->number);
+
+  // If we're enforcing global only lookups then check we have a global user.
+  if (!(_icscf->get_global_only_lookups()) ||
+      (PJUtils::is_user_global(user)))
+  {
+    std::string new_uri =
+      _icscf->get_enum_service()->lookup_uri_from_user(user, trail());
+
+    if (!new_uri.empty())
+    {
+      pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, pool);
+      if (req_uri != NULL)
+      {
+        LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+        req->line.req.uri = req_uri;
+
+        // We need to change the IMPU stored on our LIR router so that when
+        // we next do an LIR we look up the new IMPU.
+        ((ICSCFLIRouter *)_router)->change_impu(new_uri);
+        found = true;
+      }
+      else
+      {
+        LOG_WARNING("Badly formed URI %s from ENUM translation",
+                    new_uri.c_str());
+      }
+    }
+  }
+  return found;
 }

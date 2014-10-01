@@ -1574,7 +1574,10 @@ int main(int argc, char *argv[])
     ICSCFSproutlet* icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
                                                          hss_connection,
                                                          icscf_acr_factory,
-                                                         scscf_selector);
+                                                         scscf_selector,
+                                                         enum_service,
+                                                         opt.enforce_global_only_lookups,
+                                                         opt.enforce_user_phone);
     if (icscf_sproutlet == NULL)
     {
       LOG_ERROR("Failed to create I-CSCF Sproutlet");
