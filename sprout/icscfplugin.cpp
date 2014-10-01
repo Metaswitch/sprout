@@ -94,7 +94,10 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
     _icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
                                           hss_connection,
                                           _acr_factory,
-                                          _scscf_selector);
+                                          _scscf_selector,
+                                          enum_service,
+                                          opt.enforce_global_only_lookups,
+                                          opt.enforce_user_phone);
 
     sproutlets.push_back(_icscf_sproutlet);
   }
