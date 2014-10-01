@@ -1610,8 +1610,9 @@ bool PJUtils::is_emergency_registration(pjsip_contact_hdr* contact_hdr)
 bool PJUtils::is_uri_phone_number(pjsip_uri* uri)
 {
   return ((uri != NULL) &&
-          ((PJSIP_URI_SCHEME_IS_TEL(uri) ||
-           (PJSIP_URI_SCHEME_IS_SIP(uri) && (pj_strcmp2(&((pjsip_sip_uri*)uri)->user_param, "phone") == 0)))));
+          ((PJSIP_URI_SCHEME_IS_TEL(uri)) ||
+           ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+            (!pj_strcmp(&((pjsip_sip_uri*)uri)->user_param, &STR_USER_PHONE)))));
 }
 
 bool PJUtils::is_uri_gruu(pjsip_uri* uri)
@@ -1978,4 +1979,90 @@ void PJUtils::add_pcfa_header(pjsip_msg* msg,
     }
     pjsip_msg_add_hdr(msg, (pjsip_hdr*)pcfa_hdr);
   }
+}
+
+/// Takes a SIP URI and turns it into its equivalent tel URI. This is used
+/// for SIP URIs that actually represent phone numbers, i.e. SIP URIs that
+/// contain the user=phone parameter.
+///
+/// @returns                      A pointer to the new tel URI object.
+/// @param sip_uri                The SIP URI to convert.
+/// @param pool                   A pool.
+pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
+                                                 pj_pool_t* pool)
+{
+  pjsip_tel_uri* tel_uri = pjsip_tel_uri_create(pool);
+
+  tel_uri->number = sip_uri->user;
+  tel_uri->context.slen = 0;
+  tel_uri->isub_param.slen = 0;
+  tel_uri->ext_param.slen = 0;
+  tel_uri->other_param.next = NULL;
+
+  pjsip_param* isub = pjsip_param_find(&sip_uri->other_param, &STR_ISUB);
+  if (isub != NULL)
+  {
+    tel_uri->isub_param.slen = isub->value.slen;
+    tel_uri->isub_param.ptr = isub->value.ptr;
+  }
+
+  pjsip_param* ext = pjsip_param_find(&sip_uri->other_param, &STR_EXT);
+  if (ext != NULL)
+  {
+    tel_uri->ext_param.slen = ext->value.slen;
+    tel_uri->ext_param.ptr = ext->value.ptr;
+  }
+
+  return (pjsip_uri*)tel_uri;
+}
+
+/// Determines whether a user string represents a global number.
+///
+/// @returns                      PJ_TRUE if the user is global, PJ_FALSE if
+///                               not.
+/// @param user                   The user to test.
+pj_bool_t PJUtils::is_user_global(const std::string& user)
+{
+  pj_bool_t rc = PJ_FALSE;
+
+  if ((!user.empty()) && (user[0] == '+'))
+  {
+    LOG_DEBUG("Global user %s", user.c_str());
+    rc = PJ_TRUE;
+  }
+
+  return rc;
+}
+
+
+pj_bool_t PJUtils::is_user_global(const pj_str_t& user)
+{
+  return is_user_global(pj_str_to_string(&user));
+}
+
+
+/// Determines whether a user string is purely numeric (maybe with a leading +).
+///
+/// @returns                      PJ_TRUE if the user is numeric, PJ_FALSE if
+///                               not.
+/// @param user                   The user to test.
+pj_bool_t PJUtils::is_user_numeric(const std::string& user)
+{
+  pj_bool_t rc = PJ_TRUE;
+
+  for (size_t i = 0; i < user.size(); i++)
+  {
+    if ((!isdigit(user[i])) &&
+        ((user[i] != '+') || (i != 0)))
+    {
+      rc = PJ_FALSE;
+    }
+  }
+  return rc;
+}
+
+
+pj_bool_t PJUtils::is_user_numeric(const pj_str_t& user)
+{
+  return is_user_numeric(pj_str_to_string(&user));
 }
