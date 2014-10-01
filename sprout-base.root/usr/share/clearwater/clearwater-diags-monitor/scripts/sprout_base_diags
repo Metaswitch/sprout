@@ -1,6 +1,4 @@
-#!/bin/sh
-
-# @file sprout.monit
+# @file sprout_base_diags
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2013  Metaswitch Networks Ltd
@@ -34,27 +32,11 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
+# This script is executed in the context of the clearwater_diags_monitor script
+# (in the clearwater-infrastructure project).
+
 . /etc/clearwater/config
 
-# Set up the monit configuration for sprout with the right IP addresses and ports
-cat > /etc/monit/conf.d/sprout.monit <<EOF
-# Poll every 10 seconds
-set daemon 10
-
-# Check the server's public interfaces.  We put this first so that we process
-# failed polls (and maybe kill the server) before we process the restart.
-check program poll_sprout with path "/usr/share/clearwater/bin/poll_sprout.sh"
-  if status != 0 for 2 cycles then exec "/etc/init.d/sprout abort"
-
-# Monitor the server's PID file and check its memory usage.
-check process sprout pidfile /var/run/sprout.pid
-  start program = "/etc/init.d/sprout start"
-  stop program = "/etc/init.d/sprout stop"
-  if memory is greater than 80% for 3 cycles
-     then exec "/etc/init.d/sprout abort-restart"
-EOF
-chmod 0644 /etc/monit/conf.d/sprout.monit
-
-# Force monit to reload its configuration
-service monit reload
-
+# Check we can contact homestead and bono.
+check_connectivity_to_domain "$hs_hostname" 8888
+check_connectivity_to_domain "$home_domain" 5058
