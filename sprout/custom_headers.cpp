@@ -800,7 +800,6 @@ pjsip_hdr* parse_hdr_p_charging_function_addresses(pjsip_parse_ctx* ctx)
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;
-    printf("name: %.*s, value: %.*s\n", name.slen, name.ptr, value.slen, value.ptr);
     if (!pj_stricmp2(&name, "ccf")) {
       pj_list_insert_before(&hdr->ccf, param);
     } else if (!pj_stricmp2(&name, "ecf")) {
