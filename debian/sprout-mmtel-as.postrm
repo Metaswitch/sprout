@@ -40,6 +40,6 @@
 set -e
 
 # Restart sprout so it unloads the plug-in that has been removed.
-sudo service sprout stop
+sudo service sprout stop || /bin/true
 
 exit 0
