@@ -71,13 +71,13 @@ void add_implicit_filters(const pjsip_msg* msg,
                           const std::vector<pjsip_reject_contact_hdr*>& reject_contacts);
 
 // Utility functions for comparing feature sets.
-enum MatchResult { YES, UNKNOWN, NO };
+enum MatchResult { YES, NO };
 MatchResult match_feature_sets(const FeatureSet& contact_filter_set,
                                pjsip_accept_contact_hdr* accept);
 MatchResult match_feature_sets(const FeatureSet& contact_filter_set,
                                pjsip_reject_contact_hdr* reject);
-MatchResult match_feature(const Feature& matcher,
-                          const Feature& matchee);
+MatchResult match_feature(Feature matcher,
+                          Feature matchee);
 MatchResult match_numeric(const std::string& matcher,
                           const std::string& matchee);
 MatchResult match_tokens(const std::string& matcher,

@@ -72,11 +72,15 @@ public:
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
+    _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
     _icscf_sproutlet = new ICSCFSproutlet(stack_data.icscf_port,
                                           _hss_connection,
                                           _acr_factory,
-                                          _scscf_selector);
+                                          _scscf_selector,
+                                          _enum_service,
+                                          true,
+                                          false);
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
@@ -97,6 +101,7 @@ public:
     pjsip_tsx_layer_destroy();
     delete _icscf_proxy; _icscf_proxy = NULL;
     delete _icscf_sproutlet; _icscf_sproutlet = NULL;
+    delete _enum_service; _enum_service = NULL;
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _scscf_selector; _scscf_selector = NULL;
@@ -286,6 +291,7 @@ protected:
   static ACRFactory* _acr_factory;
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
+  static JSONEnumService* _enum_service;
   static Sproutlet* _icscf_sproutlet;
   static SproutletProxy* _icscf_proxy;
 
@@ -294,6 +300,7 @@ protected:
 ACRFactory* ICSCFSproutletTestBase::_acr_factory;
 FakeHSSConnection* ICSCFSproutletTestBase::_hss_connection;
 SCSCFSelector* ICSCFSproutletTestBase::_scscf_selector;
+JSONEnumService* ICSCFSproutletTestBase::_enum_service;
 Sproutlet* ICSCFSproutletTestBase::_icscf_sproutlet;
 SproutletProxy* ICSCFSproutletTestBase::_icscf_proxy;
 
@@ -2230,6 +2237,294 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteHSSRetry)
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location?auth-type=CAPAB");
+
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteTelURI)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._to = "+16505551234";
+  msg1._todomain = "";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
+
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40198.147.226.2/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._to = "+16505551234";
+  msg1._todomain = "";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
+
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a sip URI representing a telephone number with a
+  // P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:+16505551234@homedomain;user=phone;isub=1234;ext=4321";
+  msg1._to = "+16505551234";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
+
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/tel%3A%2B16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a sip URI representing a telephone number with a
+  // P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:+16505551234@homedomain";
+  msg1._to = "+16505551234";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.1", 5058, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:scscf1.homedomain:5058;transport=TCP;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
   delete tp;
 }

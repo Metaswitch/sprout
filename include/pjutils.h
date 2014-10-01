@@ -51,6 +51,7 @@ extern "C" {
 
 #include <string>
 #include <map>
+#include <deque>
 #include "sas.h"
 #include "sipresolver.h"
 
@@ -249,6 +250,21 @@ pj_str_t user_from_uri(pjsip_uri* uri);
 bool is_uri_gruu(pjsip_uri* uri);
 
 void report_sas_to_from_markers(SAS::TrailId trail, pjsip_msg* msg);
+
+void add_pcfa_header(pjsip_msg* msg,
+                     pj_pool_t* pool,
+                     const std::deque<std::string>& ccfs,
+                     const std::deque<std::string>& ecfs,
+                     const bool replace);
+
+pjsip_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
+                                        pj_pool_t* pool);
+
+pj_bool_t is_user_global(const std::string& user);
+pj_bool_t is_user_global(const pj_str_t& user);
+
+pj_bool_t is_user_numeric(const std::string& user);
+pj_bool_t is_user_numeric(const pj_str_t& user);
 
 } // namespace PJUtils
 

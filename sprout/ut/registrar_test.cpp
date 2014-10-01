@@ -199,7 +199,6 @@ string Message::get()
                    "P-Access-Network-Info: DUMMY\r\n"
                    "P-Visited-Network-ID: DUMMY\r\n"
                    "P-Charging-Vector: icid-value=100\r\n"
-                   "P-Charging-Function-Addresses: ccf=1.2.3.4; ecf=5.6.7.8\r\n"
                    "%12$s"
                    "%4$s"
                    "Content-Length:  %5$d\r\n"
@@ -354,7 +353,7 @@ TEST_F(RegistrarTest, SimpleMainlinePassthrough)
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=ccf1;ecf=ecf1;ecf=ecf2", get_headers(out, "P-Charging-Function-Addresses"));
 
   free_txdata();
 }
@@ -828,28 +827,6 @@ TEST_F(RegistrarTest, AppServersWithNoBody)
 /// Verify that third-party REGISTERs have appropriate headers passed through
 TEST_F(RegistrarTest, AppServersPassthrough)
 {
-  _hss_connection->set_result("/impu/sip%3A6505550231%40homedomain",
-                              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                              "<IMSSubscription><ServiceProfile>\n"
-                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
-                              "  <InitialFilterCriteria>\n"
-                              "    <Priority>1</Priority>\n"
-                              "    <TriggerPoint>\n"
-                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
-                              "      <SPT>\n"
-                              "        <ConditionNegated>0</ConditionNegated>\n"
-                              "        <Group>0</Group>\n"
-                              "        <Method>REGISTER</Method>\n"
-                              "        <Extension></Extension>\n"
-                              "      </SPT>\n"
-                              "    </TriggerPoint>\n"
-                              "    <ApplicationServer>\n"
-                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
-                              "      <DefaultHandling>0</DefaultHandling>\n"
-                              "    </ApplicationServer>\n"
-                              "  </InitialFilterCriteria>\n"
-                              "</ServiceProfile></IMSSubscription>");
-
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
 
   SCOPED_TRACE("REGISTER (1)");
@@ -879,7 +856,7 @@ TEST_F(RegistrarTest, AppServersPassthrough)
 
   // Test the headers we expect to have passed through
   EXPECT_EQ("P-Charging-Vector: icid-value=\"100\"", get_headers(out, "P-Charging-Vector"));
-  EXPECT_EQ("P-Charging-Function-Addresses: ccf=1.2.3.4;ecf=5.6.7.8", get_headers(out, "P-Charging-Function-Addresses"));
+  EXPECT_EQ("P-Charging-Function-Addresses: ccf=ccf1;ecf=ecf1;ecf=ecf2", get_headers(out, "P-Charging-Function-Addresses"));
 
   tpAS.expect_target(current_txdata(), false);
   inject_msg(respond_to_current_txdata(200));

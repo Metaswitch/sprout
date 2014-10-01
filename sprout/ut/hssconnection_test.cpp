@@ -90,6 +90,12 @@ class HssConnectionTest : public BaseTest
         "</InitialFilterCriteria>"
       "</ServiceProfile>"
       "</IMSSubscription>"
+      "<ChargingAddresses>"
+        "<CCF priority=\"1\">ccf1</CCF>"
+        "<CCF priority=\"2\">ccf2</CCF>"
+        "<ECF priority=\"2\">ecf2</ECF>"
+        "<ECF priority=\"1\">ecf1</ECF>"
+      "</ChargingAddresses>"
       "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid43/reg-data", "{\"reqtype\": \"reg\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
@@ -226,6 +232,20 @@ TEST_F(HssConnectionTest, SimpleIfc)
   std::string regstate;
   _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_FALSE(ifcs_map.empty());
+}
+
+TEST_F(HssConnectionTest, SimpleChargingAddrs)
+{
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  std::deque<std::string> ccfs;
+  std::deque<std::string> actual_ccfs = {"ccf1", "ccf2"};
+  std::deque<std::string> ecfs;
+  std::deque<std::string> actual_ecfs = {"ecf1", "ecf2"};
+  _hss.update_registration_state("pubid42", "", HSSConnection::REG, regstate, ifcs_map, uris, ccfs, ecfs, 0);
+  EXPECT_EQ(actual_ccfs, ccfs);
+  EXPECT_EQ(actual_ecfs, ecfs);
 }
 
 TEST_F(HssConnectionTest, BadXML)

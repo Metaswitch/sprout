@@ -92,6 +92,7 @@ const pj_str_t STR_TRANSIT_IOI = pj_str((char*)"transit-ioi");
 const pj_str_t STR_SESSION_EXPIRES = pj_str((char*)"Session-Expires");
 const pj_str_t STR_CALL_ID = pj_str((char*)"Call-ID");
 const pj_str_t STR_CCF = pj_str((char*)"ccf");
+const pj_str_t STR_ECF = pj_str((char*)"ecf");
 const pj_str_t STR_CONTENT_DISPOSITION = pj_str((char*)"Content-Disposition");
 const pj_str_t STR_REG = pj_str((char*)"reg");
 const pj_str_t STR_SOS = pj_str((char*)"sos");
@@ -108,6 +109,9 @@ const pj_str_t STR_SESCASE = pj_str((char*)"sescase");
 const pj_str_t STR_BILLING_ROLE = pj_str((char*)"billing-role");
 const pj_str_t STR_GR = pj_str((char*)"gr");
 const pj_str_t STR_XML_PUB_GRUU = pj_str((char*)"gr:pub-gruu");
+const pj_str_t STR_ISUB = pj_str((char*)"isub");
+const pj_str_t STR_EXT = pj_str((char*)"ext");
+const pj_str_t STR_USER_PHONE = pj_str((char*)"phone");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
