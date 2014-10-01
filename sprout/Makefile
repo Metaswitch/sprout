@@ -75,7 +75,11 @@ TARGET_SOURCES := logger.cpp \
                   contact_filtering.cpp \
                   sproutletproxy.cpp \
                   sproutletappserver.cpp \
-									pluginloader.cpp
+									scscfsproutlet.cpp \
+									icscfsproutlet.cpp \
+									bgcfsproutlet.cpp \
+									mmtel.cpp \
+									mobiletwinned.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
