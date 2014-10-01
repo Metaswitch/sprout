@@ -461,16 +461,31 @@ void PJUtils::get_impi_and_impu(pjsip_rx_data* rdata, std::string& impi_out, std
 }
 
 /// Adds a P-Asserted-Identity header to the message.
-void PJUtils::add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid)
+void PJUtils::add_asserted_identity(pjsip_msg* msg,
+                                    pj_pool_t* pool,
+                                    const std::string& aid,
+                                    const pj_str_t& display_name)
 {
   LOG_DEBUG("Adding P-Asserted-Identity header: %s", aid.c_str());
   pjsip_routing_hdr* p_asserted_id =
-                     identity_hdr_create(tdata->pool, STR_P_ASSERTED_IDENTITY);
+                     identity_hdr_create(pool, STR_P_ASSERTED_IDENTITY);
 
-  pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, tdata->pool, true);
+  pjsip_name_addr* temp = (pjsip_name_addr*)uri_from_string(aid, pool, true);
+  if (display_name.slen > 0)
+  {
+    temp->display = display_name;
+  }
   memcpy(&p_asserted_id->name_addr, temp, sizeof(pjsip_name_addr));
 
-  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)p_asserted_id);
+  pjsip_msg_add_hdr(msg, (pjsip_hdr*)p_asserted_id);
+}
+
+void PJUtils::add_asserted_identity(pjsip_tx_data* tdata,
+                                    const std::string& aid)
+{
+  pj_str_t display_name;
+  display_name.slen = 0;
+  add_asserted_identity(tdata->msg, tdata->pool, aid, display_name);
 }
 
 

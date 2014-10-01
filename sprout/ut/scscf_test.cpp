@@ -5906,3 +5906,115 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   msg.set_route(out);
   free_txdata();
 }
+
+TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551000>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("tel:6505551000", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <tel:6505551000>", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain;user=phone>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>\nP-Asserted-Identity: Andy <tel:6505551111>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551111>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestNoPAIHdrs)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestPAIHdrODIToken)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:odi_dgds89gd8gdshds@homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}

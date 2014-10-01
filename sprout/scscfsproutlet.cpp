@@ -266,8 +266,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
       new_uri = "sip:";
-      pj_str_t number = PJUtils::user_from_uri(uri);
-      new_uri += PJUtils::pj_str_to_string(&number);
+      new_uri += PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
       new_uri += "@";
       new_uri += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
       LOG_DEBUG("Translate tel URI to SIP URI %s", new_uri.c_str());
@@ -375,32 +374,41 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     send_response(rsp);
     free_msg(req);
   }
-  else if (_as_chain_link.is_set())
+  else
   {
-    // AS chain is set up, so must apply services to the request.
-    LOG_INFO("Found served user, so apply services");
-
-    // First add a P-Charging-Function-Addresses header if one is
-    // not already present for some reason. We only do this if we have
-    // the charging addresses cached (which we should do). We do this
-    // for originating and terminating services.
+    // Add a P-Charging-Function-Addresses header if one is not already present
+    // for some reason. We only do this if we have the charging addresses cached
+    // (which we should do).
     PJUtils::add_pcfa_header(req, get_pool(req), _ccfs, _ecfs, false);
 
+    // Add a second P-Asserted-Identity header if required on originating calls.
+    // See 3GPP TS24.229, 5.4.3.2.
     if (_session_case->is_originating())
     {
-      apply_originating_services(req);
+      add_second_p_a_i_hdr(req);
+    }
+
+    if (_as_chain_link.is_set())
+    {
+      // AS chain is set up, so must apply services to the request.
+      LOG_INFO("Found served user, so apply services");
+
+      if (_session_case->is_originating())
+      {
+        apply_originating_services(req);
+      }
+      else
+      {
+        apply_terminating_services(req);
+      }
     }
     else
     {
-      apply_terminating_services(req);
+      // No AS chain set, so don't apply services to the request.
+      // Default action is to route the request directly to the BGCF.
+      LOG_INFO("Route request to BGCF without applying services");
+      route_to_bgcf(req);
     }
-  }
-  else
-  {
-    // No AS chain set, so don't apply services to the request.
-    // Default action is to route the request directly to the BGCF.
-    LOG_INFO("Route request to BGCF without applying services");
-    route_to_bgcf(req);
   }
 }
 
@@ -462,12 +470,20 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // try it again.
     // @TODO - this code has been removed from stateful_proxy, not sure why???
   }
-  else if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
+
+  if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
   {
     // Final response. Add a P-Charging-Function-Addresses header if one is
     // not already present for some reason. We only do this if we have
     // the charging addresses cached (which we should do).
     PJUtils::add_pcfa_header(rsp, get_pool(rsp), _ccfs, _ecfs, false);
+  }
+
+  if ((st_code < 300) && (_session_case->is_terminating()))
+  {
+    // Add a second P-Asserted-Identity header if required. See 3GPP TS24.229,
+    // 5.4.3.3.
+    add_second_p_a_i_hdr(rsp);
   }
 
   if (_as_chain_link.is_set())
@@ -1395,6 +1411,83 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
                                        PJSIP_SC_REQUEST_TIMEOUT);
       free_msg(req);
       send_response(rsp);
+    }
+  }
+}
+
+/// Adds a second P-Asserted-Identity header to a message when required.
+///
+/// We only add the header to messages for which all of the following is true:
+/// - We can't find our Route header or our Route header doesn't contain an
+///   ODI token.
+/// - There is exactly one P-Asserted-Identity header on the message already.
+/// - If that header contains a SIP URI sip:user@example.com, that SIP URI is
+///   an alias of the tel URI tel:user. That tel URI is used in the new header.
+///   If that header contains a tel URI tel:user, we use the SIP URI
+///   sip:user@<homedomain> in the new header.
+void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
+{
+  const pjsip_route_hdr* hroute = route_hdr();
+
+  if ((hroute != NULL) &&
+      (!pj_strncmp(&((pjsip_sip_uri*)hroute->name_addr.uri)->user,
+                   &STR_ODI_PREFIX,
+                   STR_ODI_PREFIX.slen)))
+  {
+    // Found our Route header and it contains one of our original dialog
+    // identifier (ODI) tokens. No need to add a second P-Asserted-Identity
+    // header.
+    return;
+  }
+
+  // Look for P-Asserted-Identity header.
+  pjsip_routing_hdr* asserted_id =
+    (pjsip_routing_hdr*)pjsip_msg_find_hdr_by_name(msg,
+                                                   &STR_P_ASSERTED_IDENTITY,
+                                                   NULL);
+
+  // If we have one and only one P-Asserted-Identity header we may need to add
+  // a second one.
+  if ((asserted_id != NULL) &&
+      (pjsip_msg_find_hdr_by_name(msg,
+                                  &STR_P_ASSERTED_IDENTITY,
+                                  asserted_id->next) == NULL))
+  {
+    std::string new_p_a_i_str;
+    pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&asserted_id->name_addr);
+
+    if (PJSIP_URI_SCHEME_IS_SIP(uri))
+    {
+      // If we have a SIP URI, we add a second P-Asserted-Identity containg a
+      // tel URI if this SIP URI has a tel URI alias.
+      new_p_a_i_str = "tel:";
+      new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
+
+      if (find(_aliases.begin(),
+               _aliases.end(),
+               new_p_a_i_str) != _aliases.end())
+      {
+        LOG_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
+        PJUtils::add_asserted_identity(msg,
+                                       get_pool(msg),
+                                       new_p_a_i_str,
+                                       asserted_id->name_addr.display);
+      }
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+    {
+      // If we have a tel URI, we add a second P-Asserted-Identity containg the
+      // corresponding SIP URI.
+      new_p_a_i_str = "sip:";
+      new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
+      new_p_a_i_str += "@";
+      new_p_a_i_str += PJUtils::pj_str_to_string(&stack_data.default_home_domain);
+      new_p_a_i_str += ";user=phone";
+      LOG_DEBUG("Add second P-Asserted-Identity for %s", new_p_a_i_str.c_str());
+      PJUtils::add_asserted_identity(msg,
+                                     get_pool(msg),
+                                     new_p_a_i_str,
+                                     asserted_id->name_addr.display);
     }
   }
 }
