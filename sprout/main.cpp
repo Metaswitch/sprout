@@ -95,9 +95,6 @@ extern "C" {
 #include "scscfsproutlet.h"
 #include "icscfsproutlet.h"
 #include "bgcfsproutlet.h"
-#include "mobiletwinned.h"
-#include "mementoappserver.h"
-#include "call_list_store.h"
 #endif
 
 enum OptionTypes
@@ -965,9 +962,6 @@ int main(int argc, char *argv[])
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
-#if 0
-  CallListStore::Store* call_list_store = NULL;
-#endif
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
 
@@ -1432,45 +1426,6 @@ int main(int argc, char *argv[])
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
   loader->load(sproutlets);
 
-  // Load any other AppServers that should be collocated, eg.
-  //   AppServer* app = new SampleForkAS();
-  //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
-  //   sproutlets.push_back(app_sproutlet);
-
-#if 0
-  if (opt.gemini_enabled)
-  {
-    // Create a Gemini App Server.
-    AppServer* gemini = new MobileTwinnedAppServer("mobile-twinned");
-    Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini);
-    sproutlets.push_back(gemini_sproutlet);
-  }
-
-  if (opt.memento_enabled)
-  {
-    call_list_store = new CallListStore::Store();
-    call_list_store->initialize();
-    call_list_store->configure("localhost", 9160);
-    CassandraStore::ResultCode store_rc = call_list_store->start();
-
-    if (store_rc != CassandraStore::OK)
-    {
-      LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
-      return 1;
-    }
-
-    // Create a Memento Server.
-    AppServer* memento = new MementoAppServer("memento",
-                                              call_list_store,
-                                              opt.home_domain,
-                                              opt.max_call_list_length,
-                                              opt.memento_threads,
-                                              opt.call_list_ttl);
-    Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento);
-    sproutlets.push_back(memento_sproutlet);
-  }
-#endif
-
   if (!sproutlets.empty())
   {
     // There are Sproutlets loaded, so start the Sproutlet proxy.
@@ -1565,11 +1520,6 @@ int main(int argc, char *argv[])
   delete loader;
 
   // Delete any statically loaded sproutlets.
-
-#if 0
-  delete call_list_store;
-#endif
-
   if (opt.scscf_enabled)
   {
     destroy_subscription();

@@ -75,11 +75,11 @@ TARGET_SOURCES := logger.cpp \
                   contact_filtering.cpp \
                   sproutletproxy.cpp \
                   sproutletappserver.cpp \
-									scscfsproutlet.cpp \
-									icscfsproutlet.cpp \
-									bgcfsproutlet.cpp \
-									mmtel.cpp \
-									mobiletwinned.cpp
+                  scscfsproutlet.cpp \
+		  icscfsproutlet.cpp \
+		  bgcfsproutlet.cpp \
+		  mmtel.cpp \
+		  mobiletwinned.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -220,7 +220,7 @@ LDFLAGS += -lmemcached \
 LDFLAGS_BUILD += -lcurl -lsas
 
 # Include memento if desired
-LDFLAGS += -lmemento -lthrift -lcassandra
+#LDFLAGS_BUILD += -lmemento -lthrift -lcassandra
 
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib

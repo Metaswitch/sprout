@@ -17,7 +17,8 @@ sprout: pjsip libmemcached
 	make -f sprout_icscf.mk -C ${SPROUT_DIR}
 	make -f sprout_bgcf.mk -C ${SPROUT_DIR}
 	make -f sprout_mmtel_as.mk -C ${SPROUT_DIR}
-
+	make -f gemini.mk -C ${SPROUT_DIR}
+	make -f memento-sip.mk -C ${SPROUT_DIR}
 sprout_test:
 	make -C ${SPROUT_DIR} test
 
@@ -27,6 +28,8 @@ sprout_clean:
 	make -f sprout_icscf.mk -C ${SPROUT_DIR} clean
 	make -f sprout_bgcf.mk -C ${SPROUT_DIR} clean
 	make -f sprout_mmtel_as.mk -C ${SPROUT_DIR} clean
+	make -f gemini.mk -C ${SPROUT_DIR} clean
+	make -f memento-sip.mk -C ${SPROUT_DIR} clean
 	make -C ${SPROUT_DIR} clean
 	-make -C ${SPROUT_TEST_DIR} clean
 
