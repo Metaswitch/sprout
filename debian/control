@@ -39,6 +39,7 @@ Package: sprout-base
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5, chronos
 Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
+Replaces: sprout
 Description: sprout-base, the SIP Router basic executable
 
 Package: sprout-base-dbg

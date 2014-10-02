@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include <vector>
 #include "gmock/gmock.h"
@@ -192,7 +189,7 @@ TEST_F(SCSCFSelectorTest, MissingFile)
 {
   CapturingTestLogger log;
   SCSCFSelector scscf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(log.contains("Failed to read S-CSCF configuration data"));
+  EXPECT_TRUE(log.contains("No S-CSCF configuration data"));
 
   // Check that no S-CSCF is returned
   ST({}, {}, {}, "").test(scscf_);

@@ -1,4 +1,4 @@
-# @file sprout_diags
+# @file sprout_mmtel_as_diags
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2013  Metaswitch Networks Ltd
@@ -37,7 +37,5 @@
 
 . /etc/clearwater/config
 
-# Check we can contact homestead, homer and bono.
-check_connectivity_to_domain "$hs_hostname" 8888
+# Check we can contact homer.
 check_connectivity_to_domain "$xdms_hostname" 7888
-check_connectivity_to_domain "$home_domain" 5058

@@ -1,9 +1,9 @@
 #!/bin/sh
 
-# @file sprout-bgcf.postrm
+# @file sprout.monit
 #
 # Project Clearwater - IMS in the Cloud
-# Copyright (C) 2014  Metaswitch Networks Ltd
+# Copyright (C) 2013  Metaswitch Networks Ltd
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -34,12 +34,26 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-#
-# see: dh_installdeb(1)
+. /etc/clearwater/config
 
-set -e
+# Set up the monit configuration for sprout with the right IP addresses and ports
+cat > /etc/monit/conf.d/sprout.monit <<EOF
+# Poll every 10 seconds
+set daemon 10
 
-# Restart sprout so it unloads the plug-in that has been removed.
-sudo service sprout stop || /bin/true
+# Check the server's public interfaces.  We put this first so that we process
+# failed polls (and maybe kill the server) before we process the restart.
+check program poll_sprout with path "/usr/share/clearwater/bin/poll_sprout.sh"
+  if status != 0 for 2 cycles then exec "/etc/init.d/sprout abort"
 
-exit 0
+# Monitor the server's PID file and check its memory usage.
+check process sprout pidfile /var/run/sprout.pid
+  start program = "/etc/init.d/sprout start"
+  stop program = "/etc/init.d/sprout stop"
+  if memory is greater than 80% for 3 cycles
+     then exec "/etc/init.d/sprout abort-restart"
+EOF
+chmod 0644 /etc/monit/conf.d/sprout.monit
+
+# Force monit to reload its configuration
+service monit reload

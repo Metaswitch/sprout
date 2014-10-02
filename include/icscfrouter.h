@@ -142,6 +142,10 @@ public:
                  bool originating);
   ~ICSCFLIRouter();
 
+  /// Function to change the _impu we're looking up. This is used after
+  /// doing an ENUM translation.
+  inline void change_impu(std::string& new_impu) { _impu = new_impu; }
+
 private:
 
   /// Perform the HSS LIR query.

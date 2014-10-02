@@ -1,3 +1,3 @@
 build/bin/sprout usr/share/clearwater/bin
-sprout.root/* /
+sprout-base.root/* /
 scripts/sprout-log-cleanup etc/cron.hourly

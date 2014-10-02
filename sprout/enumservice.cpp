@@ -34,8 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-
+#include <sys/stat.h>
 #include <json/reader.h>
 #include <fstream>
 #include <stdlib.h>
@@ -96,6 +95,16 @@ JSONEnumService::JSONEnumService(std::string configuration)
   std::string jsonData;
   std::ifstream file;
 
+  // Check whether the file exists.
+  struct stat s;
+  if ((stat(configuration.c_str(), &s) != 0) &&
+      (errno == ENOENT))
+  {
+    LOG_STATUS("No ENUM configuration (file %s does not exist)",
+               configuration.c_str());
+    return;
+  }
+
   LOG_STATUS("Loading ENUM configuration from %s", configuration.c_str());
 
   file.open(configuration.c_str());
@@ -152,7 +161,9 @@ JSONEnumService::JSONEnumService(std::string configuration)
   }
   else
   {
+    //LCOV_EXCL_START
     LOG_WARNING("Failed to read ENUM configuration data %d", file.rdstate());
+    //LCOV_EXCL_STOP
   }
 }
 
