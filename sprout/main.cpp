@@ -1590,11 +1590,10 @@ int main(int argc, char *argv[])
     delete pcscf_acr_factory;
   }
 
-  delete hss_connection;
-
   destroy_options();
   destroy_stack();
 
+  delete hss_connection;
   delete quiescing_mgr;
   delete load_monitor;
   delete local_reg_store;
@@ -1603,6 +1602,8 @@ int main(int argc, char *argv[])
   delete local_data_store;
   delete remote_data_store;
   delete ralf_connection;
+  delete enum_service;
+  delete scscf_acr_factory;
 
   delete sip_resolver;
   delete http_resolver;
