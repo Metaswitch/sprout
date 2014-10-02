@@ -34,8 +34,6 @@ CPPFLAGS_BUILD += -O2
 
 LDFLAGS += -L${ROOT}/usr/lib -shared
 
-LDFLAGS_BUILD += -lmemento -lthrift -lcassandra
-
 include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
