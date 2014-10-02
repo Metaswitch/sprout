@@ -245,7 +245,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // If there's only one match, then return its name.
   if (matches.empty())
   {
-    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities");
+    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
+                mandatory_str.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_NONE_VALID, 0);
     event.add_var_param(mandatory_str);
