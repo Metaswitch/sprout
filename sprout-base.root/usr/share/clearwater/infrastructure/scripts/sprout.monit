@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file sprout-base.monit
+# @file sprout.monit
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2013  Metaswitch Networks Ltd
