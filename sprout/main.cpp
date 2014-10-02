@@ -417,29 +417,29 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     switch (c)
     {
     case 'p':
-    {
-      std::vector<std::string> pcscf_options;
-      Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
-      if (pcscf_options.size() == 2)
       {
-        options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
-        options->pcscf_trusted_port = parse_port(pcscf_options[1]);
-      }
+        std::vector<std::string> pcscf_options;
+        Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
+        if (pcscf_options.size() == 2)
+        {
+          options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
+          options->pcscf_trusted_port = parse_port(pcscf_options[1]);
+        }
 
-      if ((options->pcscf_untrusted_port != 0) &&
-          (options->pcscf_trusted_port != 0))
-      {
-        LOG_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
-                 options->pcscf_untrusted_port, options->pcscf_trusted_port);
-        options->pcscf_enabled = true;
+        if ((options->pcscf_untrusted_port != 0) &&
+            (options->pcscf_trusted_port != 0))
+        {
+          LOG_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
+                   options->pcscf_untrusted_port, options->pcscf_trusted_port);
+          options->pcscf_enabled = true;
+        }
+        else
+        {
+          LOG_ERROR("P-CSCF ports %s invalid", pj_optarg);
+          return -1;
+        }
       }
-      else
-      {
-        LOG_ERROR("P-CSCF ports %s invalid", pj_optarg);
-        return -1;
-      }
-    }
-    break;
+      break;
 
     case 's':
       options->scscf_port = parse_port(std::string(pj_optarg));
@@ -504,31 +504,31 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'l':
-    {
-      std::vector<std::string> localhost_options;
-      Utils::split_string(std::string(pj_optarg), ',', localhost_options, 0, false);
-      if (localhost_options.size() == 1)
       {
-        options->local_host = localhost_options[0];
-        options->public_host = localhost_options[0];
-        LOG_INFO("Override private and public local host names %s",
-                 options->local_host.c_str());
+        std::vector<std::string> localhost_options;
+        Utils::split_string(std::string(pj_optarg), ',', localhost_options, 0, false);
+        if (localhost_options.size() == 1)
+        {
+          options->local_host = localhost_options[0];
+          options->public_host = localhost_options[0];
+          LOG_INFO("Override private and public local host names %s",
+                   options->local_host.c_str());
+        }
+        else if (localhost_options.size() == 2)
+        {
+          options->local_host = localhost_options[0];
+          options->public_host = localhost_options[1];
+          LOG_INFO("Override private local host name to %s",
+                  options->local_host.c_str());
+          LOG_INFO("Override public local host name to %s",
+                  options->public_host.c_str());
+        }
+        else
+        {
+          LOG_WARNING("Invalid --local-host option, ignored");
+        }
       }
-      else if (localhost_options.size() == 2)
-      {
-        options->local_host = localhost_options[0];
-        options->public_host = localhost_options[1];
-        LOG_INFO("Override private local host name to %s",
-                 options->local_host.c_str());
-        LOG_INFO("Override public local host name to %s",
-                 options->public_host.c_str());
-      }
-      else
-      {
-        LOG_WARNING("Invalid --local-host option, ignored");
-      }
-    }
-    break;
+      break;
 
     case 'D':
       options->home_domain = std::string(pj_optarg);
@@ -551,30 +551,30 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'r':
-    {
-      std::vector<std::string> upstream_proxy_options;
-      Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
-      options->upstream_proxy = upstream_proxy_options[0];
-      options->upstream_proxy_port = 0;
-      options->upstream_proxy_connections = 1;
-      options->upstream_proxy_recycle = 0;
-      if (upstream_proxy_options.size() > 1)
       {
-        options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
-        if (upstream_proxy_options.size() > 2)
+        std::vector<std::string> upstream_proxy_options;
+        Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
+        options->upstream_proxy = upstream_proxy_options[0];
+        options->upstream_proxy_port = 0;
+        options->upstream_proxy_connections = 1;
+        options->upstream_proxy_recycle = 0;
+        if (upstream_proxy_options.size() > 1)
         {
-          options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
-          if (upstream_proxy_options.size() > 3)
+          options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
+          if (upstream_proxy_options.size() > 2)
           {
-            options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
+            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
+            if (upstream_proxy_options.size() > 3)
+            {
+              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
+            }
           }
         }
+        LOG_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
+        LOG_INFO("  connections = %d", options->upstream_proxy_connections);
+        LOG_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
       }
-      LOG_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
-      LOG_INFO("  connections = %d", options->upstream_proxy_connections);
-      LOG_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
-    }
-    break;
+      break;
 
     case 'I':
       options->ibcf = PJ_TRUE;
@@ -603,22 +603,22 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'S':
-    {
-      std::vector<std::string> sas_options;
-      Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-      if (sas_options.size() == 2)
       {
-        options->sas_server = sas_options[0];
-        options->sas_system_name = sas_options[1];
-        LOG_INFO("SAS set to %s", options->sas_server.c_str());
-        LOG_INFO("System name is set to %s", options->sas_system_name.c_str());
+        std::vector<std::string> sas_options;
+        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
+        if (sas_options.size() == 2)
+        {
+          options->sas_server = sas_options[0];
+          options->sas_system_name = sas_options[1];
+          LOG_INFO("SAS set to %s", options->sas_server.c_str());
+          LOG_INFO("System name is set to %s", options->sas_system_name.c_str());
+        }
+        else
+        {
+          LOG_WARNING("Invalid --sas option, SAS disabled");
+        }
       }
-      else
-      {
-        LOG_WARNING("Invalid --sas option, SAS disabled");
-      }
-    }
-    break;
+      break;
 
     case 'H':
       options->hss_server = std::string(pj_optarg);
