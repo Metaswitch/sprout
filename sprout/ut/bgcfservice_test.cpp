@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include <vector>
 #include "gmock/gmock.h"
@@ -153,6 +150,6 @@ TEST_F(BgcfServiceTest, MissingFile)
 {
   CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
+  EXPECT_TRUE(log.contains("No BGCF configuration"));
   ET("+15108580271", "").test(bgcf_);
 }

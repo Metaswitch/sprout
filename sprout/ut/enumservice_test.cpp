@@ -34,9 +34,6 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///----------------------------------------------------------------------------
-
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -141,7 +138,7 @@ TEST_F(JSONEnumServiceTest, MissingFile)
 {
   CapturingTestLogger log;
   JSONEnumService enum_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
-  EXPECT_TRUE(log.contains("Failed to read ENUM configuration data"));
+  EXPECT_TRUE(log.contains("No ENUM configuration"));
   ET("+15108580271", "").test(enum_);
 }
 
