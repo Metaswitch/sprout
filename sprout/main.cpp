@@ -173,59 +173,59 @@ struct options
   pj_bool_t              daemon;
 };
 
-  const static struct pj_getopt_option long_opt[] =
-  {
-    { "pcscf",             required_argument, 0, 'p'},
-    { "scscf",             required_argument, 0, 's'},
-    { "icscf",             required_argument, 0, 'i'},
-    { "webrtc-port",       required_argument, 0, 'w'},
-    { "localhost",         required_argument, 0, 'l'},
-    { "domain",            required_argument, 0, 'D'},
-    { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-    { "scscf_uri",         required_argument, 0, 'c'},
-    { "alias",             required_argument, 0, 'n'},
-    { "routing-proxy",     required_argument, 0, 'r'},
-    { "ibcf",              required_argument, 0, 'I'},
-    { "external-icscf",    required_argument, 0, 'j'},
-    { "auth",              required_argument, 0, 'A'},
-    { "realm",             required_argument, 0, 'R'},
-    { "memstore",          required_argument, 0, 'M'},
-    { "remote-memstore",   required_argument, 0, 'm'},
-    { "sas",               required_argument, 0, 'S'},
-    { "hss",               required_argument, 0, 'H'},
-    { "record-routing-model", required_argument, 0, 'C'},
-    { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-    { "xdms",              required_argument, 0, 'X'},
-    { "chronos",           required_argument, 0, 'K'},
-    { "ralf",              required_argument, 0, 'G'},
-    { "enum",              required_argument, 0, 'E'},
-    { "enum-suffix",       required_argument, 0, 'x'},
-    { "enum-file",         required_argument, 0, 'f'},
-    { "enforce-user-phone", no_argument,      0, 'u'},
-    { "enforce-global-only-lookups", no_argument, 0, 'g'},
-    { "reg-max-expires",   required_argument, 0, 'e'},
-    { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
-    { "pjsip-threads",     required_argument, 0, 'P'},
-    { "worker-threads",    required_argument, 0, 'W'},
-    { "analytics",         required_argument, 0, 'a'},
-    { "authentication",    no_argument,       0, 'A'},
-    { "log-file",          required_argument, 0, 'F'},
-    { "http_address",      required_argument, 0, 'T'},
-    { "http_port",         required_argument, 0, 'o'},
-    { "http_threads",      required_argument, 0, 'q'},
-    { "billing-cdf",       required_argument, 0, 'B'},
-    { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
-    { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-    { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
-    { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-    { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
-    { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
-    { "log-level",         required_argument, 0, 'L'},
-    { "daemon",            no_argument,       0, 'd'},
-    { "interactive",       no_argument,       0, 't'},
-    { "help",              no_argument,       0, 'h'},
-    { NULL,                0, 0, 0}
-  };
+const static struct pj_getopt_option long_opt[] =
+{
+  { "pcscf",             required_argument, 0, 'p'},
+  { "scscf",             required_argument, 0, 's'},
+  { "icscf",             required_argument, 0, 'i'},
+  { "webrtc-port",       required_argument, 0, 'w'},
+  { "localhost",         required_argument, 0, 'l'},
+  { "domain",            required_argument, 0, 'D'},
+  { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
+  { "scscf_uri",         required_argument, 0, 'c'},
+  { "alias",             required_argument, 0, 'n'},
+  { "routing-proxy",     required_argument, 0, 'r'},
+  { "ibcf",              required_argument, 0, 'I'},
+  { "external-icscf",    required_argument, 0, 'j'},
+  { "auth",              required_argument, 0, 'A'},
+  { "realm",             required_argument, 0, 'R'},
+  { "memstore",          required_argument, 0, 'M'},
+  { "remote-memstore",   required_argument, 0, 'm'},
+  { "sas",               required_argument, 0, 'S'},
+  { "hss",               required_argument, 0, 'H'},
+  { "record-routing-model", required_argument, 0, 'C'},
+  { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "xdms",              required_argument, 0, 'X'},
+  { "chronos",           required_argument, 0, 'K'},
+  { "ralf",              required_argument, 0, 'G'},
+  { "enum",              required_argument, 0, 'E'},
+  { "enum-suffix",       required_argument, 0, 'x'},
+  { "enum-file",         required_argument, 0, 'f'},
+  { "enforce-user-phone", no_argument,      0, 'u'},
+  { "enforce-global-only-lookups", no_argument, 0, 'g'},
+  { "reg-max-expires",   required_argument, 0, 'e'},
+  { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
+  { "pjsip-threads",     required_argument, 0, 'P'},
+  { "worker-threads",    required_argument, 0, 'W'},
+  { "analytics",         required_argument, 0, 'a'},
+  { "authentication",    no_argument,       0, 'A'},
+  { "log-file",          required_argument, 0, 'F'},
+  { "http_address",      required_argument, 0, 'T'},
+  { "http_port",         required_argument, 0, 'o'},
+  { "http_threads",      required_argument, 0, 'q'},
+  { "billing-cdf",       required_argument, 0, 'B'},
+  { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
+  { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+  { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
+  { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
+  { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
+  { "log-level",         required_argument, 0, 'L'},
+  { "daemon",            no_argument,       0, 'd'},
+  { "interactive",       no_argument,       0, 't'},
+  { "help",              no_argument,       0, 'h'},
+  { NULL,                0, 0, 0}
+};
 
 static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
@@ -233,7 +233,7 @@ static sem_t term_sem;
 
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
-QuiescingManager *quiescing_mgr;
+QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -347,7 +347,7 @@ static void usage(void)
        " -d, --daemon               Run as daemon\n"
        " -t, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
-    );
+      );
 }
 
 
@@ -366,7 +366,7 @@ int parse_port(const std::string& port_str)
 }
 
 
-static pj_status_t init_logging_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -404,7 +404,7 @@ static pj_status_t init_logging_options(int argc, char *argv[], struct options *
   return PJ_SUCCESS;
 }
 
-static pj_status_t init_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -417,29 +417,29 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
     switch (c)
     {
     case 'p':
+    {
+      std::vector<std::string> pcscf_options;
+      Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
+      if (pcscf_options.size() == 2)
       {
-        std::vector<std::string> pcscf_options;
-        Utils::split_string(std::string(pj_optarg), ',', pcscf_options, 0, false);
-        if (pcscf_options.size() == 2)
-        {
-          options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
-          options->pcscf_trusted_port = parse_port(pcscf_options[1]);
-        }
-
-        if ((options->pcscf_untrusted_port != 0) &&
-            (options->pcscf_trusted_port != 0))
-        {
-          LOG_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
-                   options->pcscf_untrusted_port, options->pcscf_trusted_port);
-          options->pcscf_enabled = true;
-        }
-        else
-        {
-          LOG_ERROR("P-CSCF ports %s invalid", pj_optarg);
-          return -1;
-        }
+        options->pcscf_untrusted_port = parse_port(pcscf_options[0]);
+        options->pcscf_trusted_port = parse_port(pcscf_options[1]);
       }
-      break;
+
+      if ((options->pcscf_untrusted_port != 0) &&
+          (options->pcscf_trusted_port != 0))
+      {
+        LOG_INFO("P-CSCF enabled on ports %d (untrusted) and %d (trusted)",
+                 options->pcscf_untrusted_port, options->pcscf_trusted_port);
+        options->pcscf_enabled = true;
+      }
+      else
+      {
+        LOG_ERROR("P-CSCF ports %s invalid", pj_optarg);
+        return -1;
+      }
+    }
+    break;
 
     case 's':
       options->scscf_port = parse_port(std::string(pj_optarg));
@@ -504,31 +504,31 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'l':
+    {
+      std::vector<std::string> localhost_options;
+      Utils::split_string(std::string(pj_optarg), ',', localhost_options, 0, false);
+      if (localhost_options.size() == 1)
       {
-        std::vector<std::string> localhost_options;
-        Utils::split_string(std::string(pj_optarg), ',', localhost_options, 0, false);
-        if (localhost_options.size() == 1)
-        {
-          options->local_host = localhost_options[0];
-          options->public_host = localhost_options[0];
-          LOG_INFO("Override private and public local host names %s",
-                   options->local_host.c_str());
-        }
-        else if (localhost_options.size() == 2)
-        {
-          options->local_host = localhost_options[0];
-          options->public_host = localhost_options[1];
-          LOG_INFO("Override private local host name to %s",
-                  options->local_host.c_str());
-          LOG_INFO("Override public local host name to %s",
-                  options->public_host.c_str());
-        }
-        else
-        {
-          LOG_WARNING("Invalid --local-host option, ignored");
-        }
+        options->local_host = localhost_options[0];
+        options->public_host = localhost_options[0];
+        LOG_INFO("Override private and public local host names %s",
+                 options->local_host.c_str());
       }
-      break;
+      else if (localhost_options.size() == 2)
+      {
+        options->local_host = localhost_options[0];
+        options->public_host = localhost_options[1];
+        LOG_INFO("Override private local host name to %s",
+                 options->local_host.c_str());
+        LOG_INFO("Override public local host name to %s",
+                 options->public_host.c_str());
+      }
+      else
+      {
+        LOG_WARNING("Invalid --local-host option, ignored");
+      }
+    }
+    break;
 
     case 'D':
       options->home_domain = std::string(pj_optarg);
@@ -551,30 +551,30 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'r':
+    {
+      std::vector<std::string> upstream_proxy_options;
+      Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
+      options->upstream_proxy = upstream_proxy_options[0];
+      options->upstream_proxy_port = 0;
+      options->upstream_proxy_connections = 1;
+      options->upstream_proxy_recycle = 0;
+      if (upstream_proxy_options.size() > 1)
       {
-        std::vector<std::string> upstream_proxy_options;
-        Utils::split_string(std::string(pj_optarg), ',', upstream_proxy_options, 0, false);
-        options->upstream_proxy = upstream_proxy_options[0];
-        options->upstream_proxy_port = 0;
-        options->upstream_proxy_connections = 1;
-        options->upstream_proxy_recycle = 0;
-        if (upstream_proxy_options.size() > 1)
+        options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
+        if (upstream_proxy_options.size() > 2)
         {
-          options->upstream_proxy_port = atoi(upstream_proxy_options[1].c_str());
-          if (upstream_proxy_options.size() > 2)
+          options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
+          if (upstream_proxy_options.size() > 3)
           {
-            options->upstream_proxy_connections = atoi(upstream_proxy_options[2].c_str());
-            if (upstream_proxy_options.size() > 3)
-            {
-              options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
-            }
+            options->upstream_proxy_recycle = atoi(upstream_proxy_options[3].c_str());
           }
         }
-        LOG_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
-        LOG_INFO("  connections = %d", options->upstream_proxy_connections);
-        LOG_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
       }
-      break;
+      LOG_INFO("Upstream proxy is set to %s:%d", options->upstream_proxy.c_str(), options->upstream_proxy_port);
+      LOG_INFO("  connections = %d", options->upstream_proxy_connections);
+      LOG_INFO("  recycle time = %d seconds", options->upstream_proxy_recycle);
+    }
+    break;
 
     case 'I':
       options->ibcf = PJ_TRUE;
@@ -603,22 +603,22 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       break;
 
     case 'S':
+    {
+      std::vector<std::string> sas_options;
+      Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
+      if (sas_options.size() == 2)
       {
-        std::vector<std::string> sas_options;
-        Utils::split_string(std::string(pj_optarg), ',', sas_options, 0, false);
-        if (sas_options.size() == 2)
-        {
-          options->sas_server = sas_options[0];
-          options->sas_system_name = sas_options[1];
-          LOG_INFO("SAS set to %s", options->sas_server.c_str());
-          LOG_INFO("System name is set to %s", options->sas_system_name.c_str());
-        }
-        else
-        {
-          LOG_WARNING("Invalid --sas option, SAS disabled");
-        }
+        options->sas_server = sas_options[0];
+        options->sas_system_name = sas_options[1];
+        LOG_INFO("SAS set to %s", options->sas_server.c_str());
+        LOG_INFO("System name is set to %s", options->sas_system_name.c_str());
       }
-      break;
+      else
+      {
+        LOG_WARNING("Invalid --sas option, SAS disabled");
+      }
+    }
+    break;
 
     case 'H':
       options->hss_server = std::string(pj_optarg);
@@ -672,7 +672,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       {
         options->reg_max_expires = reg_max_expires;
         LOG_INFO("Maximum registration period set to %d seconds\n",
-                options->reg_max_expires);
+                 options->reg_max_expires);
       }
       else
       {
@@ -840,11 +840,17 @@ int daemonize()
 
   // Redirect standard files to /dev/null
   if (freopen("/dev/null", "r", stdin) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stdout) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stderr) == NULL)
+  {
     return errno;
+  }
 
   if (setsid() == -1)
   {
@@ -907,16 +913,17 @@ void terminate_handler(int sig)
 }
 
 
-void *quiesce_unquiesce_thread_func(void *dummy)
+void* quiesce_unquiesce_thread_func(void* dummy)
 {
-   // First register the thread with PJSIP.
+  // First register the thread with PJSIP.
   pj_thread_desc desc;
-  pj_thread_t *thread;
+  pj_thread_t* thread;
   pj_status_t status;
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
-  if (status != PJ_SUCCESS) {
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
               "This function will not be available",
               status);
@@ -933,9 +940,12 @@ void *quiesce_unquiesce_thread_func(void *dummy)
     {
       curr_quiescing = new_quiescing;
 
-      if (new_quiescing) {
+      if (new_quiescing)
+      {
         quiescing_mgr->quiesce();
-      } else {
+      }
+      else
+      {
         quiescing_mgr->unquiesce();
       }
     }
@@ -962,10 +972,10 @@ public:
   }
 };
 
-void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+void reg_httpthread_with_pjsip(evhtp_t* htp, evthr_t* httpthread, void* arg)
 {
   pj_thread_desc thread_desc;
-  pj_thread_t *thread = 0;
+  pj_thread_t* thread = 0;
 
   if (!pj_thread_is_registered())
   {
@@ -981,7 +991,7 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 /*
  * main()
  */
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
   pj_status_t status;
   struct options opt;
@@ -1108,7 +1118,8 @@ int main(int argc, char *argv[])
     // Work out the program name from argv[0], stripping anything before the final slash.
     char* prog_name = argv[0];
     char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL) {
+    if (slash_ptr != NULL)
+    {
       prog_name = slash_ptr + 1;
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
@@ -1220,7 +1231,7 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-    scscf_selector = new SCSCFSelector();
+  scscf_selector = new SCSCFSelector();
 
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
@@ -1230,7 +1241,7 @@ int main(int argc, char *argv[])
 
   if ((opt.memento_enabled) &&
       ((opt.max_call_list_length == 0) &&
-      (opt.call_list_ttl == 0)))
+       (opt.call_list_ttl == 0)))
   {
     LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
     return 1;
@@ -1530,17 +1541,17 @@ int main(int argc, char *argv[])
     }
 
     SCSCFSproutlet* scscf_sproutlet =
-                      new SCSCFSproutlet(scscf_uri,
-                                         icscf_uri,
-                                         bgcf_uri,
-                                         opt.scscf_port,
-                                         local_reg_store,
-                                         remote_reg_store,
-                                         hss_connection,
-                                         enum_service,
-                                         scscf_acr_factory,
-                                         opt.enforce_user_phone,
-                                         opt.enforce_global_only_lookups);
+      new SCSCFSproutlet(scscf_uri,
+                         icscf_uri,
+                         bgcf_uri,
+                         opt.scscf_port,
+                         local_reg_store,
+                         remote_reg_store,
+                         hss_connection,
+                         enum_service,
+                         scscf_acr_factory,
+                         opt.enforce_user_phone,
+                         opt.enforce_global_only_lookups);
     if (scscf_sproutlet == NULL)
     {
       LOG_ERROR("Failed to create S-CSCF Sproutlet");
@@ -1696,11 +1707,11 @@ int main(int argc, char *argv[])
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
       http_stack->register_handler("^/timers$",
-                                      &reg_timeout_handler);
+                                   &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
-                                      &auth_timeout_handler);
+                                   &auth_timeout_handler);
       http_stack->register_handler("^/registrations?*$",
-                                      &deregistration_handler);
+                                   &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
