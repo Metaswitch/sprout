@@ -12,7 +12,17 @@ MODULE_DIR := ${ROOT}/modules
 
 DEB_COMPONENT := sprout
 DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
-DEB_NAMES := sprout-libs sprout-libs-dbg sprout sprout-dbg bono bono-dbg restund clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
+DEB_NAMES := sprout-libs sprout-libs-dbg
+DEB_NAMES += sprout sprout-dbg
+DEB_NAMES += sprout-base sprout-base-dbg
+DEB_NAMES += sprout-scscf sprout-scscf-dbg
+DEB_NAMES += sprout-icscf sprout-icscf-dbg
+DEB_NAMES += sprout-bgcf sprout-bgcf-dbg
+DEB_NAMES += sprout-mmtel-as sprout-mmtel-as-dbg
+DEB_NAMES += gemini-as gemini-as-dbg
+DEB_NAMES += memento-as memento-as-dbg
+DEB_NAMES += bono bono-dbg restund
+DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
 
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib

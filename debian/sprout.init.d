@@ -203,14 +203,14 @@ do_start()
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires $sub_max_expires"
         fi
 
-        if [ -n "$max_call_list_length" ]
-        then
-          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length $max_call_list_length"
-        fi
-
         if [ -n "$memento_threads" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --memento-threads $memento_threads"
+        fi
+
+        if [ -n "$max_call_list_length" ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length $max_call_list_length"
         fi
 
         if [ -n "$call_list_ttl" ]
