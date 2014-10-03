@@ -566,7 +566,15 @@ HTTPCode HSSConnection::update_registration_state(const std::string& public_user
     return http_code;
   }
 
-  return decode_homestead_xml(public_user_identity, root, regstate, ifcs_map, associated_uris, aliases, ccfs, ecfs, false) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return decode_homestead_xml(public_user_identity,
+                              root,
+                              regstate,
+                              ifcs_map,
+                              associated_uris,
+                              aliases,
+                              ccfs,
+                              ecfs,
+                              false) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 HTTPCode HSSConnection::get_registration_data(const std::string& public_user_identity,
@@ -636,7 +644,15 @@ HTTPCode HSSConnection::get_registration_data(const std::string& public_user_ide
   // not return any IFCs (when the subscriber isn't registered), so a successful
   // response shouldn't be taken as a guarantee of IFCs.
   std::vector<std::string> unused_aliases;
-  return decode_homestead_xml(public_user_identity, root, regstate, ifcs_map, associated_uris, unused_aliases, ccfs, ecfs, true) ? HTTP_OK : HTTP_SERVER_ERROR;
+  return decode_homestead_xml(public_user_identity,
+                              root,
+                              regstate,
+                              ifcs_map,
+                              associated_uris,
+                              unused_aliases,
+                              ccfs,
+                              ecfs,
+                              true) ? HTTP_OK : HTTP_SERVER_ERROR;
 }
 
 

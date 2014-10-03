@@ -1458,7 +1458,7 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
 
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
-      // If we have a SIP URI, we add a second P-Asserted-Identity containg a
+      // If we have a SIP URI, we add a second P-Asserted-Identity containing a
       // tel URI if this SIP URI has a tel URI alias.
       new_p_a_i_str = "tel:";
       new_p_a_i_str += PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);

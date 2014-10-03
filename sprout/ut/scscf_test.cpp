@@ -479,7 +479,7 @@ protected:
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
   void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true, bool session_expires=false);
   void doFastFailureFlow(SP::Message& msg, int st_code);
-  void doSlowFailureFlow(SP::Message& msg, int st_code);
+  void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SP::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 
@@ -1204,7 +1204,10 @@ void SCSCFTest::doFastFailureFlow(Message& msg, int st_code)
 }
 
 /// Test a message results in a 100 then a failure.
-void SCSCFTest::doSlowFailureFlow(Message& msg, int st_code)
+void SCSCFTest::doSlowFailureFlow(Message& msg,
+                                  int st_code,
+                                  std::string body,
+                                  std::string reason)
 {
   SCOPED_TRACE("");
 
@@ -1219,7 +1222,7 @@ void SCSCFTest::doSlowFailureFlow(Message& msg, int st_code)
 
   // error goes back
   out = current_txdata()->msg;
-  RespMatcher(st_code).matches(out);
+  RespMatcher(st_code, body, reason).matches(out);
   free_txdata();
 }
 
@@ -1581,6 +1584,26 @@ TEST_F(SCSCFTest, TestEnumLocalNumber)
   doSlowFailureFlow(msg, 404);
 }
 
+TEST_F(SCSCFTest, TestEnumLocalTelURI)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+
+  set_global_only_lookups(true);
+  Message msg;
+  msg._to = "16505551234";
+  msg._toscheme = "tel";
+  msg._todomain = "";
+  // We only do ENUM on originating calls
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  list<HeaderMatcher> hdrs;
+  // ENUM fails and wr route to the BGCF, but there are no routes so the call
+  // is rejected.
+  doSlowFailureFlow(msg, 404, "", "No route to target");
+}
+
 TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
 {
   SCOPED_TRACE("");
@@ -1595,8 +1618,9 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  // Routed to the BGCF with the req URI unchanged.
-  doSuccessfulFlow(msg, testing::MatchesRegex(msg._requri), hdrs, false);
+  // ENUM fails and wr route to the BGCF, but there are no routes so the call
+  // is rejected.
+  doSlowFailureFlow(msg, 404, "", "No route to target");
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
