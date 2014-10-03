@@ -273,7 +273,7 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     }
     else
     {
-      new_uri = PJUtils::public_id_from_uri(uri);
+      new_uri = PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri);
       LOG_DEBUG("Translate SIP URI %s to itself", new_uri.c_str());
     }
   }
