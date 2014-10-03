@@ -137,6 +137,8 @@ get_settings()
 
         [ "$enforce_user_phone" != "Y" ] || user_phone_arg="--enforce-user-phone"
         [ "$enforce_global_only_lookups" != "Y" ] || global_only_lookups_arg="--enforce-global-only-lookups"
+        [ "$memento_enabled" != "Y" ] || memento_enabled_arg="--memento-enabled"
+        [ "$gemini_enabled" != "Y" ] || gemini_enabled_arg="--gemini-enabled"
 }
 
 #
@@ -180,6 +182,8 @@ do_start()
                      $authentication_arg
                      $user_phone_arg
                      $global_only_lookups_arg
+                     $memento_enabled_arg
+                     $gemini_enabled_arg
                      -T $local_ip
                      -o 9888
                      -a $log_directory
@@ -197,6 +201,11 @@ do_start()
         if [ -n "$sub_max_expires" ]
         then
           DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires $sub_max_expires"
+        fi
+
+        if [ -n "$memento_threads" ]
+        then
+          DAEMON_ARGS="$DAEMON_ARGS --memento-threads $memento_threads"
         fi
 
         if [ -n "$max_call_list_length" ]
