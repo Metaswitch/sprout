@@ -1,14 +1,14 @@
-# memento-sip Makefile
+# memento-as Makefile
 
 all: stage-build
 
 ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
-TARGET := memento-sip.so
+TARGET := memento-as.so
 
 TARGET_SOURCES := sproutletappserver.cpp \
-                  memento-sipplugin.cpp
+                  mementoasplugin.cpp
 
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x

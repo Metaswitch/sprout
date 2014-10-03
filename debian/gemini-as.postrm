@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file memento-sip.postrm
+# @file gemini-as.postrm
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2014  Metaswitch Networks Ltd
@@ -40,6 +40,6 @@
 set -e
 
 # Restart sprout so it unloads the plug-in that has been removed.
-sudo service sprout stop
+sudo service sprout stop || /bin/true
 
 exit 0

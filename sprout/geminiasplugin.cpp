@@ -1,5 +1,5 @@
 /**
- * @file memento-sipplugin.cpp  Plug-in wrapper for the Memento SIP Sproutlet.
+ * @file geminiasplugin.cpp  Plug-in wrapper for the Gemini Sproutlet.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2014  Metaswitch Networks Ltd
@@ -41,79 +41,59 @@
 
 #include "cfgoptions.h"
 #include "sproutletplugin.h"
-#include "mementoappserver.h"
-#include "call_list_store.h"
+#include "mobiletwinned.h"
 #include "sproutletappserver.h"
 
-class MementoSIPPlugin : public SproutletPlugin
+class GeminiPlugin : public SproutletPlugin
 {
 public:
-  MementoSIPPlugin();
-  ~MementoSIPPlugin();
+  GeminiPlugin();
+  ~GeminiPlugin();
 
   std::list<Sproutlet*> load(struct options& opt);
   void unload();
 
 private:
-  CallListStore::Store* _call_list_store;
-  MementoAppServer* _memento;
-  SproutletAppServerShim* _memento_sproutlet;
+  MobileTwinnedAppServer* _gemini;
+  SproutletAppServerShim* _gemini_sproutlet;
 };
 
 /// Export the plug-in using the magic symbol "plugin-loader"
 extern "C" {
-MementoSIPPlugin plugin_loader;
+GeminiPlugin plugin_loader;
 }
 
 
-MementoSIPPlugin::MementoSIPPlugin() :
-  _call_list_store(NULL),
-  _memento(NULL),
-  _memento_sproutlet(NULL)
+GeminiPlugin::GeminiPlugin() :
+  _gemini(NULL),
+  _gemini_sproutlet(NULL)
 {
 }
 
-MementoSIPPlugin::~MementoSIPPlugin()
+GeminiPlugin::~GeminiPlugin()
 {
 }
 
-/// Loads the Memento SIP plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> MementoSIPPlugin::load(struct options& opt)
+/// Loads the Gemini plug-in, returning the supported Sproutlets.
+std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
 {
   std::list<Sproutlet*> sproutlets;
 
-  if (opt.memento_enabled)
+  if (opt.gemini_enabled)
   {
-    _call_list_store = new CallListStore::Store();
-    _call_list_store->initialize();
-    _call_list_store->configure("localhost", 9160);
-    CassandraStore::ResultCode store_rc = _call_list_store->start();
+    // Create the Sproutlet.
+    _gemini = new MobileTwinnedAppServer("mobile-twinned");
+    _gemini_sproutlet = new SproutletAppServerShim(_gemini);
 
-    if (store_rc != CassandraStore::OK)
-    {
-      LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
-    }
-    else
-    {
-      _memento = new MementoAppServer("memento",
-                                      _call_list_store,
-                                      opt.home_domain,
-                                      opt.max_call_list_length,
-                                      opt.memento_threads,
-                                      opt.call_list_ttl);
-
-      _memento_sproutlet = new SproutletAppServerShim(_memento);
-      sproutlets.push_back(_memento_sproutlet);
-    }
+    sproutlets.push_back(_gemini_sproutlet);
   }
 
   return sproutlets;
 }
 
-/// Unloads the Memento SIP plug-in.
-void MementoSIPPlugin::unload()
+/// Unloads the Gemini plug-in.
+void GeminiPlugin::unload()
 {
-  delete _memento_sproutlet;
-  delete _memento;
-  delete _call_list_store;
+  delete _gemini_sproutlet;
+  delete _gemini;
 }

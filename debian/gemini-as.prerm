@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file memento-sip.prerm
+# @file gemini-as.prerm
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2014  Metaswitch Networks Ltd

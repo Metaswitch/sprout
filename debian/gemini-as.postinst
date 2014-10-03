@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# @file gemini.postinst
+# @file gemini-as.postinst
 #
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2014  Metaswitch Networks Ltd

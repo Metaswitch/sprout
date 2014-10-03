@@ -19,8 +19,8 @@ DEB_NAMES += sprout-scscf sprout-scscf-dbg
 DEB_NAMES += sprout-icscf sprout-icscf-dbg
 DEB_NAMES += sprout-bgcf sprout-bgcf-dbg
 DEB_NAMES += sprout-mmtel-as sprout-mmtel-as-dbg
-DEB_NAMES += gemini gemini-dbg
-DEB_NAMES += memento-sip memento-sip-dbg
+DEB_NAMES += gemini-as gemini-as-dbg
+DEB_NAMES += memento-as memento-as-dbg
 DEB_NAMES += bono bono-dbg restund
 DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
 

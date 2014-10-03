@@ -102,31 +102,31 @@ Priority: extra
 Depends: sprout-mmtel-as (= ${binary:Version})
 Description: Debugging symbols for sprout-mmtel-as, the SIP Router MMTEL Application Server plug-in
 
-Package: gemini
+Package: gemini-as
 Architecture: any
 Depends: sprout-base
-Suggests: gemini-dbg
+Suggests: gemini-as-dbg
 Description: gemini, the Mobile Twinning Application Server plug-in
 
-Package: gemini-dbg
+Package: gemini-as-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: gemini (= ${binary:Version})
+Depends: gemini-as (= ${binary:Version})
 Description: Debugging symbols for gemini, the Mobile Twinning Application Server plug-in
 
-Package: memento-sip
+Package: memento-as
 Architecture: any
 Depends: sprout-base
-Suggests: memento-sip-dbg
-Description: memento-sip, the Call List Application Server plug-in
+Suggests: memento-as-dbg
+Description: memento-as, the Call List Application Server plug-in
 
-Package: memento-sip-dbg
+Package: memento-as-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: memento-sip (= ${binary:Version})
-Description: Debugging symbols for memento-sip, the Call List Application Server plug-in
+Depends: memento-as (= ${binary:Version})
+Description: Debugging symbols for memento-as, the Call List Application Server plug-in
 
 Package: bono
 Architecture: any

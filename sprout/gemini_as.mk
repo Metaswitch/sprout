@@ -1,15 +1,15 @@
-# gemini Makefile
+# gemini-as Makefile
 
 all: stage-build
 
 ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
-TARGET := gemini.so
+TARGET := gemini-as.so
 
 TARGET_SOURCES := mobiletwinned.cpp	\
                   sproutletappserver.cpp \
-                  geminiplugin.cpp
+                  geminiasplugin.cpp
 
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
