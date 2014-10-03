@@ -33,6 +33,9 @@ CPPFLAGS := $(filter-out -O2,$(CPPFLAGS))
 CPPFLAGS_BUILD += -O2
 
 LDFLAGS += -L${ROOT}/usr/lib -shared
+LDFLAGS += -lmemento \
+           -lthrift \
+           -lcassandra
 
 include ${MK_DIR}/platform.mk
 
