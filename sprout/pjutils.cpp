@@ -379,6 +379,13 @@ pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
   return msg->line.req.uri;
 }
 
+void PJUtils::add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id)
+{
+  pjsip_generic_string_hdr* pvni_hdr = pjsip_generic_string_hdr_create(tdata->pool,
+								       &STR_P_V_N_I,
+								       network_id);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pvni_hdr);
+}
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
