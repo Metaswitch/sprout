@@ -125,7 +125,7 @@ ICSCFSproutletRegTsx::ICSCFSproutletRegTsx(SproutletTsxHelper* helper,
 /// REGISTER-handling Tsx destructor (may also cause ACRs to be sent).
 ICSCFSproutletRegTsx::~ICSCFSproutletRegTsx()
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Send the ACR for this transaction.
     _acr->send_message();
@@ -243,7 +243,7 @@ void ICSCFSproutletRegTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
 void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
@@ -254,7 +254,7 @@ void ICSCFSproutletRegTsx::on_tx_request(pjsip_msg* req)
 
 void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the received response to the ACR.
     // @TODO - timestamp from response???
@@ -324,6 +324,7 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
       }
 
       // We're done, no more retries.
+      free_msg(req);
       send_response(rsp);
     }
   }
@@ -336,9 +337,9 @@ void ICSCFSproutletRegTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp) 
+void ICSCFSproutletRegTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.
@@ -380,13 +381,13 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
 /// REGISTER-handling Tsx destructor (may also cause ACRs to be sent).
 ICSCFSproutletTsx::~ICSCFSproutletTsx()
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     _acr->send_message();
     delete _acr;
   }
 
-  if (_router != NULL) 
+  if (_router != NULL)
   {
     delete _router;
   }
@@ -549,7 +550,7 @@ void ICSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 
 void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted request to the ACR to update the accounting
     // information.
@@ -560,7 +561,7 @@ void ICSCFSproutletTsx::on_tx_request(pjsip_msg* req)
 
 void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the received response to the ACR.
     // @TODO - timestamp from response???
@@ -614,6 +615,7 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     }
     else
     {
+      free_msg(req);
       send_response(rsp);
     }
   }
@@ -626,9 +628,9 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 }
 
 
-void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp) 
+void ICSCFSproutletTsx::on_tx_response(pjsip_msg* rsp)
 {
-  if (_acr != NULL) 
+  if (_acr != NULL)
   {
     // Pass the transmitted response to the ACR to update the accounting
     // information.

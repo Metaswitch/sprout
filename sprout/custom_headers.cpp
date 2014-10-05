@@ -46,7 +46,6 @@ extern "C" {
 #include "constants.h"
 #include "custom_headers.h"
 
-
 /// Custom parser for Privacy header.  This is registered with PJSIP below
 /// in register_custom_headers().
 ///
@@ -806,8 +805,8 @@ pjsip_hdr* parse_hdr_p_charging_function_addresses(pjsip_parse_ctx* ctx)
   pjsip_param *param;
 
   for (;;) {
-    pjsip_parse_param_imp(scanner, pool, &name, &value,
-                          PJSIP_PARSE_REMOVE_QUOTE);
+    pjsip_parse_uri_param_imp(scanner, pool, &name, &value,
+                          NULL);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;
@@ -948,7 +947,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
       // Simply write out the parameters
       printed = pjsip_param_print_on(param_list, p, buf+len-p,
                                      &pc->pjsip_TOKEN_SPEC,
-                                     &pc->pjsip_TOKEN_SPEC, ';');
+                                     &pc->pjsip_PARAM_CHAR_SPEC, ';');
       if (printed < 0) {
         return -1;
       }
@@ -979,7 +978,7 @@ int pjsip_p_c_f_a_hdr_print_on(void *h, char* buf, pj_size_t len)
       // Now print the rest of this parameter list (may be empty).
       printed = pjsip_param_print_on(param_list, p, buf+len-p,
                                      &pc->pjsip_TOKEN_SPEC,
-                                     &pc->pjsip_TOKEN_SPEC, ';');
+                                     &pc->pjsip_PARAM_CHAR_SPEC, ';');
       if (printed < 0) {
         pj_list_insert_after(param_list, first_param);
         return -1;

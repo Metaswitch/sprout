@@ -34,9 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
 
-
+#include <sys/stat.h>
 #include <json/reader.h>
 #include <fstream>
 #include <stdlib.h>
@@ -61,6 +60,17 @@ void BgcfService::update_routes()
 
   std::string jsonData;
   std::ifstream file;
+
+  // Check whether the file exists.
+  struct stat s;
+  LOG_DEBUG("stat(%s) returns %d", _configuration.c_str(), stat(_configuration.c_str(), &s));
+  if ((stat(_configuration.c_str(), &s) != 0) &&
+      (errno == ENOENT))
+  {
+    LOG_STATUS("No BGCF configuration (file %s does not exist)",
+               _configuration.c_str());
+    return;
+  }
 
   LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
 
@@ -120,7 +130,9 @@ void BgcfService::update_routes()
   }
   else
   {
+    //LCOV_EXCL_START
     LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
+    //LCOV_EXCL_STOP
   }
 }
 

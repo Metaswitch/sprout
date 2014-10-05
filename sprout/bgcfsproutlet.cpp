@@ -159,17 +159,23 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   else
   {
     LOG_DEBUG("No route configured for %s", domain.c_str());
-#if 0
-    // TS 24.229 doesn't cover the behavior if the domain is not routable
-    // from the BGCF.  Simply response 404 and explain why in the reason.
-    pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "No route to target");
-    send_response(rsp);
-    free_msg(req);
-#else
-    // Previous behaviour on no route was to try to forward the request as-is,
-    // (so trying to route to the domain in the request URI directly).
-    send_request(req);
-#endif
+
+    if (domain == "")
+    {
+      // If the domain is blank we were trying to route a telephone number and
+      // there are no more routes to try.
+      pjsip_msg* rsp = create_response(req,
+                                       PJSIP_SC_NOT_FOUND,
+                                       "No route to target");
+      send_response(rsp);
+      free_msg(req);
+    }
+    else
+    {
+      // Previous behaviour on no route was to try to forward the request as-is,
+      // (so trying to route to the domain in the request URI directly).
+      send_request(req);
+    }
   }
 }
 

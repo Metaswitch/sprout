@@ -115,6 +115,7 @@ private:
   bool read_hss_data(const std::string& public_id,
                      bool& registered,
                      std::vector<std::string>& uris,
+                     std::vector<std::string>& aliases,
                      Ifcs& ifcs,
                      std::deque<std::string>& ccfs,
                      std::deque<std::string>& ecfs,
@@ -242,6 +243,9 @@ private:
   /// set during session initiation.
   void get_billing_role(std::string& billing_role);
 
+  /// Adds a second P-Asserted-Identity header to a message when required.
+  void add_second_p_a_i_hdr(pjsip_msg* msg);
+
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.
   SCSCFSproutlet* _scscf;
@@ -260,6 +264,7 @@ private:
   bool _hss_data_cached;
   bool _registered;
   std::vector<std::string> _uris;
+  std::vector<std::string> _aliases;
   Ifcs _ifcs;
   std::deque<std::string> _ccfs;
   std::deque<std::string> _ecfs;

@@ -47,6 +47,7 @@ mmtel.cpp
 bgcfsproutlet.cpp
 icscfsproutlet.cpp
 scscfsproutlet.cpp
+pluginloader.cpp
 
 # Tested as part of homestead
 modules/cpp-common/src/httpstack_utils.cpp

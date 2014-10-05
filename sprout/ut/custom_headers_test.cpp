@@ -316,6 +316,117 @@ TEST_F(CustomHeadersTest, PChargingFunctionAddresses)
   EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.0.0.2;ccf=10.0.0.4;ecf=10.0.0.1;ecf=10.0.0.3;other-param=test-value", buf);
 }
 
+TEST_F(CustomHeadersTest, PChargingFunctionAddressesIPv6)
+{
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "P-Charging-Function-Addresses: ccf=10.22.42.18;ccf=[FD5F:5D21:845:1C27:FF00::42:105]\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("P-Charging-Function-Addresses");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                          &header_name,
+                                                          NULL);
+  EXPECT_NE(hdr, (pjsip_hdr*)NULL);
+
+  // We have a P-CFA header, check it was filled out correctly.
+  pjsip_p_c_f_a_hdr* pcfa = (pjsip_p_c_f_a_hdr*)hdr;
+
+  EXPECT_EQ(2u, pj_list_size(&pcfa->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa->other_param));
+
+  // Test the VPTR functions (clone, shallow clone and print on).
+  pjsip_p_c_f_a_hdr* pcfa_clone = (pjsip_p_c_f_a_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
+
+  EXPECT_EQ(2u, pj_list_size(&pcfa_clone->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_clone->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_clone->other_param));
+
+  pjsip_p_c_f_a_hdr* pcfa_sclone = (pjsip_p_c_f_a_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
+
+  EXPECT_EQ(2u, pj_list_size(&pcfa_sclone->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_sclone->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_sclone->other_param));
+
+  char buf[1024];
+  hdr = (pjsip_hdr*)pcfa_clone;
+  int written = hdr->vptr->print_on(hdr, buf, 0);
+  EXPECT_EQ(written, -1);
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = hdr->vptr->print_on(hdr, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 84);
+  EXPECT_STREQ("P-Charging-Function-Addresses: ccf=10.22.42.18;ccf=[FD5F:5D21:845:1C27:FF00::42:105]", buf);
+}
+
+TEST_F(CustomHeadersTest, PChargingFunctionAddressesOneIPv6)
+{
+  string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
+             "Via: SIP/2.0/TCP 10.0.0.1:5060;rport;branch=z9hG4bKPjPtKqxhkZnvVKI2LUEWoZVFjFaqo.cOzf;alias\n"
+             "Max-Forwards: 63\n"
+             "From: <sip:6505551234@homedomain>;tag=1234\n"
+             "To: <sip:6505554321@homedomain>\n"
+             "P-Charging-Function-Addresses: ccf=[fd5f:5d21:845:1c27:ff00:0:42:105]\n"
+             "Contact: <sip:6505551234@10.0.0.1:5060;transport=TCP;ob>\n"
+             "Call-ID: 1-13919@10.151.20.48\n"
+             "CSeq: 1 INVITE\n"
+             "Content-Length: 0\n\n");
+
+  pjsip_rx_data* rdata = build_rxdata(str);
+  parse_rxdata(rdata);
+
+  pj_str_t header_name = pj_str("P-Charging-Function-Addresses");
+  pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(rdata->msg_info.msg,
+                                                          &header_name,
+                                                          NULL);
+  EXPECT_NE(hdr, (pjsip_hdr*)NULL);
+
+  // We have a P-CFA header, check it was filled out correctly.
+  pjsip_p_c_f_a_hdr* pcfa = (pjsip_p_c_f_a_hdr*)hdr;
+
+  EXPECT_EQ(1u, pj_list_size(&pcfa->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa->other_param));
+
+  // Test the VPTR functions (clone, shallow clone and print on).
+  pjsip_p_c_f_a_hdr* pcfa_clone = (pjsip_p_c_f_a_hdr*)hdr->vptr->clone(stack_data.pool, (void*)hdr);
+
+  EXPECT_EQ(1u, pj_list_size(&pcfa_clone->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_clone->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_clone->other_param));
+
+  pjsip_p_c_f_a_hdr* pcfa_sclone = (pjsip_p_c_f_a_hdr*)hdr->vptr->shallow_clone(stack_data.pool, (void*)hdr);
+
+  EXPECT_EQ(1u, pj_list_size(&pcfa_sclone->ccf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_sclone->ecf));
+  EXPECT_EQ(0u, pj_list_size(&pcfa_sclone->other_param));
+
+  char buf[1024];
+  hdr = (pjsip_hdr*)pcfa_clone;
+  int written = hdr->vptr->print_on(hdr, buf, 0);
+  EXPECT_EQ(written, -1);
+  int i = 1;
+  while ((written == -1) && (i <= 1024)) {
+    written = hdr->vptr->print_on(hdr, buf, i);
+    i++;
+  }
+  EXPECT_EQ(written, 69);
+  EXPECT_STREQ("P-Charging-Function-Addresses: ccf=[fd5f:5d21:845:1c27:ff00:0:42:105]", buf);
+}
+
+
 TEST_F(CustomHeadersTest, SessionExpires)
 {
   string str("INVITE sip:6505554321@homedomain SIP/2.0\n"
