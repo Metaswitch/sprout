@@ -27,7 +27,7 @@ DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stre
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := pjsip jsoncpp c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client memento
+SUBMODULES := pjsip jsoncpp c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift cassandra memento
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk
