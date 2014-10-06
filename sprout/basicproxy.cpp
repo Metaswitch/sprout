@@ -1362,7 +1362,10 @@ void BasicProxy::UASTsx::dissociate(UACTsx* uac_tsx)
 {
   LOG_DEBUG("Dissociate UAC transaction %p for target %d", uac_tsx, uac_tsx->_index);
   uac_tsx->_uas_tsx = NULL;
-  _uac_tsx[uac_tsx->_index] = NULL;
+  if (_uac_tsx.size() > (size_t)uac_tsx->_index)
+  {
+    _uac_tsx[uac_tsx->_index] = NULL;
+  }
 }
 
 

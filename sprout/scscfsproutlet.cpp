@@ -926,73 +926,89 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 }
 
 
-/// Route the request to an application server.
-void SCSCFSproutletTsx::route_to_as(pjsip_msg* req,
-                                    const std::string& server_name)
+/// Attempt to route the request to an application server.
+void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_name)
 {
-  std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) +
-                          _as_chain_link.next_odi_token();
-  LOG_INFO("Routing to Application Server %s with ODI token %s for %s",
-           server_name.c_str(),
-           odi_value.c_str(),
-           _as_chain_link.to_string().c_str());
-
-
-  // Set P-Served-User, including session case and registration
-  // state, per RFC5502 and the extension in 3GPP TS 24.229
-  // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
-  // step 5 s5.4.3.3 step 4c.
-  PJUtils::remove_hdr(req, &STR_P_SERVED_USER);
-  pj_pool_t* pool = get_pool(req);
-  pjsip_routing_hdr* psu_hdr = identity_hdr_create(pool, STR_P_SERVED_USER);
-  psu_hdr->name_addr.uri =
-                  PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
-  pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-  pj_strdup2(pool, &p->name, "sescase");
-  pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
-  pj_list_insert_before(&psu_hdr->other_param, p);
-  if (_session_case != &SessionCase::OriginatingCdiv)
-  {
-    p = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup2(pool, &p->name, "regstate");
-    if (_as_chain_link.is_registered())
-    {
-      pj_strdup2(pool, &p->value, "reg");
-    }
-    else
-    {
-      pj_strdup2(pool, &p->value, "unreg");
-    }
-    pj_list_insert_before(&psu_hdr->other_param, p);
-  }
-  pjsip_msg_add_hdr(req, (pjsip_hdr*)psu_hdr);
-
-  // Add the application server URI as the next Route header.
+  // Check that the AS URI is well-formed.
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
-                          PJUtils::uri_from_string(server_name, get_pool(req));
-  PJUtils::add_route_header(req, as_uri, get_pool(req));
+                        PJUtils::uri_from_string(server_name, get_pool(req));
 
-  // Insert route header below it with an ODI in it.
-  pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
-                           pjsip_uri_clone(get_pool(req), _scscf->scscf_uri());
-  pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
-  odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
-  if (_session_case->is_originating())
+  if ((as_uri != NULL) &&
+      (PJSIP_URI_SCHEME_IS_SIP(as_uri)))
   {
-    pjsip_param *orig_param = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
-    pj_strdup(get_pool(req), &orig_param->name, &STR_ORIG);
-    pj_strdup2(get_pool(req), &orig_param->value, "");
-    pj_list_insert_after(&odi_uri->other_param, orig_param);
+    // AS URI is valid, so encode the AS hop and the return hop in Route headers.
+    std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) +
+                            _as_chain_link.next_odi_token();
+    LOG_INFO("Routing to Application Server %s with ODI token %s for %s",
+             server_name.c_str(),
+             odi_value.c_str(),
+             _as_chain_link.to_string().c_str());
+
+    // Add the application server URI as the next Route header.
+    PJUtils::add_route_header(req, as_uri, get_pool(req));
+
+    // Insert route header below it with an ODI in it.
+    pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
+                             pjsip_uri_clone(get_pool(req), _scscf->scscf_uri());
+    pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
+    odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
+    if (_session_case->is_originating())
+    {
+      pjsip_param *orig_param = PJ_POOL_ALLOC_T(get_pool(req), pjsip_param);
+      pj_strdup(get_pool(req), &orig_param->name, &STR_ORIG);
+      pj_strdup2(get_pool(req), &orig_param->value, "");
+      pj_list_insert_after(&odi_uri->other_param, orig_param);
+    }
+    PJUtils::add_route_header(req, odi_uri, get_pool(req));
+
+    // Set P-Served-User, including session case and registration
+    // state, per RFC5502 and the extension in 3GPP TS 24.229
+    // s7.2A.15, following the description in 3GPP TS 24.229 5.4.3.2
+    // step 5 s5.4.3.3 step 4c.
+    PJUtils::remove_hdr(req, &STR_P_SERVED_USER);
+    pj_pool_t* pool = get_pool(req);
+    pjsip_routing_hdr* psu_hdr = identity_hdr_create(pool, STR_P_SERVED_USER);
+    psu_hdr->name_addr.uri =
+                PJUtils::uri_from_string(_as_chain_link.served_user(), pool);
+    pjsip_param* p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    pj_strdup2(pool, &p->name, "sescase");
+    pj_strdup2(pool, &p->value, _session_case->to_string().c_str());
+    pj_list_insert_before(&psu_hdr->other_param, p);
+    if (_session_case != &SessionCase::OriginatingCdiv)
+    {
+      p = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup2(pool, &p->name, "regstate");
+      if (_as_chain_link.is_registered())
+      {
+        pj_strdup2(pool, &p->value, "reg");
+      }
+      else
+      {
+        pj_strdup2(pool, &p->value, "unreg");
+      }
+      pj_list_insert_before(&psu_hdr->other_param, p);
+    }
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)psu_hdr);
+
+    // Forward the request.
+    send_request(req);
+
+    // Start the liveness timer for the AS.
+    if (!schedule_timer(NULL, _liveness_timer, _as_chain_link.as_timeout() * 1000))
+    {
+      LOG_WARNING("Failed to start liveness timer");
+    }
   }
-  PJUtils::add_route_header(req, odi_uri, get_pool(req));
-
-  // Forward the request.
-  send_request(req);
-
-  // Start the liveness timer for the AS.
-  if (!schedule_timer(NULL, _liveness_timer, _as_chain_link.as_timeout() * 1000))
+  else
   {
-    LOG_WARNING("Failed to start liveness timer");
+    // The AS URI is badly formed, so reject the request.  (We could choose
+    // to continue processing here with the next AS if the default handling
+    // is set to allow it, but it feels better to fail the request for a
+    // misconfiguration.)
+    LOG_ERROR("Badly formed AS URI %s", server_name.c_str());
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_BAD_GATEWAY);
+    send_response(rsp);
+    free_msg(req);
   }
 }
 
