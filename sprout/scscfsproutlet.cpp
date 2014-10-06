@@ -933,7 +933,8 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
                         PJUtils::uri_from_string(server_name, get_pool(req));
 
-  if (as_uri != NULL)
+  if ((as_uri != NULL) &&
+      (PJSIP_URI_SCHEME_IS_SIP(as_uri)))
   {
     // AS URI is valid, so encode the AS hop and the return hop in Route headers.
     std::string odi_value = PJUtils::pj_str_to_string(&STR_ODI_PREFIX) +
