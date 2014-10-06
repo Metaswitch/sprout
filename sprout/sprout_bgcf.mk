@@ -36,9 +36,5 @@ include ${MK_DIR}/platform.mk
 .PHONY: stage-build
 stage-build: build
 
-.PHONY: debug
-debug: | build_test
-	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
-
 .PHONY: distclean
 distclean: clean

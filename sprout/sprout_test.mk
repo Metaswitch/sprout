@@ -139,9 +139,9 @@ TARGET_SOURCES_TEST := test_main.cpp \
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
-	                  gtest-all.o \
+                          gtest-all.o \
                           md5.o \
-	                  test_interposer.so
+                          test_interposer.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 COVERAGE_XML = $(TEST_OUT_DIR)/coverage_$(TARGET_TEST).xml
@@ -236,8 +236,6 @@ GTEST_SRCS_ := $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
 GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 # End of boilerplate
 
-#
-
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
                 --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/)' \
                 --sort-percentage
@@ -246,7 +244,7 @@ VGFLAGS = --suppressions=$(VG_SUPPRESS) \
           --leak-check=full \
           --track-origins=yes \
           --malloc-fill=cc \
-					--num-callers=40 \
+          --num-callers=40 \
           --free-fill=df
 
 # Define JUSTTEST=<testname> to test just that test.  Easier than

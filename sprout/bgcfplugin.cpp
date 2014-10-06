@@ -60,9 +60,9 @@ private:
   BgcfService* _bgcf_service;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-BGCFPlugin plugin_loader;
+BGCFPlugin sproutlet_plugin;
 }
 
 
@@ -84,11 +84,6 @@ std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
 
   if (opt.scscf_enabled)
   {
-    // Determine the BGCF URIs.
-    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr,
-                                        stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
-
     // Create BGCF service required for the BGCF Sproutlet.
     _bgcf_service = new BgcfService();
 

@@ -57,9 +57,9 @@ private:
   EnumService* _enum_service;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-SCSCFPlugin plugin_loader;
+SCSCFPlugin sproutlet_plugin;
 }
 
 SCSCFPlugin::SCSCFPlugin() :

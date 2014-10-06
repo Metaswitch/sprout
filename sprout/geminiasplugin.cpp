@@ -58,9 +58,9 @@ private:
   SproutletAppServerShim* _gemini_sproutlet;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-GeminiPlugin plugin_loader;
+GeminiPlugin sproutlet_plugin;
 }
 
 

@@ -59,9 +59,9 @@ private:
   SCSCFSelector* _scscf_selector;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-ICSCFPlugin plugin_loader;
+ICSCFPlugin sproutlet_plugin;
 }
 
 ICSCFPlugin::ICSCFPlugin() :

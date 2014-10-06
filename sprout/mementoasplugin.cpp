@@ -60,9 +60,9 @@ private:
   SproutletAppServerShim* _memento_sproutlet;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-MementoPlugin plugin_loader;
+MementoPlugin sproutlet_plugin;
 }
 
 
