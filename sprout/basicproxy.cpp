@@ -1716,6 +1716,7 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           // Set up the PJSIP transaction user module data on the cancel
           // transaction to refer to this UACTsx object.
           _proxy->bind_transaction(this, _cancel_tsx);
+          set_trail(_cancel_tsx, _trail);
 
           // Send the CANCEL on the new transaction.
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);

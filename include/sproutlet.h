@@ -52,6 +52,9 @@ extern "C" {
 #include <list>
 #include "sas.h"
 
+
+#define API_VERSION 1
+
 class SproutletTsxHelper;
 class Sproutlet;
 class SproutletTsx;
@@ -72,7 +75,7 @@ struct ForkState
 /// a single transaction.  Once a service has been triggered as part of handling
 /// a transaction, the related SproutletTsxHelper is inspected to determine what should
 /// be done next, e.g. forward the request, reject it, fork it etc.
-/// 
+///
 /// This is an abstract base class to allow for alternative implementations -
 /// in particular, production and test.  It is implemented by the underlying
 /// service infrastructure, not by the services themselves.
@@ -83,7 +86,7 @@ public:
   /// Virtual destructor.
   virtual ~SproutletTsxHelper() {}
 
-  /// Returns a mutable clone of the original request.  This can be modified 
+  /// Returns a mutable clone of the original request.  This can be modified
   /// and sent by the Sproutlet using the send_request call.
   ///
   /// @returns             - A clone of the original request message.
@@ -142,7 +145,7 @@ public:
 
   /// Indicate that the request should be forwarded following standard routing
   /// rules.
-  /// 
+  ///
   /// This function may be called repeatedly to create downstream forks of an
   /// original upstream request and may also be called during response processing
   /// or an original request to create a late fork.  When processing an in-dialog
@@ -184,7 +187,7 @@ public:
   /// transaction state and whether a timeout or transport error has been
   /// detected on the fork.
   ///
-  /// @returns             - ForkState structure containing transaction and 
+  /// @returns             - ForkState structure containing transaction and
   ///                        error status for the fork.
   /// @param  fork_id      - The identifier of the fork.
   ///
@@ -216,7 +219,7 @@ public:
 
   /// Schedules a timer with the specified identifier and expiry period.
   /// The on_timer_expiry callback will be called back with the timer identity
-  /// and context parameter when the timer expires.  If the identifier 
+  /// and context parameter when the timer expires.  If the identifier
   /// corresponds to a timer that is already running, the timer will be stopped
   /// and restarted with the new duration and context parameter.
   ///
@@ -237,7 +240,7 @@ public:
   /// Queries the state of a timer.
   ///
   /// @returns             - true if the timer is running, false otherwise.
-  /// @param  id           - The unique identifier for the timer. 
+  /// @param  id           - The unique identifier for the timer.
   ///
   virtual bool timer_running(TimerID id) = 0;
 
@@ -266,7 +269,7 @@ public:
   /// Called when an initial request (dialog-initiating or out-of-dialog) is
   /// received for the transaction.
   ///
-  /// During this function, exactly one of the following functions must be called, 
+  /// During this function, exactly one of the following functions must be called,
   /// otherwise the request will be rejected with a 503 Server Internal
   /// Error:
   ///
@@ -279,7 +282,7 @@ public:
 
   /// Called when an in-dialog request is received for the transaction.
   ///
-  /// During this function, exactly one of the following functions must be called, 
+  /// During this function, exactly one of the following functions must be called,
   /// otherwise the request will be rejected with a 503 Server Internal
   /// Error:
   ///
@@ -319,7 +322,7 @@ public:
   /// downstream legs) will be cancelled automatically.  No further methods
   /// will be called for this transaction.
   ///
-  /// @param  status_code  - Indicates the reason for the cancellation 
+  /// @param  status_code  - Indicates the reason for the cancellation
   ///                        (487 for a CANCEL, 408 for a transport error
   ///                        or transaction timeout)
   /// @param  cancel_req   - The received CANCEL request or NULL if cancellation
@@ -334,7 +337,7 @@ public:
 
 protected:
 
-  /// Returns a mutable clone of the original request.  This can be modified 
+  /// Returns a mutable clone of the original request.  This can be modified
   /// and sent by the Sproutlet using the send_request call.
   ///
   /// @returns             - A clone of the original request message.
@@ -405,7 +408,7 @@ protected:
   /// original upstream request and may also be called during response processing
   /// or an original request to create a late fork.  When processing an in-dialog
   /// request this function may only be called once.
-  /// 
+  ///
   /// This function may be called while processing initial requests,
   /// in-dialog requests and cancels but not during response handling.
   ///
@@ -418,7 +421,7 @@ protected:
   /// Indicate that the response should be forwarded following standard routing
   /// rules.  Note that, if this service created multiple forks, the responses
   /// will be aggregated before being sent downstream.
-  /// 
+  ///
   /// This function may be called while handling any response.
   ///
   /// @param  rsp          - The response message to use for forwarding.
@@ -446,7 +449,7 @@ protected:
   /// transaction state and whether a timeout or transport error has been
   /// detected on the fork.
   ///
-  /// @returns             - ForkState structure containing transaction and 
+  /// @returns             - ForkState structure containing transaction and
   ///                        error status for the fork.
   /// @param  fork_id      - The identifier of the fork.
   ///
@@ -482,7 +485,7 @@ protected:
 
   /// Schedules a timer with the specified identifier and expiry period.
   /// The on_timer_expiry callback will be called back with the timer identity
-  /// and context parameter when the timer expires.  If the identifier 
+  /// and context parameter when the timer expires.  If the identifier
   /// corresponds to a timer that is already running, the timer will be stopped
   /// and restarted with the new duration and context parameter.
   ///
@@ -523,9 +526,9 @@ private:
 
 
 /// The Sproutlet class is a base class on which SIP services can be
-/// built.  
+/// built.
 ///
-/// Derived classes are instantiated during system initialization and 
+/// Derived classes are instantiated during system initialization and
 /// register a service name with Sprout.  Sprout calls the create_tsx method
 /// on an Sproutlet derived class when the ServiceManager determines that
 /// the next hop for a request contains a hostname of the form
@@ -560,6 +563,9 @@ public:
 
   /// Returns the name of this service.
   const std::string service_name() const { return _service_name; }
+
+  /// Returns the API version required by this Sproutlet.
+  int api_version() const { return API_VERSION; }
 
   /// Returns the default port for this service.
   int port() const { return _port; }
