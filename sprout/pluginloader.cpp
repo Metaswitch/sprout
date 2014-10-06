@@ -85,7 +85,7 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         p.handle = dlopen(p.name.c_str(), RTLD_NOW);
         if (p.handle != NULL)
         {
-          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "plugin_loader"));
+          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "sproutlet_plugin"));
 
           if (p.plugin != NULL)
           {

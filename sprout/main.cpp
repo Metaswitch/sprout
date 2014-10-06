@@ -90,12 +90,6 @@ extern "C" {
 #include "sproutlet.h"
 #include "sproutletproxy.h"
 #include "pluginloader.h"
-#if 0
-#include "sproutletappserver.h"
-#include "scscfsproutlet.h"
-#include "icscfsproutlet.h"
-#include "bgcfsproutlet.h"
-#endif
 
 enum OptionTypes
 {
@@ -111,59 +105,59 @@ enum OptionTypes
 };
 
 
-  const static struct pj_getopt_option long_opt[] =
-  {
-    { "pcscf",             required_argument, 0, 'p'},
-    { "scscf",             required_argument, 0, 's'},
-    { "icscf",             required_argument, 0, 'i'},
-    { "webrtc-port",       required_argument, 0, 'w'},
-    { "localhost",         required_argument, 0, 'l'},
-    { "domain",            required_argument, 0, 'D'},
-    { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-    { "scscf_uri",         required_argument, 0, 'c'},
-    { "alias",             required_argument, 0, 'n'},
-    { "routing-proxy",     required_argument, 0, 'r'},
-    { "ibcf",              required_argument, 0, 'I'},
-    { "external-icscf",    required_argument, 0, 'j'},
-    { "auth",              required_argument, 0, 'A'},
-    { "realm",             required_argument, 0, 'R'},
-    { "memstore",          required_argument, 0, 'M'},
-    { "remote-memstore",   required_argument, 0, 'm'},
-    { "sas",               required_argument, 0, 'S'},
-    { "hss",               required_argument, 0, 'H'},
-    { "record-routing-model", required_argument, 0, 'C'},
-    { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-    { "xdms",              required_argument, 0, 'X'},
-    { "chronos",           required_argument, 0, 'K'},
-    { "ralf",              required_argument, 0, 'G'},
-    { "enum",              required_argument, 0, 'E'},
-    { "enum-suffix",       required_argument, 0, 'x'},
-    { "enum-file",         required_argument, 0, 'f'},
-    { "enforce-user-phone", no_argument,      0, 'u'},
-    { "enforce-global-only-lookups", no_argument, 0, 'g'},
-    { "reg-max-expires",   required_argument, 0, 'e'},
-    { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
-    { "pjsip-threads",     required_argument, 0, 'P'},
-    { "worker-threads",    required_argument, 0, 'W'},
-    { "analytics",         required_argument, 0, 'a'},
-    { "authentication",    no_argument,       0, 'A'},
-    { "log-file",          required_argument, 0, 'F'},
-    { "http_address",      required_argument, 0, 'T'},
-    { "http_port",         required_argument, 0, 'o'},
-    { "http_threads",      required_argument, 0, 'q'},
-    { "billing-cdf",       required_argument, 0, 'B'},
-    { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
-    { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-    { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
-    { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-    { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
-    { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
-    { "log-level",         required_argument, 0, 'L'},
-    { "daemon",            no_argument,       0, 'd'},
-    { "interactive",       no_argument,       0, 't'},
-    { "help",              no_argument,       0, 'h'},
-    { NULL,                0, 0, 0}
-  };
+const static struct pj_getopt_option long_opt[] =
+{
+  { "pcscf",             required_argument, 0, 'p'},
+  { "scscf",             required_argument, 0, 's'},
+  { "icscf",             required_argument, 0, 'i'},
+  { "webrtc-port",       required_argument, 0, 'w'},
+  { "localhost",         required_argument, 0, 'l'},
+  { "domain",            required_argument, 0, 'D'},
+  { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
+  { "scscf_uri",         required_argument, 0, 'c'},
+  { "alias",             required_argument, 0, 'n'},
+  { "routing-proxy",     required_argument, 0, 'r'},
+  { "ibcf",              required_argument, 0, 'I'},
+  { "external-icscf",    required_argument, 0, 'j'},
+  { "auth",              required_argument, 0, 'A'},
+  { "realm",             required_argument, 0, 'R'},
+  { "memstore",          required_argument, 0, 'M'},
+  { "remote-memstore",   required_argument, 0, 'm'},
+  { "sas",               required_argument, 0, 'S'},
+  { "hss",               required_argument, 0, 'H'},
+  { "record-routing-model", required_argument, 0, 'C'},
+  { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "xdms",              required_argument, 0, 'X'},
+  { "chronos",           required_argument, 0, 'K'},
+  { "ralf",              required_argument, 0, 'G'},
+  { "enum",              required_argument, 0, 'E'},
+  { "enum-suffix",       required_argument, 0, 'x'},
+  { "enum-file",         required_argument, 0, 'f'},
+  { "enforce-user-phone", no_argument,      0, 'u'},
+  { "enforce-global-only-lookups", no_argument, 0, 'g'},
+  { "reg-max-expires",   required_argument, 0, 'e'},
+  { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
+  { "pjsip-threads",     required_argument, 0, 'P'},
+  { "worker-threads",    required_argument, 0, 'W'},
+  { "analytics",         required_argument, 0, 'a'},
+  { "authentication",    no_argument,       0, 'A'},
+  { "log-file",          required_argument, 0, 'F'},
+  { "http_address",      required_argument, 0, 'T'},
+  { "http_port",         required_argument, 0, 'o'},
+  { "http_threads",      required_argument, 0, 'q'},
+  { "billing-cdf",       required_argument, 0, 'B'},
+  { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
+  { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+  { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
+  { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
+  { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
+  { "log-level",         required_argument, 0, 'L'},
+  { "daemon",            no_argument,       0, 'd'},
+  { "interactive",       no_argument,       0, 't'},
+  { "help",              no_argument,       0, 'h'},
+  { NULL,                0, 0, 0}
+};
 
 static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
@@ -900,26 +894,14 @@ public:
   }
 };
 
-/// Unregisters HTTP threads with PJSIP on termination.  PJSIP doesn't actually
-/// need to be called in this case, but we do need to free off the thread
-/// descriptor block that was allocated when the thread was registered.
-void unreg_httpthread_with_pjsip(void* thread_desc)
-{
-  delete (pj_thread_desc*)thread_desc;
-}
-
 /// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
 void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 {
-  //pj_thread_desc* thread_desc = new pj_thread_desc;
   pj_thread_desc thread_desc;
   pj_thread_t *thread = 0;
 
-  //pthread_cleanup_push(unreg_httpthread_with_pjsip, thread_desc);
-
   if (!pj_thread_is_registered())
   {
-    //pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", *thread_desc, &thread);
     pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
@@ -1516,10 +1498,10 @@ int main(int argc, char *argv[])
   // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
 
-  // Unload any dynamically loaded sproutlets by deleting the loader.
+  // Unload any dynamically loaded sproutlets and delete the loader.
+  loader->unload();
   delete loader;
 
-  // Delete any statically loaded sproutlets.
   if (opt.scscf_enabled)
   {
     destroy_subscription();
