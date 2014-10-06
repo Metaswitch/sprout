@@ -9,8 +9,8 @@ TARGET := memento-as.so
 
 TARGET_SOURCES := sproutletappserver.cpp \
                   mementoasplugin.cpp \
+                  cassandra_store.cpp \
                   call_list_store.cpp \
-                  call_list_xml.cpp \
                   mementosaslogger.cpp \
                   call_list_store_processor.cpp \
                   mementoappserver.cpp
@@ -30,7 +30,7 @@ CPPFLAGS += -I${ROOT}/include \
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add memento/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/memento/src
+VPATH = ${ROOT}/modules/memento/src:${ROOT}/modules/cpp-common/src
 
 # Production build:
 #
