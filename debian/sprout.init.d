@@ -98,7 +98,7 @@ get_settings()
         fi
 
         # If the remote cluster settings file exists then start sprout with geo-redundancy enabled
-        [ -f /etc/clearwater/remote_cluster_settings ] && remote_memstore_arg="--remote-memstore /etc/clearwater/remote_cluster_settings"
+        [ -f /etc/clearwater/remote_cluster_settings ] && remote_memstore_arg="--remote-memstore=/etc/clearwater/remote_cluster_settings"
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
@@ -119,19 +119,19 @@ get_settings()
           done
         fi
 
-        [ -z "$enum_server" ] || enum_server_arg="--enum $enum_server"
-        [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix $enum_suffix"
+        [ -z "$enum_server" ] || enum_server_arg="--enum=$enum_server"
+        [ -z "$enum_suffix" ] || enum_suffix_arg="--enum-suffix=$enum_suffix"
         if [ $ENUM_FILE_ENABLED = Y ]
         then
-          [ -z "$enum_file" ] || enum_file_arg="--enum-file $enum_file"
+          [ -z "$enum_file" ] || enum_file_arg="--enum-file=$enum_file"
         fi
 
         if [ $MMTEL_SERVICES_ENABLED = Y ]
         then
-          [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms $xdms_hostname"
+          [ -z "$xdms_hostname" ] || xdms_hostname_arg="--xdms=$xdms_hostname"
         fi
 
-        [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
+        [ -z "$ralf_hostname" ] || ralf_arg="--ralf=$ralf_hostname"
 
         [ "$authentication" != "Y" ] || authentication_arg="--authentication"
 
@@ -162,75 +162,75 @@ do_start()
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
         DAEMON_ARGS="
-                     --domain $home_domain
-                     --localhost $local_ip
-                     --realm $home_domain
-                     --memstore /etc/clearwater/cluster_settings
+                     --domain=$home_domain
+                     --localhost=$local_ip
+                     --realm=$home_domain
+                     --memstore=/etc/clearwater/cluster_settings
                      $remote_memstore_arg
-                     --hss $hs_hostname
-                     --chronos $chronos_hostname
+                     --hss=$hs_hostname
+                     --chronos=$chronos_hostname
                      $xdms_hostname_arg
                      $ralf_arg
                      $enum_server_arg
                      $enum_suffix_arg
                      $enum_file_arg
-                     --sas $sas_server,$NAME@$public_hostname
-                     --pjsip-threads $num_pjsip_threads
-                     --worker-threads $num_worker_threads
-                     --record-routing-model $sprout_rr_level
-                     --default-session-expires $default_session_expires
+                     --sas=$sas_server,$NAME@$public_hostname
+                     --pjsip-threads=$num_pjsip_threads
+                     --worker-threads=$num_worker_threads
+                     --record-routing-model=$sprout_rr_level
+                     --default-session-expires=$default_session_expires
                      $authentication_arg
                      $user_phone_arg
                      $global_only_lookups_arg
                      $memento_enabled_arg
                      $gemini_enabled_arg
-                     -T $local_ip
-                     -o 9888
-                     -a $log_directory
-                     -F $log_directory
-                     -L $log_level"
+                     --http_address=$local_ip
+                     --http_port=9888
+                     --analytics=$log_directory
+                     --log-file=$log_directory
+                     --log-level=$log_level"
 
         # Add alias host names if any are defined.
-        [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias $alias_list"
+        [ -z $alias_list ] || DAEMON_ARGS="$DAEMON_ARGS --alias=$alias_list"
 
         if [ -n "$reg_max_expires" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires $reg_max_expires"
+          DAEMON_ARGS="$DAEMON_ARGS --reg-max-expires=$reg_max_expires"
         fi
 
         if [ -n "$sub_max_expires" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires $sub_max_expires"
+          DAEMON_ARGS="$DAEMON_ARGS --sub-max-expires=$sub_max_expires"
         fi
 
         if [ -n "$memento_threads" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --memento-threads $memento_threads"
+          DAEMON_ARGS="$DAEMON_ARGS --memento-threads=$memento_threads"
         fi
 
         if [ -n "$max_call_list_length" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length $max_call_list_length"
+          DAEMON_ARGS="$DAEMON_ARGS --max-call-list-length=$max_call_list_length"
         fi
 
         if [ -n "$call_list_ttl" ]
         then
-          DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl $call_list_ttl"
+          DAEMON_ARGS="$DAEMON_ARGS --call-list-ttl=$call_list_ttl"
         fi
 
         # Only add the icscf and scscf arguments if they're not 0
         if [ -n "$scscf" ] && [ ! $scscf = 0 ]
         then
           # S-CSCF function is enabled, so add S-CSCF specific parameters
-          DAEMON_ARGS="$DAEMON_ARGS --scscf $scscf"
+          DAEMON_ARGS="$DAEMON_ARGS --scscf=$scscf"
 
-          [ -z "$icscf_uri" ] || DAEMON_ARGS="$DAEMON_ARGS --external-icscf $icscf_uri"
+          [ -z "$icscf_uri" ] || DAEMON_ARGS="$DAEMON_ARGS --external-icscf=$icscf_uri"
 
           if [ -n "$scscf_uri" ]
           then
-            DAEMON_ARGS="$DAEMON_ARGS --scscf_uri $scscf_uri"
+            DAEMON_ARGS="$DAEMON_ARGS --scscf_uri=$scscf_uri"
           else
-            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf_uri sip:$sprout_hostname:$scscf;transport=TCP"
+            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf_uri=sip:$sprout_hostname:$scscf;transport=TCP"
           fi
 
         fi
@@ -238,10 +238,10 @@ do_start()
         if [ -n "$icscf" ] && [ ! $icscf = 0 ]
         then
           # I-CSCF function is enabled
-          DAEMON_ARGS="$DAEMON_ARGS --icscf $icscf"
+          DAEMON_ARGS="$DAEMON_ARGS --icscf=$icscf"
         fi
 
-        [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
+        [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains=$additional_home_domains"
 
         start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
