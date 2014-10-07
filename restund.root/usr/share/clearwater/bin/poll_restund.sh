@@ -46,7 +46,7 @@ sleep 5
 # Send the STUN message.  The nc line also includes checking the first line of the response starts
 # "\x01\x01" - a positive response.
 printf '\x00\x01\x00\x00\x21\x12\xa4\x42MonitPollXid' |
-nc -v -C -u -w 2 $local_ip 3478 2> /tmp/poll_restund.sh.nc.stderr.$$ | tee /tmp/poll_restund.sh.nc.stdout.$$ | head -1 | grep -U -P -q '^\x01\x01'
+nc -v -C -u -w 2 -q 1 $local_ip 3478 2> /tmp/poll_restund.sh.nc.stderr.$$ | tee /tmp/poll_restund.sh.nc.stdout.$$ | head -1 | grep -U -P -q '^\x01\x01'
 rc=$?
 
 # Check the return code and log if appropriate
