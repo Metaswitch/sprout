@@ -1334,12 +1334,29 @@ int main(int argc, char *argv[])
     {
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
-      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+      MemcachedStore* mstore = new MemcachedStore(false, opt.store_servers);
+
+      if (!mstore->has_servers())
+      {
+	LOG_ERROR("Memcached cluster settings file '%s' does not contain a valid set of servers", opt.store_servers.c_str());
+	return 1;
+      };
+
+      local_data_store = (Store*)mstore;
+
       if (opt.remote_store_servers != "")
       {
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+	mstore = new MemcachedStore(false, opt.remote_store_servers);
+
+	if (!mstore->has_servers())
+	{
+	  LOG_ERROR("Memcached remote cluster settings file '%s' does not contain a valid set of servers", opt.store_servers.c_str());
+	  return 1;
+	};
+
+        remote_data_store = (Store*)mstore;
       }
     }
     else
