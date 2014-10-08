@@ -165,7 +165,7 @@ static sem_t term_sem;
 
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
-QuiescingManager *quiescing_mgr;
+QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -279,7 +279,7 @@ static void usage(void)
        " -d, --daemon               Run as daemon\n"
        " -t, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
-    );
+      );
 }
 
 
@@ -298,7 +298,7 @@ int parse_port(const std::string& port_str)
 }
 
 
-static pj_status_t init_logging_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -336,7 +336,7 @@ static pj_status_t init_logging_options(int argc, char *argv[], struct options *
   return PJ_SUCCESS;
 }
 
-static pj_status_t init_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -604,7 +604,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       {
         options->reg_max_expires = reg_max_expires;
         LOG_INFO("Maximum registration period set to %d seconds\n",
-                options->reg_max_expires);
+                 options->reg_max_expires);
       }
       else
       {
@@ -772,11 +772,17 @@ int daemonize()
 
   // Redirect standard files to /dev/null
   if (freopen("/dev/null", "r", stdin) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stdout) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stderr) == NULL)
+  {
     return errno;
+  }
 
   if (setsid() == -1)
   {
@@ -839,16 +845,17 @@ void terminate_handler(int sig)
 }
 
 
-void *quiesce_unquiesce_thread_func(void *dummy)
+void* quiesce_unquiesce_thread_func(void* dummy)
 {
-   // First register the thread with PJSIP.
+  // First register the thread with PJSIP.
   pj_thread_desc desc;
-  pj_thread_t *thread;
+  pj_thread_t* thread;
   pj_status_t status;
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
-  if (status != PJ_SUCCESS) {
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
               "This function will not be available",
               status);
@@ -865,9 +872,12 @@ void *quiesce_unquiesce_thread_func(void *dummy)
     {
       curr_quiescing = new_quiescing;
 
-      if (new_quiescing) {
+      if (new_quiescing)
+      {
         quiescing_mgr->quiesce();
-      } else {
+      }
+      else
+      {
         quiescing_mgr->unquiesce();
       }
     }
@@ -895,10 +905,10 @@ public:
 };
 
 /// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
-void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+void reg_httpthread_with_pjsip(evhtp_t* htp, evthr_t* httpthread, void* arg)
 {
   pj_thread_desc thread_desc;
-  pj_thread_t *thread = 0;
+  pj_thread_t* thread = 0;
 
   if (!pj_thread_is_registered())
   {
@@ -927,7 +937,7 @@ EnumService* enum_service = NULL;
 /*
  * main()
  */
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
   pj_status_t status;
   struct options opt;
@@ -1040,7 +1050,8 @@ int main(int argc, char *argv[])
     // Work out the program name from argv[0], stripping anything before the final slash.
     char* prog_name = argv[0];
     char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL) {
+    if (slash_ptr != NULL)
+    {
       prog_name = slash_ptr + 1;
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
@@ -1160,7 +1171,7 @@ int main(int argc, char *argv[])
 
   if ((opt.memento_enabled) &&
       ((opt.max_call_list_length == 0) &&
-      (opt.call_list_ttl == 0)))
+       (opt.call_list_ttl == 0)))
   {
     LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
     return 1;
@@ -1460,11 +1471,11 @@ int main(int argc, char *argv[])
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
       http_stack->register_handler("^/timers$",
-                                      &reg_timeout_handler);
+                                   &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
-                                      &auth_timeout_handler);
+                                   &auth_timeout_handler);
       http_stack->register_handler("^/registrations?*$",
-                                      &deregistration_handler);
+                                   &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
