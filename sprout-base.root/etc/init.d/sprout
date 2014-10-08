@@ -84,6 +84,7 @@ get_settings()
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
         scscf=5054
+        target_latency_us=100000
         alias_list=""
         default_session_expires=600
         . /etc/clearwater/config
@@ -179,6 +180,7 @@ do_start()
                      --worker-threads $num_worker_threads
                      --record-routing-model $sprout_rr_level
                      --default-session-expires $default_session_expires
+                     --target-latency-us $target_latency_us
                      $authentication_arg
                      $user_phone_arg
                      $global_only_lookups_arg
