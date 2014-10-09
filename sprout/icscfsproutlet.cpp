@@ -174,7 +174,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
     impi = impu.substr(4);
   }
 
-  // Get the visted network identification if present.  If not, warn
+  // Get the visited network identification if present.  If not, warn
   // (because a spec-compliant P-CSCF should default it) and use a
   // sensible default.
   pjsip_generic_string_hdr* vn_hdr =
@@ -190,7 +190,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Use the domain of the IMPU as the visited network.
     visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
-    LOG_WARNING("P-Visited-Network-ID not found in REGISTER - using %s as a default", visited_network.c_str());
+    LOG_WARNING("No P-Visited-Network-ID in REGISTER - using %s as a default",
+                visited_network.c_str());
   }
 
   // Work out what authorization type to use by looking at the expiry
