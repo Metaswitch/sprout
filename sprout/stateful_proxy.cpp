@@ -1294,6 +1294,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
                                                   PJUtils::Integrity::IP_ASSOC_YES);
     }
 
+    PJUtils::add_pvni(tdata, &stack_data.default_home_domain);
+
     // Add a path header so we get included in the egress call flow.  If we're not
     // acting as access proxy, we'll add the bono cluster instead.
     status = add_path(tdata, src_flow, rdata);
