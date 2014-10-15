@@ -1305,6 +1305,7 @@ TEST_F(SproutletProxyTest, SproutletDelayRedirect)
   delete tp;
 }
 
+
 TEST_F(SproutletProxyTest, SproutletErrors)
 {
   // Tests error handling in SproutletProxy.
@@ -1342,7 +1343,7 @@ TEST_F(SproutletProxyTest, SproutletErrors)
 
 TEST_F(SproutletProxyTest, UnrecognisedSproutlet)
 {
-  // Tests error handling in SproutletProxy.
+  // Tests SproutletProxy handling of requests to an unrecognised sproutlet.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the listening port.
@@ -1492,7 +1493,5 @@ TEST_F(SproutletProxyTest, UASError)
   req.clear();
   ASSERT_EQ(0, txdata_count());
 }
-
-
 
 

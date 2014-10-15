@@ -762,7 +762,6 @@ void SproutletProxy::UASTsx::schedule_requests()
       // No local Sproutlet, proxy the request.
       LOG_DEBUG("No local sproutlet matches request");
       size_t index;
-      PJUtils::add_top_via(req.req);
 
       pj_status_t status = allocate_uac(req.req, index);
 

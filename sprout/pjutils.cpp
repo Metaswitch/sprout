@@ -1524,6 +1524,16 @@ void PJUtils::add_top_via(pjsip_tx_data* tdata)
   generate_new_branch_id(tdata);
 }
 
+void PJUtils::remove_top_via(pjsip_tx_data* tdata)
+{
+  // Removes the top Via header.
+  pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+  if (hvia != NULL)
+  {
+    pj_list_erase(hvia);
+  }
+}
+
 void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)
 {
   char reason_val_str[100];
