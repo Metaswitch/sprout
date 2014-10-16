@@ -904,15 +904,24 @@ public:
   }
 };
 
-/// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
-void reg_httpthread_with_pjsip(evhtp_t* htp, evthr_t* httpthread, void* arg)
-{
-  pj_thread_desc thread_desc;
-  pj_thread_t* thread = 0;
 
+/// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
+void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
+{
   if (!pj_thread_is_registered())
   {
-    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+    // The thread descriptor must stay in scope for the lifetime of the thread
+    // so we must allocate it from heap.  However, this will leak because
+    // there is no way of freeing it when the thread terminates (HttpStack
+    // does not support a thread termination callback and pthread_cleanup_push
+    // won't work in this case).  This is okay for now because HttpStack
+    // just creates a pool of threads at start of day.
+    pj_thread_desc* td = (pj_thread_desc*)malloc(sizeof(pj_thread_desc));
+    pj_thread_t *thread = 0;
+
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread",
+                                                       *td,
+                                                       &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
     {
