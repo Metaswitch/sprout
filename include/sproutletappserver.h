@@ -68,6 +68,9 @@ public:
   /// transaction.
   void store_onward_route(pjsip_msg* req);
 
+  /// Stores the dialog_id from the top Route header, if it is present.
+  void store_dialog_id(pjsip_msg* req);
+
   /// Returns a mutable clone of the original request.  This can be modified
   /// and sent by the application using the send_request call.
   ///
