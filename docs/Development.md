@@ -28,7 +28,7 @@ On Ubuntu 12.04,
 
 3.  install the required packages
 
-        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl0 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils rubygems libevent-dev libevent-pthreads-2.0-5 cmake
+        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl0 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils rubygems libevent-dev libevent-pthreads-2.0-5 cmake flex bison
 
 ## Getting the Code
 
@@ -130,5 +130,5 @@ The sprout makefile offers the following additional options and targets.
 To run sprout on the machine it was built on, change to the top-level `sprout` directory and then run the following command. Note that you will need to enable either S-CSCF, I-CSCF or P-CSCF, and provide a [Homestead](https://github.com/Metaswitch/homestead) server/cluster and a [Chronos](https://github.com/Metaswitch/chronos) host.
 
     LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t -s 5054 -H <homestead.server> -K localhost:7253
-    
+
 For all command-line options, use the `-h` option.
