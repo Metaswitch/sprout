@@ -34,6 +34,7 @@
 * as those licenses appear in the file LICENSE-OPENSSL.
 */
 
+#include <sys/stat.h>
 #include <json/reader.h>
 #include <fstream>
 #include <stdlib.h>
@@ -60,9 +61,20 @@ void SCSCFSelector::update_scscf()
   std::string jsonData;
   std::ifstream file;
 
-  LOG_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
-
   std::vector<scscf_t> new_scscfs;
+
+  // Check whether the file exists.
+  struct stat s;
+  if ((stat(_configuration.c_str(), &s) != 0) &&
+      (errno == ENOENT))
+  {
+    LOG_STATUS("No S-CSCF configuration data (file %s does not exist)",
+               _configuration.c_str());
+    return;
+  }
+
+  // The file exists so try to open it.
+  LOG_STATUS("Loading S-CSCF configuration from %s", _configuration.c_str());
 
   file.open(_configuration.c_str());
   if (file.is_open())
@@ -126,7 +138,9 @@ void SCSCFSelector::update_scscf()
   }
   else
   {
+    //LCOV_EXCL_START
     LOG_WARNING("Failed to read S-CSCF configuration data %d", file.rdstate());
+    //LCOV_EXCL_STOP
   }
 }
 
@@ -231,7 +245,8 @@ std::string SCSCFSelector::get_scscf(const std::vector<int> &mandatory,
   // If there's only one match, then return its name.
   if (matches.empty())
   {
-    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities");
+    LOG_WARNING("There are no configured S-CSCFs that have the requested mandatory capabilities (%s)",
+                mandatory_str.c_str());
 
     SAS::Event event(trail, SASEvent::SCSCF_NONE_VALID, 0);
     event.add_var_param(mandatory_str);

@@ -242,8 +242,6 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 // Helper functions.
 static int compare_sip_sc(int sc1, int sc2);
 static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
-static pj_bool_t is_user_numeric(const std::string& user);
-static pj_bool_t is_user_global(const std::string& user);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -1296,6 +1294,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
                                                   PJUtils::Integrity::IP_ASSOC_YES);
     }
 
+    PJUtils::add_pvni(tdata, &stack_data.default_home_domain);
+
     // Add a path header so we get included in the egress call flow.  If we're not
     // acting as access proxy, we'll add the bono cluster instead.
     status = add_path(tdata, src_flow, rdata);
@@ -2034,12 +2034,12 @@ static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trai
 
   // Check whether we have a global number or whether we allow
   // ENUM lookups for local numbers
-  if (is_user_global(user) || !global_only_lookups)
+  if (PJUtils::is_user_global(user) || !global_only_lookups)
   {
     // Perform an ENUM lookup if we have a tel URI, or if we have
     // a SIP URI which is being treated as a phone number
     if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
-        (!user_phone && is_user_numeric(user)))
+        (!user_phone && PJUtils::is_user_numeric(user)))
     {
       LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       uri = enum_service->lookup_uri_from_user(user, trail);
@@ -4870,34 +4870,6 @@ static pj_bool_t is_uri_routeable(const pjsip_uri* uri)
   return PJ_FALSE;
 }
 
-
-/// Determines whether a user string is purely numeric (maybe with a leading +).
-// @returns PJ_TRUE if so, PJ_FALSE if not.
-static pj_bool_t is_user_numeric(const std::string& user)
-{
-  for (size_t i = 0; i < user.size(); i++)
-  {
-    if ((!isdigit(user[i])) &&
-        ((user[i] != '+') || (i != 0)))
-    {
-      return PJ_FALSE;
-    }
-  }
-  return PJ_TRUE;
-}
-
-// Determines whether a user string represents a global number.
-//
-// @returns PJ_TRUE if so, PJ_FALSE if not.
-static pj_bool_t is_user_global(const std::string& user)
-{
-  if (user.size() > 0 && user[0] == '+')
-  {
-    return PJ_TRUE;
-  }
-
-  return PJ_FALSE;
-}
 
 /// Adds a Path header when functioning as an edge proxy.
 ///

@@ -51,7 +51,7 @@ Note that the first build can take a long time - up to an hour on a slow
 machine. It takes 20-30 minutes on an EC2 m1.medium instance.
 
 To build sprout and all its dependencies, change to the top-level `sprout`
-directory and issue `make all`.  Both the sprout and bono functions are
+directory and issue `make`.  Both the sprout and bono functions are
 provided by the same "sprout" binary - command-line parameters control which
 behavior the binary performs.
 

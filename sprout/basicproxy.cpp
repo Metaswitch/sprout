@@ -1362,7 +1362,10 @@ void BasicProxy::UASTsx::dissociate(UACTsx* uac_tsx)
 {
   LOG_DEBUG("Dissociate UAC transaction %p for target %d", uac_tsx, uac_tsx->_index);
   uac_tsx->_uas_tsx = NULL;
-  _uac_tsx[uac_tsx->_index] = NULL;
+  if (_uac_tsx.size() > (size_t)uac_tsx->_index)
+  {
+    _uac_tsx[uac_tsx->_index] = NULL;
+  }
 }
 
 
@@ -1716,6 +1719,7 @@ void BasicProxy::UACTsx::cancel_pending_tsx(int st_code)
           // Set up the PJSIP transaction user module data on the cancel
           // transaction to refer to this UACTsx object.
           _proxy->bind_transaction(this, _cancel_tsx);
+          set_trail(_cancel_tsx, _trail);
 
           // Send the CANCEL on the new transaction.
           status = pjsip_tsx_send_msg(_cancel_tsx, cancel);

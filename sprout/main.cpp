@@ -60,6 +60,7 @@ extern "C" {
 #include "ipv6utils.h"
 #include "logger.h"
 #include "utils.h"
+#include "cfgoptions.h"
 #include "sasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
@@ -87,14 +88,8 @@ extern "C" {
 #include "handlers.h"
 #include "httpstack.h"
 #include "sproutlet.h"
-#include "sproutletappserver.h"
 #include "sproutletproxy.h"
-#include "scscfsproutlet.h"
-#include "icscfsproutlet.h"
-#include "bgcfsproutlet.h"
-#include "mobiletwinned.h"
-#include "mementoappserver.h"
-#include "call_list_store.h"
+#include "pluginloader.h"
 
 enum OptionTypes
 {
@@ -109,123 +104,60 @@ enum OptionTypes
   OPT_GEMINI_ENABLED
 };
 
-struct options
-{
-  bool                   pcscf_enabled;
-  int                    pcscf_untrusted_port;
-  int                    pcscf_trusted_port;
-  int                    webrtc_port;
-  std::string            upstream_proxy;
-  int                    upstream_proxy_port;
-  int                    upstream_proxy_connections;
-  int                    upstream_proxy_recycle;
-  pj_bool_t              ibcf;
-  bool                   scscf_enabled;
-  int                    scscf_port;
-  bool                   icscf_enabled;
-  int                    icscf_port;
-  std::string            external_icscf_uri;
-  int                    record_routing_model;
-  int                    default_session_expires;
-  std::string            local_host;
-  std::string            public_host;
-  std::string            home_domain;
-  std::string            additional_home_domains;
-  std::string            scscf_uri;
-  std::string            alias_hosts;
-  std::string            trusted_hosts;
-  pj_bool_t              auth_enabled;
-  std::string            auth_realm;
-  std::string            auth_config;
-  std::string            sas_server;
-  std::string            sas_system_name;
-  std::string            hss_server;
-  std::string            xdm_server;
-  std::string            chronos_service;
-  std::string            store_servers;
-  std::string            remote_store_servers;
-  std::string            ralf_server;
-  std::string            enum_server;
-  std::string            enum_suffix;
-  std::string            enum_file;
-  bool                   enforce_user_phone;
-  bool                   enforce_global_only_lookups;
-  pj_bool_t              analytics_enabled;
-  std::string            analytics_directory;
-  int                    reg_max_expires;
-  int                    sub_max_expires;
-  int                    pjsip_threads;
-  std::string            http_address;
-  int                    http_port;
-  int                    http_threads;
-  std::string            billing_cdf;
-  pj_bool_t              emerg_reg_accepted;
-  int                    max_call_list_length;
-  int                    memento_threads;
-  int                    call_list_ttl;
-  pj_bool_t              memento_enabled;
-  pj_bool_t              gemini_enabled;
-  int                    worker_threads;
-  pj_bool_t              log_to_file;
-  std::string            log_directory;
-  int                    log_level;
-  pj_bool_t              interactive;
-  pj_bool_t              daemon;
-};
 
-  const static struct pj_getopt_option long_opt[] =
-  {
-    { "pcscf",             required_argument, 0, 'p'},
-    { "scscf",             required_argument, 0, 's'},
-    { "icscf",             required_argument, 0, 'i'},
-    { "webrtc-port",       required_argument, 0, 'w'},
-    { "localhost",         required_argument, 0, 'l'},
-    { "domain",            required_argument, 0, 'D'},
-    { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-    { "scscf_uri",         required_argument, 0, 'c'},
-    { "alias",             required_argument, 0, 'n'},
-    { "routing-proxy",     required_argument, 0, 'r'},
-    { "ibcf",              required_argument, 0, 'I'},
-    { "external-icscf",    required_argument, 0, 'j'},
-    { "auth",              required_argument, 0, 'A'},
-    { "realm",             required_argument, 0, 'R'},
-    { "memstore",          required_argument, 0, 'M'},
-    { "remote-memstore",   required_argument, 0, 'm'},
-    { "sas",               required_argument, 0, 'S'},
-    { "hss",               required_argument, 0, 'H'},
-    { "record-routing-model", required_argument, 0, 'C'},
-    { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-    { "xdms",              required_argument, 0, 'X'},
-    { "chronos",           required_argument, 0, 'K'},
-    { "ralf",              required_argument, 0, 'G'},
-    { "enum",              required_argument, 0, 'E'},
-    { "enum-suffix",       required_argument, 0, 'x'},
-    { "enum-file",         required_argument, 0, 'f'},
-    { "enforce-user-phone", no_argument,      0, 'u'},
-    { "enforce-global-only-lookups", no_argument, 0, 'g'},
-    { "reg-max-expires",   required_argument, 0, 'e'},
-    { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
-    { "pjsip-threads",     required_argument, 0, 'P'},
-    { "worker-threads",    required_argument, 0, 'W'},
-    { "analytics",         required_argument, 0, 'a'},
-    { "authentication",    no_argument,       0, 'A'},
-    { "log-file",          required_argument, 0, 'F'},
-    { "http_address",      required_argument, 0, 'T'},
-    { "http_port",         required_argument, 0, 'o'},
-    { "http_threads",      required_argument, 0, 'q'},
-    { "billing-cdf",       required_argument, 0, 'B'},
-    { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
-    { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-    { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
-    { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-    { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
-    { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
-    { "log-level",         required_argument, 0, 'L'},
-    { "daemon",            no_argument,       0, 'd'},
-    { "interactive",       no_argument,       0, 't'},
-    { "help",              no_argument,       0, 'h'},
-    { NULL,                0, 0, 0}
-  };
+const static struct pj_getopt_option long_opt[] =
+{
+  { "pcscf",             required_argument, 0, 'p'},
+  { "scscf",             required_argument, 0, 's'},
+  { "icscf",             required_argument, 0, 'i'},
+  { "webrtc-port",       required_argument, 0, 'w'},
+  { "localhost",         required_argument, 0, 'l'},
+  { "domain",            required_argument, 0, 'D'},
+  { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
+  { "scscf_uri",         required_argument, 0, 'c'},
+  { "alias",             required_argument, 0, 'n'},
+  { "routing-proxy",     required_argument, 0, 'r'},
+  { "ibcf",              required_argument, 0, 'I'},
+  { "external-icscf",    required_argument, 0, 'j'},
+  { "auth",              required_argument, 0, 'A'},
+  { "realm",             required_argument, 0, 'R'},
+  { "memstore",          required_argument, 0, 'M'},
+  { "remote-memstore",   required_argument, 0, 'm'},
+  { "sas",               required_argument, 0, 'S'},
+  { "hss",               required_argument, 0, 'H'},
+  { "record-routing-model", required_argument, 0, 'C'},
+  { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "xdms",              required_argument, 0, 'X'},
+  { "chronos",           required_argument, 0, 'K'},
+  { "ralf",              required_argument, 0, 'G'},
+  { "enum",              required_argument, 0, 'E'},
+  { "enum-suffix",       required_argument, 0, 'x'},
+  { "enum-file",         required_argument, 0, 'f'},
+  { "enforce-user-phone", no_argument,      0, 'u'},
+  { "enforce-global-only-lookups", no_argument, 0, 'g'},
+  { "reg-max-expires",   required_argument, 0, 'e'},
+  { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
+  { "pjsip-threads",     required_argument, 0, 'P'},
+  { "worker-threads",    required_argument, 0, 'W'},
+  { "analytics",         required_argument, 0, 'a'},
+  { "authentication",    no_argument,       0, 'A'},
+  { "log-file",          required_argument, 0, 'F'},
+  { "http_address",      required_argument, 0, 'T'},
+  { "http_port",         required_argument, 0, 'o'},
+  { "http_threads",      required_argument, 0, 'q'},
+  { "billing-cdf",       required_argument, 0, 'B'},
+  { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
+  { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+  { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
+  { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
+  { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
+  { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
+  { "log-level",         required_argument, 0, 'L'},
+  { "daemon",            no_argument,       0, 'd'},
+  { "interactive",       no_argument,       0, 't'},
+  { "help",              no_argument,       0, 'h'},
+  { NULL,                0, 0, 0}
+};
 
 static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
@@ -233,7 +165,7 @@ static sem_t term_sem;
 
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
-QuiescingManager *quiescing_mgr;
+QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -347,7 +279,7 @@ static void usage(void)
        " -d, --daemon               Run as daemon\n"
        " -t, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
-    );
+      );
 }
 
 
@@ -366,7 +298,7 @@ int parse_port(const std::string& port_str)
 }
 
 
-static pj_status_t init_logging_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -404,7 +336,7 @@ static pj_status_t init_logging_options(int argc, char *argv[], struct options *
   return PJ_SUCCESS;
 }
 
-static pj_status_t init_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -672,7 +604,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       {
         options->reg_max_expires = reg_max_expires;
         LOG_INFO("Maximum registration period set to %d seconds\n",
-                options->reg_max_expires);
+                 options->reg_max_expires);
       }
       else
       {
@@ -840,11 +772,17 @@ int daemonize()
 
   // Redirect standard files to /dev/null
   if (freopen("/dev/null", "r", stdin) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stdout) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stderr) == NULL)
+  {
     return errno;
+  }
 
   if (setsid() == -1)
   {
@@ -907,16 +845,17 @@ void terminate_handler(int sig)
 }
 
 
-void *quiesce_unquiesce_thread_func(void *dummy)
+void* quiesce_unquiesce_thread_func(void* dummy)
 {
-   // First register the thread with PJSIP.
+  // First register the thread with PJSIP.
   pj_thread_desc desc;
-  pj_thread_t *thread;
+  pj_thread_t* thread;
   pj_status_t status;
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
-  if (status != PJ_SUCCESS) {
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
               "This function will not be available",
               status);
@@ -933,9 +872,12 @@ void *quiesce_unquiesce_thread_func(void *dummy)
     {
       curr_quiescing = new_quiescing;
 
-      if (new_quiescing) {
+      if (new_quiescing)
+      {
         quiescing_mgr->quiesce();
-      } else {
+      }
+      else
+      {
         quiescing_mgr->unquiesce();
       }
     }
@@ -962,25 +904,24 @@ public:
   }
 };
 
-/// Unregisters HTTP threads with PJSIP on termination.  PJSIP doesn't actually
-/// need to be called in this case, but we do need to free off the thread
-/// descriptor block that was allocated when the thread was registered.
-void unreg_httpthread_with_pjsip(void* thread_desc)
-{
-  delete (pj_thread_desc*)thread_desc;
-}
 
 /// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
 void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 {
-  pj_thread_desc* thread_desc = new pj_thread_desc;
-  pj_thread_t *thread = 0;
-
-  pthread_cleanup_push(unreg_httpthread_with_pjsip, thread_desc);
-
   if (!pj_thread_is_registered())
   {
-    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", *thread_desc, &thread);
+    // The thread descriptor must stay in scope for the lifetime of the thread
+    // so we must allocate it from heap.  However, this will leak because
+    // there is no way of freeing it when the thread terminates (HttpStack
+    // does not support a thread termination callback and pthread_cleanup_push
+    // won't work in this case).  This is okay for now because HttpStack
+    // just creates a pool of threads at start of day.
+    pj_thread_desc* td = (pj_thread_desc*)malloc(sizeof(pj_thread_desc));
+    pj_thread_t *thread = 0;
+
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread",
+                                                       *td,
+                                                       &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
     {
@@ -989,40 +930,39 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
   }
 }
 
+
+// Objects that must be shared with dynamically linked sproutlets must be
+// globally scoped.
+LoadMonitor* load_monitor = NULL;
+HSSConnection* hss_connection = NULL;
+RegStore* local_reg_store = NULL;
+RegStore* remote_reg_store = NULL;
+HttpConnection* ralf_connection = NULL;
+HttpResolver* http_resolver = NULL;
+ACRFactory* scscf_acr_factory = NULL;
+EnumService* enum_service = NULL;
+
+
 /*
  * main()
  */
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
   pj_status_t status;
   struct options opt;
 
-  HSSConnection* hss_connection = NULL;
-  XDMConnection* xdm_connection = NULL;
   Logger* analytics_logger_logger = NULL;
   AnalyticsLogger* analytics_logger = NULL;
-  EnumService* enum_service = NULL;
-  BgcfService* bgcf_service = NULL;
   pthread_t quiesce_unquiesce_thread;
-  LoadMonitor* load_monitor = NULL;
   DnsCachedResolver* dns_resolver = NULL;
   SIPResolver* sip_resolver = NULL;
-  HttpResolver* http_resolver = NULL;
   Store* local_data_store = NULL;
   Store* remote_data_store = NULL;
-  RegStore* local_reg_store = NULL;
-  RegStore* remote_reg_store = NULL;
   AvStore* av_store = NULL;
-  SCSCFSelector* scscf_selector = NULL;
   ChronosConnection* chronos_connection = NULL;
-  HttpConnection* ralf_connection = NULL;
-  ACRFactory* scscf_acr_factory = NULL;
-  ACRFactory* bgcf_acr_factory = NULL;
-  ACRFactory* icscf_acr_factory = NULL;
   ACRFactory* pcscf_acr_factory = NULL;
   pj_bool_t websockets_enabled = PJ_FALSE;
   AccessLogger* access_logger = NULL;
-  CallListStore::Store* call_list_store = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
 
@@ -1119,7 +1059,8 @@ int main(int argc, char *argv[])
     // Work out the program name from argv[0], stripping anything before the final slash.
     char* prog_name = argv[0];
     char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL) {
+    if (slash_ptr != NULL)
+    {
       prog_name = slash_ptr + 1;
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
@@ -1231,8 +1172,6 @@ int main(int argc, char *argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-    scscf_selector = new SCSCFSelector();
-
   if ((!opt.enum_server.empty()) &&
       (!opt.enum_file.empty()))
   {
@@ -1241,7 +1180,7 @@ int main(int argc, char *argv[])
 
   if ((opt.memento_enabled) &&
       ((opt.max_call_list_length == 0) &&
-      (opt.call_list_ttl == 0)))
+       (opt.call_list_ttl == 0)))
   {
     LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
     return 1;
@@ -1317,33 +1256,17 @@ int main(int argc, char *argv[])
                                        stack_data.stats_aggregator);
   }
 
-  if (ralf_connection != NULL)
+  if (opt.scscf_enabled)
   {
-    // Rf billing is enabled, so create ACR factories.
-    if (opt.scscf_enabled)
+    // Create ENUM service required for S-CSCF.
+    if (!opt.enum_server.empty())
     {
-      // Create ACRFactory instances for the S-CSCF and BGCF.
-      scscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF);
-      bgcf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF);
+      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
     }
-    if (opt.icscf_enabled)
+    else if (!opt.enum_file.empty())
     {
-      // Create ACRFactory instance for the I-CSCF.
-      icscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, ICSCF);
+      enum_service = new JSONEnumService(opt.enum_file);
     }
-    if (opt.pcscf_enabled)
-    {
-      // Create ACRFactory instance for the P-CSCF.
-      pcscf_acr_factory = (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF);
-    }
-  }
-  else
-  {
-    // Ralf is not enabled, so create a null ACRFactory for all components.
-    scscf_acr_factory = new ACRFactory();
-    bgcf_acr_factory = new ACRFactory();
-    icscf_acr_factory = new ACRFactory();
-    pcscf_acr_factory = new ACRFactory();
   }
 
   if (opt.chronos_service != "")
@@ -1369,6 +1292,11 @@ int main(int argc, char *argv[])
 
   if (opt.pcscf_enabled)
   {
+    // Create an ACR factory for the P-CSCF.
+    pcscf_acr_factory = (ralf_connection != NULL) ?
+                (ACRFactory*)new RalfACRFactory(ralf_connection, PCSCF) :
+                new ACRFactory();
+
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
                                  NULL,
@@ -1418,6 +1346,10 @@ int main(int argc, char *argv[])
 
   if (opt.scscf_enabled)
   {
+    scscf_acr_factory = (ralf_connection != NULL) ?
+                      (ACRFactory*)new RalfACRFactory(ralf_connection, SCSCF) :
+                      new ACRFactory();
+
     if (opt.store_servers != "")
     {
       // Use memcached store.
@@ -1447,16 +1379,6 @@ int main(int argc, char *argv[])
     local_reg_store = new RegStore(local_data_store, chronos_connection);
     remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
 
-    if (opt.xdm_server != "")
-    {
-      // Create a connection to the XDMS.
-      LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-      xdm_connection = new XDMConnection(opt.xdm_server,
-                                         http_resolver,
-                                         load_monitor,
-                                         stack_data.stats_aggregator);
-    }
-
     if (opt.auth_enabled)
     {
       // Create an AV store using the local store and initialise the authentication
@@ -1472,17 +1394,6 @@ int main(int argc, char *argv[])
                                    scscf_acr_factory,
                                    analytics_logger);
     }
-
-    // Create Enum and BGCF services required for S-CSCF.
-    if (!opt.enum_server.empty())
-    {
-      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
-    }
-    else if (!opt.enum_file.empty())
-    {
-      enum_service = new JSONEnumService(opt.enum_file);
-    }
-    bgcf_service = new BgcfService();
 
     // Launch the registrar.
     status = init_registrar(local_reg_store,
@@ -1511,146 +1422,11 @@ int main(int argc, char *argv[])
       LOG_ERROR("Failed to enable subscription module");
       return 1;
     }
-
-    // Create the S-CSCF and BGCF Sproutlets.
-    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr, stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
-    std::string icscf_uri;
-    if (opt.icscf_enabled)
-    {
-      // Create a local I-CSCF URI by replacing the S-CSCF port number in the
-      // S-CSCF URI with the I-CSCF port number.
-      icscf_uri = scscf_uri;
-      size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
-
-      if (pos != std::string::npos)
-      {
-        icscf_uri.replace(pos,
-                          std::to_string(opt.scscf_port).length(),
-                          std::to_string(opt.icscf_port));
-      }
-      else
-      {
-        // No port number, so best we can do is strap icscf. on the front.
-        icscf_uri = "sip:icscf." + scscf_uri.substr(4);
-      }
-    }
-    else
-    {
-      icscf_uri = opt.external_icscf_uri;
-    }
-
-    SCSCFSproutlet* scscf_sproutlet =
-                      new SCSCFSproutlet(scscf_uri,
-                                         icscf_uri,
-                                         bgcf_uri,
-                                         opt.scscf_port,
-                                         local_reg_store,
-                                         remote_reg_store,
-                                         hss_connection,
-                                         enum_service,
-                                         scscf_acr_factory,
-                                         opt.enforce_user_phone,
-                                         opt.enforce_global_only_lookups);
-    if (scscf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create S-CSCF Sproutlet");
-      return 1;
-    }
-    sproutlets.push_back(scscf_sproutlet);
-
-    BGCFSproutlet* bgcf_sproutlet = new BGCFSproutlet(0,
-                                                      bgcf_service,
-                                                      bgcf_acr_factory);
-    if (bgcf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create BGCF Sproutlet");
-      return 1;
-    }
-
-    sproutlets.push_back(bgcf_sproutlet);
   }
 
-  if (opt.icscf_enabled)
-  {
-    // Create the S-CSCF selector.
-    scscf_selector = new SCSCFSelector();
-    if (scscf_selector == NULL)
-    {
-      LOG_ERROR("Failed to create S-CSCF selector");
-      return 1;
-    }
-
-    // Create the I-CSCF sproutlet.
-    ICSCFSproutlet* icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
-                                                         hss_connection,
-                                                         icscf_acr_factory,
-                                                         scscf_selector);
-    if (icscf_sproutlet == NULL)
-    {
-      LOG_ERROR("Failed to create I-CSCF Sproutlet");
-      return 1;
-    }
-    sproutlets.push_back(icscf_sproutlet);
-  }
-
-  if (opt.xdm_server != "")
-  {
-    // Create a connection to the XDMS.
-    LOG_STATUS("Creating connection to XDMS %s", opt.xdm_server.c_str());
-    xdm_connection = new XDMConnection(opt.xdm_server,
-                                       http_resolver,
-                                       load_monitor,
-                                       stack_data.stats_aggregator);
-
-    if (xdm_connection == NULL)
-    {
-      LOG_ERROR("Failed to create XDM connection");
-      return 1;
-    }
-
-    // Load the MMTEL AppServer
-    AppServer* mmtel = new Mmtel("mmtel", xdm_connection);
-    Sproutlet* mmtel_sproutlet = new SproutletAppServerShim(mmtel, "mmtel." + opt.home_domain);
-    sproutlets.push_back(mmtel_sproutlet);
-  }
-
-  // Load any other AppServers that should be collocated, eg.
-  //   AppServer* app = new SampleForkAS();
-  //   Sproutlet* app_sproutlet = new SproutletAppServerShim(app);
-  //   sproutlets.push_back(app_sproutlet);
-
-  if (opt.gemini_enabled)
-  {
-    // Create a Gemini App Server.
-    AppServer* gemini = new MobileTwinnedAppServer("mobile-twinned");
-    Sproutlet* gemini_sproutlet = new SproutletAppServerShim(gemini);
-    sproutlets.push_back(gemini_sproutlet);
-  }
-
-  if (opt.memento_enabled)
-  {
-    call_list_store = new CallListStore::Store();
-    call_list_store->initialize();
-    call_list_store->configure("localhost", 9160);
-    CassandraStore::ResultCode store_rc = call_list_store->start();
-
-    if (store_rc != CassandraStore::OK)
-    {
-      LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
-      return 1;
-    }
-
-    // Create a Memento Server.
-    AppServer* memento = new MementoAppServer("memento",
-                                              call_list_store,
-                                              opt.home_domain,
-                                              opt.max_call_list_length,
-                                              opt.memento_threads,
-                                              opt.call_list_ttl);
-    Sproutlet* memento_sproutlet = new SproutletAppServerShim(memento);
-    sproutlets.push_back(memento_sproutlet);
-  }
+  // Load the sproutlet plugins.
+  PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
+  loader->load(sproutlets);
 
   if (!sproutlets.empty())
   {
@@ -1704,11 +1480,11 @@ int main(int argc, char *argv[])
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
       http_stack->register_handler("^/timers$",
-                                      &reg_timeout_handler);
+                                   &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
-                                      &auth_timeout_handler);
+                                   &auth_timeout_handler);
       http_stack->register_handler("^/registrations?*$",
-                                      &deregistration_handler);
+                                   &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
@@ -1739,14 +1515,12 @@ int main(int argc, char *argv[])
   // after they have unregistered.
   unregister_stack_modules();
 
-  // Destroy the Sproutlet Proxy and any Sproutlets.
+  // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
-  while (!sproutlets.empty())
-  {
-    delete sproutlets.front();
-    sproutlets.pop_front();
-  }
-  delete call_list_store;
+
+  // Unload any dynamically loaded sproutlets and delete the loader.
+  loader->unload();
+  delete loader;
 
   if (opt.scscf_enabled)
   {
@@ -1756,13 +1530,7 @@ int main(int argc, char *argv[])
     {
       destroy_authentication();
     }
-    delete hss_connection;
-    delete xdm_connection;
-    delete enum_service;
-    delete bgcf_service;
     delete chronos_connection;
-    delete scscf_acr_factory;
-    delete bgcf_acr_factory;
   }
   if (opt.pcscf_enabled)
   {
@@ -1773,15 +1541,11 @@ int main(int argc, char *argv[])
     destroy_stateful_proxy();
     delete pcscf_acr_factory;
   }
-  if (opt.icscf_enabled)
-  {
-    delete scscf_selector;
-    delete icscf_acr_factory;
-  }
 
   destroy_options();
   destroy_stack();
 
+  delete hss_connection;
   delete quiescing_mgr;
   delete load_monitor;
   delete local_reg_store;
@@ -1790,8 +1554,11 @@ int main(int argc, char *argv[])
   delete local_data_store;
   delete remote_data_store;
   delete ralf_connection;
+  delete enum_service;
+  delete scscf_acr_factory;
 
   delete sip_resolver;
+  delete http_resolver;
   delete dns_resolver;
 
   delete analytics_logger;

@@ -479,7 +479,7 @@ protected:
   void doFourAppServerFlow(std::string record_route_regex, bool app_servers_record_route=false);
   void doSuccessfulFlow(SP::Message& msg, testing::Matcher<string> uri_matcher, list<HeaderMatcher> headers, bool include_ack_and_bye=true, bool session_expires=false);
   void doFastFailureFlow(SP::Message& msg, int st_code);
-  void doSlowFailureFlow(SP::Message& msg, int st_code);
+  void doSlowFailureFlow(SP::Message& msg, int st_code, std::string body = "", std::string reason = "");
   void setupForkedFlow(SP::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 
@@ -1204,7 +1204,10 @@ void SCSCFTest::doFastFailureFlow(Message& msg, int st_code)
 }
 
 /// Test a message results in a 100 then a failure.
-void SCSCFTest::doSlowFailureFlow(Message& msg, int st_code)
+void SCSCFTest::doSlowFailureFlow(Message& msg,
+                                  int st_code,
+                                  std::string body,
+                                  std::string reason)
 {
   SCOPED_TRACE("");
 
@@ -1219,7 +1222,7 @@ void SCSCFTest::doSlowFailureFlow(Message& msg, int st_code)
 
   // error goes back
   out = current_txdata()->msg;
-  RespMatcher(st_code).matches(out);
+  RespMatcher(st_code, body, reason).matches(out);
   free_txdata();
 }
 
@@ -1269,11 +1272,11 @@ TEST_F(SCSCFTest, TestSimpleTelURI)
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   Message msg;
   msg._toscheme = "tel";
-  msg._to = "+16505551234";
+  msg._to = "16505551234";
   msg._route = "Route: <sip:homedomain;orig>";
   msg._todomain = "";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*+16505551234@ut.cw-ngv.com.*"), hdrs, false);
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*16505551234@ut.cw-ngv.com.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestNoMoreForwards)
@@ -1596,7 +1599,9 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 484);
+  // ENUM fails and wr route to the BGCF, but there are no routes so the call
+  // is rejected.
+  doSlowFailureFlow(msg, 404, "", "No route to target");
 }
 
 TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
@@ -1613,7 +1618,9 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
-  doSlowFailureFlow(msg, 484);
+  // ENUM fails and wr route to the BGCF, but there are no routes so the call
+  // is rejected.
+  doSlowFailureFlow(msg, 404, "", "No route to target");
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
@@ -2140,6 +2147,113 @@ TEST_F(SCSCFTest, SimpleISCMainline)
   free_txdata();
 }
 
+// Test handling of IFC with a malformed AS URI.
+TEST_F(SCSCFTest, ISCASURIMalformed)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>sip::5060</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // INVITE rejected with 502 Bad Gateway response.
+  out = current_txdata()->msg;
+  RespMatcher(502).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+}
+
+// Test handling of IFC with a AS Tel URI.
+TEST_F(SCSCFTest, ISCASURITel)
+{
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", "UNREGISTERED",
+                                "<IMSSubscription><ServiceProfile>\n"
+                                "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                "  <InitialFilterCriteria>\n"
+                                "    <Priority>1</Priority>\n"
+                                "    <TriggerPoint>\n"
+                                "    <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                                "    <SPT>\n"
+                                "      <ConditionNegated>0</ConditionNegated>\n"
+                                "      <Group>0</Group>\n"
+                                "      <Method>INVITE</Method>\n"
+                                "      <Extension></Extension>\n"
+                                "    </SPT>\n"
+                                "  </TriggerPoint>\n"
+                                "  <ApplicationServer>\n"
+                                "    <ServerName>tel:1234</ServerName>\n"
+                                "    <DefaultHandling>0</DefaultHandling>\n"
+                                "  </ApplicationServer>\n"
+                                "  </InitialFilterCriteria>\n"
+                                "</ServiceProfile></IMSSubscription>");
+
+  TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345;transport=TCP";
+  msg._to = "6505551234@homedomain";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  msg._requri = "sip:6505551234@homedomain";
+
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+
+  // INVITE rejected with 502 Bad Gateway response.
+  out = current_txdata()->msg;
+  RespMatcher(502).matches(out);
+  tpBono.expect_target(current_txdata(), true);  // Requests always come back on same transport
+  free_txdata();
+}
 
 // Test basic ISC (AS) flow with a single "Next" on the originating side.
 TEST_F(SCSCFTest, SimpleNextOrigFlow)
@@ -5924,3 +6038,114 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   free_txdata();
 }
 
+TEST_F(SCSCFTest, TestAddSecondTelPAIHdr)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551000>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestAddSecondSIPPAIHdr)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("tel:6505551000", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <tel:6505551000>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <tel:6505551000>", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain;user=phone>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestTwoPAIHdrsAlready)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>\nP-Asserted-Identity: Andy <tel:6505551111>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>", "P-Asserted-Identity: \"Andy\" <tel:6505551111>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestNoPAIHdrs)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:homedomain;orig>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestPAIHdrODIToken)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._route = "Route: <sip:odi_dgds89gd8gdshds@homedomain;orig>";
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
+                                   "<IMSSubscription><ServiceProfile>\n"
+                                   "<PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>"
+                                   "<PublicIdentity><Identity>tel:6505551000</Identity></PublicIdentity>"
+                                   "  <InitialFilterCriteria>\n"
+                                   "  </InitialFilterCriteria>\n"
+                                   "</ServiceProfile></IMSSubscription>");
+  Message msg;
+  msg._extra = "P-Asserted-Identity: Andy <sip:6505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}

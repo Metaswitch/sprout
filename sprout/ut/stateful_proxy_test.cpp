@@ -2304,6 +2304,8 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   // Check P-Charging headers are added correctly
   actual = get_headers(tdata->msg, "P-Charging-Function-Addresses");
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=cdfdomain", actual);
+  actual = get_headers(tdata->msg, "P-Visited-Network-ID");
+  EXPECT_EQ("P-Visited-Network-ID: homedomain", actual);
   actual = get_headers(tdata->msg, "P-Charging-Vector");
   std::string call_id = get_headers(tdata->msg, "Call-ID");
   call_id.erase(std::remove(call_id.begin(), call_id.end(), '@'), call_id.end());
