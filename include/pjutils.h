@@ -218,6 +218,8 @@ void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_m
 
 void add_top_via(pjsip_tx_data* tdata);
 
+void remove_top_via(pjsip_tx_data* tdata);
+
 void add_reason(pjsip_tx_data* tdata, int reason_code);
 
 bool compare_pj_sockaddr(const pj_sockaddr& lhs, const pj_sockaddr& rhs);

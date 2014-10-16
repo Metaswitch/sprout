@@ -851,7 +851,6 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
   {
     LOG_DEBUG("Allocating transaction and data for target");
     pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
-    PJUtils::add_top_via(uac_tdata);
 
     if (uac_tdata == NULL)
     {
@@ -1554,6 +1553,10 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 
   _trail = _uas_tsx->trail();
 
+  // Add a new top Via header to the request.  This must be done before creating
+  // the PJSIP UAC transaction as otherwise response correlation won't work.
+  PJUtils::add_top_via(tdata);
+
   if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Use the lock associated with the PJSIP UAS transaction.
@@ -1670,6 +1673,9 @@ void BasicProxy::UACTsx::send_request()
     if ((_uas_tsx != NULL) &&
         (_tdata->msg->line.req.method.id != PJSIP_ACK_METHOD))
     {
+      // Remove the top Via from the request before reporting the error in
+      // case the request is used to build an error response.
+      PJUtils::remove_top_via(_tdata);
       _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TRANSPORT_ERROR);
     }
     //LCOV_EXCL_STOP
@@ -1855,6 +1861,10 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           SAS::report_event(sas_event);
         }
         // LCOV_EXCL_STOP - no timeouts in UT
+
+        // Report the error to the UASTsx.  Remove the top Via header from the
+        // request first in case it is used to generate an error response.
+        PJUtils::remove_top_via(_tdata);
         _uas_tsx->on_client_not_responding(this, event->body.tsx_state.type);
       }
     }
@@ -2084,11 +2094,14 @@ void BasicProxy::UACTsx::timer_c_expired()
     {
       // Either a non-INVITE transaction, or an INVITE transaction which
       // hasn't yet received a 100 Trying response, so terminate the
-      // transaction and report this target as non-responsive.
+      // transaction and report this target as non-responsive.  Remove
+      // the top Via header from the request in case it is used to generate
+      // an error response.
       LOG_INFO("Timer C expired, %.*s transaction in %s state, aborting",
                _tsx->method.name.slen, _tsx->method.name.ptr,
                pjsip_tsx_state_str(_tsx->state));
       pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
+      PJUtils::remove_top_via(_tdata);
       _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TIMER);
     }
     //LCOV_EXCL_STOP
