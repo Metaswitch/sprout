@@ -205,7 +205,12 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                       NULL,         // No body
                                       &tdata);      // OUT
 
-  assert(status == PJ_SUCCESS);
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Failed to build third-party REGISTER request for server %s",
+              as.server_name.c_str());
+    return;
+  }
 
   // Expires header based on 200 OK response
   pjsip_expires_hdr_create(tdata->pool, expires);
