@@ -735,8 +735,11 @@ void SproutletProxy::UASTsx::schedule_requests()
                                                           trail());
 
       // Set up the mappings.
-      _dmap_sproutlet[req.upstream] = downstream;
-      _umap[(void*)downstream] = req.upstream;
+      if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
+      {
+        _dmap_sproutlet[req.upstream] = downstream;
+        _umap[(void*)downstream] = req.upstream;
+      }
 
       if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
       {
@@ -769,8 +772,11 @@ void SproutletProxy::UASTsx::schedule_requests()
       {
         // Successfully set up UAC transaction, so set up the mappings and
         // send the request.
-        _dmap_uac[req.upstream] = _uac_tsx[index];
-        _umap[(void*)_uac_tsx[index]] = req.upstream;
+        if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
+        {
+          _dmap_uac[req.upstream] = _uac_tsx[index];
+          _umap[(void*)_uac_tsx[index]] = req.upstream;
+        }
 
         // Send the request.
         _uac_tsx[index]->send_request();
@@ -781,6 +787,9 @@ void SproutletProxy::UASTsx::schedule_requests()
       }
     }
   }
+
+  // Check to see if we can destroy the UASTsx.
+  check_destroy();
 }
 
 
