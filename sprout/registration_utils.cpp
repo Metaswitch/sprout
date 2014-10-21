@@ -98,10 +98,13 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
                                                           SAS::TrailId trail)
 {
   // Function preconditions
-  if (received_register == NULL) {
+  if (received_register == NULL)
+  {
     // We should have both messages or neither
     assert(ok_response == NULL);
-  } else {
+  }
+  else
+  {
     // We should have both messages or neither
     assert(ok_response != NULL);
   }
@@ -112,7 +115,8 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   // Originating message, otherwise we use the Request-URI. We need to use the From for REGISTERs.
   // See 3GPP TS 23.218 s5.2.1 note 2: "REGISTER is considered part of the UE-originating".
 
-  if (received_register == NULL) {
+  if (received_register == NULL)
+  {
     pj_status_t status;
     pjsip_method method;
     pjsip_method_set(&method, PJSIP_REGISTER_METHOD);
@@ -145,13 +149,18 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     status = pjsip_tx_data_dec_ref(tdata);
     assert(status == PJSIP_EBUFDESTROYED);
-  } else {
+  }
+  else
+  {
     ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
   }
   LOG_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
-  for(std::vector<AsInvocation>::iterator as_iter = as_list.begin(); as_iter != as_list.end(); as_iter++) {
+  for (std::vector<AsInvocation>::iterator as_iter = as_list.begin();
+       as_iter != as_list.end();
+                              as_iter++)
+  {
     send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
   }
 }
@@ -207,9 +216,11 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   if (status != PJ_SUCCESS)
   {
+    //LCOV_EXCL_START
     LOG_ERROR("Failed to build third-party REGISTER request for server %s",
               as.server_name.c_str());
     return;
+    //LCOV_EXCL_STOP
   }
 
   // Expires header based on 200 OK response
@@ -219,7 +230,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
 
   // TODO: modify orig-ioi of P-Charging-Vector and remove term-ioi
 
-  if (received_register && ok_response) {
+  if (received_register && ok_response)
+  {
     // Copy P-Access-Network-Info, P-Visited-Network-Id and P-Charging-Vector
     // from original message
     PJUtils::clone_header(&STR_P_A_N_I, received_register->msg_info.msg, tdata->msg, tdata->pool);
@@ -243,7 +255,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
     pjsip_msg_body *possible_final_body = NULL;
     int multipart_parts = 0;
 
-    if (!as.service_info.empty()) {
+    if (!as.service_info.empty())
+    {
       pjsip_multipart_part *xml_part = pjsip_multipart_create_part(tdata->pool);
       std::string xml_str = "<ims-3gpp><service-info>"+as.service_info+"</service-info></ims-3gpp>";
       pj_str_t xml_pj_str;
@@ -256,7 +269,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
                                xml_part);
     }
 
-    if (as.include_register_request) {
+    if (as.include_register_request)
+    {
       pjsip_multipart_part *request_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(received_register->msg_info.msg, buf, sizeof(buf));
       pj_str_t request_str = pj_str(buf);
@@ -266,9 +280,10 @@ void send_register_to_as(pjsip_rx_data *received_register,
       pjsip_multipart_add_part(tdata->pool,
                                final_body,
                                request_part);
-    };
+    }
 
-    if (as.include_register_response) {
+    if (as.include_register_response)
+    {
       pjsip_multipart_part *response_part = pjsip_multipart_create_part(tdata->pool);
       pjsip_msg_print(ok_response->msg, buf, sizeof(buf));
       pj_str_t response_str = pj_str(buf);
@@ -278,15 +293,20 @@ void send_register_to_as(pjsip_rx_data *received_register,
       pjsip_multipart_add_part(tdata->pool,
                                final_body,
                                response_part);
-    };
+    }
 
-    if (multipart_parts == 0) {
+    if (multipart_parts == 0)
+    {
       final_body = NULL;
-    } else if (multipart_parts == 1) {
+    }
+    else if (multipart_parts == 1)
+    {
       final_body = possible_final_body;
-    } else {
+    }
+    else
+    {
       // Just use the multipart MIME body you've built up
-    };
+    }
 
     tdata->msg->body = final_body;
 
@@ -308,7 +328,8 @@ void send_register_to_as(pjsip_rx_data *received_register,
   }
 }
 
-void notify_application_servers() {
+void notify_application_servers()
+{
   LOG_DEBUG("In dummy notify_application_servers function");
   // TODO: implement as part of reg events package
 }
@@ -324,12 +345,15 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
       break;  // LCOV_EXCL_LINE No UT for lookup failure.
     }
 
-    if (binding_id == "*") {
+    if (binding_id == "*")
+    {
       // We only use this when doing some network-initiated deregistrations;
       // when the user deregisters all bindings another code path clears them
       LOG_INFO("Clearing all bindings!");
       aor_data->clear(false);
-    } else {
+    }
+    else
+    {
       aor_data->remove_binding(binding_id); // LCOV_EXCL_LINE No UT for network
                                             // initiated deregistration of a
                                             // single binding (flow failed).
