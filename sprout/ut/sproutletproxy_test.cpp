@@ -376,8 +376,7 @@ public:
       // response, irrespective of the status code.
       LOG_DEBUG("Process INVITE final response");
       pjsip_msg* ack = original_request();
-      ack->line.req.method.id = PJSIP_ACK_METHOD;
-      pj_cstr(&ack->line.req.method.name, "ACK");
+      pjsip_method_set(&ack->line.req.method, PJSIP_ACK_METHOD);
 
       pjsip_hdr* next = NULL;
       for (pjsip_hdr* hdr = ack->hdr.next;
@@ -412,7 +411,7 @@ public:
           case PJSIP_H_CSEQ:
             // Update the method to ACK.
             LOG_DEBUG("Update method in CSeq");
-            ((pjsip_cseq_hdr*)hdr)->method.id = PJSIP_ACK_METHOD;
+            pjsip_method_set(&((pjsip_cseq_hdr*)hdr)->method, PJSIP_ACK_METHOD);
             break;
 
           default:
@@ -1449,7 +1448,7 @@ TEST_F(SproutletProxyTest, SproutletB2BUA)
   EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
   free_txdata();
 
-  // Check the 200 OK Trying.
+  // Check the 200 OK.
   tdata = current_txdata();
   RespMatcher(200).matches(tdata->msg);
   tp->expect_target(tdata);
