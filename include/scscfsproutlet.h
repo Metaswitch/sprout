@@ -71,7 +71,8 @@ class SCSCFSproutletTsx;
 class SCSCFSproutlet : public Sproutlet
 {
 public:
-  SCSCFSproutlet(const std::string& scscf_uri,
+  SCSCFSproutlet(const std::string& scscf_cluster_uri,
+                 const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
                  int port,
@@ -96,8 +97,11 @@ private:
   /// Returns the AS chain table for this system.
   AsChainTable* as_chain_table() const;
 
-  /// Returns the configured S-CSCF URI for this system.
-  const pjsip_uri* scscf_uri() const;
+  /// Returns the configured S-CSCF cluster URI for this system.
+  const pjsip_uri* scscf_cluster_uri() const;
+
+  /// Returns the configured S-CSCF node URI for this system.
+  const pjsip_uri* scscf_node_uri() const;
 
   /// Returns the configured I-CSCF URI for this system.
   const pjsip_uri* icscf_uri() const;
@@ -133,8 +137,18 @@ private:
 
   friend class SCSCFSproutletTsx;
 
-  pjsip_uri* _scscf_uri;
+  /// A URI which routes to the S-CSCF cluster.
+  pjsip_uri* _scscf_cluster_uri;
+
+  /// A URI which routes to this particular S-CSCF node.  This must be
+  /// constructed using an IP address or a domain name which resolves to this
+  /// Sprout node only.
+  pjsip_uri* _scscf_node_uri;
+
+  /// A URI which routes to the URI cluster.
   pjsip_uri* _icscf_uri;
+
+  /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
 
   RegStore* _store;
