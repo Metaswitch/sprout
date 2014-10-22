@@ -159,7 +159,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
   // Loop through the as_list
   for (std::vector<AsInvocation>::iterator as_iter = as_list.begin();
        as_iter != as_list.end();
-                              as_iter++)
+       as_iter++)
   {
     send_register_to_as(received_register, ok_response, *as_iter, expires, served_user, trail);
   }
