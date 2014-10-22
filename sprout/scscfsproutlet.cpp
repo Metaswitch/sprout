@@ -49,7 +49,8 @@
 #include "scscfsproutlet.h"
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
+                               const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
                                int port,
@@ -61,7 +62,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                bool user_phone,
                                bool global_only_lookups) :
   Sproutlet("scscf", port),
-  _scscf_uri(NULL),
+  _scscf_cluster_uri(NULL),
+  _scscf_node_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
   _store(store),
@@ -73,16 +75,22 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   _user_phone(user_phone)
 {
   LOG_DEBUG("Creating S-CSCF Sproutlet");
-  LOG_DEBUG("  S-CSCF URI = %s", scscf_uri.c_str());
-  LOG_DEBUG("  I-CSCF URI = %s", icscf_uri.c_str());
-  LOG_DEBUG("  BGCF   URI = %s", bgcf_uri.c_str());
+  LOG_DEBUG("  S-CSCF cluster URI = %s", scscf_cluster_uri.c_str());
+  LOG_DEBUG("  S-CSCF node URI    = %s", scscf_node_uri.c_str());
+  LOG_DEBUG("  I-CSCF URI         = %s", icscf_uri.c_str());
+  LOG_DEBUG("  BGCF URI           = %s", bgcf_uri.c_str());
 
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
-  _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
-  if (_scscf_uri == NULL)
+  _scscf_cluster_uri = PJUtils::uri_from_string(scscf_cluster_uri, stack_data.pool, false);
+  if (_scscf_cluster_uri == NULL)
   {
-    LOG_ERROR("Invalid S-CSCF URI %s", scscf_uri.c_str());
+    LOG_ERROR("Invalid S-CSCF cluster %s", scscf_cluster_uri.c_str());
+  }
+  _scscf_node_uri = PJUtils::uri_from_string(scscf_node_uri, stack_data.pool, false);
+  if (_scscf_node_uri == NULL)
+  {
+    LOG_ERROR("Invalid S-CSCF node URI %s", scscf_node_uri.c_str());
   }
   _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
   if (_bgcf_uri == NULL)
@@ -121,10 +129,17 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 }
 
 
-/// Returns the configured S-CSCF URI for this system.
-const pjsip_uri* SCSCFSproutlet::scscf_uri() const
+/// Returns the configured S-CSCF cluster URI for this system.
+const pjsip_uri* SCSCFSproutlet::scscf_cluster_uri() const
 {
-  return _scscf_uri;
+  return _scscf_cluster_uri;
+}
+
+
+/// Returns the configured S-CSCF node URI for this system.
+const pjsip_uri* SCSCFSproutlet::scscf_node_uri() const
+{
+  return _scscf_node_uri;
 }
 
 
@@ -947,9 +962,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // Add the application server URI as the next Route header.
     PJUtils::add_route_header(req, as_uri, get_pool(req));
 
-    // Insert route header below it with an ODI in it.
+    // Insert route header below it with an ODI in it.  This must use the
+    // URI for this S-CSCF node (not the cluster) to ensure any forwarded
+    // requests are routed to this node.
     pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
-                             pjsip_uri_clone(get_pool(req), _scscf->scscf_uri());
+                             pjsip_uri_clone(get_pool(req), _scscf->scscf_node_uri());
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     if (_session_case->is_originating())
@@ -1030,7 +1047,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   else
   {
     // I-CSCF is disabled, so route directly to the local S-CSCF.
-    const pjsip_uri* scscf_uri = _scscf->scscf_uri();
+    const pjsip_uri* scscf_uri = _scscf->scscf_cluster_uri();
     LOG_INFO("Routing directly to S-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, scscf_uri).c_str());
     PJUtils::add_route_header(req,
@@ -1060,10 +1077,10 @@ void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
 {
   LOG_INFO("Routing to terminating S-CSCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->scscf_uri()).c_str());
+                                  _scscf->scscf_cluster_uri()).c_str());
   PJUtils::add_route_header(req,
                             (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            _scscf->scscf_uri()),
+                                                            _scscf->scscf_cluster_uri()),
                             get_pool(req));
   send_request(req);
 }
