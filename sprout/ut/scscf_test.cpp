@@ -1247,8 +1247,9 @@ TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   Message msg;
   msg._requri = "sip:254.253.252.251:5058";
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
-  doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:254.253.252.251:5058"), hdrs, false);
 }
 
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
@@ -1389,9 +1390,11 @@ TEST_F(SCSCFTest, TestNonLocal)
 {
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
+  add_host_mapping("destination.com", "10.10.10.2");
   Message msg;
   msg._to = "lasthop";
   msg._todomain = "destination.com";
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
@@ -1434,6 +1437,7 @@ TEST_F(SCSCFTest, TestExternal)
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
