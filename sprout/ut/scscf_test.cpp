@@ -1394,7 +1394,6 @@ TEST_F(SCSCFTest, TestNonLocal)
   Message msg;
   msg._to = "lasthop";
   msg._todomain = "destination.com";
-  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("Route"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*lasthop@destination\\.com.*"), hdrs);
@@ -1437,7 +1436,6 @@ TEST_F(SCSCFTest, TestExternal)
   msg._to = "+15108580271";
   msg._todomain = "ut.cw-ngv.com";
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580271@ut.cw-ngv.com.*"), hdrs);
 }
