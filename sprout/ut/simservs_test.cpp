@@ -438,3 +438,42 @@ TEST_F(SimServsTest, Alternate2)
   expect_ss(exp, ss);
 }
 
+TEST_F(SimServsTest, CdivConstructor)
+{
+  std::string forward_target = "sip:1234567890@cw-ngv.com";
+  simservs ss(forward_target, simservs::Rule::CONDITION_BUSY | simservs::Rule::CONDITION_NOT_REGISTERED, 21);
+  ss_values exp;
+  exp.oip_enabled = false;
+  exp.oir_enabled = false;
+  exp.oir_presentation_restricted = false;
+  exp.cdiv_enabled = true;
+  exp.cdiv_no_reply_timer = 21;
+  ss_cdiv_rule cdiv;
+  cdiv.forward_target = forward_target;
+  cdiv.conditions = simservs::Rule::CONDITION_BUSY;
+  exp.cdiv_rules.push_back(cdiv);
+  cdiv.conditions = simservs::Rule::CONDITION_NOT_REGISTERED;
+  exp.cdiv_rules.push_back(cdiv);
+  exp.inbound_cb_enabled = false;
+  exp.outbound_cb_enabled = false;
+  expect_ss(exp, ss);
+}
+
+TEST_F(SimServsTest, CdivConstructorUnconditional)
+{
+  std::string forward_target = "sip:1234567891@cw-ngv.com";
+  simservs ss(forward_target, 0, 22);
+  ss_values exp;
+  exp.oip_enabled = false;
+  exp.oir_enabled = false;
+  exp.oir_presentation_restricted = false;
+  exp.cdiv_enabled = true;
+  exp.cdiv_no_reply_timer = 22;
+  ss_cdiv_rule cdiv;
+  cdiv.forward_target = forward_target;
+  cdiv.conditions = 0;
+  exp.cdiv_rules.push_back(cdiv);
+  exp.inbound_cb_enabled = false;
+  exp.outbound_cb_enabled = false;
+  expect_ss(exp, ss);
+}
