@@ -9,6 +9,7 @@ all:
 	make -f sprout_mmtel_as.mk
 	make -f gemini_as.mk
 	make -f memento_as.mk
+	make -f cdiv_as.mk
 
 .PHONY: test run_test coverage coverage-check coverage_raw debug vg vg-check vg_raw
 test run_test coverage coverage-check coverage_raw debug vg vg-check vg_raw:
@@ -23,4 +24,5 @@ clean:
 	make -f sprout_mmtel_as.mk clean
 	make -f gemini_as.mk clean
 	make -f memento_as.mk clean
+	make -f cdiv_as.mk clean
 	make -f sprout_test.mk clean

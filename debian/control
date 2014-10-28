@@ -128,6 +128,19 @@ Priority: extra
 Depends: memento-as (= ${binary:Version})
 Description: Debugging symbols for memento-as, the Call List Application Server plug-in
 
+Package: call-diversion-as
+Architecture: any
+Depends: sprout-base
+Suggests: call-diversion-as-dbg, clearwater-snmp-handler-mmtel
+Description: The Call Diversion Application Server plug-in
+
+Package: call-diversion-as-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: call-diversion-as (= ${binary:Version})
+Description: Debugging symbols for the Call Diversion Application Server plug-in
+
 Package: bono
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5

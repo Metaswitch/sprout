@@ -49,12 +49,16 @@ class simservs
 {
 public:
   simservs(std::string xml);
+  simservs(const std::string forward_target,
+           unsigned int conditions,
+           unsigned int no_reply_timer);
   ~simservs();
 
   class Rule
   {
   public:
     Rule(rapidxml::xml_node<>* rule);
+    Rule(unsigned int conditions) : _conditions(conditions) {};
     ~Rule();
 
     static const unsigned int CONDITION_BUSY =               0x0001;
@@ -76,6 +80,8 @@ public:
   {
   public:
     CDIVRule(rapidxml::xml_node<>* rule);
+    CDIVRule(const std::string forward_target, unsigned int conditions) :
+      Rule(conditions), _forward_target(forward_target) {};
     ~CDIVRule();
     std::string forward_target() const;
 
