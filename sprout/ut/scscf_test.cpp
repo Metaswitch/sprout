@@ -1238,6 +1238,20 @@ TEST_F(SCSCFTest, TestSimpleMainline)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs);
 }
 
+// Send a request where the URI is for the same port as a Sproutlet,
+// but a different host. We should deal with this sensibly (as opposed
+// to e.g. looping forever until we crash).
+TEST_F(SCSCFTest, ReqURIMatchesSproutletPort)
+{
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  Message msg;
+  msg._requri = "sip:254.253.252.251:5058";
+  msg._route = "Route: <sip:homedomain;transport=tcp;lr;service=scscf;billing-role=charge-term>";
+  list<HeaderMatcher> hdrs;
+  doSuccessfulFlow(msg, testing::MatchesRegex("sip:254.253.252.251:5058"), hdrs, false);
+}
+
 // Test flows into Sprout (S-CSCF), in particular for header stripping.
 TEST_F(SCSCFTest, TestMainlineHeadersSprout)
 {
@@ -1376,6 +1390,7 @@ TEST_F(SCSCFTest, TestNonLocal)
 {
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
+  add_host_mapping("destination.com", "10.10.10.2");
   Message msg;
   msg._to = "lasthop";
   msg._todomain = "destination.com";

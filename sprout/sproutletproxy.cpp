@@ -154,9 +154,11 @@ Sproutlet* SproutletProxy::target_sproutlet(pjsip_msg* req,
       }
     }
 
-    if (port == 0)
+    if ((port == 0) &&
+        (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+        (is_host_local(&((pjsip_sip_uri*)uri)->host)))
     {
-      // No port was specified, so use the URI port instead.
+      // No port was specified by the caller, and the URI is local, so use the URI port instead.
       port = uri->port;
     }
   }
