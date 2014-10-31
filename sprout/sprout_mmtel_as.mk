@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout_mmtel_as.so
+TARGET_TEST := sprout_mmtel_as.so_test
 
 TARGET_SOURCES := mmtel.cpp	\
                   sproutletappserver.cpp \

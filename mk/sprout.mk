@@ -12,14 +12,14 @@ SPROUT_DIR := ${ROOT}/sprout
 SPROUT_TEST_DIR := ${ROOT}/tests
 
 sprout: pjsip libmemcached
-	make -C ${SPROUT_DIR}
+	${MAKE} -C ${SPROUT_DIR}
 
 sprout_test:
-	make -C ${SPROUT_DIR} test
+	${MAKE} -C ${SPROUT_DIR} test
 
 sprout_clean:
-	make -C ${SPROUT_DIR} clean
-	-make -C ${SPROUT_TEST_DIR} clean
+	${MAKE} -C ${SPROUT_DIR} clean
+	-${MAKE} -C ${SPROUT_TEST_DIR} clean
 
 sprout_distclean: sprout_clean
 

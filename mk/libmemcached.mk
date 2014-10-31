@@ -14,17 +14,17 @@ ${LIBMEM_MAKEFILE}: ${LIBMEM_CONFIGURE}
 		LDFLAGS="-L${INSTALL_DIR}/lib"
 
 libmemcached: libevhtp ${LIBMEM_MAKEFILE}
-	make -C ${LIBMEM_DIR}
-	make -C ${LIBMEM_DIR} install
+	${MAKE} -C ${LIBMEM_DIR}
+	${MAKE} -C ${LIBMEM_DIR} install
 
 libmemcached_test: libevhtp ${LIBMEM_MAKEFILE}
-	make -C ${LIBMEM_DIR} test
+	${MAKE} -C ${LIBMEM_DIR} test
 
 libmemcached_clean: ${LIBMEM_MAKEFILE}
-	make -C ${LIBMEM_DIR} clean
+	${MAKE} -C ${LIBMEM_DIR} clean
 
 libmemcached_distclean: ${LIBMEM_MAKEFILE}
-	make -C ${LIBMEM_DIR} distclean
+	${MAKE} -C ${LIBMEM_DIR} distclean
 
 
 .PHONY: libmemcached libmemcached_test libmemcached_clean libmemcached_distclean

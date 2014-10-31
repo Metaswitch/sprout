@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout_bgcf.so
+TARGET_TEST := sprout_bgcf.so_test
 
 TARGET_SOURCES := bgcfsproutlet.cpp	\
                   bgcfservice.cpp \
