@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout_scscf.so
+TARGET_TEST := sprout_scscf.so_test
 
 TARGET_SOURCES := scscfsproutlet.cpp \
                   scscfplugin.cpp

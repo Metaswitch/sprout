@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout_icscf.so
+TARGET_TEST := sprout_icscf.so_test
 
 TARGET_SOURCES := icscfsproutlet.cpp \
                   icscfrouter.cpp \

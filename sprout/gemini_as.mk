@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := gemini-as.so
+TARGET_TEST := gemini-as.so_test
 
 TARGET_SOURCES := mobiletwinned.cpp	\
                   sproutletappserver.cpp \
