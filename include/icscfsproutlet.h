@@ -84,7 +84,6 @@ public:
 
 private:
 
-  /// Returns the AS chain table for this system.
   inline HSSConnection* get_hss_connection() const
   {
     return _hss;
@@ -95,20 +94,13 @@ private:
     return _scscf_selector;
   }
 
-  inline EnumService* get_enum_service() const
-  {
-    return _enum_service;
-  }
-
-  inline bool get_global_only_lookups() const
-  {
-    return _global_only_lookups;
-  }
-
   inline bool get_user_phone() const
   {
     return _user_phone;
   }
+
+  /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
+  std::string enum_translate_tel_uri(pjsip_tel_uri* uri, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
@@ -164,7 +156,7 @@ private:
   /// @param req                  The request whose URI we are trying to
   ///                             translate
   /// @param pool                 A pool.
-  bool enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
+  bool translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
 
   ICSCFSproutlet* _icscf;
   ACR* _acr;
