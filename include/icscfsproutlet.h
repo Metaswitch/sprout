@@ -99,7 +99,8 @@ private:
     return _user_phone;
   }
 
-  std::string enum_translate_tel_uri(pjsip_msg* req, SAS::TrailId trail);
+  /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
+  std::string enum_translate_tel_uri(pjsip_tel_uri* uri, SAS::TrailId trail);
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.

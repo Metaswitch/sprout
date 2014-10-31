@@ -109,14 +109,14 @@ ACR* ICSCFSproutlet::get_acr(SAS::TrailId trail)
 }
 
 /// Translates a Tel URI to a SIP URI (if ENUM is enabled).
-std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_msg* req, SAS::TrailId trail)
+std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_tel_uri* uri,
+                                                   SAS::TrailId trail)
 {
   std::string new_uri;
   if (_enum_service != NULL)
   {
     // ENUM is enabled, so extract the user name from the Request-URI.
-    std::string user =
-         PJUtils::pj_str_to_string(&((pjsip_tel_uri*)req->line.req.uri)->number);
+    std::string user = PJUtils::pj_str_to_string(&uri->number);
 
     // If we're enforcing global only lookups then check we have a global user.
     if ((!_global_only_lookups) ||
@@ -683,7 +683,8 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
 bool ICSCFSproutletTsx::translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
 {
   bool found = false;
-  std::string new_uri = _icscf->enum_translate_tel_uri(req, trail());
+  std::string new_uri =
+    _icscf->enum_translate_tel_uri((pjsip_tel_uri*)req->line.req.uri, trail());
 
   if (!new_uri.empty())
   {
