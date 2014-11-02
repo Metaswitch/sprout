@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := memento-as.so
+TARGET_TEST := memento-as.so_test
 
 TARGET_SOURCES := sproutletappserver.cpp \
                   mementoasplugin.cpp \

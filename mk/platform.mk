@@ -121,13 +121,13 @@ ${TARGET_BIN}: ${TARGET_OBJS}
 ${TARGET_BIN_TEST}: ${TARGET_OBJS_TEST}
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) -o $@ $^ $(LDFLAGS) $(LDFLAGS_TEST) $(TARGET_ARCH) $(LOADLIBES) $(LDLIBS)
 
-${OBJ_DIR}/%.o: %.cpp
+${OBJ_DIR}/%.o: %.cpp | ${OBJ_DIR}
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_BUILD) $(TARGET_ARCH) -c -o $@ $<
 
-${OBJ_DIR_TEST}/%.o: %.cpp
+${OBJ_DIR_TEST}/%.o: %.cpp | ${OBJ_DIR_TEST}
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
 
-${OBJ_DIR_TEST}/%.o: $(UT_DIR)/%.cpp
+${OBJ_DIR_TEST}/%.o: $(UT_DIR)/%.cpp | ${OBJ_DIR_TEST}
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(CPPFLAGS_TEST) $(TARGET_ARCH) -c -o $@ $<
 
 ${OBJ_DIR}/%.depends: %.cpp | ${OBJ_DIR}

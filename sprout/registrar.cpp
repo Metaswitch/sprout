@@ -438,7 +438,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   }
 
   // Finally, send out SIP NOTIFYs for any subscriptions
-  if (send_notify)
+  if ((send_notify) &&
+      (aor_data != NULL))
   {
     for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
          i != aor_data->subscriptions().end();

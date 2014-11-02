@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout
+TARGET_TEST := sprout_base_test
 
 TARGET_SOURCES := logger.cpp \
                   saslogger.cpp \

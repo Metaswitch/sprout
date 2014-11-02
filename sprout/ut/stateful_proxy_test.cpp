@@ -1589,6 +1589,7 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
   Message msg;
+  add_host_mapping("destination.com", "10.10.10.2");
   msg._to = "lasthop";
   msg._todomain = "destination.com";
   list<HeaderMatcher> hdrs;

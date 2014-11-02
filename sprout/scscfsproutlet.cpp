@@ -1173,13 +1173,19 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   _scscf->get_bindings(aor, &aor_data, trail());
 
   TargetList targets;
-  filter_bindings_to_targets(aor,
-                             aor_data,
-                             req,
-                             pool,
-                             MAX_FORKING,
-                             targets,
-                             trail());
+  if ((aor_data != NULL) &&
+      (!aor_data->bindings().empty()))
+  {
+    // Retrieved bindings from the store so filter them to an ordered
+    // list of targets.
+    filter_bindings_to_targets(aor,
+                               aor_data,
+                               req,
+                               pool,
+                               MAX_FORKING,
+                               targets,
+                               trail());
+  }
 
   if (targets.empty())
   {
