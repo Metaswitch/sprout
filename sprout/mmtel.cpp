@@ -58,15 +58,6 @@ using namespace rapidxml;
 #define PRIVACY_H_CRITICAL 0x00000020
 
 
-/// Constructor.
-Mmtel::Mmtel(const std::string& service_name,
-             XDMConnection* xdm_client) :
-            AppServer(service_name),
-            _xdmc(xdm_client)
-{
-  MmtelTsx::init_static();
-};
-
 /// Get a new MmtelTsx from the Mmtel AS.
 AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
                                  pjsip_msg* req)
@@ -124,10 +115,80 @@ simservs* Mmtel::get_user_services(std::string public_id, SAS::TrailId trail)
 }
 
 /// Constructor.
-CallDiversionAS::CallDiversionAS(const std::string& service_name) : AppServer(service_name)
+CallDiversionAS::CallDiversionAS(const std::string& service_name) :
+  AppServer(service_name),
+  _cdiv_total_stat("cdiv_total", stack_data.stats_aggregator),
+  _cdiv_unconditional_stat("cdiv_unconditional", stack_data.stats_aggregator),
+  _cdiv_busy_stat("cdiv_busy", stack_data.stats_aggregator),
+  _cdiv_not_registered_stat("cdiv_not_registered", stack_data.stats_aggregator),
+  _cdiv_no_answer_stat("cdiv_no_answer", stack_data.stats_aggregator),
+  _cdiv_not_reachable_stat("cdiv_not_reachable", stack_data.stats_aggregator) {};
+
+/*
+StatisticCounter* MmtelTsx::_cdiv_total_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_unconditional_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_busy_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_not_registered_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_no_answer_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_not_reachable_stat = NULL;
+
+/// Initializes static variables in MmtelTsx - currently just statistics.
+void MmtelTsx::init_static()
 {
-  MmtelTsx::init_static();
-};
+  _cdiv_total_stat = new StatisticCounter("cdiv_total",
+                                          stack_data.stats_aggregator);
+  _cdiv_unconditional_stat = new StatisticCounter("cdiv_unconditional",
+                                                  stack_data.stats_aggregator);
+  _cdiv_busy_stat = new StatisticCounter("cdiv_busy",
+                                         stack_data.stats_aggregator);
+  _cdiv_not_registered_stat = new StatisticCounter("cdiv_not_registered",
+                                                   stack_data.stats_aggregator);
+  _cdiv_no_answer_stat = new StatisticCounter("cdiv_no_answer",
+                                              stack_data.stats_aggregator);
+  _cdiv_not_reachable_stat = new StatisticCounter("cdiv_not_reachable",
+                                                  stack_data.stats_aggregator);
+}
+
+/// Terminates static variables in MmtelTsx - currently just statistics.
+void MmtelTsx::term_static()
+{
+  delete _cdiv_total_stat; _cdiv_total_stat = NULL;
+  delete _cdiv_unconditional_stat; _cdiv_unconditional_stat = NULL;
+  delete _cdiv_busy_stat; _cdiv_busy_stat = NULL;
+  delete _cdiv_not_registered_stat; _cdiv_not_registered_stat = NULL;
+  delete _cdiv_no_answer_stat; _cdiv_no_answer_stat = NULL; 
+  delete _cdiv_not_reachable_stat; _cdiv_not_reachable_stat = NULL;
+}
+*/
+
+/// Destructor.
+CallDiversionAS::~CallDiversionAS() {}
+
+/// Called on diversion.  Increments statistics.
+void CallDiversionAS::cdiv_callback(std::string target, unsigned int conditions)
+{
+  _cdiv_total_stat.increment();
+  if (conditions == 0)
+  {
+    _cdiv_unconditional_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_BUSY)
+  {
+    _cdiv_busy_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NOT_REGISTERED)
+  {
+    _cdiv_not_registered_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NO_ANSWER)
+  {
+    _cdiv_no_answer_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NOT_REACHABLE)
+  {
+    _cdiv_not_reachable_stat.increment();
+  }
+}
 
 /// Get a new MmtelTsx from the CallDiversionAS.
 AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
@@ -153,8 +214,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
     pjsip_param* target_param = pjsip_param_find(&uri->other_param, &STR_TARGET);
     if (target_param != NULL)
     {
-      std::string target = std::string(target_param->value.ptr,
-                                       target_param->value.slen);
+      std::string target = PJUtils::pj_str_to_string(&target_param->value);
       LOG_DEBUG("Found target parameter: %s", target.c_str());
 
       // Now parse the conditions.
@@ -163,10 +223,10 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
       std::string conditions_str = "unconditional";
       if (conditions_param != NULL)
       {
-        conditions_str = std::string(conditions_param->value.ptr, conditions_param->value.slen);
+        conditions_str = PJUtils::pj_str_to_string(&conditions_param->value);
         LOG_DEBUG("Found conditions parameter: %s", conditions_str.c_str());
 
-        // Split the conditions at commas, and then try to match them, ignoring unknown ones.
+        // Split the conditions at plus, and then try to match them, ignoring unknown ones.
         std::vector<std::string> conditions_list;
         Utils::split_string(conditions_str, '+', conditions_list);
         for (std::vector<std::string>::iterator it = conditions_list.begin();
@@ -205,8 +265,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
       {
         // Construct a std::string from the parameter.  This ensures that the string is
         // NUL-terminated.  Then parse it as an integer.
-        std::string no_reply_timer_str = std::string(no_reply_timer_param->value.ptr,
-                                                     no_reply_timer_param->value.slen);
+        std::string no_reply_timer_str = PJUtils::pj_str_to_string(&no_reply_timer_param->value);
         LOG_DEBUG("Found no-reply-timer parameter: %s", no_reply_timer_str.c_str());
         errno = 0;
         unsigned long int_value = strtoul(no_reply_timer_str.c_str(), NULL, 10);
@@ -249,54 +308,14 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
   return mmtel_tsx;
 }
 
-StatisticCounter* MmtelTsx::_cdiv_total_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_unconditional_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_busy_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_not_registered_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_no_answer_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_not_reachable_stat = NULL;
-
-/// Initializes static variables in MmtelTsx - currently just statistics.
-void MmtelTsx::init_static()
-{
-  if (_cdiv_total_stat == NULL)
-  {
-    _cdiv_total_stat = new StatisticCounter("cdiv_total",
-                                            stack_data.stats_aggregator);
-  }
-  if (_cdiv_unconditional_stat == NULL)
-  {
-    _cdiv_unconditional_stat = new StatisticCounter("cdiv_unconditional",
-                                                    stack_data.stats_aggregator);
-  }
-  if (_cdiv_busy_stat == NULL)
-  {
-    _cdiv_busy_stat = new StatisticCounter("cdiv_busy",
-                                           stack_data.stats_aggregator);
-  }
-  if (_cdiv_not_registered_stat == NULL)
-  {
-    _cdiv_not_registered_stat = new StatisticCounter("cdiv_not_registered",
-                                                     stack_data.stats_aggregator);
-  }
-  if (_cdiv_no_answer_stat == NULL)
-  {
-    _cdiv_no_answer_stat = new StatisticCounter("cdiv_no_answer",
-                                                stack_data.stats_aggregator);
-  }
-  if (_cdiv_not_reachable_stat == NULL)
-  {
-    _cdiv_not_reachable_stat = new StatisticCounter("cdiv_not_reachable",
-                                                    stack_data.stats_aggregator);
-  }
-}
-
 /// Constructor for the MmtelTsx.
 MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
                    pjsip_msg* req,
-                   simservs* user_services) :
+                   simservs* user_services,
+                   CDivCallback* cdiv_callback) :
   AppServerTsx(helper),
   _user_services(user_services),
+  _cdiv_callback(cdiv_callback),
   _no_reply_timer(0),
   _cdiv_targets()
 {
@@ -1106,7 +1125,9 @@ std::string MmtelTsx::check_call_diversion_rules(unsigned int conditions)
           (_cdiv_targets.find(rule->forward_target()) == _cdiv_targets.end()))
       {
         LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
-        increment_cdiv_stats(rule->conditions());
+        if (_cdiv_callback != NULL) {
+          _cdiv_callback->cdiv_callback(rule->forward_target(), rule->conditions());
+        }
         _cdiv_targets.insert(rule->forward_target());
         return rule->forward_target();
       }
@@ -1173,31 +1194,6 @@ void MmtelTsx::on_timer_expiry(void* context)
     pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
     free_msg(req);
     send_response(rsp);
-  }
-}
-
-void MmtelTsx::increment_cdiv_stats(unsigned int conditions)
-{
-  _cdiv_total_stat->increment();
-  if (conditions == 0)
-  {
-    _cdiv_unconditional_stat->increment();
-  }
-  if (conditions & simservs::Rule::CONDITION_BUSY)
-  {
-    _cdiv_busy_stat->increment();
-  }
-  if (conditions & simservs::Rule::CONDITION_NOT_REGISTERED)
-  {
-    _cdiv_not_registered_stat->increment();
-  }
-  if (conditions & simservs::Rule::CONDITION_NO_ANSWER)
-  {
-    _cdiv_no_answer_stat->increment();
-  }
-  if (conditions & simservs::Rule::CONDITION_NOT_REACHABLE)
-  {
-    _cdiv_not_reachable_stat->increment();
   }
 }
 

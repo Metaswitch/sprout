@@ -56,11 +56,19 @@ extern "C" {
 #include "aschain.h"
 #include "counter.h"
 
+class CDivCallback
+{
+public:
+  virtual void cdiv_callback(std::string target, unsigned int conditions) = 0;
+};
+
 class Mmtel : public AppServer
 {
 public:
   Mmtel(const std::string& service_name,
-        XDMConnection* xdm_client);
+        XDMConnection* xdm_client) :
+    AppServer(service_name),
+    _xdmc(xdm_client) {};
 
   AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
                             pjsip_msg* req);
@@ -73,13 +81,24 @@ private:
 
 // Cut-down AS that invokes MMTEL-style call diversion configured through
 // parameters encoded on the AS URI.
-class CallDiversionAS : public AppServer
+class CallDiversionAS : public AppServer, CDivCallback
 {
 public:
   CallDiversionAS(const std::string& service_name);
+  virtual ~CallDiversionAS();
 
   AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
                             pjsip_msg* req);
+  virtual void cdiv_callback(std::string target,
+                             unsigned int conditions);
+
+private:
+  StatisticCounter _cdiv_total_stat;
+  StatisticCounter _cdiv_unconditional_stat;
+  StatisticCounter _cdiv_busy_stat;
+  StatisticCounter _cdiv_not_registered_stat;
+  StatisticCounter _cdiv_no_answer_stat;
+  StatisticCounter _cdiv_not_reachable_stat;
 };
 
 class MmtelTsx : public AppServerTsx
@@ -87,27 +106,20 @@ class MmtelTsx : public AppServerTsx
 public:
   MmtelTsx(AppServerTsxHelper* helper,
            pjsip_msg* req,
-           simservs* user_services);
+           simservs* user_services,
+           CDivCallback* cdiv_callback = NULL);
   ~MmtelTsx();
-
-  static void init_static();
 
   void on_initial_request(pjsip_msg* req);
   void on_response(pjsip_msg* rsp, int fork_id);
   void on_timer_expiry(void* context);
 
 private:
-  static StatisticCounter* _cdiv_total_stat;
-  static StatisticCounter* _cdiv_unconditional_stat;
-  static StatisticCounter* _cdiv_busy_stat;
-  static StatisticCounter* _cdiv_not_registered_stat;
-  static StatisticCounter* _cdiv_no_answer_stat;
-  static StatisticCounter* _cdiv_not_reachable_stat;
-
   bool _originating;
   pjsip_method_e _method;
   std::string _country_code;
   simservs* _user_services;
+  CDivCallback* _cdiv_callback;
   bool _ringing;
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
@@ -131,7 +143,6 @@ private:
   static unsigned int get_media_type_conditions(pjsip_msg *req);
 
   void no_reply_timer_pop();
-  void increment_cdiv_stats(unsigned int conditions);
 };
 
 #endif

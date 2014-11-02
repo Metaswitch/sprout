@@ -131,7 +131,7 @@ Description: Debugging symbols for memento-as, the Call List Application Server 
 Package: call-diversion-as
 Architecture: any
 Depends: sprout-base
-Suggests: call-diversion-as-dbg, clearwater-snmp-handler-mmtel
+Suggests: call-diversion-as-dbg, clearwater-snmp-handler-cdiv
 Description: The Call Diversion Application Server plug-in
 
 Package: call-diversion-as-dbg
