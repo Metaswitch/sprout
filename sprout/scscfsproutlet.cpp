@@ -366,15 +366,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // services.
   status_code = determine_served_user(req);
 
-  if (_acr == NULL)
-  {
-    // No ACR found or created while determining the served user, so create
-    // a new one.
-    _acr = _scscf->get_acr(trail(),
-                           CALLING_PARTY,
-                           ACR::requested_node_role(req));
-  }
-
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
   _acr->rx_request(req);
@@ -438,7 +429,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   // Create an ACR for this request and pass the request to it.
   _acr = _scscf->get_acr(trail(),
                          CALLING_PARTY,
-                         ACR::requested_node_role(req));
+                         get_billing_role());
 
   // @TODO - request timestamp???
   _acr->rx_request(req);
@@ -632,11 +623,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
               _session_case->to_string().c_str(),
               _as_chain_link.to_string().c_str());
   }
-  else if (hroute == NULL)
+  else
   {
-    // No Route header on the request.  This probably shouldn't happen, but
-    // if it does we will treat it as a terminating request.
-    LOG_DEBUG("No Route header, so treat as terminating request");
+    // No Route header on the request or top Route header does not correspond to
+    // the S-CSCF.  This probably shouldn't happen, but if it does we will
+    // treat it as a terminating request.
+    LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
 
@@ -669,6 +661,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         pcv->term_ioi = pj_str("");
       }
 
+      // Create a new ACR for this request.
+      _acr = _scscf->get_acr(trail(),
+                             CALLING_PARTY,
+                             NODE_ROLE_ORIGINATING);
 
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
@@ -680,7 +676,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Add service to dialog - originating Cdiv");
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
       else
@@ -700,19 +696,25 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         LOG_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, "charge-term");
+          add_record_route(req, NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
     }
   }
-  else if (_session_case != NULL)
+  else
   {
     // No existing AS chain - create new.
     std::string served_user = served_user_from_msg(req);
+
+    // Create a new ACR for this request.
+    _acr = _scscf->get_acr(trail(),
+                           CALLING_PARTY,
+                           _session_case->is_originating() ?
+                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
@@ -734,7 +736,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, "charge-term");
+          add_record_route(req, NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -742,7 +744,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -826,12 +828,6 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
   }
   bool is_registered = is_user_registered(served_user);
 
-  // Create a new ACR to use for this service hop and the new AS chain.
-  _acr = _scscf->get_acr(trail(),
-                         CALLING_PARTY,
-                         _session_case->is_originating() ?
-                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
-
   AsChainLink ret = AsChainLink::create_as_chain(_scscf->as_chain_table(),
                                                  *_session_case,
                                                  served_user,
@@ -878,7 +874,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       LOG_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, "charge-orig");
+      add_record_route(req, NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -932,7 +928,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       LOG_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, "charge-term");
+      add_record_route(req, NODE_ROLE_TERMINATING);
     }
 
     // Route the call to the appropriate target.
@@ -1367,7 +1363,7 @@ void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
 /// be attached to the Record-Route and can be used to recover the billing
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
-                                         const std::string& billing_role)
+                                         NodeRole billing_role)
 {
   if (!_record_routed)
   {
@@ -1375,7 +1371,14 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
     pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
-    pj_strdup2(pool, &param->value, billing_role.c_str());
+    if (billing_role == NODE_ROLE_ORIGINATING)
+    {
+      pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
+    }
+    else
+    {
+      pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
+    }
 
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
     pj_list_insert_before(&uri->other_param, param);
@@ -1391,21 +1394,49 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
 
 /// Retrieve the billing role for an in-dialog message.
-void SCSCFSproutletTsx::get_billing_role(std::string& billing_role)
+NodeRole SCSCFSproutletTsx::get_billing_role()
 {
+  NodeRole role;
+
   const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
-  pjsip_param* param = pjsip_param_find(&uri->other_param,
-                                        &STR_BILLING_ROLE);
-  if (param != NULL)
+  if ((route != NULL) &&
+      (is_uri_reflexive(route->name_addr.uri)))
   {
-    billing_role = PJUtils::pj_str_to_string(&param->value);
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+    pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                          &STR_BILLING_ROLE);
+    if (param != NULL)
+    {
+      if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
+      {
+        LOG_INFO("Charging role is originating");
+        role = NODE_ROLE_ORIGINATING;
+      }
+      else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
+      {
+        LOG_INFO("Charging role is terminating");
+        role = NODE_ROLE_TERMINATING;
+      }
+      else
+      {
+        LOG_WARNING("Unknown charging role %.*s, assume originating",
+                    param->value.slen, param->value.ptr);
+        role = NODE_ROLE_ORIGINATING;
+      }
+    }
+    else
+    {
+      LOG_WARNING("No charging role in Route header, assume originating");
+      role = NODE_ROLE_ORIGINATING;
+    }
   }
   else
   {
-    LOG_WARNING("Billing role unknown, assuming originating only");
-    billing_role = "charge-orig";
+    LOG_WARNING("Cannot determine charging role as no Route header, assume originating");
+    role = NODE_ROLE_ORIGINATING;
   }
+
+  return role;
 }
 
 

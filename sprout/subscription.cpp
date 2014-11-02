@@ -385,9 +385,11 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // Create an ACR for the request.  The node role is always considered
+  // originating for SUBSCRIBE requests.
   ACR* acr = acr_factory->get_acr(get_trail(rdata),
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.

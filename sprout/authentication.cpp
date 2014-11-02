@@ -619,10 +619,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  // Create an ACR for the message and pass the request to it.
+  // Create an ACR for the message and pass the request to it.  Role is always
+  // considered originating for a REGISTER request.
   ACR* acr = acr_factory->get_acr(trail,
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   pjsip_tx_data* tdata;
