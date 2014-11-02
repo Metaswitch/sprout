@@ -42,7 +42,7 @@
 #include "stack.h"
 #include "pjutils.h"
 #include "pjmedia.h"
-#include "sproutsasevent.h"
+#include "mmtelsasevent.h"
 #include "mmtel.h"
 #include "constants.h"
 
@@ -57,27 +57,14 @@ using namespace rapidxml;
 #define PRIVACY_H_NONE     0x00000010
 #define PRIVACY_H_CRITICAL 0x00000020
 
-/// Get a new MmtelTsx.
+
+/// Get a new MmtelTsx from the Mmtel AS.
 AppServerTsx* Mmtel::get_app_tsx(AppServerTsxHelper* helper,
                                  pjsip_msg* req)
 {
-  MmtelTsx* mmtel_tsx = new MmtelTsx(helper, req, _xdmc);
-  return mmtel_tsx;
-}
+  MmtelTsx* mmtel_tsx = NULL;
 
-/// Constructor for the MmtelTsx.
-MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
-                   pjsip_msg* req,
-                   XDMConnection *xdm_client) :
-  AppServerTsx(helper),
-  _no_reply_timer(0),
-  _cdiv_targets(),
-  _xdmc(xdm_client)
-{
-  _country_code = "1";
-
-  std::string served_user;
-
+  // Find the P-Served-User header, look up simservs and construct an MmtelTsx.
   pjsip_routing_hdr* psu_hdr = (pjsip_routing_hdr*)
                      pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
   if (psu_hdr != NULL)
@@ -85,11 +72,265 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
     LOG_DEBUG("Found P-Served-User header: %s",
               PJUtils::hdr_to_string(psu_hdr).c_str());
     pjsip_uri* uri = (pjsip_uri*)pjsip_uri_get_uri(&psu_hdr->name_addr);
-    served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
+    std::string served_user = PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, uri);
 
+    simservs* user_services = get_user_services(served_user, helper->trail());
+    mmtel_tsx = new MmtelTsx(helper, req, user_services);
+  }
+  else
+  {
+    LOG_DEBUG("Failed to find P-Served-User header - not invoking MMTEL");
+  }
+
+  return mmtel_tsx;
+}
+
+// Get the user services (simservs) configuration if relevant and present.
+//
+// @returns The simservs object if it is relevant and present.  If there is
+// no simservs configuration for the user, returns a default simservs object
+// with all services disabled.
+simservs* Mmtel::get_user_services(std::string public_id, SAS::TrailId trail)
+{
+  // Fetch the user's simservs configuration from the XDMS
+  LOG_DEBUG("Fetching simservs configuration for %s", public_id.c_str());
+  {
+    SAS::Event event(trail, SASEvent::RETRIEVING_SIMSERVS, 0);
+    event.add_var_param(public_id);
+    SAS::report_event(event);
+  }
+  std::string simservs_xml;
+  if (!_xdmc->get_simservs(public_id, simservs_xml, "", trail))
+  {
+    LOG_DEBUG("Failed to fetch simservs configuration for %s, no MMTel services enabled", public_id.c_str());
+    SAS::Event event(trail, SASEvent::FAILED_RETRIEVE_SIMSERVS, 0);
+    SAS::report_event(event);
+    return new simservs("");
+  }
+
+  // Parse the retrieved XDMS information
+  simservs *user_services = new simservs(simservs_xml);
+
+  return user_services;
+}
+
+/// Constructor.
+CallDiversionAS::CallDiversionAS(const std::string& service_name) :
+  AppServer(service_name),
+  _cdiv_total_stat("cdiv_total", stack_data.stats_aggregator),
+  _cdiv_unconditional_stat("cdiv_unconditional", stack_data.stats_aggregator),
+  _cdiv_busy_stat("cdiv_busy", stack_data.stats_aggregator),
+  _cdiv_not_registered_stat("cdiv_not_registered", stack_data.stats_aggregator),
+  _cdiv_no_answer_stat("cdiv_no_answer", stack_data.stats_aggregator),
+  _cdiv_not_reachable_stat("cdiv_not_reachable", stack_data.stats_aggregator) {};
+
+/*
+StatisticCounter* MmtelTsx::_cdiv_total_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_unconditional_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_busy_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_not_registered_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_no_answer_stat = NULL;
+StatisticCounter* MmtelTsx::_cdiv_not_reachable_stat = NULL;
+
+/// Initializes static variables in MmtelTsx - currently just statistics.
+void MmtelTsx::init_static()
+{
+  _cdiv_total_stat = new StatisticCounter("cdiv_total",
+                                          stack_data.stats_aggregator);
+  _cdiv_unconditional_stat = new StatisticCounter("cdiv_unconditional",
+                                                  stack_data.stats_aggregator);
+  _cdiv_busy_stat = new StatisticCounter("cdiv_busy",
+                                         stack_data.stats_aggregator);
+  _cdiv_not_registered_stat = new StatisticCounter("cdiv_not_registered",
+                                                   stack_data.stats_aggregator);
+  _cdiv_no_answer_stat = new StatisticCounter("cdiv_no_answer",
+                                              stack_data.stats_aggregator);
+  _cdiv_not_reachable_stat = new StatisticCounter("cdiv_not_reachable",
+                                                  stack_data.stats_aggregator);
+}
+
+/// Terminates static variables in MmtelTsx - currently just statistics.
+void MmtelTsx::term_static()
+{
+  delete _cdiv_total_stat; _cdiv_total_stat = NULL;
+  delete _cdiv_unconditional_stat; _cdiv_unconditional_stat = NULL;
+  delete _cdiv_busy_stat; _cdiv_busy_stat = NULL;
+  delete _cdiv_not_registered_stat; _cdiv_not_registered_stat = NULL;
+  delete _cdiv_no_answer_stat; _cdiv_no_answer_stat = NULL; 
+  delete _cdiv_not_reachable_stat; _cdiv_not_reachable_stat = NULL;
+}
+*/
+
+/// Destructor.
+CallDiversionAS::~CallDiversionAS() {}
+
+/// Called on diversion.  Increments statistics.
+void CallDiversionAS::cdiv_callback(std::string target, unsigned int conditions)
+{
+  _cdiv_total_stat.increment();
+  if (conditions == 0)
+  {
+    _cdiv_unconditional_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_BUSY)
+  {
+    _cdiv_busy_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NOT_REGISTERED)
+  {
+    _cdiv_not_registered_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NO_ANSWER)
+  {
+    _cdiv_no_answer_stat.increment();
+  }
+  if (conditions & simservs::Rule::CONDITION_NOT_REACHABLE)
+  {
+    _cdiv_not_reachable_stat.increment();
+  }
+}
+
+/// Get a new MmtelTsx from the CallDiversionAS.
+AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
+                                           pjsip_msg* req)
+{
+  MmtelTsx* mmtel_tsx = NULL;
+
+  // Find the Route header, parse the simservs parameters out and construct an MmtelTsx.
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)helper->route_hdr();
+  if (route_hdr != NULL)
+  {
+    LOG_DEBUG("Found Route header: %s",
+              PJUtils::hdr_to_string(route_hdr).c_str());
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)pjsip_uri_get_uri(&route_hdr->name_addr);
+
+    {
+      SAS::Event event(helper->trail(), SASEvent::CALL_DIVERSION_INVOKED, 0);
+      event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, (pjsip_uri*)uri));
+      SAS::report_event(event);
+    }
+
+    // Get the target parameter - it is required.
+    pjsip_param* target_param = pjsip_param_find(&uri->other_param, &STR_TARGET);
+    if (target_param != NULL)
+    {
+      std::string target = PJUtils::pj_str_to_string(&target_param->value);
+      LOG_DEBUG("Found target parameter: %s", target.c_str());
+
+      // Now parse the conditions.
+      unsigned int conditions = 0;
+      pjsip_param* conditions_param = pjsip_param_find(&uri->other_param, &STR_CONDITIONS);
+      std::string conditions_str = "unconditional";
+      if (conditions_param != NULL)
+      {
+        conditions_str = PJUtils::pj_str_to_string(&conditions_param->value);
+        LOG_DEBUG("Found conditions parameter: %s", conditions_str.c_str());
+
+        // Split the conditions at plus, and then try to match them, ignoring unknown ones.
+        std::vector<std::string> conditions_list;
+        Utils::split_string(conditions_str, '+', conditions_list);
+        for (std::vector<std::string>::iterator it = conditions_list.begin();
+             it != conditions_list.end();
+             ++it)
+        {
+          if (*it == "busy")
+          {
+            conditions |= simservs::Rule::CONDITION_BUSY;
+          }
+          else if (*it == "not-registered")
+          {
+            conditions |= simservs::Rule::CONDITION_NOT_REGISTERED;
+          }
+          else if (*it == "no-answer")
+          {
+            conditions |= simservs::Rule::CONDITION_NO_ANSWER;
+          }
+          else if (*it == "not-reachable")
+          {
+            conditions |= simservs::Rule::CONDITION_NOT_REACHABLE;
+          }
+          else
+          {
+            LOG_DEBUG("Unrecognized condition: %s", it->c_str());
+            SAS::Event event(helper->trail(), SASEvent::UNRECOGNIZED_CONDITION, 0);
+            event.add_var_param(*it);
+            SAS::report_event(event);
+          }
+        }
+      }
+
+      unsigned int no_reply_timer = 20;
+      pjsip_param* no_reply_timer_param = pjsip_param_find(&uri->other_param, &STR_NO_REPLY_TIMER);
+      if (no_reply_timer_param != NULL)
+      {
+        // Construct a std::string from the parameter.  This ensures that the string is
+        // NUL-terminated.  Then parse it as an integer.
+        std::string no_reply_timer_str = PJUtils::pj_str_to_string(&no_reply_timer_param->value);
+        LOG_DEBUG("Found no-reply-timer parameter: %s", no_reply_timer_str.c_str());
+        errno = 0;
+        unsigned long int_value = strtoul(no_reply_timer_str.c_str(), NULL, 10);
+        if (errno == 0)
+        {
+          no_reply_timer = (unsigned int)int_value;
+        }
+        else
+        {
+          LOG_DEBUG("Failed to parse no-reply-timer as integer - ignoring");
+          SAS::Event event(helper->trail(), SASEvent::UNPARSEABLE_NO_REPLY_TIMER, 0);
+          event.add_var_param(no_reply_timer_str);
+          SAS::report_event(event);
+        }
+      }
+
+      simservs* user_services = new simservs(target, conditions, no_reply_timer);
+      mmtel_tsx = new MmtelTsx(helper, req, user_services);
+
+      {
+        SAS::Event event(helper->trail(), SASEvent::CALL_DIVERSION_ENABLED, 0);
+        event.add_var_param(target);
+        event.add_var_param(conditions_str);
+        event.add_static_param(no_reply_timer);
+        SAS::report_event(event);
+      }
+    }
+    else
+    {
+      LOG_DEBUG("Failed to find target parameter - not invoking MMTEL");
+      SAS::Event event(helper->trail(), SASEvent::NO_TARGET_PARAM, 0);
+      SAS::report_event(event);
+    }
+  }
+  else
+  {
+    LOG_DEBUG("Failed to find Route header - not invoking MMTEL");
+  }
+
+  return mmtel_tsx;
+}
+
+/// Constructor for the MmtelTsx.
+MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
+                   pjsip_msg* req,
+                   simservs* user_services,
+                   CDivCallback* cdiv_callback) :
+  AppServerTsx(helper),
+  _user_services(user_services),
+  _cdiv_callback(cdiv_callback),
+  _no_reply_timer(0),
+  _cdiv_targets()
+{
+  _country_code = "1";
+
+  pjsip_routing_hdr* psu_hdr = (pjsip_routing_hdr*)
+                     pjsip_msg_find_hdr_by_name(req, &STR_P_SERVED_USER, NULL);
+  if (psu_hdr != NULL)
+  {
+    LOG_DEBUG("Found P-Served-User header: %s",
+              PJUtils::hdr_to_string(psu_hdr).c_str());
     pjsip_param* sescase = pjsip_param_find(&psu_hdr->other_param, &STR_SESCASE);
     if ((sescase != NULL) &&
-        (pj_stricmp(&sescase->value, &STR_ORIG) == 0))
+        ((pj_stricmp(&sescase->value, &STR_ORIG) == 0) ||
+         (pj_stricmp(&sescase->value, &STR_ORIG_CDIV) == 0)))
     {
       _originating = true;
     }
@@ -106,9 +347,24 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
 
   _method = req->line.req.method.id;
 
-  _user_services = get_user_services(served_user, trail());
-
-  if (!_originating)
+  if (_originating)
+  {
+    if ((_user_services != NULL) &&
+        ((_user_services->oir_enabled()) ||
+         (_user_services->outbound_cb_enabled())))
+    {
+      SAS::Event event(helper->trail(), SASEvent::ORIGINATING_SERVICES_ENABLED, 0);
+      event.add_static_param(_user_services->oir_enabled());
+      event.add_static_param(_user_services->outbound_cb_enabled());
+      SAS::report_event(event);
+    }
+    else
+    {
+      SAS::Event event(helper->trail(), SASEvent::ORIGINATING_SERVICES_DISABLED, 0);
+      SAS::report_event(event);
+    }
+  }
+  else
   {
     _ringing = false;
     // Determine the media type conditions, in case they're needed later.
@@ -119,6 +375,21 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
     else
     {
       _media_conditions = 0;
+    }
+
+    if ((_user_services != NULL) &&
+        ((_user_services->cdiv_enabled()) ||
+         (_user_services->inbound_cb_enabled())))
+    {
+      SAS::Event event(helper->trail(), SASEvent::TERMINATING_SERVICES_ENABLED, 0);
+      event.add_static_param(_user_services->cdiv_enabled());
+      event.add_static_param(_user_services->inbound_cb_enabled());
+      SAS::report_event(event);
+    }
+    else
+    {
+      SAS::Event event(helper->trail(), SASEvent::TERMINATING_SERVICES_DISABLED, 0);
+      SAS::report_event(event);
     }
   }
 }
@@ -136,28 +407,6 @@ MmtelTsx::~MmtelTsx()
   {
     delete _user_services;
   }
-}
-
-// Get the user services (simservs) configuration if relevant and present.
-//
-// @returns The simservs object if it is relevant and present.  If there is
-// no simservs configuration for the user, returns a default simservs object
-// with all services disabled.
-simservs* MmtelTsx::get_user_services(std::string public_id, SAS::TrailId trail)
-{
-  // Fetch the user's simservs configuration from the XDMS
-  LOG_DEBUG("Fetching simservs configuration for %s", public_id.c_str());
-  std::string simservs_xml;
-  if (!_xdmc->get_simservs(public_id, simservs_xml, "", trail))
-  {
-    LOG_DEBUG("Failed to fetch simservs configuration for %s, no MMTel services enabled", public_id.c_str());
-    return new simservs("");
-  }
-
-  // Parse the retrieved XDMS information
-  simservs *user_services = new simservs(simservs_xml);
-
-  return user_services;
 }
 
 // Apply Mmtel processing on initial invite.
@@ -775,6 +1024,12 @@ pjsip_status_code MmtelTsx::apply_cdiv_on_req(pjsip_msg* req,
 
   if (!target.empty()) 
   {
+    {
+      SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 0);
+      event.add_var_param(target);
+      SAS::report_event(event);
+    }
+
     // Update the request for the redirect.
     rc = PJUtils::redirect(req, target, get_pool(req), code);
 
@@ -819,6 +1074,12 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
   {
     // We have a target for the redirect, so get a copy of the original 
     // request and update it for the redirect.
+    {
+      SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 1);
+      event.add_var_param(target);
+      SAS::report_event(event);
+    }
+
     pjsip_msg* req = original_request();
 
     if (PJUtils::redirect(req, target, get_pool(req), code) == PJSIP_SC_OK)
@@ -864,6 +1125,9 @@ std::string MmtelTsx::check_call_diversion_rules(unsigned int conditions)
           (_cdiv_targets.find(rule->forward_target()) == _cdiv_targets.end()))
       {
         LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
+        if (_cdiv_callback != NULL) {
+          _cdiv_callback->cdiv_callback(rule->forward_target(), rule->conditions());
+        }
         _cdiv_targets.insert(rule->forward_target());
         return rule->forward_target();
       }

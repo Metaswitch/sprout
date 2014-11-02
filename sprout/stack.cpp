@@ -145,6 +145,12 @@ const static std::string _known_statnames[] = {
   "hss_user_auth_latency_us",
   "hss_location_latency_us",
   "connected_ralfs",
+  "cdiv_total",
+  "cdiv_unconditional",
+  "cdiv_busy",
+  "cdiv_not_registered",
+  "cdiv_no_answer",
+  "cdiv_not_reachable",
 };
 
 const static std::string SPROUT_ZMQ_PORT = "6666";
