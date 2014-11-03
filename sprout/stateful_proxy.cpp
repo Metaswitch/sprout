@@ -245,6 +245,7 @@ static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
+static NodeRole acr_node_role(pjsip_msg *req);
 
 
 ///@{
@@ -438,7 +439,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                     CALLING_PARTY,
-                                    ACR::requested_node_role(rdata->msg_info.msg));
+                                    acr_node_role(rdata->msg_info.msg));
   }
   else
   {
@@ -508,7 +509,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         // new one.
         acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                         CALLING_PARTY,
-                                        ACR::requested_node_role(rdata->msg_info.msg));
+                                        acr_node_role(rdata->msg_info.msg));
       }
     }
     else
@@ -814,7 +815,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Create and send an ACR for the CANCEL request.
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
-                                       ACR::requested_node_role(rdata->msg_info.msg));
+                                       acr_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -893,7 +894,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
 
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
-                                       ACR::requested_node_role(rdata->msg_info.msg));
+                                       acr_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1704,6 +1705,37 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   return PJ_SUCCESS;
 }
 
+/// For a given message, calculate the role the message is requesting the
+/// node carry out.
+static NodeRole acr_node_role(pjsip_msg *req)
+{
+  NodeRole role;
+
+  // Determine whether this an originating or terminating request by looking for
+  // the `orig` parameter in the top route header.  REGISTERs, are neither, but
+  // originating makes most sense as they only correspond to the user that
+  // generates them.
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
+                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  if ((route_hdr != NULL) &&
+      (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
+                        &STR_ORIG) != NULL))
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else
+  {
+    role = NODE_ROLE_TERMINATING;
+  }
+
+  return role;
+}
+
 ///@}
 
 void UASTransaction::cancel_trying_timer()
@@ -1893,7 +1925,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         // switch ACR context for the downstream leg.
         _bgcf_acr = bgcf_acr_factory->get_acr(trail,
                                               CALLING_PARTY,
-                                              ACR::requested_node_role(msg));
+                                              acr_node_role(msg));
 
         if ((_downstream_acr != _upstream_acr) &&
             (!_as_chain_links.empty()))
@@ -2573,7 +2605,7 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
       // Allocate an I-CSCF ACR.
       _icscf_acr = icscf_acr_factory->get_acr(trail(),
                                               CALLING_PARTY,
-                                              ACR::requested_node_role(_req->msg));
+                                              acr_node_role(_req->msg));
       _icscf_acr->rx_request(_req->msg);
 
       // Create an I-CSCF router for the LIR query.
@@ -2924,7 +2956,7 @@ bool UASTransaction::move_to_terminating_chain()
       _upstream_acr->tx_request(_req->msg);
       _downstream_acr = cscf_acr_factory->get_acr(trail(),
                                                   CALLING_PARTY,
-                                                  ACR::requested_node_role(_req->msg));
+                                                  acr_node_role(_req->msg));
       _downstream_acr->rx_request(_req->msg);
 
       // These headers name the originating user, so should not survive
@@ -4988,5 +5020,6 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   LOG_DEBUG("UASTransaction %p linked to AsChain %s", this, ret.to_string().c_str());
   return ret;
 }
+
 
 ///@}

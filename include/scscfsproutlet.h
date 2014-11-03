@@ -250,12 +250,11 @@ private:
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
-  void add_record_route(pjsip_msg* msg,
-                        const std::string& billing_role);
+  void add_record_route(pjsip_msg* msg, NodeRole);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  void get_billing_role(std::string& billing_role);
+  NodeRole get_billing_role();
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);
