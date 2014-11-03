@@ -129,35 +129,6 @@ std::string ACR::node_role_str(NodeRole role)
   }
 }
 
-NodeRole ACR::requested_node_role(pjsip_msg *req)
-{
-  NodeRole role;
-
-  // Determine whether this an originating or terminating request by looking for
-  // the `orig` parameter in the top route header.  REGISTERs, are neither, but
-  // originating makes most sense as they only correspond to the user that
-  // generates them.
-  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
-                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
-
-  if ((route_hdr != NULL) &&
-      (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
-                        &STR_ORIG) != NULL))
-  {
-    role = NODE_ROLE_ORIGINATING;
-  }
-  else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
-  {
-    role = NODE_ROLE_ORIGINATING;
-  }
-  else
-  {
-    role = NODE_ROLE_TERMINATING;
-  }
-
-  return role;
-}
-
 ACRFactory::ACRFactory()
 {
 }

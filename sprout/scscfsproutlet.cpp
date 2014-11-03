@@ -557,9 +557,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
       (cancel_req != NULL))
   {
     // Create and send an ACR for the CANCEL request.
-    ACR* acr = _scscf->get_acr(trail(),
-                               CALLING_PARTY,
-                               ACR::requested_node_role(cancel_req));
+    NodeRole role = NODE_ROLE_ORIGINATING;
+    if ((_session_case != NULL) &&
+        (_session_case->is_terminating()))
+    {
+      role = NODE_ROLE_TERMINATING;
+    }
+    ACR* acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
     acr->rx_request(cancel_req);
