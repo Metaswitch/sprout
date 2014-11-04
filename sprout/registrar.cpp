@@ -970,28 +970,7 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->update_registration_state(public_id,
-                                                      "",
-                                                      HSSConnection::DEREG_ADMIN,
-                                                      ifc_map,
-                                                      uris,
-                                                      trail);
-
-  // If we try to deregister a subscriber who has already
-  // registered (e.g. because our third-party-registration
-  // announcing a deregistration fails) Homestead will return an
-  // error and we'll avoid sending these in a loop.
-  if (http_code == HTTP_OK)
-  {
-    LOG_DEBUG("Initiating network-initiated deregistration");
-    RegistrationUtils::network_initiated_deregistration(store,
-                                                        ifc_map[public_id],
-                                                        public_id,
-                                                        "*",
-                                                        trail);
-  }
+  RegistrationUtils::remove_bindings(store, hss, public_id, "*", trail);
 }
 
 

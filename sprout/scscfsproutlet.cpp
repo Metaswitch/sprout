@@ -46,6 +46,7 @@
 #include "custom_headers.h"
 #include "stack.h"
 #include "contact_filtering.h"
+#include "registration_utils.h"
 #include "scscfsproutlet.h"
 
 /// SCSCFSproutlet constructor.
@@ -186,6 +187,16 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
   }
 
   // TODO - Log bindings to SAS
+}
+
+
+/// Removes the specified binding for the specified Address of Record from
+/// the local or remote registration stores.
+void SCSCFSproutlet::remove_binding(const std::string& aor,
+                                    const std::string& binding_id,
+                                    SAS::TrailId trail)
+{
+  RegistrationUtils::remove_bindings(_store, _hss, aor, binding_id, trail);
 }
 
 
@@ -474,7 +485,14 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // The edge proxy / P-CSCF has reported that this flow has failed.
     // We should remove the binding from the registration store so we don't
     // try it again.
-    // @TODO - this code has been removed from stateful_proxy, not sure why???
+    std::unordered_map<int, std::string>::iterator i = _target_bindings.find(fork_id);
+
+    if (i != _target_bindings.end())
+    {
+      // We're the auth proxy and the flow we used failed, so delete the binding
+      // corresponding to this flow.
+      _scscf->remove_binding(_target_aor, i->second, trail());
+    }
   }
 
   if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
@@ -1205,7 +1223,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       pjsip_msg* to_send = (ii == targets.size() - 1) ? req : clone_request(req);
       pool = get_pool(to_send);
 
-      // Set up the Rquest URI.
+      // Set up the Request URI.
       to_send->line.req.uri = (pjsip_uri*)
                                         pjsip_uri_clone(pool, targets[ii].uri);
 
@@ -1222,7 +1240,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       }
 
       // Forward the request and remember the binding identifier used for this
-      // in case we get a Flow Failed response.
+      // in case we get a 430 Flow Failed response.
       int fork_id = send_request(to_send);
       _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
     }

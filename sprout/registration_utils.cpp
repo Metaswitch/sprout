@@ -334,9 +334,11 @@ void notify_application_servers()
   // TODO: implement as part of reg events package
 }
 
-static void expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
+static bool expire_bindings(RegStore *store, const std::string& aor, const std::string& binding_id, SAS::TrailId trail)
 {
-  //We need the retry loop to handle the store's compare-and-swap.
+  // We need the retry loop to handle the store's compare-and-swap.
+  bool all_bindings_expired = false;
+
   for (;;)  // LCOV_EXCL_LINE No UT for retry loop.
   {
     RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
@@ -359,25 +361,45 @@ static void expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    bool ok = store->set_aor_data(aor, aor_data, false, trail);
+    bool ok = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired);
     delete aor_data;
     if (ok)
     {
       break;
     }
   }
-};
 
-void RegistrationUtils::network_initiated_deregistration(RegStore *store,
-                                                         Ifcs& ifcs,
-                                                         const std::string& served_user,
-                                                         const std::string& binding_id,
-                                                         SAS::TrailId trail)
+  return all_bindings_expired;
+}
+
+void RegistrationUtils::remove_bindings(RegStore* store,
+                                        HSSConnection* hss,
+                                        const std::string& aor,
+                                        const std::string& binding_id,
+                                        SAS::TrailId trail)
 {
-  expire_bindings(store, served_user, binding_id, trail);
+  LOG_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
 
-  // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
-  // should be passed on the REGISTER message, so we don't need the binding ID.
-  RegistrationUtils::deregister_with_application_servers(ifcs, store, served_user, trail);
-  notify_application_servers();
+  if (expire_bindings(store, aor, binding_id, trail))
+  {
+    // All bindings have been expired, so do deregistration processing for the
+    // IMPU.
+    LOG_INFO("All bindings for %s expired, so deregister at HSS and ASs", aor.c_str());
+    std::vector<std::string> uris;
+    std::map<std::string, Ifcs> ifc_map;
+    HTTPCode http_code = hss->update_registration_state(aor,
+                                                        "",
+                                                        HSSConnection::DEREG_ADMIN,
+                                                        ifc_map,
+                                                        uris,
+                                                        trail);
+
+    if (http_code == HTTP_OK)
+    {
+      // Note that 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 doesn't specify that any binding information
+      // should be passed on the REGISTER message, so we don't need the binding ID.
+      deregister_with_application_servers(ifc_map[aor], store, aor, trail);
+      notify_application_servers();
+    }
+  }
 };
