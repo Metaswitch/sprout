@@ -873,7 +873,7 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   std::string user = "sip:6505550231@homedomain";
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED,
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"
@@ -899,12 +899,13 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   ASSERT_TRUE(aor_data != NULL);
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
-  std::map<std::string, Ifcs> ifc_map;
-  std::vector<std::string> uris;
-  std::string regstate;
-  _hss_connection->update_registration_state(user, "", HSSConnection::REG, regstate, ifc_map, uris, 0);
 
-  RegistrationUtils::network_initiated_deregistration(_store, ifc_map[user], user, "*", 0);
+  RegistrationUtils::remove_bindings(_store,
+                                     _hss_connection,
+                                     user,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration

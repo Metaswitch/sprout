@@ -5645,7 +5645,6 @@ TEST_F(SCSCFTest, OriginatingTerminatingASTimeout)
   msg._method = "ACK";
   msg._branch = "2222222222";
   inject_msg(msg.get_request(), &tpAS);
-
 }
 
 
@@ -5868,6 +5867,10 @@ TEST_F(SCSCFTest, OriginatingTerminatingMessageASTimeout)
 // Test terminating call-diversion AS flow to external URI, with orig-cdiv enabled too.
 TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
 {
+  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+
   register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
@@ -5892,9 +5895,6 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
-  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
-  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
-  TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
 
   // ---------- Send INVITE
   // We're within the trust boundary, so no stripping should occur.
@@ -6166,4 +6166,100 @@ TEST_F(SCSCFTest, TestNoSecondPAIHdrTerm)
   list<HeaderMatcher> hdrs;
   hdrs.push_back(HeaderMatcher("P-Asserted-Identity", "P-Asserted-Identity: \"Andy\" <sip:6505551000@homedomain>"));
   doSuccessfulFlow(msg, testing::MatchesRegex(".*wuntootreefower.*"), hdrs, false);
+}
+
+/// Test handling of 430 Flow Failed response
+TEST_F(SCSCFTest, FlowFailedResponse)
+{
+  TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
+  //TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
+  TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
+
+  std::string user = "sip:6505550231@homedomain";
+  register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
+
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", HSSConnection::STATE_REGISTERED,
+                              "<IMSSubscription><ServiceProfile>\n"
+                              "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
+                              "  <InitialFilterCriteria>\n"
+                              "    <Priority>1</Priority>\n"
+                              "    <TriggerPoint>\n"
+                              "      <ConditionTypeCNF>0</ConditionTypeCNF>\n"
+                              "      <SPT>\n"
+                              "        <ConditionNegated>0</ConditionNegated>\n"
+                              "        <Group>0</Group>\n"
+                              "        <Method>REGISTER</Method>\n"
+                              "        <Extension></Extension>\n"
+                              "      </SPT>\n"
+                              "    </TriggerPoint>\n"
+                              "    <ApplicationServer>\n"
+                              "      <ServerName>sip:1.2.3.4:56789;transport=UDP</ServerName>\n"
+                              "      <DefaultHandling>1</DefaultHandling>\n"
+                              "    </ApplicationServer>\n"
+                              "  </InitialFilterCriteria>\n"
+                              "</ServiceProfile></IMSSubscription>");
+
+
+  // ---------- Send INVITE
+  // We're within the trust boundary, so no stripping should occur.
+  Message msg;
+  msg._via = "10.99.88.11:12345";
+  msg._to = "65055502314@homedomain";
+  msg._todomain = "";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._requri = "sip:6505550231@homedomain";
+  msg._method = "INVITE";
+  inject_msg(msg.get_request(), &tpBono);
+  poll();
+  ASSERT_EQ(2, txdata_count());
+
+  // 100 Trying goes back to bono
+  pjsip_msg* out = current_txdata()->msg;
+  RespMatcher(100).matches(out);
+  tpBono.expect_target(current_txdata(), true);
+  msg.set_route(out);
+  free_txdata();
+
+  // INVITE passed externally
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("INVITE").matches(out));
+
+  // Send 430 Flow Failed response.
+  string fresp = respond_to_current_txdata(430);
+  free_txdata();
+  inject_msg(fresp);
+
+  // Sprout ACKs the response.
+  ASSERT_EQ(3, txdata_count());
+  ReqMatcher("ACK").matches(current_txdata()->msg);
+  free_txdata();
+
+  // Sprout deletes the binding.
+  RegStore::AoR* aor_data = _store->get_aor_data(user, 0);
+  ASSERT_TRUE(aor_data != NULL);
+  EXPECT_EQ(0u, aor_data->_bindings.size());
+  delete aor_data; aor_data = NULL;
+
+  // Because there are no remaining bindings, Sprout sends a deregister to the
+  // HSS and a third-party deREGISTER to the AS.
+  ASSERT_EQ(2, txdata_count());
+  out = current_txdata()->msg;
+  ASSERT_NO_FATAL_FAILURE(ReqMatcher("REGISTER").matches(out));
+  EXPECT_EQ(NULL, out->body);
+
+  // Send a 200 OK response from the AS.
+  fresp = respond_to_current_txdata(200);
+  //free_txdata();
+  inject_msg(fresp, &tpAS);
+
+  // Catch the forwarded 430 response.
+  ASSERT_EQ(1, txdata_count());
+  out = current_txdata()->msg;
+  RespMatcher(430).matches(out);
+  free_txdata();
+
+  // UE ACKs the response.
+  msg._method = "ACK";
+  inject_msg(msg.get_request(), &tpBono);
 }
