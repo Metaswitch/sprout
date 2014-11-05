@@ -156,6 +156,7 @@ public:
   string _cseq;
   string _scheme;
   string _route;
+  bool _gruu_support;
 
   Message() :
     _method("REGISTER"),
@@ -169,7 +170,8 @@ public:
     _auth(""),
     _cseq("16567"),
     _scheme("sip"),
-    _route("homedomain")
+    _route("homedomain"),
+    _gruu_support(true)
   {
   }
 
@@ -186,7 +188,7 @@ string Message::get()
                    "Via: SIP/2.0/TCP 10.83.18.38:36530;rport;branch=z9hG4bKPjmo1aimuq33BAI4rjhgQgBr4sY5e9kSPI\r\n"
                    "Via: SIP/2.0/TCP 10.114.61.213:5061;received=23.20.193.43;branch=z9hG4bK+7f6b263a983ef39b0bbda2135ee454871+sip+1+a64de9f6\r\n"
                    "From: <%2$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                   "Supported: outbound, path\r\n"
+                   "Supported: outbound, path%15$s\r\n"
                    "To: <%2$s>\r\n"
                    "Max-Forwards: 68\r\n"
                    "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqsUOO4ohntC@10.114.61.213\r\n"
@@ -217,7 +219,8 @@ string Message::get()
                    /* 11 */ _expires.empty() ? "" : string(_expires).append("\r\n").c_str(),
                    /* 12 */ _auth.empty() ? "" : string(_auth).append("\r\n").c_str(),
                    /* 13 */ _cseq.c_str(),
-                   /* 14 */ _route.c_str()
+                   /* 14 */ _route.c_str(),
+                   /* 15 */ _gruu_support ? ", gruu" : ""
     );
 
   EXPECT_LT(n, (int)sizeof(buf));
@@ -411,6 +414,30 @@ TEST_F(RegistrarTest, SimpleMainlineNoExpiresHeaderParameter)
   EXPECT_EQ(msg._path, get_headers(out, "Path"));
   EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
   EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
+
+/// UE without support for GRUUs
+TEST_F(RegistrarTest, GRUUNotSupported)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  msg._gruu_support = false;
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  // No pub-gruu as UE doesn't support GRUUs.
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1",
+            get_headers(out, "Contact"));
   free_txdata();
 }
 
