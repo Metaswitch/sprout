@@ -6179,7 +6179,7 @@ TEST_F(SCSCFTest, FlowFailedResponse)
   register_uri(_store, _hss_connection, "6505550231", "homedomain", "sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213", 30);
 
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
-  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-admin", HSSConnection::STATE_REGISTERED,
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "dereg-timeout", HSSConnection::STATE_REGISTERED,
                               "<IMSSubscription><ServiceProfile>\n"
                               "  <PublicIdentity><Identity>sip:6505550231@homedomain</Identity></PublicIdentity>\n"
                               "  <InitialFilterCriteria>\n"

@@ -376,6 +376,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
                                         HSSConnection* hss,
                                         const std::string& aor,
                                         const std::string& binding_id,
+                                        const std::string& dereg_type,
                                         SAS::TrailId trail)
 {
   LOG_INFO("Remove binding(s) %s from IMPU %s", binding_id.c_str(), aor.c_str());
@@ -389,7 +390,7 @@ void RegistrationUtils::remove_bindings(RegStore* store,
     std::map<std::string, Ifcs> ifc_map;
     HTTPCode http_code = hss->update_registration_state(aor,
                                                         "",
-                                                        HSSConnection::DEREG_ADMIN,
+                                                        dereg_type,
                                                         ifc_map,
                                                         uris,
                                                         trail);

@@ -970,7 +970,12 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  RegistrationUtils::remove_bindings(store, hss, public_id, "*", trail);
+  RegistrationUtils::remove_bindings(store,
+                                     hss,
+                                     public_id,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     trail);
 }
 
 

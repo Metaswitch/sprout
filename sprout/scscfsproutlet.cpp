@@ -196,7 +196,12 @@ void SCSCFSproutlet::remove_binding(const std::string& aor,
                                     const std::string& binding_id,
                                     SAS::TrailId trail)
 {
-  RegistrationUtils::remove_bindings(_store, _hss, aor, binding_id, trail);
+  RegistrationUtils::remove_bindings(_store,
+                                     _hss,
+                                     aor,
+                                     binding_id,
+                                     HSSConnection::DEREG_TIMEOUT,
+                                     trail);
 }
 
 

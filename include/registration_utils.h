@@ -55,6 +55,7 @@ void remove_bindings(RegStore* store,
                      HSSConnection* hss,
                      const std::string& aor,
                      const std::string& binding_id,
+                     const std::string& dereg_type,
                      SAS::TrailId trail);
 
 void register_with_application_servers(Ifcs& ifcs,

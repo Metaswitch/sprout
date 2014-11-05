@@ -900,7 +900,12 @@ TEST_F(RegistrarTest, DeregisterAppServersWithNoBody)
   EXPECT_EQ(1u, aor_data->_bindings.size());
   delete aor_data; aor_data = NULL;
 
-  RegistrationUtils::remove_bindings(_store, _hss_connection, user, "*", 0);
+  RegistrationUtils::remove_bindings(_store,
+                                     _hss_connection,
+                                     user,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     0);
 
   SCOPED_TRACE("deREGISTER");
   // Check that we send a REGISTER to the AS on network-initiated deregistration
