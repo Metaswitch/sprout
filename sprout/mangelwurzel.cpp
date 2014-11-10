@@ -1,5 +1,5 @@
 /**
- * @file mangelwurzel.cpp Implementation of mangelwurzel.
+ * @file mangelwurzel.cpp Implementation of mangelwurzel, the B2BUA emulator.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2014  Metaswitch Networks Ltd
@@ -43,6 +43,7 @@
 #include "constants.h"
 #include "mangelwurzel.h"
 
+/// Mangelwurzel URI parameter constants.
 static const pj_str_t DIALOG_PARAM = pj_str((char *)"dialog");
 static const pj_str_t REQ_URI_PARAM = pj_str((char *)"req-uri");
 static const pj_str_t CONTACT_PARAM = pj_str((char *)"contact");
@@ -61,8 +62,8 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
 {
   MangelwurzelTsx::Config config;
 
-  // Find the Route header, parse the parameters out and construct a
-  // MangelwurzelTsx.
+  // Find the mangewurzel Route header, parse the parameters and use them to
+  // build a Config object. Then construct the MangelwurzelTsx.
   pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)helper->route_hdr();
 
   if (route_hdr != NULL)
@@ -101,6 +102,8 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
     {
       config.ootb = true;
     }
+    // The mangalgorithm defaults to ROT_13, so only change it if REVERSE is
+    // specified.
     pjsip_param* mangalgorithm_param = pjsip_param_find(&route_hdr_uri->other_param,
                                                         &MANGALGORITHM_PARAM);
     if ((mangalgorithm_param != NULL) &&
@@ -122,14 +125,14 @@ void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
 
-  if (_config.req_uri)
-  {
-    mangle_req_uri(req, pool);
-  }
-
   if (_config.dialog)
   {
     mangle_dialog_identifiers(req, pool);
+  }
+
+  if (_config.req_uri)
+  {
+    mangle_req_uri(req, pool);
   }
 
   if (_config.contact)
@@ -217,6 +220,8 @@ void MangelwurzelTsx::on_rx_in_dialog_request(pjsip_msg* req)
   send_request(req);
 }
 
+/// Apply the mangalgorithm to the From tag, To tag (if present) and call ID of
+/// req.
 void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
 {
   pjsip_from_hdr* from_hdr = PJSIP_MSG_FROM_HDR(req);
@@ -225,6 +230,7 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string from_tag = PJUtils::pj_str_to_string(&from_hdr->tag);
     mangle_string(from_tag);
+    LOG_DEBUG("From tag mangled to %s", from_tag.c_str());
     from_hdr->tag = pj_strdup3(pool, from_tag.c_str());
   }
 
@@ -234,6 +240,7 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string to_tag = PJUtils::pj_str_to_string(&to_hdr->tag);
     mangle_string(to_tag);
+    LOG_DEBUG("To tag mangled to %s", to_tag.c_str());
     to_hdr->tag = pj_strdup3(pool, to_tag.c_str());
   }
 
@@ -244,8 +251,11 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   {
     std::string call_id = PJUtils::pj_str_to_string(&cid_hdr->id);
     mangle_string(call_id);
+    LOG_DEBUG("Call ID manged to %s", call_id.c_str());
     cid_hdr->id = pj_strdup3(pool, call_id.c_str());
 
+    // Report a SAS marker for the new call ID so that the two dialogs can be
+    // correlated in SAS.
     LOG_DEBUG("Logging SAS Call-ID marker, Call-ID %.*s",
               cid_hdr->id.slen,
               cid_hdr->id.ptr);
@@ -255,11 +265,13 @@ void MangelwurzelTsx::mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool)
   }
 }
 
+/// Apply the mangalgorithm to the Request URI of req.
 void MangelwurzelTsx::mangle_req_uri(pjsip_msg* req, pj_pool_t* pool)
 {
   mangle_uri(req->line.req.uri, pool, false);
 }
 
+/// Apply the mangalgorithm to the Contact URI of req.
 void MangelwurzelTsx::mangle_contact(pjsip_msg* msg, pj_pool_t* pool)
 {
   pjsip_contact_hdr* contact_hdr =
@@ -272,6 +284,7 @@ void MangelwurzelTsx::mangle_contact(pjsip_msg* msg, pj_pool_t* pool)
   }
 }
 
+/// Apply the mangalgorithm to the To URI of req.
 void MangelwurzelTsx::mangle_to(pjsip_msg* req, pj_pool_t* pool)
 {
   pjsip_to_hdr* to_hdr = PJSIP_MSG_TO_HDR(req);
@@ -282,6 +295,12 @@ void MangelwurzelTsx::mangle_to(pjsip_msg* req, pj_pool_t* pool)
   }
 }
 
+/// Apply the mangalgorithm to the specified URI. The user part of the URI is
+/// always mangled. The domain is mangled separately, and is only mangled if
+/// mangelwurzel's change_domain flag is set, or if the function's
+/// force_mangle_domain flag is set (we use this flag to make sure we always
+/// mangle the domains for Routes and Record-Routes). We don't mangle
+/// anything else (e.g. port number, SIP parameters).
 void MangelwurzelTsx::mangle_uri(pjsip_uri* uri,
                                  pj_pool_t* pool,
                                  bool force_mangle_domain)
@@ -309,6 +328,7 @@ void MangelwurzelTsx::mangle_uri(pjsip_uri* uri,
   }
 }
 
+/// Decide which mangalgorithm to use.
 void MangelwurzelTsx::mangle_string(std::string& str)
 {
   if (_config.mangalgorithm == REVERSE)
@@ -321,6 +341,9 @@ void MangelwurzelTsx::mangle_string(std::string& str)
   }
 }
 
+/// Implementation of the rot13 mangalgorithm. Alphabet characters are rotated
+/// through the alphabet by 13, numeric characters are rotated through the
+/// single digit numbers by 5.
 void MangelwurzelTsx::rot13(std::string& str)
 {
   for (std::string::iterator it = str.begin(); it != str.end(); it++)
@@ -344,14 +367,16 @@ void MangelwurzelTsx::rot13(std::string& str)
   }
 }
 
+/// Implementation of the reverse mangalgorithm. Reverse the string.
 void MangelwurzelTsx::reverse(std::string& str)
 {
   std::reverse(str.begin(), str.end());
 }
 
+/// Remove all the Via headers from the request. We do this on all requests,
+/// and we add them back on on responses.
 void MangelwurzelTsx::strip_via_hdrs(pjsip_msg* req)
 {
-  // Remove all the via headers from the request.
   pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(req,
                                                               PJSIP_H_VIA,
                                                               NULL);
@@ -365,6 +390,8 @@ void MangelwurzelTsx::strip_via_hdrs(pjsip_msg* req)
   }
 }
 
+/// Add the Via headers that we removed from the request back on the response.
+/// We do this by looking at the original request.
 void MangelwurzelTsx::add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool)
 {
   // Copy all the via headers from the original request back onto the response
@@ -385,6 +412,12 @@ void MangelwurzelTsx::add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool)
   }
 }
 
+/// Mangelwurzel can be configured to generate originating or terminating
+/// requests, and out of the blue requests. This requires manipulation of the
+/// S-CSCF Route header, which will be the top Route header. Mangelwurzel
+/// adds the orig parameter for originating requests, removes it for
+/// terminating requests and removes the ODI token from the URI for out of
+/// the blue requests.
 void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
 {
   pjsip_route_hdr* route_hdr =
@@ -399,6 +432,7 @@ void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
 
     if ((_config.orig) && (orig_param == NULL))
     {
+      LOG_DEBUG("Add orig param to S-CSCF Route header");
       orig_param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &orig_param->name, &STR_ORIG);
       orig_param->value.slen = 0;
@@ -406,19 +440,26 @@ void MangelwurzelTsx::edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool)
     }
     else if ((!_config.orig) && (orig_param != NULL))
     {
+      LOG_DEBUG("Remove orig param from S-CSCF Route header");
       pj_list_erase(orig_param);
     }
 
+    // Ensure there is no ODI token by clearing the user part of the URI.
     if (_config.ootb)
     {
+      LOG_DEBUG("Remove ODI token from S-CSCF Route header");
       scscf_uri->user.ptr = NULL;
       scscf_uri->user.slen = 0;
     }
   }
 }
 
+/// Apply the mangalgorithm to all the Record-Routes except mangelwurzel's own
+/// one.
 void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
 {
+  // Get the original request. We use this to calculate which Record-Route
+  // header might be mangelwurzel's.
   pjsip_msg* original_req = original_request();
   int mangelwurzel_rr_index = 1;
 
@@ -429,12 +470,16 @@ void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
 
   while (rr_hdr != NULL)
   {
+    // For each Record-Route header on the original request, increment
+    // mangelwurzel_rr_index. Once we've found all the original Record-Routes
+    // we'll have the index of mangelwurzel's Record-Route on our message.
     mangelwurzel_rr_index++;
     rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(original_req,
                                                PJSIP_H_RECORD_ROUTE,
                                                rr_hdr->next);
   }
 
+  // Now go through the Record-Routes again mangling them.
   rr_hdr = (pjsip_rr_hdr*)pjsip_msg_find_hdr(msg, PJSIP_H_RECORD_ROUTE, NULL);
   int rr_index = 0;
 
@@ -442,6 +487,7 @@ void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
   {
     rr_index++;
 
+    // Don't mangle mangelwurzel's Record-Route header.
     if (rr_index != mangelwurzel_rr_index)
     {
       mangle_uri(rr_hdr->name_addr.uri, pool, true);
@@ -453,6 +499,9 @@ void MangelwurzelTsx::mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool)
   }
 }
 
+/// Apply the mangalgorithm to all the Route headers. We only do this for
+/// responses and in dialog requests, and it will unmangle the Routes that were
+/// mangled in the endpoint's Route-set.
 void MangelwurzelTsx::mangle_routes(pjsip_msg* msg, pj_pool_t* pool)
 {
   pjsip_route_hdr* route_hdr =
@@ -467,6 +516,8 @@ void MangelwurzelTsx::mangle_routes(pjsip_msg* msg, pj_pool_t* pool)
   }
 }
 
+/// Record-route ourselves, preserving the parameters on our original Route
+/// header.
 void MangelwurzelTsx::record_route(pjsip_msg* req, pj_pool_t* pool)
 {
   const pjsip_route_hdr* mangelwurzel_route_hdr = route_hdr();
