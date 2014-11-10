@@ -55,26 +55,35 @@ extern "C" {
 
 class MangelwurzelTsx;
 
+/// Definition of MangelwurzelTsx class.
 class Mangelwurzel : public Sproutlet
 {
 public:
+  /// Constructor.
   Mangelwurzel() : Sproutlet("mangelwurzel") {}
+
+  /// Destructor.
   ~Mangelwurzel() {}
 
+  /// Create a MangelwurzelTsx.
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
 };
 
+/// Definition of the MangelwurzelTsx class.
 class MangelwurzelTsx : public SproutletTsx
 {
 public:
+  /// Enum defining the valid mangalgorithms mangelwurzel implements.
   enum Mangalgorithm
   {
     ROT_13 = 0,
     REVERSE = 1
   };
 
+  /// Config object for a MangelwurzelTsx. Sets sensible defaults for all the
+  /// fields.
   class Config
   {
   public:
@@ -92,33 +101,63 @@ public:
 
     ~Config() {}
 
+    /// Whether or not to mangle the dialog identifiers on messages.
     bool dialog;
+
+    /// Whether or not to mangle the Request URI on requests (and the Contact
+    /// header on responses).
     bool req_uri;
+
+    /// Whether or not to mangle the Contact URI on requests.
     bool contact;
+
+    /// Whether or not to mangle the To URI on requests.
     bool to;
+
+    /// Whether or not to mangle the domain of the Request URI, Contact URI and
+    /// To URI.
     bool change_domain;
+
+    /// Whether or not to mangle the route-sets.
     bool routes;
+
+    /// Which Mangalgorithm to use for mangling strings.
     Mangalgorithm mangalgorithm;
+
+    /// Whether or not requests should be sent back to the S-CSCF as originating
+    /// requests.
     bool orig;
+
+    /// Whether requests should be sent back to the S-CSCF as out of the blue
+    /// requests.
     bool ootb;
   };
 
+  /// Constructor.
   MangelwurzelTsx(SproutletTsxHelper* helper, Config& config) :
     SproutletTsx(helper), _config(config) {}
+
+  /// Destructor.
   ~MangelwurzelTsx() {}
 
+  /// Implementation of SproutletTsx methods in mangelwurzel.
   virtual void on_rx_initial_request(pjsip_msg* req);
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_rx_in_dialog_request(pjsip_msg* req);
 
 private:
+  /// The config object for this transaction.
   Config _config;
 
+  /// Helper functions for manipulating SIP messages.
   void mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool);
   void mangle_req_uri(pjsip_msg* req, pj_pool_t* pool);
   void mangle_contact(pjsip_msg* req, pj_pool_t* pool);
   void mangle_to(pjsip_msg* req, pj_pool_t* pool);
   void mangle_uri(pjsip_uri* req, pj_pool_t* pool, bool force_mangle_domain);
+
+  void mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool);
+  void mangle_routes(pjsip_msg* msg, pj_pool_t* pool);
 
   void mangle_string(std::string& str);
   void rot13(std::string& str);
@@ -128,9 +167,6 @@ private:
   void add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool);
 
   void edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool);
-
-  void mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool);
-  void mangle_routes(pjsip_msg* msg, pj_pool_t* pool);
 
   void record_route(pjsip_msg* req, pj_pool_t* pool);
 };
