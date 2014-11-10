@@ -171,6 +171,7 @@ MATCHER_P(ReqUriEquals, req_uri, "")
   return arg_req_uri == req_uri;
 }
 
+/// Check the rot13 mangalgorithm works as expected for various strings.
 TEST_F(MangelwurzelTest, Rot13)
 {
   MangelwurzelTsx::Config config;
@@ -189,6 +190,7 @@ TEST_F(MangelwurzelTest, Rot13)
   EXPECT_EQ(test_str, "");
 }
 
+/// Check the reverse mangalgorithm works as expected for various strings.
 TEST_F(MangelwurzelTest, Reverse)
 {
   MangelwurzelTsx::Config config;
@@ -207,13 +209,17 @@ TEST_F(MangelwurzelTest, Reverse)
   EXPECT_EQ(test_str, "");
 }
 
+/// Test creating mangelwurzel transactions and checking the config is parsed
+/// correctly from the Route header.
 TEST_F(MangelwurzelTest, Create)
 {
   Mangelwurzel mangelwurzel;
   Message msg;
   pjsip_msg* req = parse_msg(msg.get_request());
-
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
+
+  // No parameters on the Route header URI. Check the default values are all
+  // set.
   hdr->name_addr.uri =
     PJUtils::uri_from_string("sip:mangelwurzel.homedomain", stack_data.pool);
   EXPECT_CALL(*_helper, route_hdr()).WillOnce(Return(hdr));
@@ -233,6 +239,8 @@ TEST_F(MangelwurzelTest, Create)
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 
+  // Set all the parameters on the Route header URI. Check the values are all
+  // accurate in the transaction's config.
   hdr->name_addr.uri =
     PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=reverse",
                              stack_data.pool);
@@ -254,6 +262,7 @@ TEST_F(MangelwurzelTest, Create)
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 
+  // Check that setting the mangalgorithm to rot13 works.
   hdr->name_addr.uri =
     PJUtils::uri_from_string("sip:mangelwurzel.homedomain;mangalgorithm=rot13",
                              stack_data.pool);
@@ -267,6 +276,8 @@ TEST_F(MangelwurzelTest, Create)
 
   delete mangelwurzel_tsx; mangelwurzel_tsx = NULL;
 
+  // Check that we don't create a mangelwurzel transaction if we can't find the
+  // mangelwurzel Route header.
   EXPECT_CALL(*_helper, route_hdr()).WillOnce(ReturnNull());
 
   mangelwurzel_tsx = (MangelwurzelTsx*)mangelwurzel.get_tsx(_helper,
@@ -277,12 +288,18 @@ TEST_F(MangelwurzelTest, Create)
 
 TEST_F(MangelwurzelTest, Mainline)
 {
+  // Create a request with an S-CSCF Route header, a Contact header and a
+  // Record-Route header.
   Message msg;
   msg._routes = "Route: <sip:odi_a1b2c3@sprout.homedomain:5054;transport=TCP;lr>\r\n";
   msg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>\r\nRecord-Route: <sip:homedomain>\r\n";
+  pjsip_msg* req = parse_msg(msg.get_request());
+
+  // Save off the original request. We expect mangelwurzel to request it later.
   pjsip_msg* original_req = parse_msg(msg.get_request());
   EXPECT_CALL(*_helper, original_request()).WillRepeatedly(Return(original_req));
-  pjsip_msg* req = parse_msg(msg.get_request());
+
+  // Set up the mangelwurzel transaction's config. Turn everything on.
   MangelwurzelTsx::Config config;
   config.dialog = true;
   config.req_uri = true;
@@ -293,15 +310,22 @@ TEST_F(MangelwurzelTest, Mainline)
   config.orig = true;
   config.ootb = true;
   MangelwurzelTsx mangelwurzel_tsx(_helper, config);
+
+  // Create the corresponding Route header for this config set. We expect
+  // mangelwurzel to request it when it Record-Routes itself.
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
   hdr->name_addr.uri =
     PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=rot13",
                              stack_data.pool);
   EXPECT_CALL(*_helper, route_hdr()).WillRepeatedly(Return(hdr));
 
+  // Trigger initial request processing in mangelwurzel and catch the request
+  // again when mangelwurzel sends it on.
   EXPECT_CALL(*_helper, get_pool(req)).WillOnce(Return(stack_data.pool));
   EXPECT_CALL(*_helper, send_request(req));
   mangelwurzel_tsx.on_rx_initial_request(req);
+
+  // Check mangelwurzel has made the appropriate manipulations.
   EXPECT_EQ("To: \"6505550001\" <sip:1050005556@ubzrqbznva>;tag=32109876",
             get_headers(req, "To"));
   EXPECT_EQ("From: \"6505550000\" <sip:6505550000@homedomain>;tag=67890123",
@@ -317,10 +341,14 @@ TEST_F(MangelwurzelTest, Mainline)
   EXPECT_EQ("Record-Route: <sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=rot13>\r\nRecord-Route: <sip:ubzrqbznva>",
             get_headers(req, "Record-Route"));
 
+  // Create a response and trigger response processing on mangelwurzel. Catch
+  // the response again when mangelwurzel sends it on.
   pjsip_msg* rsp = parse_msg(msg.get_response());
   EXPECT_CALL(*_helper, get_pool(rsp)).WillOnce(Return(stack_data.pool));
   EXPECT_CALL(*_helper, send_response(rsp));
   mangelwurzel_tsx.on_rx_response(rsp, 0);
+
+  // Check mangelwurzel has made the appropriate manipulations.
   EXPECT_EQ("To: \"6505550001\" <sip:6505550001@homedomain>;tag=32109876",
             get_headers(rsp, "To"));
   EXPECT_EQ("From: \"6505550000\" <sip:6505550000@homedomain>;tag=67890123",
@@ -337,13 +365,20 @@ TEST_F(MangelwurzelTest, Mainline)
 
 TEST_F(MangelwurzelTest, InDialog)
 {
+  // Create a request with an S-CSCF Route header, a Contact header and a
+  // Record-Route header. The request is addressed to a tel URI.
   Message msg;
   msg._to = "\"6505550001\" <tel:6505550001>;tag=87654321";
   msg._routes = "Route: <sip:odi_a1b2c3@sprout.homedomain:5054;transport=TCP;lr;orig>\r\n";
   msg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>\r\nRecord-Route: <sip:homedomain>\r\n";
+  pjsip_msg* req = parse_msg(msg.get_request());
+
+  // Save off the original request. We expect mangelwurzel to request it later.
   pjsip_msg* original_req = parse_msg(msg.get_request());
   EXPECT_CALL(*_helper, original_request()).WillRepeatedly(Return(original_req));
-  pjsip_msg* req = parse_msg(msg.get_request());
+
+  // Set up the mangelwurzel transaction's config. This is different to the
+  // mainline case in order to test more code paths.
   MangelwurzelTsx::Config config;
   config.dialog = true;
   config.req_uri = true;
@@ -355,15 +390,14 @@ TEST_F(MangelwurzelTest, InDialog)
   config.ootb = false;
   config.mangalgorithm = MangelwurzelTsx::REVERSE;
   MangelwurzelTsx mangelwurzel_tsx(_helper, config);
-  pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
-  hdr->name_addr.uri =
-    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=rot13",
-                             stack_data.pool);
-  EXPECT_CALL(*_helper, route_hdr()).WillRepeatedly(Return(hdr));
 
+  // Trigger in dialog request processing in mangelwurzel and catch the request
+  // again when mangelwurzel sends it on.
   EXPECT_CALL(*_helper, get_pool(req)).WillOnce(Return(stack_data.pool));
   EXPECT_CALL(*_helper, send_request(req));
   mangelwurzel_tsx.on_rx_in_dialog_request(req);
+
+  // Check mangelwurzel has made the appropriate manipulations.
   EXPECT_EQ("To: \"6505550001\" <tel:1000555056>;tag=12345678",
             get_headers(req, "To"));
   EXPECT_EQ("From: \"6505550000\" <sip:6505550000@homedomain>;tag=87654321",
