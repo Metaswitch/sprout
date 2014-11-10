@@ -5,7 +5,7 @@ all: stage-build
 ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
-TARGET := mangelwurzel_as.so
+TARGET := mangelwurzel-as.so
 
 TARGET_SOURCES := mangelwurzel.cpp \
                   mangelwurzelplugin.cpp

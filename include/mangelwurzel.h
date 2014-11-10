@@ -53,38 +53,86 @@ extern "C" {
 #include "stack.h"
 #include "sproutlet.h"
 
-#include <map>
-#include <vector>
-#include <string>
-
 class MangelwurzelTsx;
 
 class Mangelwurzel : public Sproutlet
 {
 public:
-  Mangelwurzel();
-  ~Mangelwurzel();
+  Mangelwurzel() : Sproutlet("mangelwurzel") {}
+  ~Mangelwurzel() {}
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
 };
 
-
 class MangelwurzelTsx : public SproutletTsx
 {
 public:
-  MangelwurzelTsx(SproutletTsxHelper* helper,
-                  Mangelwurzel* mangelwurzel);
-  ~MangelwurzelTsx();
+  enum Mangalgorithm
+  {
+    ROT_13 = 0,
+    REVERSE = 1
+  };
+
+  class Config
+  {
+  public:
+    Config() :
+      dialog(false),
+      req_uri(false),
+      contact(false),
+      to(false),
+      change_domain(false),
+      routes(false),
+      mangalgorithm(ROT_13),
+      orig(false),
+      ootb(false)
+    {}
+
+    ~Config() {}
+
+    bool dialog;
+    bool req_uri;
+    bool contact;
+    bool to;
+    bool change_domain;
+    bool routes;
+    Mangalgorithm mangalgorithm;
+    bool orig;
+    bool ootb;
+  };
+
+  MangelwurzelTsx(SproutletTsxHelper* helper, Config& config) :
+    SproutletTsx(helper), _config(config) {}
+  ~MangelwurzelTsx() {}
 
   virtual void on_rx_initial_request(pjsip_msg* req);
   virtual void on_rx_response(pjsip_msg* rsp, int fork_id);
   virtual void on_rx_in_dialog_request(pjsip_msg* req);
-  virtual void on_cancel(int status_code, pjsip_msg* req);
 
 private:
-  Mangelwurzel* _mangelwurzel;
+  Config _config;
+
+  void mangle_dialog_identifiers(pjsip_msg* req, pj_pool_t* pool);
+  void mangle_req_uri(pjsip_msg* req, pj_pool_t* pool);
+  void mangle_contact(pjsip_msg* req, pj_pool_t* pool);
+  void mangle_to(pjsip_msg* req, pj_pool_t* pool);
+  void mangle_uri(pjsip_uri* req, pj_pool_t* pool, bool force_mangle_domain);
+
+  void mangle_string(std::string& str);
+  void rot13(std::string& str);
+  void reverse(std::string& str);
+
+  void strip_via_hdrs(pjsip_msg* req);
+  void add_via_hdrs(pjsip_msg* rsp, pj_pool_t* pool);
+
+  void edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool);
+
+  void mangle_record_routes(pjsip_msg* msg, pj_pool_t* pool);
+  void mangle_routes(pjsip_msg* msg, pj_pool_t* pool);
+
+  void record_route(pjsip_msg* req, pj_pool_t* pool);
 };
 
 #endif

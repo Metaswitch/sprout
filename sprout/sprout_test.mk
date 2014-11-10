@@ -60,9 +60,9 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   icscfrouter.cpp \
-                  scscfselector.cpp	\
+                  scscfselector.cpp \
                   acr.cpp \
-                  signalhandler.cpp	\
+                  signalhandler.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \
@@ -79,7 +79,8 @@ TARGET_SOURCES := logger.cpp \
                   icscfsproutlet.cpp \
                   bgcfsproutlet.cpp \
                   mmtel.cpp \
-                  mobiletwinned.cpp
+                  mobiletwinned.cpp \
+                  mangelwurzel.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -135,7 +136,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        scscf_test.cpp \
                        sproutletproxy_test.cpp \
                        gruu_test.cpp \
-                       mobiletwinned_test.cpp
+                       mobiletwinned_test.cpp \
+                       mangelwurzel_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
