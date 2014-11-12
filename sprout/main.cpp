@@ -99,9 +99,7 @@ enum OptionTypes
   OPT_SUB_MAX_EXPIRES,
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
-  OPT_CALL_LIST_TTL,
-  OPT_MEMENTO_ENABLED,
-  OPT_GEMINI_ENABLED
+  OPT_CALL_LIST_TTL
 };
 
 
@@ -150,8 +148,6 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-  { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
-  { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
   { "log-level",         required_argument, 0, 'L'},
   { "daemon",            no_argument,       0, 'd'},
   { "interactive",       no_argument,       0, 't'},
@@ -271,8 +267,6 @@ static void usage(void)
        "                            then there is no limit (default: 0)\n"
        "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
-       "     --memento-enabled      Whether the memento AS is enabled (default: false)\n"
-       "     --gemini-enabled       Whether the gemini AS is enabled (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -720,16 +714,6 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->call_list_ttl);
       break;
 
-    case OPT_MEMENTO_ENABLED:
-      options->memento_enabled = PJ_TRUE;
-      LOG_INFO("Memento AS is enabled");
-      break;
-
-    case OPT_GEMINI_ENABLED:
-      options->gemini_enabled = PJ_TRUE;
-      LOG_INFO("Gemini AS is enabled");
-      break;
-
     case 'h':
       usage();
       return -1;
@@ -1021,8 +1005,6 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.memento_enabled = PJ_FALSE;
-  opt.gemini_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1176,14 +1158,6 @@ int main(int argc, char* argv[])
       (!opt.enum_file.empty()))
   {
     LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
-  }
-
-  if ((opt.memento_enabled) &&
-      ((opt.max_call_list_length == 0) &&
-       (opt.call_list_ttl == 0)))
-  {
-    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
-    return 1;
   }
 
   // Ensure our random numbers are unpredictable.

@@ -82,7 +82,12 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
 {
   std::list<Sproutlet*> sproutlets;
 
-  if (opt.memento_enabled)
+  if (((opt.max_call_list_length == 0) &&
+       (opt.call_list_ttl == 0)))
+  {
+    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
+  }
+  else
   {
     _call_list_store = new CallListStore::Store();
     _call_list_store->initialize();
