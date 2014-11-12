@@ -42,6 +42,7 @@
 #include "log.h"
 #include "constants.h"
 #include "mangelwurzel.h"
+#include "mangelwurzelsasevent.h"
 
 /// Mangelwurzel URI parameter constants.
 static const pj_str_t DIALOG_PARAM = pj_str((char *)"dialog");
@@ -53,7 +54,8 @@ static const pj_str_t DOMAIN_PARAM = pj_str((char *)"change-domain");
 static const pj_str_t ORIG_PARAM = pj_str((char *)"orig");
 static const pj_str_t OOTB_PARAM = pj_str((char *)"ootb");
 static const pj_str_t MANGALGORITHM_PARAM = pj_str((char *)"mangalgorithm");
-static const pj_str_t REVERSE_MANGALGORITHM = pj_str((char *)"reverse");
+static const char* REVERSE_MANGALGORITHM = "reverse";
+static const char* ROT_13_MANGALGORITHM = "rot13";
 
 /// Creates a MangelwurzelTsx instance.
 SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
@@ -102,14 +104,29 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
     {
       config.ootb = true;
     }
+
     // The mangalgorithm defaults to ROT_13, so only change it if REVERSE is
-    // specified.
-    pjsip_param* mangalgorithm_param = pjsip_param_find(&route_hdr_uri->other_param,
-                                                        &MANGALGORITHM_PARAM);
-    if ((mangalgorithm_param != NULL) &&
-        (pj_strcmp(&mangalgorithm_param->value, &REVERSE_MANGALGORITHM) == 0))
+    // specified, but raise a log if an invalid mangalgorithm is specified.
+    pjsip_param* mangalgorithm_param =
+      pjsip_param_find(&route_hdr_uri->other_param,
+                       &MANGALGORITHM_PARAM);
+    if (mangalgorithm_param != NULL)
     {
-      config.mangalgorithm = MangelwurzelTsx::REVERSE;
+      std::string mangalgorithm =
+        PJUtils::pj_str_to_string(&mangalgorithm_param->value);
+
+      if (mangalgorithm == REVERSE_MANGALGORITHM)
+      {
+        config.mangalgorithm = MangelwurzelTsx::REVERSE;
+      }
+      else if (mangalgorithm != ROT_13_MANGALGORITHM)
+      {
+        LOG_ERROR("Invalid mangalgorithm specified: %s",
+                  mangalgorithm.c_str());
+        SAS::Event event(helper->trail(), SASEvent::INVALID_MANGALGORITHM, 0);
+        event.add_var_param(mangalgorithm);
+        SAS::report_event(event);
+      }
     }
 
     return new MangelwurzelTsx(helper, config);
@@ -121,9 +138,34 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
   }
 }
 
+/// Mangelwurzel receives an initial request. It will Record-Route itself,
+/// strip off all the Via headers and send the request on. It can also change
+/// the request in various ways depending on the configuration in its Route
+/// header.
+/// - It can mangle the dialog identifiers using its mangalgorithm.
+/// - It can mangle the Request URI using its mangalgorithm.
+/// - It can mangle the Contact URI using its mangalgorithm.
+/// - It can mangle the To URI using its mangalgorithm.
+/// - It can edit the S-CSCF Route header to turn the request into either an
+///   originating or terminating request.
+/// - It can edit the S-CSCF Route header to turn the request into an out of
+///   the blue request.
+/// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
+
+  // Get mangewurzel's route header and clone the URI. We use this in the SAS
+  // event logging that we've received a request, and then we use it to
+  // Record-Route ourselves.
+  const pjsip_route_hdr* mangelwurzel_route_hdr = route_hdr();
+  pjsip_uri* mangelwurzel_uri =
+    (pjsip_uri*)pjsip_uri_clone(pool, mangelwurzel_route_hdr->name_addr.uri);
+
+  SAS::Event event(trail(), SASEvent::MANGELWURZEL_INITIAL_REQ, 0);
+  event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                             mangelwurzel_uri));
+  SAS::report_event(event);
 
   if (_config.dialog)
   {
@@ -154,11 +196,18 @@ void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
 
   strip_via_hdrs(req);
 
-  record_route(req, pool);
+  record_route(req, pool, mangelwurzel_uri);
 
   send_request(req);
 }
 
+/// Mangelwurzel receives a response. It will add all the Via headers from the
+/// original request back on and send the response on. It can also change
+/// the response in various ways depending on the configuration that was
+/// specified in the Route header of the original request.
+/// - It can mangle the dialog identifiers using its mangalgorithm.
+/// - It can mangle the Contact URI using its mangalgorithm.
+/// - It can mangle the Record-Route and Route headers URIs.
 void MangelwurzelTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 {
   pj_pool_t* pool = get_pool(rsp);
@@ -184,18 +233,40 @@ void MangelwurzelTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   send_response(rsp);
 }
 
+/// Mangelwurzel receives an in dialog request. It will strip off all the Via
+/// headers and send the request on. It can also change the request in various
+/// ways depending on the configuration in its Route header.
+/// - It can mangle the dialog identifiers using its mangalgorithm.
+/// - It can mangle the Request URI using its mangalgorithm.
+/// - It can mangle the Contact URI using its mangalgorithm.
+/// - It can mangle the To URI using its mangalgorithm.
+/// - It can edit the S-CSCF Route header to turn the request into either an
+///   originating or terminating request.
+/// - It can edit the S-CSCF Route header to turn the request into an out of
+///   the blue request.
+/// - It can mangle the Record-Route headers URIs.
 void MangelwurzelTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
 
-  if (_config.req_uri)
-  {
-    mangle_req_uri(req, pool);
-  }
+  // Get the URI from the Route header. We use it in the SAS event logging that
+  // we've received an in dialog request.
+  const pjsip_route_hdr* mangelwurzel_route_hdr = route_hdr();
+  pjsip_uri* mangelwurzel_uri = mangelwurzel_route_hdr->name_addr.uri;
+
+  SAS::Event event(trail(), SASEvent::MANGELWURZEL_IN_DIALOG_REQ, 0);
+  event.add_var_param(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                             mangelwurzel_uri));
+  SAS::report_event(event);
 
   if (_config.dialog)
   {
     mangle_dialog_identifiers(req, pool);
+  }
+
+  if (_config.req_uri)
+  {
+    mangle_req_uri(req, pool);
   }
 
   if (_config.contact)
@@ -518,14 +589,12 @@ void MangelwurzelTsx::mangle_routes(pjsip_msg* msg, pj_pool_t* pool)
 
 /// Record-route ourselves, preserving the parameters on our original Route
 /// header.
-void MangelwurzelTsx::record_route(pjsip_msg* req, pj_pool_t* pool)
+void MangelwurzelTsx::record_route(pjsip_msg* req,
+                                   pj_pool_t* pool,
+                                   pjsip_uri* uri)
 {
-  const pjsip_route_hdr* mangelwurzel_route_hdr = route_hdr();
-  pjsip_uri* mangelwurzel_uri =
-    (pjsip_uri*)pjsip_uri_clone(pool, mangelwurzel_route_hdr->name_addr.uri);
-
   pjsip_rr_hdr* rr_hdr = pjsip_rr_hdr_create(pool);
-  rr_hdr->name_addr.uri = mangelwurzel_uri;
+  rr_hdr->name_addr.uri = uri;
 
   pjsip_msg_insert_first_hdr(req, (pjsip_hdr*)rr_hdr);
 }

@@ -168,7 +168,7 @@ private:
 
   void edit_scscf_route_hdr(pjsip_msg* req, pj_pool_t* pool);
 
-  void record_route(pjsip_msg* req, pj_pool_t* pool);
+  void record_route(pjsip_msg* req, pj_pool_t* pool, pjsip_uri* uri);
 };
 
 #endif

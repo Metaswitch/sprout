@@ -15,10 +15,13 @@ CPPFLAGS += -Wno-write-strings \
 #	Build location independent code for shared object
 CPPFLAGS += -fpic
 CPPFLAGS += -I${ROOT}/include \
+            -I${ROOT}/include/mangelwurzel \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/usr/include
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
+
+VPATH += ${ROOT}/sprout/mangelwurzel
 
 # Production build:
 #
