@@ -115,6 +115,12 @@ private:
                     RegStore::AoR** aor_data,
                     SAS::TrailId trail);
 
+  /// Removes the specified binding for the specified Address of Record from
+  /// the local or remote registration stores.
+  void remove_binding(const std::string& aor,
+                      const std::string& binding_id,
+                      SAS::TrailId trail);
+
   /// Read data for a public user identity from the HSS.
   bool read_hss_data(const std::string& public_id,
                      bool& registered,
