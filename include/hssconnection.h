@@ -61,7 +61,8 @@ public:
   HSSConnection(const std::string& server,
                 HttpResolver* resolver,
                 LoadMonitor *load_monitor,
-                LastValueCache *stats_aggregator);
+                LastValueCache *stats_aggregator,
+                CommunicationMonitor* comm_monitor);
   ~HSSConnection();
 
   HTTPCode get_auth_vector(const std::string& private_user_id,

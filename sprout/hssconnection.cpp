@@ -63,14 +63,16 @@ const std::string HSSConnection::STATE_NOT_REGISTERED = "NOT_REGISTERED";
 HSSConnection::HSSConnection(const std::string& server,
                              HttpResolver* resolver,
                              LoadMonitor *load_monitor,
-                             LastValueCache *stats_aggregator) :
+                             LastValueCache *stats_aggregator,
+                             CommunicationMonitor* comm_monitor) :
   _http(new HttpConnection(server,
                            false,
                            resolver,
                            "connected_homesteads",
                            load_monitor,
                            stats_aggregator,
-                           SASEvent::HttpLogLevel::PROTOCOL)),
+                           SASEvent::HttpLogLevel::PROTOCOL,
+                           comm_monitor)),
   _latency_stat("hss_latency_us", stats_aggregator),
   _digest_latency_stat("hss_digest_latency_us", stats_aggregator),
   _subscription_latency_stat("hss_subscription_latency_us", stats_aggregator),
@@ -85,7 +87,6 @@ HSSConnection::~HSSConnection()
   delete _http;
   _http = NULL;
 }
-
 
 /// Get an Authentication Vector as JSON object. Caller is responsible for deleting.
 HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity,

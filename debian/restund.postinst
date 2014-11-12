@@ -75,12 +75,12 @@ case "$1" in
         setup_user
         add_section /etc/security/limits.conf restund /etc/security/limits.conf.restund
         /usr/share/clearwater/infrastructure/scripts/restund
-        service monit reload
+        reload clearwater-monit || true
         # Restart restund.  Always do this by terminating restund so monit will
         # restart it more-or-less immediately.  (monit restart seems to have
         # significant lag.)
         # Don't fail if it's already stopped.
-        service restund stop || /bin/true
+        service restund stop || true
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
