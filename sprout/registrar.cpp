@@ -842,17 +842,21 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_list_insert_before(&contact->other_param, new_param);
         }
 
-        // The pub-gruu parameter on the Contact header is calculated
-        // from the instance-id, to avoid unnecessary storage in
-        // memcached.
-
-        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
-        if (!gruu.empty())
+        // Add a GRUU if the UE supports GRUUs and the contact header contains
+        // a +sip.instance parameter.
+        if (PJUtils::msg_supports_extension(msg, "gruu"))
         {
-          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-          pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
-          pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
-          pj_list_insert_before(&contact->other_param, new_param);
+          // The pub-gruu parameter on the Contact header is calculated
+          // from the instance-id, to avoid unnecessary storage in
+          // memcached.
+          std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+          if (!gruu.empty())
+          {
+            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+            pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+            pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+            pj_list_insert_before(&contact->other_param, new_param);
+          }
         }
 
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
