@@ -1,6 +1,6 @@
 # Mangelwurzel
 
-Mangelwurzel is a sproutlet that is built with sprout and is invoked and configured as an application server. Its function is to mangle various fields on SIP requests it receives and unmangle them on responses, without affecting call service. It is used for testing purposes.
+Mangelwurzel is a Sproutlet that is built with sprout and is invoked and configured as an application server. Its function is to mangle various fields on SIP requests and unmangle them on responses, and then forward the messages on. It doesn't affect call service. It is used for testing purposes.
 
 ## Installation
 
