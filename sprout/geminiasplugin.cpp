@@ -79,14 +79,11 @@ std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
 {
   std::list<Sproutlet*> sproutlets;
 
-  if (opt.gemini_enabled)
-  {
-    // Create the Sproutlet.
-    _gemini = new MobileTwinnedAppServer("mobile-twinned");
-    _gemini_sproutlet = new SproutletAppServerShim(_gemini);
+  // Create the Sproutlet.
+  _gemini = new MobileTwinnedAppServer("mobile-twinned");
+  _gemini_sproutlet = new SproutletAppServerShim(_gemini);
 
-    sproutlets.push_back(_gemini_sproutlet);
-  }
+  sproutlets.push_back(_gemini_sproutlet);
 
   return sproutlets;
 }
