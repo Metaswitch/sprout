@@ -141,6 +141,19 @@ Priority: extra
 Depends: call-diversion-as (= ${binary:Version})
 Description: Debugging symbols for the Call Diversion Application Server plug-in
 
+Package: mangelwurzel-as
+Architecture: any
+Depends: sprout-base
+Suggests: mangelwurzel-as-dbg
+Description: mangelwurzel, the B2BUA and SCC-AS emulator
+
+Package: mangelwurzel-as-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: mangelwurzel-as (= ${binary:Version})
+Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
+
 Package: bono
 Architecture: any
 Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5

@@ -1,5 +1,5 @@
 /**
- * @file geminiasplugin.cpp  Plug-in wrapper for the Gemini Sproutlet.
+ * @file mangelwurzelplugin.cpp Plug-in wrapper for the mangelwurzel sproutlet.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2014  Metaswitch Networks Ltd
@@ -40,57 +40,52 @@
  */
 
 #include "cfgoptions.h"
+#include "acr.h"
 #include "sproutletplugin.h"
-#include "mobiletwinned.h"
-#include "sproutletappserver.h"
+#include "mangelwurzel.h"
 
-class GeminiPlugin : public SproutletPlugin
+class MangelwurzelPlugin : public SproutletPlugin
 {
 public:
-  GeminiPlugin();
-  ~GeminiPlugin();
+  MangelwurzelPlugin();
+  ~MangelwurzelPlugin();
 
   std::list<Sproutlet*> load(struct options& opt);
   void unload();
 
 private:
-  MobileTwinnedAppServer* _gemini;
-  SproutletAppServerShim* _gemini_sproutlet;
+  Mangelwurzel* _mangelwurzel;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-GeminiPlugin sproutlet_plugin;
+MangelwurzelPlugin sproutlet_plugin;
 }
 
-
-GeminiPlugin::GeminiPlugin() :
-  _gemini(NULL),
-  _gemini_sproutlet(NULL)
+MangelwurzelPlugin::MangelwurzelPlugin() :
+  _mangelwurzel(NULL)
 {
 }
 
-GeminiPlugin::~GeminiPlugin()
+MangelwurzelPlugin::~MangelwurzelPlugin()
 {
 }
 
-/// Loads the Gemini plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
+/// Loads the mangelwurzel plug-in, returning the supported Sproutlets.
+std::list<Sproutlet*> MangelwurzelPlugin::load(struct options& opt)
 {
   std::list<Sproutlet*> sproutlets;
 
   // Create the Sproutlet.
-  _gemini = new MobileTwinnedAppServer("mobile-twinned");
-  _gemini_sproutlet = new SproutletAppServerShim(_gemini);
+  _mangelwurzel = new Mangelwurzel();
 
-  sproutlets.push_back(_gemini_sproutlet);
+  sproutlets.push_back(_mangelwurzel);
 
   return sproutlets;
 }
 
-/// Unloads the Gemini plug-in.
-void GeminiPlugin::unload()
+/// Unloads the mangelwurzel plug-in.
+void MangelwurzelPlugin::unload()
 {
-  delete _gemini_sproutlet;
-  delete _gemini;
+  delete _mangelwurzel;
 }

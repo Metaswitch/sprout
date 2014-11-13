@@ -842,17 +842,21 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_list_insert_before(&contact->other_param, new_param);
         }
 
-        // The pub-gruu parameter on the Contact header is calculated
-        // from the instance-id, to avoid unnecessary storage in
-        // memcached.
-
-        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
-        if (!gruu.empty())
+        // Add a GRUU if the UE supports GRUUs and the contact header contains
+        // a +sip.instance parameter.
+        if (PJUtils::msg_supports_extension(msg, "gruu"))
         {
-          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-          pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
-          pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
-          pj_list_insert_before(&contact->other_param, new_param);
+          // The pub-gruu parameter on the Contact header is calculated
+          // from the instance-id, to avoid unnecessary storage in
+          // memcached.
+          std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+          if (!gruu.empty())
+          {
+            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+            pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+            pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+            pj_list_insert_before(&contact->other_param, new_param);
+          }
         }
 
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
@@ -970,28 +974,12 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->update_registration_state(public_id,
-                                                      "",
-                                                      HSSConnection::DEREG_ADMIN,
-                                                      ifc_map,
-                                                      uris,
-                                                      trail);
-
-  // If we try to deregister a subscriber who has already
-  // registered (e.g. because our third-party-registration
-  // announcing a deregistration fails) Homestead will return an
-  // error and we'll avoid sending these in a loop.
-  if (http_code == HTTP_OK)
-  {
-    LOG_DEBUG("Initiating network-initiated deregistration");
-    RegistrationUtils::network_initiated_deregistration(store,
-                                                        ifc_map[public_id],
-                                                        public_id,
-                                                        "*",
-                                                        trail);
-  }
+  RegistrationUtils::remove_bindings(store,
+                                     hss,
+                                     public_id,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     trail);
 }
 
 

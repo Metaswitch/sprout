@@ -1,8 +1,8 @@
 /**
- * @file geminiasplugin.cpp  Plug-in wrapper for the Gemini Sproutlet.
+ * @file mocktsxhelper.h  Mock SproutletTsxHelper interfaces.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2014  Metaswitch Networks Ltd
+ * Copyright (C) 2013  Metaswitch Networks Ltd
  *
  * Parts of this module were derived from GPL licensed PJSIP sample code
  * with the following copyrights.
@@ -39,58 +39,41 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "cfgoptions.h"
-#include "sproutletplugin.h"
-#include "mobiletwinned.h"
-#include "sproutletappserver.h"
+#ifndef MOCKTSXHELPER_H__
+#define MOCKTSXHELPER_H__
 
-class GeminiPlugin : public SproutletPlugin
+#include "gmock/gmock.h"
+#include "sproutlet.h"
+
+class MockSproutletTsxHelper : public SproutletTsxHelper
 {
 public:
-  GeminiPlugin();
-  ~GeminiPlugin();
+  MockSproutletTsxHelper() {}
 
-  std::list<Sproutlet*> load(struct options& opt);
-  void unload();
+  const std::string& dialog_id() const {return _dialog_id;}
+  std::string _dialog_id;
 
-private:
-  MobileTwinnedAppServer* _gemini;
-  SproutletAppServerShim* _gemini_sproutlet;
+  SAS::TrailId trail() const {return _trail;}
+  SAS::TrailId _trail;
+
+  MOCK_METHOD0(original_request, pjsip_msg*());
+  MOCK_CONST_METHOD0(route_hdr, const pjsip_route_hdr*());
+  MOCK_CONST_METHOD1(get_reflexive_uri, pjsip_sip_uri*(pj_pool_t*));
+  MOCK_CONST_METHOD1(is_uri_reflexive, bool(const pjsip_uri*));
+  MOCK_METHOD1(add_to_dialog, void(const std::string&));
+  MOCK_METHOD1(clone_request, pjsip_msg*(pjsip_msg*));
+  MOCK_METHOD3(create_response, pjsip_msg*(pjsip_msg*, pjsip_status_code, const std::string&));
+  MOCK_METHOD1(send_request, int(pjsip_msg*&));
+  MOCK_METHOD1(send_response, void(pjsip_msg*&));
+  MOCK_METHOD2(cancel_fork, void(int, int));
+  MOCK_METHOD1(cancel_pending_forks, void(int));
+  MOCK_METHOD1(fork_state, const ForkState&(int));
+  MOCK_METHOD1(free_msg, void(pjsip_msg*&));
+  MOCK_METHOD1(get_pool, pj_pool_t*(const pjsip_msg*));
+  MOCK_METHOD1(msg_info, const char*(pjsip_msg*));
+  MOCK_METHOD3(schedule_timer, bool(void*, TimerID&, int));
+  MOCK_METHOD1(cancel_timer, void(TimerID));
+  MOCK_METHOD1(timer_running, bool(TimerID));
 };
 
-/// Export the plug-in using the magic symbol "sproutlet_plugin"
-extern "C" {
-GeminiPlugin sproutlet_plugin;
-}
-
-
-GeminiPlugin::GeminiPlugin() :
-  _gemini(NULL),
-  _gemini_sproutlet(NULL)
-{
-}
-
-GeminiPlugin::~GeminiPlugin()
-{
-}
-
-/// Loads the Gemini plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
-{
-  std::list<Sproutlet*> sproutlets;
-
-  // Create the Sproutlet.
-  _gemini = new MobileTwinnedAppServer("mobile-twinned");
-  _gemini_sproutlet = new SproutletAppServerShim(_gemini);
-
-  sproutlets.push_back(_gemini_sproutlet);
-
-  return sproutlets;
-}
-
-/// Unloads the Gemini plug-in.
-void GeminiPlugin::unload()
-{
-  delete _gemini_sproutlet;
-  delete _gemini;
-}
+#endif

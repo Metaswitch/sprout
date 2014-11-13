@@ -1,5 +1,5 @@
 /**
- * @file geminiasplugin.cpp  Plug-in wrapper for the Gemini Sproutlet.
+ * @file mangelwurzelsasevent.h Mangelwurzel-specific SAS event IDs
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2014  Metaswitch Networks Ltd
@@ -39,58 +39,19 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "cfgoptions.h"
-#include "sproutletplugin.h"
-#include "mobiletwinned.h"
-#include "sproutletappserver.h"
+#ifndef MANGELWURZELSASEVENT_H__
+#define MANGELWURZELSASEVENT_H__
 
-class GeminiPlugin : public SproutletPlugin
+#include "sasevent.h"
+
+namespace SASEvent
 {
-public:
-  GeminiPlugin();
-  ~GeminiPlugin();
+  //----------------------------------------------------------------------------
+  // Mangelwurzel events.
+  //----------------------------------------------------------------------------
+  const int INVALID_MANGALGORITHM = MANGELWURZEL_BASE + 0x000000;
+  const int MANGELWURZEL_INITIAL_REQ = MANGELWURZEL_BASE + 0x000001;
+  const int MANGELWURZEL_IN_DIALOG_REQ = MANGELWURZEL_BASE + 0x000002;
+} //namespace SASEvent
 
-  std::list<Sproutlet*> load(struct options& opt);
-  void unload();
-
-private:
-  MobileTwinnedAppServer* _gemini;
-  SproutletAppServerShim* _gemini_sproutlet;
-};
-
-/// Export the plug-in using the magic symbol "sproutlet_plugin"
-extern "C" {
-GeminiPlugin sproutlet_plugin;
-}
-
-
-GeminiPlugin::GeminiPlugin() :
-  _gemini(NULL),
-  _gemini_sproutlet(NULL)
-{
-}
-
-GeminiPlugin::~GeminiPlugin()
-{
-}
-
-/// Loads the Gemini plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
-{
-  std::list<Sproutlet*> sproutlets;
-
-  // Create the Sproutlet.
-  _gemini = new MobileTwinnedAppServer("mobile-twinned");
-  _gemini_sproutlet = new SproutletAppServerShim(_gemini);
-
-  sproutlets.push_back(_gemini_sproutlet);
-
-  return sproutlets;
-}
-
-/// Unloads the Gemini plug-in.
-void GeminiPlugin::unload()
-{
-  delete _gemini_sproutlet;
-  delete _gemini;
-}
+#endif
