@@ -1284,15 +1284,31 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // for the REGISTER response from upstream.
     src_flow->touch();
 
-    // Add an integrity-protected indicator if the message was received on a
-    // client flow that has already been authenticated.  We don't add
-    // integrity-protected=no otherwise as this would be interpreted by the
-    // S-CSCF as a request to use AKA authentication.
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (!src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).empty())
     {
+      // The message was received on a client flow that has already been
+      // authenticated, so add "integrity-protected=ip-assoc-yes" to flag this
+      // to the S-CSCF.
       PJUtils::add_integrity_protected_indication(tdata,
                                                   PJUtils::Integrity::IP_ASSOC_YES);
+    }
+    else
+    {
+      // The message wasn't received on an authenticated client flow.  Add
+      // "integrity-protected=ip-assoc-pending" if the request contains a
+      // response to a challenge, otherwise don't add an integrity protected
+      // indicator at all (adding "integrity-protected=no" would be interpreted
+      // by the S-CSCF as a request to use AKA authentication).
+      pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+               pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+
+      if ((auth_hdr != NULL) &&
+          (auth_hdr->credential.digest.response.slen != 0))
+      {
+        PJUtils::add_integrity_protected_indication(tdata,
+                                                    PJUtils::Integrity::IP_ASSOC_PENDING);
+      }
     }
 
     PJUtils::add_pvni(tdata, &stack_data.default_home_domain);
