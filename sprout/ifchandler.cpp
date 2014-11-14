@@ -450,7 +450,7 @@ bool Ifc::filter_matches(const SessionCase& session_case,
   rapidxml::print(std::back_inserter(ifc_str), *_ifc, 0);
 
   SAS::Event event(trail, SASEvent::IFC_TESTING, 0);
-  event.add_var_param(ifc_str);
+  event.add_compressed_param(ifc_str, &SASEvent::PROFILE_SERVICE_PROFILE);
   SAS::report_event(event);
   std::string server_name;
 
