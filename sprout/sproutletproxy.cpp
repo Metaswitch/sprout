@@ -583,9 +583,6 @@ void SproutletProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
       // the Sproutlets.
       _dmap_uac.erase(i->second);
       _umap.erase(i);
-
-      // Check to see if we can destroy the UASTsx.
-      check_destroy();
     }
     upstream_sproutlet->rx_response(rsp, upstream_fork);
 
@@ -625,9 +622,6 @@ void SproutletProxy::UASTsx::on_client_not_responding(UACTsx* uac_tsx,
     // the Sproutlets.
     _dmap_uac.erase(i->second);
     _umap.erase(i);
-
-    // Check to see if we can destroy the UASTsx.
-    check_destroy();
 
     upstream_sproutlet->rx_fork_error(event, upstream_fork);
 
@@ -857,9 +851,6 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
         // Final response, so break the linkage between the Sproutlets.
         _dmap_sproutlet.erase(i->second);
         _umap.erase(i);
-
-        // Check to see if the UASTsx can be destroyed.
-        check_destroy();
       }
       upstream->rx_response(rsp, fork_id);
     }
@@ -872,6 +863,9 @@ void SproutletProxy::UASTsx::tx_response(SproutletWrapper* downstream,
       //LCOV_EXCL_STOP
     }
   }
+
+  // Check to see if the UASTsx can be destroyed.
+  check_destroy();
 }
 
 
