@@ -713,12 +713,11 @@ void SproutletProxy::UASTsx::schedule_requests()
     PendingRequest req = _pending_req_q.front();
     _pending_req_q.pop();
 
-    // Decrement the value in the Max-Forwards header, and reject the request
-    // if it expires.
+    // Reject the request if the Max-Forwards value has dropped to zero.
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                   pjsip_msg_find_hdr(req.req->msg, PJSIP_H_MAX_FORWARDS, NULL);
     if ((mf_hdr != NULL) &&
-        ((--(mf_hdr->ivalue) <= 0)))
+        (mf_hdr->ivalue <= 0))
     {
       // Max-Forwards has decayed to zero, so either reject the request or
       // discard it if it's an ACK.
@@ -1359,6 +1358,14 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 {
   // Keep an immutable reference to the request.
   _req = req;
+
+  // Decrement Max-Forwards if present.
+  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
+  if (mf_hdr != NULL)
+  {
+    --mf_hdr->ivalue;
+  }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
   pjsip_msg* clone = original_request();
