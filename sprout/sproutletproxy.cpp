@@ -718,17 +718,17 @@ void SproutletProxy::UASTsx::schedule_requests()
     pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
                   pjsip_msg_find_hdr(req.req->msg, PJSIP_H_MAX_FORWARDS, NULL);
     if ((mf_hdr != NULL) &&
-        ((--(mf_hdr->ivalue) < 0)))
+        ((--(mf_hdr->ivalue) <= 0)))
     {
       // Max-Forwards has decayed to zero, so either reject the request or
       // discard it if it's an ACK.
       if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
-        LOG_INFO("Loop detected - rejecting request with 482 status code");
+        LOG_INFO("Loop detected - rejecting request with 483 status code");
         pjsip_tx_data* rsp;
         pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                       req.req,
-                                                      PJSIP_SC_LOOP_DETECTED,
+                                                      PJSIP_SC_TOO_MANY_HOPS,
                                                       NULL,
                                                       &rsp);
         if (status == PJ_SUCCESS)
