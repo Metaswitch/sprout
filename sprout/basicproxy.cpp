@@ -1650,7 +1650,8 @@ void BasicProxy::UACTsx::send_request()
       // Send non-ACK request statefully.
       status = pjsip_tsx_send_msg(_tsx, _tdata);
 
-      if (status == PJ_SUCCESS)
+      if ((status == PJ_SUCCESS) &&
+          (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD))
       {
         start_timer_c();
       }
@@ -1980,8 +1981,11 @@ bool BasicProxy::UACTsx::retry_request()
         LOG_INFO("Retrying request to alternate target");
         retrying = true;
 
-        // Start Timer C again.
-        start_timer_c();
+        if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+        {
+          // Start Timer C again.
+          start_timer_c();
+        }
       }
       else
       {
