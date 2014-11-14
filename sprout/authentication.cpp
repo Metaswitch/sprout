@@ -504,6 +504,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       // The integrity protected indicator is included and set to tls-yes or
       // ip-assoc-yes.  This indicates the client has already been authenticated
       // so we will accept this REGISTER even if there is a challenge response.
+      // (Values of tls-pending or ip-assoc-pending indicate the challenge
+      // should be checked.)
       LOG_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
       std::string error_msg = "SIP digest authenticated request integrity protected by edge proxy";
