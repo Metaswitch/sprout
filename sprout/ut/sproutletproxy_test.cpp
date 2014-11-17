@@ -1812,3 +1812,63 @@ TEST_F(SproutletProxyTest, SproutletChain)
   delete tp;
 }
 
+TEST_F(SproutletProxyTest, LoopDetection)
+{
+  // Test loop detection of requests passing through a chain of sproutlets.
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a INVITE with a two Route headers referencing the forwarding Sproutlet,
+  // but with Max-Forwards set to one.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@proxy1.awaydomain";
+  msg1._from = "sip:alice@homedomain";
+  msg1._to = "sip:bob@awaydomain";
+  msg1._via = tp->to_string(false) + "1111";
+  msg1._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
+  msg1._forwards = 2;
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying followed by 483 Too Many Hops response.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Check the 486 Loop Detected.
+  tdata = current_txdata();
+  RespMatcher(483).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Inject an ACK with a two Route headers referencing the forwarding Sproutlet,
+  // but with Max-Forwards set to one.
+  Message msg2;
+  msg2._method = "ACK";
+  msg2._requri = "sip:bob@proxy1.awaydomain";
+  msg2._from = "sip:alice@homedomain";
+  msg2._to = "sip:bob@awaydomain";
+  msg2._via = tp->to_string(false) + "2222";
+  msg2._route = "Route: <sip:fwd.proxy1.homedomain;transport=TCP;lr>\r\nRoute: <sip:fwd.proxy1.homedomain;transport=TCP;lr>";
+  msg2._forwards = 2;
+  inject_msg(msg2.get_request(), tp);
+
+  // The ACK should be discarded.
+  ASSERT_EQ(0, txdata_count());
+
+  // All done!
+  ASSERT_EQ(0, txdata_count());
+
+  delete tp;
+}
+

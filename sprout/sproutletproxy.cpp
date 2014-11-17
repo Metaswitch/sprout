@@ -707,70 +707,101 @@ void SproutletProxy::UASTsx::schedule_requests()
     PendingRequest req = _pending_req_q.front();
     _pending_req_q.pop();
 
-    std::string alias;
-    Sproutlet* sproutlet = target_sproutlet(req.req->msg, 0, alias);
-
-    if (sproutlet != NULL)
+    // Reject the request if the Max-Forwards value has dropped to zero.
+    pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                  pjsip_msg_find_hdr(req.req->msg, PJSIP_H_MAX_FORWARDS, NULL);
+    if ((mf_hdr != NULL) &&
+        (mf_hdr->ivalue <= 0))
     {
-      // Found a local Sproutlet to handle the request, so create a
-      // SproutletWrapper.
-      SproutletWrapper* downstream = new SproutletWrapper(_sproutlet_proxy,
-                                                          this,
-                                                          sproutlet,
-                                                          alias,
-                                                          req.req,
-                                                          trail());
-
-      // Set up the mappings.
+      // Max-Forwards has decayed to zero, so either reject the request or
+      // discard it if it's an ACK.
       if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
       {
-        _dmap_sproutlet[req.upstream] = downstream;
-        _umap[(void*)downstream] = req.upstream;
-      }
-
-      if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
-      {
-        // Send an immediate 100 Trying response to the upstream
-        // Sproutlet.
-        pjsip_tx_data* trying;
+        LOG_INFO("Loop detected - rejecting request with 483 status code");
+        pjsip_tx_data* rsp;
         pj_status_t status = PJUtils::create_response(stack_data.endpt,
                                                       req.req,
-                                                      PJSIP_SC_TRYING,
+                                                      PJSIP_SC_TOO_MANY_HOPS,
                                                       NULL,
-                                                      &trying);
+                                                      &rsp);
         if (status == PJ_SUCCESS)
         {
-          req.upstream.first->rx_response(trying, req.upstream.second);
+          // Pass the response back to the Sproutlet.
+          req.upstream.first->rx_response(rsp, req.upstream.second);
         }
-      }
-
-      // Pass the request to the downstream sproutlet.
-      downstream->rx_request(req.req);
-    }
-    else
-    {
-      // No local Sproutlet, proxy the request.
-      LOG_DEBUG("No local sproutlet matches request");
-      size_t index;
-
-      pj_status_t status = allocate_uac(req.req, index);
-
-      if (status == PJ_SUCCESS)
-      {
-        // Successfully set up UAC transaction, so set up the mappings and
-        // send the request.
-        if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
-        {
-          _dmap_uac[req.upstream] = _uac_tsx[index];
-          _umap[(void*)_uac_tsx[index]] = req.upstream;
-        }
-
-        // Send the request.
-        _uac_tsx[index]->send_request();
       }
       else
       {
-        // @TODO
+        LOG_INFO("Loop detected - discarding ACK request");
+      }
+    }
+    else
+    {
+      std::string alias;
+      Sproutlet* sproutlet = target_sproutlet(req.req->msg, 0, alias);
+
+      if (sproutlet != NULL)
+      {
+        // Found a local Sproutlet to handle the request, so create a
+        // SproutletWrapper.
+        SproutletWrapper* downstream = new SproutletWrapper(_sproutlet_proxy,
+                                                            this,
+                                                            sproutlet,
+                                                            alias,
+                                                            req.req,
+                                                            trail());
+
+        // Set up the mappings.
+        if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
+        {
+          _dmap_sproutlet[req.upstream] = downstream;
+          _umap[(void*)downstream] = req.upstream;
+        }
+
+        if (req.req->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+        {
+          // Send an immediate 100 Trying response to the upstream
+          // Sproutlet.
+          pjsip_tx_data* trying;
+          pj_status_t status = PJUtils::create_response(stack_data.endpt,
+                                                        req.req,
+                                                        PJSIP_SC_TRYING,
+                                                        NULL,
+                                                        &trying);
+          if (status == PJ_SUCCESS)
+          {
+            req.upstream.first->rx_response(trying, req.upstream.second);
+          }
+        }
+
+        // Pass the request to the downstream sproutlet.
+        downstream->rx_request(req.req);
+      }
+      else
+      {
+        // No local Sproutlet, proxy the request.
+        LOG_DEBUG("No local sproutlet matches request");
+        size_t index;
+
+        pj_status_t status = allocate_uac(req.req, index);
+
+        if (status == PJ_SUCCESS)
+        {
+          // Successfully set up UAC transaction, so set up the mappings and
+          // send the request.
+          if (req.req->msg->line.req.method.id != PJSIP_ACK_METHOD)
+          {
+            _dmap_uac[req.upstream] = _uac_tsx[index];
+            _umap[(void*)_uac_tsx[index]] = req.upstream;
+          }
+
+          // Send the request.
+          _uac_tsx[index]->send_request();
+        }
+        else
+        {
+          // @TODO
+        }
       }
     }
   }
@@ -1321,6 +1352,14 @@ void SproutletWrapper::rx_request(pjsip_tx_data* req)
 {
   // Keep an immutable reference to the request.
   _req = req;
+
+  // Decrement Max-Forwards if present.
+  pjsip_max_fwd_hdr* mf_hdr = (pjsip_max_fwd_hdr*)
+                      pjsip_msg_find_hdr(req->msg, PJSIP_H_MAX_FORWARDS, NULL);
+  if (mf_hdr != NULL)
+  {
+    --mf_hdr->ivalue;
+  }
 
   // Clone the request to get a mutable copy to pass to the Sproutlet.
   pjsip_msg* clone = original_request();
