@@ -240,7 +240,9 @@ bool Ifc::spt_matches(const SessionCase& session_case,  //< The session case
                   server_name, SASEvent::IFC_INVALID, 0, trail);
     }
 
-    header_regex = boost::regex(get_text_or_cdata(spt_header), boost::regex_constants::no_except);
+    header_regex = boost::regex(get_text_or_cdata(spt_header),
+                                boost::regex_constants::icase |
+                                boost::regex_constants::no_except);
     if (header_regex.status())
     {
       invalid_ifc("Invalid regular expression in Header element for SIPHeader service point trigger",
