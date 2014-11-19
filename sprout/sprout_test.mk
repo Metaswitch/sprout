@@ -80,7 +80,9 @@ TARGET_SOURCES := logger.cpp \
                   bgcfsproutlet.cpp \
                   mmtel.cpp \
                   mobiletwinned.cpp \
-                  mangelwurzel.cpp
+                  mangelwurzel.cpp \
+                  alarm.cpp \
+                  communicationmonitor.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -137,13 +139,16 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        sproutletproxy_test.cpp \
                        gruu_test.cpp \
                        mobiletwinned_test.cpp \
-                       mangelwurzel_test.cpp
+                       mangelwurzel_test.cpp \
+                       alarm_test.cpp \
+                       communicationmonitor_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o \
                           md5.o \
-                          test_interposer.so
+                          test_interposer.so \
+                          fakezmq.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 COVERAGE_XML = $(TEST_OUT_DIR)/coverage_$(TARGET_TEST).xml
@@ -363,4 +368,8 @@ $(OBJ_DIR_TEST)/md5.o : $(SIPP_DIR)/md5.c
 
 # Build rule for our interposer.
 $(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_interposer.cpp ${ROOT}/modules/cpp-common/test_utils/test_interposer.hpp
+	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@
+
+# Build rule for our fake zmq.
+$(OBJ_DIR_TEST)/fakezmq.so: ${ROOT}/modules/cpp-common/test_utils/fakezmq.cpp ${ROOT}/modules/cpp-common/test_utils/fakezmq.h
 	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@

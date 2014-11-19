@@ -74,6 +74,7 @@ extern "C" {
 #include "registrar.h"
 #include "authentication.h"
 #include "options.h"
+#include "dnsresolver.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "pjutils.h"
@@ -90,6 +91,8 @@ extern "C" {
 #include "sproutlet.h"
 #include "sproutletproxy.h"
 #include "pluginloader.h"
+#include "alarm.h"
+#include "communicationmonitor.h"
 
 enum OptionTypes
 {
@@ -99,7 +102,8 @@ enum OptionTypes
   OPT_SUB_MAX_EXPIRES,
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
-  OPT_CALL_LIST_TTL
+  OPT_CALL_LIST_TTL,
+  OPT_ALARMS_ENABLED
 };
 
 
@@ -148,6 +152,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
+  { "alarms-enabled", no_argument, 0, OPT_ALARMS_ENABLED},
   { "log-level",         required_argument, 0, 'L'},
   { "daemon",            no_argument,       0, 'd'},
   { "interactive",       no_argument,       0, 't'},
@@ -267,6 +272,7 @@ static void usage(void)
        "                            then there is no limit (default: 0)\n"
        "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
+       "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -714,6 +720,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->call_list_ttl);
       break;
 
+    case OPT_ALARMS_ENABLED:
+      options->alarms_enabled = PJ_TRUE;
+      LOG_INFO("SNMP alarms are enabled");
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -949,6 +960,14 @@ int main(int argc, char* argv[])
   AccessLogger* access_logger = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
+  CommunicationMonitor* chronos_comm_monitor = NULL;
+  CommunicationMonitor* enum_comm_monitor = NULL;
+  CommunicationMonitor* hss_comm_monitor = NULL;
+  CommunicationMonitor* memcached_comm_monitor = NULL;
+  CommunicationMonitor* memcached_remote_comm_monitor = NULL;
+  CommunicationMonitor* ralf_comm_monitor = NULL;
+  Alarm* vbucket_alarm = NULL;
+  Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -1005,6 +1024,7 @@ int main(int argc, char* argv[])
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
+  opt.alarms_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1167,6 +1187,39 @@ int main(int argc, char* argv[])
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
 
+  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  {
+    // Create Sprout's alarm objects. 
+
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR, 
+                                                                        AlarmDef::MAJOR));
+
+    enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                                     AlarmDef::MAJOR));
+
+    hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                                    AlarmDef::CRITICAL));
+
+    memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
+                                                                          AlarmDef::CRITICAL));
+
+    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
+                                                                                 AlarmDef::CRITICAL));
+
+    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR, 
+                                                                     AlarmDef::MAJOR));
+
+    vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
+                                        AlarmDef::MAJOR);
+
+    remote_vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
+                                               AlarmDef::MAJOR);
+
+    // Start the alarm request agent
+    AlarmReqAgent::get_instance().start();
+    AlarmState::clear_all("sprout");
+  }
+
   // Start the load monitor
   load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
 
@@ -1214,7 +1267,8 @@ int main(int argc, char* argv[])
                                          "connected_ralfs",
                                          load_monitor,
                                          stack_data.stats_aggregator,
-                                         SASEvent::HttpLogLevel::PROTOCOL);
+                                         SASEvent::HttpLogLevel::PROTOCOL,
+                                         ralf_comm_monitor);
   }
 
   // Initialise the OPTIONS handling module.
@@ -1227,7 +1281,8 @@ int main(int argc, char* argv[])
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
-                                       stack_data.stats_aggregator);
+                                       stack_data.stats_aggregator,
+                                       hss_comm_monitor);
   }
 
   if (opt.scscf_enabled)
@@ -1235,7 +1290,10 @@ int main(int argc, char* argv[])
     // Create ENUM service required for S-CSCF.
     if (!opt.enum_server.empty())
     {
-      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
+      enum_service = new DNSEnumService(opt.enum_server, 
+                                        opt.enum_suffix,
+                                        new DNSResolverFactory(),
+                                        enum_comm_monitor);
     }
     else if (!opt.enum_file.empty())
     {
@@ -1261,7 +1319,8 @@ int main(int argc, char* argv[])
                chronos_callback_host.c_str());
     chronos_connection = new ChronosConnection(opt.chronos_service,
                                                chronos_callback_host,
-                                               http_resolver);
+                                               http_resolver,
+                                               chronos_comm_monitor);
   }
 
   if (opt.pcscf_enabled)
@@ -1328,12 +1387,18 @@ int main(int argc, char* argv[])
     {
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
-      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+      local_data_store = (Store*)new MemcachedStore(false, 
+                                                    opt.store_servers,
+                                                    memcached_comm_monitor,
+                                                    vbucket_alarm);
       if (opt.remote_store_servers != "")
       {
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+        remote_data_store = (Store*)new MemcachedStore(false, 
+                                                       opt.remote_store_servers,
+                                                       memcached_remote_comm_monitor,
+                                                       remote_vbucket_alarm);
       }
     }
     else
@@ -1537,6 +1602,22 @@ int main(int argc, char* argv[])
 
   delete analytics_logger;
   delete analytics_logger_logger;
+
+  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  {
+    // Stop the alarm request agent
+    AlarmReqAgent::get_instance().stop();
+
+    // Delete Sprout's alarm objects
+    delete chronos_comm_monitor;
+    delete enum_comm_monitor;
+    delete hss_comm_monitor;
+    delete memcached_comm_monitor;
+    delete memcached_remote_comm_monitor;
+    delete ralf_comm_monitor;
+    delete vbucket_alarm;
+    delete remote_vbucket_alarm;
+  }
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
