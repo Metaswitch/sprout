@@ -1044,6 +1044,23 @@ TEST_F(IfcHandlerTest, HeaderMatch)
          true);
 }
 
+TEST_F(IfcHandlerTest, HeaderMatchCaseInsensitive)
+{
+  doTest("",
+         "    <TriggerPoint>\n"
+         "    <ConditionTypeCNF>1</ConditionTypeCNF>\n"
+         "    <SPT>\n"
+         "      <ConditionNegated>0</ConditionNegated>\n"
+         "      <Group>0</Group>\n"
+         "      <SIPHeader><Header>contact</Header></SIPHeader>\n"
+         "      <Extension></Extension>\n"
+         "    </SPT>\n"
+         "  </TriggerPoint>\n",
+         true,
+         SessionCase::Originating,
+         true);
+}
+
 TEST_F(IfcHandlerTest, NegatedHeaderMatch)
 {
   doTest("",
