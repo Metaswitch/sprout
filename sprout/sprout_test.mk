@@ -82,7 +82,9 @@ TARGET_SOURCES := logger.cpp \
                   mobiletwinned.cpp \
                   mangelwurzel.cpp \
                   alarm.cpp \
-                  communicationmonitor.cpp
+                  communicationmonitor.cpp \
+                  thread_dispatcher.cpp \
+                  common_sip_processing.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -109,7 +111,6 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        registrar_test.cpp \
                        stateful_proxy_test.cpp \
                        bgcfservice_test.cpp \
-                       stack_test.cpp \
                        options_test.cpp \
                        logger_test.cpp \
                        utils_test.cpp \

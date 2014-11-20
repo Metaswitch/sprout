@@ -76,10 +76,10 @@ extern "C" {
 #include "counter.h"
 
 static Accumulator* latency_accumulator;
-static Accumulator* queue_size_accumulator;
 static Counter* requests_counter;
 static Counter* overload_counter;
 static LoadMonitor* load_monitor = NULL;
+static ConnectionTracker* connection_tracker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
@@ -340,7 +340,7 @@ init_common_sip_processing(stack_data_struct& stack_data,
 }
 
 
-void destroy_stack(void)
+void unregister_common_processing_module(void)
 {
   requests_counter = NULL;
   overload_counter = NULL;

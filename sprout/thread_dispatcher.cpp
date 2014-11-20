@@ -92,7 +92,9 @@ eventq<struct rx_msg_qe> rx_msg_q;
 // from a single request, each with a possible 500ms timeout).
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
-static ConnectionTracker *connection_tracker = NULL;
+static Accumulator* latency_accumulator = NULL;
+static LoadMonitor* load_monitor = NULL;
+static Accumulator* queue_size_accumulator = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
@@ -204,26 +206,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   return PJ_TRUE;
 }
 
-pj_status_t init_stack(const std::string& system_name,
-                       const std::string& sas_address,
-                       int pcscf_trusted_port,
-                       int pcscf_untrusted_port,
-                       int scscf_port,
-                       int icscf_port,
-                       const std::string& local_host,
-                       const std::string& public_host,
-                       const std::string& home_domain,
-                       const std::string& additional_home_domains,
-                       const std::string& scscf_uri,
-                       const std::string& alias_hosts,
-                       SIPResolver* sipresolver,
-                       int num_pjsip_threads,
-                       int num_worker_threads,
-                       int record_routing_model,
-                       const int default_session_expires,
-                       QuiescingManager *quiescing_mgr_arg,
-                       LoadMonitor *load_monitor_arg,
-                       const std::string& cdf_domain)
+pj_status_t init_thread_dispatcher(int num_worker_threads,
+                                   LoadMonitor *load_monitor_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
   // start_stack is called.
@@ -231,6 +215,11 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Enable deadlock detection on the message queue.
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
+
+  if (load_monitor_arg != NULL)
+  {
+    load_monitor = load_monitor_arg;
+  }
 
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_distribute_to_threads);
@@ -242,8 +231,6 @@ pj_status_t init_stack(const std::string& system_name,
 pj_status_t start_threads()
 {
   pj_status_t status = PJ_SUCCESS;
-
-  quit_flag = PJ_FALSE;
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
@@ -281,21 +268,14 @@ void stop_threads()
   {
     pj_thread_join(*i);
   }
+  worker_threads.clear();
 }
 
 
 // Unregister all modules registered by the stack.  In particular, unregister
 // the transaction layer module, which terminates all transactions.
-void unregister_stack_modules(void)
+void unregister_thread_dispatcher(void)
 {
-  PJUtils::term();
-  pjsip_tsx_layer_destroy();
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_distribute_to_threads);
-  pjsip_endpt_unregister_module(stack_data.endpt, &mod_initial_processing);
-}
 
-
-void destroy_stack(void)
-{
-  worker_threads.clear();
 }
