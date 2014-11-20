@@ -76,9 +76,6 @@ public:
   static void SetUpTestCase()
   {
     SipTest::SetUpTestCase(false);
-    ct = new ConnectionTracker(NULL);
-    lm = new LoadMonitor(0, 1, 0, 0);
-    init_common_sip_processing(lm, &requests_counter, &overload_counter, ct);
 
     // Schedule timers.
     SipTest::poll();
@@ -88,19 +85,22 @@ public:
   {
     // Shut down the transaction module first, before we destroy the
     // objects that might handle any callbacks!
-    delete(ct);
-    delete(lm);
-    unregister_common_processing_module();
     SipTest::TearDownTestCase();
   }
 
   CommonProcessingTest()
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
+    lm = new LoadMonitor(0, 1, 0, 0);
+    ct = new ConnectionTracker(NULL);
+    init_common_sip_processing(lm, &requests_counter, &overload_counter, ct);
   }
 
   ~CommonProcessingTest()
   {
+    delete(lm);
+    delete(ct);
+    unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
 
     // Terminate all transactions
@@ -343,6 +343,42 @@ TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher r1(503);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+
+  delete tp;
+}
+
+TEST_F(CommonProcessingTest, BadRequestRejected)
+{
+  // Tests routing of REGISTER requests when the HSS responses with a server
+  // name.  There are two cases tested here - one where the impi is defaulted
+  // from the impu and one where the impi is explicit specified in an
+  // Authorization header.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: ;;";
+  inject_msg(msg1.get_request(), tp);
+
+  // REGISTER request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  RespMatcher r1(400);
   r1.matches(tdata->msg);
 
   free_txdata();

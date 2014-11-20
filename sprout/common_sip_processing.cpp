@@ -306,6 +306,35 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     overload_counter->increment();
     return PJ_TRUE;
   }
+
+  if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
+  {
+    SAS::TrailId trail = get_trail(rdata);
+    LOG_DEBUG("Report SAS start marker - trail (%llx)", trail);
+    SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
+    SAS::report_marker(start_marker);
+
+    PJUtils::report_sas_to_from_markers(trail, rdata->msg_info.msg);
+    PJUtils::mark_sas_call_branch_ids(trail, rdata->msg_info.cid, rdata->msg_info.msg);
+    
+    pjsip_parser_err_report *err = rdata->msg_info.parse_err.next;
+    while (err != &rdata->msg_info.parse_err)
+    {
+      LOG_ERROR("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
+      //SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
+      //event.add_var_param((int)err->hname.slen, err->hname.ptr);
+      //SAS::report_event(event);
+      err = err->next;
+    }
+
+    PJUtils::respond_stateless(stack_data.endpt,
+                               rdata,
+                               PJSIP_SC_BAD_REQUEST,
+                               NULL,
+                               NULL,
+                               NULL);
+    return PJ_TRUE;
+  }
   return PJ_FALSE;
 }
 
