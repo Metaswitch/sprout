@@ -1298,8 +1298,6 @@ int main(int argc, char* argv[])
                       opt.scscf_uri,
                       opt.alias_hosts,
                       sip_resolver,
-                      opt.pjsip_threads,
-                      opt.worker_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
@@ -1581,7 +1579,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  status = start_stack();
+  status = start_pjsip_thread();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
@@ -1643,12 +1641,12 @@ int main(int argc, char* argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
-
-  stop_stack();
+  
+  status = start_pjsip_thread();
   // We must unregister stack modules here because this terminates the
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
-  unregister_stack_modules();
+  //unregister_stack_modules();
 
   // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
