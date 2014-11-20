@@ -142,7 +142,8 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        mobiletwinned_test.cpp \
                        mangelwurzel_test.cpp \
                        alarm_test.cpp \
-                       communicationmonitor_test.cpp
+                       communicationmonitor_test.cpp \
+                       common_sip_processing_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \

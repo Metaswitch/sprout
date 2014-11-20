@@ -76,8 +76,8 @@ extern "C" {
 #include "counter.h"
 
 static Accumulator* latency_accumulator;
-static Counter* requests_counter;
-static Counter* overload_counter;
+static Counter* requests_counter = NULL;
+static Counter* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
 static ConnectionTracker* connection_tracker = NULL;
 
@@ -132,7 +132,7 @@ static void local_log_tx_msg(pjsip_tx_data* tdata)
               tdata->buf.start);
 }
 
-
+// LCOV_EXCL_START - can't meaningfully test SAS in UT
 static void sas_log_rx_msg(pjsip_rx_data* rdata)
 {
   SAS::TrailId trail = 0;
@@ -233,7 +233,7 @@ static void sas_log_tx_msg(pjsip_tx_data *tdata)
               tdata->buf.start);
   }
 }
-
+// LCOV_EXCL_STOP
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 {
@@ -258,6 +258,7 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     pjsip_cid_hdr* cid = (pjsip_cid_hdr*)rdata->msg_info.cid;
 
+    // LCOV_EXCL_START - can't meaningfully verify SAS in UT
     SAS::TrailId trail = get_trail(rdata);
 
     SAS::Marker start_marker(trail, MARKER_ID_START, 1u);
@@ -286,6 +287,8 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
     SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
     SAS::report_marker(end_marker);
+
+    // LCOV_EXCL_STOP
 
     pjsip_retry_after_hdr* retry_after = pjsip_retry_after_hdr_create(rdata->tp_info.pool, 0);
     PJUtils::respond_stateless(stack_data.endpt,
@@ -318,31 +321,25 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 
 pj_status_t
-init_common_sip_processing(stack_data_struct& stack_data,
-			   LoadMonitor* load_monitor_arg,
-			   StatisticAccumulator* requests_counter_arg,
-			   StatisticAccumulator* overload_counter_arg,
+init_common_sip_processing(LoadMonitor* load_monitor_arg,
+			   Counter* requests_counter_arg,
+			   Counter* overload_counter_arg,
 			   ConnectionTracker* tracker_arg)
 {
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_initial_processing);
   stack_data.common_processing_module_id = mod_initial_processing.id;
 
-  requests_counter = new StatisticCounter("incoming_requests",
-                                          stack_data.stats_aggregator);
-  overload_counter = new StatisticCounter("rejected_overload",
-                                          stack_data.stats_aggregator);
+  connection_tracker = tracker_arg;
+  overload_counter = overload_counter_arg;
+  requests_counter = requests_counter_arg;
 
-  if (load_monitor_arg != NULL)
-  {
-    load_monitor = load_monitor_arg;
-  }
+  load_monitor = load_monitor_arg;
+
 }
 
 
 void unregister_common_processing_module(void)
 {
-  requests_counter = NULL;
-  overload_counter = NULL;
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_initial_processing);
 }
