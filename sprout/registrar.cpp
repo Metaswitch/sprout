@@ -469,7 +469,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (all_bindings_expired)
   {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, 0);
+    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, trail);
   }
 
   out_is_initial_registration = is_initial_registration;
