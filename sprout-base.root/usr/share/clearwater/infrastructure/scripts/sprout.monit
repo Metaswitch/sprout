@@ -38,22 +38,33 @@
 
 # Set up the monit configuration for sprout with the right IP addresses and ports
 cat > /etc/monit/conf.d/sprout.monit <<EOF
-# Poll every 10 seconds
-set daemon 10
-
-# Check the server's public interfaces.  We put this first so that we process
+# Check the service's public interfaces.  We put this first so that we process
 # failed polls (and maybe kill the server) before we process the restart.
-check program poll_sprout with path "/usr/share/clearwater/bin/poll_sprout.sh"
-  if status != 0 for 2 cycles then exec "/etc/init.d/sprout abort"
 
-# Monitor the server's PID file and check its memory usage.
+check program poll_sprout with path "/usr/share/clearwater/bin/poll_sprout.sh"
+
+  if status != 0 for 2 cycles
+     then exec "/etc/init.d/sprout abort"
+
+
+# Monitor the service's PID file and check its memory usage. Issue an alarm for
+# any restart, clear after the process has run for 30s.
+
 check process sprout pidfile /var/run/sprout.pid
-  start program = "/etc/init.d/sprout start"
-  stop program = "/etc/init.d/sprout stop"
+
+  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout start'"
+  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout stop'"
+  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort-restart'"
+
   if memory is greater than 80% for 3 cycles
-     then exec "/etc/init.d/sprout abort-restart"
+     then restart
+
+  if uptime < 30 seconds
+     then exec "/bin/true"
+     else if succeeded
+         then exec "/usr/share/clearwater/bin/issue_alarm.py monit 1000.1"
 EOF
 chmod 0644 /etc/monit/conf.d/sprout.monit
 
 # Force monit to reload its configuration
-service monit reload
+reload clearwater-monit &> /dev/null || true

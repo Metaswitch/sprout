@@ -2,7 +2,6 @@
 /usr/
 /build/
 *.o
-*.d
 *.swp
 *.gem
 on-eclipse-build.local.sh
