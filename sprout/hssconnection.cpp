@@ -260,8 +260,6 @@ bool decode_homestead_xml(const std::string public_user_identity,
                           std::deque<std::string>& ecfs,
                           bool allowNoIMS)
 {
-  rapidxml::xml_node<>* sp = NULL;
-
   if (!root.get())
   {
     // If get_xml_object has not returned a document, there must have been a parsing error.
@@ -316,46 +314,75 @@ bool decode_homestead_xml(const std::string public_user_identity,
   std::vector<std::string> sp_identities;
   bool current_sp_contains_public_id = false;
   bool found_aliases = false;
+  rapidxml::xml_node<>* sp = NULL;
 
-  for (sp = imss->first_node("ServiceProfile"); sp != NULL; sp = sp->next_sibling("ServiceProfile"))
+  if (imss->first_node("ServiceProfile"))
   {
-    Ifcs ifc(root, sp);
-    rapidxml::xml_node<>* public_id = NULL;
-
-    for (public_id = sp->first_node("PublicIdentity"); public_id != NULL; public_id = public_id->next_sibling("PublicIdentity"))
+    for (sp = imss->first_node("ServiceProfile");
+         sp != NULL;
+         sp = sp->next_sibling("ServiceProfile"))
     {
-      rapidxml::xml_node<>* identity = public_id->first_node("Identity");
-      if (identity)
+      Ifcs ifc(root, sp);
+      rapidxml::xml_node<>* public_id = NULL;
+
+      if (sp->first_node("PublicIdentity") != NULL)
       {
-        std::string uri = std::string(identity->value());
-        LOG_DEBUG("Processing Identity node from HSS XML - %s\n", uri.c_str());
-
-        associated_uris.push_back(uri);
-        ifcs_map[uri] = ifc;
-
-        if (!found_aliases)
+        for (public_id = sp->first_node("PublicIdentity");
+             public_id != NULL;
+             public_id = public_id->next_sibling("PublicIdentity"))
         {
-          sp_identities.push_back(uri);
-          if (uri == public_user_identity)
+          rapidxml::xml_node<>* identity = public_id->first_node("Identity");
+
+          if (identity)
           {
-            current_sp_contains_public_id = true;
+            std::string uri = std::string(identity->value());
+            LOG_DEBUG("Processing Identity node from HSS XML - %s\n",
+                      uri.c_str());
+
+            associated_uris.push_back(uri);
+            ifcs_map[uri] = ifc;
+
+            if (!found_aliases)
+            {
+              sp_identities.push_back(uri);
+
+              if (uri == public_user_identity)
+              {
+                current_sp_contains_public_id = true;
+              }
+            }
+          }
+          else
+          {
+            LOG_ERROR("Malformed PublicIdentity XML - no Identity");
+            return false;
           }
         }
       }
-    }
-
-    if (!found_aliases)
-    {
-      if (current_sp_contains_public_id)
-      {
-        aliases = sp_identities;
-        found_aliases = true;
-      }
       else
       {
-        sp_identities.clear();
+        LOG_ERROR("Malformed ServiceProfile XML - no Public Identity");
+        return false;
+      }
+
+      if (!found_aliases)
+      {
+        if (current_sp_contains_public_id)
+        {
+          aliases = sp_identities;
+          found_aliases = true;
+        }
+        else
+        {
+          sp_identities.clear();
+        }
       }
     }
+  }
+  else
+  {
+    LOG_ERROR("Malformed HSS XML - no ServiceProfiles");
+    return false;
   }
 
   rapidxml::xml_node<>* charging_addrs_node = cw->first_node("ChargingAddresses");

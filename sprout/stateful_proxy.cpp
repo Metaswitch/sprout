@@ -1789,9 +1789,9 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::string regstate;
     long http_code = hss->update_registration_state(public_id, "", HSSConnection::CALL, regstate, ifc_map, uris, trail);
     bool registered = (regstate == HSSConnection::STATE_REGISTERED);
-    info = {registered, ifc_map[public_id], uris};
     if (http_code == 200)
     {
+      info = {registered, ifc_map[public_id], uris};
       cached_hss_data[public_id] = info;
       rc = true;
     }
