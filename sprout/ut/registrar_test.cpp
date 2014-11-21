@@ -268,6 +268,21 @@ TEST_F(RegistrarTest, BadScheme)
   EXPECT_EQ("Not Found", str_pj(out->line.status.reason));
 }
 
+
+///----------------------------------------------------------------------------
+/// Check that a bare +sip.instance keyword doesn't break contact parsing
+///----------------------------------------------------------------------------
+TEST_F(RegistrarTest, BadGRUU)
+{
+  Message msg;
+  msg._contact_instance = ";+sip.instance";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  free_txdata();
+}
+
 /// Simple correct example with Authorization header
 TEST_F(RegistrarTest, SimpleMainlineAuthHeader)
 {
