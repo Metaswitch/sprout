@@ -285,8 +285,6 @@ TEST_F(CommonProcessingTest, RequestAllowed)
   // from the impu and one where the impi is explicit specified in an
   // Authorization header.
 
-  pjsip_tx_data* tdata;
-
   // Create a TCP connection to the I-CSCF listening port.
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
                                         stack_data.icscf_port,
@@ -295,13 +293,6 @@ TEST_F(CommonProcessingTest, RequestAllowed)
 
   // Inject a REGISTER request.
   Message msg1;
-  msg1._method = "REGISTER";
-  msg1._requri = "sip:homedomain";
-  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   inject_msg(msg1.get_request(), tp);
 
   // REGISTER request should be forwarded to the server named in the HSS
@@ -328,13 +319,6 @@ TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
 
   // Inject a REGISTER request.
   Message msg1;
-  msg1._method = "REGISTER";
-  msg1._requri = "sip:homedomain";
-  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
   lm->admit_request();
   inject_msg(msg1.get_request(), tp);
 
@@ -346,6 +330,32 @@ TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
   r1.matches(tdata->msg);
 
   free_txdata();
+
+  delete tp;
+}
+
+TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
+{
+  // Tests routing of REGISTER requests when the HSS responses with a server
+  // name.  There are two cases tested here - one where the impi is defaulted
+  // from the impu and one where the impi is explicit specified in an
+  // Authorization header.
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "ACK";
+  lm->admit_request();
+  inject_msg(msg1.get_request(), tp);
+
+  // REGISTER request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  ASSERT_EQ(0, txdata_count());
 
   delete tp;
 }
@@ -382,6 +392,31 @@ TEST_F(CommonProcessingTest, BadRequestRejected)
   r1.matches(tdata->msg);
 
   free_txdata();
+
+  delete tp;
+}
+
+TEST_F(CommonProcessingTest, BadResponseDropped)
+{
+  // Tests routing of REGISTER requests when the HSS responses with a server
+  // name.  There are two cases tested here - one where the impi is defaulted
+  // from the impu and one where the impi is explicit specified in an
+  // Authorization header.
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._extra = "Contact: ;;";
+  inject_msg(msg1.get_response(), tp);
+
+  // REGISTER request should be forwarded to the server named in the HSS
+  // response, scscf1.homedomain.
+  ASSERT_EQ(0, txdata_count());
 
   delete tp;
 }

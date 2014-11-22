@@ -327,12 +327,23 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
       err = err->next;
     }
 
-    PJUtils::respond_stateless(stack_data.endpt,
-                               rdata,
-                               PJSIP_SC_BAD_REQUEST,
-                               NULL,
-                               NULL,
-                               NULL);
+    if (rdata->msg_info.msg->type == PJSIP_REQUEST_MSG)
+    {
+      LOG_WARNING("Rejecting malformed request with a 400 error");
+      PJUtils::respond_stateless(stack_data.endpt,
+                                 rdata,
+                                 PJSIP_SC_BAD_REQUEST,
+                                 NULL,
+                                 NULL,
+                                 NULL);
+    }
+    else
+    {
+      LOG_WARNING("Dropping malformed response");
+    }
+
+    // As this message is malformed, return PJ_TRUE to absorb it and
+    // stop later modules from processing it.
     return PJ_TRUE;
   }
   return PJ_FALSE;
