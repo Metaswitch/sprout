@@ -84,6 +84,12 @@ static ConnectionTracker* connection_tracker = NULL;
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
 
+// Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-2 allows this to run
+// as early as possible in incoming message processing (e.g. for
+// overload control), and as late as possible in outgoing message
+// processing (in particular, after the transport layer has printed
+// the message into the bytes that will go over the wire, so that we
+// can log out those bytes).
 static pjsip_module mod_initial_processing =
 {
   NULL, NULL,                           /* prev, next.          */

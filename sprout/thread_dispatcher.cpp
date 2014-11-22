@@ -98,6 +98,12 @@ static Accumulator* queue_size_accumulator = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
+// Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1 causes this to run
+// right after the initial processing module, but before everything
+// else. This is important - this module clones the rdata, which loses
+// some of the parsing error information which the initial processing
+// module uses. (Note that this module only handles received data, and
+// the transport module isn't actually invoked on received processing.)
 static pjsip_module mod_distribute_to_threads =
 {
   NULL, NULL,                           /* prev, next.          */
