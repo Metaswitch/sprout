@@ -228,7 +228,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads,
 }
 
 
-pj_status_t start_threads()
+pj_status_t start_worker_threads()
 {
   pj_status_t status = PJ_SUCCESS;
 
@@ -251,7 +251,7 @@ pj_status_t start_threads()
   return status;
 }
 
-void stop_threads()
+void stop_worker_threads()
 {
   // Terminate the PJSIP threads and the worker threads to exit.  We kill
   // the PJSIP threads first - if we killed the worker threads first the

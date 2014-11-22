@@ -831,13 +831,15 @@ pj_status_t init_stack(const std::string& system_name,
 }
 
 
-void term_pjsip_thread()
+pj_status_t stop_pjsip_thread()
 {
   // Set the quit flag to signal the PJSIP threads to exit, then wait
   // for them to exit.
   quit_flag = PJ_TRUE;
 
   pj_thread_join(pjsip_thread);
+
+  return PJ_SUCCESS;
 }
 
 void term_pjsip()

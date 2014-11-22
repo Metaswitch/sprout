@@ -73,6 +73,8 @@ TARGET_SOURCES := logger.cpp \
                   pluginloader.cpp \
                   alarm.cpp \
                   communicationmonitor.cpp
+                  thread_dispatcher.cpp \
+                  common_sip_processing.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
