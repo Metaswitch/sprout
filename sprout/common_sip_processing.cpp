@@ -57,7 +57,6 @@ extern "C" {
 #include <string>
 
 #include "constants.h"
-#include "eventq.h"
 #include "pjutils.h"
 #include "log.h"
 #include "sas.h"
@@ -65,12 +64,9 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
-#include "zmq_lvc.h"
-#include "statistic.h"
 #include "custom_headers.h"
 #include "utils.h"
 #include "accumulator.h"
-#include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
 
@@ -81,26 +77,29 @@ static LoadMonitor* load_monitor = NULL;
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
 
+// Module handling common processing for all SIP messages - logging,
+// overload control, and rejection of bad requests.
+
 // Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-2 allows this to run
 // as early as possible in incoming message processing (e.g. for
 // overload control), and as late as possible in outgoing message
 // processing (in particular, after the transport layer has printed
 // the message into the bytes that will go over the wire, so that we
 // can log out those bytes).
-static pjsip_module mod_initial_processing =
+static pjsip_module mod_common_processing =
 {
   NULL, NULL,                           /* prev, next.          */
-  pj_str("mod-initial-processing"),                  /* Name.                */
+  pj_str("mod-common-processing"),      /* Name.                */
   -1,                                   /* Id                   */
   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-2, /* Priority             */
   NULL,                                 /* load()               */
   NULL,                                 /* start()              */
   NULL,                                 /* stop()               */
   NULL,                                 /* unload()             */
-  &process_on_rx_msg,                           /* on_rx_request()      */
-  &process_on_rx_msg,                           /* on_rx_response()     */
-  &process_on_tx_msg,                           /* on_tx_request()      */
-  &process_on_tx_msg,                           /* on_tx_response()     */
+  &process_on_rx_msg,                   /* on_rx_request()      */
+  &process_on_rx_msg,                   /* on_rx_response()     */
+  &process_on_tx_msg,                   /* on_tx_request()      */
+  &process_on_tx_msg,                   /* on_tx_response()     */
   NULL,                                 /* on_tsx_state()       */
 };
 
@@ -307,6 +306,8 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     return PJ_TRUE;
   }
 
+  // If a message has parse errors, reject it (if it's a request) or
+  // drop it (if it's a response).
   if (!pj_list_empty((pj_list_type*)&rdata->msg_info.parse_err))
   {
     SAS::TrailId trail = get_trail(rdata);
@@ -366,18 +367,19 @@ init_common_sip_processing(LoadMonitor* load_monitor_arg,
 			   Counter* overload_counter_arg)
 {
   // Register the stack modules.
-  pjsip_endpt_register_module(stack_data.endpt, &mod_initial_processing);
-  stack_data.common_processing_module_id = mod_initial_processing.id;
+  pjsip_endpt_register_module(stack_data.endpt, &mod_common_processing);
+  stack_data.common_processing_module_id = mod_common_processing.id;
 
   overload_counter = overload_counter_arg;
   requests_counter = requests_counter_arg;
 
   load_monitor = load_monitor_arg;
 
+  return PJ_SUCCESS;
 }
 
 
 void unregister_common_processing_module(void)
 {
-  pjsip_endpt_unregister_module(stack_data.endpt, &mod_initial_processing);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_common_processing);
 }

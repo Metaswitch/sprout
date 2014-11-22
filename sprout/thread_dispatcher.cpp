@@ -1,5 +1,5 @@
 /**
- * @file stack.cpp
+ * @file thread_dispatcher.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -65,7 +65,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "stack.h"
 #include "utils.h"
-#include "zmq_lvc.h"
 #include "statistic.h"
 #include "custom_headers.h"
 #include "utils.h"
@@ -98,26 +97,29 @@ static Accumulator* queue_size_accumulator = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
+// Module to clone SIP requests and dispatch them to worker threads.
+
 // Priority of PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1 causes this to run
 // right after the initial processing module, but before everything
 // else. This is important - this module clones the rdata, which loses
 // some of the parsing error information which the initial processing
 // module uses. (Note that this module only handles received data, and
-// the transport module isn't actually invoked on received processing.)
-static pjsip_module mod_distribute_to_threads =
+// the transport module isn't actually invoked on received processing,
+// so this priority really just means "early".)
+static pjsip_module mod_thread_dispatcher =
 {
   NULL, NULL,                           /* prev, next.          */
-  pj_str("mod-distribute-to-threads"),                  /* Name.                */
+  pj_str("mod-thread-dispatcher"),      /* Name.                */
   -1,                                   /* Id                   */
   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-1, /* Priority             */
   NULL,                                 /* load()               */
   NULL,                                 /* start()              */
   NULL,                                 /* stop()               */
   NULL,                                 /* unload()             */
-  &threads_on_rx_msg,                           /* on_rx_request()      */
-  &threads_on_rx_msg,                           /* on_rx_response()     */
-  NULL,                           /* on_tx_request()      */
-  NULL,                           /* on_tx_response()     */
+  &threads_on_rx_msg,                   /* on_rx_request()      */
+  &threads_on_rx_msg,                   /* on_rx_response()     */
+  NULL,                                 /* on_tx_request()      */
+  NULL,                                 /* on_tx_response()     */
   NULL,                                 /* on_tsx_state()       */
 };
 
@@ -128,7 +130,7 @@ static int worker_thread(void* p)
   // module after our module.
   pjsip_process_rdata_param rp;
   pjsip_process_rdata_param_default(&rp);
-  rp.start_mod = &mod_distribute_to_threads;
+  rp.start_mod = &mod_thread_dispatcher;
   rp.idx_after_start = 1;
 
   LOG_DEBUG("Worker thread started");
@@ -218,7 +220,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads,
                                    LoadMonitor *load_monitor_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
-  // start_stack is called.
+  // start_worker_threads is called.
   worker_threads.resize(num_worker_threads);
 
   // Enable deadlock detection on the message queue.
@@ -228,9 +230,11 @@ pj_status_t init_thread_dispatcher(int num_worker_threads,
   queue_size_accumulator = queue_size_acc_arg;
   load_monitor = load_monitor_arg;
 
-  // Register the stack modules.
-  pjsip_endpt_register_module(stack_data.endpt, &mod_distribute_to_threads);
-  stack_data.thread_module_id = mod_distribute_to_threads.id;
+  // Register the PJSIP module.
+  pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);
+  stack_data.thread_module_id = mod_thread_dispatcher.id;
+
+  return PJ_SUCCESS;
 }
 
 
@@ -238,8 +242,6 @@ pj_status_t start_worker_threads()
 {
   pj_status_t status = PJ_SUCCESS;
 
-  // Create worker threads first as they take work from the PJSIP threads so
-  // need to be ready.
   for (size_t ii = 0; ii < worker_threads.size(); ++ii)
   {
     pj_thread_t* thread;
@@ -259,12 +261,6 @@ pj_status_t start_worker_threads()
 
 void stop_worker_threads()
 {
-  // Terminate the PJSIP threads and the worker threads to exit.  We kill
-  // the PJSIP threads first - if we killed the worker threads first the
-  // rx_msg_q will stop getting serviced so could fill up blocking
-  // PJSIP threads, causing a deadlock.
-
-
   // Now it is safe to signal the worker threads to exit via the queue and to
   // wait for them to terminate.
   rx_msg_q.terminate();
@@ -277,11 +273,8 @@ void stop_worker_threads()
   worker_threads.clear();
 }
 
-
-// Unregister all modules registered by the stack.  In particular, unregister
-// the transaction layer module, which terminates all transactions.
 void unregister_thread_dispatcher(void)
 {
-  pjsip_endpt_unregister_module(stack_data.endpt, &mod_distribute_to_threads);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_thread_dispatcher);
 
 }

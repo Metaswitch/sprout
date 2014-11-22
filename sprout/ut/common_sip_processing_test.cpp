@@ -59,7 +59,6 @@ using testing::HasSubstr;
 using testing::Not;
 
 static LoadMonitor* lm = NULL;
-static ConnectionTracker* ct = NULL;
 static StatisticCounter requests_counter("incoming_requests",
                                          stack_data.stats_aggregator);
 static StatisticCounter overload_counter("rejected_overload",
@@ -92,14 +91,12 @@ public:
   {
     _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
     lm = new LoadMonitor(0, 1, 0, 0);
-    ct = new ConnectionTracker(NULL);
-    init_common_sip_processing(lm, &requests_counter, &overload_counter, ct);
+    init_common_sip_processing(lm, &requests_counter, &overload_counter);
   }
 
   ~CommonProcessingTest()
   {
     delete(lm);
-    delete(ct);
     unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
 

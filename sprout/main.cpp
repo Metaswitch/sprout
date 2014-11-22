@@ -1597,6 +1597,10 @@ int main(int argc, char* argv[])
                          latency_accumulator,
                          queue_size_accumulator,
                          load_monitor);
+
+  // Create worker threads first as they take work from the PJSIP threads so
+  // need to be ready.
+
   status = start_worker_threads();
   if (status != PJ_SUCCESS)
   {
@@ -1667,11 +1671,18 @@ int main(int argc, char* argv[])
     }
   }
   
+  // Terminate the PJSIP threads and the worker threads to exit.  We kill
+  // the PJSIP threads first - if we killed the worker threads first the
+  // rx_msg_q will stop getting serviced so could fill up blocking
+  // PJSIP threads, causing a deadlock.
   status = stop_pjsip_thread();
   stop_worker_threads();
-  // We must unregister stack modules here because this terminates the
+
+  // We must call stop_stack here because this terminates the
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
+  stop_stack();
+  
   unregister_thread_dispatcher();
   unregister_common_processing_module();
 
@@ -1740,6 +1751,11 @@ int main(int argc, char* argv[])
     delete remote_vbucket_alarm;
   }
 
+  delete latency_accumulator;
+  delete queue_size_accumulator;
+  delete requests_counter;
+  delete overload_counter;
+  
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
   signal(QUIESCE_SIGNAL, SIG_DFL);

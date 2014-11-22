@@ -368,6 +368,8 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 {
   // Notify the connection tracker that the transport is active.
   connection_tracker->connection_active(rdata->tp_info.transport);
+
+  return PJ_FALSE;
 }
 
 // This class distributes quiescing work within the stack module.  It receives
@@ -853,14 +855,18 @@ void term_pjsip()
   pj_shutdown();
 }
 
+void stop_stack()
+{
+  PJUtils::term();
+  pjsip_tsx_layer_destroy();
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_connection_tracking);
+}
 
 // Destroy stack
 void destroy_stack(void)
 {
   // Tear down the stack.
   delete stack_data.stats_aggregator;
-
-  pjsip_endpt_unregister_module(stack_data.endpt, &mod_connection_tracking);
 
   delete stack_quiesce_handler;
   stack_quiesce_handler = NULL;
