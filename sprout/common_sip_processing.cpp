@@ -75,7 +75,6 @@ extern "C" {
 #include "load_monitor.h"
 #include "counter.h"
 
-static Accumulator* latency_accumulator;
 static Counter* requests_counter = NULL;
 static Counter* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
@@ -369,14 +368,12 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
 			   Counter* requests_counter_arg,
-			   Counter* overload_counter_arg,
-			   ConnectionTracker* tracker_arg)
+			   Counter* overload_counter_arg)
 {
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_initial_processing);
   stack_data.common_processing_module_id = mod_initial_processing.id;
 
-  connection_tracker = tracker_arg;
   overload_counter = overload_counter_arg;
   requests_counter = requests_counter_arg;
 

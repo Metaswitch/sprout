@@ -55,8 +55,10 @@ extern "C" {
 #include "counter.h"
 #include "sipresolver.h"
 
-pj_status_t
-init_thread_dispatcher(int worker_threads, LoadMonitor* load_monitor_arg);
+pj_status_t init_thread_dispatcher(int num_worker_threads,
+                                   Accumulator* latency_acc_arg,
+                                   Accumulator* queue_size_acc_arg,
+                                   LoadMonitor *load_monitor_arg);
 
 void unregister_thread_dispatcher(void);
 

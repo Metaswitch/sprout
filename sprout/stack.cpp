@@ -73,7 +73,6 @@ extern "C" {
 #include "accumulator.h"
 #include "connection_tracker.h"
 #include "quiescing_manager.h"
-#include "load_monitor.h"
 #include "counter.h"
 #include "sprout_pd_definitions.h"
 
@@ -81,12 +80,6 @@ class StackQuiesceHandler;
 
 struct stack_data_struct stack_data;
 
-static Accumulator* latency_accumulator;
-static Accumulator* queue_size_accumulator;
-static Counter* requests_counter;
-static Counter* overload_counter;
-
-static LoadMonitor *load_monitor = NULL;
 static QuiescingManager *quiescing_mgr = NULL;
 static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
@@ -525,7 +518,6 @@ pj_status_t init_stack(const std::string& system_name,
                        int record_routing_model,
                        const int default_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
-                       LoadMonitor *load_monitor_arg,
                        const std::string& cdf_domain)
 {
   pj_status_t status;
@@ -795,20 +787,6 @@ pj_status_t init_stack(const std::string& system_name,
                                                    known_statnames,
                                                    process_name);
 
-  latency_accumulator = new StatisticAccumulator("latency_us",
-                                                 stack_data.stats_aggregator);
-  queue_size_accumulator = new StatisticAccumulator("queue_size",
-                                                    stack_data.stats_aggregator);
-  requests_counter = new StatisticCounter("incoming_requests",
-                                          stack_data.stats_aggregator);
-  overload_counter = new StatisticCounter("rejected_overload",
-                                          stack_data.stats_aggregator);
-
-  if (load_monitor_arg != NULL)
-  {
-    load_monitor = load_monitor_arg;
-  }
-
   if (quiescing_mgr_arg != NULL)
   {
     quiescing_mgr = quiescing_mgr_arg;
@@ -855,14 +833,6 @@ void term_pjsip()
 void destroy_stack(void)
 {
   // Tear down the stack.
-  delete latency_accumulator;
-  latency_accumulator = NULL;
-  delete queue_size_accumulator;
-  queue_size_accumulator = NULL;
-  delete requests_counter;
-  requests_counter = NULL;
-  delete overload_counter;
-  overload_counter = NULL;
   delete stack_data.stats_aggregator;
 
   delete stack_quiesce_handler;

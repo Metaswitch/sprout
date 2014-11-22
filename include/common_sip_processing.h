@@ -58,8 +58,7 @@ extern "C" {
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
                            Counter* requests_counter_arg,
-                           Counter* overload_counter_arg,
-                           ConnectionTracker* tracker_arg);
+                           Counter* overload_counter_arg);
 
 void unregister_common_processing_module(void);
 

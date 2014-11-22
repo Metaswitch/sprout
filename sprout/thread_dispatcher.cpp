@@ -213,6 +213,8 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
 }
 
 pj_status_t init_thread_dispatcher(int num_worker_threads,
+                                   Accumulator* latency_acc_arg,
+                                   Accumulator* queue_size_acc_arg,
                                    LoadMonitor *load_monitor_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
@@ -222,15 +224,13 @@ pj_status_t init_thread_dispatcher(int num_worker_threads,
   // Enable deadlock detection on the message queue.
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
-  if (load_monitor_arg != NULL)
-  {
-    load_monitor = load_monitor_arg;
-  }
+  latency_accumulator = latency_acc_arg;
+  queue_size_accumulator = queue_size_acc_arg;
+  load_monitor = load_monitor_arg;
 
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_distribute_to_threads);
   stack_data.thread_module_id = mod_distribute_to_threads.id;
-
 }
 
 

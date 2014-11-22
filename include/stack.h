@@ -154,7 +154,6 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int record_routing_model,
                               const int default_session_expires,
                               QuiescingManager *quiescing_mgr,
-                              LoadMonitor *load_monitor,
                               const std::string& cdf_domain);
 extern pj_status_t start_pjsip_thread();
 extern pj_status_t stop_pjsip_thread();

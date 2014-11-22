@@ -1303,7 +1303,6 @@ int main(int argc, char* argv[])
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
-                      load_monitor,
                       opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
@@ -1581,8 +1580,23 @@ int main(int argc, char* argv[])
     }
   }
 
-  init_common_sip_processing(NULL, NULL, NULL, NULL);
-  init_thread_dispatcher(opt.worker_threads, NULL);
+  Accumulator* latency_accumulator = new StatisticAccumulator("latency_us",
+                                                 stack_data.stats_aggregator);
+  Accumulator* queue_size_accumulator = new StatisticAccumulator("queue_size",
+                                                    stack_data.stats_aggregator);
+  Counter* requests_counter = new StatisticCounter("incoming_requests",
+                                          stack_data.stats_aggregator);
+  Counter* overload_counter = new StatisticCounter("rejected_overload",
+                                          stack_data.stats_aggregator);
+
+
+  init_common_sip_processing(load_monitor,
+                             requests_counter,
+                             overload_counter);
+  init_thread_dispatcher(opt.worker_threads,
+                         latency_accumulator,
+                         queue_size_accumulator,
+                         load_monitor);
   status = start_worker_threads();
   if (status != PJ_SUCCESS)
   {
