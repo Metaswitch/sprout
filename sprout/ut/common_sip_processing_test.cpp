@@ -58,12 +58,6 @@ using testing::MatchesRegex;
 using testing::HasSubstr;
 using testing::Not;
 
-static LoadMonitor* lm = NULL;
-static StatisticCounter requests_counter("incoming_requests",
-                                         stack_data.stats_aggregator);
-static StatisticCounter overload_counter("rejected_overload",
-                                         stack_data.stats_aggregator);
-
 class CommonProcessingTest : public SipTest
 {
 public:
@@ -89,14 +83,32 @@ public:
 
   CommonProcessingTest()
   {
-    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting(); // true to see all traffic
-    lm = new LoadMonitor(0, 1, 0, 0);
-    init_common_sip_processing(lm, &requests_counter, &overload_counter);
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+
+    // Create a TCP connection to the I-CSCF listening port.
+    _tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                          stack_data.icscf_port,
+                                          "1.2.3.4",
+                                          49152);
+
+    
+    // Load monitor with one token in the bucket at startup.
+    _lm = new LoadMonitor(0, 1, 0, 0);
+    
+    _requests_counter = new StatisticCounter("incoming_requests",
+                                             stack_data.stats_aggregator);
+    _overload_counter = new StatisticCounter("rejected_overload",
+                                             stack_data.stats_aggregator);
+
+    init_common_sip_processing(_lm, _requests_counter, _overload_counter);
   }
 
   ~CommonProcessingTest()
   {
-    delete(lm);
+    delete(_tp);
+    delete(_lm);
+    delete(_requests_counter);
+    delete(_overload_counter);
     unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
 
@@ -269,151 +281,96 @@ public:
   };
 
 protected:
-  //  static SproutletProxy* _icscf_proxy;
+  TransportFlow* _tp;
+  LoadMonitor* _lm;
+  StatisticCounter* _requests_counter;
+  StatisticCounter* _overload_counter;
 };
-
-//SproutletProxy* ICSCFSproutletTestBase::_icscf_proxy;
-
 
 TEST_F(CommonProcessingTest, RequestAllowed)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
-  // name.  There are two cases tested here - one where the impi is defaulted
-  // from the impu and one where the impi is explicit specified in an
-  // Authorization header.
-
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a REGISTER request.
+  // Tests that, when there is a token in the load monitor's bucket, a
+  // request is not rejected.
+    
+  // Inject a request.
   Message msg1;
-  inject_msg(msg1.get_request(), tp);
+  inject_msg(msg1.get_request(), _tp);
 
-  // REGISTER request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
+  // As only the common processing module is loaded (and not anything
+  // that will actually handle the request), expect it to just disappear.
   ASSERT_EQ(0, txdata_count());
-
-  delete tp;
 }
 
 TEST_F(CommonProcessingTest, RequestRejectedWithOverload)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
-  // name.  There are two cases tested here - one where the impi is defaulted
-  // from the impu and one where the impi is explicit specified in an
-  // Authorization header.
+  // Tests that, when there is no token in the load monitor's bucket, a
+  // request is rejected with 503 Service Unavailable.
 
   pjsip_tx_data* tdata;
 
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
-                                        "1.2.3.4",
-                                        49152);
+  // Consume the only token in the bucket.
+  _lm->admit_request();
 
-  // Inject a REGISTER request.
+  // Inject a request.
   Message msg1;
-  lm->admit_request();
-  inject_msg(msg1.get_request(), tp);
+  inject_msg(msg1.get_request(), _tp);
 
-  // REGISTER request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
+  // Expect a 503 response code.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher r1(503);
   r1.matches(tdata->msg);
 
   free_txdata();
-
-  delete tp;
 }
 
 TEST_F(CommonProcessingTest, AckRequestAlwaysAllowed)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
-  // name.  There are two cases tested here - one where the impi is defaulted
-  // from the impu and one where the impi is explicit specified in an
-  // Authorization header.
+  // Tests that, even when there is no token in the load monitor's bucket, an
+  // ACK request is not rejected.
 
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a REGISTER request.
+  // Consume the only token in the bucket.
+  _lm->admit_request();
+    
+  // Inject an ACK request.
   Message msg1;
   msg1._method = "ACK";
-  lm->admit_request();
-  inject_msg(msg1.get_request(), tp);
+  inject_msg(msg1.get_request(), _tp);
 
-  // REGISTER request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
+  // As only the common processing module is loaded (and not anything
+  // that will actually handle the request), expect it to just disappear.
   ASSERT_EQ(0, txdata_count());
-
-  delete tp;
 }
 
 TEST_F(CommonProcessingTest, BadRequestRejected)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
-  // name.  There are two cases tested here - one where the impi is defaulted
-  // from the impu and one where the impi is explicit specified in an
-  // Authorization header.
-
+  // Tests that a malformed request receives a 400 Bad Request error.
   pjsip_tx_data* tdata;
 
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a REGISTER request.
+  // Inject a request with an invalid Contact.
   Message msg1;
-  msg1._method = "REGISTER";
-  msg1._requri = "sip:homedomain";
-  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
-  msg1._via = tp->to_string(false);
   msg1._extra = "Contact: ;;";
-  inject_msg(msg1.get_request(), tp);
+  inject_msg(msg1.get_request(), _tp);
 
-  // REGISTER request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
+  // Expect a 400 error.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   RespMatcher r1(400);
   r1.matches(tdata->msg);
 
   free_txdata();
-
-  delete tp;
 }
 
 TEST_F(CommonProcessingTest, BadResponseDropped)
 {
-  // Tests routing of REGISTER requests when the HSS responses with a server
-  // name.  There are two cases tested here - one where the impi is defaulted
-  // from the impu and one where the impi is explicit specified in an
-  // Authorization header.
+  // Tests that a malformed response is just dropped,
+  // rather than receiving a 400 Bad Request error.
 
-  // Create a TCP connection to the I-CSCF listening port.
-  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
-                                        stack_data.icscf_port,
-                                        "1.2.3.4",
-                                        49152);
-
-  // Inject a REGISTER request.
+  // Inject a response with an invalid Contact.
   Message msg1;
   msg1._extra = "Contact: ;;";
-  inject_msg(msg1.get_response(), tp);
+  inject_msg(msg1.get_response(), _tp);
 
-  // REGISTER request should be forwarded to the server named in the HSS
-  // response, scscf1.homedomain.
+  // Expect it to just vanish.
   ASSERT_EQ(0, txdata_count());
-
-  delete tp;
 }
