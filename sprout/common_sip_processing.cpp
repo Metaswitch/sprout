@@ -70,7 +70,6 @@ extern "C" {
 #include "custom_headers.h"
 #include "utils.h"
 #include "accumulator.h"
-#include "connection_tracker.h"
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
@@ -78,7 +77,6 @@ extern "C" {
 static Counter* requests_counter = NULL;
 static Counter* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
-static ConnectionTracker* connection_tracker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
@@ -245,9 +243,6 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
   // Do logging.
   local_log_rx_msg(rdata);
   sas_log_rx_msg(rdata);
-
-  // Notify the connection tracker that the transport is active.
-  connection_tracker->connection_active(rdata->tp_info.transport);
 
   requests_counter->increment();
 

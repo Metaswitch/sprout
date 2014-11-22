@@ -86,6 +86,24 @@ static ConnectionTracker *connection_tracker = NULL;
 
 static volatile pj_bool_t quit_flag;
 static pj_thread_t* pjsip_thread;
+static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
+
+static pjsip_module mod_connection_tracking =
+{
+  NULL, NULL,                           /* prev, next.          */
+  pj_str("mod-connection-tracking"),                  /* Name.                */
+  -1,                                   /* Id                   */
+  PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-3, /* Priority             */
+  NULL,                                 /* load()               */
+  NULL,                                 /* start()              */
+  NULL,                                 /* stop()               */
+  NULL,                                 /* unload()             */
+  &process_on_rx_msg,                           /* on_rx_request()      */
+  &process_on_rx_msg,                           /* on_rx_response()     */
+  NULL,                           /* on_tx_request()      */
+  NULL,                           /* on_tx_response()     */
+  NULL,                                 /* on_tsx_state()       */
+};
 
 const static std::string _known_statnames[] = {
   "client_count",
@@ -346,6 +364,11 @@ pj_status_t start_transports(int port, pj_str_t& host, pjsip_tpfactory** tcp_fac
   return PJ_SUCCESS;
 }
 
+static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
+{
+  // Notify the connection tracker that the transport is active.
+  connection_tracker->connection_active(rdata->tp_info.transport);
+}
 
 // This class distributes quiescing work within the stack module.  It receives
 // requests from the QuiscingManager and ConnectionTracker, and calls the
@@ -803,6 +826,8 @@ pj_status_t init_stack(const std::string& system_name,
     // Register the quiesce handler with the quiescing manager (the former
     // implements the connection handling interface).
     quiescing_mgr->register_conns_handler(stack_quiesce_handler);
+
+    pjsip_endpt_register_module(stack_data.endpt, &mod_connection_tracking);
   }
 
   return status;
@@ -834,6 +859,8 @@ void destroy_stack(void)
 {
   // Tear down the stack.
   delete stack_data.stats_aggregator;
+
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_connection_tracking);
 
   delete stack_quiesce_handler;
   stack_quiesce_handler = NULL;
