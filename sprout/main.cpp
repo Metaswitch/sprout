@@ -1299,6 +1299,7 @@ int main(int argc, char* argv[])
                       opt.additional_home_domains,
                       opt.scscf_uri,
                       opt.alias_hosts,
+                      opt.pjsip_threads,
                       sip_resolver,
                       opt.record_routing_model,
                       opt.default_session_expires,
@@ -1608,7 +1609,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  status = start_pjsip_thread();
+  status = start_pjsip_threads();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
@@ -1675,7 +1676,7 @@ int main(int argc, char* argv[])
   // the PJSIP threads first - if we killed the worker threads first the
   // rx_msg_q will stop getting serviced so could fill up blocking
   // PJSIP threads, causing a deadlock.
-  status = stop_pjsip_thread();
+  status = stop_pjsip_threads();
   stop_worker_threads();
 
   // We must call stop_stack here because this terminates the

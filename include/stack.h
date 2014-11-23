@@ -150,13 +150,14 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& additional_home_domains,
                               const std::string& scscf_uri,
                               const std::string& alias_hosts,
+                              int num_pjsip_threads,
                               SIPResolver* sipresolver,
                               int record_routing_model,
                               const int default_session_expires,
                               QuiescingManager *quiescing_mgr,
                               const std::string& cdf_domain);
-extern pj_status_t start_pjsip_thread();
-extern pj_status_t stop_pjsip_thread();
+extern pj_status_t start_pjsip_threads();
+extern pj_status_t stop_pjsip_threads();
 extern void stop_stack();
 extern void destroy_stack();
 extern pj_status_t init_pjsip();

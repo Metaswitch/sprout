@@ -74,7 +74,6 @@ extern "C" {
 #include "load_monitor.h"
 #include "counter.h"
 
-static std::vector<pj_thread_t*> pjsip_threads;
 static std::vector<pj_thread_t*> worker_threads;
 
 // Queue for incoming messages.

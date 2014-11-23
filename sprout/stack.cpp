@@ -85,7 +85,7 @@ static StackQuiesceHandler *stack_quiesce_handler = NULL;
 static ConnectionTracker *connection_tracker = NULL;
 
 static volatile pj_bool_t quit_flag;
-static pj_thread_t* pjsip_thread;
+static std::vector<pj_thread_t*> pjsip_threads;
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 
 static pjsip_module mod_connection_tracking =
@@ -511,17 +511,24 @@ pj_status_t init_pjsip()
   return PJ_SUCCESS;
 }
 
-pj_status_t start_pjsip_thread()
+pj_status_t start_pjsip_threads()
 {
-  pj_status_t status = pj_thread_create(stack_data.pool, "pjsip", &pjsip_thread_func,
-			    NULL, 0, 0, &pjsip_thread);
-  if (status != PJ_SUCCESS)
-  {
-    LOG_ERROR("Error creating PJSIP thread, %s",
-	      PJUtils::pj_status_to_string(status).c_str());
-    return 1;
-  }
+  pj_status_t status = PJ_SUCCESS;
 
+  for (size_t ii = 0; ii < pjsip_threads.size(); ++ii)
+  {
+    pj_thread_t* thread;
+
+    status = pj_thread_create(stack_data.pool, "pjsip", &pjsip_thread_func,
+                              NULL, 0, 0, &thread);
+    if (status != PJ_SUCCESS)
+    {
+        LOG_ERROR("Error creating PJSIP thread, %s",
+                  PJUtils::pj_status_to_string(status).c_str());
+        return 1;
+    }
+    pjsip_threads[ii] = thread;
+  }
   
   return PJ_SUCCESS;
 }
@@ -539,6 +546,7 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
                        const std::string& alias_hosts,
+                       int num_pjsip_threads,
                        SIPResolver* sipresolver,
                        int record_routing_model,
                        const int default_session_expires,
@@ -550,6 +558,11 @@ pj_status_t init_stack(const std::string& system_name,
   pj_sockaddr addr_list[16];
   unsigned addr_cnt = PJ_ARRAY_SIZE(addr_list);
   unsigned i;
+
+  // Set up the vectors of threads.  The threads don't get created until
+  // start_pjsip_threads is called.
+  pjsip_threads.resize(num_pjsip_threads);
+
 
   // Get ports and host names specified on options.  If local host was not
   // specified, use the host name returned by pj_gethostname.
@@ -836,13 +849,16 @@ pj_status_t init_stack(const std::string& system_name,
 }
 
 
-pj_status_t stop_pjsip_thread()
+pj_status_t stop_pjsip_threads()
 {
   // Set the quit flag to signal the PJSIP threads to exit, then wait
   // for them to exit.
   quit_flag = PJ_TRUE;
 
-  pj_thread_join(pjsip_thread);
+  for (size_t ii = 0; ii < pjsip_threads.size(); ++ii)
+  {
+      pj_thread_join(pjsip_threads[ii]);
+  }
 
   return PJ_SUCCESS;
 }
