@@ -60,9 +60,9 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   icscfrouter.cpp \
-                  scscfselector.cpp	\
+                  scscfselector.cpp \
                   acr.cpp \
-                  signalhandler.cpp	\
+                  signalhandler.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \
@@ -79,7 +79,10 @@ TARGET_SOURCES := logger.cpp \
                   icscfsproutlet.cpp \
                   bgcfsproutlet.cpp \
                   mmtel.cpp \
-                  mobiletwinned.cpp
+                  mobiletwinned.cpp \
+                  mangelwurzel.cpp \
+                  alarm.cpp \
+                  communicationmonitor.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \
@@ -135,13 +138,17 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        scscf_test.cpp \
                        sproutletproxy_test.cpp \
                        gruu_test.cpp \
-                       mobiletwinned_test.cpp
+                       mobiletwinned_test.cpp \
+                       mangelwurzel_test.cpp \
+                       alarm_test.cpp \
+                       communicationmonitor_test.cpp
 
 # Put the interposer in here, so it will be loaded before pjsip.
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o \
                           md5.o \
-                          test_interposer.so
+                          test_interposer.so \
+                          fakezmq.so
 
 TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 COVERAGE_XML = $(TEST_OUT_DIR)/coverage_$(TARGET_TEST).xml
@@ -163,6 +170,7 @@ EXTRA_CLEANS += $(TEST_XML) \
 CPPFLAGS += -Wno-write-strings \
             -ggdb3 -std=c++0x
 CPPFLAGS += -I${ROOT}/include \
+            -I${ROOT}/include/mangelwurzel \
             -I${ROOT}/modules/cpp-common/include \
             -I${ROOT}/modules/cpp-common/test_utils \
             -I${ROOT}/modules/app-servers/include \
@@ -176,7 +184,7 @@ CPPFLAGS += -I${ROOT}/include \
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
 # Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src
+VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/cpp-common/test_utils:${ROOT}/modules/app-servers/test:${ROOT}/modules/gemini/src:${ROOT}/sprout/mangelwurzel
 
 # Production build:
 #
@@ -237,7 +245,7 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 # End of boilerplate
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/|^sprout/ut/|^sprout/mangelwurzel/ut/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \
@@ -360,4 +368,8 @@ $(OBJ_DIR_TEST)/md5.o : $(SIPP_DIR)/md5.c
 
 # Build rule for our interposer.
 $(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_interposer.cpp ${ROOT}/modules/cpp-common/test_utils/test_interposer.hpp
+	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@
+
+# Build rule for our fake zmq.
+$(OBJ_DIR_TEST)/fakezmq.so: ${ROOT}/modules/cpp-common/test_utils/fakezmq.cpp ${ROOT}/modules/cpp-common/test_utils/fakezmq.h
 	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@

@@ -795,8 +795,7 @@ pjsip_hdr* parse_hdr_p_charging_function_addresses(pjsip_parse_ctx* ctx)
   pjsip_param *param;
 
   for (;;) {
-    pjsip_parse_uri_param_imp(scanner, pool, &name, &value,
-                          NULL);
+    pjsip_parse_uri_param_imp(scanner, pool, &name, &value, 0);
     param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     param->name = name;
     param->value = value;

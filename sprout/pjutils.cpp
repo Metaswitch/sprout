@@ -379,6 +379,13 @@ pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
   return msg->line.req.uri;
 }
 
+void PJUtils::add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id)
+{
+  pjsip_generic_string_hdr* pvni_hdr = pjsip_generic_string_hdr_create(tdata->pool,
+                                                                       &STR_P_V_N_I,
+                                                                       network_id);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pvni_hdr);
+}
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
@@ -1175,55 +1182,60 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   {
     // We have servers to send the request to, so allocate a transaction.
     status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
-
-    if (status == PJ_SUCCESS)
-    {
-      // Set the trail ID in the transaction from the message.
-      set_trail(tsx, get_trail(tdata));
-      if (log_sas_branch)
-      {
-        PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
-      }
-      // Set up the module data for the new transaction to reference
-      // the state information.
-      tsx->mod_data[mod_sprout_util.id] = sss;
-
-      if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
-      {
-        // Transport has already been determined, so copy it across to the
-        // transaction.
-        LOG_DEBUG("Transport already determined");
-        pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
-      }
-
-      // Store the message and add a reference to prevent the transaction layer
-      // freeing it.
-      sss->tdata = tdata;
-      pjsip_tx_data_add_ref(tdata);
-
-      LOG_DEBUG("Sending request");
-      status = pjsip_tsx_send_msg(tsx, tdata);
-    }
   }
 
-  if (status != PJ_SUCCESS)
+  if (status == PJ_SUCCESS)
   {
-    // The assumption here is that, if pjsip_tsx_send_msg returns an error
-    // the on_tsx_state callback will not get called, so it is safe to free
-    // off the state data and request here.  Also, this is an unexpected
-    // error rather than an indication that the destination server is down,
-    // so we don't blacklist.
+    // Set the trail ID in the transaction from the message.
+    set_trail(tsx, get_trail(tdata));
+    if (log_sas_branch)
+    {
+      PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
+    }
+
+    // Set up the module data for the new transaction to reference
+    // the state information.
+    tsx->mod_data[mod_sprout_util.id] = sss;
+
+    if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+    {
+      // Transport has already been determined, so copy it across to the
+      // transaction.
+      LOG_DEBUG("Transport already determined");
+      pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+    }
+
+    // Store the message and add a reference to prevent the transaction layer
+    // freeing it.
+    sss->tdata = tdata;
+    pjsip_tx_data_add_ref(tdata);
+
+    LOG_DEBUG("Sending request");
+    status = pjsip_tsx_send_msg(tsx, tdata);
+
+    if (status != PJ_SUCCESS)
+    {
+      // If pjsip_tsx_send_msg fails when the UAC transaction is in NULL
+      // state it will always call the on_tsx_state callback terminating
+      // the transaction, so no clean-up left to do, and must return
+      // PJ_SUCCESS to caller to avoid potential double-free errors.  It's
+      // also not safe to access the request here, and logging of the error
+      // will have happened in the callback.
+      status = PJ_SUCCESS;
+    }
+  }
+  else
+  {
+    // Failed to resolve the destination or failed to create a PJSIP UAC
+    // transaction.
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
 
-    // Only free the state data if there are no more references to it
-    pj_status_t dec_status = pjsip_tx_data_dec_ref(tdata);
-
-    if (dec_status == PJSIP_EBUFDESTROYED)
-    {
-      delete sss;
-    }
+    // Since the on_tsx_state callback will not have been called we must
+    // clean up resources here.
+    pjsip_tx_data_dec_ref(tdata);
+    delete sss;
   }
 
   return status;
@@ -1515,6 +1527,16 @@ void PJUtils::add_top_via(pjsip_tx_data* tdata)
   pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
   generate_new_branch_id(tdata);
+}
+
+void PJUtils::remove_top_via(pjsip_tx_data* tdata)
+{
+  // Removes the top Via header.
+  pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+  if (hvia != NULL)
+  {
+    pj_list_erase(hvia);
+  }
 }
 
 void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)

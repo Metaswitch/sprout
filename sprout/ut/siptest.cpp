@@ -659,7 +659,9 @@ string SipTest::respond_to_current_txdata(int st_code, string body, string extra
 std::string SipTest::respond_to_txdata(pjsip_tx_data* tdata, int st_code, string body, string extra)
 {
   char buf[16384];
-  pjsip_tx_data* resp = create_response(tdata, st_code, NULL);
+  pjsip_tx_data* resp = (st_code != SIP_STATUS_FLOW_FAILED) ?
+                         create_response(tdata, st_code, NULL) :
+                         create_response(tdata, st_code, &SIP_REASON_FLOW_FAILED);
   pj_ssize_t len = pjsip_msg_print(resp->msg, buf, sizeof(buf));
   string ret(buf, len - 2);
   pjsip_tx_data_dec_ref(resp);

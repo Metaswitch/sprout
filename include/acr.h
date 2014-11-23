@@ -161,9 +161,6 @@ public:
   /// Convert the ENUM node role to a displayable string.
   static std::string node_role_str(NodeRole role);
 
-  /// For a given message, calculate the role the message is requesting the
-  /// node carry out.
-  static NodeRole requested_node_role(pjsip_msg* msg);
 };
 
 

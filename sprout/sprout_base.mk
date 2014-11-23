@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout
+TARGET_TEST := sprout_base_test
 
 TARGET_SOURCES := logger.cpp \
                   saslogger.cpp \
@@ -69,7 +70,9 @@ TARGET_SOURCES := logger.cpp \
                   ipv6utils.cpp \
                   contact_filtering.cpp \
                   sproutletproxy.cpp \
-                  pluginloader.cpp
+                  pluginloader.cpp \
+                  alarm.cpp \
+                  communicationmonitor.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

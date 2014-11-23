@@ -54,11 +54,13 @@ using namespace std;
 class HssConnectionTest : public BaseTest
 {
   FakeHttpResolver _resolver;
+  CommunicationMonitor _cm;
   HSSConnection _hss;
 
   HssConnectionTest() :
     _resolver("10.42.42.42"),
-    _hss("narcissus", &_resolver, NULL, NULL)
+    _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL)),
+    _hss("narcissus", &_resolver, NULL, NULL, &_cm)
   {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =

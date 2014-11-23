@@ -108,6 +108,26 @@ ACR* ICSCFSproutlet::get_acr(SAS::TrailId trail)
   return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
 }
 
+/// Translates a Tel URI to a SIP URI (if ENUM is enabled).
+std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_tel_uri* uri,
+                                                   SAS::TrailId trail)
+{
+  std::string new_uri;
+  if (_enum_service != NULL)
+  {
+    // ENUM is enabled, so extract the user name from the Request-URI.
+    std::string user = PJUtils::pj_str_to_string(&uri->number);
+
+    // If we're enforcing global only lookups then check we have a global user.
+    if ((!_global_only_lookups) ||
+        (PJUtils::is_user_global(user)))
+    {
+      new_uri = _enum_service->lookup_uri_from_user(user, trail);
+    }
+  }
+  return new_uri;
+}
+
 /*****************************************************************************/
 /* REGISTER handling.                                                        */
 /*****************************************************************************/
@@ -174,8 +194,9 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
     impi = impu.substr(4);
   }
 
-  // Get the visted network identification if present.  If not, homestead will
-  // default it.
+  // Get the visited network identification if present.  If not, warn
+  // (because a spec-compliant P-CSCF should default it) and use a
+  // sensible default.
   pjsip_generic_string_hdr* vn_hdr =
     (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(req,
                                                           &STR_P_V_N_I,
@@ -189,6 +210,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Use the domain of the IMPU as the visited network.
     visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
+    LOG_WARNING("No P-Visited-Network-ID in REGISTER - using %s as a default",
+                visited_network.c_str());
   }
 
   // Work out what authorization type to use by looking at the expiry
@@ -500,7 +523,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
          ++ii)
     {
       if ((PJSIP_URI_SCHEME_IS_TEL(uri)) &&
-          (enum_translate_tel_uri(req, pool)))
+          (translate_tel_uri(req, pool)))
       {
         // If we successfully translate the req URI, we should look for an
         // S-CSCF again.
@@ -655,38 +678,33 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
   }
 }
 
-bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
+
+/// Translates a Tel URI to a SIP URI (if ENUM is enabled).
+bool ICSCFSproutletTsx::translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
 {
   bool found = false;
-  std::string user =
-    PJUtils::pj_str_to_string(&((pjsip_tel_uri*)req->line.req.uri)->number);
+  std::string new_uri =
+    _icscf->enum_translate_tel_uri((pjsip_tel_uri*)req->line.req.uri, trail());
 
-  // If we're enforcing global only lookups then check we have a global user.
-  if (!(_icscf->get_global_only_lookups()) ||
-      (PJUtils::is_user_global(user)))
+  if (!new_uri.empty())
   {
-    std::string new_uri =
-      _icscf->get_enum_service()->lookup_uri_from_user(user, trail());
-
-    if (!new_uri.empty())
+    pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, pool);
+    if (req_uri != NULL)
     {
-      pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, pool);
-      if (req_uri != NULL)
-      {
-        LOG_DEBUG("Update request URI to %s", new_uri.c_str());
-        req->line.req.uri = req_uri;
+      LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+      req->line.req.uri = req_uri;
 
-        // We need to change the IMPU stored on our LIR router so that when
-        // we next do an LIR we look up the new IMPU.
-        ((ICSCFLIRouter *)_router)->change_impu(new_uri);
-        found = true;
-      }
-      else
-      {
-        LOG_WARNING("Badly formed URI %s from ENUM translation",
-                    new_uri.c_str());
-      }
+      // We need to change the IMPU stored on our LIR router so that when
+      // we next do an LIR we look up the new IMPU.
+      ((ICSCFLIRouter *)_router)->change_impu(new_uri);
+      found = true;
+    }
+    else
+    {
+      LOG_WARNING("Badly formed URI %s from ENUM translation",
+                  new_uri.c_str());
     }
   }
+
   return found;
 }

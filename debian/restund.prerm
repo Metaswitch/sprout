@@ -72,8 +72,8 @@ case "$1" in
         # Must stop before attempting to remove the user, else that will fail.
         # Use || /bin/true to ignore a failure, because set -e is in effect.
         rm -f /etc/monit/conf.d/$NAME.monit
-        service monit restart
-        service $NAME stop || /bin/true
+        reload clearwater-monit &> /dev/null || true
+        service $NAME stop || true
         remove_user
         remove_section /etc/security/limits.conf $NAME
     ;;
