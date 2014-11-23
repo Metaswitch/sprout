@@ -372,4 +372,4 @@ $(OBJ_DIR_TEST)/test_interposer.so: ${ROOT}/modules/cpp-common/test_utils/test_i
 
 # Build rule for our fake zmq.
 $(OBJ_DIR_TEST)/fakezmq.so: ${ROOT}/modules/cpp-common/test_utils/fakezmq.cpp ${ROOT}/modules/cpp-common/test_utils/fakezmq.h
-	$(CXX) $(CPPFLAGS) -shared -fPIC -ldl $< -o $@
+	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) -I$(GTEST_DIR)/include -I$(GMOCK_DIR) -I$(GMOCK_DIR)/include -shared -fPIC -ldl $< -o $@
