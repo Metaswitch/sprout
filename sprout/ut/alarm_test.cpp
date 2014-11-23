@@ -298,7 +298,11 @@ TEST_F(AlarmTest, PairClearAlarmed)
 TEST_F(AlarmQueueErrorTest, Overflow)
 {
   CapturingTestLogger log;
-  for (int idx = 0; idx < AlarmReqAgent::MAX_Q_DEPTH+1; idx++)
+
+  // Produce 20 more requests than the max queue depth, so that this
+  // test isn't fragile on a fast machine which might take a couple of
+  // items off the queue.
+  for (int idx = 0; idx < AlarmReqAgent::MAX_Q_DEPTH+20; idx++)
   {
     _alarm_state.issue();
   }
