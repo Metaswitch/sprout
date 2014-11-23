@@ -1,5 +1,8 @@
 /**
- * @file stack.h PJSIP stack initialization/termination functions and PJSIP related utilities.
+ * @file common_sip_processing.h
+ * 
+ * Processing that needs to be done
+ * early on every SIP message.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -47,13 +50,8 @@ extern "C" {
 #include <pjsip.h>
 }
 
-#include <string>
-#include <unordered_set>
-
-#include "stack.h"
 #include "load_monitor.h"
 #include "counter.h"
-#include "sipresolver.h"
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,

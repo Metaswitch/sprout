@@ -368,7 +368,7 @@ init_common_sip_processing(LoadMonitor* load_monitor_arg,
 {
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_common_processing);
-  stack_data.common_processing_module_id = mod_common_processing.id;
+  stack_data.sas_logging_module_id = mod_common_processing.id;
 
   overload_counter = overload_counter_arg;
   requests_counter = requests_counter_arg;

@@ -231,7 +231,6 @@ pj_status_t init_thread_dispatcher(int num_worker_threads,
 
   // Register the PJSIP module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);
-  stack_data.thread_module_id = mod_thread_dispatcher.id;
 
   return PJ_SUCCESS;
 }

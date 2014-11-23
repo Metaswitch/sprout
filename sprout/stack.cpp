@@ -86,24 +86,33 @@ static ConnectionTracker *connection_tracker = NULL;
 
 static volatile pj_bool_t quit_flag;
 static std::vector<pj_thread_t*> pjsip_threads;
-static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
+static pj_bool_t on_rx_msg(pjsip_rx_data* rdata);
 
+// Handles updating the connection tracker when requests are received,
+// for quiescing processing.
 static pjsip_module mod_connection_tracking =
 {
   NULL, NULL,                           /* prev, next.          */
-  pj_str("mod-connection-tracking"),                  /* Name.                */
+  pj_str("mod-connection-tracking"),    /* Name.                */
   -1,                                   /* Id                   */
   PJSIP_MOD_PRIORITY_TRANSPORT_LAYER-3, /* Priority             */
   NULL,                                 /* load()               */
   NULL,                                 /* start()              */
   NULL,                                 /* stop()               */
   NULL,                                 /* unload()             */
-  &process_on_rx_msg,                           /* on_rx_request()      */
-  &process_on_rx_msg,                           /* on_rx_response()     */
-  NULL,                           /* on_tx_request()      */
-  NULL,                           /* on_tx_response()     */
+  &on_rx_msg,                           /* on_rx_request()      */
+  &on_rx_msg,                           /* on_rx_response()     */
+  NULL,                                 /* on_tx_request()      */
+  NULL,                                 /* on_tx_response()     */
   NULL,                                 /* on_tsx_state()       */
 };
+
+static pj_bool_t on_rx_msg(pjsip_rx_data* rdata)
+{
+  // Notify the connection tracker that the transport is active.
+  connection_tracker->connection_active(rdata->tp_info.transport);
+  return PJ_FALSE;
+}
 
 const static std::string _known_statnames[] = {
   "client_count",
@@ -364,14 +373,6 @@ pj_status_t start_transports(int port, pj_str_t& host, pjsip_tpfactory** tcp_fac
   return PJ_SUCCESS;
 }
 
-static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
-{
-  // Notify the connection tracker that the transport is active.
-  connection_tracker->connection_active(rdata->tp_info.transport);
-
-  return PJ_FALSE;
-}
-
 // This class distributes quiescing work within the stack module.  It receives
 // requests from the QuiscingManager and ConnectionTracker, and calls the
 // relevant methods in the stack module, QuiescingManager and ConnectionManager
@@ -546,8 +547,8 @@ pj_status_t init_stack(const std::string& system_name,
                        const std::string& additional_home_domains,
                        const std::string& scscf_uri,
                        const std::string& alias_hosts,
-                       int num_pjsip_threads,
                        SIPResolver* sipresolver,
+                       int num_pjsip_threads,
                        int record_routing_model,
                        const int default_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
@@ -855,11 +856,14 @@ pj_status_t stop_pjsip_threads()
   // for them to exit.
   quit_flag = PJ_TRUE;
 
-  for (size_t ii = 0; ii < pjsip_threads.size(); ++ii)
+  for (std::vector<pj_thread_t*>::iterator i = pjsip_threads.begin();
+       i != pjsip_threads.end();
+       ++i)
   {
-      pj_thread_join(pjsip_threads[ii]);
+    pj_thread_join(*i);
   }
 
+  pjsip_threads.clear();
   return PJ_SUCCESS;
 }
 

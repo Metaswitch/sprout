@@ -1,5 +1,5 @@
 /**
- * @file icscfproxy_test.cpp UT for I-CSCF proxy class.
+ * @file common_sip_processing_test.cpp
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -37,26 +37,18 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <boost/lexical_cast.hpp>
 
 #include "pjutils.h"
 #include "constants.h"
 #include "siptest.hpp"
 #include "utils.h"
 #include "test_utils.hpp"
-#include "icscfsproutlet.h"
-#include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "sproutletproxy.h"
 #include "common_sip_processing.h"
 #include "counter.h"
 
 using namespace std;
-using testing::StrEq;
-using testing::ElementsAre;
-using testing::MatchesRegex;
-using testing::HasSubstr;
-using testing::Not;
 
 class CommonProcessingTest : public SipTest
 {

@@ -75,8 +75,7 @@ struct stack_data_struct
   int                  icscf_port;
   pjsip_tpfactory     *icscf_tcp_factory;
 
-  int                  thread_module_id;
-  int                  common_processing_module_id;
+  int                  sas_logging_module_id;
 
   pj_str_t             local_host;
   pj_str_t             public_host;
@@ -106,32 +105,32 @@ extern struct stack_data_struct stack_data;
 
 inline void set_trail(pjsip_rx_data* rdata, SAS::TrailId trail)
 {
-  rdata->endpt_info.mod_data[stack_data.common_processing_module_id] = (void*)trail;
+  rdata->endpt_info.mod_data[stack_data.sas_logging_module_id] = (void*)trail;
 }
 
 inline void set_trail(pjsip_tx_data* tdata, SAS::TrailId trail)
 {
-  tdata->mod_data[stack_data.common_processing_module_id] = (void*)trail;
+  tdata->mod_data[stack_data.sas_logging_module_id] = (void*)trail;
 }
 
 inline void set_trail(pjsip_transaction* tsx, SAS::TrailId trail)
 {
-  tsx->mod_data[stack_data.common_processing_module_id] = (void*)trail;
+  tsx->mod_data[stack_data.sas_logging_module_id] = (void*)trail;
 }
 
 inline SAS::TrailId get_trail(const pjsip_rx_data* rdata)
 {
-  return (SAS::TrailId)rdata->endpt_info.mod_data[stack_data.common_processing_module_id];
+  return (SAS::TrailId)rdata->endpt_info.mod_data[stack_data.sas_logging_module_id];
 }
 
 inline SAS::TrailId get_trail(const pjsip_tx_data* tdata)
 {
-  return (SAS::TrailId)tdata->mod_data[stack_data.common_processing_module_id];
+  return (SAS::TrailId)tdata->mod_data[stack_data.sas_logging_module_id];
 }
 
 inline SAS::TrailId get_trail(const pjsip_transaction* tsx)
 {
-  return (SAS::TrailId)tsx->mod_data[stack_data.common_processing_module_id];
+  return (SAS::TrailId)tsx->mod_data[stack_data.sas_logging_module_id];
 }
 
 extern void init_pjsip_logging(int log_level,
@@ -150,8 +149,8 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               const std::string& additional_home_domains,
                               const std::string& scscf_uri,
                               const std::string& alias_hosts,
-                              int num_pjsip_threads,
                               SIPResolver* sipresolver,
+                              int num_pjsip_threads,
                               int record_routing_model,
                               const int default_session_expires,
                               QuiescingManager *quiescing_mgr,

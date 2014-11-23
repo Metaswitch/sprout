@@ -1299,8 +1299,8 @@ int main(int argc, char* argv[])
                       opt.additional_home_domains,
                       opt.scscf_uri,
                       opt.alias_hosts,
-                      opt.pjsip_threads,
                       sip_resolver,
+                      opt.pjsip_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
@@ -1581,14 +1581,18 @@ int main(int argc, char* argv[])
     }
   }
 
-  Accumulator* latency_accumulator = new StatisticAccumulator("latency_us",
-                                                 stack_data.stats_aggregator);
-  Accumulator* queue_size_accumulator = new StatisticAccumulator("queue_size",
-                                                    stack_data.stats_aggregator);
-  Counter* requests_counter = new StatisticCounter("incoming_requests",
-                                          stack_data.stats_aggregator);
-  Counter* overload_counter = new StatisticCounter("rejected_overload",
-                                          stack_data.stats_aggregator);
+  Accumulator* latency_accumulator =
+      new StatisticAccumulator("latency_us",
+                               stack_data.stats_aggregator);
+  Accumulator* queue_size_accumulator =
+      new StatisticAccumulator("queue_size",
+                               stack_data.stats_aggregator);
+  Counter* requests_counter =
+      new StatisticCounter("incoming_requests",
+                           stack_data.stats_aggregator);
+  Counter* overload_counter =
+      new StatisticCounter("rejected_overload",
+                           stack_data.stats_aggregator);
 
 
   init_common_sip_processing(load_monitor,

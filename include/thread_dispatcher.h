@@ -1,5 +1,5 @@
 /**
- * @file stack.h PJSIP stack initialization/termination functions and PJSIP related utilities.
+ * @file thread_dispatcher.h
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -47,13 +47,8 @@ extern "C" {
 #include <pjsip.h>
 }
 
-#include <string>
-#include <unordered_set>
-
-#include "stack.h"
 #include "load_monitor.h"
-#include "counter.h"
-#include "sipresolver.h"
+#include "accumulator.h"
 
 pj_status_t init_thread_dispatcher(int num_worker_threads,
                                    Accumulator* latency_acc_arg,
