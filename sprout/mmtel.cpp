@@ -280,7 +280,7 @@ MmtelTsx::MmtelTsx(AppServerTsxHelper* helper,
   _user_services(user_services),
   _cdiv_callback(cdiv_callback),
   _no_reply_timer(0),
-  _cdiv_targets()
+  _diverted(false)
 {
   _country_code = "1";
 
@@ -435,7 +435,8 @@ void MmtelTsx::on_response(pjsip_msg* rsp, int fork_id)
 
         if ((_no_reply_timer == 0) &&
             (_user_services != NULL) &&
-            (_user_services->cdiv_enabled()))
+            (_user_services->cdiv_enabled()) &&
+            (!_diverted))
         {
           // Now spin through the rules looking for one that requires no answer but
           // is also satisfied by our media conditions.
@@ -1001,6 +1002,7 @@ pjsip_status_code MmtelTsx::apply_cdiv_on_req(pjsip_msg* req,
       // Send a provisional response indicating the call is being forwarded.
       pjsip_msg* rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
       send_response(rsp);
+      _diverted = true;
     }
   }
   return rc;
@@ -1012,59 +1014,70 @@ bool MmtelTsx::apply_cdiv_on_rsp(pjsip_msg* rsp,
                                  unsigned int conditions,
                                  pjsip_status_code code)
 {
-  bool redirected = false;
+  bool already_diverted = _diverted;
   std::string target;
 
-  if ((code == PJSIP_SC_MOVED_TEMPORARILY) &&
-      (rsp != NULL))
+  if (!already_diverted)
   {
-    // Handle 302 redirect by parsing the contact header and diverting to that
-    // address.
-    pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
-                                pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);
-    if (contact_hdr != NULL)
+    if ((code == PJSIP_SC_MOVED_TEMPORARILY) &&
+        (rsp != NULL))
     {
-      target = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, (pjsip_uri*)pjsip_uri_get_uri(contact_hdr->uri));
-    }
-  }
-  else
-  {
-    // Check to see if CDIV rules trigger.
-    target = check_call_diversion_rules(conditions);
-  }
-
-  if (!target.empty()) 
-  {
-    // We have a target for the redirect, so get a copy of the original 
-    // request and update it for the redirect.
-    {
-      SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 1);
-      event.add_var_param(target);
-      SAS::report_event(event);
-    }
-
-    pjsip_msg* req = original_request();
-
-    if (PJUtils::redirect(req, target, get_pool(req), code) == PJSIP_SC_OK)
-    {
-      // Send a provisional response flagging that the call is being
-      // forwarded.
-      LOG_DEBUG("Redirect request");
-      rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
-      send_response(rsp);
-
-      // Send the redirected request.
-      send_request(req);
-
-      redirected = true;
+      // Handle 302 redirect by parsing the contact header and diverting to that
+      // address.
+      pjsip_contact_hdr* contact_hdr = (pjsip_contact_hdr*)
+                                  pjsip_msg_find_hdr(rsp, PJSIP_H_CONTACT, NULL);
+      if (contact_hdr != NULL)
+      {
+        target = PJUtils::uri_to_string(PJSIP_URI_IN_CONTACT_HDR, (pjsip_uri*)pjsip_uri_get_uri(contact_hdr->uri));
+      }
     }
     else
     {
-      // Can't redirect the request.
-      free_msg(req);
+      // Check to see if CDIV rules trigger.
+      target = check_call_diversion_rules(conditions);
+    }
+  
+    if (!target.empty()) 
+    {
+      // We have a target for the redirect, so get a copy of the original 
+      // request and update it for the redirect.
+      {
+        SAS::Event event(trail(), SASEvent::DIVERTING_CALL, 1);
+        event.add_var_param(target);
+        SAS::report_event(event);
+      }
+  
+      pjsip_msg* req = original_request();
+  
+      if (PJUtils::redirect(req, target, get_pool(req), code) == PJSIP_SC_OK)
+      {
+        // Send a provisional response flagging that the call is being
+        // forwarded.
+        LOG_DEBUG("Redirect request");
+        rsp = create_response(req, PJSIP_SC_CALL_BEING_FORWARDED);
+        send_response(rsp);
+  
+        // Send the redirected request.
+        send_request(req);
+  
+        // The call has been diverted.  Cancel the no-reply timer.
+        _diverted = true;
+        if (_no_reply_timer != 0)
+        {
+          cancel_timer(_no_reply_timer);
+          _no_reply_timer = 0;
+        }
+      }
+      else
+      {
+        // Can't redirect the request.
+        free_msg(req);
+      }
     }
   }
-  return redirected;
+
+  // Return true only if we're _newly_ diverted.
+  return ((_diverted) && (!already_diverted));
 }
 
 // Check call diversion rules to see if all conditions of any rule match
@@ -1084,14 +1097,12 @@ std::string MmtelTsx::check_call_diversion_rules(unsigned int conditions)
     {
       LOG_DEBUG("Considering rule - conditions 0x%x (?= 0x%x), target %s",
                 rule->conditions(), conditions, rule->forward_target().c_str());
-      if (((rule->conditions() & ~conditions) == 0) &&
-          (_cdiv_targets.find(rule->forward_target()) == _cdiv_targets.end()))
+      if ((rule->conditions() & ~conditions) == 0)
       {
         LOG_INFO("Forwarding to %s", rule->forward_target().c_str());
         if (_cdiv_callback != NULL) {
           _cdiv_callback->cdiv_callback(rule->forward_target(), rule->conditions());
         }
-        _cdiv_targets.insert(rule->forward_target());
         return rule->forward_target();
       }
     }
