@@ -1417,10 +1417,15 @@ void RalfACR::store_instance_id(pjsip_msg* msg)
                                       &STR_SIP_INSTANCE);
     if (p != NULL)
     {
-      // Found the instance identifier, so convert to a string and dequote.
-      _instance_id = PJUtils::pj_str_to_string(&p->value);
-      _instance_id = _instance_id.substr(1, _instance_id.size() - 2);
-      break;
+      std::string instance = PJUtils::pj_str_to_string(&p->value);
+
+      // Check that the value is a valid length before we dequote
+      if (instance.size() >= 2)
+      {
+        // Found the instance identifier, so convert to a string and dequote.
+        _instance_id = instance.substr(1, instance.size() - 2);
+        break;
+      }
     }
     contact_hdr = (pjsip_contact_hdr*)
                    pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact_hdr->next);
