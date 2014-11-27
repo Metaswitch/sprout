@@ -103,7 +103,8 @@ enum OptionTypes
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
-  OPT_ALARMS_ENABLED
+  OPT_ALARMS_ENABLED,
+  OPT_DNS_SERVER
 };
 
 
@@ -133,6 +134,7 @@ const static struct pj_getopt_option long_opt[] =
   { "xdms",              required_argument, 0, 'X'},
   { "chronos",           required_argument, 0, 'K'},
   { "ralf",              required_argument, 0, 'G'},
+  { "dns-server",        required_argument, 0, OPT_DNS_SERVER },
   { "enum",              required_argument, 0, 'E'},
   { "enum-suffix",       required_argument, 0, 'x'},
   { "enum-file",         required_argument, 0, 'f'},
@@ -236,6 +238,7 @@ static void usage(void)
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
+       "     --dns-server <server>  IP address of the DNS server to use (defaults to 127.0.0.1)\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
@@ -737,6 +740,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       LOG_INFO("SNMP alarms are enabled");
       break;
 
+    case OPT_DNS_SERVER:
+      options->dns_server = std::string(pj_optarg);
+      LOG_INFO("Using DNS server %s", pj_optarg);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1031,6 +1039,7 @@ int main(int argc, char* argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
+  opt.dns_server = "127.0.0.1";
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
   opt.max_call_list_length = 0;
@@ -1239,7 +1248,7 @@ int main(int argc, char* argv[])
                                  MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  dns_resolver = new DnsCachedResolver(opt.dns_server);
   sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialize the PJSIP stack and associated subsystems.
