@@ -44,17 +44,18 @@ sleep 5
 scscf=5054
 icscf=0
 . /etc/clearwater/config
+[ -z $signaling_namespace ] || namespace_prefix="ip netns exec $signaling_namespace"
 
 # If we have S-CSCF configured, check it.
 rc=0
 if [ "$scscf" != "0" ] ; then
-  /usr/share/clearwater/bin/poll-sip $scscf
+  $namespace_prefix /usr/share/clearwater/bin/poll-sip $scscf
   rc=$?
 fi
 
 # If that succeeded and we have I-CSCF configured, check it.
 if [ $rc = 0 ] && [ "$icscf" != "0" ] ; then
-  /usr/share/clearwater/bin/poll-sip $icscf
+  $namespace_prefix /usr/share/clearwater/bin/poll-sip $icscf
   rc=$?
 fi
 
