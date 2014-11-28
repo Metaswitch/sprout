@@ -638,7 +638,9 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     pj_gettimeofday(&timestamp);
   }
 
-  Json::Value v;
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+  writer.StartObject();
 
   // Add the peers section with charging function addresses if this is a
   // start or event message.
@@ -646,41 +648,72 @@ std::string RalfACR::get_message(pj_time_val timestamp)
       (_record_type == EVENT_RECORD))
   {
     LOG_DEBUG("Adding peers meta-data, %d ccfs, %d ecfs", _ccfs.size(), _ecfs.size());
-    Json::Value& p = v["peers"];
-    for (std::list<std::string>::const_iterator i = _ccfs.begin();
-         i != _ccfs.end();
-         ++i)
+
+    writer.String("peers");
+    writer.StartObject();
+
+    if (!_ccfs.empty())
     {
-      p["ccf"].append(Json::Value(*i));
+      writer.String("ccf");
+      writer.StartArray();
+
+      for (std::list<std::string>::const_iterator i = _ccfs.begin();
+           i != _ccfs.end();
+           ++i)
+      {
+        writer.String((*i).c_str());
+      }
+
+      writer.EndArray();
     }
-    for (std::list<std::string>::const_iterator i = _ecfs.begin();
-         i != _ecfs.end();
-         ++i)
+
+    if (!_ecfs.empty())
     {
-      p["ecf"].append(Json::Value(*i));
-    }
+      writer.String("ecf");
+      writer.StartArray();
+
+      for (std::list<std::string>::const_iterator i = _ecfs.begin();
+           i != _ecfs.end();
+           ++i)
+      {
+        writer.String((*i).c_str());
+      }
+
+      writer.EndArray();
+   }
+
+   writer.EndObject();
   }
 
   // Build the event data.
   LOG_DEBUG("Building event");
-  Json::Value& e = v["event"];
+  writer.String("event");
+  writer.StartObject();
 
   // Add top-level fields.
   LOG_DEBUG("Adding Account-Record-Type AVP %d", _record_type);
-  e["Accounting-Record-Type"] = Json::Value(_record_type);
+  writer.String("Accounting-Record-Type");
+  writer.Int(_record_type);
+
   if (!_username.empty())
   {
-    e["User-Name"] = Json::Value(_username);
+    writer.String("User-Name");
+    writer.String(_username.c_str());
   }
+
   if (_interim_interval != 0)
   {
-    e["Acct-Interim-Interval"] = Json::Value(_interim_interval);
+    writer.String("Acct-Interim-Interval");
+    writer.Int(_interim_interval);
   }
-  e["Event-Timestamp"] = Json::Value((Json::UInt)timestamp.sec);
+
+  writer.String("Event-Timestamp");
+  writer.Int(timestamp.sec);
 
   // Add Service-Information AVP group.
   LOG_DEBUG("Adding Service-Information AVP group");
-  Json::Value& si = e["Service-Information"];
+  writer.String("Service-Information");
+  writer.StartObject();
 
   if ((_node_functionality == PCSCF) ||
       (_node_functionality == SCSCF) ||
@@ -689,51 +722,88 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     // Add Subscription-Id AVPs on P-CSCF/S-CSCF/IBCF ACRs (should be omitted
     // on I-CSCF and BGCF).
     LOG_DEBUG("Adding %d Subscription-Id AVPs", _subscription_ids.size());
-    for (std::list<SubscriptionId>::const_iterator i = _subscription_ids.begin();
-         i != _subscription_ids.end();
-         ++i)
+
+    if (_subscription_ids.size() > 0)
     {
-      Json::Value& sub = si["Subscription-Id"].append(Json::Value());
-      sub["Subscription-Id-Type"] = Json::Value(i->type);
-      sub["Subscription-Id-Data"] = Json::Value(i->id);
+      writer.String("Subscription-Id");
+      writer.StartArray();
+
+      for (std::list<SubscriptionId>::const_iterator i = _subscription_ids.begin();
+           i != _subscription_ids.end();
+           ++i)
+      {
+        writer.StartObject();
+        {
+          writer.String("Subscription-Id-Type");
+          writer.Int(i->type);
+          writer.String("Subscription-Id-Data");
+          writer.String(i->id.c_str());
+        }
+        writer.EndObject();
+      }
+
+      writer.EndArray();
     }
   }
 
   // Add IMS-Information AVP group.
   LOG_DEBUG("Adding IMS-Information AVP group");
-  Json::Value& ii = si["IMS-Information"];
+  writer.String("IMS-Information");
+  writer.StartObject();
 
   // Add Event-Type AVP group.
   LOG_DEBUG("Adding Event-Type AVP group");
-  Json::Value& event_type = ii["Event-Type"];
-  event_type["SIP-Method"] = Json::Value(_method);
-  if (!_event.empty())
+  writer.String("Event-Type");
+  writer.StartObject();
   {
-    event_type["Event"] = Json::Value(_event);
-  }
-  if (_expires != -1)
-  {
-    event_type["Expires"] = Json::Value(_expires);
-  }
+    writer.String("SIP-Method");
+    writer.String(_method.c_str());
 
-  ii["Role-Of-Node"] = Json::Value(_node_role);
-  ii["Node-Functionality"] = Json::Value(_node_functionality);
-  ii["User-Session-Id"] = Json::Value(_user_session_id);
+    if (!_event.empty())
+    {
+      writer.String("Event");
+      writer.String(_event.c_str());
+    }
+
+    if (_expires != -1)
+    {
+      writer.String("Expires");
+      writer.Int(_expires);
+    }
+  }
+  writer.EndObject();
+
+  writer.String("Role-Of-Node");
+  writer.Int(_node_role);
+  writer.String("Node-Functionality");
+  writer.Int(_node_functionality);
+  writer.String("User-Session-Id");
+  writer.String(_user_session_id.c_str());
 
   // Add the Calling-Party-Address AVPs.
   LOG_DEBUG("Adding %d Calling-Party-Address AVPs", _calling_party_addresses.size());
-  for (std::list<std::string>::const_iterator i = _calling_party_addresses.begin();
-       i != _calling_party_addresses.end();
-       ++i)
+
+  if (_calling_party_addresses.size() > 0)
   {
-    ii["Calling-Party-Address"].append(Json::Value(*i));
+    writer.String("Calling-Party-Address");
+    writer.StartArray();
+
+    for (std::list<std::string>::const_iterator i = _calling_party_addresses.begin();
+         i != _calling_party_addresses.end();
+         ++i)
+    {
+      writer.String((*i).c_str());
+    }
+
+    writer.EndArray();
   }
 
   // Add the Called-Party-Address AVP.
   if (!_called_party_address.empty())
   {
     LOG_DEBUG("Adding Called-Party-Address AVP");
-    ii["Called-Party-Address"] = Json::Value(_called_party_address);
+    writer.String("Called-Party-Address");
+    writer.String(_called_party_address.c_str());
   }
 
   if (_node_functionality == SCSCF)
@@ -743,7 +813,8 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     if (_requested_party_address != _called_party_address)
     {
       LOG_DEBUG("Adding Requested-Party-Address AVP");
-      ii["Requested-Party-Address"] = Json::Value(_requested_party_address);
+      writer.String("Requested-Party-Address");
+      writer.String(_requested_party_address.c_str());
     }
   }
 
@@ -752,11 +823,20 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   {
     // Add the Called-Asserted-Identity AVPs.
     LOG_DEBUG("Adding %d Called-Asserted-Identity AVPs", _called_asserted_ids.size());
-    for (std::list<std::string>::const_iterator i = _called_asserted_ids.begin();
-         i != _called_asserted_ids.end();
-         ++i)
+
+    if (_called_asserted_ids.size() > 0)
     {
-      ii["Called-Asserted-Identity"].append(Json::Value(*i));
+      writer.String("Called-Asserted-Identity");
+      writer.StartArray();
+
+      for (std::list<std::string>::const_iterator i = _called_asserted_ids.begin();
+           i != _called_asserted_ids.end();
+           ++i)
+      {
+        writer.String((*i).c_str());
+      }
+
+      writer.EndArray();
     }
   }
 
@@ -764,46 +844,83 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   {
     // Add the Associated-URI AVPs.
     LOG_DEBUG("Adding %d Associated-URI AVPs", _associated_uris.size());
-    for (std::list<std::string>::const_iterator i = _associated_uris.begin();
-         i != _associated_uris.end();
-         ++i)
+
+    if (_associated_uris.size() > 0)
     {
-      ii["Associated-URI"].append(Json::Value(*i));
+      writer.String("Associated-URI");
+      writer.StartArray();
+
+      for (std::list<std::string>::const_iterator i = _associated_uris.begin();
+           i != _associated_uris.end();
+           ++i)
+      {
+        writer.String((*i).c_str());
+      }
+
+      writer.EndArray();
     }
   }
 
   // Add the Time-Stamps AVP group.
   LOG_DEBUG("Adding Time-Stamps AVP group");
-  Json::Value& timestamps = ii["Time-Stamps"];
-  if (_req_timestamp.sec != 0)
+  writer.String("Time-Stamps");
+  writer.StartObject();
   {
-    timestamps["SIP-Request-Timestamp"] = Json::Value((Json::UInt)_req_timestamp.sec);
-    timestamps["SIP-Request-Timestamp-Fraction"] = Json::Value((Json::UInt)_req_timestamp.msec);
+    if (_req_timestamp.sec != 0)
+    {
+      writer.String("SIP-Request-Timestamp");
+      writer.Int(_req_timestamp.sec);
+      writer.String("SIP-Request-Timestamp-Fraction");
+      writer.Int(_req_timestamp.msec);
+    }
+
+    if (_rsp_timestamp.sec != 0)
+    {
+      writer.String("SIP-Response-Timestamp");
+      writer.Int(_rsp_timestamp.sec);
+      writer.String("SIP-Response-Timestamp-Fraction");
+      writer.Int(_rsp_timestamp.msec);
+    }
   }
-  if (_rsp_timestamp.sec != 0)
-  {
-    timestamps["SIP-Response-Timestamp"] = Json::Value((Json::UInt)_rsp_timestamp.sec);
-    timestamps["SIP-Response-Timestamp-Fraction"] = Json::Value((Json::UInt)_rsp_timestamp.msec);
-  }
+  writer.EndObject();
 
   if (_node_functionality == SCSCF)
   {
     // Add the Application-Server-Information AVPs.
     LOG_DEBUG("Adding %d Application-Server-Information AVP groups", _as_information.size());
-    for (std::list<ASInformation>::const_iterator i = _as_information.begin();
-         i != _as_information.end();
-         ++i)
+
+    if (_as_information.size() > 0)
     {
-      Json::Value& as = ii["Application-Server-Information"].append(Json::Value());
-      as["Application-Server"] = Json::Value(i->uri);
-      if (!i->redirect_uri.empty())
+      writer.String("Application-Server-Information");
+      writer.StartArray();
+
+      for (std::list<ASInformation>::const_iterator i = _as_information.begin();
+           i != _as_information.end();
+           ++i)
       {
-        as["Application-Provided-Called-Party-Address"].append(Json::Value(i->redirect_uri));
+        writer.StartObject();
+        {
+          writer.String("Application-Server");
+          writer.String(i->uri.c_str());
+
+          if (!i->redirect_uri.empty())
+          {
+            writer.String("Application-Provided-Called-Party-Address");
+            writer.StartArray();
+            writer.String(i->redirect_uri.c_str());
+            writer.EndArray();
+          }
+
+          if (i->status_code != STATUS_CODE_NONE)
+          {
+            writer.String("Status-Code");
+            writer.Int(i->status_code);
+          }
+        }
+        writer.EndObject();
       }
-      if (i->status_code != STATUS_CODE_NONE)
-      {
-        as["Status-Code"] = Json::Value(i->status_code);
-      }
+
+      writer.EndArray();
     }
   }
 
@@ -814,51 +931,88 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   if ((!_orig_ioi.empty()) || (!_term_ioi.empty()))
   {
     LOG_DEBUG("Adding Inter-Operator-Identifier AVP group");
-    Json::Value& ioi = ii["Inter-Operator-Identifier"].append(Json::Value());
-    if (!_orig_ioi.empty())
+    writer.String("Inter-Operator-Identifier");
+    writer.StartArray();
+    writer.StartObject();
     {
-      ioi["Originating-IOI"] = Json::Value(_orig_ioi);
+      if (!_orig_ioi.empty())
+      {
+        writer.String("Originating-IOI");
+        writer.String(_orig_ioi.c_str());
+      }
+
+      if (!_term_ioi.empty())
+      {
+        writer.String("Terminating-IOI");
+        writer.String(_term_ioi.c_str());
+      }
     }
-    if (!_term_ioi.empty())
-    {
-      ioi["Terminating-IOI"] = Json::Value(_term_ioi);
-    }
+    writer.EndObject();
+    writer.EndArray();
   }
 
   // Add Transit-IOI-List AVPs.
   LOG_DEBUG("Adding %d Transit-IOI-List AVPs", _transit_iois.size());
-  for (std::list<std::string>::const_iterator i = _transit_iois.begin();
-       i != _transit_iois.end();
-       ++i)
+
+  if (_transit_iois.size() > 0)
   {
-    ii["Transit-IOI-List"].append(Json::Value(*i));
+    writer.String("Transit-IOI-List");
+    writer.StartArray();
+
+    for (std::list<std::string>::const_iterator i = _transit_iois.begin();
+         i != _transit_iois.end();
+         ++i)
+    {
+      writer.String((*i).c_str());
+    }
+
+    writer.EndArray();
   }
 
-  ii["IMS-Charging-Identifier"] = Json::Value(_icid);
+  writer.String("IMS-Charging-Identifier");
+  writer.String(_icid.c_str());
 
   // Add the Server-Capabilities AVP if I-CSCF.
   if (_node_functionality == ICSCF)
   {
     LOG_DEBUG("Adding Server-Capabilities AVP group");
-    Json::Value& server_caps = ii["Server-Capabilities"];
-    for (std::vector<int>::const_iterator i = _server_caps.mandatory_caps.begin();
-         i != _server_caps.mandatory_caps.end();
-         ++i)
+    writer.String("Server-Capabilities");
+    writer.StartObject();
     {
-      server_caps["Mandatory-Capability"].append(Json::Value(*i));
+      writer.String("Mandatory-Capability");
+      writer.StartArray();
+
+      for (std::vector<int>::const_iterator i = _server_caps.mandatory_caps.begin();
+           i != _server_caps.mandatory_caps.end();
+           ++i)
+      {
+        writer.Int(*i);
+      }
+
+      writer.EndArray();
+      writer.String("Optional-Capability");
+      writer.StartArray();
+
+      for (std::vector<int>::const_iterator i = _server_caps.optional_caps.begin();
+           i != _server_caps.optional_caps.end();
+           ++i)
+      {
+        writer.Int(*i);
+      }
+
+      writer.EndArray();
+
+      if (!_server_caps.scscf.empty())
+      {
+        // Note that the Server-Name in Server-Capabilities is an array AVP
+        // according to 6.3.4/TS 29.229.
+        writer.String("Server-Name");
+        writer.StartArray();
+        writer.String(_server_caps.scscf.c_str());
+        writer.EndArray();
+      }
     }
-    for (std::vector<int>::const_iterator i = _server_caps.optional_caps.begin();
-         i != _server_caps.optional_caps.end();
-         ++i)
-    {
-      server_caps["Optional-Capability"].append(Json::Value(*i));
-    }
-    if (!_server_caps.scscf.empty())
-    {
-      // Note that the Server-Name in Server-Capabilities is an array AVP
-      // according to 6.3.4/TS 29.229.
-      server_caps["Server-Name"].append(Json::Value(_server_caps.scscf));
-    }
+    writer.EndObject();
   }
 
   // Add media and message body related AVPs on P-CSCF/S-CSCF/IBCF ACRs.  Note
@@ -875,16 +1029,21 @@ std::string RalfACR::get_message(pj_time_val timestamp)
         (_record_type == EVENT_RECORD))
     {
       LOG_DEBUG("Adding %d Early-Media-Description AVPs", _early_media.size());
-      for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
-           i != _early_media.end();
-           ++i)
+      if (_early_media.size() > 0)
       {
-        Json::Value& em = ii["Early-Media-Description"].append(Json::Value());
-        em["SDP-Timestamps"]["SDP-Offer-Timestamp"] =
-                                 Json::Value((Json::UInt)i->offer_timestamp.sec);
-        em["SDP-Timestamps"]["SDP-Answer-Timestamp"] =
-                                Json::Value((Json::UInt)i->answer_timestamp.sec);
-        encode_sdp_description(em, i->media);
+        writer.String("Early-Media-Description");
+        writer.StartArray();
+
+        for (std::list<EarlyMediaDescription>::const_iterator i = _early_media.begin();
+             i != _early_media.end();
+             ++i)
+        {
+          writer.Int(i->offer_timestamp.sec);
+          writer.Int(i->answer_timestamp.sec);
+          encode_sdp_description(&writer, i->media);
+        }
+
+        writer.EndArray();
       }
     }
 
@@ -893,23 +1052,37 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     {
       // Add SDP related AVPs to Start and Interim ACRs.
       LOG_DEBUG("Adding Media AVPs");
-      encode_sdp_description(ii, _media);
+      encode_sdp_description(&writer, _media);
     }
 
     // Add Message-Body AVPs.
     LOG_DEBUG("Adding %d Message-Body AVPs", _msg_bodies.size());
-    for (std::list<MessageBody>::const_iterator i = _msg_bodies.begin();
-         i != _msg_bodies.end();
-         ++i)
+
+    if (_msg_bodies.size() > 0)
     {
-      Json::Value& body = ii["Message-Body"].append(Json::Value());
-      body["Content-Type"] = Json::Value(i->type);
-      body["Content-Length"] = Json::Value(i->length);
-      if (!i->disposition.empty())
+      writer.String("Message-Body");
+      writer.StartArray();
+
+      for (std::list<MessageBody>::const_iterator i = _msg_bodies.begin();
+           i != _msg_bodies.end();
+           ++i)
       {
-        body["Content-Disposition"] = Json::Value(i->disposition);
+        writer.String("Content-Type");
+        writer.String(i->type.c_str());
+        writer.String("Content-Length");
+        writer.Int(i->length);
+
+        if (!i->disposition.empty())
+        {
+          writer.String("Content-Disposition");
+          writer.String(i->disposition.c_str());
+        }
+
+        writer.String("Originator");
+        writer.Int(i->originator);
       }
-      body["Originator"] = Json::Value(i->originator);
+
+      writer.EndArray();
     }
   }
 
@@ -918,7 +1091,8 @@ std::string RalfACR::get_message(pj_time_val timestamp)
   {
     // Cause code is always zero for STOP requests.
     LOG_DEBUG("Adding Cause-Code(0) AVP to ACR[Stop]");
-    ii["Cause-Code"] = Json::Value(0);
+    writer.String("Cause-Code");
+    writer.Int(0);
   }
   else if ((_record_type == EVENT_RECORD) &&
            (_status_code != 0))
@@ -963,65 +1137,94 @@ std::string RalfACR::get_message(pj_time_val timestamp)
     // cases we have to send a SIP response with a valid 4xx/5xx/6xx status
     // code, so we use that status code.
     LOG_DEBUG("Adding Cause-Code(%d) AVP to ACR[Interim]", cause_code);
-    ii["Cause-Code"] = Json::Value(cause_code);
+    writer.String("Cause-Code");
+    writer.Int(cause_code);
   }
 
   // Add Reason-Header AVPs.
   LOG_DEBUG("Adding %d Reason-Header AVPs", _reasons.size());
-  for (std::list<std::string>::const_iterator i = _reasons.begin();
-       i != _reasons.end();
-       ++i)
+
+  if (_reasons.size() > 0)
   {
-    ii["Reason-Header"].append(Json::Value(*i));
+    writer.String("Reason-Header");
+    writer.StartArray();
+
+    for (std::list<std::string>::const_iterator i = _reasons.begin();
+         i != _reasons.end();
+         ++i)
+    {
+      writer.String((*i).c_str());
+    }
+
+    writer.EndArray();
   }
 
   // Add Access-Network-Information AVPs
   LOG_DEBUG("Adding %d Access-Network-Information AVPs", _access_network_info.size());
-  for (std::list<std::string>::const_iterator i = _access_network_info.begin();
-       i != _access_network_info.end();
-       ++i)
+
+  if (_access_network_info.size() > 0)
   {
-    ii["Access-Network-Information"].append(Json::Value(*i));
+    writer.String("Access-Network-Information");
+    writer.StartArray();
+
+    for (std::list<std::string>::const_iterator i = _access_network_info.begin();
+         i != _access_network_info.end();
+         ++i)
+    {
+      writer.String((*i).c_str());
+    }
+
+    writer.EndArray();
   }
 
   // Add From-Address AVP.
   LOG_DEBUG("Adding From-Address AVP");
-  ii["From-Address"] = Json::Value(_from_address);
+  writer.String("From-Address");
+  writer.String(_from_address.c_str());
 
   // Add IMS-Visited-Network-Identifier AVP if set.
   if (!_visited_network_id.empty())
   {
     LOG_DEBUG("Adding IMS-Visited-Network-Identifier AVP");
-    ii["IMS-Visited-Network-Identifier"] = Json::Value(_visited_network_id);
+    writer.String("IMS-Visited-Network-Identifier");
+    writer.String(_visited_network_id.c_str());
   }
 
   // Add Route-Header-Received and Route-Header-Transmitted AVPs if set.
   if (!_route_hdr_received.empty())
   {
     LOG_DEBUG("Adding Route-Header-Received AVP");
-    ii["Route-Header-Received"] = Json::Value(_route_hdr_received);
+    writer.String("Route-Header-Received");
+    writer.String(_route_hdr_received.c_str());
   }
+
   if (!_route_hdr_transmitted.empty())
   {
     LOG_DEBUG("Adding Route-Header-Transmitted AVP");
-    ii["Route-Header-Transmitted"] = Json::Value(_route_hdr_transmitted);
+    writer.String("Route-Header-Transmitted");
+    writer.String(_route_hdr_transmitted.c_str());
   }
 
   // Add the Instance-Id AVP if set.
   if (!_instance_id.empty())
   {
     LOG_DEBUG("Adding Instance-Id AVP");
-    ii["Instance-Id"] = Json::Value(_instance_id);
+    writer.String("Instance-Id");
+    writer.String(_instance_id.c_str());
   }
 
-  //LOG_DEBUG("Built JSON message %s", v.toStyledString().c_str());
+  writer.EndObject(); // End ims information object
+  writer.EndObject(); // End service indication object
+  writer.EndObject(); // End event object
+  writer.EndObject(); // End whole object
 
   // Render the message to a string and return it.
-  Json::FastWriter writer;
-  return writer.write(v);
+  return sb.GetString();
 }
 
-void RalfACR::encode_sdp_description(Json::Value& v, const MediaDescription& media)
+void RalfACR::encode_sdp_description(
+                             rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                             const MediaDescription& media)
 {
   // Split the offer and answer in to lines.
   std::vector<std::string> offer;
@@ -1034,72 +1237,103 @@ void RalfACR::encode_sdp_description(Json::Value& v, const MediaDescription& med
   // repeating them).
   LOG_DEBUG("Adding SDP-Session-Description AVPs");
   std::vector<std::string>& session_sdp = (answer.empty()) ? offer : answer;
-  for (size_t ii = 0; ii < session_sdp.size(); ++ii)
+
+  if (session_sdp.size() > 0)
   {
-    if (session_sdp[ii][0] == 'm')
+    writer->String("SDP-Session-Description");
+    writer->StartArray();
+
+    for (size_t ii = 0; ii < session_sdp.size(); ++ii)
     {
-      break;
+      if (session_sdp[ii][0] == 'm')
+      {
+        break;
+      }
+      writer->String(session_sdp[ii].c_str());
     }
-    v["SDP-Session-Description"].append(Json::Value(session_sdp[ii]));
+
+    writer->EndArray();
   }
 
   // Now parse and encode the offer and answer media components.
-  LOG_DEBUG("Adding media AVPs for offer");
-  encode_media_components(v,
-                          offer,
-                          SDP_OFFER,
-                          media.offer.initiator_flag,
-                          media.offer.initiator_party);
-  LOG_DEBUG("Adding media AVPs for answer");
-  encode_media_components(v,
-                          answer,
-                          SDP_ANSWER,
-                          media.answer.initiator_flag,
-                          media.answer.initiator_party);
+  if ((offer.size() > 0) || (answer.size() > 0))
+  {
+    writer->String("SDP-Media-Component");
+    writer->StartArray();
+
+    LOG_DEBUG("Adding media AVPs for offer");
+    encode_media_components(writer,
+                            offer,
+                            SDP_OFFER,
+                            media.offer.initiator_flag,
+                            media.offer.initiator_party);
+
+    LOG_DEBUG("Adding media AVPs for answer");
+    encode_media_components(writer,
+                            answer,
+                            SDP_ANSWER,
+                            media.answer.initiator_flag,
+                            media.answer.initiator_party);
+    writer->EndArray();
+  }
 }
 
-void RalfACR::encode_media_components(Json::Value& v,
-                                  const std::vector<std::string>& sdp,
-                                  SDPType sdp_type,
-                                  Initiator initiator_flag,
-                                  const std::string& initiator_party)
+void RalfACR::encode_media_components(
+                             rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                             const std::vector<std::string>& sdp,
+                             SDPType sdp_type,
+                             Initiator initiator_flag,
+                             const std::string& initiator_party)
 {
   for (size_t ii = 0; ii < sdp.size(); )
   {
     if (sdp[ii][0] == 'm')
     {
       // Generate an SDP-Media-Component AVP.
-      Json::Value& mc = v["SDP-Media-Component"].append(Json::Value());
+      writer->StartObject();
 
       // Add the SDP-Media-Name AVP.
-      mc["SDP-Media-Name"] = Json::Value(sdp[ii]);
+      writer->String("SDP-Media-Name");
+      writer->String(sdp[ii].c_str());
 
       // Add SDP-Media-Description AVPs.
+      writer->String("SDP-Media-Description");
+      writer->StartArray();
+
       for (ii = ii + 1; (ii < sdp.size()) && (sdp[ii][0] != 'm'); ++ii)
       {
-        mc["SDP-Media-Description"].append(Json::Value(sdp[ii]));
+        writer->String(sdp[ii].c_str());
       }
+
+      writer->EndArray();
 
       // Add the Local-GW-Inserted-Indication AVP (alway 0 - Local GW not
       // inserted).
-      mc["Local-GW-Inserted-Indication"] = Json::Value(0);
+      writer->String("Local-GW-Inserted-Indication");
+      writer->Int(0);
 
       // Add the IP-Realm-Default-Indication AVP (always 1 - Default IP
       // realm used).
-      mc["IP-Realm-Default-Indication"] = Json::Value(1);
+      writer->String("IP-Realm-Default-Indication");
+      writer->Int(1);
 
       // Add the Transcoder-Inserted-Indication AVP (always 0 - Transcode not
       // inserted).
-      mc["Transcoder-Inserted-Indication"] = Json::Value(0);
+      writer->String("Transcoder-Inserted-Indication");
+      writer->Int(0);
 
       // Add the Media-Initiator-Flag AVP.
-      mc["Media-Initiator-Flag"] = Json::Value(initiator_flag);
+      writer->String("Media-Initiator-Flag");
+      writer->Int(initiator_flag);
 
       // Add the Media-Initiator-Party AVP.
-      mc["Media-Initiator-Party"] = Json::Value(initiator_party);
+      writer->String("Media-Initiator-Party");
+      writer->String(initiator_party.c_str());
 
       // Add the SDP-Type AVP.
-      mc["SDP-Type"] = Json::Value(sdp_type);
+      writer->String("SDP-Type");
+      writer->Int(sdp_type);
+      writer->EndObject();
     }
     else
     {
@@ -1389,6 +1623,7 @@ void RalfACR::store_message_bodies(pjsip_msg* msg)
       // Default disposition for non application/sdp bodies is "render"
       body.disposition = "render";
     }
+
     if (((_initiator == Initiator::CALLING_PARTY) &&
          (msg->type == PJSIP_REQUEST_MSG)) ||
         ((_initiator == Initiator::CALLED_PARTY) &&
@@ -1417,10 +1652,15 @@ void RalfACR::store_instance_id(pjsip_msg* msg)
                                       &STR_SIP_INSTANCE);
     if (p != NULL)
     {
-      // Found the instance identifier, so convert to a string and dequote.
-      _instance_id = PJUtils::pj_str_to_string(&p->value);
-      _instance_id = _instance_id.substr(1, _instance_id.size() - 2);
-      break;
+      std::string instance = PJUtils::pj_str_to_string(&p->value);
+
+      // Check that the value is a valid length before we dequote
+      if (instance.size() >= 2)
+      {
+        // Found the instance identifier, so convert to a string and dequote.
+        _instance_id = instance.substr(1, instance.size() - 2);
+        break;
+      }
     }
     contact_hdr = (pjsip_contact_hdr*)
                    pjsip_msg_find_hdr(msg, PJSIP_H_CONTACT, contact_hdr->next);

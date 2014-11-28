@@ -124,43 +124,6 @@ CallDiversionAS::CallDiversionAS(const std::string& service_name) :
   _cdiv_no_answer_stat("cdiv_no_answer", stack_data.stats_aggregator),
   _cdiv_not_reachable_stat("cdiv_not_reachable", stack_data.stats_aggregator) {};
 
-/*
-StatisticCounter* MmtelTsx::_cdiv_total_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_unconditional_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_busy_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_not_registered_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_no_answer_stat = NULL;
-StatisticCounter* MmtelTsx::_cdiv_not_reachable_stat = NULL;
-
-/// Initializes static variables in MmtelTsx - currently just statistics.
-void MmtelTsx::init_static()
-{
-  _cdiv_total_stat = new StatisticCounter("cdiv_total",
-                                          stack_data.stats_aggregator);
-  _cdiv_unconditional_stat = new StatisticCounter("cdiv_unconditional",
-                                                  stack_data.stats_aggregator);
-  _cdiv_busy_stat = new StatisticCounter("cdiv_busy",
-                                         stack_data.stats_aggregator);
-  _cdiv_not_registered_stat = new StatisticCounter("cdiv_not_registered",
-                                                   stack_data.stats_aggregator);
-  _cdiv_no_answer_stat = new StatisticCounter("cdiv_no_answer",
-                                              stack_data.stats_aggregator);
-  _cdiv_not_reachable_stat = new StatisticCounter("cdiv_not_reachable",
-                                                  stack_data.stats_aggregator);
-}
-
-/// Terminates static variables in MmtelTsx - currently just statistics.
-void MmtelTsx::term_static()
-{
-  delete _cdiv_total_stat; _cdiv_total_stat = NULL;
-  delete _cdiv_unconditional_stat; _cdiv_unconditional_stat = NULL;
-  delete _cdiv_busy_stat; _cdiv_busy_stat = NULL;
-  delete _cdiv_not_registered_stat; _cdiv_not_registered_stat = NULL;
-  delete _cdiv_no_answer_stat; _cdiv_no_answer_stat = NULL; 
-  delete _cdiv_not_reachable_stat; _cdiv_not_reachable_stat = NULL;
-}
-*/
-
 /// Destructor.
 CallDiversionAS::~CallDiversionAS() {}
 
@@ -283,7 +246,7 @@ AppServerTsx* CallDiversionAS::get_app_tsx(AppServerTsxHelper* helper,
       }
 
       simservs* user_services = new simservs(target, conditions, no_reply_timer);
-      mmtel_tsx = new MmtelTsx(helper, req, user_services);
+      mmtel_tsx = new MmtelTsx(helper, req, user_services, this);
 
       {
         SAS::Event event(helper->trail(), SASEvent::CALL_DIVERSION_ENABLED, 0);

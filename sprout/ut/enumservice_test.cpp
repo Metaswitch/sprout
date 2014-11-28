@@ -45,8 +45,10 @@
 #include "fakednsresolver.hpp"
 #include "fakelogger.h"
 #include "test_utils.hpp"
+#include "mockcommunicationmonitor.h"
 
 using namespace std;
+using ::testing::_;
 
 /// Fixture for EnumServiceTest.
 class EnumServiceTest : public ::testing::Test
@@ -177,8 +179,9 @@ struct ares_naptr_reply basic_naptr_reply[] = {
 
 TEST_F(DNSEnumServiceTest, BasicTest)
 {
+  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
@@ -333,4 +336,28 @@ TEST_F(DNSEnumServiceTest, DifferentSuffixTest)
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa.cw-ngv.com"), (struct ares_naptr_reply*)basic_naptr_reply));
   DNSEnumService enum_("127.0.0.1", ".e164.arpa.cw-ngv.com", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
+}
+
+TEST_F(DNSEnumServiceTest, ResolverErrorTest)
+{
+  CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
+  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  ET("1234", "").test(enum_);
+}
+
+TEST_F(DNSEnumServiceTest, ResolverOkCommMonMockTest)
+{
+  MockCommunicationMonitor cm_;
+  EXPECT_CALL(cm_, inform_success(_));
+  FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
+  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
+}
+
+TEST_F(DNSEnumServiceTest, ResolverErrorCommMonMockTest)
+{
+  MockCommunicationMonitor cm_;
+  EXPECT_CALL(cm_, inform_failure(_));
+  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  ET("1234", "").test(enum_);
 }
