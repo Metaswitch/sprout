@@ -143,7 +143,7 @@ void RegistrationTimeoutTask::run()
     return;
   }
 
-  HTTPCode rc = parse_response(_req.body());
+  HTTPCode rc = parse_response(_req.get_rx_body());
 
   if (rc != HTTP_OK)
   {
@@ -178,7 +178,7 @@ void AuthTimeoutTask::run()
   SAS::Marker start_marker(trail(), MARKER_ID_START, 1u);
   SAS::report_marker(start_marker);
 
-  HTTPCode rc = handle_response(_req.body());
+  HTTPCode rc = handle_response(_req.get_rx_body());
 
   SAS::Marker end_marker(trail(), MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
@@ -218,7 +218,7 @@ void DeregistrationTask::run()
   }
 
   // Parse the JSON body
-  HTTPCode rc = parse_request(_req.body());
+  HTTPCode rc = parse_request(_req.get_rx_body());
 
   if (rc != HTTP_OK)
   {
