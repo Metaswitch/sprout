@@ -50,6 +50,18 @@
 
 using namespace std;
 
+const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                  "<ClearwaterRegData>"
+                                    "<RegistrationState>REGISTERED</RegistrationState>"
+                                    "<IMSSubscription>"
+                                      "<ServiceProfile>"
+                                        "<PublicIdentity>"
+                                          "<Identity>sip:6505550001@homedomain</Identity>"
+                                        "</PublicIdentity>"
+                                      "</ServiceProfile>"
+                                    "</IMSSubscription>"
+                                  "</ClearwaterRegData>";
+
 class RegistrationTimeoutTasksTest : public SipTest
 {
   FakeChronosConnection* chronos_connection;
@@ -226,11 +238,15 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
 
 TEST_F(DeregistrationTaskTest, AoROnlyTest)
 {
+  fake_hss->set_result("/impu/sip%3A6505552001%40homedomain/reg-data", HSS_REG_STATE);
+  fake_hss->set_result("/impu/sip%3A6505552002/reg-data", HSS_REG_STATE);
+
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
   handler->handle_request();
+  fake_hss->flush_all();
 }
 
 TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
@@ -244,11 +260,14 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
 
 TEST_F(DeregistrationTaskTest, AoRsOnlyTest)
 {
+  fake_hss->set_result("/impu/sip%3A6505552001%40homedomain/reg-data", HSS_REG_STATE);
+  fake_hss->set_result("/impu/sip%3A6505552002/reg-data", HSS_REG_STATE);
   std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}, {\"primary-impu\": \"sip:6505552002\"}]}";
   int status = handler->parse_request(body);
   ASSERT_EQ(status, 200);
 
   handler->handle_request();
+  fake_hss->flush_all();
 }
 
 TEST_F(DeregistrationTaskTest, InvalidJSONTest)
