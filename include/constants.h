@@ -68,6 +68,7 @@ const pj_str_t STR_P_ASSOCIATED_URI = pj_str((char*)"P-Associated-URI");
 const pj_str_t STR_REQUEST_DISPOSITION = pj_str((char*)"Request-Disposition");
 const pj_str_t STR_SERVICE_ROUTE = pj_str((char*)"Service-Route");
 const pj_str_t STR_ORIG = pj_str((char*)"orig");
+const pj_str_t STR_ORIG_CDIV = pj_str((char*)"orig-cdiv");
 const pj_str_t STR_NO_FORK = pj_str((char*)"no-fork");
 const pj_str_t STR_P_C_V = pj_str((char*)"P-Charging-Vector");
 const pj_str_t STR_P_C_F_A = pj_str((char*)"P-Charging-Function-Addresses");
@@ -113,6 +114,10 @@ const pj_str_t STR_ISUB = pj_str((char*)"isub");
 const pj_str_t STR_EXT = pj_str((char*)"ext");
 const pj_str_t STR_USER_PHONE = pj_str((char*)"phone");
 const pj_str_t STR_DIALOG_ID = pj_str((char*)"dialog_id");
+const pj_str_t STR_TARGET = pj_str((char*)"target");
+const pj_str_t STR_CONDITIONS = pj_str((char*)"conditions");
+const pj_str_t STR_NO_REPLY_TIMER = pj_str((char*)"no-reply-timer");
+const pj_str_t STR_3GPP_ICS = pj_str((char*)"g.3gpp.ics");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");

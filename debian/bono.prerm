@@ -78,11 +78,11 @@ case "$1" in
         # Must stop before attempting to remove the user, else that will fail.
         # Use || /bin/true to ignore a failure, because set -e is in effect.
         rm -f /etc/monit/conf.d/$NAME.monit
-        service monit restart
+        reload clearwater-monit &> /dev/null || true
         # For consistency with sprout, we should quiesce here but quiescing on
         # bono can take a long time so we leave this decision up to the
         # management/orchestration layer.
-        service $NAME stop || /bin/true
+        service $NAME stop || true
         if [ $1 != "upgrade" ]; then
             # We shouldn't do this cleanup on upgrade - deleting the
             # logs loses valuable information

@@ -108,6 +108,7 @@ struct options
   int                    call_list_ttl;
   bool                   memento_enabled;
   bool                   gemini_enabled;
+  bool                   alarms_enabled;
   int                    worker_threads;
   bool                   log_to_file;
   std::string            log_directory;

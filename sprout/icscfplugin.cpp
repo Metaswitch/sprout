@@ -87,7 +87,7 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
 
     // Create the I-CSCF ACR factory.
     _acr_factory = (ralf_connection != NULL) ?
-                        (ACRFactory*)new RalfACRFactory(ralf_connection, BGCF) :
+                        (ACRFactory*)new RalfACRFactory(ralf_connection, ICSCF) :
                         new ACRFactory();
 
     // Create the I-CSCF sproutlet.

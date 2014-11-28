@@ -319,7 +319,7 @@ std::string SIPResolver::get_transport_str(int transport)
   }
   else if (transport == IPPROTO_TCP)
   {
-    return "UDP";
+    return "TCP";
   }
   else
   {

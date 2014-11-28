@@ -578,6 +578,7 @@ protected:
                       string& xoToken,
                       string& xoBareToken,
                       int expiry = 300,
+                      string response = "",
                       string integrity = "",
                       string extraRspHeaders = "",
                       bool firstHop = false,
@@ -1589,6 +1590,7 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
   Message msg;
+  add_host_mapping("destination.com", "10.10.10.2");
   msg._to = "lasthop";
   msg._todomain = "destination.com";
   list<HeaderMatcher> hdrs;
@@ -2234,6 +2236,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
                                            string& xoToken, //^ out: token (parsed from Path)
                                            string& xoBareToken, //^ out: bare token (parsed from Path)
                                            int expires, //^ expiry period
+                                           string response, //^ response string to be included in authorization header
                                            string integrity, //^ expected integrity marking in authorization header
                                            string extraRspHeaders, //^ extra headers to be included in response
                                            bool firstHop,  //^ is this the first hop? If not, there was a previous hop to get here.
@@ -2251,6 +2254,10 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   msg._via = via.empty() ? xiTp->to_string(false) : via;
   msg._extra = "Contact: sip:wuntootreefower@";
   msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  if (!response.empty())
+  {
+    msg._extra.append("\r\nAuthorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"").append(response).append("\"");
+  }
   if (!supported.empty())
   {
     msg._extra.append("\r\n").append("Supported: ").append(supported);
@@ -2298,7 +2305,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!integrity.empty())
   {
     actual = get_headers(tdata->msg, "Authorization");
-    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
+    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"" + response + "\",integrity-protected=" + integrity, actual);
   }
 
   // Check P-Charging headers are added correctly
@@ -2561,7 +2568,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   SCOPED_TRACE("");
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, 300, "",
+  doRegisterEdge(tp, token, baretoken, 300, "1234123412341234", "ip-assoc-pending",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Send an INVITE from the client specifying one of the valid identities in
@@ -2733,7 +2740,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Refresh the registration.
   SCOPED_TRACE("");
-  doRegisterEdge(tp, token, baretoken, 300, "ip-assoc-yes",
+  doRegisterEdge(tp, token, baretoken, 300, "", "ip-assoc-yes",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Check that authorization is still in place by sending an INVITE from the client with no P-Preferred-Identity header.
@@ -2779,7 +2786,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Expire the registration.
   SCOPED_TRACE("");
-  doRegisterEdge(tp, token, baretoken, 0, "ip-assoc-yes",
+  doRegisterEdge(tp, token, baretoken, 0, "", "ip-assoc-yes",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Check that authorization is gone by sending an INVITE from the client with no P-Preferred-Identity header.
@@ -2930,7 +2937,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.38",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "outbound, path", true, "");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
@@ -2938,7 +2945,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.39",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "outbound, path", true, "10.22.3.4:9999");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
   // Client 3: Doesn't declare outbound support (no attr), not behind NAT. Shouldn't get path.
@@ -2952,7 +2959,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "path", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "path", true, "10.22.3.5:8888");
   delete tp;
 
   // Client 5: Doesn't declare outbound support (no header), not behind NAT. Shouldn't get path.
@@ -2966,7 +2973,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
@@ -2978,7 +2985,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true);
 
   // This is first hop, so should be marked
   EXPECT_THAT(token, HasSubstr(";ob"));
@@ -3060,7 +3067,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -3081,7 +3088,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   // INVITE from client via bono to Sprout, first hop
   Message msg;
@@ -3186,7 +3193,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   Message msg;
   msg._first_hop = true;

@@ -11,16 +11,16 @@ ${C_ARES_MAKEFILE}: ${C_ARES_CONFIGURE}
 	cd ${C_ARES_DIR} && ./configure --prefix=${INSTALL_DIR}
 
 c-ares: ${C_ARES_MAKEFILE}
-	make -C ${C_ARES_DIR}
-	make -C ${C_ARES_DIR} install
+	${MAKE} -C ${C_ARES_DIR}
+	${MAKE} -C ${C_ARES_DIR} install
 
 c-ares_test:
 	true
 
 c-ares_clean: ${C_ARES_MAKEFILE}
-	make -C ${C_ARES_DIR} clean
+	${MAKE} -C ${C_ARES_DIR} clean
 
 c-ares_distclean: ${C_ARES_MAKEFILE}
-	make -C ${C_ARES_DIR} distclean
+	${MAKE} -C ${C_ARES_DIR} distclean
 
 .PHONY: c-ares c-ares_test c-ares_clean c-ares_distclean

@@ -396,9 +396,9 @@ TEST_F(AuthenticationTest, IntegrityProtected)
 {
   // Test that the authentication module lets through REGISTER requests
   // with authorization headers indicating the request has been integrity
-  // protected at the P-CSCF.  Note that these requests must not have a
-  // response field in the authorization header, otherwise this will be
-  // checked.
+  // protected at the P-CSCF.  Note that, in the AKA case (yes), the requests
+  // must not have a response field in the authorization header, otherwise
+  // this will be checked.
   pj_bool_t ret;
 
   AuthenticationMessage msg1("REGISTER");
@@ -412,10 +412,16 @@ TEST_F(AuthenticationTest, IntegrityProtected)
   msg2._integ_prot = "tls-yes";
   ret = inject_msg_direct(msg2.get());
   EXPECT_EQ(PJ_FALSE, ret);
+  msg2._response = "12341234123412341234123412341234";
+  ret = inject_msg_direct(msg2.get());
+  EXPECT_EQ(PJ_FALSE, ret);
 
   AuthenticationMessage msg3("REGISTER");
   msg3._auth_hdr = true;
   msg3._integ_prot = "ip-assoc-yes";
+  ret = inject_msg_direct(msg3.get());
+  EXPECT_EQ(PJ_FALSE, ret);
+  msg3._response = "12341234123412341234123412341234";
   ret = inject_msg_direct(msg3.get());
   EXPECT_EQ(PJ_FALSE, ret);
 }
@@ -484,6 +490,7 @@ TEST_F(AuthenticationTest, DigestAuthSuccess)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
   inject_msg(msg2.get());
 
   // Expect no response, as the authentication module has let the request through.
@@ -531,6 +538,7 @@ TEST_F(AuthenticationTest, DigestAuthFailBadResponse)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
   msg2._response = "00000000000000000000000000000000";
   inject_msg(msg2.get());
 
@@ -592,6 +600,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   msg1._nc = "00000001";
   msg1._cnonce = "8765432187654321";
   msg1._qop = "auth";
+  msg1._integ_prot = "ip-assoc-pending";
   msg1._response = "00000000000000000000000000000000";
   inject_msg(msg1.get());
 
@@ -621,6 +630,7 @@ TEST_F(AuthenticationTest, DigestAuthFailStale)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
   inject_msg(msg2.get());
 
   // Expect no response, as the authentication module has let the request through.
@@ -669,6 +679,7 @@ TEST_F(AuthenticationTest, DigestAuthFailWrongRealm)
   msg2._nc = "00000001";
   msg2._cnonce = "8765432187654321";
   msg2._qop = "auth";
+  msg2._integ_prot = "ip-assoc-pending";
   msg2._auth_realm = "otherdomain";
   inject_msg(msg2.get());
 

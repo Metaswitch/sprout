@@ -488,27 +488,43 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.response.slen == 0))
+  if (auth_hdr != NULL)
   {
-    // There is an authorization header with no challenge response, so check
-    // for the integrity-protected indication.
-    LOG_DEBUG("Authorization header in request with no challenge response");
+    // There is an authorization header, so check for the integrity-protected
+    // indication.
+    LOG_DEBUG("Authorization header in request");
     pjsip_param* integrity =
            pjsip_param_find(&auth_hdr->credential.digest.other_param,
                             &STR_INTEGRITY_PROTECTED);
 
-    // Request has an integrity protected indication, so let it through if
-    // it is set to a "yes" value.
     if ((integrity != NULL) &&
-        ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
-         (pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+        ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
          (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
     {
-      // Request is already integrity protected, so let it through.
-      LOG_INFO("Request integrity protected by edge proxy");
+      // The integrity protected indicator is included and set to tls-yes or
+      // ip-assoc-yes.  This indicates the client has already been authenticated
+      // so we will accept this REGISTER even if there is a challenge response.
+      // (Values of tls-pending or ip-assoc-pending indicate the challenge
+      // should be checked.)
+      LOG_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
-      std::string error_msg = "Request integrity protected by edge proxy";
+      std::string error_msg = "SIP digest authenticated request integrity protected by edge proxy";
+      log_sas_auth_not_needed_event(trail, error_msg);
+
+      return PJ_FALSE;
+    }
+    else if ((integrity != NULL) &&
+             (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
+             (auth_hdr->credential.digest.response.slen == 0))
+    {
+      // The integrity protected indicator is include and set to yes.  This
+      // indicates that AKA authentication is in use and the REGISTER was
+      // received on an integrity protected channel, so we will let the
+      // request through if there is no challenge response, but must check
+      // the challenge response if included.
+      LOG_INFO("AKA authenticated request integrity protected by edge proxy");
+
+      std::string error_msg = "AKA authenticated request integrity protected by edge proxy";
       log_sas_auth_not_needed_event(trail, error_msg);
 
       return PJ_FALSE;
@@ -619,10 +635,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  // Create an ACR for the message and pass the request to it.
+  // Create an ACR for the message and pass the request to it.  Role is always
+  // considered originating for a REGISTER request.
   ACR* acr = acr_factory->get_acr(trail,
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   pjsip_tx_data* tdata;
