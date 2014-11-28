@@ -43,7 +43,8 @@ extern "C" {
 #include <pjlib.h>
 }
 
-#include <json/json.h>
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
 
 #include <string>
 #include <list>
@@ -316,9 +317,10 @@ private:
     Originator originator;
   };
 
-  void encode_sdp_description(Json::Value& v, const MediaDescription& media);
+  void encode_sdp_description(rapidjson::Writer<rapidjson::StringBuffer>* writer,
+                              const MediaDescription& media);
 
-  void encode_media_components(Json::Value& v,
+  void encode_media_components(rapidjson::Writer<rapidjson::StringBuffer>* writer,
                                const std::vector<std::string>& sdp,
                                SDPType sdp_type,
                                Initiator initiator_flag,
