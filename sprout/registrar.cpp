@@ -127,7 +127,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 {
   // Get a suitable binding string from +sip.instance and reg_id parameters
   // if they are supplied.
-  std::string id;
+  std::string id = "";
   pj_str_t *instance = NULL;
   pj_str_t *reg_id = NULL;
 
@@ -146,7 +146,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     p = p->next;
   }
 
-  if (instance != NULL)
+  if ((instance != NULL) && (pj_strlen(instance) >= 2))
   {
     // The contact a +sip.instance parameters, so form a suitable binding
     // string.

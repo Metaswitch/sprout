@@ -24,7 +24,7 @@ Description: Debugging symbols for sprout-libs
 Package: sprout
 Architecture: any
 Depends: sprout-base, sprout-scscf, sprout-icscf, sprout-bgcf, sprout-mmtel-as
-Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
+Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout, clearwater-snmp-handler-alarm
 Description: sprout, the SIP Router
 
 Package: sprout-dbg
@@ -37,7 +37,7 @@ Description: Debugging symbols for sprout, the SIP Router
 
 Package: sprout-base
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5, chronos
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, clearwater-memcached, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5, chronos
 Suggests: sprout-dbg, clearwater-logging, clearwater-snmp-handler-sprout
 Replaces: sprout
 Description: sprout-base, the SIP Router basic executable
@@ -156,7 +156,7 @@ Description: Debugging symbols for mangelwurzel, the B2BUA and SCC-AS emulator
 
 Package: bono
 Architecture: any
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, monit, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, sprout-libs, libboost-regex1.46.1, libboost-system1.46.1, libboost-thread1.46.1, libzmq3, libevent-pthreads-2.0-5
 Suggests: restund, bono-dbg, clearwater-logging, clearwater-snmp-handler-bono
 Description: bono, the SIP edge proxy
 

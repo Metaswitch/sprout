@@ -733,7 +733,7 @@ RegStore::Connector::~Connector()
 }
 
 // Generates the public GRUU for this binding from the address of record and
-// instance-id. Returns "" if this binding has no GRUU.
+// instance-id. Returns NULL if this binding has no valid GRUU.
 pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 {
   pjsip_sip_uri* uri = (pjsip_sip_uri*)PJUtils::uri_from_string(*_address_of_record, pool);
@@ -746,9 +746,19 @@ pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
     return NULL;
   }
 
+  // The instance parameter might be too short to be a valid GRUU. Specifically
+  // if its less than 2 characters in length, the stripping function will give
+  // us a buffer underrun, so exit now.
+  std::string sip_instance = _params.at("+sip.instance");
+  if (sip_instance.length() < 2)
+  {
+    // instance ID too short to be parsed
+    return NULL;
+  }
+
   pjsip_param* gr_param = (pjsip_param*) pj_pool_alloc(pool, sizeof(pjsip_param));
   gr_param->name = STR_GR;
-  pj_strdup2(pool, &gr_param->value, _params.at("+sip.instance").c_str());
+  pj_strdup2(pool, &gr_param->value, sip_instance.c_str());
 
   // instance-ids are often of the form '"<urn:..."' - convert that to
   // just 'urn:...'
