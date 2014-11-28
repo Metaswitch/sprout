@@ -44,7 +44,8 @@ extern "C" {
 #include <sstream>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "rapidjson/document.h"
+
+#include <json/json.h>
 
 #include "test_utils.hpp"
 #include "siptest.hpp"
@@ -88,41 +89,35 @@ protected:
   bool compare_acr(const std::string& output,
                    const std::string& expected_file)
   {
+    Json::Reader reader;
+    Json::Value json_output;
+    Json::Value json_expected;
+
     // Parse the output ACR.
-    rapidjson::Document* actual = new rapidjson::Document();
-    actual->Parse<0>(output.c_str());
+    if (!reader.parse(output, json_output))
+    {
+      printf("Failed to parse output ACR\n%s\n", output.c_str());
+    }
 
     // Read and parse the expected ACR.
     std::string expected_pathname = UT_DIR + "/" + expected_file;
     std::ifstream is;
     is.open(expected_pathname, ios::in);
-    rapidjson::Document* expected = new rapidjson::Document();
-    expected->Parse<0>(output.c_str());
+    if (!reader.parse(is, json_expected))
+    {
+      printf("Failed to parse expected ACR from file %s\n",
+             expected_file.c_str());
+    }
     is.close();
-
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    expected->Accept(writer);
-    std::string expected_str = buffer.GetString();
-
-    rapidjson::StringBuffer buffer2;
-    rapidjson::Writer<rapidjson::StringBuffer> writer2(buffer2);
-    actual->Accept(writer2);
-    std::string actual_str = buffer2.GetString();
-
-    // A comparison of the rapidjson objects would be better, but this
-    // currently always returns false for our ACRs
-    bool rc = (actual_str == expected_str);
+    bool rc = (json_output == json_expected);
 
     if (!rc)
     {
+      Json::FastWriter writer;
       printf("JSON comparison failed\nReceived\n%s\nExpected\n%s\n",
-             actual_str.c_str(),
-             expected_str.c_str());
+             json_output.toStyledString().c_str(),
+             json_expected.toStyledString().c_str());
     }
-
-    delete expected;
-    delete actual;
 
     return rc;
   }
@@ -279,7 +274,6 @@ TEST_F(ACRTest, SCSCFRegister)
   reg._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
   reg._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
   reg._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
-  //reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36531;transport=TCP>\r\n";
   reg._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
   reg._extra_hdrs += "Expires: 300\r\n";
   reg._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
