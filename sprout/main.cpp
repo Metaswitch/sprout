@@ -129,6 +129,7 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",               required_argument, 0, 'H'},
   { "record-routing-model", required_argument, 0, 'C'},
   { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "target-latency-us", required_argument, 0, 'Y'},
   { "xdms",              required_argument, 0, 'X'},
   { "chronos",           required_argument, 0, 'K'},
   { "ralf",              required_argument, 0, 'G'},
@@ -160,7 +161,7 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                0, 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:Y:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
@@ -251,6 +252,8 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
+       " -Y, --target-latency-us <usecs>\n"
+       "                            Target latency above which throttling applies (default: 100000)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -632,6 +635,15 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         LOG_WARNING("Invalid value for sub_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->sub_max_expires);
+      }
+      break;
+
+    case 'Y':
+      options->target_latency_us = atoi(pj_optarg);
+      if (options->target_latency_us <= 0)
+      {
+        LOG_ERROR("Invalid --target-latency-us option %s", pj_optarg);
+        return -1;
       }
       break;
 
@@ -1221,7 +1233,10 @@ int main(int argc, char* argv[])
   }
 
   // Start the load monitor
-  load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
+  load_monitor = new LoadMonitor(opt.target_latency_us, // Initial target latency (us).
+                                 MAX_TOKENS,            // Maximum token bucket size.
+                                 INITIAL_TOKEN_RATE,    // Initial token fill rate (per sec).
+                                 MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver("127.0.0.1");
