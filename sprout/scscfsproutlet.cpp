@@ -228,7 +228,11 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    ccfs,
                                                    ecfs,
                                                    trail);
-  ifcs = ifc_map[public_id];
+  if (http_code == 200)
+  {
+    ifcs = ifc_map[public_id];
+  }
+
   registered = (regstate == HSSConnection::STATE_REGISTERED);
 
   return (http_code == 200);
