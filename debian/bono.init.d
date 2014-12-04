@@ -150,7 +150,7 @@ do_start()
                      --routing-proxy $upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
                      $ralf_arg
                      --sas $sas_server,$NAME@$public_hostname
-                     --dns_server $signaling_dns_server
+                     --dns-server $signaling_dns_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory
