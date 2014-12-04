@@ -176,6 +176,15 @@ TEST_F(UtilsTest, Unescape)
   }
 }
 
+TEST_F(UtilsTest, XmlEscape)
+{
+  string actual = Utils::xml_escape("");
+  EXPECT_EQ("", actual);
+
+  actual = Utils::xml_escape("The quick brown fox &\"'<>\n\377");
+  EXPECT_EQ("The quick brown fox &amp;&quot;&apos;&lt;&gt;\n\377", actual);
+}
+
 TEST_F(UtilsTest, Trim)
 {
   string s = "    floop  ";

@@ -112,7 +112,8 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
                                       opt.home_domain,
                                       opt.max_call_list_length,
                                       opt.memento_threads,
-                                      opt.call_list_ttl);
+                                      opt.call_list_ttl,
+                                      stack_data.stats_aggregator);
 
       _memento_sproutlet = new SproutletAppServerShim(_memento);
       sproutlets.push_back(_memento_sproutlet);
