@@ -158,9 +158,6 @@ const static std::string _known_statnames[] = {
   "memento_cassandra_write_latency",
 };
 
-const static std::string SPROUT_ZMQ_PORT = "6666";
-const static std::string BONO_ZMQ_PORT = "6669";
-
 const std::string* known_statnames = _known_statnames;
 const int num_known_stats = sizeof(_known_statnames) / sizeof(std::string);
 
@@ -1100,17 +1097,20 @@ pj_status_t init_stack(const std::string& system_name,
   }
 
   // Set up the Last Value Cache, accumulators and counters.
-  std::string zmq_port = SPROUT_ZMQ_PORT;
-
+  std::string process_name;
   if ((stack_data.pcscf_trusted_port != 0) &&
       (stack_data.pcscf_untrusted_port != 0))
   {
-    zmq_port = BONO_ZMQ_PORT;
+    process_name = "bono";
+  }
+  else
+  {
+    process_name = "sprout";
   }
 
   stack_data.stats_aggregator = new LastValueCache(num_known_stats,
                                                    known_statnames,
-                                                   zmq_port);
+                                                   process_name);
 
   latency_accumulator = new StatisticAccumulator("latency_us",
                                                  stack_data.stats_aggregator);
