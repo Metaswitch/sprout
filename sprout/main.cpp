@@ -815,8 +815,8 @@ void exception_handler(int sig)
   // Reset the signal handlers so that another exception will cause a crash.
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, SIG_DFL);
-  const char* signamep = (sig >= SIGHUP and sig <= SIGSYS) ? signalnames[sig-1] : "Unknown";
-  CL_SPROUT_CRASH.log(signamep);
+  CL_SPROUT_CRASH.log(strsignal(sig));
+  closelog();
   closelog();
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);

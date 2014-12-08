@@ -72,7 +72,6 @@ TARGET_SOURCES := logger.cpp \
                   sproutletproxy.cpp \
                   pluginloader.cpp \
                   alarm.cpp \
-		  signalnames.cpp \
                   communicationmonitor.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
