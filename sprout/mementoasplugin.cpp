@@ -71,7 +71,9 @@ MementoPlugin sproutlet_plugin;
 MementoPlugin::MementoPlugin() :
   _call_list_store(NULL),
   _memento(NULL),
-  _memento_sproutlet(NULL)
+  _memento_sproutlet(NULL),
+  _cass_comm_alarm(NULL),
+  _cass_comm_monitor(NULL)
 {
 }
 
@@ -91,10 +93,13 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
   }
   else
   {
-    _cass_comm_alarm = new Alarm("memento",
-                                  AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
-                                  AlarmDef::CRITICAL);
-    _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm);
+    if (opt.alarms_enabled)
+    {
+      _cass_comm_alarm = new Alarm("memento",
+                                   AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
+                                   AlarmDef::CRITICAL);
+      _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm);
+    }
 
     _call_list_store = new CallListStore::Store();
     _call_list_store->initialize();
