@@ -1309,6 +1309,10 @@ int main(int argc, char* argv[])
                                          SASEvent::HttpLogLevel::PROTOCOL,
                                          ralf_comm_monitor);
   }
+  else
+  {
+    CL_SPROUT_NO_RALF_CONFIGURED.log();
+  }
 
   // Initialise the OPTIONS handling module.
   status = init_options();
@@ -1339,7 +1343,6 @@ int main(int argc, char* argv[])
       enum_service = new JSONEnumService(opt.enum_file);
     }
   }
-    CL_SPROUT_NO_RALF_CONFIGURED.log();
 
   if (opt.chronos_service != "")
   {
@@ -1529,10 +1532,6 @@ int main(int argc, char* argv[])
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
   loader->load(sproutlets);
-      CL_SPROUT_S_CSCF_INIT_FAIL.log();
-      CL_SPROUT_BGCF_INIT_FAIL.log();
-      CL_SPROUT_I_CSCF_INIT_FAIL.log();
-      closelog();
 
   if (!sproutlets.empty())
   {
@@ -1554,6 +1553,9 @@ int main(int argc, char* argv[])
                                          sproutlets);
     if (sproutlet_proxy == NULL)
     {
+      CL_SPROUT_S_CSCF_INIT_FAIL.log();
+      CL_SPROUT_BGCF_INIT_FAIL.log();
+      CL_SPROUT_I_CSCF_INIT_FAIL.log();
       LOG_ERROR("Failed to create SproutletProxy");
       closelog();
       return 1;
