@@ -817,7 +817,6 @@ void exception_handler(int sig)
   signal(SIGSEGV, SIG_DFL);
   CL_SPROUT_CRASH.log(strsignal(sig));
   closelog();
-  closelog();
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
@@ -1531,10 +1530,7 @@ int main(int argc, char* argv[])
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
   loader->load(sproutlets);
       CL_SPROUT_S_CSCF_INIT_FAIL.log();
-      closelog();
       CL_SPROUT_BGCF_INIT_FAIL.log();
-      closelog();
-      closelog();
       CL_SPROUT_I_CSCF_INIT_FAIL.log();
       closelog();
 
