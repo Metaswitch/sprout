@@ -87,6 +87,7 @@ get_settings()
         target_latency_us=100000
         alias_list=""
         default_session_expires=600
+        signaling_dns_server=127.0.0.1
         . /etc/clearwater/config
         [ -n "$chronos_hostname" ] || chronos_hostname=$local_ip:7253
 
@@ -144,6 +145,8 @@ get_settings()
         then
           alarms_enabled_arg="--alarms-enabled"
         fi
+
+        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
 #
@@ -180,6 +183,7 @@ do_start()
                      $enum_suffix_arg
                      $enum_file_arg
                      --sas $sas_server,$NAME@$public_hostname
+                     --dns-server $signaling_dns_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      --record-routing-model $sprout_rr_level
@@ -248,7 +252,7 @@ do_start()
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
 
-        start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend
