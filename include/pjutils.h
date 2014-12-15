@@ -100,6 +100,7 @@ pjsip_uri* term_served_user(pjsip_msg* msg);
 
 typedef enum {NO, YES, TLS_YES, TLS_PENDING, IP_ASSOC_YES, IP_ASSOC_PENDING, AUTH_DONE} Integrity;
 void add_integrity_protected_indication(pjsip_tx_data* tdata, PJUtils::Integrity integrity);
+void add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id);
 
 void add_asserted_identity(pjsip_msg* msg, pj_pool_t* pool, const std::string& aid, const pj_str_t& display_name);
 void add_asserted_identity(pjsip_tx_data* tdata, const std::string& aid);
@@ -216,6 +217,8 @@ pjsip_tx_data *clone_tdata(pjsip_tx_data* tdata);
 void clone_header(const pj_str_t* hdr_name, pjsip_msg* old_msg, pjsip_msg* new_msg, pj_pool_t* pool);
 
 void add_top_via(pjsip_tx_data* tdata);
+
+void remove_top_via(pjsip_tx_data* tdata);
 
 void add_reason(pjsip_tx_data* tdata, int reason_code);
 

@@ -127,7 +127,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 {
   // Get a suitable binding string from +sip.instance and reg_id parameters
   // if they are supplied.
-  std::string id;
+  std::string id = "";
   pj_str_t *instance = NULL;
   pj_str_t *reg_id = NULL;
 
@@ -146,7 +146,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     p = p->next;
   }
 
-  if (instance != NULL)
+  if ((instance != NULL) && (pj_strlen(instance) >= 2))
   {
     // The contact a +sip.instance parameters, so form a suitable binding
     // string.
@@ -438,7 +438,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   }
 
   // Finally, send out SIP NOTIFYs for any subscriptions
-  if (send_notify)
+  if ((send_notify) &&
+      (aor_data != NULL))
   {
     for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
          i != aor_data->subscriptions().end();
@@ -468,7 +469,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (all_bindings_expired)
   {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, 0);
+    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, trail);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -509,10 +510,11 @@ void process_register_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Allocate an ACR for this transaction and pass the request to it.
+  // Allocate an ACR for this transaction and pass the request to it.  Node
+  // role is always considered originating for REGISTER requests.
   ACR* acr = acr_factory->get_acr(get_trail(rdata),
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
@@ -840,17 +842,21 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_list_insert_before(&contact->other_param, new_param);
         }
 
-        // The pub-gruu parameter on the Contact header is calculated
-        // from the instance-id, to avoid unnecessary storage in
-        // memcached.
-
-        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
-        if (!gruu.empty())
+        // Add a GRUU if the UE supports GRUUs and the contact header contains
+        // a +sip.instance parameter.
+        if (PJUtils::msg_supports_extension(msg, "gruu"))
         {
-          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-          pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
-          pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
-          pj_list_insert_before(&contact->other_param, new_param);
+          // The pub-gruu parameter on the Contact header is calculated
+          // from the instance-id, to avoid unnecessary storage in
+          // memcached.
+          std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+          if (!gruu.empty())
+          {
+            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+            pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+            pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+            pj_list_insert_before(&contact->other_param, new_param);
+          }
         }
 
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
@@ -968,28 +974,12 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->update_registration_state(public_id,
-                                                      "",
-                                                      HSSConnection::DEREG_ADMIN,
-                                                      ifc_map,
-                                                      uris,
-                                                      trail);
-
-  // If we try to deregister a subscriber who has already
-  // registered (e.g. because our third-party-registration
-  // announcing a deregistration fails) Homestead will return an
-  // error and we'll avoid sending these in a loop.
-  if (http_code == HTTP_OK)
-  {
-    LOG_DEBUG("Initiating network-initiated deregistration");
-    RegistrationUtils::network_initiated_deregistration(store,
-                                                        ifc_map[public_id],
-                                                        public_id,
-                                                        "*",
-                                                        trail);
-  }
+  RegistrationUtils::remove_bindings(store,
+                                     hss,
+                                     public_id,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     trail);
 }
 
 

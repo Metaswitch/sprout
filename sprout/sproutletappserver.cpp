@@ -40,6 +40,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#include "constants.h"
 #include "pjutils.h"
 #include "sproutletappserver.h"
 
@@ -77,6 +78,25 @@ void SproutletAppServerTsxHelper::store_onward_route(pjsip_msg* req)
     pj_list_push_back(&_route_set, pjsip_hdr_clone(_pool, hroute));
     hroute = (pjsip_route_hdr*)
                         pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, hroute->next);
+  }
+}
+
+/// Stores the dialog_id from the top Route header, if it is present.
+void SproutletAppServerTsxHelper::store_dialog_id(pjsip_msg* req)
+{
+  LOG_DEBUG("Store dialog_id if it present");
+  const pjsip_route_hdr* hroute = route_hdr();
+  if (hroute != NULL)
+  {
+    pjsip_param* dialog_id_param =
+      pjsip_param_find(&((pjsip_sip_uri*)hroute->name_addr.uri)->other_param,
+                       &STR_DIALOG_ID);
+    if (dialog_id_param != NULL)
+    {
+      std::string dialog_id = PJUtils::pj_str_to_string(&dialog_id_param->value);
+      LOG_DEBUG("Store dialog_id: %s", dialog_id.c_str());
+      add_to_dialog(dialog_id);
+    }
   }
 }
 
@@ -190,7 +210,7 @@ int SproutletAppServerTsxHelper::send_request(pjsip_msg*& req)
   if (_record_routed)
   {
     pjsip_param *param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup2(pool, &param->name, "dialog_id");
+    pj_strdup(pool, &param->name, &STR_DIALOG_ID);
     pj_strdup2(pool, &param->value, _rr_param_value.c_str());
 
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
@@ -349,6 +369,7 @@ void SproutletAppServerShimTsx::on_rx_initial_request(pjsip_msg* req)
 void SproutletAppServerShimTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   _app_server_helper->store_onward_route(req);
+  _app_server_helper->store_dialog_id(req);
   _app_tsx->on_in_dialog_request(req);
 }
 

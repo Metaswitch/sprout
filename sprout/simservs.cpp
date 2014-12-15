@@ -200,6 +200,39 @@ simservs::simservs(std::string xml) : _oip_enabled(false),
   }
 }
 
+/// Constructor: Build configuration representing call diversion to the
+/// specified target for _any_ of the specified conditions.
+simservs::simservs(const std::string forward_target,
+                   unsigned int conditions,
+                   unsigned int no_reply_timer) :
+                   _oip_enabled(false),
+                   _oir_enabled(false),
+                   _oir_presentation_restricted(true),
+                   _cdiv_enabled(true),
+                   _cdiv_no_reply_timer(no_reply_timer),
+                   _inbound_cb_enabled(false),
+                   _outbound_cb_enabled(false)
+{
+  if (conditions == 0)
+  {
+    _cdiv_rules.push_back(simservs::CDIVRule(forward_target, 0));
+  }
+  else
+  {
+    // The conditions mask we're provided is such that any condition should
+    // invoke diversion.  Rules are only invoked if all conditions are true,
+    // so we need to translate this into multiple rules.
+    while (conditions != 0)
+    {
+      // Extract the next least-significant bit from conditions.
+      // (A & -A gives the least-significant bit.)
+      int condition = (conditions & (-conditions));
+      conditions = conditions & ~condition;
+      _cdiv_rules.push_back(simservs::CDIVRule(forward_target, condition));
+    }
+  }
+}
+
 simservs::~simservs()
 {
 }

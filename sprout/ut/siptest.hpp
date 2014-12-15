@@ -46,6 +46,7 @@ extern "C" {
 }
 
 #include "utils.h"
+#include "constants.h"
 #include "dnscachedresolver.h"
 #include "localstore.h"
 #include "regstore.h"
@@ -336,7 +337,9 @@ class RespMatcher : public MsgMatcher
     if (_reason == "")
     {
       // No reason specified, so use the default from PJSIP.
-      const pj_str_t* reason = pjsip_get_status_text(status);
+      const pj_str_t* reason = (status != SIP_STATUS_FLOW_FAILED) ?
+                                  pjsip_get_status_text(status) :
+                                  &SIP_REASON_FLOW_FAILED;
       _reason.assign(reason->ptr, reason->slen);
     }
   }

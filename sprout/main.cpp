@@ -74,6 +74,7 @@ extern "C" {
 #include "registrar.h"
 #include "authentication.h"
 #include "options.h"
+#include "dnsresolver.h"
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "pjutils.h"
@@ -90,6 +91,8 @@ extern "C" {
 #include "sproutlet.h"
 #include "sproutletproxy.h"
 #include "pluginloader.h"
+#include "alarm.h"
+#include "communicationmonitor.h"
 
 enum OptionTypes
 {
@@ -100,8 +103,8 @@ enum OptionTypes
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
-  OPT_MEMENTO_ENABLED,
-  OPT_GEMINI_ENABLED
+  OPT_ALARMS_ENABLED,
+  OPT_DNS_SERVER
 };
 
 
@@ -127,9 +130,11 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",               required_argument, 0, 'H'},
   { "record-routing-model", required_argument, 0, 'C'},
   { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "target-latency-us", required_argument, 0, 'Y'},
   { "xdms",              required_argument, 0, 'X'},
   { "chronos",           required_argument, 0, 'K'},
   { "ralf",              required_argument, 0, 'G'},
+  { "dns-server",        required_argument, 0, OPT_DNS_SERVER },
   { "enum",              required_argument, 0, 'E'},
   { "enum-suffix",       required_argument, 0, 'x'},
   { "enum-file",         required_argument, 0, 'f'},
@@ -150,8 +155,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
   { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
   { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-  { "memento-enabled", no_argument, 0, OPT_MEMENTO_ENABLED},
-  { "gemini-enabled", no_argument, 0, OPT_GEMINI_ENABLED},
+  { "alarms-enabled", no_argument, 0, OPT_ALARMS_ENABLED},
   { "log-level",         required_argument, 0, 'L'},
   { "daemon",            no_argument,       0, 'd'},
   { "interactive",       no_argument,       0, 't'},
@@ -159,13 +163,13 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                0, 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:Y:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
-QuiescingManager *quiescing_mgr;
+QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -234,6 +238,7 @@ static void usage(void)
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
+       "     --dns-server <server>  IP address of the DNS server to use (defaults to 127.0.0.1)\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
@@ -250,6 +255,8 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
+       " -Y, --target-latency-us <usecs>\n"
+       "                            Target latency above which throttling applies (default: 100000)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -271,15 +278,14 @@ static void usage(void)
        "                            then there is no limit (default: 0)\n"
        "     --memento-threads N    Number of Memento threads (default: 25)\n"
        "     --call-list-ttl N      Time to store call lists entries (default: 604800)\n"
-       "     --memento-enabled      Whether the memento AS is enabled (default: false)\n"
-       "     --gemini-enabled       Whether the gemini AS is enabled (default: false)\n"
+       "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
        " -d, --daemon               Run as daemon\n"
        " -t, --interactive          Run in foreground with interactive menu\n"
        " -h, --help                 Show this help screen\n"
-    );
+      );
 }
 
 
@@ -298,7 +304,7 @@ int parse_port(const std::string& port_str)
 }
 
 
-static pj_status_t init_logging_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_logging_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -336,7 +342,7 @@ static pj_status_t init_logging_options(int argc, char *argv[], struct options *
   return PJ_SUCCESS;
 }
 
-static pj_status_t init_options(int argc, char *argv[], struct options *options)
+static pj_status_t init_options(int argc, char* argv[], struct options* options)
 {
   int c;
   int opt_ind;
@@ -604,7 +610,7 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
       {
         options->reg_max_expires = reg_max_expires;
         LOG_INFO("Maximum registration period set to %d seconds\n",
-                options->reg_max_expires);
+                 options->reg_max_expires);
       }
       else
       {
@@ -632,6 +638,15 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
         LOG_WARNING("Invalid value for sub_max_expires: '%s'. "
                     "The default value of %d will be used.",
                     pj_optarg, options->sub_max_expires);
+      }
+      break;
+
+    case 'Y':
+      options->target_latency_us = atoi(pj_optarg);
+      if (options->target_latency_us <= 0)
+      {
+        LOG_ERROR("Invalid --target-latency-us option %s", pj_optarg);
+        return -1;
       }
       break;
 
@@ -720,14 +735,14 @@ static pj_status_t init_options(int argc, char *argv[], struct options *options)
                options->call_list_ttl);
       break;
 
-    case OPT_MEMENTO_ENABLED:
-      options->memento_enabled = PJ_TRUE;
-      LOG_INFO("Memento AS is enabled");
+    case OPT_ALARMS_ENABLED:
+      options->alarms_enabled = PJ_TRUE;
+      LOG_INFO("SNMP alarms are enabled");
       break;
 
-    case OPT_GEMINI_ENABLED:
-      options->gemini_enabled = PJ_TRUE;
-      LOG_INFO("Gemini AS is enabled");
+    case OPT_DNS_SERVER:
+      options->dns_server = std::string(pj_optarg);
+      LOG_INFO("Using DNS server %s", pj_optarg);
       break;
 
     case 'h':
@@ -772,11 +787,17 @@ int daemonize()
 
   // Redirect standard files to /dev/null
   if (freopen("/dev/null", "r", stdin) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stdout) == NULL)
+  {
     return errno;
+  }
   if (freopen("/dev/null", "w", stderr) == NULL)
+  {
     return errno;
+  }
 
   if (setsid() == -1)
   {
@@ -839,16 +860,17 @@ void terminate_handler(int sig)
 }
 
 
-void *quiesce_unquiesce_thread_func(void *dummy)
+void* quiesce_unquiesce_thread_func(void* dummy)
 {
-   // First register the thread with PJSIP.
+  // First register the thread with PJSIP.
   pj_thread_desc desc;
-  pj_thread_t *thread;
+  pj_thread_t* thread;
   pj_status_t status;
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
-  if (status != PJ_SUCCESS) {
+  if (status != PJ_SUCCESS)
+  {
     LOG_ERROR("Error creating quiesce/unquiesce thread (status = %d). "
               "This function will not be available",
               status);
@@ -865,9 +887,12 @@ void *quiesce_unquiesce_thread_func(void *dummy)
     {
       curr_quiescing = new_quiescing;
 
-      if (new_quiescing) {
+      if (new_quiescing)
+      {
         quiescing_mgr->quiesce();
-      } else {
+      }
+      else
+      {
         quiescing_mgr->unquiesce();
       }
     }
@@ -894,15 +919,24 @@ public:
   }
 };
 
+
 /// Registers HTTP threads with PJSIP so we can use PJSIP APIs on these threads
 void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 {
-  pj_thread_desc thread_desc;
-  pj_thread_t *thread = 0;
-
   if (!pj_thread_is_registered())
   {
-    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread", thread_desc, &thread);
+    // The thread descriptor must stay in scope for the lifetime of the thread
+    // so we must allocate it from heap.  However, this will leak because
+    // there is no way of freeing it when the thread terminates (HttpStack
+    // does not support a thread termination callback and pthread_cleanup_push
+    // won't work in this case).  This is okay for now because HttpStack
+    // just creates a pool of threads at start of day.
+    pj_thread_desc* td = (pj_thread_desc*)malloc(sizeof(pj_thread_desc));
+    pj_thread_t *thread = 0;
+
+    pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread",
+                                                       *td,
+                                                       &thread);
 
     if (thread_reg_status != PJ_SUCCESS)
     {
@@ -927,7 +961,7 @@ EnumService* enum_service = NULL;
 /*
  * main()
  */
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
   pj_status_t status;
   struct options opt;
@@ -946,6 +980,14 @@ int main(int argc, char *argv[])
   AccessLogger* access_logger = NULL;
   SproutletProxy* sproutlet_proxy = NULL;
   std::list<Sproutlet*> sproutlets;
+  CommunicationMonitor* chronos_comm_monitor = NULL;
+  CommunicationMonitor* enum_comm_monitor = NULL;
+  CommunicationMonitor* hss_comm_monitor = NULL;
+  CommunicationMonitor* memcached_comm_monitor = NULL;
+  CommunicationMonitor* memcached_remote_comm_monitor = NULL;
+  CommunicationMonitor* ralf_comm_monitor = NULL;
+  Alarm* vbucket_alarm = NULL;
+  Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, exception_handler);
@@ -997,13 +1039,13 @@ int main(int argc, char *argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
+  opt.dns_server = "127.0.0.1";
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
-  opt.memento_enabled = PJ_FALSE;
-  opt.gemini_enabled = PJ_FALSE;
+  opt.alarms_enabled = PJ_FALSE;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1040,7 +1082,8 @@ int main(int argc, char *argv[])
     // Work out the program name from argv[0], stripping anything before the final slash.
     char* prog_name = argv[0];
     char* slash_ptr = rindex(argv[0], '/');
-    if (slash_ptr != NULL) {
+    if (slash_ptr != NULL)
+    {
       prog_name = slash_ptr + 1;
     }
     Log::setLogger(new Logger(opt.log_directory, prog_name));
@@ -1158,14 +1201,6 @@ int main(int argc, char *argv[])
     LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
   }
 
-  if ((opt.memento_enabled) &&
-      ((opt.max_call_list_length == 0) &&
-      (opt.call_list_ttl == 0)))
-  {
-    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store");
-    return 1;
-  }
-
   // Ensure our random numbers are unpredictable.
   unsigned int seed;
   pj_time_val now;
@@ -1173,11 +1208,47 @@ int main(int argc, char *argv[])
   seed = (unsigned int)now.sec ^ (unsigned int)now.msec ^ getpid();
   srand(seed);
 
+  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  {
+    // Create Sprout's alarm objects. 
+
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR, 
+                                                                        AlarmDef::MAJOR));
+
+    enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
+                                                                     AlarmDef::MAJOR));
+
+    hss_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR,
+                                                                    AlarmDef::CRITICAL));
+
+    memcached_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_MEMCACHED_COMM_ERROR,
+                                                                          AlarmDef::CRITICAL));
+
+    memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
+                                                                                 AlarmDef::CRITICAL));
+
+    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR, 
+                                                                     AlarmDef::MAJOR));
+
+    vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
+                                        AlarmDef::MAJOR);
+
+    remote_vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_REMOTE_VBUCKET_ERROR,
+                                               AlarmDef::MAJOR);
+
+    // Start the alarm request agent
+    AlarmReqAgent::get_instance().start();
+    AlarmState::clear_all("sprout");
+  }
+
   // Start the load monitor
-  load_monitor = new LoadMonitor(TARGET_LATENCY, MAX_TOKENS, INITIAL_TOKEN_RATE, MIN_TOKEN_RATE);
+  load_monitor = new LoadMonitor(opt.target_latency_us, // Initial target latency (us).
+                                 MAX_TOKENS,            // Maximum token bucket size.
+                                 INITIAL_TOKEN_RATE,    // Initial token fill rate (per sec).
+                                 MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  dns_resolver = new DnsCachedResolver(opt.dns_server);
   sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialize the PJSIP stack and associated subsystems.
@@ -1220,7 +1291,8 @@ int main(int argc, char *argv[])
                                          "connected_ralfs",
                                          load_monitor,
                                          stack_data.stats_aggregator,
-                                         SASEvent::HttpLogLevel::PROTOCOL);
+                                         SASEvent::HttpLogLevel::PROTOCOL,
+                                         ralf_comm_monitor);
   }
 
   // Initialise the OPTIONS handling module.
@@ -1233,7 +1305,8 @@ int main(int argc, char *argv[])
     hss_connection = new HSSConnection(opt.hss_server,
                                        http_resolver,
                                        load_monitor,
-                                       stack_data.stats_aggregator);
+                                       stack_data.stats_aggregator,
+                                       hss_comm_monitor);
   }
 
   if (opt.scscf_enabled)
@@ -1241,7 +1314,10 @@ int main(int argc, char *argv[])
     // Create ENUM service required for S-CSCF.
     if (!opt.enum_server.empty())
     {
-      enum_service = new DNSEnumService(opt.enum_server, opt.enum_suffix);
+      enum_service = new DNSEnumService(opt.enum_server, 
+                                        opt.enum_suffix,
+                                        new DNSResolverFactory(),
+                                        enum_comm_monitor);
     }
     else if (!opt.enum_file.empty())
     {
@@ -1267,7 +1343,8 @@ int main(int argc, char *argv[])
                chronos_callback_host.c_str());
     chronos_connection = new ChronosConnection(opt.chronos_service,
                                                chronos_callback_host,
-                                               http_resolver);
+                                               http_resolver,
+                                               chronos_comm_monitor);
   }
 
   if (opt.pcscf_enabled)
@@ -1334,12 +1411,35 @@ int main(int argc, char *argv[])
     {
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
-      local_data_store = (Store*)new MemcachedStore(false, opt.store_servers);
+
+      local_data_store = (Store*)new MemcachedStore(false, 
+                                                    opt.store_servers,
+                                                    memcached_comm_monitor,
+                                                    vbucket_alarm);
+
+      if (!(((MemcachedStore*)local_data_store)->has_servers()))
+      {
+        LOG_ERROR("Cluster settings file '%s' does not contain a valid set of servers",
+                  opt.store_servers.c_str());
+        return 1;
+      };
+
       if (opt.remote_store_servers != "")
       {
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
-        remote_data_store = (Store*)new MemcachedStore(false, opt.remote_store_servers);
+
+        remote_data_store = (Store*)new MemcachedStore(false, 
+                                                       opt.remote_store_servers,
+                                                       memcached_remote_comm_monitor,
+                                                       remote_vbucket_alarm);
+
+        if (!(((MemcachedStore*)remote_data_store)->has_servers()))
+        {
+          LOG_ERROR("Remote cluster settings file '%s' does not contain a valid set of servers",
+                    opt.remote_store_servers.c_str());
+          return 1;
+        };
       }
     }
     else
@@ -1460,11 +1560,11 @@ int main(int argc, char *argv[])
       http_stack->initialize();
       http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
       http_stack->register_handler("^/timers$",
-                                      &reg_timeout_handler);
+                                   &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
-                                      &auth_timeout_handler);
+                                   &auth_timeout_handler);
       http_stack->register_handler("^/registrations?*$",
-                                      &deregistration_handler);
+                                   &deregistration_handler);
       http_stack->start(&reg_httpthread_with_pjsip);
     }
     catch (HttpStack::Exception& e)
@@ -1543,6 +1643,22 @@ int main(int argc, char *argv[])
 
   delete analytics_logger;
   delete analytics_logger_logger;
+
+  if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
+  {
+    // Stop the alarm request agent
+    AlarmReqAgent::get_instance().stop();
+
+    // Delete Sprout's alarm objects
+    delete chronos_comm_monitor;
+    delete enum_comm_monitor;
+    delete hss_comm_monitor;
+    delete memcached_comm_monitor;
+    delete memcached_remote_comm_monitor;
+    delete ralf_comm_monitor;
+    delete vbucket_alarm;
+    delete remote_vbucket_alarm;
+  }
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

@@ -23,6 +23,8 @@ modules/cpp-common/test_utils/mockhttpstack.hpp
 modules/cpp-common/test_utils/sip_common.cpp
 modules/cpp-common/test_utils/faketransport_tcp.cpp
 modules/cpp-common/test_utils/faketransport_udp.cpp
+modules/cpp-common/test_utils/fakezmq.h
+modules/cpp-common/test_utils/fakezmq.cpp
 
 modules/app-servers/include/appserver.h
 modules/app-servers/test/mockappserver.hpp

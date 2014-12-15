@@ -55,6 +55,8 @@ public:
   void unload();
 
 private:
+  Alarm* _cass_comm_alarm;
+  CommunicationMonitor* _cass_comm_monitor;
   CallListStore::Store* _call_list_store;
   MementoAppServer* _memento;
   SproutletAppServerShim* _memento_sproutlet;
@@ -69,7 +71,9 @@ MementoPlugin sproutlet_plugin;
 MementoPlugin::MementoPlugin() :
   _call_list_store(NULL),
   _memento(NULL),
-  _memento_sproutlet(NULL)
+  _memento_sproutlet(NULL),
+  _cass_comm_alarm(NULL),
+  _cass_comm_monitor(NULL)
 {
 }
 
@@ -82,11 +86,24 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
 {
   std::list<Sproutlet*> sproutlets;
 
-  if (opt.memento_enabled)
+  if (((opt.max_call_list_length == 0) &&
+       (opt.call_list_ttl == 0)))
   {
+    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
+  }
+  else
+  {
+    if (opt.alarms_enabled)
+    {
+      _cass_comm_alarm = new Alarm("memento",
+                                   AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
+                                   AlarmDef::CRITICAL);
+      _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm);
+    }
+
     _call_list_store = new CallListStore::Store();
     _call_list_store->initialize();
-    _call_list_store->configure("localhost", 9160);
+    _call_list_store->configure("localhost", 9160, 0, 0, _cass_comm_monitor);
     CassandraStore::ResultCode store_rc = _call_list_store->start();
 
     if (store_rc != CassandraStore::OK)
@@ -100,7 +117,8 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
                                       opt.home_domain,
                                       opt.max_call_list_length,
                                       opt.memento_threads,
-                                      opt.call_list_ttl);
+                                      opt.call_list_ttl,
+                                      stack_data.stats_aggregator);
 
       _memento_sproutlet = new SproutletAppServerShim(_memento);
       sproutlets.push_back(_memento_sproutlet);
@@ -116,4 +134,6 @@ void MementoPlugin::unload()
   delete _memento_sproutlet;
   delete _memento;
   delete _call_list_store;
+  delete _cass_comm_monitor;
+  delete _cass_comm_alarm;
 }

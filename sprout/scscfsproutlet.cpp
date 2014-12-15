@@ -46,10 +46,12 @@
 #include "custom_headers.h"
 #include "stack.h"
 #include "contact_filtering.h"
+#include "registration_utils.h"
 #include "scscfsproutlet.h"
 
 /// SCSCFSproutlet constructor.
-SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
+SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
+                               const std::string& scscf_node_uri,
                                const std::string& icscf_uri,
                                const std::string& bgcf_uri,
                                int port,
@@ -61,7 +63,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
                                bool user_phone,
                                bool global_only_lookups) :
   Sproutlet("scscf", port),
-  _scscf_uri(NULL),
+  _scscf_cluster_uri(NULL),
+  _scscf_node_uri(NULL),
   _icscf_uri(NULL),
   _bgcf_uri(NULL),
   _store(store),
@@ -73,16 +76,22 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_uri,
   _user_phone(user_phone)
 {
   LOG_DEBUG("Creating S-CSCF Sproutlet");
-  LOG_DEBUG("  S-CSCF URI = %s", scscf_uri.c_str());
-  LOG_DEBUG("  I-CSCF URI = %s", icscf_uri.c_str());
-  LOG_DEBUG("  BGCF   URI = %s", bgcf_uri.c_str());
+  LOG_DEBUG("  S-CSCF cluster URI = %s", scscf_cluster_uri.c_str());
+  LOG_DEBUG("  S-CSCF node URI    = %s", scscf_node_uri.c_str());
+  LOG_DEBUG("  I-CSCF URI         = %s", icscf_uri.c_str());
+  LOG_DEBUG("  BGCF URI           = %s", bgcf_uri.c_str());
 
   // Convert the routing URIs to a form suitable for PJSIP, so we're
   // not continually converting from strings.
-  _scscf_uri = PJUtils::uri_from_string(scscf_uri, stack_data.pool, false);
-  if (_scscf_uri == NULL)
+  _scscf_cluster_uri = PJUtils::uri_from_string(scscf_cluster_uri, stack_data.pool, false);
+  if (_scscf_cluster_uri == NULL)
   {
-    LOG_ERROR("Invalid S-CSCF URI %s", scscf_uri.c_str());
+    LOG_ERROR("Invalid S-CSCF cluster %s", scscf_cluster_uri.c_str());
+  }
+  _scscf_node_uri = PJUtils::uri_from_string(scscf_node_uri, stack_data.pool, false);
+  if (_scscf_node_uri == NULL)
+  {
+    LOG_ERROR("Invalid S-CSCF node URI %s", scscf_node_uri.c_str());
   }
   _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
   if (_bgcf_uri == NULL)
@@ -121,10 +130,17 @@ SproutletTsx* SCSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 }
 
 
-/// Returns the configured S-CSCF URI for this system.
-const pjsip_uri* SCSCFSproutlet::scscf_uri() const
+/// Returns the configured S-CSCF cluster URI for this system.
+const pjsip_uri* SCSCFSproutlet::scscf_cluster_uri() const
 {
-  return _scscf_uri;
+  return _scscf_cluster_uri;
+}
+
+
+/// Returns the configured S-CSCF node URI for this system.
+const pjsip_uri* SCSCFSproutlet::scscf_node_uri() const
+{
+  return _scscf_node_uri;
 }
 
 
@@ -174,6 +190,21 @@ void SCSCFSproutlet::get_bindings(const std::string& aor,
 }
 
 
+/// Removes the specified binding for the specified Address of Record from
+/// the local or remote registration stores.
+void SCSCFSproutlet::remove_binding(const std::string& aor,
+                                    const std::string& binding_id,
+                                    SAS::TrailId trail)
+{
+  RegistrationUtils::remove_bindings(_store,
+                                     _hss,
+                                     aor,
+                                     binding_id,
+                                     HSSConnection::DEREG_TIMEOUT,
+                                     trail);
+}
+
+
 /// Read data for a public user identity from the HSS.
 bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                    bool& registered,
@@ -197,7 +228,11 @@ bool SCSCFSproutlet::read_hss_data(const std::string& public_id,
                                                    ccfs,
                                                    ecfs,
                                                    trail);
-  ifcs = ifc_map[public_id];
+  if (http_code == 200)
+  {
+    ifcs = ifc_map[public_id];
+  }
+
   registered = (regstate == HSSConnection::STATE_REGISTERED);
 
   return (http_code == 200);
@@ -351,15 +386,6 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   // services.
   status_code = determine_served_user(req);
 
-  if (_acr == NULL)
-  {
-    // No ACR found or created while determining the served user, so create
-    // a new one.
-    _acr = _scscf->get_acr(trail(),
-                           CALLING_PARTY,
-                           ACR::requested_node_role(req));
-  }
-
   // Pass the received request to the ACR.
   // @TODO - request timestamp???
   _acr->rx_request(req);
@@ -423,7 +449,7 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   // Create an ACR for this request and pass the request to it.
   _acr = _scscf->get_acr(trail(),
                          CALLING_PARTY,
-                         ACR::requested_node_role(req));
+                         get_billing_role());
 
   // @TODO - request timestamp???
   _acr->rx_request(req);
@@ -468,7 +494,14 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
     // The edge proxy / P-CSCF has reported that this flow has failed.
     // We should remove the binding from the registration store so we don't
     // try it again.
-    // @TODO - this code has been removed from stateful_proxy, not sure why???
+    std::unordered_map<int, std::string>::iterator i = _target_bindings.find(fork_id);
+
+    if (i != _target_bindings.end())
+    {
+      // We're the auth proxy and the flow we used failed, so delete the binding
+      // corresponding to this flow.
+      _scscf->remove_binding(_target_aor, i->second, trail());
+    }
   }
 
   if ((st_code >= PJSIP_SC_OK) && (_hss_data_cached))
@@ -551,9 +584,13 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
       (cancel_req != NULL))
   {
     // Create and send an ACR for the CANCEL request.
-    ACR* acr = _scscf->get_acr(trail(),
-                               CALLING_PARTY,
-                               ACR::requested_node_role(cancel_req));
+    NodeRole role = NODE_ROLE_ORIGINATING;
+    if ((_session_case != NULL) &&
+        (_session_case->is_terminating()))
+    {
+      role = NODE_ROLE_TERMINATING;
+    }
+    ACR* acr = _scscf->get_acr(trail(), CALLING_PARTY, role);
 
     // @TODO - timestamp from request.
     acr->rx_request(cancel_req);
@@ -617,11 +654,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
               _session_case->to_string().c_str(),
               _as_chain_link.to_string().c_str());
   }
-  else if (hroute == NULL)
+  else
   {
-    // No Route header on the request.  This probably shouldn't happen, but
-    // if it does we will treat it as a terminating request.
-    LOG_DEBUG("No Route header, so treat as terminating request");
+    // No Route header on the request or top Route header does not correspond to
+    // the S-CSCF.  This probably shouldn't happen, but if it does we will
+    // treat it as a terminating request.
+    LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
 
@@ -654,6 +692,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         pcv->term_ioi = pj_str("");
       }
 
+      // Create a new ACR for this request.
+      _acr = _scscf->get_acr(trail(),
+                             CALLING_PARTY,
+                             NODE_ROLE_ORIGINATING);
 
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
@@ -665,7 +707,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_diversion)
         {
           LOG_DEBUG("Add service to dialog - originating Cdiv");
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
       else
@@ -685,19 +727,25 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         LOG_DEBUG("Add service to dialog - AS hop");
         if (_session_case->is_terminating())
         {
-          add_record_route(req, "charge-term");
+          add_record_route(req, NODE_ROLE_TERMINATING);
         }
         else
         {
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
     }
   }
-  else if (_session_case != NULL)
+  else
   {
     // No existing AS chain - create new.
     std::string served_user = served_user_from_msg(req);
+
+    // Create a new ACR for this request.
+    _acr = _scscf->get_acr(trail(),
+                           CALLING_PARTY,
+                           _session_case->is_originating() ?
+                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
 
     if (!served_user.empty())
     {
@@ -719,7 +767,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_terminating)
         {
           LOG_DEBUG("Single Record-Route - initiation of terminating handling");
-          add_record_route(req, "charge-term");
+          add_record_route(req, NODE_ROLE_TERMINATING);
         }
       }
       else if (_session_case->is_originating())
@@ -727,7 +775,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
         if (stack_data.record_route_on_initiation_of_originating)
         {
           LOG_DEBUG("Single Record-Route - initiation of originating handling");
-          add_record_route(req, "charge-orig");
+          add_record_route(req, NODE_ROLE_ORIGINATING);
         }
       }
     }
@@ -811,12 +859,6 @@ AsChainLink SCSCFSproutletTsx::create_as_chain(Ifcs ifcs,
   }
   bool is_registered = is_user_registered(served_user);
 
-  // Create a new ACR to use for this service hop and the new AS chain.
-  _acr = _scscf->get_acr(trail(),
-                         CALLING_PARTY,
-                         _session_case->is_originating() ?
-                                NODE_ROLE_ORIGINATING : NODE_ROLE_TERMINATING);
-
   AsChainLink ret = AsChainLink::create_as_chain(_scscf->as_chain_table(),
                                                  *_session_case,
                                                  served_user,
@@ -863,7 +905,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_originating)
     {
       LOG_DEBUG("Add service to dialog - end of originating handling");
-      add_record_route(req, "charge-orig");
+      add_record_route(req, NODE_ROLE_ORIGINATING);
     }
 
     // Attempt to translate the RequestURI using ENUM or an alternative
@@ -917,7 +959,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
     if (stack_data.record_route_on_completion_of_terminating)
     {
       LOG_DEBUG("Add service to dialog - end of terminating handling");
-      add_record_route(req, "charge-term");
+      add_record_route(req, NODE_ROLE_TERMINATING);
     }
 
     // Route the call to the appropriate target.
@@ -947,9 +989,11 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
     // Add the application server URI as the next Route header.
     PJUtils::add_route_header(req, as_uri, get_pool(req));
 
-    // Insert route header below it with an ODI in it.
+    // Insert route header below it with an ODI in it.  This must use the
+    // URI for this S-CSCF node (not the cluster) to ensure any forwarded
+    // requests are routed to this node.
     pjsip_sip_uri* odi_uri = (pjsip_sip_uri*)
-                             pjsip_uri_clone(get_pool(req), _scscf->scscf_uri());
+                             pjsip_uri_clone(get_pool(req), _scscf->scscf_node_uri());
     pj_strdup2(get_pool(req), &odi_uri->user, odi_value.c_str());
     odi_uri->transport_param = as_uri->transport_param;  // Use same transport as AS, in case it can only cope with one.
     if (_session_case->is_originating())
@@ -1030,7 +1074,7 @@ void SCSCFSproutletTsx::route_to_icscf(pjsip_msg* req)
   else
   {
     // I-CSCF is disabled, so route directly to the local S-CSCF.
-    const pjsip_uri* scscf_uri = _scscf->scscf_uri();
+    const pjsip_uri* scscf_uri = _scscf->scscf_cluster_uri();
     LOG_INFO("Routing directly to S-CSCF %s",
              PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR, scscf_uri).c_str());
     PJUtils::add_route_header(req,
@@ -1060,10 +1104,10 @@ void SCSCFSproutletTsx::route_to_term_scscf(pjsip_msg* req)
 {
   LOG_INFO("Routing to terminating S-CSCF %s",
            PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                  _scscf->scscf_uri()).c_str());
+                                  _scscf->scscf_cluster_uri()).c_str());
   PJUtils::add_route_header(req,
                             (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
-                                                            _scscf->scscf_uri()),
+                                                            _scscf->scscf_cluster_uri()),
                             get_pool(req));
   send_request(req);
 }
@@ -1156,13 +1200,19 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   _scscf->get_bindings(aor, &aor_data, trail());
 
   TargetList targets;
-  filter_bindings_to_targets(aor,
-                             aor_data,
-                             req,
-                             pool,
-                             MAX_FORKING,
-                             targets,
-                             trail());
+  if ((aor_data != NULL) &&
+      (!aor_data->bindings().empty()))
+  {
+    // Retrieved bindings from the store so filter them to an ordered
+    // list of targets.
+    filter_bindings_to_targets(aor,
+                               aor_data,
+                               req,
+                               pool,
+                               MAX_FORKING,
+                               targets,
+                               trail());
+  }
 
   if (targets.empty())
   {
@@ -1182,7 +1232,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       pjsip_msg* to_send = (ii == targets.size() - 1) ? req : clone_request(req);
       pool = get_pool(to_send);
 
-      // Set up the Rquest URI.
+      // Set up the Request URI.
       to_send->line.req.uri = (pjsip_uri*)
                                         pjsip_uri_clone(pool, targets[ii].uri);
 
@@ -1199,7 +1249,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       }
 
       // Forward the request and remember the binding identifier used for this
-      // in case we get a Flow Failed response.
+      // in case we get a 430 Flow Failed response.
       int fork_id = send_request(to_send);
       _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
     }
@@ -1350,7 +1400,7 @@ void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
 /// be attached to the Record-Route and can be used to recover the billing
 /// role that is in use on subsequent in-dialog messages.
 void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
-                                         const std::string& billing_role)
+                                         NodeRole billing_role)
 {
   if (!_record_routed)
   {
@@ -1358,7 +1408,14 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
     pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
     pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
-    pj_strdup2(pool, &param->value, billing_role.c_str());
+    if (billing_role == NODE_ROLE_ORIGINATING)
+    {
+      pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
+    }
+    else
+    {
+      pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
+    }
 
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
     pj_list_insert_before(&uri->other_param, param);
@@ -1374,21 +1431,49 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
 
 /// Retrieve the billing role for an in-dialog message.
-void SCSCFSproutletTsx::get_billing_role(std::string& billing_role)
+NodeRole SCSCFSproutletTsx::get_billing_role()
 {
+  NodeRole role;
+
   const pjsip_route_hdr* route = route_hdr();
-  pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
-  pjsip_param* param = pjsip_param_find(&uri->other_param,
-                                        &STR_BILLING_ROLE);
-  if (param != NULL)
+  if ((route != NULL) &&
+      (is_uri_reflexive(route->name_addr.uri)))
   {
-    billing_role = PJUtils::pj_str_to_string(&param->value);
+    pjsip_sip_uri* uri = (pjsip_sip_uri*)route->name_addr.uri;
+    pjsip_param* param = pjsip_param_find(&uri->other_param,
+                                          &STR_BILLING_ROLE);
+    if (param != NULL)
+    {
+      if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
+      {
+        LOG_INFO("Charging role is originating");
+        role = NODE_ROLE_ORIGINATING;
+      }
+      else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
+      {
+        LOG_INFO("Charging role is terminating");
+        role = NODE_ROLE_TERMINATING;
+      }
+      else
+      {
+        LOG_WARNING("Unknown charging role %.*s, assume originating",
+                    param->value.slen, param->value.ptr);
+        role = NODE_ROLE_ORIGINATING;
+      }
+    }
+    else
+    {
+      LOG_WARNING("No charging role in Route header, assume originating");
+      role = NODE_ROLE_ORIGINATING;
+    }
   }
   else
   {
-    LOG_WARNING("Billing role unknown, assuming originating only");
-    billing_role = "charge-orig";
+    LOG_WARNING("Cannot determine charging role as no Route header, assume originating");
+    role = NODE_ROLE_ORIGINATING;
   }
+
+  return role;
 }
 
 

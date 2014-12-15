@@ -69,6 +69,7 @@ struct options
   std::string            external_icscf_uri;
   int                    record_routing_model;
   int                    default_session_expires;
+  int                    target_latency_us;
   std::string            local_host;
   std::string            public_host;
   std::string            home_domain;
@@ -87,6 +88,7 @@ struct options
   std::string            store_servers;
   std::string            remote_store_servers;
   std::string            ralf_server;
+  std::string            dns_server;
   std::string            enum_server;
   std::string            enum_suffix;
   std::string            enum_file;
@@ -107,6 +109,7 @@ struct options
   int                    call_list_ttl;
   bool                   memento_enabled;
   bool                   gemini_enabled;
+  bool                   alarms_enabled;
   int                    worker_threads;
   bool                   log_to_file;
   std::string            log_directory;

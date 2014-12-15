@@ -54,6 +54,13 @@ extern "C" {
 #include "xdmconnection.h"
 #include "simservs.h"
 #include "aschain.h"
+#include "counter.h"
+
+class CDivCallback
+{
+public:
+  virtual void cdiv_callback(std::string target, unsigned int conditions) = 0;
+};
 
 class Mmtel : public AppServer
 {
@@ -61,13 +68,37 @@ public:
   Mmtel(const std::string& service_name,
         XDMConnection* xdm_client) :
     AppServer(service_name),
-    _xdmc(xdm_client) {}
+    _xdmc(xdm_client) {};
 
   AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
                             pjsip_msg* req);
 
 private:
   XDMConnection* _xdmc;
+
+  simservs *get_user_services(std::string public_id, SAS::TrailId trail);
+};
+
+// Cut-down AS that invokes MMTEL-style call diversion configured through
+// parameters encoded on the AS URI.
+class CallDiversionAS : public AppServer, CDivCallback
+{
+public:
+  CallDiversionAS(const std::string& service_name);
+  virtual ~CallDiversionAS();
+
+  AppServerTsx* get_app_tsx(AppServerTsxHelper* helper,
+                            pjsip_msg* req);
+  virtual void cdiv_callback(std::string target,
+                             unsigned int conditions);
+
+private:
+  StatisticCounter _cdiv_total_stat;
+  StatisticCounter _cdiv_unconditional_stat;
+  StatisticCounter _cdiv_busy_stat;
+  StatisticCounter _cdiv_not_registered_stat;
+  StatisticCounter _cdiv_no_answer_stat;
+  StatisticCounter _cdiv_not_reachable_stat;
 };
 
 class MmtelTsx : public AppServerTsx
@@ -75,7 +106,8 @@ class MmtelTsx : public AppServerTsx
 public:
   MmtelTsx(AppServerTsxHelper* helper,
            pjsip_msg* req,
-           XDMConnection* xdm_client);
+           simservs* user_services,
+           CDivCallback* cdiv_callback = NULL);
   ~MmtelTsx();
 
   void on_initial_request(pjsip_msg* req);
@@ -87,15 +119,12 @@ private:
   pjsip_method_e _method;
   std::string _country_code;
   simservs* _user_services;
+  CDivCallback* _cdiv_callback;
   bool _ringing;
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
   TimerID _no_reply_timer;
-  std::unordered_set<std::string> _cdiv_targets;
-
-  XDMConnection* _xdmc;
-
-  simservs *get_user_services(std::string public_id, SAS::TrailId trail);
+  bool _diverted;
 
   pjsip_status_code apply_ob_call_barring(pjsip_msg* req);
   pjsip_status_code apply_ib_call_barring(pjsip_msg* req);
