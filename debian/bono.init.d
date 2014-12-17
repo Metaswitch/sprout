@@ -119,6 +119,7 @@ get_settings()
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
         [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
+        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
@@ -156,6 +157,7 @@ do_start()
                      -a $log_directory
                      -F $log_directory
                      -L $log_level
+                     $target_latency_us_arg
                      $ibcf_arg
                      $billing_cdf_arg"
 

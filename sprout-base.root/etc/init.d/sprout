@@ -84,7 +84,6 @@ get_settings()
         sas_server=0.0.0.0
         sprout_rr_level="pcscf"
         scscf=5054
-        target_latency_us=100000
         alias_list=""
         default_session_expires=600
         signaling_dns_server=127.0.0.1
@@ -146,6 +145,8 @@ get_settings()
           alarms_enabled_arg="--alarms-enabled"
         fi
 
+        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
+
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
@@ -188,7 +189,7 @@ do_start()
                      --worker-threads=$num_worker_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
-                     --target-latency-us=$target_latency_us
+                     $target_latency_us_arg
                      $authentication_arg
                      $user_phone_arg
                      $global_only_lookups_arg
