@@ -104,7 +104,8 @@ enum OptionTypes
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
   OPT_ALARMS_ENABLED,
-  OPT_DNS_SERVER
+  OPT_DNS_SERVER,
+  OPT_TARGET_LATENCY_US
 };
 
 
@@ -130,7 +131,7 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",               required_argument, 0, 'H'},
   { "record-routing-model", required_argument, 0, 'C'},
   { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "target-latency-us", required_argument, 0, 'Y'},
+  { "target-latency-us", required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",              required_argument, 0, 'X'},
   { "chronos",           required_argument, 0, 'K'},
   { "ralf",              required_argument, 0, 'G'},
@@ -163,7 +164,7 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                0, 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:Y:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
@@ -255,7 +256,7 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
-       " -Y, --target-latency-us <usecs>\n"
+       "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
@@ -641,7 +642,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case 'Y':
+    case OPT_TARGET_LATENCY_US:
       options->target_latency_us = atoi(pj_optarg);
       if (options->target_latency_us <= 0)
       {
@@ -1046,6 +1047,7 @@ int main(int argc, char* argv[])
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
   opt.alarms_enabled = PJ_FALSE;
+  opt.target_latency_us = 100000;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
