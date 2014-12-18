@@ -1053,6 +1053,7 @@ int main(int argc, char* argv[])
 
   if (status != PJ_SUCCESS)
   {
+    closelog();
     return 1;
   }
 
@@ -1068,6 +1069,7 @@ int main(int argc, char* argv[])
     int errnum = daemonize();
     if (errnum != 0)
     {
+      closelog();
       LOG_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
       exit(0);
     }
