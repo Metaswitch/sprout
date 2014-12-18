@@ -92,6 +92,9 @@ protected:
   /// transaction.
   ServerCapabilities _hss_rsp;
 
+  // Port that I-CSCF is listening on
+  int _port;
+
   /// The list of S-CSCFs already attempted for this request.
   std::vector<std::string> _attempted_scscfs;
 };

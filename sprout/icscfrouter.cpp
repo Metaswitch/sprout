@@ -56,11 +56,13 @@ extern "C" {
 ICSCFRouter::ICSCFRouter(HSSConnection* hss,
                          SCSCFSelector* scscf_selector,
                          SAS::TrailId trail,
-                         ACR* acr) :
+                         ACR* acr,
+                         int port) :
   _hss(hss),
   _scscf_selector(scscf_selector),
   _trail(trail),
   _acr(acr),
+  _port(port),
   _queried_caps(false),
   _hss_rsp(),
   _attempted_scscfs()
@@ -132,7 +134,41 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
 
       if ((scscf_uri != NULL) && PJSIP_URI_SCHEME_IS_SIP(scscf_uri))
       {
-        scscf_sip_uri = (pjsip_sip_uri*)scscf_uri;
+        // Check whether the URI points back to ourselves, i.e.
+        // - The host is either this server or the home domain.
+        // - The port is the I-CSCF port for this deployment
+        //
+        // If the URI matches these criteria, we need to reject this message
+        // now (with a signature SAS log) as this is never valid and would
+        // lead to an infinite loop (were it not for our separate Max-Forwards
+        // checking).
+        //
+        // The motivation for putting an explicit check here (rather than
+        // relying on Max Forwards checking) is that this is reasonably likely
+        // to occur when turning up a new deployment: customers can very easily
+        // get their S-CSCF and I-CSCF ports the wrong way round (resulting in
+        // an I-CSCF loop) and this fix will save them time diagnosing the
+        // condition.
+        //
+        // Note that we are only checking the I-CSCF => I-CSCF loop condition
+        // explicitly in this way.  S-CSCF => S-CSCF loops are much harder to
+        // explicitly block because messages can be legitimately routed by an
+        // S-CSCF back to itself (with subtly changed headers) for various
+        // reasons.  Max Forwards checking should catch these instances.
+        sip_uri = (pjsip_sip_uri*)scscf_uri;
+
+        if ((PJUtils::is_uri_local(scscf_uri) || PJUtils::is_home_domain(scscf_uri)) &&
+            (sip_uri->port == _port))
+        {
+          LOG_WARNING("SCSCF URI %s points back to ICSCF", scscf.c_str());
+          status_code = PJSIP_SC_LOOP_DETECTED;
+          SAS::Event event(_trail, SASEvent::SCSCF_ICSCF_LOOP_DETECTED, 0);
+          SAS::report_event(event);
+        }
+        else
+        {
+          scscf_sip_uri = sip_uri;
+        }
       }
       else
       {
@@ -257,11 +293,12 @@ ICSCFUARouter::ICSCFUARouter(HSSConnection* hss,
                              SCSCFSelector* scscf_selector,
                              SAS::TrailId trail,
                              ACR* acr,
+                             int port,
                              const std::string& impi,
                              const std::string& impu,
                              const std::string& visited_network,
                              const std::string& auth_type) :
-  ICSCFRouter(hss, scscf_selector, trail, acr),
+  ICSCFRouter(hss, scscf_selector, trail, acr, port),
   _impi(impi),
   _impu(impu),
   _visited_network(visited_network),
@@ -333,9 +370,10 @@ ICSCFLIRouter::ICSCFLIRouter(HSSConnection* hss,
                              SCSCFSelector* scscf_selector,
                              SAS::TrailId trail,
                              ACR* acr,
+                             int port,
                              const std::string& impu,
                              bool originating) :
-  ICSCFRouter(hss, scscf_selector, trail, acr),
+  ICSCFRouter(hss, scscf_selector, trail, acr, port),
   _impu(impu),
   _originating(originating)
 {
