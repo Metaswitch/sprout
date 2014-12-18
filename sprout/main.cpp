@@ -91,7 +91,7 @@ extern "C" {
 #include "sproutlet.h"
 #include "sproutletproxy.h"
 #include "pluginloader.h"
-#include "sprout_ent_definitions.h"
+#include "sprout_pd_definitions.h"
 #include "alarm.h"
 #include "communicationmonitor.h"
 

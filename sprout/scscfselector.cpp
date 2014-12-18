@@ -44,7 +44,7 @@
 #include "log.h"
 #include "sas.h"
 #include "sproutsasevent.h"
-#include "sprout_ent_definitions.h"
+#include "sprout_pd_definitions.h"
 
 SCSCFSelector::SCSCFSelector(std::string configuration) :
   _configuration(configuration),

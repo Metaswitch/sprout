@@ -46,7 +46,7 @@ extern "C" {
 #include <pjlib.h>
 }
 
-#include "sprout_ent_definitions.h"
+#include "sprout_pd_definitions.h"
 
 #include "stack.h"
 #include "log.h"
@@ -1231,12 +1231,12 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
     // Failed to resolve the destination or failed to create a PJSIP UAC
     // transaction.
     CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-	       PJUtils::next_hop(tdata->msg)).c_str(),
-               PJUtils::pj_status_to_string(status).c_str());
+                                       PJUtils::next_hop(tdata->msg)).c_str(),
+                                       PJUtils::pj_status_to_string(status).c_str());
 
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-                                     PJUtils::next_hop(tdata->msg)).c_str());
+              PJUtils::next_hop(tdata->msg)).c_str());
 
     // Since the on_tsx_state callback will not have been called we must
     // clean up resources here.

@@ -75,7 +75,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
-#include "sprout_ent_definitions.h"
+#include "sprout_pd_definitions.h"
 
 class StackQuiesceHandler;
 
@@ -646,7 +646,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   {
     status = PJ_EAFNOTSUP;
     CL_SPROUT_SIP_TCP_START_FAIL.log(port,
-				     PJUtils::pj_status_to_string(status).c_str());
+                                     PJUtils::pj_status_to_string(status).c_str());
     LOG_ERROR("Failed to start TCP transport for port %d  (%s)",
               port,
               PJUtils::pj_status_to_string(status).c_str());
@@ -662,7 +662,7 @@ pj_status_t create_tcp_listener_transport(int port, pj_str_t& host, pjsip_tpfact
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_TCP_SERVICE_START_FAIL.log(port,
-					     PJUtils::pj_status_to_string(status).c_str());
+                                             PJUtils::pj_status_to_string(status).c_str());
     LOG_ERROR("Failed to start TCP transport for port %d (%s)",
               port,
               PJUtils::pj_status_to_string(status).c_str());
@@ -1024,8 +1024,7 @@ pj_status_t init_stack(const std::string& system_name,
     }
     else
     {
-      CL_SPROUT_S_CSCF_INIT_FAIL2.log(stack_data.scscf_port)
-;
+      CL_SPROUT_S_CSCF_INIT_FAIL2.log(stack_data.scscf_port);
     }
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
@@ -1042,8 +1041,7 @@ pj_status_t init_stack(const std::string& system_name,
     }
     else
     {
-      CL_SPROUT_I_CSCF_INIT_FAIL2.log(stack_data.icscf_port)
-;
+      CL_SPROUT_I_CSCF_INIT_FAIL2.log(stack_data.icscf_port);
     }
     PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   }
