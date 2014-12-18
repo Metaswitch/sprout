@@ -44,6 +44,7 @@
 #include "log.h"
 #include "sas.h"
 #include "sproutsasevent.h"
+#include "sprout_ent_definitions.h"
 
 SCSCFSelector::SCSCFSelector(std::string configuration) :
   _configuration(configuration),
@@ -68,6 +69,7 @@ void SCSCFSelector::update_scscf()
   if ((stat(_configuration.c_str(), &s) != 0) &&
       (errno == ENOENT))
   {
+    CL_SPROUT_BAD_S_CSCF_JSON.log();
     LOG_STATUS("No S-CSCF configuration data (file %s does not exist)",
                _configuration.c_str());
     return;
@@ -81,6 +83,7 @@ void SCSCFSelector::update_scscf()
   {
     if (!reader.parse(file, root))
     {
+      CL_SPROUT_BAD_S_CSCF_JSON.log();
       LOG_WARNING("Failed to read S-CSCF configuration data, %s",
                   reader.getFormattedErrorMessages().c_str());
       return;
