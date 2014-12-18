@@ -57,7 +57,6 @@ extern "C" {
 #include <list>
 #include <queue>
 #include <string>
-//#include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 
 #include "ipv6utils.h"
