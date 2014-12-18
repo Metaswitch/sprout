@@ -48,6 +48,7 @@ extern "C" {
 #include <errno.h>
 #include <semaphore.h>
 
+
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -56,6 +57,8 @@ extern "C" {
 #include <list>
 #include <queue>
 #include <string>
+//#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
 #include "ipv6utils.h"
 #include "logger.h"
@@ -1047,7 +1050,8 @@ int main(int argc, char* argv[])
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
 
-  openlog("sprout", PDLOG_PID, PDLOG_LOCAL6);
+  boost::filesystem::path p = argv[0];
+  openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
   CL_SPROUT_STARTED.log();
   status = init_logging_options(argc, argv, &opt);
 
