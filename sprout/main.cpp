@@ -388,7 +388,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       else
       {
-	CL_SPROUT_INVALID_S_CSCF_PORT.log(pj_optarg);
+        CL_SPROUT_INVALID_S_CSCF_PORT.log(pj_optarg);
         LOG_ERROR("S-CSCF port %s is invalid\n", pj_optarg);
         return -1;
       }

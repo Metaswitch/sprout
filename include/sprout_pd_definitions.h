@@ -96,7 +96,7 @@ static const PDLog1<const char*> CL_SPROUT_CRASH
   "The application has encountered a fatal software error or has "
   "been terminated.",
   "The application will exit and restart until the problem is fixed.",
-  "This error can occur if The application has been terminated by "
+  "This error can occur if the application has been terminated by "
   "operator command. "
   "Check your installation and configuration for other types of crashes."
 );
@@ -215,10 +215,9 @@ static const PDLog CL_SPROUT_MEMCACHE_CONN_FAIL
   "Fatal - Failed to connect to the memcached data store.",
   "The connection to the local store could not be created.",
   "The application will exit and restart until the problem is fixed.",
-  "(1).Check to see if the memcached is running using ps -ef | grep memcached."
-  "(2). If not, try starting the memcached by entering the command sudo "
-  "service memcached start. "
-  "(3). Restart the node to see if the problem clears."
+  "(1). After the restart the problem should clear."
+  "(2). if there is still a failure restart the node to see if the problem "
+  "clears."
 );
 
 static const PDLog1<const char*> CL_SPROUT_INIT_SERVICE_ROUTE_FAIL
@@ -248,8 +247,7 @@ static const PDLog CL_SPROUT_S_CSCF_INIT_FAIL
   "Fatal - The S-CSCF service failed to initialize.",
   "The S-CSCF did not initialize.",
   "The S-CSCF proxy is not enabled.",
-  "(1). Check the configuration in the /etc/clearwater/config and correct."
-  "(2). Check the configuration in the /etc/clearwater/s-cscf.json and correct"
+  "Check the configuration in the /etc/clearwater/config and correct."
 );
 
 static const PDLog CL_SPROUT_I_CSCF_INIT_FAIL
