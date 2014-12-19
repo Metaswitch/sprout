@@ -95,7 +95,7 @@ static const PDLog1<const char*> CL_SPROUT_CRASH
   "Fatal - The application has exited or crashed with signal %s.",
   "The application has encountered a fatal software error or has "
   "been terminated.",
-  "The application will restart.",
+  "The application will exit and restart until the problem is fixed.",
   "This error can occur if The application has been terminated by "
   "operator command. "
   "Check your installation and configuration for other types of crashes."
