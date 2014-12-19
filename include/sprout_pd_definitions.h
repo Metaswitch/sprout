@@ -216,7 +216,7 @@ static const PDLog CL_SPROUT_MEMCACHE_CONN_FAIL
   "The connection to the local store could not be created.",
   "The application will exit and restart until the problem is fixed.",
   "(1). After the restart the problem should clear."
-  "(2). if there is still a failure restart the node to see if the problem "
+  "(2). If there is still a failure restart the node to see if the problem "
   "clears."
 );
 
