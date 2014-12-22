@@ -1236,7 +1236,7 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
 
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
-              PJUtils::next_hop(tdata->msg)).c_str());
+                                     PJUtils::next_hop(tdata->msg)).c_str());
 
     // Since the on_tsx_state callback will not have been called we must
     // clean up resources here.
@@ -1363,7 +1363,7 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
     // don't blacklist.
     CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                        PJUtils::next_hop(tdata->msg)).c_str(),
-	                               PJUtils::pj_status_to_string(status).c_str());
+                                       PJUtils::pj_status_to_string(status).c_str());
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());

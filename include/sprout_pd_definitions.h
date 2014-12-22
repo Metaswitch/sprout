@@ -96,9 +96,8 @@ static const PDLog1<const char*> CL_SPROUT_CRASH
   "The application has encountered a fatal software error or has "
   "been terminated.",
   "The application will exit and restart until the problem is fixed.",
-  "This error can occur if the application has been terminated by "
-  "operator command. "
-  "Check your installation and configuration for other types of crashes."
+  "Ensure that the node has been installed correctly and that it "
+  "has valid configuration."
 );
 
 static const PDLog CL_SPROUT_STARTED
@@ -116,7 +115,7 @@ static const PDLog CL_SPROUT_NO_SI_CSCF
   PDLogBase::CL_SPROUT_ID + 6,
   PDLOG_ERR,
   "Fatal - Must enable P-CSCF, S-CSCF or I-CSCF in /etc/clearwater/config.",
-  "Neither a P-CSCF, S-CSCF nor an I-CSCF was configured in "
+  "Neither a P-CSCF, a S-CSCF nor an I-CSCF was configured in "
   "/etc/clearwater/config.",
   "The application will exit and restart until the problem is fixed.",
   "The P-CSCF is configured by setting the pcscf=<port> option. "
@@ -177,19 +176,19 @@ static const PDLog CL_SPROUT_BAD_S_CSCF_JSON
 (
   PDLogBase::CL_SPROUT_ID + 11,
   PDLOG_ERR,
-  "Fatal - Missing or malformed /etc/clearwater/s-cscf.json file.",
-  "The s-cscf.json file must be corrected or created to provide "
-  "S-CSCF service.",
+  "Missing or malformed /etc/clearwater/s-cscf.json file.",
+  "The s-cscf.json file must be corrected or created to allow the I-CSCF to "
+  "select an S-CSCF for a subscriber.",
   "This prevents the I-CSCF from selecting an S-CSCF.",
   "Correct or add the /etc/clearwater/s-cscf.json file "
-  "and restart Sprout."
+  "and reload the application."
 );
 
 static const PDLog1<const char*> CL_SPROUT_SIP_INIT_INTERFACE_FAIL
 (
   PDLogBase::CL_SPROUT_ID + 12,
   PDLOG_ERR,
-  "Fatal - Error initializing sip interfaces with error %s.",
+  "Fatal - Error initializing SIP interfaces with error %s.",
   "The SIP interfaces could not be started.",
   "The application will exit and restart until the problem is fixed.",
   "(1). Check the /etc/clearwater/config configuration."
@@ -227,7 +226,7 @@ static const PDLog1<const char*> CL_SPROUT_INIT_SERVICE_ROUTE_FAIL
   "Fatal - Failed to enable the S-CSCF registrar with error %s.",
   "The S-CSCF registar could not be initialized.",
   "The application will exit and restart until the problem is fixed.",
-  "Check the configuration in /etc/clearwater/config."
+  "The restart should clear the issue."
 );
 
 static const PDLog1<const char*> CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL
@@ -235,7 +234,7 @@ static const PDLog1<const char*> CL_SPROUT_REG_SUBSCRIBER_HAND_FAIL
   PDLogBase::CL_SPROUT_ID + 16,
   PDLOG_ERR,
   "Fatal - Failed to register the SUBSCRIBE handlers with the SIP stack %s.",
-  "The Application subscription module could not be loaded.",
+  "The application subscription module could not be loaded.",
   "The application will exit and restart until the problem is fixed.",
   "The restart should clear the issue."
 );
@@ -246,8 +245,9 @@ static const PDLog CL_SPROUT_S_CSCF_INIT_FAIL
   PDLOG_ERR,
   "Fatal - The S-CSCF service failed to initialize.",
   "The S-CSCF did not initialize.",
-  "The S-CSCF proxy is not enabled.",
-  "Check the configuration in the /etc/clearwater/config and correct."
+  "The application will exit and restart until the problem is fixed.",
+  "Ensure that the application has been installed correctly and that it "
+  "has valid configuration."
 );
 
 static const PDLog CL_SPROUT_I_CSCF_INIT_FAIL
@@ -257,7 +257,8 @@ static const PDLog CL_SPROUT_I_CSCF_INIT_FAIL
   "Fatal - The I-CSCF service failed to initialize.",
   "The I-CSCF service did not initialize.",
   "The application will exit and restart until the problem is fixed.",
-  "Check the configuration in /etc/clearwater/config"
+  "Ensure that the application has been installed correctly and that it "
+  "has valid configuration."
 );
 
 static const PDLog1<const char*> CL_SPROUT_SIP_STACK_INIT_FAIL
@@ -267,8 +268,8 @@ static const PDLog1<const char*> CL_SPROUT_SIP_STACK_INIT_FAIL
   "Fatal - The SIP stack failed to initialize with error, %s.",
   "The SIP interfaces could not be started.",
   "The application will exit and restart until the problem is fixed.",
-  "(1). Check the configuration on Sprout."
-  "(2). Check the network status and configuration on Sprout."
+  "(1). Check the configuration."
+  "(2). Check the network status and configuration."
 );
 
 static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_FAIL
@@ -277,13 +278,8 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_FAIL
   PDLOG_ERR,
   "An HTTP interface failed to initialize or start in %s with error %d.",
   "An HTTP interface has failed initialization.",
-  "The timeout handlers for the application could not be registered "
-  "with Chronos if the interface is for Chronos. "
-  "Requests to Homestead are affected if the interface is for Homestead.",
-  "(1). Check the configuration in /etc/clearwater/config for hs_hostname "
-  " and chronos_hostname."
-  "(2). Insure that Homestead and Chronos are both running."
-  "(3). Check the network status and configuration." 
+  "The application will exit and restart until the problem is fixed.",
+  "Check the network status and configuration." 
 );
 
 static const PDLog CL_SPROUT_ENDED
@@ -291,11 +287,11 @@ static const PDLog CL_SPROUT_ENDED
   PDLogBase::CL_SPROUT_ID + 21,
   PDLOG_ERR,
   "The application is ending -- Shutting down.",
-  "The application has been terminated by Monit or has exited.",
+  "The application has been terminated by monit or has exited.",
   "Application services are no longer available.",
-  "(1). This occurs normally when Sprout is stopped. "
-  "(2). If the Application failed to respond to Monit queries in a "
-  "timely manner, Monit restarts the application. "
+  "(1). This occurs normally when the application is stopped. "
+  "(2). If the application failed to respond to monit queries in a "
+  "timely manner, monit restarts the application. "
   " This can occur if the application is busy or unresponsive."
 );
 
@@ -305,9 +301,9 @@ static const PDLog2<const char*, int> CL_SPROUT_HTTP_INTERFACE_STOP_FAIL
   PDLOG_ERR,
   "The HTTP interfaces encountered an error when stopping the HTTP stack in "
   "%s with error %d.",
-  "When the Application was exiting it encountered an error when shutting "
+  "When the application was exiting it encountered an error when shutting "
   "down the HTTP stack.",
-  "Not critical as the Application is exiting anyway.",
+  "Not critical as the application is exiting anyway.",
   "None."
 );
 
@@ -325,11 +321,11 @@ static const PDLog CL_SPROUT_SIP_DEADLOCK
 (
   PDLogBase::CL_SPROUT_ID + 24,
   PDLOG_ERR,
-  "Fatal - The Application detected a fatal software deadlock "
+  "Fatal - The application detected a fatal software deadlock "
   "affecting SIP communication.",
-  "An internal Application software error has been detected.",
+  "An internal application software error has been detected.",
   "A SIP interface has failed.",
-  "The Sprout node should automatically be restarted and the problem cleared."
+  "The application will exit and restart until the problem is fixed."
 );
 
 static const PDLog2<int, const char*> CL_SPROUT_SIP_UDP_INTERFACE_START_FAIL
@@ -337,7 +333,7 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_UDP_INTERFACE_START_FAIL
   PDLogBase::CL_SPROUT_ID + 25,
   PDLOG_ERR,
   "Failed to start a SIP UDP interface for port %d with error %s.",
-  "The Application could not start a UDP interface.",
+  "The application could not start a UDP interface.",
   "This may affect call processing.",
   "(1). Check the configuration. "
   "(2). Check the network status and configuration."
@@ -351,7 +347,7 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_START_FAIL
   "Failed to start a SIP TCP connection.",
   "This may affect call processing.",
   "(1). Check the configuration. "
-  "(2). Check the network status and configration."
+  "(2). Check the network status and configuration."
 );
 
 static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_SERVICE_START_FAIL
@@ -359,9 +355,9 @@ static const PDLog2<int, const char*> CL_SPROUT_SIP_TCP_SERVICE_START_FAIL
   PDLogBase::CL_SPROUT_ID + 27,
   PDLOG_ERR,
   "Failed to start a SIP TCP service for port %d with error %s.",
-  "The Application could not start a TCP service.",
+  "The application could not start a TCP service.",
   "This may affect call processing.",
-  "(1). Check to see that the scscf_port or icscf_port in the "
+  "(1). Check to see that the ports in the "
   "/etc/clearwater/config file do not conflict with any other service. "
   "(2). Check the network status and configuration."
 );
@@ -371,10 +367,10 @@ static const PDLog CL_SPROUT_BGCF_INIT_FAIL
   PDLogBase::CL_SPROUT_ID + 28,
   PDLOG_ERR,
   "Failed to start BGCF service.",
-  "The Application could not start the BGCF service.",
-  "This may affect call processing.",
-  "Check the BGCF configuration in /etc/clearwater/bgcf.json "
-  "if the feature is desired. "
+  "The application could not start the BGCF service.",
+  "The application will exit and restart until the problem is fixed.",
+  "Ensure that the application has been installed correctly and that it "
+  "has valid configuration."
 );
 
 static const PDLog1<int> CL_SPROUT_S_CSCF_END
@@ -384,7 +380,7 @@ static const PDLog1<int> CL_SPROUT_S_CSCF_END
   "The S-CSCF service on port %d has ended.",
   "The S-CSCF service is no longer available.",
   "Call processing is no longer available.",
-  "Monit will restart the application unless Sprout has been stopped. "
+  "Monit will restart the application."
 );
 
 static const PDLog1<int> CL_SPROUT_I_CSCF_END
@@ -394,7 +390,7 @@ static const PDLog1<int> CL_SPROUT_I_CSCF_END
   "The I-CSCF service on port %d has ended.",
   "The I-CSCF service is no longer available.",
   "Call processing is no longer available.",
-  "Monit will restart Sprout unless Sprout has been stopped. "
+  "Monit will restart the application."
 );
 
 static const PDLog1<int> CL_SPROUT_S_CSCF_AVAIL
@@ -413,8 +409,8 @@ static const PDLog1<int> CL_SPROUT_S_CSCF_INIT_FAIL2
   PDLOG_ERR,
   "The S-CSCF service on port %d failed to initialize.",
   "The S-CSCF service is no longer available.",
-  "Call processing is no longer available.",
-  "Monit will restart Sprout unless Sprout has been stopped. "
+  "The application will exit and restart until the problem is fixed.",
+  "Check the configuration in /etc/clearwater/config."
 );
 
 static const PDLog1<int> CL_SPROUT_I_CSCF_AVAIL
@@ -433,8 +429,8 @@ static const PDLog1<int> CL_SPROUT_I_CSCF_INIT_FAIL2
   PDLOG_ERR,
   "The I-CSCF service on port %d failed to initialize.",
   "The I-CSCF service is no longer available.",
-  "Call processing is no longer available.",
-  "Check the Sprout configuration."
+  "The application will exit and restart until the problem is fixed.",
+  "Check the configuration in /etc/clearwater/config."
 );
 
 #endif

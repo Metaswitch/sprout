@@ -407,7 +407,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       else
       {
-	CL_SPROUT_INVALID_I_CSCF_PORT.log(pj_optarg);
+        CL_SPROUT_INVALID_I_CSCF_PORT.log(pj_optarg);
         LOG_ERROR("I-CSCF port %s is invalid", pj_optarg);
         return -1;
       }
@@ -559,7 +559,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
         }
         else
         {
-	  CL_SPROUT_INVALID_SAS_OPTION.log();
+          CL_SPROUT_INVALID_SAS_OPTION.log();
           LOG_WARNING("Invalid --sas option, SAS disabled");
         }
       }
@@ -826,8 +826,10 @@ void exception_handler(int sig)
   // Reset the signal handlers so that another exception will cause a crash.
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, SIG_DFL);
+
   CL_SPROUT_CRASH.log(strsignal(sig));
   closelog();
+
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
@@ -1063,6 +1065,7 @@ int main(int argc, char* argv[])
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
   CL_SPROUT_STARTED.log();
+
   status = init_logging_options(argc, argv, &opt);
 
   if (status != PJ_SUCCESS)
@@ -1617,7 +1620,9 @@ int main(int argc, char* argv[])
     catch (HttpStack::Exception& e)
     {
       CL_SPROUT_HTTP_INTERFACE_FAIL.log(e._func, e._rc);
+      closelog();
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
+      return 1;
     }
   }
 
