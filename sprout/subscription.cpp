@@ -332,7 +332,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
-    // Can't log the public ID as the subscribe has failed too early
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -370,7 +369,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting subscribe request from emergency registration");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
-    // Can't log the public ID as the subscribe has failed too early
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
@@ -581,7 +579,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     {
       // LCOV_EXCL_START
       SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-      std::string error_msg = "Failed to send NOTIFY - error code: " + std::to_string(status);
+      std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
       event.add_var_param(error_msg);
       SAS::report_event(event);
       // LCOV_EXCL_STOP

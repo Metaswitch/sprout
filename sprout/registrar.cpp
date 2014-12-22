@@ -493,12 +493,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     LOG_ERROR("Rejecting register request using invalid URI scheme");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
-    // Can't log the public ID as the REGISTER has failed too early
-    std::string public_id = "UNKNOWN";
-    std::string error_msg = "Rejecting register request using invalid URI scheme";
-    event.add_var_param(public_id);
-    event.add_var_param(error_msg);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -603,10 +598,9 @@ void process_register_request(pjsip_rx_data* rdata)
 
     LOG_ERROR("Rejecting register request with invalid public/private identity");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting register request with invalid public/private identity";
-    event.add_var_param(error_msg);
+    event.add_var_param(private_id);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -665,10 +659,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
   if (reject_with_400)
   {
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting register request with invalid contact header";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -685,10 +677,8 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     LOG_ERROR("Rejecting register request as attempting to deregister an emergency registration");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::DEREGISTER_FAILED_EMERGENCY, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting deregister request for emergency registrations";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -731,10 +721,8 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_REGSTORE, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Unable to access Registration Store";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     // LCOV_EXCL_STOP
@@ -796,10 +784,8 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - can't see how this could ever happen
     LOG_ERROR("Failed to add RFC 5626 headers");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_5636, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Failed to add RFC 5636 headers";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
