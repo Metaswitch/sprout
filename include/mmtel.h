@@ -124,7 +124,7 @@ private:
   unsigned int _media_conditions;
   int _late_redirect_fork_id;
   TimerID _no_reply_timer;
-  std::unordered_set<std::string> _cdiv_targets;
+  bool _diverted;
 
   pjsip_status_code apply_ob_call_barring(pjsip_msg* req);
   pjsip_status_code apply_ib_call_barring(pjsip_msg* req);

@@ -82,6 +82,7 @@ get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
         sas_server=0.0.0.0
+        signaling_dns_server=127.0.0.1
         . /etc/clearwater/config
 
         # Set the upsteam hostname to the sprout hostname only if it hasn't
@@ -118,6 +119,8 @@ get_settings()
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
         [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
+        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
+        [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
 #
@@ -148,17 +151,19 @@ do_start()
                      --routing-proxy $upstream_hostname,$upstream_port,$upstream_connections,$upstream_recycle_connections
                      $ralf_arg
                      --sas $sas_server,$NAME@$public_hostname
+                     --dns-server $signaling_dns_server
                      --pjsip-threads $num_pjsip_threads
                      --worker-threads $num_worker_threads
                      -a $log_directory
                      -F $log_directory
                      -L $log_level
+                     $target_latency_us_arg
                      $ibcf_arg
                      $billing_cdf_arg"
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
 
-        start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend

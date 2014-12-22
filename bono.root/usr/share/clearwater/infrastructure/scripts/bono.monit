@@ -38,18 +38,22 @@
 
 # Set up the monit configuration for bono with the right IP addresses and ports
 cat > /etc/monit/conf.d/bono.monit <<EOF
-# Poll every 10 seconds
-set daemon 10
-
 # Check the server's public interfaces.  We put this first so that we process
 # failed polls (and maybe kill the server) before we process the restart.
+
 check program poll_bono with path "/usr/share/clearwater/bin/poll_bono.sh"
-  if status != 0 for 2 cycles then exec "/etc/init.d/bono abort"
+
+  if status != 0 for 2 cycles
+     then exec "/etc/init.d/bono abort"
+
 
 # Monitor the server's PID file and check its memory usage.
+
 check process bono pidfile /var/run/bono.pid
+
   start program = "/etc/init.d/bono start"
   stop program = "/etc/init.d/bono stop"
+
   if memory is greater than 80% for 3 cycles
      then exec "/etc/init.d/bono abort-restart"
 EOF

@@ -106,7 +106,9 @@ enum OptionTypes
   OPT_MAX_CALL_LIST_LENGTH,
   OPT_MEMENTO_THREADS,
   OPT_CALL_LIST_TTL,
-  OPT_ALARMS_ENABLED
+  OPT_ALARMS_ENABLED,
+  OPT_DNS_SERVER,
+  OPT_TARGET_LATENCY_US
 };
 
 
@@ -132,10 +134,11 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",               required_argument, 0, 'H'},
   { "record-routing-model", required_argument, 0, 'C'},
   { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "target-latency-us", required_argument, 0, 'Y'},
+  { "target-latency-us", required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",              required_argument, 0, 'X'},
   { "chronos",           required_argument, 0, 'K'},
   { "ralf",              required_argument, 0, 'G'},
+  { "dns-server",        required_argument, 0, OPT_DNS_SERVER },
   { "enum",              required_argument, 0, 'E'},
   { "enum-suffix",       required_argument, 0, 'x'},
   { "enum-file",         required_argument, 0, 'f'},
@@ -164,7 +167,7 @@ const static struct pj_getopt_option long_opt[] =
   { NULL,                0, 0, 0}
 };
 
-static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:Y:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
+static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
 
 static sem_t term_sem;
 
@@ -239,6 +242,7 @@ static void usage(void)
        "                            If 'pcscf,icscf,as', it also Record-Routes between every AS.\n"
        " -G, --ralf <server>        Name/IP address of Ralf (Rf) billing server.\n"
        " -X, --xdms <server>        Name/IP address of XDM server\n"
+       "     --dns-server <server>  IP address of the DNS server to use (defaults to 127.0.0.1)\n"
        " -E, --enum <server>        Name/IP address of ENUM server (can't be enabled at same\n"
        "                            time as -f)\n"
        " -x, --enum-suffix <suffix> Suffix appended to ENUM domains (default: .e164.arpa)\n"
@@ -255,7 +259,7 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
-       " -Y, --target-latency-us <usecs>\n"
+       "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
@@ -644,7 +648,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
-    case 'Y':
+    case OPT_TARGET_LATENCY_US:
       options->target_latency_us = atoi(pj_optarg);
       if (options->target_latency_us <= 0)
       {
@@ -741,6 +745,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_ALARMS_ENABLED:
       options->alarms_enabled = PJ_TRUE;
       LOG_INFO("SNMP alarms are enabled");
+      break;
+
+    case OPT_DNS_SERVER:
+      options->dns_server = std::string(pj_optarg);
+      LOG_INFO("Using DNS server %s", pj_optarg);
       break;
 
     case 'h':
@@ -1038,12 +1047,14 @@ int main(int argc, char* argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
+  opt.dns_server = "127.0.0.1";
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
   opt.max_call_list_length = 0;
   opt.memento_threads = 25;
   opt.call_list_ttl = 604800;
   opt.alarms_enabled = PJ_FALSE;
+  opt.target_latency_us = 100000;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1267,7 +1278,7 @@ int main(int argc, char* argv[])
                                  MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver("127.0.0.1");
+  dns_resolver = new DnsCachedResolver(opt.dns_server);
   sip_resolver = new SIPResolver(dns_resolver);
 
   // Initialize the PJSIP stack and associated subsystems.

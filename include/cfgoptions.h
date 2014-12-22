@@ -88,6 +88,7 @@ struct options
   std::string            store_servers;
   std::string            remote_store_servers;
   std::string            ralf_server;
+  std::string            dns_server;
   std::string            enum_server;
   std::string            enum_suffix;
   std::string            enum_file;
