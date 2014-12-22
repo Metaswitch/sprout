@@ -114,7 +114,8 @@ LDFLAGS += -lmemcached \
            -levent \
            -levent_pthreads \
            -lcurl \
-           -lsas
+           -lsas \
+           -lboost_filesystem
 
 LDFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
