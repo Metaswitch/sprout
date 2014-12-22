@@ -616,7 +616,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
          (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
         PJUtils::check_route_headers(rdata)))
   {
-    LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
+    LOG_DEBUG("Not processing subscription request not targeted at this domain or node");
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
     SAS::report_event(event);
     return PJ_FALSE;
@@ -633,7 +633,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
   {
     // The Event header is missing or doesn't match "reg"
-    LOG_DEBUG("Rejecting subscription request with invalid event header");
+    LOG_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
     SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
     if (event)
@@ -665,7 +665,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     if (!found)
     {
       // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-      LOG_DEBUG("Rejecting subscription request with invalid accept header");
+      LOG_DEBUG("Not processing subscription request that doesn't "
+                "accept reginfo notifications");
       char accept_hdr_str[256];
       memset(accept_hdr_str, 0, 256);
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);
