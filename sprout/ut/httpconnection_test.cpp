@@ -83,7 +83,7 @@ class HttpConnectionTest : public BaseTest
     fakecurl_responses.clear();
     fakecurl_responses["http://10.42.42.42:80/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
     fakecurl_responses["http://10.42.42.42:80/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = 503;
     fakecurl_responses["http://10.42.42.42:80/blah/blah/recv_error"] = CURLE_RECV_ERROR;
     fakecurl_responses["http://10.42.42.42:80/up/up/up"] = "<message>ok, whatever...</message>";
     fakecurl_responses["http://10.42.42.42:80/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
