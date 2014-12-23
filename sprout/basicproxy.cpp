@@ -1071,6 +1071,18 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
         LOG_DEBUG("%s - All UAC responded", name());
         on_final_response();
       }
+      else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 600))
+      {
+        // From RFC 3261, section 16.7, point 5:
+        // > If a 6xx response is received, it is not immediately forwarded,
+        // > but the stateful proxy SHOULD cancel all client pending
+        // > transactions as described in Section 10, and it MUST NOT create
+        // > any new branches in this context.
+
+        // Cancel any pending transactions, but don't dissociate so that we wait
+        // for all transactions to complete before forwarding the response.
+        cancel_pending_uac_tsx(status_code, false);
+      }
     }
 
     exit_context();
@@ -1315,7 +1327,8 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
 ///
 int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 {
-  // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
+  // See RFC 3261, section 16.7, point 6 for full logic for choosing the best response.
+  // Our order is: (best) 600, ..., 699, 300, ..., 407, 409, ..., 599, 408 (worst).
   LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
   if (sc1 == sc2)
   {
@@ -1332,16 +1345,23 @@ int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
     // A non-timeout response is always better than a timeout.
     return 1;
   }
-  else if (sc2 == PJSIP_SC_REQUEST_TERMINATED)
+  else if (PJSIP_IS_STATUS_IN_CLASS(sc1, 600))
   {
-    // Request terminated is always better than anything else because
-    // this should only happen if transaction is CANCELLED by originator
-    // and this will be the expected response.
-    return -1;
+    if (PJSIP_IS_STATUS_IN_CLASS(sc2, 600))
+    {
+      // Both 6xx series - compare directly.
+      return (sc1 < sc2) ? 1 : -1;
+    }
+    else
+    {
+      // sc1 is 6xx but sc2 is not - sc1 is better
+      return 1;
+    }
   }
-  else if (sc1 == PJSIP_SC_REQUEST_TERMINATED)
+  else if (PJSIP_IS_STATUS_IN_CLASS(sc2, 600))
   {
-    return 1;
+    // sc2 is 6xx and we know sc1 is not - sc2 is better
+    return -1;
   }
   // Default behaviour is to favour the lowest number.
   else if (sc1 < sc2)
