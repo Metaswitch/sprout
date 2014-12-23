@@ -65,24 +65,19 @@ bool AvStore::set_av(const std::string& impi,
   std::string data = writer.write(*av);
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
-  std::string operation = "SET";
   if (status != Store::Status::OK)
   {
     // LCOV_EXCL_START
-    std::string error_msg = "Failed to write Authentication Vector for private_id " + impi;
-    LOG_ERROR(error_msg.c_str());
-
-    SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param(operation);
-    event.add_var_param(error_msg);
+    LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
+    SAS::Event event(trail, SASEvent::AVSTORE_SET_FAILURE, 0);
+    event.add_var_param(impi);
     SAS::report_event(event);
 
     return false;
     // LCOV_EXCL_STOP
   }
 
-  SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-  event.add_var_param(operation);
+  SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
   event.add_var_param(impi);
   SAS::report_event(event);
 
@@ -98,7 +93,6 @@ Json::Value* AvStore::get_av(const std::string& impi,
   std::string key = impi + '\\' + nonce;
   std::string data;
   Store::Status status = _data_store->get_data("av", key, data, cas, trail);
-  std::string operation = "GET";
 
   if (status == Store::Status::OK)
   {
@@ -114,17 +108,14 @@ Json::Value* AvStore::get_av(const std::string& impi,
       av = NULL;
     }
 
-    SAS::Event event(trail, SASEvent::AVSTORE_SUCCESS, 0);
-    event.add_var_param(operation);
+    SAS::Event event(trail, SASEvent::AVSTORE_GET_SUCCESS, 0);
     event.add_var_param(impi);
     SAS::report_event(event);
   }
   else
   {
-    std::string error_msg = "Failed to get Authentication Vector for private_id " + impi;
-    SAS::Event event(trail, SASEvent::AVSTORE_FAILURE, 0);
-    event.add_var_param(operation);
-    event.add_var_param(error_msg);
+    SAS::Event event(trail, SASEvent::AVSTORE_GET_FAILURE, 0);
+    event.add_var_param(impi);
     SAS::report_event(event);
   }
 
