@@ -155,7 +155,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
         // explicitly block because messages can be legitimately routed by an
         // S-CSCF back to itself (with subtly changed headers) for various
         // reasons.  Max Forwards checking should catch these instances.
-        sip_uri = (pjsip_sip_uri*)scscf_uri;
+        pjsip_sip_uri *sip_uri = (pjsip_sip_uri*)scscf_uri;
 
         if ((PJUtils::is_uri_local(scscf_uri) || PJUtils::is_home_domain(scscf_uri)) &&
             (sip_uri->port == _port))

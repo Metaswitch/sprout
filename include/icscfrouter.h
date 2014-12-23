@@ -55,7 +55,8 @@ public:
   ICSCFRouter(HSSConnection* hss,
               SCSCFSelector* scscf_selector,
               SAS::TrailId trail,
-              ACR* acr);
+              ACR* acr,
+              int port);
   virtual ~ICSCFRouter();
 
   int get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_uri);
@@ -108,6 +109,7 @@ public:
                 SCSCFSelector* scscf_selector,
                 SAS::TrailId trail,
                 ACR* acr,
+                int port,
                 const std::string& impi,
                 const std::string& impu,
                 const std::string& visited_network,
@@ -141,6 +143,7 @@ public:
                  SCSCFSelector* scscf_selector,
                  SAS::TrailId trail,
                  ACR* acr,
+                 int port,
                  const std::string& impu,
                  bool originating);
   ~ICSCFLIRouter();
