@@ -627,6 +627,53 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSCapsNoMatch)
 }
 
 
+TEST_F(ICSCFSproutletTest, RouteRegisterICSCFLoop)
+{
+  // Tests routing of REGISTER requests when the HSS responds with
+  // a register that points back to the ICSCF sproutlet.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS response for the user registration status query using
+  // a default private user identity.  The response returns capabilities
+  // rather than an S-CSCF name.
+  _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:homedomain:" + std::to_string(stack_data.icscf_port) + ";transport=TCP\"}");
+
+  // Inject a REGISTER request.
+  Message msg1;
+  msg1._method = "REGISTER";
+  msg1._requri = "sip:homedomain";
+  msg1._to = msg1._from;        // To header contains AoR in REGISTER requests.
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"";
+  inject_msg(msg1.get_request(), tp);
+
+  // S-CSCF return resolves to the local domain and I-CSCF port,s, so the REGISTER is
+  // rejected with a "Loop detected" error.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "1.2.3.4", 49152, tdata);
+  RespMatcher r1(482);
+  r1.matches(tdata->msg);
+
+  free_txdata();
+
+  _hss_connection->delete_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=homedomain&auth-type=REG");
+
+  delete tp;
+}
+
+
 TEST_F(ICSCFSproutletTest, RouteRegisterSCSCFReturnedCAPAB)
 {
   // Tests routing of REGISTER requests when the S-CSCF returned by the HSS
@@ -1930,7 +1977,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteCancel)
   msg2._unique = msg1._unique;    // Make sure branch and call-id are same as the INVITE
   inject_msg(msg2.get_request(), tp);
 
-  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as 
+  // Expect the 200 OK response to the CANCEL, but no forwarded CANCEL as
   // no provisional response has yet been received.
   ASSERT_EQ(1, txdata_count());
 

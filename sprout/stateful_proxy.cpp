@@ -2630,6 +2630,7 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
                                                       scscf_selector,
                                                       trail(),
                                                       _icscf_acr,
+                                                      stack_data.icscf_port,
                                                       public_id,
                                                       false);
 
