@@ -1071,7 +1071,8 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
         LOG_DEBUG("%s - All UAC responded", name());
         on_final_response();
       }
-      else if (PJSIP_IS_STATUS_IN_CLASS(status_code, 600))
+      else if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
+               (PJSIP_IS_STATUS_IN_CLASS(status_code, 600)))
       {
         // From RFC 3261, section 16.7, point 5:
         // > If a 6xx response is received, it is not immediately forwarded,
