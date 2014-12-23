@@ -69,11 +69,11 @@ MementoPlugin sproutlet_plugin;
 
 
 MementoPlugin::MementoPlugin() :
+  _cass_comm_alarm(NULL),
+  _cass_comm_monitor(NULL),
   _call_list_store(NULL),
   _memento(NULL),
-  _memento_sproutlet(NULL),
-  _cass_comm_alarm(NULL),
-  _cass_comm_monitor(NULL)
+  _memento_sproutlet(NULL)
 {
 }
 
