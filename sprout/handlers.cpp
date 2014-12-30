@@ -495,12 +495,12 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
     std::string state;
     LOG_INFO("ID %s", aor_id.c_str());
 
-    if (_cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, 0) == HTTP_OK)
+    if (_cfg->_hss->get_registration_data(aor_id, state, ifc_map, uris, trail()) == HTTP_OK)
     {
       RegistrationUtils::deregister_with_application_servers(ifc_map[aor_id],
                                                              current_store,
                                                              aor_id,
-                                                             0);
+                                                             trail());
     }
   }
 
