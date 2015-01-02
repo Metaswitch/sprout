@@ -1329,7 +1329,11 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
 int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 {
   // See RFC 3261, section 16.7, point 6 for full logic for choosing the best response.
-  // Our order is: (best) 600, ..., 699, 300, ..., 407, 409, ..., 599, 408 (worst).
+  // We also priortize 487 over any 300-599 status code to ensure that after a CANCEL we
+  // get a 487 unless we get a definitive (6xx) response.
+  //
+  // Our order is:
+  // (best) 600, ..., 699, 487, 300, ..., 407, 409, ..., 486, 488, ..., 599, 408 (worst).
   LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
   if (sc1 == sc2)
   {
@@ -1362,6 +1366,15 @@ int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
   else if (PJSIP_IS_STATUS_IN_CLASS(sc2, 600))
   {
     // sc2 is 6xx and we know sc1 is not - sc2 is better
+    return -1;
+  }
+  // After 6xx, 487 takes precedence over anything else.
+  else if (sc1 == PJSIP_SC_REQUEST_TERMINATED)
+  {
+    return 1;
+  }
+  else if (sc2 == PJSIP_SC_REQUEST_TERMINATED)
+  {
     return -1;
   }
   // Default behaviour is to favour the lowest number.

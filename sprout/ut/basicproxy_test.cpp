@@ -1652,11 +1652,11 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-  // A 480 response is now forwarded back to the source.
+  // A 487 response is now forwarded back to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher(480).matches(tdata->msg);
+  RespMatcher(487).matches(tdata->msg);
   free_txdata();
 
   // Send an ACK to complete the UAS transaction.
