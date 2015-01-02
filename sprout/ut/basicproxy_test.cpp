@@ -1288,7 +1288,7 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
                                         "1.2.3.4",
                                         49152);
 
-  // Add two test targets for bob@homedomain, both with a URI plus a path with a
+  // Add four test targets for bob@homedomain, all with a URI plus a path with a
   // single proxy.
   _basic_proxy->add_test_target("sip:bob@homedomain",
                                 "sip:bob@node1.homedomain;transport=TCP",
@@ -1298,6 +1298,9 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
                                 std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
   _basic_proxy->add_test_target("sip:bob@homedomain",
                                 "sip:bob@node3.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node4.homedomain;transport=TCP",
                                 std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
 
   // Inject a request with a Route header referring to this node and a
@@ -1312,8 +1315,8 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
   inject_msg(msg1.get_request(), tp);
 
-  // Expecting 100 Trying and three forwarded INVITEs
-  ASSERT_EQ(4, txdata_count());
+  // Expecting 100 Trying and four forwarded INVITEs
+  ASSERT_EQ(5, txdata_count());
 
   // Check the 100 Trying.
   tdata = current_txdata();
@@ -1349,12 +1352,23 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
   EXPECT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
             get_headers(tdata3->msg, "Route"));
 
-  // Send 100 Trying responses from all three nodes, and check they are absorbed.
+  // Catch the request forked to node3.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata4 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata4);
+  ReqMatcher("INVITE").matches(tdata4->msg);
+  EXPECT_EQ("sip:bob@node4.homedomain;transport=TCP",
+            str_uri(tdata4->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata4->msg, "Route"));
+
+  // Send 100 Trying responses from all four nodes, and check they are absorbed.
   inject_msg(respond_to_txdata(tdata1, 100));
   ASSERT_EQ(0, txdata_count());
   inject_msg(respond_to_txdata(tdata2, 100));
   ASSERT_EQ(0, txdata_count());
   inject_msg(respond_to_txdata(tdata3, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata4, 100));
   ASSERT_EQ(0, txdata_count());
 
   // Send a 480 response from the first target, and check the proxy absorbs
@@ -1374,16 +1388,23 @@ TEST_F(BasicProxyTest, ForkedRequestFail)
 
   // Send a 404 Not Found reponse from the third target.
   inject_msg(respond_to_txdata(tdata3, 404));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Send a 604 Not Found reponse from the fourth target.
+  inject_msg(respond_to_txdata(tdata4, 604));
   ASSERT_EQ(2, txdata_count());
   tdata = current_txdata();
   ReqMatcher("ACK").matches(tdata->msg);
   free_txdata();
 
-  // The proxy sends the best response (the 404) to the source.
+  // The proxy sends the best response (the 604) to the source.
   ASSERT_EQ(1, txdata_count());
   tdata = current_txdata();
   tp->expect_target(tdata);
-  RespMatcher(404).matches(tdata->msg);
+  RespMatcher(604).matches(tdata->msg);
   free_txdata();
 
   // Send an ACK to complete the UAS transaction.
@@ -1636,6 +1657,139 @@ TEST_F(BasicProxyTest, ForkedRequestCancel)
   tdata = current_txdata();
   tp->expect_target(tdata);
   RespMatcher(487).matches(tdata->msg);
+  free_txdata();
+
+  // Send an ACK to complete the UAS transaction.
+  msg1._method = "ACK";
+  inject_msg(msg1.get_request(), tp);
+
+  _basic_proxy->remove_test_targets("sip:bob@homedomain");
+
+  delete tp;
+}
+
+
+TEST_F(BasicProxyTest, ForkedRequest6xx)
+{
+  // Tests forking of request to a home domain RequestURI where one
+  // downstream transaction fails with 6xx and we cancel all the others.
+
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.scscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Add three test targets for bob@homedomain, both with a URI plus a path with a
+  // single proxy.
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node1.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy1.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node2.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+  _basic_proxy->add_test_target("sip:bob@homedomain",
+                                "sip:bob@node3.homedomain;transport=TCP",
+                                std::list<std::string>(1, "sip:proxy2.homedomain;transport=TCP;lr"));
+
+  // Inject a request with a Route header referring to this node and a
+  // RequestURI with a URI in the home domain.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:bob@homedomain;transport=TCP";
+  msg1._from = "alice";
+  msg1._to = "bob";
+  msg1._todomain = "awaydomain";
+  msg1._via = tp->to_string(false);
+  msg1._route = "Route: <sip:127.0.0.1;transport=TCP;lr>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and three forwarded INVITEs
+  ASSERT_EQ(4, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  EXPECT_EQ("To: <sip:bob@awaydomain>", get_headers(tdata->msg, "To")); // No tag
+  free_txdata();
+
+  // Catch the request forked to node1.homedomain via proxy1.homedomain.
+  pjsip_tx_data* tdata1 = pop_txdata();
+  expect_target("TCP", "10.10.10.1", 5060, tdata1);
+  ReqMatcher("INVITE").matches(tdata1->msg);
+  EXPECT_EQ("sip:bob@node1.homedomain;transport=TCP",
+            str_uri(tdata1->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy1.homedomain;transport=TCP;lr>",
+            get_headers(tdata1->msg, "Route"));
+
+  // Catch the request forked to node2.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata2 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata2);
+  ReqMatcher("INVITE").matches(tdata2->msg);
+  EXPECT_EQ("sip:bob@node2.homedomain;transport=TCP",
+            str_uri(tdata2->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata2->msg, "Route"));
+
+  // Catch the request forked to node3.homedomain via proxy2.homedomain.
+  pjsip_tx_data* tdata3 = pop_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata3);
+  ReqMatcher("INVITE").matches(tdata3->msg);
+  EXPECT_EQ("sip:bob@node3.homedomain;transport=TCP",
+            str_uri(tdata3->msg->line.req.uri));
+  EXPECT_EQ("Route: <sip:proxy2.homedomain;transport=TCP;lr>",
+            get_headers(tdata3->msg, "Route"));
+
+  // Send 100 Trying responses from all three nodes, and check they are absorbed.
+  inject_msg(respond_to_txdata(tdata1, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata2, 100));
+  ASSERT_EQ(0, txdata_count());
+  inject_msg(respond_to_txdata(tdata3, 100));
+  ASSERT_EQ(0, txdata_count());
+
+  // Send a 600 response from the first target and expect an ACK.
+  inject_msg(respond_to_txdata(tdata1, 600));
+  ASSERT_EQ(3, txdata_count());
+  tdata = current_txdata();
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Also expect CANCEL at node2.homedomain.  Send a 200 OK.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata);
+  ReqMatcher("CANCEL").matches(tdata->msg);
+  inject_msg(respond_to_current_txdata(200));
+
+  // Also expect CANCEL at node3.homedomain.  Send a 200 OK.
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata);
+  ReqMatcher("CANCEL").matches(tdata->msg);
+  inject_msg(respond_to_current_txdata(200));
+
+  // Send 487 response from node2.homedomain.  Check that this is ACKed.
+  inject_msg(respond_to_txdata(tdata2, 487));
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // Send 604 response from node3.homedomain.  Check that this is ACKed.
+  inject_msg(respond_to_txdata(tdata3, 604));
+  ASSERT_EQ(2, txdata_count());
+  tdata = current_txdata();
+  expect_target("TCP", "10.10.10.2", 5060, tdata);
+  ReqMatcher("ACK").matches(tdata->msg);
+  free_txdata();
+
+  // The proxy sends the best response (the 600) to the source.
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher(600).matches(tdata->msg);
   free_txdata();
 
   // Send an ACK to complete the UAS transaction.
