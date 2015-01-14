@@ -1180,7 +1180,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
   if (is_user_registered(public_id))
   {
-    // User is registered, so look up bindings.
+    // User is registered, so look up bindings.  Determine the canonical public
+    // ID, and look up the set of associated URIs on the HSS.
     std::vector<std::string> uris;
     bool success = get_associated_uris(public_id, uris);
 
@@ -1204,6 +1205,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
     if ((aor_data != NULL) && (!(aor_data)->bindings().empty()))
     {
+      // Retrieved bindings from the store so filter them to an ordered list
+      // of targets.
       filter_bindings_to_targets(aor,
                                  aor_data,
                                  req,
