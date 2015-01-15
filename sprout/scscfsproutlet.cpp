@@ -1220,9 +1220,8 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
     {
       // Subscriber is registered, but there are no bindings in the store.
       // This indicates an error case - it is likely that de-registration
-      // has failed.  Make an error and SAS log, the call will be rejected
-      // with a 480.
-      LOG_ERROR("Public ID %s registered, but 0 bindings in store",
+      // has failed.  Make a SAS log, the call will be rejected with a 480.
+      LOG_DEBUG("Public ID %s registered, but 0 bindings in store",
                 public_id.c_str());
       SAS::Event event(trail(), SASEvent::SCSCF_NO_BINDINGS, 0);
       event.add_var_param(public_id);
