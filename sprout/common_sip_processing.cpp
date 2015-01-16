@@ -322,9 +322,9 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
     while (err != &rdata->msg_info.parse_err)
     {
       LOG_ERROR("Error parsing header %.*s", (int)err->hname.slen, err->hname.ptr);
-      //SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
-      //event.add_var_param((int)err->hname.slen, err->hname.ptr);
-      //SAS::report_event(event);
+      SAS::Event event(trail, SASEvent::UNPARSEABLE_HEADER, 0);
+      event.add_var_param((int)err->hname.slen, err->hname.ptr);
+      SAS::report_event(event);
       err = err->next;
     }
 
