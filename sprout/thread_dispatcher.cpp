@@ -73,6 +73,7 @@ extern "C" {
 #include "quiescing_manager.h"
 #include "load_monitor.h"
 #include "counter.h"
+#include "sprout_pd_definitions.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -173,6 +174,7 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
     // The queue has not been serviced for sufficiently long to imply that
     // all the worker threads are deadlock, so exit the process so it will be
     // restarted.
+    CL_SPROUT_SIP_DEADLOCK.log();
     LOG_ERROR("Detected worker thread deadlock - exiting");
     abort();
   }
