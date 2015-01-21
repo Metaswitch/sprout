@@ -1175,43 +1175,67 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
                                                         &called_party_id);
   pjsip_msg_add_hdr(req, hdr);
 
-  // Determine the canonical public ID, and look up the set of associated
-  // URIs on the HSS.
-  std::vector<std::string> uris;
-  bool success = get_associated_uris(public_id, uris);
-
+  TargetList targets;
   std::string aor;
-  if (success && (uris.size() > 0))
+
+  if (is_user_registered(public_id))
   {
-    // Take the first associated URI as the AOR.
-    aor = uris.front();
+    // User is registered, so look up bindings.  Determine the canonical public
+    // ID, and look up the set of associated URIs on the HSS.
+    std::vector<std::string> uris;
+    bool success = get_associated_uris(public_id, uris);
+
+    if (success && (uris.size() > 0))
+    {
+      // Take the first associated URI as the AOR.
+      aor = uris.front();
+    }
+    else
+    {
+      // Failed to get the associated URIs from Homestead.  We'll try to
+      // do the registration look-up with the specified target URI - this may
+      // fail, but we'll never misroute the call.
+      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
+      aor = public_id;
+    }
+
+    // Get the bindings from the store and filter/sort them for the request.
+    RegStore::AoR* aor_data = NULL;
+    _scscf->get_bindings(aor, &aor_data, trail());
+
+    if ((aor_data != NULL) && (!(aor_data)->bindings().empty()))
+    {
+      // Retrieved bindings from the store so filter them to an ordered list
+      // of targets.
+      filter_bindings_to_targets(aor,
+                                 aor_data,
+                                 req,
+                                 pool,
+                                 MAX_FORKING,
+                                 targets,
+                                 trail());
+      delete aor_data; aor_data = NULL;
+    }
+    else
+    {
+      // Subscriber is registered, but there are no bindings in the store.
+      // This indicates an error case - it is likely that de-registration
+      // has failed.  Make a SAS log, the call will be rejected with a 480.
+      LOG_DEBUG("Public ID %s registered, but 0 bindings in store",
+                public_id.c_str());
+      SAS::Event event(trail(), SASEvent::SCSCF_NO_BINDINGS, 0);
+      event.add_var_param(public_id);
+      SAS::report_event(event);
+    }
   }
   else
   {
-    // Failed to get the associated URIs from Homestead.  We'll try to
-    // do the registration look-up with the specified target URI - this may
-    // fail, but we'll never misroute the call.
-    LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
-    aor = public_id;
-  }
-
-  // Get the bindings from the store and filter/sort them for the request.
-  RegStore::AoR* aor_data = NULL;
-  _scscf->get_bindings(aor, &aor_data, trail());
-
-  TargetList targets;
-  if ((aor_data != NULL) &&
-      (!aor_data->bindings().empty()))
-  {
-    // Retrieved bindings from the store so filter them to an ordered
-    // list of targets.
-    filter_bindings_to_targets(aor,
-                               aor_data,
-                               req,
-                               pool,
-                               MAX_FORKING,
-                               targets,
-                               trail());
+    // Subscriber is not registered.  This is not necessarily an error case,
+    // but make a SAS log for clarity.  The call will be rejected with a 480.
+    LOG_DEBUG("Public ID %s not registered", public_id.c_str());
+    SAS::Event event(trail(), SASEvent::SCSCF_NOT_REGISTERED, 0);
+    event.add_var_param(public_id);
+    SAS::report_event(event);
   }
 
   if (targets.empty())
@@ -1254,8 +1278,6 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
       _target_bindings.insert(std::make_pair(fork_id, targets[ii].binding_id));
     }
   }
-
-  delete aor_data; aor_data = NULL;
 }
 
 
