@@ -255,6 +255,17 @@ public:
                                  const std::string& s) = 0;
   };
 
+  /// A (de)serializer for the (deprecated) custom binary format.
+  class BinarySerializerDeserializer : public SerializerDeserializer
+  {
+  public:
+    ~BinarySerializerDeserializer() {}
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& aor_id,
+                         const std::string& s);
+  };
+
   /// Provides the interface to the data store. This is responsible for
   /// updating and getting information from the underlying data store. The
   /// classes that call this class are responsible for retrying the get/set

@@ -369,178 +369,16 @@ void RegStore::expire_subscriptions(AoR* aor_data,
 /// Serialize the contents of an AoR.
 std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 {
-  std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
-
-  int num_bindings = aor_data->bindings().size();
-  LOG_DEBUG("Serialize %d bindings", num_bindings);
-  oss.write((const char *)&num_bindings, sizeof(int));
-
-  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
-       i != aor_data->bindings().end();
-       ++i)
-  {
-    LOG_DEBUG("  Binding %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Binding* b = i->second;
-    oss << b->_uri << '\0';
-    oss << b->_cid << '\0';
-    oss.write((const char *)&b->_cseq, sizeof(int));
-    oss.write((const char *)&b->_expires, sizeof(int));
-    oss.write((const char *)&b->_priority, sizeof(int));
-    int num_params = b->_params.size();
-    oss.write((const char *)&num_params, sizeof(int));
-    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
-         i != b->_params.end();
-         ++i)
-    {
-      oss << i->first << '\0' << i->second << '\0';
-    }
-    int num_path_hdrs = b->_path_headers.size();
-    oss.write((const char *)&num_path_hdrs, sizeof(int));
-    for (std::list<std::string>::const_iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    oss << b->_timer_id << '\0';
-    oss << b->_private_id << '\0';
-    oss.write((const char *)&b->_emergency_registration, sizeof(int));
-  }
-
-  int num_subscriptions = aor_data->subscriptions().size();
-  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
-  oss.write((const char *)&num_subscriptions, sizeof(int));
-
-  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
-       i != aor_data->subscriptions().end();
-       ++i)
-  {
-    LOG_DEBUG("  Subscription %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Subscription* s = i->second;
-    oss << s->_req_uri << '\0';
-    oss << s->_from_uri << '\0';
-    oss << s->_from_tag << '\0';
-    oss << s->_to_uri << '\0';
-    oss << s->_to_tag << '\0';
-    oss << s->_cid << '\0';
-    int num_routes = s->_route_uris.size();
-    LOG_DEBUG("    number of routes = %d", num_routes);
-    oss.write((const char *)&num_routes, sizeof(int));
-    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    oss.write((const char *)&s->_expires, sizeof(int));
-  }
-
-  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
-
-  return oss.str();
+  return BinarySerializerDeserializer().serialize_aor(aor_data);
 }
 
 
 /// Deserialize the contents of an AoR
 RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
 {
-  std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
-
-  AoR* aor_data = new AoR(aor_id);
-
-  int num_bindings;
-  iss.read((char *)&num_bindings, sizeof(int));
-  LOG_DEBUG("Deserialize %d bindings", num_bindings);
-
-  for (int ii = 0; ii < num_bindings; ++ii)
-  {
-    // Extract the binding identifier into a string.
-    std::string binding_id;
-    getline(iss, binding_id, '\0');
-    LOG_DEBUG("  Binding %s", binding_id.c_str());
-
-    AoR::Binding* b = aor_data->get_binding(binding_id);
-
-    // Now extract the various fixed binding parameters.
-    getline(iss, b->_uri, '\0');
-    getline(iss, b->_cid, '\0');
-    iss.read((char *)&b->_cseq, sizeof(int));
-    iss.read((char *)&b->_expires, sizeof(int));
-
-    iss.read((char *)&b->_priority, sizeof(int));
-
-    int num_params;
-    iss.read((char *)&num_params, sizeof(int));
-    for (int ii = 0;
-         ii < num_params;
-         ++ii)
-    {
-      std::string pname;
-      std::string pvalue;
-      getline(iss, pname, '\0');
-      getline(iss, pvalue, '\0');
-      b->_params[pname] = pvalue;
-    }
-
-    int num_paths = 0;
-    iss.read((char *)&num_paths, sizeof(int));
-    b->_path_headers.resize(num_paths);
-    LOG_DEBUG("Deserialize %d path headers", num_paths);
-    for (std::list<std::string>::iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
-    {
-      getline(iss, *i, '\0');
-      LOG_DEBUG("  Deserialized path header %s", i->c_str());
-    }
-    getline(iss, b->_timer_id, '\0');
-    getline(iss, b->_private_id, '\0');
-    iss.read((char *)&b->_emergency_registration, sizeof(int));
-  }
-
-  int num_subscriptions;
-  iss.read((char *)&num_subscriptions, sizeof(int));
-  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
-
-  for (int ii = 0; ii < num_subscriptions; ++ii)
-  {
-    // Extract the to tag index into a string.
-    std::string to_tag;
-    getline(iss, to_tag, '\0');
-    LOG_DEBUG("  Subscription %s", to_tag.c_str());
-
-    AoR::Subscription* s = aor_data->get_subscription(to_tag);
-
-    // Now extract the various fixed subscription parameters.
-    getline(iss, s->_req_uri, '\0');
-    getline(iss, s->_from_uri, '\0');
-    getline(iss, s->_from_tag, '\0');
-    getline(iss, s->_to_uri, '\0');
-    getline(iss, s->_to_tag, '\0');
-    getline(iss, s->_cid, '\0');
-
-    int num_routes = 0;
-    iss.read((char *)&num_routes, sizeof(int));
-    LOG_DEBUG("    number of routes = %d", num_routes);
-    s->_route_uris.resize(num_routes);
-    for (std::list<std::string>::iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      getline(iss, *i, '\0');
-    }
-
-    iss.read((char *)&s->_expires, sizeof(int));
-  }
-
-  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
-
-  return aor_data;
+  return BinarySerializerDeserializer().deserialize_aor(aor_id, s);
 }
+
 
 /// Default constructor.
 RegStore::AoR::AoR(std::string sip_uri) :
@@ -809,4 +647,183 @@ std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) cons
   ret.append(unquoted_pub_gruu.ptr, unquoted_pub_gruu.slen);
   ret.append("\"");
   return ret;
+}
+
+//
+// (De)serializer for the binary RegStore format.
+//
+
+RegStore::AoR* RegStore::BinarySerializerDeserializer::
+  deserialize_aor(const std::string& aor_id, const std::string& s)
+{
+  std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
+
+  AoR* aor_data = new AoR(aor_id);
+
+  int num_bindings;
+  iss.read((char *)&num_bindings, sizeof(int));
+  LOG_DEBUG("Deserialize %d bindings", num_bindings);
+
+  for (int ii = 0; ii < num_bindings; ++ii)
+  {
+    // Extract the binding identifier into a string.
+    std::string binding_id;
+    getline(iss, binding_id, '\0');
+    LOG_DEBUG("  Binding %s", binding_id.c_str());
+
+    AoR::Binding* b = aor_data->get_binding(binding_id);
+
+    // Now extract the various fixed binding parameters.
+    getline(iss, b->_uri, '\0');
+    getline(iss, b->_cid, '\0');
+    iss.read((char *)&b->_cseq, sizeof(int));
+    iss.read((char *)&b->_expires, sizeof(int));
+
+    iss.read((char *)&b->_priority, sizeof(int));
+
+    int num_params;
+    iss.read((char *)&num_params, sizeof(int));
+    for (int ii = 0;
+         ii < num_params;
+         ++ii)
+    {
+      std::string pname;
+      std::string pvalue;
+      getline(iss, pname, '\0');
+      getline(iss, pvalue, '\0');
+      b->_params[pname] = pvalue;
+    }
+
+    int num_paths = 0;
+    iss.read((char *)&num_paths, sizeof(int));
+    b->_path_headers.resize(num_paths);
+    LOG_DEBUG("Deserialize %d path headers", num_paths);
+    for (std::list<std::string>::iterator i = b->_path_headers.begin();
+         i != b->_path_headers.end();
+         ++i)
+    {
+      getline(iss, *i, '\0');
+      LOG_DEBUG("  Deserialized path header %s", i->c_str());
+    }
+    getline(iss, b->_timer_id, '\0');
+    getline(iss, b->_private_id, '\0');
+    iss.read((char *)&b->_emergency_registration, sizeof(int));
+  }
+
+  int num_subscriptions;
+  iss.read((char *)&num_subscriptions, sizeof(int));
+  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
+
+  for (int ii = 0; ii < num_subscriptions; ++ii)
+  {
+    // Extract the to tag index into a string.
+    std::string to_tag;
+    getline(iss, to_tag, '\0');
+    LOG_DEBUG("  Subscription %s", to_tag.c_str());
+
+    AoR::Subscription* s = aor_data->get_subscription(to_tag);
+
+    // Now extract the various fixed subscription parameters.
+    getline(iss, s->_req_uri, '\0');
+    getline(iss, s->_from_uri, '\0');
+    getline(iss, s->_from_tag, '\0');
+    getline(iss, s->_to_uri, '\0');
+    getline(iss, s->_to_tag, '\0');
+    getline(iss, s->_cid, '\0');
+
+    int num_routes = 0;
+    iss.read((char *)&num_routes, sizeof(int));
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    s->_route_uris.resize(num_routes);
+    for (std::list<std::string>::iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      getline(iss, *i, '\0');
+    }
+
+    iss.read((char *)&s->_expires, sizeof(int));
+  }
+
+  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
+
+  return aor_data;
+}
+
+
+std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
+{
+  std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
+
+  int num_bindings = aor_data->bindings().size();
+  LOG_DEBUG("Serialize %d bindings", num_bindings);
+  oss.write((const char *)&num_bindings, sizeof(int));
+
+  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+       i != aor_data->bindings().end();
+       ++i)
+  {
+    LOG_DEBUG("  Binding %s", i->first.c_str());
+    oss << i->first << '\0';
+
+    AoR::Binding* b = i->second;
+    oss << b->_uri << '\0';
+    oss << b->_cid << '\0';
+    oss.write((const char *)&b->_cseq, sizeof(int));
+    oss.write((const char *)&b->_expires, sizeof(int));
+    oss.write((const char *)&b->_priority, sizeof(int));
+    int num_params = b->_params.size();
+    oss.write((const char *)&num_params, sizeof(int));
+    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
+         i != b->_params.end();
+         ++i)
+    {
+      oss << i->first << '\0' << i->second << '\0';
+    }
+    int num_path_hdrs = b->_path_headers.size();
+    oss.write((const char *)&num_path_hdrs, sizeof(int));
+    for (std::list<std::string>::const_iterator i = b->_path_headers.begin();
+         i != b->_path_headers.end();
+         ++i)
+    {
+      oss << *i << '\0';
+    }
+    oss << b->_timer_id << '\0';
+    oss << b->_private_id << '\0';
+    oss.write((const char *)&b->_emergency_registration, sizeof(int));
+  }
+
+  int num_subscriptions = aor_data->subscriptions().size();
+  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
+  oss.write((const char *)&num_subscriptions, sizeof(int));
+
+  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    LOG_DEBUG("  Subscription %s", i->first.c_str());
+    oss << i->first << '\0';
+
+    AoR::Subscription* s = i->second;
+    oss << s->_req_uri << '\0';
+    oss << s->_from_uri << '\0';
+    oss << s->_from_tag << '\0';
+    oss << s->_to_uri << '\0';
+    oss << s->_to_tag << '\0';
+    oss << s->_cid << '\0';
+    int num_routes = s->_route_uris.size();
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    oss.write((const char *)&num_routes, sizeof(int));
+    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      oss << *i << '\0';
+    }
+    oss.write((const char *)&s->_expires, sizeof(int));
+  }
+
+  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
+
+  return oss.str();
 }
