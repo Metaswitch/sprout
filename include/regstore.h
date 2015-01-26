@@ -226,6 +226,35 @@ public:
     friend class RegStore;
   };
 
+  /// Interface used by the RegStore to serialize AoRs from C++ objects to the
+  /// format used in the store, and deserialize them.
+  ///
+  /// This interface allows multiple (de)serializers to be defined and for the
+  /// RegStore to use them in a pluggable fashion.
+  class SerializerDeserializer
+  {
+  public:
+    /// Virtual destructor.
+    virtual ~SerializerDeserializer() {};
+
+    /// Serialize an AoR object to the format used in the store.
+    ///
+    /// @param aor_data - The AoR object to serialize.
+    /// @return         - The serialized form.
+    virtual std::string serialize_aor(AoR* aor_data) = 0;
+
+    /// Deserialize some data from the store into an AoR object.
+    ///
+    /// @param aor_id - The primary public ID for the AoR. This is also the key
+    ///                 used used for the record in the store.
+    /// @param s      - The data to deserialize.
+    ///
+    /// @return       - An AoR object, or NULL if the data could not be
+    ///                 deserialized (e.g. because it is corrupt).
+    virtual AoR* deserialize_aor(const std::string& aor_id,
+                                 const std::string& s) = 0;
+  };
+
   /// Provides the interface to the data store. This is responsible for
   /// updating and getting information from the underlying data store. The
   /// classes that call this class are responsible for retrying the get/set
