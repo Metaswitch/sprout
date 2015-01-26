@@ -126,13 +126,26 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
+    LOG_DEBUG("Data store returned a record, CAS = %ld", cas);
     aor_data = deserialize_aor(aor_id, data);
-    aor_data->_cas = cas;
-    LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
 
-    SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
-    event.add_var_param(aor_id);
-    SAS::report_event(event);
+    if (aor_data != NULL)
+    {
+      aor_data->_cas = cas;
+
+      SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
+      event.add_var_param(aor_id);
+      SAS::report_event(event);
+    }
+    else
+    {
+      // Could not deserialize the record. Treat it as not found.
+      LOG_INFO("Failed to deserialize record");
+      SAS::Event event(trail, SASEvent::REGSTORE_DESERIALIZATION_FAILED, 0);
+      event.add_var_param(aor_id);
+      event.add_var_param(data);
+      SAS::report_event(event);
+    }
   }
   else if (status == Store::Status::NOT_FOUND)
   {
@@ -709,10 +722,29 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 {
   std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
 
-  AoR* aor_data = new AoR(aor_id);
-
+  // First off, try to read the number of bindings.
   int num_bindings;
   iss.read((char *)&num_bindings, sizeof(int));
+
+  if (iss.eof())
+  {
+    // Hit an EOF which means the record is corrupt.
+    LOG_INFO("Could not deserialize AOR - EOF reached");
+    return NULL;
+  }
+
+  if (num_bindings > 0xffffff)
+  {
+    // That's a lot of bindings. It is more likely that the data is corrupt, or
+    // that we have been passed a record in a different format.
+    LOG_INFO("Could not deserialize AOR. Got %d bindings suggesting the data"
+             " is corrupt or not in the binary format",
+             num_bindings);
+    return NULL;
+  }
+
+  AoR* aor_data = new AoR(aor_id);
+
   LOG_DEBUG("Deserialize %d bindings", num_bindings);
 
   for (int ii = 0; ii < num_bindings; ++ii)
