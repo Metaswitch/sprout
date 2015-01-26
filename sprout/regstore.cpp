@@ -66,11 +66,27 @@ extern "C" {
 #include "constants.h"
 
 RegStore::RegStore(Store* data_store,
+                   SerializerDeserializer* serializer,
+                   std::vector<SerializerDeserializer*>& deserializers,
                    ChronosConnection* chronos_connection) :
   _chronos(chronos_connection),
   _connector(NULL)
 {
-  _connector = new Connector(data_store);
+  _connector = new Connector(data_store, serializer, deserializers);
+}
+
+
+RegStore::RegStore(Store* data_store,
+                   ChronosConnection* chronos_connection) :
+  _chronos(chronos_connection),
+  _connector(NULL)
+{
+  SerializerDeserializer* serializer = new BinarySerializerDeserializer();
+  std::vector<SerializerDeserializer*> deserializers = {
+    new BinarySerializerDeserializer(),
+  };
+
+  _connector = new Connector(data_store, serializer, deserializers);
 }
 
 
@@ -369,14 +385,36 @@ void RegStore::expire_subscriptions(AoR* aor_data,
 /// Serialize the contents of an AoR.
 std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 {
-  return BinarySerializerDeserializer().serialize_aor(aor_data);
+  return _serializer->serialize_aor(aor_data);
 }
 
 
 /// Deserialize the contents of an AoR
 RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
 {
-  return BinarySerializerDeserializer().deserialize_aor(aor_id, s);
+  AoR* aor = NULL;
+
+  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
+      it != _deserializers.end();
+      ++it)
+  {
+    SerializerDeserializer* deserializer = *it;
+    aor = deserializer->deserialize_aor(aor_id, s);
+
+    if (aor != NULL)
+    {
+      LOG_DEBUG("Deserialized record with '%s' deserializer",
+                deserializer->name().c_str());
+      return aor;
+    }
+    else
+    {
+      LOG_DEBUG("Failed to deserialized record with '%s' deserializer",
+                deserializer->name().c_str());
+    }
+  }
+
+  return aor;
 }
 
 
@@ -561,13 +599,25 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   }
 }
 
-RegStore::Connector::Connector(Store* data_store) :
-  _data_store(data_store)
+RegStore::Connector::Connector(Store* data_store,
+                               SerializerDeserializer* serializer,
+                               std::vector<SerializerDeserializer*>& deserializers) :
+  _data_store(data_store),
+  _serializer(serializer),
+  _deserializers(deserializers)
 {
 }
 
 RegStore::Connector::~Connector()
 {
+  delete _serializer; _serializer = NULL;
+
+  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
+      it != _deserializers.end();
+      ++it)
+  {
+    delete *it; *it = NULL;
+  }
 }
 
 // Generates the public GRUU for this binding from the address of record and
@@ -648,6 +698,7 @@ std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) cons
   ret.append("\"");
   return ret;
 }
+
 
 //
 // (De)serializer for the binary RegStore format.
@@ -826,4 +877,9 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
   oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
 
   return oss.str();
+}
+
+std::string RegStore::BinarySerializerDeserializer::name()
+{
+  return "binary";
 }

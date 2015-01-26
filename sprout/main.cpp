@@ -1243,9 +1243,9 @@ int main(int argc, char* argv[])
 
   if ((opt.icscf_enabled || opt.scscf_enabled) && opt.alarms_enabled)
   {
-    // Create Sprout's alarm objects. 
+    // Create Sprout's alarm objects.
 
-    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR, 
+    chronos_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_CHRONOS_COMM_ERROR,
                                                                         AlarmDef::MAJOR));
 
     enum_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR,
@@ -1260,7 +1260,7 @@ int main(int argc, char* argv[])
     memcached_remote_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_REMOTE_MEMCACHED_COMM_ERROR,
                                                                                  AlarmDef::CRITICAL));
 
-    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR, 
+    ralf_comm_monitor = new CommunicationMonitor(new Alarm("sprout", AlarmDef::SPROUT_RALF_COMM_ERROR,
                                                                      AlarmDef::MAJOR));
 
     vbucket_alarm = new Alarm("sprout", AlarmDef::SPROUT_VBUCKET_ERROR,
@@ -1352,7 +1352,7 @@ int main(int argc, char* argv[])
     // Create ENUM service required for S-CSCF.
     if (!opt.enum_server.empty())
     {
-      enum_service = new DNSEnumService(opt.enum_server, 
+      enum_service = new DNSEnumService(opt.enum_server,
                                         opt.enum_suffix,
                                         new DNSResolverFactory(),
                                         enum_comm_monitor);
@@ -1450,7 +1450,7 @@ int main(int argc, char* argv[])
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
 
-      local_data_store = (Store*)new MemcachedStore(false, 
+      local_data_store = (Store*)new MemcachedStore(false,
                                                     opt.store_servers,
                                                     memcached_comm_monitor,
                                                     vbucket_alarm);
@@ -1467,7 +1467,7 @@ int main(int argc, char* argv[])
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
 
-        remote_data_store = (Store*)new MemcachedStore(false, 
+        remote_data_store = (Store*)new MemcachedStore(false,
                                                        opt.remote_store_servers,
                                                        memcached_remote_comm_monitor,
                                                        remote_vbucket_alarm);
@@ -1496,8 +1496,32 @@ int main(int argc, char* argv[])
     }
 
     // Create local and optionally remote registration data stores.
-    local_reg_store = new RegStore(local_data_store, chronos_connection);
-    remote_reg_store = (remote_data_store != NULL) ? new RegStore(remote_data_store, chronos_connection) : NULL;
+    {
+      RegStore::SerializerDeserializer* serializer =
+        new RegStore::BinarySerializerDeserializer();
+      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+        new RegStore::BinarySerializerDeserializer(),
+      };
+
+      local_reg_store = new RegStore(local_data_store,
+                                     serializer,
+                                     deserializers,
+                                     chronos_connection);
+    }
+
+    if (remote_data_store != NULL)
+    {
+      RegStore::SerializerDeserializer* serializer =
+        new RegStore::BinarySerializerDeserializer();
+      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+        new RegStore::BinarySerializerDeserializer(),
+      };
+
+      remote_reg_store = new RegStore(remote_data_store,
+                                      serializer,
+                                      deserializers,
+                                      chronos_connection);
+    }
 
     if (opt.auth_enabled)
     {
