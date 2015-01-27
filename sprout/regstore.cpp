@@ -40,6 +40,10 @@ extern "C" {
 #include "pjsip-simple/evsub.h"
 }
 
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/document.h"
+
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -914,4 +918,154 @@ std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
 std::string RegStore::BinarySerializerDeserializer::name()
 {
   return "binary";
+}
+
+
+//
+// (De)serializer for the JSON RegStore format.
+//
+
+static const char* const JSON_BINDINGS = "bindings";
+static const char* const JSON_URI = "uri";
+static const char* const JSON_CID = "cid";
+static const char* const JSON_CSEQ = "cseq";
+static const char* const JSON_EXPIRES = "expires";
+static const char* const JSON_PRIORITY = "priority";
+static const char* const JSON_PARAMS = "params";
+static const char* const JSON_PATHS = "paths";
+static const char* const JSON_TIMER_ID = "timer_id";
+static const char* const JSON_PRIVATE_ID = "private_id";
+static const char* const JSON_EMERGENCY_REG = "emergency_reg";
+
+static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
+static const char* const JSON_REQ_URI = "req_uri";
+static const char* const JSON_FROM_URI = "from_uri";
+static const char* const JSON_FROM_TAG = "from_tag";
+static const char* const JSON_TO_URI = "to_uri";
+static const char* const JSON_TO_TAG = "to_tag";
+static const char* const JSON_ROUTES = "routes";
+
+static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+
+RegStore::AoR* RegStore::JsonSerializerDeserializer::
+  deserialize_aor(const std::string& aor_id, const std::string& s)
+{
+  return NULL;
+}
+
+
+std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    //
+    // Bindings
+    //
+    writer.String(JSON_BINDINGS);
+    writer.StartObject();
+    {
+      for (AoR::Bindings::const_iterator it = aor_data->bindings().begin();
+           it != aor_data->bindings().end();
+           ++it)
+      {
+        LOG_DEBUG("  Binding %s", it->first.c_str());
+        writer.String(it->first.c_str());
+
+        writer.StartObject();
+        {
+          AoR::Binding* b = it->second;
+          writer.String(JSON_URI); writer.String(b->_uri.c_str());
+          writer.String(JSON_CID); writer.String(b->_cid.c_str());
+          writer.String(JSON_CSEQ); writer.Int(b->_cseq);
+          writer.String(JSON_EXPIRES); writer.Int(b->_expires);
+          writer.String(JSON_PRIORITY); writer.Int(b->_priority);
+
+          writer.String(JSON_PARAMS);
+          writer.StartObject();
+          {
+            for (std::map<std::string, std::string>::const_iterator p = b->_params.begin();
+                 p != b->_params.end();
+                 ++p)
+            {
+              writer.String(p->first.c_str()); writer.String(p->second.c_str());
+            }
+          }
+          writer.EndObject();
+
+          writer.String(JSON_PATHS);
+          writer.StartArray();
+          {
+            for (std::list<std::string>::const_iterator p = b->_path_headers.begin();
+                 p != b->_path_headers.end();
+                 ++p)
+            {
+              writer.String(p->c_str());
+            }
+          }
+          writer.EndArray();
+
+          writer.String(JSON_TIMER_ID); writer.String(b->_timer_id.c_str());
+          writer.String(JSON_PRIVATE_ID); writer.String(b->_private_id.c_str());
+          writer.String(JSON_EMERGENCY_REG); writer.Bool(b->_emergency_registration);
+        }
+        writer.EndObject();
+      }
+    }
+    writer.EndObject();
+
+    //
+    // Subscriptions.
+    //
+    writer.String(JSON_SUBSCRIPTIONS);
+    writer.StartObject();
+    {
+      for (AoR::Subscriptions::const_iterator it = aor_data->subscriptions().begin();
+           it != aor_data->subscriptions().end();
+           ++it)
+      {
+        LOG_DEBUG("  Subscription %s", it->first.c_str());
+        writer.String(it->first.c_str());
+        writer.StartObject();
+        {
+          AoR::Subscription* s = it->second;
+          writer.String(JSON_REQ_URI); writer.String(s->_req_uri.c_str());
+          writer.String(JSON_FROM_URI); writer.String(s->_from_uri.c_str());
+          writer.String(JSON_FROM_TAG); writer.String(s->_from_tag.c_str());
+          writer.String(JSON_TO_URI); writer.String(s->_to_uri.c_str());
+          writer.String(JSON_TO_TAG); writer.String(s->_to_tag.c_str());
+          writer.String(JSON_CID); writer.String(s->_cid.c_str());
+
+          writer.String(JSON_ROUTES);
+          writer.StartArray();
+          {
+            for (std::list<std::string>::const_iterator r = s->_route_uris.begin();
+                 r != s->_route_uris.end();
+                 ++r)
+            {
+              writer.String(r->c_str());
+            }
+          }
+          writer.EndArray();
+
+          writer.String(JSON_EXPIRES); writer.Int(s->_expires);
+        }
+        writer.EndObject();
+      }
+    }
+    writer.EndObject();
+
+    // Notify Cseq flag
+    writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}
+
+std::string RegStore::JsonSerializerDeserializer::name()
+{
+  return "JSON";
 }

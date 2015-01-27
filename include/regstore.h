@@ -270,6 +270,18 @@ public:
     std::string name();
   };
 
+  /// A (de)serializer for the JSON format.
+  class JsonSerializerDeserializer : public SerializerDeserializer
+  {
+  public:
+    ~JsonSerializerDeserializer() {}
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& aor_id,
+                         const std::string& s);
+    std::string name();
+  };
+
   /// Provides the interface to the data store. This is responsible for
   /// updating and getting information from the underlying data store. The
   /// classes that call this class are responsible for retrying the get/set
