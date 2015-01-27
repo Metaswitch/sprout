@@ -70,7 +70,7 @@ extern "C" {
 #include "constants.h"
 
 RegStore::RegStore(Store* data_store,
-                   SerializerDeserializer* serializer,
+                   SerializerDeserializer*& serializer,
                    std::vector<SerializerDeserializer*>& deserializers,
                    ChronosConnection* chronos_connection) :
   _chronos(chronos_connection),
@@ -617,12 +617,15 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
 }
 
 RegStore::Connector::Connector(Store* data_store,
-                               SerializerDeserializer* serializer,
+                               SerializerDeserializer*& serializer,
                                std::vector<SerializerDeserializer*>& deserializers) :
   _data_store(data_store),
   _serializer(serializer),
   _deserializers(deserializers)
 {
+  // We have taken ownership of the serializer and deserializers.
+  serializer = NULL;
+  deserializers.clear();
 }
 
 RegStore::Connector::~Connector()

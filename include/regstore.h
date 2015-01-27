@@ -289,7 +289,7 @@ public:
   class Connector
   {
     Connector(Store* data_store,
-              SerializerDeserializer* serializer,
+              SerializerDeserializer*& serializer,
               std::vector<SerializerDeserializer*>& deserializers);
 
     ~Connector();
@@ -329,7 +329,7 @@ public:
   /// @param chronos_connection - Chronos connection used to set timers for
   ///                             expiring registrations and subscriptions.
   RegStore(Store* data_store,
-           SerializerDeserializer* serializer,
+           SerializerDeserializer*& serializer,
            std::vector<SerializerDeserializer*>& deserializers,
            ChronosConnection* chronos_connection);
 

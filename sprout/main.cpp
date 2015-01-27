@@ -108,62 +108,64 @@ enum OptionTypes
   OPT_CALL_LIST_TTL,
   OPT_ALARMS_ENABLED,
   OPT_DNS_SERVER,
-  OPT_TARGET_LATENCY_US
+  OPT_TARGET_LATENCY_US,
+  OPT_MEMCACHED_WRITE_FORMAT
 };
 
 
 const static struct pj_getopt_option long_opt[] =
 {
-  { "pcscf",             required_argument, 0, 'p'},
-  { "scscf",             required_argument, 0, 's'},
-  { "icscf",             required_argument, 0, 'i'},
-  { "webrtc-port",       required_argument, 0, 'w'},
-  { "localhost",         required_argument, 0, 'l'},
-  { "domain",            required_argument, 0, 'D'},
-  { "additional-domains", required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-  { "scscf_uri",         required_argument, 0, 'c'},
-  { "alias",             required_argument, 0, 'n'},
-  { "routing-proxy",     required_argument, 0, 'r'},
-  { "ibcf",              required_argument, 0, 'I'},
-  { "external-icscf",    required_argument, 0, 'j'},
-  { "auth",              required_argument, 0, 'A'},
-  { "realm",             required_argument, 0, 'R'},
-  { "memstore",          required_argument, 0, 'M'},
-  { "remote-memstore",   required_argument, 0, 'm'},
-  { "sas",               required_argument, 0, 'S'},
-  { "hss",               required_argument, 0, 'H'},
-  { "record-routing-model", required_argument, 0, 'C'},
-  { "default-session-expires", required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
-  { "target-latency-us", required_argument, 0, OPT_TARGET_LATENCY_US},
-  { "xdms",              required_argument, 0, 'X'},
-  { "chronos",           required_argument, 0, 'K'},
-  { "ralf",              required_argument, 0, 'G'},
-  { "dns-server",        required_argument, 0, OPT_DNS_SERVER },
-  { "enum",              required_argument, 0, 'E'},
-  { "enum-suffix",       required_argument, 0, 'x'},
-  { "enum-file",         required_argument, 0, 'f'},
-  { "enforce-user-phone", no_argument,      0, 'u'},
-  { "enforce-global-only-lookups", no_argument, 0, 'g'},
-  { "reg-max-expires",   required_argument, 0, 'e'},
-  { "sub-max-expires",   required_argument, 0, OPT_SUB_MAX_EXPIRES},
-  { "pjsip-threads",     required_argument, 0, 'P'},
-  { "worker-threads",    required_argument, 0, 'W'},
-  { "analytics",         required_argument, 0, 'a'},
-  { "authentication",    no_argument,       0, 'A'},
-  { "log-file",          required_argument, 0, 'F'},
-  { "http_address",      required_argument, 0, 'T'},
-  { "http_port",         required_argument, 0, 'o'},
-  { "http_threads",      required_argument, 0, 'q'},
-  { "billing-cdf",       required_argument, 0, 'B'},
-  { "allow-emergency-registration", no_argument, 0, OPT_EMERGENCY_REG_ACCEPTED},
-  { "max-call-list-length", required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
-  { "memento-threads", required_argument, 0, OPT_MEMENTO_THREADS},
-  { "call-list-ttl", required_argument, 0, OPT_CALL_LIST_TTL},
-  { "alarms-enabled", no_argument, 0, OPT_ALARMS_ENABLED},
-  { "log-level",         required_argument, 0, 'L'},
-  { "daemon",            no_argument,       0, 'd'},
-  { "interactive",       no_argument,       0, 't'},
-  { "help",              no_argument,       0, 'h'},
+  { "pcscf",                        required_argument, 0, 'p'},
+  { "scscf",                        required_argument, 0, 's'},
+  { "icscf",                        required_argument, 0, 'i'},
+  { "webrtc-port",                  required_argument, 0, 'w'},
+  { "localhost",                    required_argument, 0, 'l'},
+  { "domain",                       required_argument, 0, 'D'},
+  { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
+  { "scscf_uri",                    required_argument, 0, 'c'},
+  { "alias",                        required_argument, 0, 'n'},
+  { "routing-proxy",                required_argument, 0, 'r'},
+  { "ibcf",                         required_argument, 0, 'I'},
+  { "external-icscf",               required_argument, 0, 'j'},
+  { "auth",                         required_argument, 0, 'A'},
+  { "realm",                        required_argument, 0, 'R'},
+  { "memstore",                     required_argument, 0, 'M'},
+  { "remote-memstore",              required_argument, 0, 'm'},
+  { "sas",                          required_argument, 0, 'S'},
+  { "hss",                          required_argument, 0, 'H'},
+  { "record-routing-model",         required_argument, 0, 'C'},
+  { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
+  { "xdms",                         required_argument, 0, 'X'},
+  { "chronos",                      required_argument, 0, 'K'},
+  { "ralf",                         required_argument, 0, 'G'},
+  { "dns-server",                   required_argument, 0, OPT_DNS_SERVER },
+  { "enum",                         required_argument, 0, 'E'},
+  { "enum-suffix",                  required_argument, 0, 'x'},
+  { "enum-file",                    required_argument, 0, 'f'},
+  { "enforce-user-phone",           no_argument,       0, 'u'},
+  { "enforce-global-only-lookups",  no_argument,       0, 'g'},
+  { "reg-max-expires",              required_argument, 0, 'e'},
+  { "sub-max-expires",              required_argument, 0, OPT_SUB_MAX_EXPIRES},
+  { "pjsip-threads",                required_argument, 0, 'P'},
+  { "worker-threads",               required_argument, 0, 'W'},
+  { "analytics",                    required_argument, 0, 'a'},
+  { "authentication",               no_argument,       0, 'A'},
+  { "log-file",                     required_argument, 0, 'F'},
+  { "http_address",                 required_argument, 0, 'T'},
+  { "http_port",                    required_argument, 0, 'o'},
+  { "http_threads",                 required_argument, 0, 'q'},
+  { "billing-cdf",                  required_argument, 0, 'B'},
+  { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
+  { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
+  { "memento-threads",              required_argument, 0, OPT_MEMENTO_THREADS},
+  { "call-list-ttl",                required_argument, 0, OPT_CALL_LIST_TTL},
+  { "alarms-enabled",               no_argument,       0, OPT_ALARMS_ENABLED},
+  { "log-level",                    required_argument, 0, 'L'},
+  { "daemon",                       no_argument,       0, 'd'},
+  { "interactive",                  no_argument,       0, 't'},
+  { "help",                         no_argument,       0, 'h'},
+  { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { NULL,                0, 0, 0}
 };
 
@@ -657,6 +659,26 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_MEMCACHED_WRITE_FORMAT:
+      if (strcmp(pj_optarg, "binary") == 0)
+      {
+        LOG_INFO("Memcached write format set to 'binary'");
+        options->memcached_write_format = MemcachedWriteFormat::BINARY;
+      }
+      else if (strcmp(pj_optarg, "json") == 0)
+      {
+        LOG_INFO("Memcached write format set to 'json'");
+        options->memcached_write_format = MemcachedWriteFormat::JSON;
+      }
+      else
+      {
+        LOG_WARNING("Invalid value for memcached-write-format, using '%s'."
+                    "Got '%s', valid vales are 'json' and 'binary'",
+                    ((options->memcached_write_format == MemcachedWriteFormat::JSON) ?
+                     "json" : "binary"),
+                    pj_optarg);
+      }
+
     case 'P':
       options->pjsip_threads = atoi(pj_optarg);
       LOG_INFO("Use %d PJSIP threads", options->pjsip_threads);
@@ -956,6 +978,25 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
 }
 
 
+void create_regstore_plugins(RegStore::SerializerDeserializer*& serializer,
+                             std::vector<RegStore::SerializerDeserializer*>& deserializers,
+                             MemcachedWriteFormat write_format)
+{
+  deserializers.clear();
+  deserializers.push_back(new RegStore::JsonSerializerDeserializer());
+  deserializers.push_back(new RegStore::BinarySerializerDeserializer());
+
+  if (write_format == MemcachedWriteFormat::JSON)
+  {
+    serializer = new RegStore::JsonSerializerDeserializer();
+  }
+  else
+  {
+    serializer = new RegStore::BinarySerializerDeserializer();
+  }
+}
+
+
 // Objects that must be shared with dynamically linked sproutlets must be
 // globally scoped.
 LoadMonitor* load_monitor = NULL;
@@ -1061,6 +1102,7 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
+  opt.memcached_write_format = MemcachedWriteFormat::JSON;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
@@ -1496,27 +1538,22 @@ int main(int argc, char* argv[])
     }
 
     // Create local and optionally remote registration data stores.
-    {
-      RegStore::SerializerDeserializer* serializer =
-        new RegStore::BinarySerializerDeserializer();
-      std::vector<RegStore::SerializerDeserializer*> deserializers = {
-        new RegStore::BinarySerializerDeserializer(),
-      };
+    RegStore::SerializerDeserializer* serializer;
+    std::vector<RegStore::SerializerDeserializer*> deserializers;
 
-      local_reg_store = new RegStore(local_data_store,
-                                     serializer,
-                                     deserializers,
-                                     chronos_connection);
-    }
+    create_regstore_plugins(serializer,
+                            deserializers,
+                            opt.memcached_write_format);
+    local_reg_store = new RegStore(local_data_store,
+                                   serializer,
+                                   deserializers,
+                                   chronos_connection);
 
     if (remote_data_store != NULL)
     {
-      RegStore::SerializerDeserializer* serializer =
-        new RegStore::BinarySerializerDeserializer();
-      std::vector<RegStore::SerializerDeserializer*> deserializers = {
-        new RegStore::BinarySerializerDeserializer(),
-      };
-
+      create_regstore_plugins(serializer,
+                              deserializers,
+                              opt.memcached_write_format);
       remote_reg_store = new RegStore(remote_data_store,
                                       serializer,
                                       deserializers,
