@@ -925,6 +925,76 @@ std::string RegStore::BinarySerializerDeserializer::name()
 // (De)serializer for the JSON RegStore format.
 //
 
+/// Object that is throw when a JSON formatting error is spotted.
+struct JsonFormatError
+{
+  JsonFormatError(const char* file, int line) : _file(file), _line(line) {}
+
+  /// File on which the error was spotted.
+  const char* _file;
+
+  /// Line number in the above file on which the error was spotted.
+  const int _line;
+};
+
+#define JSON_FORMAT_ERROR() {                                                  \
+  throw JsonFormatError(__FILE__, __LINE__);                                   \
+}
+
+#define JSON_ASSERT_OBJECT(NODE) {                                             \
+  if (!(NODE).IsObject())                                                      \
+  {                                                                            \
+    JSON_FORMAT_ERROR();                                                       \
+  }                                                                            \
+}
+
+#define JSON_ASSERT_INT(NODE) {                                                \
+  if (!(NODE).IsInt())                                                         \
+  {                                                                            \
+    JSON_FORMAT_ERROR();                                                       \
+  }                                                                            \
+}
+
+#define JSON_ASSERT_STRING(NODE) {                                             \
+  if (!(NODE).IsString())                                                      \
+  {                                                                            \
+    JSON_FORMAT_ERROR();                                                       \
+  }                                                                            \
+}
+
+#define JSON_ASSERT_ARRAY(NODE) {                                              \
+  if (!(NODE).IsArray())                                                       \
+  {                                                                            \
+    JSON_FORMAT_ERROR();                                                       \
+  }                                                                            \
+}
+
+#define JSON_ASSERT_CONTAINS(NODE, ELEM) {                                     \
+  if (!(NODE).HasMember(ELEM))                                                 \
+  {                                                                            \
+    JSON_FORMAT_ERROR();                                                       \
+  }                                                                            \
+}
+
+#define JSON_GET_STRING_MEMBER(NODE, ELEM, TARGET) {                           \
+    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
+    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
+    (TARGET) = (NODE)[JSON_URI].GetString();                                   \
+}
+
+#define JSON_GET_INT_MEMBER(NODE, ELEM, TARGET) {                              \
+    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
+    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
+    (TARGET) = (NODE)[JSON_URI].GetInt();                                      \
+}
+
+#define JSON_GET_BOOL_MEMBER(NODE, ELEM, TARGET) {                             \
+    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
+    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
+    (TARGET) = (NODE)[JSON_URI].GetBool();                                     \
+}
+
+
 static const char* const JSON_BINDINGS = "bindings";
 static const char* const JSON_URI = "uri";
 static const char* const JSON_CID = "cid";
@@ -936,7 +1006,6 @@ static const char* const JSON_PATHS = "paths";
 static const char* const JSON_TIMER_ID = "timer_id";
 static const char* const JSON_PRIVATE_ID = "private_id";
 static const char* const JSON_EMERGENCY_REG = "emergency_reg";
-
 static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
 static const char* const JSON_REQ_URI = "req_uri";
 static const char* const JSON_FROM_URI = "from_uri";
@@ -944,13 +1013,110 @@ static const char* const JSON_FROM_TAG = "from_tag";
 static const char* const JSON_TO_URI = "to_uri";
 static const char* const JSON_TO_TAG = "to_tag";
 static const char* const JSON_ROUTES = "routes";
-
 static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+
 
 RegStore::AoR* RegStore::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
-  return NULL;
+  rapidjson::Document doc;
+  doc.Parse<0>(s.c_str());
+
+  if (doc.HasParseError())
+  {
+    LOG_DEBUG("Failed to parse JSON document: %s", s.c_str());
+    return NULL;
+  }
+
+  AoR* aor = new AoR(aor_id);
+
+  try
+  {
+    JSON_ASSERT_CONTAINS(doc, JSON_BINDINGS);
+    JSON_ASSERT_OBJECT(doc[JSON_BINDINGS]);
+
+    for (rapidjson::Value::ConstMemberIterator bindings_it = doc[JSON_BINDINGS].MemberBegin();
+         bindings_it != doc[JSON_BINDINGS].MemberEnd();
+         ++bindings_it)
+    {
+      AoR::Binding* b = aor->get_binding(bindings_it->name.GetString());
+
+      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_URI, b->_uri);
+      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_CID, b->_cid);
+      JSON_GET_INT_MEMBER(bindings_it->value, JSON_CSEQ, b->_cseq);
+      JSON_GET_INT_MEMBER(bindings_it->value, JSON_EXPIRES, b->_expires);
+      JSON_GET_INT_MEMBER(bindings_it->value, JSON_PRIORITY, b->_priority);
+
+      JSON_ASSERT_CONTAINS(bindings_it->value, JSON_PARAMS);
+      JSON_ASSERT_OBJECT(bindings_it->value[JSON_PARAMS]);
+
+      for (rapidjson::Value::ConstMemberIterator params_it =
+             bindings_it->value[JSON_PARAMS].MemberBegin();
+           params_it != bindings_it->value[JSON_PARAMS].MemberEnd();
+           ++params_it)
+      {
+        JSON_ASSERT_STRING(params_it->value);
+        b->_params[params_it->name.GetString()] = params_it->value.GetString();
+      }
+
+      JSON_ASSERT_CONTAINS(bindings_it->value, JSON_PATHS);
+      JSON_ASSERT_OBJECT(bindings_it->value[JSON_PATHS]);
+
+      for (rapidjson::Value::ConstValueIterator paths_it =
+             bindings_it->value[JSON_PATHS].Begin();
+           paths_it != bindings_it->value[JSON_PATHS].End();
+           ++paths_it)
+      {
+        JSON_ASSERT_INT(*paths_it);
+        b->_path_headers.push_back(paths_it->GetString());
+      }
+
+      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_TIMER_ID, b->_timer_id);
+      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_PRIVATE_ID, b->_private_id);
+      JSON_GET_BOOL_MEMBER(bindings_it->value, JSON_EMERGENCY_REG, b->_emergency_registration);
+    }
+
+    JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
+    JSON_ASSERT_OBJECT(doc[JSON_SUBSCRIPTIONS]);
+
+    for (rapidjson::Value::ConstMemberIterator subscriptions_it = doc[JSON_SUBSCRIPTIONS].MemberBegin();
+         subscriptions_it != doc[JSON_BINDINGS].MemberEnd();
+         ++subscriptions_it)
+    {
+      AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
+
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_REQ_URI, s->_req_uri);
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_FROM_URI, s->_from_uri);
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_FROM_TAG, s->_from_tag);
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_TO_URI, s->_to_uri);
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_TO_TAG, s->_to_tag);
+      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_CID, s->_cid);
+
+      JSON_ASSERT_CONTAINS(subscriptions_it->value, JSON_ROUTES);
+      JSON_ASSERT_OBJECT(subscriptions_it->value[JSON_ROUTES]);
+
+      for (rapidjson::Value::ConstValueIterator routes_it =
+             subscriptions_it->value[JSON_PATHS].Begin();
+           routes_it != subscriptions_it->value[JSON_PATHS].End();
+           ++routes_it)
+      {
+        JSON_ASSERT_STRING(*routes_it);
+        s->_route_uris.push_back(routes_it->GetString());
+      }
+
+      JSON_GET_INT_MEMBER(subscriptions_it->value, JSON_EXPIRES, s->_expires);
+    }
+
+    JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
+  }
+  catch(JsonFormatError err)
+  {
+    LOG_INFO("Failed to deserialize JSON document (hit error at %s:%s)",
+             err._file, err._line);
+    delete aor; aor = NULL;
+  }
+
+  return aor;
 }
 
 
