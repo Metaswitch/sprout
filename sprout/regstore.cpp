@@ -40,10 +40,6 @@ extern "C" {
 #include "pjsip-simple/evsub.h"
 }
 
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/document.h"
-
 // Common STL includes.
 #include <cassert>
 #include <vector>
@@ -68,6 +64,7 @@ extern "C" {
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
 #include "constants.h"
+#include "json_parse_utils.h"
 
 RegStore::RegStore(Store* data_store,
                    SerializerDeserializer*& serializer,
@@ -927,76 +924,6 @@ std::string RegStore::BinarySerializerDeserializer::name()
 //
 // (De)serializer for the JSON RegStore format.
 //
-
-/// Object that is throw when a JSON formatting error is spotted.
-struct JsonFormatError
-{
-  JsonFormatError(const char* file, int line) : _file(file), _line(line) {}
-
-  /// File on which the error was spotted.
-  const char* _file;
-
-  /// Line number in the above file on which the error was spotted.
-  const int _line;
-};
-
-#define JSON_FORMAT_ERROR() {                                                  \
-  throw JsonFormatError(__FILE__, __LINE__);                                   \
-}
-
-#define JSON_ASSERT_OBJECT(NODE) {                                             \
-  if (!(NODE).IsObject())                                                      \
-  {                                                                            \
-    JSON_FORMAT_ERROR();                                                       \
-  }                                                                            \
-}
-
-#define JSON_ASSERT_INT(NODE) {                                                \
-  if (!(NODE).IsInt())                                                         \
-  {                                                                            \
-    JSON_FORMAT_ERROR();                                                       \
-  }                                                                            \
-}
-
-#define JSON_ASSERT_STRING(NODE) {                                             \
-  if (!(NODE).IsString())                                                      \
-  {                                                                            \
-    JSON_FORMAT_ERROR();                                                       \
-  }                                                                            \
-}
-
-#define JSON_ASSERT_ARRAY(NODE) {                                              \
-  if (!(NODE).IsArray())                                                       \
-  {                                                                            \
-    JSON_FORMAT_ERROR();                                                       \
-  }                                                                            \
-}
-
-#define JSON_ASSERT_CONTAINS(NODE, ELEM) {                                     \
-  if (!(NODE).HasMember(ELEM))                                                 \
-  {                                                                            \
-    JSON_FORMAT_ERROR();                                                       \
-  }                                                                            \
-}
-
-#define JSON_GET_STRING_MEMBER(NODE, ELEM, TARGET) {                           \
-    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
-    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
-    (TARGET) = (NODE)[JSON_URI].GetString();                                   \
-}
-
-#define JSON_GET_INT_MEMBER(NODE, ELEM, TARGET) {                              \
-    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
-    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
-    (TARGET) = (NODE)[JSON_URI].GetInt();                                      \
-}
-
-#define JSON_GET_BOOL_MEMBER(NODE, ELEM, TARGET) {                             \
-    JSON_ASSERT_CONTAINS((NODE), (ELEM));                                      \
-    JSON_ASSERT_STRING((NODE)[(ELEM)]);                                        \
-    (TARGET) = (NODE)[JSON_URI].GetBool();                                     \
-}
-
 
 static const char* const JSON_BINDINGS = "bindings";
 static const char* const JSON_URI = "uri";
