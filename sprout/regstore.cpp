@@ -1067,7 +1067,6 @@ std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
            it != aor_data->bindings().end();
            ++it)
       {
-        LOG_DEBUG("  Binding %s", it->first.c_str());
         writer.String(it->first.c_str());
 
         writer.StartObject();
@@ -1122,7 +1121,6 @@ std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
            it != aor_data->subscriptions().end();
            ++it)
       {
-        LOG_DEBUG("  Subscription %s", it->first.c_str());
         writer.String(it->first.c_str());
         writer.StartObject();
         {
