@@ -175,6 +175,15 @@ TYPED_TEST(BasicRegStoreTest, BindingTests)
   EXPECT_EQ(17038, b1->_cseq);
   EXPECT_EQ(now + 300, b1->_expires);
   EXPECT_EQ(0, b1->_priority);
+  EXPECT_EQ(std::string("00000000000"), b1->_timer_id);
+  EXPECT_EQ(1u, b1->_path_headers.size());
+  EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), b1->_path_headers.front());
+  EXPECT_EQ(3u, b1->_params.size());
+  EXPECT_EQ(std::string("\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\""), b1->_params["+sip.instance"]);
+  EXPECT_EQ(std::string("1"), b1->_params["reg-id"]);
+  EXPECT_EQ(std::string(""), b1->_params["+sip.ice"]);
+  EXPECT_EQ(std::string("5102175698@cw-ngv.com"), b1->_private_id);
+  EXPECT_EQ(false, b1->_emergency_registration);
 
   // Update AoR record in the store and check it.
   b1->_cseq = 17039;
