@@ -57,6 +57,10 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgReferee;
 
+// These tests use "typed tests" to run the same tests over different
+// (de)serializers. For more infomration see:
+// https://code.google.com/p/googletest/wiki/AdvancedGuide#Typed_Tests
+
 /// The types of (de)serializer that we want to test.
 typedef ::testing::Types<
   RegStore::BinarySerializerDeserializer,
