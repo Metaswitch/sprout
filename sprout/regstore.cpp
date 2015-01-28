@@ -413,18 +413,19 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, c
       ++it)
   {
     SerializerDeserializer* deserializer = *it;
+
+    LOG_DEBUG("Try to deserialize record with '%s' deserializer",
+              deserializer->name().c_str());
     aor = deserializer->deserialize_aor(aor_id, s);
 
     if (aor != NULL)
     {
-      LOG_DEBUG("Deserialized record with '%s' deserializer",
-                deserializer->name().c_str());
+      LOG_DEBUG("Deserialization suceeded");
       return aor;
     }
     else
     {
-      LOG_DEBUG("Failed to deserialized record with '%s' deserializer",
-                deserializer->name().c_str());
+      LOG_DEBUG("Deserialization failed");
     }
   }
 
@@ -956,7 +957,7 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
 
   if (doc.HasParseError())
   {
-    LOG_DEBUG("Failed to parse JSON document: %s", s.c_str());
+    LOG_DEBUG("Failed to parse document");
     return NULL;
   }
 

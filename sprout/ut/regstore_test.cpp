@@ -50,13 +50,26 @@
 #include "test_utils.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_store.h"
 
-using namespace std;
+using ::testing::_;
+using ::testing::DoAll;
+using ::testing::Return;
+using ::testing::SetArgReferee;
 
-/// Fixture for RegStoreTest.  The fixture is a template, parameterized over the
-/// different types of (de)serializer.
+/// The types of (de)serializer that we want to test.
+typedef ::testing::Types<
+  RegStore::BinarySerializerDeserializer,
+  RegStore::JsonSerializerDeserializer
+> SerializerDeserializerTypes;
+
+/// Fixture for BasicRegStoreTest.  This uses a single RegStore, configured to
+/// use exactly one (de)serisalizer.
+///
+/// The fixture is a template, parameterized over the different types of
+/// (de)serializer.
 template<class T>
-class RegStoreTest : public SipTest
+class BasicRegStoreTest : public SipTest
 {
   static void SetUpTestCase()
   {
@@ -68,7 +81,7 @@ class RegStoreTest : public SipTest
     SipTest::TearDownTestCase();
   }
 
-  RegStoreTest()
+  BasicRegStoreTest()
   {
     _chronos_connection = new FakeChronosConnection();
     _datastore = new LocalStore();
@@ -84,7 +97,7 @@ class RegStoreTest : public SipTest
                           _chronos_connection);
   }
 
-  virtual ~RegStoreTest()
+  virtual ~BasicRegStoreTest()
   {
     // PJSIP transactions aren't actually destroyed until a zero ms
     // timer fires (presumably to ensure destruction doesn't hold up
@@ -112,16 +125,11 @@ class RegStoreTest : public SipTest
   RegStore* _store;
 };
 
-// Define the types of (de)serializer that we want to test.
-typedef ::testing::Types<
-  RegStore::BinarySerializerDeserializer,
-  RegStore::JsonSerializerDeserializer
-> SerializerDeserializerTypes;
+// BasicRegStoreTest is parameterized over these types.
+TYPED_TEST_CASE(BasicRegStoreTest, SerializerDeserializerTypes);
 
-// The gtest that the RegStoreTest is parameterized over these types.
-TYPED_TEST_CASE(RegStoreTest, SerializerDeserializerTypes);
 
-TYPED_TEST(RegStoreTest, BindingTests)
+TYPED_TEST(BasicRegStoreTest, BindingTests)
 {
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
@@ -216,7 +224,7 @@ TYPED_TEST(RegStoreTest, BindingTests)
 }
 
 
-TYPED_TEST(RegStoreTest, SubscriptionTests)
+TYPED_TEST(BasicRegStoreTest, SubscriptionTests)
 {
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
@@ -304,7 +312,7 @@ TYPED_TEST(RegStoreTest, SubscriptionTests)
 }
 
 
-TYPED_TEST(RegStoreTest, CopyTests)
+TYPED_TEST(BasicRegStoreTest, CopyTests)
 {
   RegStore::AoR* aor_data1;
   RegStore::AoR::Binding* b1;
@@ -364,7 +372,8 @@ TYPED_TEST(RegStoreTest, CopyTests)
   delete aor_data1; aor_data1 = NULL;
 }
 
-TYPED_TEST(RegStoreTest, ExpiryTests)
+
+TYPED_TEST(BasicRegStoreTest, ExpiryTests)
 {
   // The expiry tests require pjsip, so initialise for this test
   RegStore::AoR* aor_data1;
@@ -469,3 +478,184 @@ TYPED_TEST(RegStoreTest, ExpiryTests)
   delete aor_data1; aor_data1 = NULL;
 }
 
+/// Fixture for testing converting between data formats. Thsi creates two
+/// RegStores:
+/// 1).  One that only uses one (de)serializer.
+/// 2).  One that loads all (de)serializers.
+///
+/// The fixture is a template, parameterized over the different types of
+/// (de)serializer that store 1). uses.
+template<class T>
+class MultiFormatRegStoreTest : public ::testing::Test
+{
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _datastore = new LocalStore();
+
+    {
+      RegStore::SerializerDeserializer* serializer = new T();
+      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+        new T()
+      };
+
+      _single_store = new RegStore(_datastore,
+                                   serializer,
+                                   deserializers,
+                                   _chronos_connection);
+    }
+    {
+      RegStore::SerializerDeserializer* serializer =
+        new RegStore::JsonSerializerDeserializer();
+      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+        new RegStore::JsonSerializerDeserializer(),
+        new RegStore::BinarySerializerDeserializer(),
+      };
+
+      _multi_store = new RegStore(_datastore,
+                                  serializer,
+                                  deserializers,
+                                  _chronos_connection);
+    }
+  }
+
+  void TearDown()
+  {
+    delete _multi_store; _multi_store = NULL;
+    delete _single_store; _single_store = NULL;
+    delete _datastore; _datastore = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  ChronosConnection* _chronos_connection;
+  LocalStore* _datastore;
+  RegStore* _multi_store;
+  RegStore* _single_store;
+};
+
+// MultiFormatRegStoreTest is parameterized over these types.
+TYPED_TEST_CASE(MultiFormatRegStoreTest, SerializerDeserializerTypes);
+
+TYPED_TEST(MultiFormatRegStoreTest, AllFormatsCanBeRead)
+{
+  RegStore::AoR* aor_data1;
+  RegStore::AoR::Binding* b1;
+  bool rc;
+  int now;
+
+  // Get an initial empty AoR record and add a binding.
+  now = time(NULL);
+  aor_data1 = this->_single_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
+  b1->_uri = std::string("<sip:2010000001@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("cid1");
+  b1->_cseq = 1000;
+  b1->_expires = now + 300;
+  b1->_timer_id = "00000000001";
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817621>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_private_id = "2010000001@cw-ngv.com";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  rc = this->_single_store->set_aor_data(std::string("2010000001@cw-ngv.com"), aor_data1, false, 0);
+  EXPECT_TRUE(rc);
+  delete aor_data1; aor_data1 = NULL;
+
+  aor_data1 = this->_multi_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 != NULL);
+  EXPECT_EQ(1u, aor_data1->bindings().size());
+  b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817621:1"));
+  EXPECT_EQ(std::string("cid1"), b1->_cid);
+
+  EXPECT_EQ(1u, b1->_path_headers.size());
+  EXPECT_EQ(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"), b1->_path_headers.front());
+
+  EXPECT_EQ(3u, b1->_params.size());
+  EXPECT_EQ(std::string("1"), b1->_params["reg-id"]);
+  delete aor_data1; aor_data1 = NULL;
+}
+
+
+/// Fixtures for tests that bad JSON documents are handled correctly, even when
+/// mutliple deserializers are loaded.
+class RegStoreCorruptDataTest : public ::testing::Test
+{
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _datastore = new MockStore();
+
+    {
+      RegStore::SerializerDeserializer* serializer =
+        new RegStore::JsonSerializerDeserializer();
+      std::vector<RegStore::SerializerDeserializer*> deserializers = {
+        new RegStore::JsonSerializerDeserializer(),
+        new RegStore::BinarySerializerDeserializer(),
+      };
+
+      _store = new RegStore(_datastore,
+                            serializer,
+                            deserializers,
+                            _chronos_connection);
+    }
+  }
+
+  void TearDown()
+  {
+    delete _store; _store = NULL;
+    delete _datastore; _datastore = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  ChronosConnection* _chronos_connection;
+  MockStore* _datastore;
+  RegStore* _store;
+};
+
+
+TEST_F(RegStoreCorruptDataTest, BadlyFormedJson)
+{
+  RegStore::AoR* aor_data1;
+
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<2>(std::string("{\"bindings\": {}")),
+                    SetArgReferee<3>(1), // CAS
+                    Return(Store::OK)));
+
+  aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 == NULL);
+}
+
+
+TEST_F(RegStoreCorruptDataTest, SemanticallyInvalidJson)
+{
+  RegStore::AoR* aor_data1;
+
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<2>(
+                     std::string("{\"bindings\": {}, \"subscriptions\" :{}, \"notify_cseq\": \"123\"}")),
+                    SetArgReferee<3>(1), // CAS
+                    Return(Store::OK)));
+
+  aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 == NULL);
+}
+
+
+TEST_F(RegStoreCorruptDataTest, EmptyJsonObject)
+{
+  RegStore::AoR* aor_data1;
+
+  EXPECT_CALL(*_datastore, get_data(_, _, _, _, _))
+    .WillOnce(DoAll(SetArgReferee<2>(std::string("{}")),
+                    SetArgReferee<3>(1), // CAS
+                    Return(Store::OK)));
+
+  aor_data1 = this->_store->get_aor_data(std::string("2010000001@cw-ngv.com"), 0);
+  ASSERT_TRUE(aor_data1 == NULL);
+}
