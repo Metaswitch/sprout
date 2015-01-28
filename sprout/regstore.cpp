@@ -949,6 +949,8 @@ static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
 RegStore::AoR* RegStore::JsonSerializerDeserializer::
   deserialize_aor(const std::string& aor_id, const std::string& s)
 {
+  LOG_DEBUG("Deserialize JSON document: %s", s.c_str());
+
   rapidjson::Document doc;
   doc.Parse<0>(s.c_str());
 
@@ -964,84 +966,94 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
   {
     JSON_ASSERT_CONTAINS(doc, JSON_BINDINGS);
     JSON_ASSERT_OBJECT(doc[JSON_BINDINGS]);
+    const rapidjson::Value& bindings_obj = doc[JSON_BINDINGS];
 
-    for (rapidjson::Value::ConstMemberIterator bindings_it = doc[JSON_BINDINGS].MemberBegin();
-         bindings_it != doc[JSON_BINDINGS].MemberEnd();
+    for (rapidjson::Value::ConstMemberIterator bindings_it = bindings_obj.MemberBegin();
+         bindings_it != bindings_obj.MemberEnd();
          ++bindings_it)
     {
+      LOG_DEBUG("  Binding: %s", bindings_it->name.GetString());
       AoR::Binding* b = aor->get_binding(bindings_it->name.GetString());
 
-      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_URI, b->_uri);
-      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_CID, b->_cid);
-      JSON_GET_INT_MEMBER(bindings_it->value, JSON_CSEQ, b->_cseq);
-      JSON_GET_INT_MEMBER(bindings_it->value, JSON_EXPIRES, b->_expires);
-      JSON_GET_INT_MEMBER(bindings_it->value, JSON_PRIORITY, b->_priority);
+      JSON_ASSERT_OBJECT(bindings_it->value);
+      const rapidjson::Value& b_obj = bindings_it->value;
 
-      JSON_ASSERT_CONTAINS(bindings_it->value, JSON_PARAMS);
-      JSON_ASSERT_OBJECT(bindings_it->value[JSON_PARAMS]);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_URI, b->_uri);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_CID, b->_cid);
+      JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, b->_cseq);
+      JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, b->_expires);
+      JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, b->_priority);
 
-      for (rapidjson::Value::ConstMemberIterator params_it =
-             bindings_it->value[JSON_PARAMS].MemberBegin();
-           params_it != bindings_it->value[JSON_PARAMS].MemberEnd();
+      JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
+      JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
+      const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
+
+      for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
+           params_it != params_obj.MemberEnd();
            ++params_it)
       {
         JSON_ASSERT_STRING(params_it->value);
         b->_params[params_it->name.GetString()] = params_it->value.GetString();
       }
 
-      JSON_ASSERT_CONTAINS(bindings_it->value, JSON_PATHS);
-      JSON_ASSERT_OBJECT(bindings_it->value[JSON_PATHS]);
+      JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
+      JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
+      const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
 
-      for (rapidjson::Value::ConstValueIterator paths_it =
-             bindings_it->value[JSON_PATHS].Begin();
-           paths_it != bindings_it->value[JSON_PATHS].End();
+      for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
+           paths_it != paths_arr.End();
            ++paths_it)
       {
-        JSON_ASSERT_INT(*paths_it);
+        JSON_ASSERT_STRING(*paths_it);
         b->_path_headers.push_back(paths_it->GetString());
       }
 
-      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_TIMER_ID, b->_timer_id);
-      JSON_GET_STRING_MEMBER(bindings_it->value, JSON_PRIVATE_ID, b->_private_id);
-      JSON_GET_BOOL_MEMBER(bindings_it->value, JSON_EMERGENCY_REG, b->_emergency_registration);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, b->_private_id);
+      JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, b->_emergency_registration);
     }
 
     JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
     JSON_ASSERT_OBJECT(doc[JSON_SUBSCRIPTIONS]);
+    const rapidjson::Value& subscriptions_obj = doc[JSON_SUBSCRIPTIONS];
 
-    for (rapidjson::Value::ConstMemberIterator subscriptions_it = doc[JSON_SUBSCRIPTIONS].MemberBegin();
-         subscriptions_it != doc[JSON_BINDINGS].MemberEnd();
+    for (rapidjson::Value::ConstMemberIterator subscriptions_it = subscriptions_obj.MemberBegin();
+         subscriptions_it != subscriptions_obj.MemberEnd();
          ++subscriptions_it)
     {
+      LOG_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
       AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
 
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_REQ_URI, s->_req_uri);
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_FROM_URI, s->_from_uri);
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_FROM_TAG, s->_from_tag);
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_TO_URI, s->_to_uri);
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_TO_TAG, s->_to_tag);
-      JSON_GET_STRING_MEMBER(subscriptions_it->value, JSON_CID, s->_cid);
+      JSON_ASSERT_OBJECT(subscriptions_it->value);
+      const rapidjson::Value& s_obj = subscriptions_it->value;
 
-      JSON_ASSERT_CONTAINS(subscriptions_it->value, JSON_ROUTES);
-      JSON_ASSERT_OBJECT(subscriptions_it->value[JSON_ROUTES]);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, s->_req_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, s->_from_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, s->_from_tag);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, s->_to_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, s->_to_tag);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_CID, s->_cid);
 
-      for (rapidjson::Value::ConstValueIterator routes_it =
-             subscriptions_it->value[JSON_PATHS].Begin();
-           routes_it != subscriptions_it->value[JSON_PATHS].End();
+      JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
+      JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
+      const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
+
+      for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
+           routes_it != routes_arr.End();
            ++routes_it)
       {
         JSON_ASSERT_STRING(*routes_it);
         s->_route_uris.push_back(routes_it->GetString());
       }
 
-      JSON_GET_INT_MEMBER(subscriptions_it->value, JSON_EXPIRES, s->_expires);
+      JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
     }
 
     JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
   }
   catch(JsonFormatError err)
   {
-    LOG_INFO("Failed to deserialize JSON document (hit error at %s:%s)",
+    LOG_INFO("Failed to deserialize JSON document (hit error at %s:%d)",
              err._file, err._line);
     delete aor; aor = NULL;
   }
