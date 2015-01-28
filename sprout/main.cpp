@@ -1102,7 +1102,7 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::JSON;
+  opt.memcached_write_format = MemcachedWriteFormat::BINARY;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
