@@ -1981,6 +1981,21 @@ bool BasicProxy::UACTsx::retry_request()
     // future events from it.
     LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
+
+    // In congestion cases, the old tdata might still be held by PjSIP's
+    // trasport layer waiting to be sent.  Therefore it's not safe to re-send
+    // the same tdata, so we should clone it first.
+    // LCOV_EXCL_START - No congestion in UTs
+    if (_tdata->is_pending)
+    {
+      pjsip_tx_data* old_tdata = _tdata;
+      _tdata = PJUtils::clone_tdata(_tdata);
+
+      // We no longer care about the old tdata.
+      pjsip_tx_data_dec_ref(old_tdata);
+    }
+    // LCOV_EXCL_STOP
+
     PJUtils::generate_new_branch_id(_tdata);
     pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
                                                _tdata,
