@@ -166,7 +166,7 @@ const static struct pj_getopt_option long_opt[] =
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
   { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
-  { NULL,                0, 0, 0}
+  { NULL,                           0,                 0, 0}
 };
 
 static std::string pj_options_description = "p:s:i:l:D:c:C:n:e:I:A:R:M:S:H:T:o:q:X:E:x:f:u:g:r:P:w:a:F:L:K:G:B:dth";
@@ -1539,6 +1539,10 @@ int main(int argc, char* argv[])
     }
 
     // Create local and optionally remote registration data stores.
+    //
+    // It is fine to reuse these variables for creating both stores, as
+    // ownership of the objects they point to is transferred to the store when
+    // it is constructed.
     RegStore::SerializerDeserializer* serializer;
     std::vector<RegStore::SerializerDeserializer*> deserializers;
 

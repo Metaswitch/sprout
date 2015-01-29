@@ -58,7 +58,7 @@ using ::testing::Return;
 using ::testing::SetArgReferee;
 
 // These tests use "typed tests" to run the same tests over different
-// (de)serializers. For more infomration see:
+// (de)serializers. For more information see:
 // https://code.google.com/p/googletest/wiki/AdvancedGuide#Typed_Tests
 
 /// The types of (de)serializer that we want to test.
@@ -68,7 +68,7 @@ typedef ::testing::Types<
 > SerializerDeserializerTypes;
 
 /// Fixture for BasicRegStoreTest.  This uses a single RegStore, configured to
-/// use exactly one (de)serisalizer.
+/// use exactly one (de)serializer.
 ///
 /// The fixture is a template, parameterized over the different types of
 /// (de)serializer.
@@ -122,7 +122,7 @@ class BasicRegStoreTest : public SipTest
   }
 
   // Fixture variables.  Note that as the fixture is a C++ template, these must
-  // be accessed in the individual tests using the this poointer (e.g. use
+  // be accessed in the individual tests using the this pointer (e.g. use
   // `this->store` rather than `_store`).
   ChronosConnection* _chronos_connection;
   LocalStore* _datastore;

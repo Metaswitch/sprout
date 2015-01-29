@@ -414,7 +414,8 @@ RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, c
   {
     SerializerDeserializer* deserializer = *it;
 
-    LOG_DEBUG("Try to deserialize record with '%s' deserializer",
+    LOG_DEBUG("Try to deserialize record for %s with '%s' deserializer",
+              aor_id.c_str(),
               deserializer->name().c_str());
     aor = deserializer->deserialize_aor(aor_id, s);
 
@@ -729,7 +730,7 @@ RegStore::AoR* RegStore::BinarySerializerDeserializer::
 
   // First off, try to read the number of bindings.
   int num_bindings;
-  iss.read((char *)&num_bindings, sizeof(int));
+  iss.read((char*)&num_bindings, sizeof(int));
 
   if (iss.eof())
   {
