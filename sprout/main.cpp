@@ -678,6 +678,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                      "json" : "binary"),
                     pj_optarg);
       }
+      break;
 
     case 'P':
       options->pjsip_threads = atoi(pj_optarg);
