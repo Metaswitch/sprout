@@ -226,13 +226,71 @@ public:
     friend class RegStore;
   };
 
+  /// Interface used by the RegStore to serialize AoRs from C++ objects to the
+  /// format used in the store, and deserialize them.
+  ///
+  /// This interface allows multiple (de)serializers to be defined and for the
+  /// RegStore to use them in a pluggable fashion.
+  class SerializerDeserializer
+  {
+  public:
+    /// Virtual destructor.
+    virtual ~SerializerDeserializer() {};
+
+    /// Serialize an AoR object to the format used in the store.
+    ///
+    /// @param aor_data - The AoR object to serialize.
+    /// @return         - The serialized form.
+    virtual std::string serialize_aor(AoR* aor_data) = 0;
+
+    /// Deserialize some data from the store into an AoR object.
+    ///
+    /// @param aor_id - The primary public ID for the AoR. This is also the key
+    ///                 used used for the record in the store.
+    /// @param s      - The data to deserialize.
+    ///
+    /// @return       - An AoR object, or NULL if the data could not be
+    ///                 deserialized (e.g. because it is corrupt).
+    virtual AoR* deserialize_aor(const std::string& aor_id,
+                                 const std::string& s) = 0;
+
+    /// @return the name of this (de)serializer.
+    virtual std::string name() = 0;
+  };
+
+  /// A (de)serializer for the (deprecated) custom binary format.
+  class BinarySerializerDeserializer : public SerializerDeserializer
+  {
+  public:
+    ~BinarySerializerDeserializer() {}
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& aor_id,
+                         const std::string& s);
+    std::string name();
+  };
+
+  /// A (de)serializer for the JSON format.
+  class JsonSerializerDeserializer : public SerializerDeserializer
+  {
+  public:
+    ~JsonSerializerDeserializer() {}
+
+    std::string serialize_aor(AoR* aor_data);
+    AoR* deserialize_aor(const std::string& aor_id,
+                         const std::string& s);
+    std::string name();
+  };
+
   /// Provides the interface to the data store. This is responsible for
   /// updating and getting information from the underlying data store. The
   /// classes that call this class are responsible for retrying the get/set
   /// functions in case of failure.
   class Connector
   {
-    Connector(Store* data_store);
+    Connector(Store* data_store,
+              SerializerDeserializer*& serializer,
+              std::vector<SerializerDeserializer*>& deserializers);
 
     ~Connector();
 
@@ -250,10 +308,39 @@ public:
 
     /// RegStore is the only class that can use Connector
     friend class RegStore;
+
+  private:
+    SerializerDeserializer* _serializer;
+    std::vector<SerializerDeserializer*> _deserializers;
   };
 
-  /// Constructor.
-  RegStore(Store* data_store, ChronosConnection* chronos_connection);
+  /// RegStore constructor that allows the user to specify which serializer and
+  /// deserializers to use.
+  ///
+  /// @param data_store         - Pointer to the underlying data store.
+  /// @param serializer         - The serializer to use when writing records.
+  ///                             The RegStore takes ownership of it.
+  /// @param deserializer       - A vector of deserializers to when reading
+  ///                             records. The order of this vector is
+  ///                             important - each deserializer is
+  ///                             tried in turn until one successfully parses
+  ///                             the record. The RegStore takes ownership of
+  ///                             the entries in the vector.
+  /// @param chronos_connection - Chronos connection used to set timers for
+  ///                             expiring registrations and subscriptions.
+  RegStore(Store* data_store,
+           SerializerDeserializer*& serializer,
+           std::vector<SerializerDeserializer*>& deserializers,
+           ChronosConnection* chronos_connection);
+
+  /// Alternative RegStore constructor that creates a RegStore using just the
+  /// default (de)serializer.
+  ///
+  /// @param data_store         - Pointer to the underlying data store.
+  /// @param chronos_connection - Chronos connection used to set timers for
+  ///                             expiring registrations and subscriptions.
+  RegStore(Store* data_store,
+           ChronosConnection* chronos_connection);
 
   /// Destructor.
   ~RegStore();

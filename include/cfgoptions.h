@@ -51,6 +51,11 @@
 #include "acr.h"
 #include "enumservice.h"
 
+enum struct MemcachedWriteFormat
+{
+  BINARY, JSON
+};
+
 struct options
 {
   bool                   pcscf_enabled;
@@ -116,6 +121,7 @@ struct options
   int                    log_level;
   bool                   interactive;
   bool                   daemon;
+  MemcachedWriteFormat   memcached_write_format;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
