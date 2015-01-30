@@ -82,9 +82,9 @@ RegStore::RegStore(Store* data_store,
   _chronos(chronos_connection),
   _connector(NULL)
 {
-  SerializerDeserializer* serializer = new BinarySerializerDeserializer();
+  SerializerDeserializer* serializer = new JsonSerializerDeserializer();
   std::vector<SerializerDeserializer*> deserializers = {
-    new BinarySerializerDeserializer(),
+    new JsonSerializerDeserializer(),
   };
 
   _connector = new Connector(data_store, serializer, deserializers);
