@@ -74,7 +74,8 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
-    _icscf_sproutlet = new ICSCFSproutlet(stack_data.icscf_port,
+    _icscf_sproutlet = new ICSCFSproutlet("sip:bgcf.homedomain",
+                                          stack_data.icscf_port,
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
@@ -2372,7 +2373,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
                                         49152);
 
   // Set up the HSS responses for the terminating location query.
-  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40198.147.226.2/location",
+  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 

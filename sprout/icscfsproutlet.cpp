@@ -50,6 +50,7 @@ extern "C" {
 
 #include "log.h"
 #include "pjutils.h"
+#include "stack.h"
 #include "sproutsasevent.h"
 #include "icscfsproutlet.h"
 #include "scscfselector.h"
@@ -60,7 +61,8 @@ extern "C" {
 #define MAX_ENUM_LOOKUPS 2
 
 /// Constructor.
-ICSCFSproutlet::ICSCFSproutlet(int port,
+ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
+                               int port,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
@@ -68,6 +70,7 @@ ICSCFSproutlet::ICSCFSproutlet(int port,
                                bool enforce_global_only_lookups,
                                bool enforce_user_phone) :
   Sproutlet("icscf", port),
+  _bgcf_uri(NULL),
   _hss(hss),
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory),
@@ -75,6 +78,13 @@ ICSCFSproutlet::ICSCFSproutlet(int port,
   _global_only_lookups(enforce_global_only_lookups),
   _user_phone(enforce_user_phone)
 {
+  // Convert the BGCF routing URI to a form suitable for PJSIP, so we're
+  // not continually converting from a string.
+  _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
+  if (_bgcf_uri == NULL)
+  {
+    LOG_ERROR("Invalid BGCF URI %s", bgcf_uri.c_str()); //LCOV_EXCL_LINE
+  }
 }
 
 
@@ -84,7 +94,7 @@ ICSCFSproutlet::~ICSCFSproutlet()
 }
 
 
-/// Creates a ICSCFSproutletTsx instance for performing BGCF service processing
+/// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
 SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
                                       const std::string& alias,
@@ -397,7 +407,8 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
                                      ICSCFSproutlet* icscf) :
   SproutletTsx(helper),
   _icscf(icscf),
-  _acr(NULL)
+  _acr(NULL),
+  _routed_to_bgcf(false)
 {
 }
 
@@ -506,8 +517,8 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         (!PJUtils::is_uri_gruu(uri)))
     {
       LOG_DEBUG("enforce_user_phone set to false, try using a tel URI");
-      req->line.req.uri =
-        PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
+      uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
+      req->line.req.uri = uri;
 
       // We need to change the IMPU stored on our LIR router so that when
       // we do a new LIR we look up the new IMPU.
@@ -527,9 +538,21 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       if ((PJSIP_URI_SCHEME_IS_TEL(uri)) &&
           (translate_tel_uri(req, pool)))
       {
-        // If we successfully translate the req URI, we should look for an
-        // S-CSCF again.
-        status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+        // If we successfully translate the req URI and end up with either another TEL URI or a
+        // local SIP URI, we should look for an S-CSCF again.
+        uri = req->line.req.uri;
+        if ((PJSIP_URI_SCHEME_IS_TEL(uri)) ||
+            ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+             (PJUtils::is_home_domain(uri))))
+        {
+          // TEL or local SIP URI.  Look up the S-CSCF again.
+          status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+        }
+        else
+        {
+          // Number translated to off-switch.  Drop out of the loop.
+          ii = MAX_ENUM_LOOKUPS;
+        }
       }
       else
       {
@@ -555,12 +578,18 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
     send_request(req);
   }
-  else
+  else if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
+           (PJUtils::is_home_domain(req->line.req.uri)))
   {
-    // Failed to find an S-CSCF, the is the final response.
+    // Target is in our home domain, but we failed to find an S-CSCF. This is the final response.
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
+  }
+  else
+  {
+    // Target is a TEL URI or not in our home domain.  Pass to the BGCF.
+    route_to_bgcf(req);
   }
 }
 
@@ -597,12 +626,15 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   // for.  See TS 24.229 - section 5.3.2.2.
   //
   // Note we support service restoration, so integrity-protected settings in
-  // Authorization header are immaterial).
+  // Authorization header are immaterial.
+  //
+  // Note also that we can never retry once we've routed to the BGCF.
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
   const ForkState& fork_status = fork_state(fork_id);
   LOG_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
             (fork_status.error_state != NONE) ? "not " : "");
-  if (fork_status.error_state != NONE)
+  if ((!_routed_to_bgcf) &&
+      (fork_status.error_state != NONE))
   {
     // Indeed it it, first log to SAS.
     LOG_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
@@ -709,4 +741,18 @@ bool ICSCFSproutletTsx::translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
   }
 
   return found;
+}
+
+/// Route the request to the BGCF.
+void ICSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
+{
+  LOG_INFO("Routing to BGCF %s",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  _icscf->bgcf_uri()).c_str());
+  PJUtils::add_route_header(req,
+                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
+                                                            _icscf->bgcf_uri()),
+                            get_pool(req));
+  send_request(req);
+  _routed_to_bgcf = true;
 }

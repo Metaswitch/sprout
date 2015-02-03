@@ -41,6 +41,10 @@
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
         },
         {   "name" : "Clearwater internal numbers",
+            "prefix" : "+1650555",
+            "regex"  : "!(^.*$)!sip:\\1@homedomain!"
+        },
+        {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@ut-int.cw-ngv.com!"
         },
