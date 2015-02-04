@@ -44,6 +44,14 @@
             "prefix" : "+1650555",
             "regex"  : "!(^.*$)!sip:\\1@homedomain!"
         },
+        {   "name" : "Clearwater remote numbers (for testing BGCF)",
+            "prefix" : "+1650777",
+            "regex"  : "!(^.*$)!sip:\\1@remotedomain!"
+        },
+        {   "name" : "+1660xxxxxxx => +1650xxxxxxx - tests repeated TEL URI lookups",
+            "prefix" : "+1660",
+            "regex"  : "!^\\+1660(.*$)!tel:+1650\\1!"
+        },
         {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@ut-int.cw-ngv.com!"
