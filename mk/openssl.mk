@@ -9,6 +9,7 @@ ${OPENSSL_CONFIG_MARKER}:
 	cd ${OPENSSL_DIR}; \
 	./config --prefix=${INSTALL_DIR} -fPIC
 	touch ${OPENSSL_CONFIG_MARKER}
+	sed -ie 's#install:.*#install: all install_sw#' ${OPENSSL_DIR}/Makefile
 
 openssl: ${OPENSSL_CONFIG_MARKER}
 	${MAKE} -C ${OPENSSL_DIR}
