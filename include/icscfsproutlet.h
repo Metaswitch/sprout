@@ -68,7 +68,8 @@ class ICSCFSproutletRegTsx;
 class ICSCFSproutlet : public Sproutlet
 {
 public:
-  ICSCFSproutlet(int port,
+  ICSCFSproutlet(const std::string& bgcf_uri,
+                 int port,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
@@ -83,6 +84,12 @@ public:
                         pjsip_msg* req);
 
 private:
+
+  /// Returns the configured BGCF URI for this system.
+  inline const pjsip_uri* bgcf_uri() const
+  {
+    return _bgcf_uri;
+  }
 
   inline HSSConnection* get_hss_connection() const
   {
@@ -108,6 +115,9 @@ private:
 
   friend class ICSCFSproutletTsx;
   friend class ICSCFSproutletRegTsx;
+
+  /// A URI which routes to the BGCF.
+  pjsip_uri* _bgcf_uri;
 
   HSSConnection* _hss;
 
@@ -158,10 +168,16 @@ private:
   /// @param pool                 A pool.
   bool translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
 
+  /// Routes a request to a BGCF.
+  ///
+  /// @param req                  The request to route.
+  void route_to_bgcf(pjsip_msg* req);
+
   ICSCFSproutlet* _icscf;
   ACR* _acr;
   ICSCFRouter* _router;
   bool _originating;
+  bool _routed_to_bgcf;
 };
 
 class ICSCFSproutletRegTsx : public SproutletTsx

@@ -74,7 +74,8 @@ public:
     _scscf_selector = new SCSCFSelector(string(UT_DIR).append("/test_icscf.json"));
     _enum_service = new JSONEnumService(string(UT_DIR).append("/test_enum.json"));
 
-    _icscf_sproutlet = new ICSCFSproutlet(stack_data.icscf_port,
+    _icscf_sproutlet = new ICSCFSproutlet("sip:bgcf.homedomain",
+                                          stack_data.icscf_port,
                                           _hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
@@ -312,12 +313,13 @@ public:
   {
     ICSCFSproutletTestBase::SetUpTestCase();
 
-    // Set up DNS mappings for some S-CSCFs.
+    // Set up DNS mappings for some S-CSCFs and a BGCF.
     add_host_mapping("scscf1.homedomain", "10.10.10.1");
     add_host_mapping("scscf2.homedomain", "10.10.10.2");
     add_host_mapping("scscf3.homedomain", "10.10.10.3");
     add_host_mapping("scscf4.homedomain", "10.10.10.4");
     add_host_mapping("scscf5.homedomain", "10.10.10.5");
+    add_host_mapping("bgcf.homedomain",   "10.10.11.1");
   }
 
   static void TearDownTestCase()
@@ -2372,7 +2374,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
                                         49152);
 
   // Set up the HSS responses for the terminating location query.
-  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40198.147.226.2/location",
+  _hss_connection->set_result("/impu/sip%3A%2B16505551234%40homedomain/location",
                               "{\"result-code\": 2001,"
                               " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
 
@@ -2380,7 +2382,7 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
   Message msg1;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
-  msg1._to = "+16505551234";
+  msg1._to = "+16605551234";
   msg1._todomain = "";
   msg1._via = tp->to_string(false);
   msg1._extra = "Contact: sip:6505551000@" +
@@ -2429,6 +2431,69 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnum)
 
   _hss_connection->delete_result("/impu/sip%3A6505551234%40homedomain/location");
 
+  delete tp;
+}
+
+
+TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._toscheme = "tel";
+  msg1._to = "+16607771234";
+  msg1._todomain = "";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:6505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and forwarded INVITE
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // INVITE request should be forwarded to the BGCF.
+  tdata = current_txdata();
+  expect_target("FAKE_UDP", "0.0.0.0", 0, tdata);
+  ReqMatcher r1("INVITE");
+  r1.matches(tdata->msg);
+
+  // Check that a Route header has been added routing the INVITE to the
+  // selected S-CSCF.  This must include the orig parameter.
+  string route = get_headers(tdata->msg, "Route");
+  ASSERT_EQ("Route: <sip:bgcf.homedomain;lr>", route);
+
+  // Check that no Record-Route headers have been added.
+  string rr = get_headers(tdata->msg, "Record-Route");
+  ASSERT_EQ("", rr);
+
+  // Send a 200 OK response.
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the response is forwarded back to the source.
+  ASSERT_EQ(1, txdata_count());
+  tdata = current_txdata();
+  tp->expect_target(tdata);
+  RespMatcher r2(200);
+  r2.matches(tdata->msg);
+
+  free_txdata();
   delete tp;
 }
 

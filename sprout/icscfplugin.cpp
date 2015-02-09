@@ -41,6 +41,7 @@
 
 #include "cfgoptions.h"
 #include "sproutletplugin.h"
+#include "stack.h"
 #include "scscfselector.h"
 #include "icscfsproutlet.h"
 
@@ -82,6 +83,11 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
 
   if (opt.icscf_enabled)
   {
+    // Determine the S-CSCF and hence BGCF URIs.
+    std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
+                                                stack_data.scscf_uri.slen);
+    std::string bgcf_uri = "sip:bgcf." + scscf_cluster_uri.substr(4);
+
     // Create the S-CSCF selector.
     _scscf_selector = new SCSCFSelector();
 
@@ -91,7 +97,8 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
                         new ACRFactory();
 
     // Create the I-CSCF sproutlet.
-    _icscf_sproutlet = new ICSCFSproutlet(opt.icscf_port,
+    _icscf_sproutlet = new ICSCFSproutlet(bgcf_uri,
+                                          opt.icscf_port,
                                           hss_connection,
                                           _acr_factory,
                                           _scscf_selector,
