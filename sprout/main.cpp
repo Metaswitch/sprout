@@ -287,7 +287,7 @@ static void usage(void)
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
-       "                            to memcached. Valid values are 'binary' and 'json' (default is 'binary')\n"
+       "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
