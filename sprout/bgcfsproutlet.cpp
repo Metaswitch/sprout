@@ -48,9 +48,11 @@
 /// BGCFSproutlet constructor.
 BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
+                             EnumService* enum_service,
                              ACRFactory* acr_factory) :
   Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
+  _enum_service(enum_service),
   _acr_factory(acr_factory)
 {
 }

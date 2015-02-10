@@ -54,7 +54,6 @@ public:
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
-  EnumService* _enum_service;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -135,5 +134,4 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
-  delete _enum_service;
 }

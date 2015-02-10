@@ -364,6 +364,7 @@ public:
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet(0,
                                         _bgcf_service,
+                                        _enum_service,
                                         _acr_factory);
 
     // Create the MMTEL AppServer.

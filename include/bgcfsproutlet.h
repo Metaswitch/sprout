@@ -56,6 +56,7 @@ extern "C" {
 #include "acr.h"
 #include "bgcfservice.h"
 #include "sproutlet.h"
+#include "enumservice.h"
 
 #include <map>
 #include <vector>
@@ -69,6 +70,7 @@ class BGCFSproutlet : public Sproutlet
 public:
   BGCFSproutlet(int port,
                 BgcfService* bgcf_service,
+                EnumService* enum_service,
                 ACRFactory* acr_factory);
   ~BGCFSproutlet();
 
@@ -92,6 +94,8 @@ private:
   friend class BGCFSproutletTsx;
 
   BgcfService* _bgcf_service;
+
+  EnumService* _enum_service;
 
   ACRFactory* _acr_factory;
 };
