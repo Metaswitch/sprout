@@ -49,7 +49,8 @@
 BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
                              EnumService* enum_service,
-                             ACRFactory* acr_factory) :
+                             ACRFactory* acr_factory,
+                             bool override_npdi) :
   Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),

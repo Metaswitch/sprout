@@ -75,7 +75,8 @@ public:
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
                  bool enforce_global_only_lookups,
-                 bool enforce_user_phone);
+                 bool enforce_user_phone, 
+                 bool override_npdi);
 
   virtual ~ICSCFSproutlet();
 

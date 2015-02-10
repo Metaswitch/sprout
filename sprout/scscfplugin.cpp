@@ -121,7 +121,8 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
                                           enum_service,
                                           scscf_acr_factory,
                                           opt.enforce_user_phone,
-                                          opt.enforce_global_only_lookups);
+                                          opt.enforce_global_only_lookups,
+                                          opt.override_npdi);
 
     sproutlets.push_back(_scscf_sproutlet);
   }

@@ -109,7 +109,8 @@ enum OptionTypes
   OPT_ALARMS_ENABLED,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
-  OPT_MEMCACHED_WRITE_FORMAT
+  OPT_MEMCACHED_WRITE_FORMAT,
+  OPT_OVERRIDE_NPDI
 };
 
 
@@ -166,6 +167,7 @@ const static struct pj_getopt_option long_opt[] =
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
   { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
+  { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
   { NULL,                           0,                 0, 0}
 };
 
@@ -288,6 +290,8 @@ static void usage(void)
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
        "                            to memcached. Valid values are 'binary' and 'json' (default is 'binary')\n"
+       "     --override-npdi        Whether the deployment should check for number portability data on \n"
+       "                            requests that already have the 'npdi' indicator (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -778,6 +782,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       LOG_INFO("Using DNS server %s", pj_optarg);
       break;
 
+    case OPT_OVERRIDE_NPDI:
+      options->override_npdi = true;
+      LOG_INFO("Number portability lookups done on URIs containing the 'npdi' indicator");
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1107,6 +1116,7 @@ int main(int argc, char* argv[])
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
   opt.memcached_write_format = MemcachedWriteFormat::BINARY;
+  opt.override_npdi = PJ_FALSE;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);

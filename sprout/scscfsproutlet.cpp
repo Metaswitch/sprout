@@ -61,7 +61,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
                                EnumService* enum_service,
                                ACRFactory* acr_factory,
                                bool user_phone,
-                               bool global_only_lookups) :
+                               bool global_only_lookups,
+                               bool override_npdi) :
   Sproutlet("scscf", port),
   _scscf_cluster_uri(NULL),
   _scscf_node_uri(NULL),

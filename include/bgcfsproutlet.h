@@ -71,7 +71,8 @@ public:
   BGCFSproutlet(int port,
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
-                ACRFactory* acr_factory);
+                ACRFactory* acr_factory,
+                bool override_npdi);
   ~BGCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,

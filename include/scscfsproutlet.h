@@ -82,7 +82,8 @@ public:
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
                  bool user_phone,
-                 bool global_only_lookups);
+                 bool global_only_lookups,
+                 bool override_npdi);
   ~SCSCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
