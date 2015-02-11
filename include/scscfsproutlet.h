@@ -92,6 +92,17 @@ public:
 
   void set_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
+  void set_override_npdi(bool v) { _override_npdi = v; }
+
+  inline bool get_user_phone() const
+  {
+    return _user_phone;
+  }
+
+  inline bool get_override_npdi() const
+  {
+    return _override_npdi;
+  }
 
 private:
 
@@ -171,7 +182,7 @@ private:
 
   bool _global_only_lookups;
   bool _user_phone;
-
+  bool _override_npdi;
 };
 
 
@@ -229,8 +240,9 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required.
-  pjsip_status_code uri_translation(pjsip_msg* req);
+  /// Does URI translation if required. Returns whether the routing 
+  /// decision for the request has already been made 
+  bool uri_translation(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.

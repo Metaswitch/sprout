@@ -74,7 +74,8 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _enum_service(enum_service),
   _acr_factory(acr_factory),
   _global_only_lookups(global_only_lookups),
-  _user_phone(user_phone)
+  _user_phone(user_phone),
+  _override_npdi(override_npdi)
 {
   LOG_DEBUG("Creating S-CSCF Sproutlet");
   LOG_DEBUG("  S-CSCF cluster URI = %s", scscf_cluster_uri.c_str());
@@ -911,7 +912,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
-    if (uri_translation(req) == PJSIP_SC_OK)
+    if (!uri_translation(req))
     {
       if ((PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri)) ||
           (!PJUtils::is_home_domain(req->line.req.uri)))
@@ -1283,9 +1284,9 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
 
 /// Do URI translation if required.
-pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
+bool SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
 {
-  pjsip_status_code status_code = PJSIP_SC_OK;
+  bool already_routed = false;
   pjsip_uri* uri = req->line.req.uri;
 
   if ((PJUtils::is_home_domain(uri)) ||
@@ -1300,20 +1301,59 @@ pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
     {
       // The URI was successfully translated, so attempt to parse the returned
       // URI and substitute it in to the request.
-      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str, get_pool(req));
+      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,   
+                                                                get_pool(req));
 
       if (new_uri != NULL)
       {
-        LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
-        req->line.req.uri = new_uri;
+        if (PJUtils::get_npdi(uri))
+        {
+          if (!PJUtils::does_uri_represent_number(new_uri, 
+                                                  _scscf->get_user_phone()))
+          {
+            // The existing URI had NP data, but the ENUM lookup has returned
+            // a URI that doesn't represent a telephone number. This trumps the
+            // NP data. 
+            req->line.req.uri = new_uri;
+          }
+          else
+          {
+            LOG_DEBUG("Request URI already has existing NP information");
+
+            // The existing URI had NP data. Only overwrite the URI if 
+            // we're configured to do so. 
+            if (_scscf->get_override_npdi())
+            { 
+              LOG_DEBUG("Override existing NP information");
+              req->line.req.uri = new_uri;
+            }
+        
+            route_to_bgcf(req);
+            already_routed = true;
+          }
+        }
+        else if (PJUtils::get_npdi(new_uri))
+        {
+          // The ENUM lookup has returned NP data. Rewrite the request
+          // URI and route the request to the BGCF
+          LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
+          req->line.req.uri = new_uri;
+          route_to_bgcf(req);
+          already_routed = true;
+        }
+        else
+        {
+          LOG_DEBUG("Update request URI to %s", new_uri_str.c_str());
+          req->line.req.uri = new_uri;
+        }
       }
       else
       {
         LOG_WARNING("Badly formed URI %s from ENUM translation", new_uri_str.c_str());
-        status_code = PJSIP_SC_NOT_FOUND;
         pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "ENUM Failed");
         send_response(rsp);
         free_msg(req);
+        already_routed = true;
       }
     }
     else if (PJUtils::is_uri_phone_number(uri))
@@ -1322,11 +1362,11 @@ pjsip_status_code SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
       // definitely encodes a phone number, so we should route to the BGCF.
       LOG_DEBUG("Unable to resolve URI phone number %s using ENUM, route to BGCF",
                 PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, uri).c_str());
-      status_code = PJSIP_SC_NOT_FOUND;
       route_to_bgcf(req);
+      already_routed = true;
     }
   }
-  return status_code;
+  return already_routed;
 }
 
 

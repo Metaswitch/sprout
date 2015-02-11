@@ -118,6 +118,8 @@ const pj_str_t STR_TARGET = pj_str((char*)"target");
 const pj_str_t STR_CONDITIONS = pj_str((char*)"conditions");
 const pj_str_t STR_NO_REPLY_TIMER = pj_str((char*)"no-reply-timer");
 const pj_str_t STR_3GPP_ICS = pj_str((char*)"g.3gpp.ics");
+const pj_str_t STR_NPDI = pj_str((char*)"npdi");
+const pj_str_t STR_RN = pj_str((char*)"rn");
 
 /// Prefix of ODI tokens we generate.
 const pj_str_t STR_ODI_PREFIX = pj_str((char*)"odi_");
