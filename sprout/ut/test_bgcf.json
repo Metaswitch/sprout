@@ -15,6 +15,18 @@
         {   "name" : "Multiple nodes",
             "domain" : "multiple-nodes.example.com",
             "route" : ["sip2.example.com","sip3.example.com"]
+        },
+        {   "name" : "Routing number",
+            "number" : "+123-123",
+            "route" : ["sip.example.com"]
+        },
+        {   "name" : "Routing number (check prefix matching)",
+            "number" : "+123-124",
+            "route" : ["sip2.example.com"]
+        },
+        {   "name" : "Routing number (no separators)",
+            "number" : "+654321",
+            "route" : ["sip3.example.com"]
         }
     ]
 }

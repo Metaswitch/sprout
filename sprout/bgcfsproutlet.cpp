@@ -79,10 +79,22 @@ SproutletTsx* BGCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 ///
 /// @return            - The URIs to route the message on to (in order).
 /// @param domain      - The domain to find a route for.
-std::vector<std::string> BGCFSproutlet::get_route(const std::string &domain,
+std::vector<std::string> BGCFSproutlet::get_route_from_domain(
+                                                  const std::string &domain,
                                                   SAS::TrailId trail) const
 {
-  return _bgcf_service->get_route(domain, trail);
+  return _bgcf_service->get_route_from_domain(domain, trail);
+}
+
+/// Look up a route from the configured rules.
+///
+/// @return            - The URIs to route the message on to (in order).
+/// @param domain      - The domain to find a route for.
+std::vector<std::string> BGCFSproutlet::get_route_from_number(
+                                                  const std::string &number,
+                                                  SAS::TrailId trail) const
+{
+  return _bgcf_service->get_route_from_number(number, trail);
 }
 
 /// Get an ACR instance from the factory.
@@ -129,7 +141,8 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
 
   // Find the downstream routes based on the domain.
-  std::vector<std::string> bgcf_routes = _bgcf->get_route(domain, trail());
+  std::vector<std::string> bgcf_routes = 
+                                  _bgcf->get_route_from_domain(domain, trail());
 
   if (!bgcf_routes.empty())
   {

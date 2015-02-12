@@ -70,10 +70,20 @@ public:
   {
   }
 
-  void test(BgcfService& bgcf_)
+  void test(BgcfService& bgcf_, bool use_domain = true)
   {
     SCOPED_TRACE(_in);
-    vector<string> ret = bgcf_.get_route(_in, 0);
+    vector<string> ret; 
+
+    if (use_domain)
+    {
+      ret = bgcf_.get_route_from_domain(_in, 0);
+    }
+    else
+    {
+      ret = bgcf_.get_route_from_number(_in, 0);
+    }
+
     std::stringstream store_strings;
 
     for(size_t ii = 0; ii < ret.size(); ++ii)
@@ -153,3 +163,25 @@ TEST_F(BgcfServiceTest, MissingFile)
   EXPECT_TRUE(log.contains("No BGCF configuration"));
   ET("+15108580271", "").test(bgcf_);
 }
+
+TEST_F(BgcfServiceTest, NumberRouteTests)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
+
+  ET("+123-123", "sip.example.com").test(bgcf_, false);
+  ET("+123123", "sip.example.com").test(bgcf_, false);
+  ET("123123", "").test(bgcf_, false);
+  ET("+123", "sip2.example.com").test(bgcf_, false);
+  ET("+654-(3.21)", "sip3.example.com").test(bgcf_, false);
+  ET("+654!-(321)", "").test(bgcf_, false);
+}
+
+TEST_F(BgcfServiceTest, ExtraParts)
+{
+  CapturingTestLogger log;
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_extra_parts.json"));
+  EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
+  ET("198.147.226.98", "").test(bgcf_);
+  ET("198.147.226.98", "").test(bgcf_, false);
+}
+

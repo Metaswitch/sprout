@@ -85,8 +85,15 @@ private:
   ///
   /// @return            - The URIs to route the message on to (in order).
   /// @param domain      - The domain to find the route to.
-  std::vector<std::string> get_route(const std::string &domain,
-                                     SAS::TrailId trail) const;
+  std::vector<std::string> get_route_from_domain(const std::string &domain,
+                                                 SAS::TrailId trail) const;
+
+  /// Lookup a route from the configured rules.
+  ///
+  /// @return            - The URIs to route the message on to (in order).
+  /// @param number      - The number to route on
+  std::vector<std::string> get_route_from_number(const std::string &number,
+                                                 SAS::TrailId trail) const;
 
   /// Get an ACR instance from the factory.
   /// @param trail                SAS trail identifier to use for the ACR.
