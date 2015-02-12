@@ -107,6 +107,11 @@ private:
     return _user_phone;
   }
 
+  inline bool get_override_npdi() const
+  {
+    return _override_npdi;
+  }
+
   /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
   std::string enum_translate_tel_uri(pjsip_tel_uri* uri, SAS::TrailId trail);
 
@@ -130,6 +135,7 @@ private:
 
   bool _global_only_lookups;
   bool _user_phone;
+  bool _override_npdi;
 };
 
 
@@ -158,16 +164,6 @@ private:
     return ((scscf_lookup == PJSIP_SC_NOT_FOUND) ||
             (scscf_lookup == PJSIP_SC_DOES_NOT_EXIST_ANYWHERE));
   }
-
-  /// Perform an ENUM lookup. We only do this for requests containing tel
-  /// URIs.
-  ///
-  /// @returns                    True if we succesfully translate the URI,
-  ///                             false otherwise.
-  /// @param req                  The request whose URI we are trying to
-  ///                             translate
-  /// @param pool                 A pool.
-  bool translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
 
   /// Routes a request to a BGCF.
   ///
