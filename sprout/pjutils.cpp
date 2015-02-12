@@ -2132,6 +2132,31 @@ bool PJUtils::get_npdi(pjsip_uri* uri)
   return npdi;
 }
 
+bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
+{
+  bool rn_set = false;
+  pjsip_param* rn;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    rn = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_RN);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the userinfo_params
+    rn = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN);
+  }
+
+  if (rn != NULL)
+  {
+    routing_value = pj_str_to_string(&rn->value);
+    rn_set = (routing_value.size() > 0);
+  }
+
+  return rn_set;
+}
+
 bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
                                         bool enforce_option)
 {

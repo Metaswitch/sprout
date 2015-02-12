@@ -72,12 +72,24 @@ public:
                 BgcfService* bgcf_service,
                 EnumService* enum_service,
                 ACRFactory* acr_factory,
+                bool user_phone,
+                bool global_only_lookups,
                 bool override_npdi);
   ~BGCFSproutlet();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
+
+  inline bool get_user_phone() const
+  {
+    return _user_phone;
+  }
+
+  inline bool get_override_npdi() const
+  {
+    return _override_npdi;
+  }
 
 private:
 
@@ -99,6 +111,12 @@ private:
   /// @param trail                SAS trail identifier to use for the ACR.
   ACR* get_acr(SAS::TrailId trail);
 
+  /// Do an ENUM lookup .
+  ///
+  /// @return            - The URI translation.
+  /// @param uri         - The URI to translate
+  std::string enum_lookup(pjsip_uri* uri, SAS::TrailId trail);
+
   friend class BGCFSproutletTsx;
 
   BgcfService* _bgcf_service;
@@ -106,6 +124,10 @@ private:
   EnumService* _enum_service;
 
   ACRFactory* _acr_factory;
+
+  bool _global_only_lookups;
+  bool _user_phone;
+  bool _override_npdi;
 };
 
 

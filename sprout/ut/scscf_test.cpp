@@ -367,6 +367,8 @@ public:
                                         _bgcf_service,
                                         _enum_service,
                                         _acr_factory,
+                                        false,
+                                        false,
                                         false);
 
     // Create the MMTEL AppServer.
@@ -1617,7 +1619,7 @@ TEST_F(SCSCFTest, TestEnumLocalTelURI)
 
   set_global_only_lookups(true);
   Message msg;
-  msg._to = "16505551234";
+  msg._to = "16505551234;npdi";
   msg._toscheme = "tel";
   msg._todomain = "";
   // We only do ENUM on originating calls
@@ -1637,8 +1639,8 @@ TEST_F(SCSCFTest, TestEnumLocalSIPURINumber)
 
   set_global_only_lookups(true);
   Message msg;
-  msg._to = "15108580271";
-  msg._requri = "sip:15108580271@homedomain;user=phone";
+  msg._to = "15108580271;npdi";
+  msg._requri = "sip:15108580271;npdi@homedomain;user=phone";
   // We only do ENUM on originating calls
   msg._route = "Route: <sip:homedomain;orig>";
   msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
@@ -1716,6 +1718,40 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   list<HeaderMatcher> hdrs;
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  set_override_npdi(true);
+
+  Message msg;
+  msg._to = "+15108580401";
+  msg._requri = "sip:+15108580401@homedomain;user=phone";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
+}
+
+TEST_F(SCSCFTest, TestEnumNPBGCFTel)
+{
+  SCOPED_TRACE("");
+  _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  set_override_npdi(true);
+
+  Message msg;
+  msg._to = "+15108580401";
+  msg._toscheme = "tel";
+  msg._todomain = "";
+  msg._requri = "tel:+15108580401";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._extra = "Record-Route: <sip:homedomain>\nP-Asserted-Identity: <sip:+16505551000@homedomain>";
+  list<HeaderMatcher> hdrs;
+  hdrs.push_back(HeaderMatcher("Route", "Route: <sip:10.0.0.1:5060;transport=TCP;lr>"));
+  doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
 TEST_F(SCSCFTest, TestValidBGCFRoute)
@@ -4957,10 +4993,10 @@ TEST_F(SCSCFTest, SimpleOptionsAccept)
 // Repros https://github.com/Metaswitch/sprout/issues/519.
 TEST_F(SCSCFTest, TerminatingDiversionExternal)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -4995,10 +5031,10 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  msg._to = "6505551234@homedomain";
+  msg._to = "6505501234@homedomain";
   msg._todomain = "";
   msg._route = "Route: <sip:homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505501234@homedomain";
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
   poll();
@@ -5018,11 +5054,11 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpAS.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_EQ("sip:6505501234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+              testing::MatchesRegex("P-Served-User: <sip:6505501234@homedomain>;sescase=term;regstate=reg"));
 
   // ---------- AS1 turns it around
   // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
@@ -5062,7 +5098,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpExternal.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("sip:6505501234@ut.cw-ngv.com", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
   // ---------- Externally accepted with 200.
@@ -5097,7 +5133,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternal)
 // Test originating AS handling for request to external URI.
 TEST_F(SCSCFTest, OriginatingExternal)
 {
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
   _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
                                 <PublicIdentity><Identity>sip:6505551000@homedomain</Identity></PublicIdentity>
@@ -5124,7 +5160,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
                                   </ApplicationServer>
                                   </InitialFilterCriteria>
                                 </ServiceProfile></IMSSubscription>)");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
   TransportFlow tpBono(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.99.88.11", 12345);
@@ -5135,10 +5171,10 @@ TEST_F(SCSCFTest, OriginatingExternal)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  msg._to = "6505551234@ut.cw-ngv.com";
+  msg._to = "6505501234@ut.cw-ngv.com";
   msg._todomain = "";
   msg._route = "Route: <sip:homedomain;orig>";
-  msg._requri = "sip:6505551234@ut.cw-ngv.com";
+  msg._requri = "sip:6505501234@ut.cw-ngv.com";
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
   poll();
@@ -5158,7 +5194,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpAS.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("sip:6505501234@ut.cw-ngv.com", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
@@ -5201,7 +5237,7 @@ TEST_F(SCSCFTest, OriginatingExternal)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpExternal.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("sip:6505501234@ut.cw-ngv.com", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
   // ---------- Externally accepted with 200.
@@ -5948,10 +5984,10 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   TransportFlow tpAS(TransportFlow::Protocol::UDP, stack_data.scscf_port, "1.2.3.4", 56789);
   TransportFlow tpExternal(TransportFlow::Protocol::UDP, stack_data.scscf_port, "10.9.8.7", 5060);
 
-  register_uri(_store, _hss_connection, "6505551234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
-  _hss_connection->set_impu_result("sip:6505551234@homedomain", "call", HSSConnection::STATE_REGISTERED,
+  register_uri(_store, _hss_connection, "6505501234", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505501234@homedomain", "call", HSSConnection::STATE_REGISTERED,
                                 R"(<IMSSubscription><ServiceProfile>
-                                <PublicIdentity><Identity>sip:6505551234@homedomain</Identity></PublicIdentity>
+                                <PublicIdentity><Identity>sip:6505501234@homedomain</Identity></PublicIdentity>
                                   <InitialFilterCriteria>
                                     <Priority>1</Priority>
                                     <TriggerPoint>
@@ -5977,10 +6013,10 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   // We're within the trust boundary, so no stripping should occur.
   Message msg;
   msg._via = "10.99.88.11:12345";
-  msg._to = "6505551234@homedomain";
+  msg._to = "6505501234@homedomain";
   msg._todomain = "";
   msg._route = "Route: <sip:homedomain;orig>";
-  msg._requri = "sip:6505551234@homedomain";
+  msg._requri = "sip:6505501234@homedomain";
   msg._method = "INVITE";
   inject_msg(msg.get_request(), &tpBono);
   poll();
@@ -6000,11 +6036,11 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpAS.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@homedomain", r1.uri());
+  EXPECT_EQ("sip:6505501234@homedomain", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=term;regstate=reg"));
+              testing::MatchesRegex("P-Served-User: <sip:6505501234@homedomain>;sescase=term;regstate=reg"));
 
   // ---------- AS1 turns it around
   // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
@@ -6045,11 +6081,11 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpAS.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@ut2.cw-ngv.com", r1.uri());
+  EXPECT_EQ("sip:6505501234@ut2.cw-ngv.com", r1.uri());
   EXPECT_THAT(get_headers(out, "Route"),
               testing::MatchesRegex("Route: <sip:1\\.2\\.3\\.4:56789;transport=UDP;lr>\r\nRoute: <sip:odi_[+/A-Za-z0-9]+@127.0.0.1:5058;transport=UDP;lr;orig>"));
   EXPECT_THAT(get_headers(out, "P-Served-User"),
-              testing::MatchesRegex("P-Served-User: <sip:6505551234@homedomain>;sescase=orig-cdiv"));
+              testing::MatchesRegex("P-Served-User: <sip:6505501234@homedomain>;sescase=orig-cdiv"));
 
   // ---------- AS1 turns it around
   // (acting as routing B2BUA by adding a Via, removing the top Route and changing the target)
@@ -6087,7 +6123,7 @@ TEST_F(SCSCFTest, TerminatingDiversionExternalOrigCdiv)
   ASSERT_NO_FATAL_FAILURE(r1.matches(out));
 
   tpExternal.expect_target(current_txdata(), false);
-  EXPECT_EQ("sip:6505551234@ut.cw-ngv.com", r1.uri());
+  EXPECT_EQ("sip:6505501234@ut.cw-ngv.com", r1.uri());
   EXPECT_EQ("", get_headers(out, "Route"));
 
   // ---------- Externally accepted with 200.

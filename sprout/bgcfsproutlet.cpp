@@ -50,11 +50,16 @@ BGCFSproutlet::BGCFSproutlet(int port,
                              BgcfService* bgcf_service,
                              EnumService* enum_service,
                              ACRFactory* acr_factory,
+                             bool user_phone,
+                             bool global_only_lookups,
                              bool override_npdi) :
   Sproutlet("bgcf", port),
   _bgcf_service(bgcf_service),
   _enum_service(enum_service),
-  _acr_factory(acr_factory)
+  _acr_factory(acr_factory),
+  _global_only_lookups(global_only_lookups),
+  _user_phone(user_phone),
+  _override_npdi(override_npdi)
 {
 }
 
@@ -105,6 +110,43 @@ ACR* BGCFSproutlet::get_acr(SAS::TrailId trail)
   return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
 }
 
+std::string BGCFSproutlet::enum_lookup(pjsip_uri* uri, SAS::TrailId trail)
+{
+  std::string new_uri;
+
+  if (_enum_service != NULL)
+  {
+    // ENUM is enabled.
+    LOG_DEBUG("ENUM is enabled");
+    std::string user;
+
+    // Determine whether we have a SIP URI or a tel URI
+    if (PJSIP_URI_SCHEME_IS_SIP(uri))
+    {
+      user =
+        PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
+      LOG_DEBUG("SIP URI - user = %s", user.c_str());
+    }
+    else if (PJSIP_URI_SCHEME_IS_TEL(uri))
+    {
+      user =
+        PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
+      LOG_DEBUG("TEL URI - user = %s", user.c_str());
+    }
+
+    if ((PJUtils::is_user_global(user)) || (!_global_only_lookups))
+    {
+      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
+      new_uri = _enum_service->lookup_uri_from_user(user, trail);
+    }
+  }
+  else
+  {
+    LOG_DEBUG("ENUM isn't enabled");
+  }
+
+  return new_uri;
+}
 
 /// Individual Tsx constructor.
 BGCFSproutletTsx::BGCFSproutletTsx(SproutletTsxHelper* helper,
@@ -132,17 +174,58 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   _acr = _bgcf->get_acr(trail());
   _acr->rx_request(req);
 
-  // Extract the domain from the ReqURI if this is a SIP URI.
   pjsip_uri* req_uri = (pjsip_uri*)req->line.req.uri;
-  std::string domain;
-  if (!PJUtils::is_uri_phone_number(req_uri))
+  std::vector<std::string> bgcf_routes;
+  std::string routing_value;
+  bool routing_with_number = false;
+
+  if ((PJUtils::does_uri_represent_number(req_uri, _bgcf->get_user_phone())) && 
+      ((!PJUtils::get_npdi(req_uri)) || 
+       (_bgcf->get_override_npdi())))
   {
-    domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+    std::string new_uri = _bgcf->enum_lookup(req_uri, trail());
+
+    if (!new_uri.empty())
+    {
+      req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, get_pool(req));
+ 
+      if (req_uri != NULL)
+      {
+        LOG_DEBUG("Rewrite request URI to %s", new_uri.c_str());
+        req->line.req.uri = req_uri;
+      }
+      else
+      {
+        // The ENUM lookup has returned an invalid URI. Reject the 
+        // request. 
+        LOG_DEBUG("Invalid ENUM response: %s", new_uri.c_str());
+        pjsip_msg* rsp = create_response(req,
+                                         PJSIP_SC_NOT_FOUND,
+                                         "ENUM failure");
+        send_response(rsp);
+        free_msg(req);
+      }
+    }
   }
 
-  // Find the downstream routes based on the domain.
-  std::vector<std::string> bgcf_routes = 
-                                  _bgcf->get_route_from_domain(domain, trail());
+  if (PJUtils::get_rn(req_uri, routing_value))
+  {
+    // Find the downstream routes based on the number.
+    bgcf_routes = _bgcf->get_route_from_number(routing_value, trail());
+    routing_with_number = true;
+  }
+  else
+  {
+    // Extract the domain from the ReqURI if this is a SIP URI.
+    if (!PJUtils::is_uri_phone_number(req_uri))
+    {
+      routing_value = 
+                    PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
+    }
+
+    // Find the downstream routes based on the domain.
+    bgcf_routes = _bgcf->get_route_from_domain(routing_value, trail());
+  }
 
   if (!bgcf_routes.empty())
   {
@@ -174,12 +257,13 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   }
   else
   {
-    LOG_DEBUG("No route configured for %s", domain.c_str());
+    LOG_DEBUG("No route configured for %s", routing_value.c_str());
 
-    if (domain == "")
+    if ((routing_value == "") || (routing_with_number))
     {
-      // If the domain is blank we were trying to route a telephone number and
-      // there are no more routes to try.
+      // If the routing_value is blank we were trying to route a telephone number and
+      // there are no more routes to try. If we had an rn value and this failed then
+      // there are also no more routes to try
       pjsip_msg* rsp = create_response(req,
                                        PJSIP_SC_NOT_FOUND,
                                        "No route to target");
@@ -189,7 +273,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     else
     {
       // Previous behaviour on no route was to try to forward the request as-is,
-      // (so trying to route to the domain in the request URI directly).
+      // (so trying to route to the routing_value in the request URI directly).
       send_request(req);
     }
   }
