@@ -104,7 +104,8 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
                                           _scscf_selector,
                                           enum_service,
                                           opt.enforce_global_only_lookups,
-                                          opt.enforce_user_phone);
+                                          opt.enforce_user_phone,
+                                          opt.override_npdi);
 
     sproutlets.push_back(_icscf_sproutlet);
   }

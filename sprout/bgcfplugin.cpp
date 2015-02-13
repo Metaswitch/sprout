@@ -93,7 +93,13 @@ std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
                        new ACRFactory();
 
     // Create the Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0, _bgcf_service, _acr_factory);
+    _bgcf_sproutlet = new BGCFSproutlet(0, 
+                                        _bgcf_service, 
+                                        enum_service, 
+                                        _acr_factory, 
+                                        opt.enforce_user_phone,
+                                        opt.enforce_global_only_lookups,
+                                        opt.override_npdi);
 
     sproutlets.push_back(_bgcf_sproutlet);
   }

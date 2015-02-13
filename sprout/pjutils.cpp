@@ -237,6 +237,7 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.maddr_param.slen = 0;
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
+  aor.userinfo_param.next = NULL;
   returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
   LOG_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
   return returned_aor;
@@ -261,6 +262,7 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
     public_id.maddr_param.slen = 0;
     public_id.other_param.next = NULL;
     public_id.header_param.next = NULL;
+    public_id.userinfo_param.next = NULL;
     return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
@@ -2043,7 +2045,6 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
   tel_uri->context.slen = 0;
   tel_uri->isub_param.slen = 0;
   tel_uri->ext_param.slen = 0;
-  tel_uri->other_param.next = NULL;
 
   pjsip_param* isub = pjsip_param_find(&sip_uri->other_param, &STR_ISUB);
   if (isub != NULL)
@@ -2111,4 +2112,62 @@ pj_bool_t PJUtils::is_user_numeric(const std::string& user)
 pj_bool_t PJUtils::is_user_numeric(const pj_str_t& user)
 {
   return is_user_numeric(pj_str_to_string(&user));
+}
+
+bool PJUtils::get_npdi(pjsip_uri* uri)
+{
+  bool npdi = false;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    npdi = (pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_NPDI) != NULL);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the userinfo_params
+    npdi = (pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_NPDI) != NULL);
+  }
+
+  return npdi;
+}
+
+bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
+{
+  bool rn_set = false;
+  pjsip_param* rn;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    rn = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_RN);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the userinfo_params
+    rn = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN);
+  }
+
+  if (rn != NULL)
+  {
+    routing_value = pj_str_to_string(&rn->value);
+    rn_set = (routing_value.size() > 0);
+  }
+
+  return rn_set;
+}
+
+bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
+                                        bool enforce_user_phone)
+{
+  // A URI represents a telephone number if:
+  // - It's a Tel URI, or 
+  // - It's a SIP URI where
+  //    - user=phone is set or enforce_user_phone is false
+  //    - The user part is numeric
+  //    - It's not a gruu. 
+  return ((is_uri_phone_number(uri)) ||
+          ((!enforce_user_phone) &&
+           (is_user_numeric(user_from_uri(uri))) &&
+           (!is_uri_gruu(uri))));
 }

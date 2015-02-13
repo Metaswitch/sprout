@@ -54,7 +54,6 @@ public:
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
-  EnumService* _enum_service;
 };
 
 /// Export the plug-in using the magic symbol "sproutlet_plugin"
@@ -122,7 +121,8 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
                                           enum_service,
                                           scscf_acr_factory,
                                           opt.enforce_user_phone,
-                                          opt.enforce_global_only_lookups);
+                                          opt.enforce_global_only_lookups,
+                                          opt.override_npdi);
 
     sproutlets.push_back(_scscf_sproutlet);
   }
@@ -135,5 +135,4 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
-  delete _enum_service;
 }

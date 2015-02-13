@@ -138,6 +138,7 @@ get_settings()
 
         [ "$enforce_user_phone" != "Y" ] || user_phone_arg="--enforce-user-phone"
         [ "$enforce_global_only_lookups" != "Y" ] || global_only_lookups_arg="--enforce-global-only-lookups"
+        [ "$override_npdi" != "Y" ] || override_npdi_arg="--override-npdi"
 
         # Enable SNMP alarms if informsink(s) are configured
         if [ ! -z "$snmp_ip" ]
@@ -193,6 +194,7 @@ do_start()
                      $authentication_arg
                      $user_phone_arg
                      $global_only_lookups_arg
+                     $override_npdi_arg
                      $alarms_enabled_arg
                      --http_address=$local_ip
                      --http_port=9888

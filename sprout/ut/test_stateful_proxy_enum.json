@@ -12,6 +12,14 @@
             "prefix" : "+15108580273",
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
         },
+        {   "name" : "NP data - no routing number +151085803",
+            "prefix" : "+151085803",
+            "regex"  : "!(^.*$)!sip:\\1;npdi@ut.cw-ngv.com!"
+        },
+        {   "name" : "NP data - SIP - routing number +151085804",
+            "prefix" : "+151085804",
+            "regex"  : "!(^.*$)!sip:\\1;npdi;rn=+151085804@homedomain!"
+        },
         {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@homedomain!"
@@ -23,10 +31,6 @@
         {   "name" : "Clearwater Tel URI",
             "prefix" : "16505551234",
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
-        },
-        {   "name" : "NANP => Alameda PBX",
-            "prefix" : "",
-            "regex"  : "!(^.*$)!sip:\\1@198.147.226.2!"
         }
     ]
 }

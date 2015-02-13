@@ -122,6 +122,7 @@ struct options
   bool                   interactive;
   bool                   daemon;
   MemcachedWriteFormat   memcached_write_format;
+  bool                   override_npdi;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
