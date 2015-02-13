@@ -49,7 +49,7 @@ public:
   SCSCFPlugin();
   ~SCSCFPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>);
   void unload();
 
 private:
@@ -71,9 +71,9 @@ SCSCFPlugin::~SCSCFPlugin()
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
+bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.scscf_enabled)
   {
@@ -123,11 +123,12 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
                                           opt.enforce_user_phone,
                                           opt.enforce_global_only_lookups,
                                           opt.override_npdi);
+    plugin_loaded = _scscf_sproutlet->init();
 
     sproutlets.push_back(_scscf_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 

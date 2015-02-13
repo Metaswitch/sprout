@@ -361,6 +361,7 @@ public:
                                           false,
                                           false,
                                           false);
+    _scscf_sproutlet->init();
 
     // Create the BGCF Sproutlet.
     _bgcf_sproutlet = new BGCFSproutlet(0,

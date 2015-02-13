@@ -78,21 +78,32 @@ ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
   _enum_service(enum_service),
   _global_only_lookups(enforce_global_only_lookups),
   _user_phone(enforce_user_phone),
-  _override_npdi(override_npdi)
+  _override_npdi(override_npdi),
+  _bgcf_uri_str(bgcf_uri)
 {
-  // Convert the BGCF routing URI to a form suitable for PJSIP, so we're
-  // not continually converting from a string.
-  _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
-  if (_bgcf_uri == NULL)
-  {
-    LOG_ERROR("Invalid BGCF URI %s", bgcf_uri.c_str()); //LCOV_EXCL_LINE
-  }
 }
 
 
 /// Destructor.
 ICSCFSproutlet::~ICSCFSproutlet()
 {
+}
+
+bool ICSCFSproutlet::init()
+{
+  bool init_success = true;
+
+  // Convert the BGCF routing URI to a form suitable for PJSIP, so we're
+  // not continually converting from a string.
+  _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
+
+  if (_bgcf_uri == NULL)
+  {
+    LOG_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
+    init_success = false;
+  }
+
+  return init_success;
 }
 
 

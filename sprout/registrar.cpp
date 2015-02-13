@@ -1008,23 +1008,29 @@ pj_status_t init_registrar(RegStore* registrar_store,
                                         stack_data.scscf_uri.ptr,
                                         stack_data.scscf_uri.slen,
                                         0);
-  service_route_uri->lr_param = 1;
+  if (service_route_uri != NULL)
+  {
+    service_route_uri->lr_param = 1;
 
-  // Add the orig parameter.  The UE must provide this back on future messages
-  // to ensure we perform originating processing.
-  pjsip_param *orig_param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
-  pj_strdup(stack_data.pool, &orig_param->name, &STR_ORIG);
-  pj_strdup2(stack_data.pool, &orig_param->value, "");
-  pj_list_insert_after(&service_route_uri->other_param, orig_param);
+    // Add the orig parameter.  The UE must provide this back on future messages
+    // to ensure we perform originating processing.
+    pjsip_param *orig_param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
+    pj_strdup(stack_data.pool, &orig_param->name, &STR_ORIG);
+    pj_strdup2(stack_data.pool, &orig_param->value, "");
+    pj_list_insert_after(&service_route_uri->other_param, orig_param);
 
-  service_route = pjsip_route_hdr_create(stack_data.pool);
-  service_route->name = STR_SERVICE_ROUTE;
-  service_route->sname = pj_str("");
-  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
+    service_route = pjsip_route_hdr_create(stack_data.pool);
+    service_route->name = STR_SERVICE_ROUTE;
+    service_route->sname = pj_str("");
+    service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
 
-  status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
-
+    status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
+  }
+  else
+  {
+    status = PJ_EINVAL;
+  }
+  
   return status;
 }
 

@@ -86,6 +86,7 @@ public:
                  bool override_npdi);
   ~SCSCFSproutlet();
 
+  bool init();
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
@@ -183,6 +184,12 @@ private:
   bool _global_only_lookups;
   bool _user_phone;
   bool _override_npdi;
+
+  /// String versions of the cluster URIs
+  std::string _scscf_cluster_uri_str;
+  std::string _scscf_node_uri_str;
+  std::string _icscf_uri_str;
+  std::string _bgcf_uri_str;
 };
 
 
