@@ -299,6 +299,8 @@ std::string SCSCFSproutlet::translate_request_uri(pjsip_msg* req,
     // We do this in order to avoid needing to setup an ENUM server on test
     // systems just to allow local calls to work.
     LOG_DEBUG("No ENUM server configured, perform default translation");
+    SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
+    SAS::report_event(event);
 
     if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
@@ -912,7 +914,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
     // Attempt to translate the RequestURI using ENUM or an alternative
     // database.
-    if (!uri_translation(req))
+    if (!uri_translation_and_route(req))
     {
       if ((PJSIP_URI_SCHEME_IS_TEL(req->line.req.uri)) ||
           (!PJUtils::is_home_domain(req->line.req.uri)))
@@ -1284,7 +1286,7 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
 
 
 /// Do URI translation if required.
-bool SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
+bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
 {
   bool already_routed = false;
   pjsip_uri* uri = req->line.req.uri;
@@ -1309,7 +1311,7 @@ bool SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
         if (PJUtils::get_npdi(uri))
         {
           if (!PJUtils::does_uri_represent_number(new_uri, 
-                                                  _scscf->get_user_phone()))
+                                           _scscf->should_require_user_phone()))
           {
             // The existing URI had NP data, but the ENUM lookup has returned
             // a URI that doesn't represent a telephone number. This trumps the
@@ -1322,7 +1324,7 @@ bool SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
 
             // The existing URI had NP data. Only overwrite the URI if 
             // we're configured to do so. 
-            if (_scscf->get_override_npdi())
+            if (_scscf->should_override_npdi())
             { 
               LOG_DEBUG("Override existing NP information");
               req->line.req.uri = new_uri;
@@ -1350,6 +1352,10 @@ bool SCSCFSproutletTsx::uri_translation(pjsip_msg* req)
       else
       {
         LOG_WARNING("Badly formed URI %s from ENUM translation", new_uri_str.c_str());
+        SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+        event.add_var_param(new_uri_str);
+        SAS::report_event(event);
+
         pjsip_msg* rsp = create_response(req, PJSIP_SC_NOT_FOUND, "ENUM Failed");
         send_response(rsp);
         free_msg(req);

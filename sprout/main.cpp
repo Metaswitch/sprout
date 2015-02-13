@@ -784,7 +784,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case OPT_OVERRIDE_NPDI:
       options->override_npdi = true;
-      LOG_INFO("Number portability lookups done on URIs containing the 'npdi' indicator");
+      LOG_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
       break;
 
     case 'h':

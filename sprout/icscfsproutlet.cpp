@@ -137,6 +137,13 @@ std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_tel_uri* uri,
       new_uri = _enum_service->lookup_uri_from_user(user, trail);
     }
   }
+  else
+  {
+    LOG_DEBUG("ENUM isn't enabled");
+    SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
+    SAS::report_event(event);
+  }
+
   return new_uri;
 }
 
@@ -513,7 +520,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // set. If it isn't, and we have a numeric SIP URI, it is possible that
     // this should have been a tel URI, so translate it and do the HSS lookup
     // again.
-    if ((!_icscf->get_user_phone()) &&
+    if ((!_icscf->should_require_user_phone()) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         (PJUtils::is_user_numeric(((pjsip_sip_uri*)uri)->user)) &&
         (!PJUtils::is_uri_gruu(uri)))
@@ -540,19 +547,20 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
       if (PJSIP_URI_SCHEME_IS_TEL(uri))
       {
         // Do an ENUM lookup and see if we should translate the TEL URI
-        std::string new_uri = 
-        _icscf->enum_translate_tel_uri((pjsip_tel_uri*)req->line.req.uri, trail());
+        std::string new_uri = _icscf->enum_translate_tel_uri(
+                                    (pjsip_tel_uri*)req->line.req.uri, trail());
 
         if (!new_uri.empty())
         {
-          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, pool);
+          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, 
+                                                                    pool);
 
           if (req_uri != NULL)
           {
             if (PJUtils::get_npdi(uri))
             {
               if (!PJUtils::does_uri_represent_number(req_uri,
-                                                      _icscf->get_user_phone()))
+                                           _icscf->should_require_user_phone()))
               {
                 // The existing URI had NP data, but the ENUM lookup has returned
                 // a URI that doesn't represent a telephone number. This trumps the
@@ -569,7 +577,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
                 // The existing URI had NP data. Only overwrite the URI if
                 // we're configured to do so.
-                if (_icscf->get_override_npdi())
+                if (_icscf->should_override_npdi())
                 {
                   LOG_DEBUG("Override existing NP information");
                   req->line.req.uri = req_uri;
@@ -599,6 +607,9 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
           {
             LOG_WARNING("Badly formed URI %s from ENUM translation",
                         new_uri.c_str());
+            SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+            event.add_var_param(new_uri);
+            SAS::report_event(event);
           }
         }
 

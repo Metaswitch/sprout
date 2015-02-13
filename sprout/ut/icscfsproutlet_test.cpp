@@ -2498,6 +2498,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumBgcf)
   delete tp;
 }
 
+// Test the case where the I-CSCF does an ENUM lookup which returns
+// NP data. The requ URI should be rewritten to include the NP data, 
+// and the request should be forwarded to the BGCF
 TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
 {
   pjsip_tx_data* tdata;
@@ -2508,24 +2511,16 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  // Inject an INVITE request to a tel URI
   Message msg1;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+1690100001";
   msg1._todomain = "";
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
-  msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
   ASSERT_EQ(2, txdata_count());
-
-  // Check the 100 Trying.
   tdata = current_txdata();
   RespMatcher(100).matches(tdata->msg);
   tp->expect_target(tdata);
@@ -2536,6 +2531,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
   expect_target("FAKE_UDP", "0.0.0.0", 0, tdata);
   ReqMatcher r1("INVITE");
   r1.matches(tdata->msg);
+
+  // Check the RequestURI has been altered 
+  ASSERT_EQ("tel:+1690100001;npdi;rn=16901", str_uri(tdata->msg->line.req.uri));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));
@@ -2551,6 +2549,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumNP)
   delete tp;
 }
 
+// Test the case where the I-CSCF does an ENUM lookup which returns
+// NP data, but already has NP in the req URI. The req URI should not
+// be rewritten and the request should be forwarded to the BGCF
 TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
 {
   pjsip_tx_data* tdata;
@@ -2561,18 +2562,12 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
                                         "1.2.3.4",
                                         49152);
 
-  // Inject an INVITE request to a tel URI with a P-Served-User header.
+  // Inject an INVITE request to a tel URI
   Message msg1;
   msg1._method = "INVITE";
   msg1._toscheme = "tel";
   msg1._to = "+1690100001;npdi";
   msg1._todomain = "";
-  msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
-  msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
   // Expecting 100 Trying and forwarded INVITE
@@ -2589,6 +2584,9 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteEnumExistingNP)
   expect_target("FAKE_UDP", "0.0.0.0", 0, tdata);
   ReqMatcher r1("INVITE");
   r1.matches(tdata->msg);
+
+  // Check the RequestURI hasn't been altered
+  ASSERT_EQ("tel:+1690100001;npdi", str_uri(tdata->msg->line.req.uri));
 
   // Send a 200 OK response.
   inject_msg(respond_to_current_txdata(200));

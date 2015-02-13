@@ -1,8 +1,13 @@
 {
     "routes" : [
-        {   "name" : "Alameda PBX",
-            "domain" : "198.147.226.2",
+        {   "name" : "Route 1",
+            "domain" : "route1",
             "number" : "+123-123",
+            "route" : ["sip.example.com"]
+        },
+        {   "name" : "Route 2",
+            "domain" : "route2",
+            "number" : 123123,
             "route" : ["sip.example.com"]
         }
     ]

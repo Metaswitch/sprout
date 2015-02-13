@@ -271,7 +271,7 @@ pj_bool_t is_user_numeric(const std::string& user);
 pj_bool_t is_user_numeric(const pj_str_t& user);
 
 bool does_uri_represent_number(pjsip_uri* uri,
-                               bool enforce_option);
+                               bool enforce_user_phone);
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
 

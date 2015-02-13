@@ -102,12 +102,12 @@ private:
     return _scscf_selector;
   }
 
-  inline bool get_user_phone() const
+  inline bool should_require_user_phone() const
   {
     return _user_phone;
   }
 
-  inline bool get_override_npdi() const
+  inline bool should_override_npdi() const
   {
     return _override_npdi;
   }

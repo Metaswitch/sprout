@@ -123,26 +123,30 @@ std::string BGCFSproutlet::enum_lookup(pjsip_uri* uri, SAS::TrailId trail)
     // Determine whether we have a SIP URI or a tel URI
     if (PJSIP_URI_SCHEME_IS_SIP(uri))
     {
-      user =
-        PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
-      LOG_DEBUG("SIP URI - user = %s", user.c_str());
+      user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)uri)->user);
     }
     else if (PJSIP_URI_SCHEME_IS_TEL(uri))
     {
-      user =
-        PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
-      LOG_DEBUG("TEL URI - user = %s", user.c_str());
+      user = PJUtils::pj_str_to_string(&((pjsip_tel_uri*)uri)->number);
     }
 
-    if ((PJUtils::is_user_global(user)) || (!_global_only_lookups))
+    if ((!user.empty()) && 
+        ((PJUtils::is_user_global(user)) || 
+         (!_global_only_lookups)))
     {
       LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
       new_uri = _enum_service->lookup_uri_from_user(user, trail);
+    }
+    else
+    {
+      LOG_DEBUG("Not doing an ENUM lookup");
     }
   }
   else
   {
     LOG_DEBUG("ENUM isn't enabled");
+    SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
+    SAS::report_event(event);
   }
 
   return new_uri;
@@ -179,12 +183,15 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   std::string routing_value;
   bool routing_with_number = false;
 
-  if ((PJUtils::does_uri_represent_number(req_uri, _bgcf->get_user_phone())) && 
+  if ((PJUtils::does_uri_represent_number(req_uri, 
+                _bgcf->should_require_user_phone())) && 
       ((!PJUtils::get_npdi(req_uri)) || 
-       (_bgcf->get_override_npdi())))
+       (_bgcf->should_override_npdi())))
   {
     std::string new_uri = _bgcf->enum_lookup(req_uri, trail());
 
+    // If we got a new_uri, then the ENUM lookup returned something. Check it's
+    // a valid URI
     if (!new_uri.empty())
     {
       req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, get_pool(req));
@@ -199,12 +206,20 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
         // The ENUM lookup has returned an invalid URI. Reject the 
         // request. 
         LOG_DEBUG("Invalid ENUM response: %s", new_uri.c_str());
+        SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+        event.add_var_param(new_uri);
+        SAS::report_event(event);
+  
         pjsip_msg* rsp = create_response(req,
                                          PJSIP_SC_NOT_FOUND,
                                          "ENUM failure");
         send_response(rsp);
         free_msg(req);
       }
+    }
+    else
+    {
+      LOG_DEBUG("ENUM lookup was unsuccessful");
     }
   }
 
@@ -263,7 +278,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     {
       // If the routing_value is blank we were trying to route a telephone number and
       // there are no more routes to try. If we had an rn value and this failed then
-      // there are also no more routes to try
+      // there are also no more routes to try.
       pjsip_msg* rsp = create_response(req,
                                        PJSIP_SC_NOT_FOUND,
                                        "No route to target");
@@ -273,7 +288,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     else
     {
       // Previous behaviour on no route was to try to forward the request as-is,
-      // (so trying to route to the routing_value in the request URI directly).
+      // (so trying to route to the domain in the request URI directly).
       send_request(req);
     }
   }

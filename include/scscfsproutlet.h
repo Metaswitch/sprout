@@ -90,16 +90,16 @@ public:
                         const std::string& alias,
                         pjsip_msg* req);
 
-  void set_user_phone(bool v) { _user_phone = v; }
+  void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
   void set_override_npdi(bool v) { _override_npdi = v; }
 
-  inline bool get_user_phone() const
+  inline bool should_require_user_phone() const
   {
     return _user_phone;
   }
 
-  inline bool get_override_npdi() const
+  inline bool should_override_npdi() const
   {
     return _override_npdi;
   }
@@ -242,7 +242,7 @@ private:
 
   /// Does URI translation if required. Returns whether the routing 
   /// decision for the request has already been made 
-  bool uri_translation(pjsip_msg* req);
+  bool uri_translation_and_route(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.

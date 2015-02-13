@@ -454,7 +454,7 @@ public:
 
     // Reset any configuration changes
     set_global_only_lookups(false);
-    set_user_phone(false);
+    set_enforce_user_phone(false);
     set_override_npdi(false);
   }
 
@@ -495,7 +495,7 @@ protected:
   void setupForkedFlow(SP::Message& msg);
   list<string> doProxyCalculateTargets(int max_targets);
 
-  void set_user_phone(bool v) { _scscf_sproutlet->set_user_phone(v); }
+  void set_enforce_user_phone(bool v) { _scscf_sproutlet->set_enforce_user_phone(v); }
   void set_global_only_lookups(bool v) { _scscf_sproutlet->set_global_only_lookups(v); }
   void set_override_npdi(bool v) { _scscf_sproutlet->set_override_npdi(v); }
 };
@@ -1525,6 +1525,9 @@ TEST_F(SCSCFTest, TestGRUUFailure)
   doSlowFailureFlow(msg, 480);
 }
 
+// Various ENUM tests - these use the test_stateful_proxy_enum.json file 
+// TODO - these want tidying up (maybe make the enum service a mock? at least make it so 
+// there are separate number ranges used in each test).  
 TEST_F(SCSCFTest, TestEnumExternalSuccessFromFromHeader)
 {
   SCOPED_TRACE("");
@@ -1566,7 +1569,7 @@ TEST_F(SCSCFTest, TestEnumUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  set_user_phone(true);
+  set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580271";
   msg._requri = "sip:+15108580271@homedomain;user=phone";
@@ -1585,7 +1588,7 @@ TEST_F(SCSCFTest, TestEnumNoUserPhone)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
 
-  set_user_phone(true);
+  set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580271";
   // We only do ENUM on originating calls
@@ -1709,7 +1712,7 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   SCOPED_TRACE("");
   _hss_connection->set_impu_result("sip:+16505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
   
-  set_user_phone(true);
+  set_enforce_user_phone(true);
   Message msg;
   msg._to = "+15108580301;npdi";
   msg._requri = "sip:+15108580301;npdi@homedomain;user=phone";
@@ -1720,6 +1723,8 @@ TEST_F(SCSCFTest, TestEnumReqURIwithNPDataToSIP)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580301;npdi@ut.cw-ngv.com.*"), hdrs, false);
 }
 
+// Test where the BGCF receives a SIP request URI represents a number and has NP data.
+// The ENUM lookup returns a rn which the BGCF routes on. 
 TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
 {
   SCOPED_TRACE("");
@@ -1736,6 +1741,8 @@ TEST_F(SCSCFTest, TestEnumNPBGCFSIP)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
+// Test where the BGCF receives a Tel request URI represents a number and has NP data.
+// The ENUM lookup returns a rn which the BGCF routes on.
 TEST_F(SCSCFTest, TestEnumNPBGCFTel)
 {
   SCOPED_TRACE("");
@@ -3786,7 +3793,7 @@ TEST_F(SCSCFTest, BothEndsWithEnumRewrite)
   TransportFlow tpBono(TransportFlow::Protocol::TCP, stack_data.scscf_port, "10.99.88.11", 12345);
   TransportFlow tpAS1(TransportFlow::Protocol::UDP, stack_data.scscf_port, "5.2.3.4", 56787);
 
-  set_user_phone(false);
+  set_enforce_user_phone(false);
   set_global_only_lookups(false);
 
   // ---------- Send INVITE

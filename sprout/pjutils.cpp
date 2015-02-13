@@ -2158,7 +2158,7 @@ bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
 }
 
 bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
-                                        bool enforce_option)
+                                        bool enforce_user_phone)
 {
   // A URI represents a telephone number if:
   // - It's a Tel URI, or 
@@ -2167,7 +2167,7 @@ bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
   //    - The user part is numeric
   //    - It's not a gruu. 
   return ((is_uri_phone_number(uri)) ||
-          ((!enforce_option) &&
+          ((!enforce_user_phone) &&
            (is_user_numeric(user_from_uri(uri))) &&
            (!is_uri_gruu(uri))));
 }
