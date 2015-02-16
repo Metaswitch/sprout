@@ -1629,7 +1629,14 @@ int main(int argc, char* argv[])
 
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
-  loader->load(sproutlets);
+
+  if (!loader->load(sproutlets))
+  {
+    CL_SPROUT_PLUGIN_FAILURE.log();
+    closelog();
+    LOG_ERROR("Failed to successfully load plug-ins");
+    return 1;
+  }
 
   if (!sproutlets.empty())
   {

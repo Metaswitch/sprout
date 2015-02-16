@@ -50,7 +50,7 @@ public:
   CDivASPlugin();
   ~CDivASPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -75,16 +75,16 @@ CDivASPlugin::~CDivASPlugin()
 }
 
 /// Loads the CDiv AS plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> CDivASPlugin::load(struct options& opt)
+bool CDivASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   // Load the CDiv AppServer
   _cdiv = new CallDiversionAS("communication-diversion");
   _cdiv_sproutlet = new SproutletAppServerShim(_cdiv);
   sproutlets.push_back(_cdiv_sproutlet);
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the CDiv AS plug-in.

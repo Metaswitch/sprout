@@ -75,43 +75,12 @@ SCSCFSproutlet::SCSCFSproutlet(const std::string& scscf_cluster_uri,
   _acr_factory(acr_factory),
   _global_only_lookups(global_only_lookups),
   _user_phone(user_phone),
-  _override_npdi(override_npdi)
+  _override_npdi(override_npdi),
+  _scscf_cluster_uri_str(scscf_cluster_uri),
+  _scscf_node_uri_str(scscf_node_uri),
+  _icscf_uri_str(icscf_uri),
+  _bgcf_uri_str(bgcf_uri)
 {
-  LOG_DEBUG("Creating S-CSCF Sproutlet");
-  LOG_DEBUG("  S-CSCF cluster URI = %s", scscf_cluster_uri.c_str());
-  LOG_DEBUG("  S-CSCF node URI    = %s", scscf_node_uri.c_str());
-  LOG_DEBUG("  I-CSCF URI         = %s", icscf_uri.c_str());
-  LOG_DEBUG("  BGCF URI           = %s", bgcf_uri.c_str());
-
-  // Convert the routing URIs to a form suitable for PJSIP, so we're
-  // not continually converting from strings.
-  _scscf_cluster_uri = PJUtils::uri_from_string(scscf_cluster_uri, stack_data.pool, false);
-  if (_scscf_cluster_uri == NULL)
-  {
-    LOG_ERROR("Invalid S-CSCF cluster %s", scscf_cluster_uri.c_str());
-  }
-  _scscf_node_uri = PJUtils::uri_from_string(scscf_node_uri, stack_data.pool, false);
-  if (_scscf_node_uri == NULL)
-  {
-    LOG_ERROR("Invalid S-CSCF node URI %s", scscf_node_uri.c_str());
-  }
-  _bgcf_uri = PJUtils::uri_from_string(bgcf_uri, stack_data.pool, false);
-  if (_bgcf_uri == NULL)
-  {
-    LOG_ERROR("Invalid BGCF URI %s", bgcf_uri.c_str());
-  }
-  if (icscf_uri != "")
-  {
-    _icscf_uri = PJUtils::uri_from_string(icscf_uri, stack_data.pool, false);
-    if (_icscf_uri == NULL)
-    {
-      LOG_ERROR("Invalid I-CSCF URI %s", icscf_uri.c_str());
-    }
-  }
-
-  // Create an AS Chain table for maintaining the mapping from ODI tokens to
-  // AS chains (and links in those chains).
-  _as_chain_table = new AsChainTable;
 }
 
 
@@ -121,6 +90,59 @@ SCSCFSproutlet::~SCSCFSproutlet()
   delete _as_chain_table;
 }
 
+bool SCSCFSproutlet::init()
+{
+  LOG_DEBUG("Creating S-CSCF Sproutlet");
+  LOG_DEBUG("  S-CSCF cluster URI = %s", _scscf_cluster_uri_str.c_str());
+  LOG_DEBUG("  S-CSCF node URI    = %s", _scscf_node_uri_str.c_str());
+  LOG_DEBUG("  I-CSCF URI         = %s", _icscf_uri_str.c_str());
+  LOG_DEBUG("  BGCF URI           = %s", _bgcf_uri_str.c_str());
+
+  bool init_success = true;
+
+  // Convert the routing URIs to a form suitable for PJSIP, so we're
+  // not continually converting from strings.
+  _scscf_cluster_uri = PJUtils::uri_from_string(_scscf_cluster_uri_str, stack_data.pool, false);
+
+  if (_scscf_cluster_uri == NULL)
+  {
+    LOG_ERROR("Invalid S-CSCF cluster %s", _scscf_cluster_uri_str.c_str());
+    init_success = false;
+  }
+
+  _scscf_node_uri = PJUtils::uri_from_string(_scscf_node_uri_str, stack_data.pool, false);
+
+  if (_scscf_node_uri == NULL)
+  {
+    LOG_ERROR("Invalid S-CSCF node URI %s", _scscf_node_uri_str.c_str());
+    init_success = false;
+  }
+
+  _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
+
+  if (_bgcf_uri == NULL)
+  {
+    LOG_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str());
+    init_success = false;
+  }
+
+  if (_icscf_uri_str != "")
+  {
+    _icscf_uri = PJUtils::uri_from_string(_icscf_uri_str, stack_data.pool, false);
+
+    if (_icscf_uri == NULL)
+    {
+      LOG_ERROR("Invalid I-CSCF URI %s", _icscf_uri_str.c_str());
+      init_success = false;
+    }
+  }
+
+  // Create an AS Chain table for maintaining the mapping from ODI tokens to
+  // AS chains (and links in those chains).
+  _as_chain_table = new AsChainTable;
+
+  return init_success;
+}
 
 /// Creates a SCSCFSproutletTsx instance for performing S-CSCF service processing
 /// on a request.

@@ -50,7 +50,7 @@ public:
   GeminiPlugin();
   ~GeminiPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -75,9 +75,9 @@ GeminiPlugin::~GeminiPlugin()
 }
 
 /// Loads the Gemini plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
+bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   // Create the Sproutlet.
   _gemini = new MobileTwinnedAppServer("mobile-twinned");
@@ -85,7 +85,7 @@ std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
 
   sproutlets.push_back(_gemini_sproutlet);
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the Gemini plug-in.

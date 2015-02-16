@@ -51,7 +51,7 @@ public:
   ICSCFPlugin();
   ~ICSCFPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>&);
   void unload();
 
 private:
@@ -77,9 +77,9 @@ ICSCFPlugin::~ICSCFPlugin()
 }
 
 /// Loads the I-CSCF plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
+bool ICSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.icscf_enabled)
   {
@@ -106,11 +106,12 @@ std::list<Sproutlet*> ICSCFPlugin::load(struct options& opt)
                                           opt.enforce_global_only_lookups,
                                           opt.enforce_user_phone,
                                           opt.override_npdi);
-
+    _icscf_sproutlet->init();
+    
     sproutlets.push_back(_icscf_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the I-CSCF plug-in.

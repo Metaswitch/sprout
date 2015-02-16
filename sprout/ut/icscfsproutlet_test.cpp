@@ -83,6 +83,7 @@ public:
                                           true,
                                           false,
                                           false);
+    _icscf_sproutlet->init();
     std::list<Sproutlet*> sproutlets;
     sproutlets.push_back(_icscf_sproutlet);
 
@@ -294,7 +295,7 @@ protected:
   static FakeHSSConnection* _hss_connection;
   static SCSCFSelector* _scscf_selector;
   static JSONEnumService* _enum_service;
-  static Sproutlet* _icscf_sproutlet;
+  static ICSCFSproutlet* _icscf_sproutlet;
   static SproutletProxy* _icscf_proxy;
 
 };
@@ -303,7 +304,7 @@ ACRFactory* ICSCFSproutletTestBase::_acr_factory;
 FakeHSSConnection* ICSCFSproutletTestBase::_hss_connection;
 SCSCFSelector* ICSCFSproutletTestBase::_scscf_selector;
 JSONEnumService* ICSCFSproutletTestBase::_enum_service;
-Sproutlet* ICSCFSproutletTestBase::_icscf_sproutlet;
+ICSCFSproutlet* ICSCFSproutletTestBase::_icscf_sproutlet;
 SproutletProxy* ICSCFSproutletTestBase::_icscf_proxy;
 
 

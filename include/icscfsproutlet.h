@@ -80,6 +80,8 @@ public:
 
   virtual ~ICSCFSproutlet();
 
+  bool init();
+
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
@@ -136,6 +138,9 @@ private:
   bool _global_only_lookups;
   bool _user_phone;
   bool _override_npdi;
+
+  /// String versions of cluster URIs
+  std::string _bgcf_uri_str;
 };
 
 
