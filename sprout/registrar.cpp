@@ -1028,7 +1028,9 @@ pj_status_t init_registrar(RegStore* registrar_store,
   }
   else
   {
+    // LCOV_EXCL_START - Start up failures not tested in UT
     status = PJ_EINVAL;
+    // LCOV_EXCL_STOP
   }
   
   return status;

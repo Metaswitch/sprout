@@ -2135,7 +2135,7 @@ bool PJUtils::get_npdi(pjsip_uri* uri)
 bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
 {
   bool rn_set = false;
-  pjsip_param* rn;
+  pjsip_param* rn = NULL;
 
   if (PJSIP_URI_SCHEME_IS_TEL(uri))
   {
