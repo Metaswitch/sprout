@@ -84,14 +84,6 @@ pj_xml_node* create_contact_node(pj_pool_t *pool,
   pj_xml_node *contact_node;
   pj_xml_attr *attr;
 
-  // Quick fix to avoid instance-ids wrapped in angle brackets from
-  // causing invalid XML
-  if (*id->ptr == '<')
-  {
-    id->ptr += 1;
-    id->slen -= 2;
-  }
-
   contact_node = pj_xml_node_new(pool, &STR_CONTACT);
 
   // Contact node requires an id, state and event
@@ -145,8 +137,10 @@ pj_xml_node* notify_create_reg_state_xml(
   pj_str_t reg_id;
   pj_str_t reg_state_str;
 
-  pj_cstr(&reg_aor, aor.c_str());
-  pj_cstr(&reg_id, subscription->_to_tag.c_str());
+  std::string unescaped_aor = aor;
+  pj_cstr(&reg_aor, Utils::xml_escape(unescaped_aor).c_str());
+  std::string unescaped_reg_id = subscription->_to_tag;
+  pj_cstr(&reg_id, Utils::xml_escape(unescaped_reg_id).c_str());
   reg_state_str = (reg_state == NotifyUtils::RegistrationState::ACTIVE)
                                                   ? STR_ACTIVE : STR_TERMINATED;
   reg_node = create_reg_node(pool, &reg_aor, &reg_id, &reg_state_str);
@@ -162,7 +156,8 @@ pj_xml_node* notify_create_reg_state_xml(
     pj_str_t c_state;
     pj_str_t c_event;
 
-    pj_cstr(&c_id, binding->first.c_str());
+    std::string unescaped_c_id = binding->first;
+    pj_cstr(&c_id, Utils::xml_escape(unescaped_c_id).c_str());
     c_state = (contact_state == NotifyUtils::ContactState::ACTIVE)
                                                   ? STR_ACTIVE : STR_TERMINATED;
 
@@ -197,14 +192,18 @@ pj_xml_node* notify_create_reg_state_xml(
 
     if (binding->second._uri.size() > 0)
     {
-      pj_cstr(&c_uri, binding->second._uri.c_str());
+      std::string unescaped_c_uri = binding->second._uri;
+      pj_cstr(&c_uri, Utils::xml_escape(unescaped_c_uri).c_str());
     }
 
     uri_node = pj_xml_node_new(pool, &STR_URI);
     pj_strdup(pool, &uri_node->content, &c_uri);
     pj_xml_add_node(contact_node, uri_node);
 
-    pj_str_t gruu = binding->second.pub_gruu_pj_str(pool);
+    std::string unescaped_gruu = binding->second.pub_gruu_str(pool);
+    pj_str_t gruu;
+    pj_cstr(&gruu, Utils::xml_escape(unescaped_gruu).c_str());
+
     if (gruu.slen != 0)
     {
       LOG_DEBUG("Create pub-gruu node");

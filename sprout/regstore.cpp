@@ -687,34 +687,23 @@ pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU as a string.
 // Returns "" if this binding has no GRUU.
-pj_str_t RegStore::AoR::Binding::pub_gruu_pj_str(pj_pool_t* pool) const
+std::string RegStore::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 {
   pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
 
   if (pub_gruu_uri == NULL)
   {
-    return pj_str("");
+    return "";
   }
 
-  return PJUtils::uri_to_pj_str(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri, pool);
+  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri);
 }
 
 // Utility method to return the public GRUU surrounded by quotes.
 // Returns "" if this binding has no GRUU.
 std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
-  pj_str_t unquoted_pub_gruu = pub_gruu_pj_str(pool);
-
-  if (unquoted_pub_gruu.slen == 0)
-  {
-    return "";
-  }
-
-  std::string ret;
-  ret.reserve(unquoted_pub_gruu.slen + 2);
-  ret.append("\"");
-  ret.append(unquoted_pub_gruu.ptr, unquoted_pub_gruu.slen);
-  ret.append("\"");
+  std::string ret = "\"" + pub_gruu_str(pool) + "\"";
   return ret;
 }
 
