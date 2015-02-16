@@ -51,7 +51,7 @@ public:
   BGCFPlugin();
   ~BGCFPlugin();
 
-  bool load(struct options& opt, std::list<Sproutlet*> sproutlets);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -78,7 +78,7 @@ BGCFPlugin::~BGCFPlugin()
 }
 
 /// Loads the BGCF plug-in, returning the supported Sproutlets.
-bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
+bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 

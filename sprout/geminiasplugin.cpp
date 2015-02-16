@@ -50,7 +50,7 @@ public:
   GeminiPlugin();
   ~GeminiPlugin();
 
-  bool load(struct options& opt, std::list<Sproutlet*> sproutlets);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -75,7 +75,7 @@ GeminiPlugin::~GeminiPlugin()
 }
 
 /// Loads the Gemini plug-in, returning the supported Sproutlets.
-bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
+bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 

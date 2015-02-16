@@ -50,7 +50,7 @@ public:
   MangelwurzelPlugin();
   ~MangelwurzelPlugin();
 
-  bool load(struct options& opt, std::list<Sproutlet*> sproutlets);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -72,7 +72,7 @@ MangelwurzelPlugin::~MangelwurzelPlugin()
 }
 
 /// Loads the mangelwurzel plug-in, returning the supported Sproutlets.
-bool MangelwurzelPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
+bool MangelwurzelPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 

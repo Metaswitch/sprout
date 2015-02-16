@@ -50,7 +50,7 @@ public:
   CDivASPlugin();
   ~CDivASPlugin();
 
-  bool load(struct options& opt, std::list<Sproutlet*> sproutlets);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -75,7 +75,7 @@ CDivASPlugin::~CDivASPlugin()
 }
 
 /// Loads the CDiv AS plug-in, returning the supported Sproutlets.
-bool CDivASPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
+bool CDivASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 

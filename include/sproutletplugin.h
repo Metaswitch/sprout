@@ -47,7 +47,7 @@
 class SproutletPlugin
 {
 public:
-  virtual bool load(struct options& opt, std::list<Sproutlet*>) = 0;
+  virtual bool load(struct options& opt, std::list<Sproutlet*>& sproutlets) = 0;
   virtual void unload() = 0;
 };
 

@@ -49,7 +49,7 @@ public:
   SCSCFPlugin();
   ~SCSCFPlugin();
 
-  bool load(struct options& opt, std::list<Sproutlet*>);
+  bool load(struct options& opt, std::list<Sproutlet*>&);
   void unload();
 
 private:
@@ -71,7 +71,7 @@ SCSCFPlugin::~SCSCFPlugin()
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
-bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*> sproutlets)
+bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
   bool plugin_loaded = true;
 
