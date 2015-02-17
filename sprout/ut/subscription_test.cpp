@@ -508,7 +508,7 @@ TEST_F(SubscriptionTest, NoNotificationsForEmergencyRegistrations)
   char buf[16384];
   int n = out->body->print_body(out->body, buf, sizeof(buf));
   string body(buf, n);
-  EXPECT_THAT(body, HasSubstr("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>"));
+  EXPECT_THAT(body, HasSubstr("&lt;sip:6505550231@192.91.191.29:59934;transport=tcp;ob&gt;"));
   EXPECT_THAT(body, Not(HasSubstr("sos")));
   inject_msg(respond_to_current_txdata(200));
 
