@@ -703,7 +703,14 @@ std::string RegStore::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 // Returns "" if this binding has no GRUU.
 std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
-  std::string ret = "\"" + pub_gruu_str(pool) + "\"";
+  std::string unquoted_pub_gruu = pub_gruu_str(pool);
+
+  if (unquoted_pub_gruu.length() == 0)
+  {
+    return "";
+  }
+
+  std::string ret = "\"" + unquoted_pub_gruu + "\"";
   return ret;
 }
 
