@@ -5,7 +5,7 @@
  * early on every SIP message.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * Parts of this header were derived from GPL licensed PJSIP sample code
  * with the following copyrights.

@@ -1803,7 +1803,7 @@ int main(int argc, char* argv[])
   // the PJSIP threads first - if we killed the worker threads first the
   // rx_msg_q will stop getting serviced so could fill up blocking
   // PJSIP threads, causing a deadlock.
-  status = stop_pjsip_threads();
+  stop_pjsip_threads();
   stop_worker_threads();
 
   // We must call stop_stack here because this terminates the
