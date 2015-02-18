@@ -172,8 +172,8 @@ const static struct pj_getopt_option long_opt[] =
   { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
-  { "target-latency-us",            required_argument, 0, OPT_INIT_TOKEN_RATE},
-  { "target-latency-us",            required_argument, 0, OPT_MIN_TOKEN_RATE},
+  { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
+  { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { NULL,                           0,                 0, 0}
 };
 
