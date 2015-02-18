@@ -119,7 +119,10 @@ get_settings()
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
         [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
-        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us=$target_latency_us"
+        [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us $target_latency_us"
+        [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens $max_tokens"
+        [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate $init_token_rate"
+        [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate $min_token_rate"
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
@@ -158,6 +161,9 @@ do_start()
                      -F $log_directory
                      -L $log_level
                      $target_latency_us_arg
+                     $max_tokens_arg
+                     $init_token_rate_arg
+                     $min_token_rate_arg
                      $ibcf_arg
                      $billing_cdf_arg"
 

@@ -110,7 +110,10 @@ enum OptionTypes
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
   OPT_MEMCACHED_WRITE_FORMAT,
-  OPT_OVERRIDE_NPDI
+  OPT_OVERRIDE_NPDI,
+  OPT_MAX_TOKENS,
+  OPT_INIT_TOKEN_RATE,
+  OPT_MIN_TOKEN_RATE
 };
 
 
@@ -168,6 +171,9 @@ const static struct pj_getopt_option long_opt[] =
   { "help",                         no_argument,       0, 'h'},
   { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
   { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
+  { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
+  { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
+  { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { NULL,                           0,                 0, 0}
 };
 
@@ -181,11 +187,6 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
-
-const static int TARGET_LATENCY = 100000;
-const static int MAX_TOKENS = 20;
-const static float INITIAL_TOKEN_RATE = 10.0;
-const static float MIN_TOKEN_RATE = 10.0;
 
 static void usage(void)
 {
@@ -265,6 +266,12 @@ static void usage(void)
        "                            The session expiry period to request (in seconds)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
+       "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n" 
+       "                            the throttling code (default: 20)\n"
+       "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
+       "                            the throttling code (default: 100)\n"
+       "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
+       "                            the throttling code (default: 10)\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -662,6 +669,33 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       if (options->target_latency_us <= 0)
       {
         LOG_ERROR("Invalid --target-latency-us option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_MAX_TOKENS:
+      options->max_tokens = atoi(pj_optarg);
+      if (options->max_tokens <= 0)
+      {
+        LOG_ERROR("Invalid --max-tokens option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_INIT_TOKEN_RATE:
+      options->init_token_rate = atoi(pj_optarg);
+      if (options->init_token_rate <= 0)
+      {
+        LOG_ERROR("Invalid --init-token-rate option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_MIN_TOKEN_RATE:
+      options->min_token_rate = atoi(pj_optarg);
+      if (options->min_token_rate <= 0)
+      {
+        LOG_ERROR("Invalid --min-token-rate option %s", pj_optarg);
         return -1;
       }
       break;
@@ -1111,6 +1145,9 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.alarms_enabled = PJ_FALSE;
   opt.target_latency_us = 100000;
+  opt.max_tokens = 20;
+  opt.init_token_rate = 100.0;
+  opt.min_token_rate = 10.0;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
@@ -1332,9 +1369,9 @@ int main(int argc, char* argv[])
 
   // Start the load monitor
   load_monitor = new LoadMonitor(opt.target_latency_us, // Initial target latency (us).
-                                 MAX_TOKENS,            // Maximum token bucket size.
-                                 INITIAL_TOKEN_RATE,    // Initial token fill rate (per sec).
-                                 MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
+                                 opt.max_tokens,        // Maximum token bucket size.
+                                 opt.init_token_rate,   // Initial token fill rate (per sec).
+                                 opt.min_token_rate);   // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
