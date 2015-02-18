@@ -247,7 +247,7 @@ GMOCK_SRCS_ := $(GMOCK_DIR)/src/*.cc $(GMOCK_HEADERS)
 # End of boilerplate
 
 COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
-                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/|^sprout/ut/|^sprout/mangelwurzel/ut/)' \
+                --exclude='(^include/|^modules/gmock/|^modules/rapidjson/|^modules/cpp-common/include/|^modules/cpp-common/test_utils/|^ut/|^usr/|^modules/gemini/src/ut/|^modules/gemini/include/|^sprout/ut/|^sprout/mangelwurzel/ut/)' \
                 --sort-percentage
 
 VGFLAGS = --suppressions=$(VG_SUPPRESS) \

@@ -84,6 +84,9 @@ protected:
   /// The ACR for the request if ACR reported is enabled, NULL otherwise.
   ACR* _acr;
 
+  // Port that I-CSCF is listening on
+  int _port;
+
   /// Flag which indicates whether or not we have asked the HSS for
   /// capabilities and got a successful response (even if there were no
   /// capabilities specified for this subscriber).
@@ -92,9 +95,6 @@ protected:
   /// Structure storing the most recent response from the HSS for this
   /// transaction.
   ServerCapabilities _hss_rsp;
-
-  // Port that I-CSCF is listening on
-  int _port;
 
   /// The list of S-CSCFs already attempted for this request.
   std::vector<std::string> _attempted_scscfs;

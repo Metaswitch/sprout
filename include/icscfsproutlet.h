@@ -68,21 +68,31 @@ class ICSCFSproutletRegTsx;
 class ICSCFSproutlet : public Sproutlet
 {
 public:
-  ICSCFSproutlet(int port,
+  ICSCFSproutlet(const std::string& bgcf_uri,
+                 int port,
                  HSSConnection* hss,
                  ACRFactory* acr_factory,
                  SCSCFSelector* scscf_selector,
                  EnumService* enum_service,
                  bool enforce_global_only_lookups,
-                 bool enforce_user_phone);
+                 bool enforce_user_phone, 
+                 bool override_npdi);
 
   virtual ~ICSCFSproutlet();
+
+  bool init();
 
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
 
 private:
+
+  /// Returns the configured BGCF URI for this system.
+  inline const pjsip_uri* bgcf_uri() const
+  {
+    return _bgcf_uri;
+  }
 
   inline HSSConnection* get_hss_connection() const
   {
@@ -94,9 +104,14 @@ private:
     return _scscf_selector;
   }
 
-  inline bool get_user_phone() const
+  inline bool should_require_user_phone() const
   {
     return _user_phone;
+  }
+
+  inline bool should_override_npdi() const
+  {
+    return _override_npdi;
   }
 
   /// Attempts to use ENUM to translate the specified Tel URI into a SIP URI.
@@ -109,6 +124,9 @@ private:
   friend class ICSCFSproutletTsx;
   friend class ICSCFSproutletRegTsx;
 
+  /// A URI which routes to the BGCF.
+  pjsip_uri* _bgcf_uri;
+
   HSSConnection* _hss;
 
   SCSCFSelector* _scscf_selector;
@@ -119,6 +137,10 @@ private:
 
   bool _global_only_lookups;
   bool _user_phone;
+  bool _override_npdi;
+
+  /// String versions of cluster URIs
+  std::string _bgcf_uri_str;
 };
 
 
@@ -148,20 +170,16 @@ private:
             (scscf_lookup == PJSIP_SC_DOES_NOT_EXIST_ANYWHERE));
   }
 
-  /// Perform an ENUM lookup. We only do this for requests containing tel
-  /// URIs.
+  /// Routes a request to a BGCF.
   ///
-  /// @returns                    True if we succesfully translate the URI,
-  ///                             false otherwise.
-  /// @param req                  The request whose URI we are trying to
-  ///                             translate
-  /// @param pool                 A pool.
-  bool translate_tel_uri(pjsip_msg* req, pj_pool_t* pool);
+  /// @param req                  The request to route.
+  void route_to_bgcf(pjsip_msg* req);
 
   ICSCFSproutlet* _icscf;
   ACR* _acr;
   ICSCFRouter* _router;
   bool _originating;
+  bool _routed_to_bgcf;
 };
 
 class ICSCFSproutletRegTsx : public SproutletTsx

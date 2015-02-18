@@ -50,7 +50,7 @@ public:
   MMTELASPlugin();
   ~MMTELASPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -77,9 +77,9 @@ MMTELASPlugin::~MMTELASPlugin()
 }
 
 /// Loads the MMTEL AS plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> MMTELASPlugin::load(struct options& opt)
+bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.xdm_server != "")
   {
@@ -96,7 +96,7 @@ std::list<Sproutlet*> MMTELASPlugin::load(struct options& opt)
     sproutlets.push_back(_mmtel_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the MMTEL AS plug-in.

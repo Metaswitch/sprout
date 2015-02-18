@@ -51,7 +51,7 @@ public:
   MementoPlugin();
   ~MementoPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -82,9 +82,9 @@ MementoPlugin::~MementoPlugin()
 }
 
 /// Loads the Memento plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
+bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (((opt.max_call_list_length == 0) &&
        (opt.call_list_ttl == 0)))
@@ -109,6 +109,7 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
     if (store_rc != CassandraStore::OK)
     {
       LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
+      plugin_loaded = false;
     }
     else
     {
@@ -125,7 +126,7 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
     }
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the Memento plug-in.

@@ -52,8 +52,10 @@ public:
   PluginLoader(const std::string& path, struct options& opt);
   ~PluginLoader();
 
-  /// Loads the plug-ins and returns the resulting list of Sproutlets.
-  void load(std::list<Sproutlet*>& sproutlets);
+  /// Loads the plug-ins and populates the resulting list of Sproutlets
+  /// Returns whether we hit issues loading the plugins and should 
+  /// therefore exit
+  bool load(std::list<Sproutlet*>& sproutlets);
 
   /// Unloads all plug-ins that have been successfully loaded.
   void unload();

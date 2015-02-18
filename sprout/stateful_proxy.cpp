@@ -181,6 +181,8 @@ PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 static pj_bool_t proxy_on_rx_request(pjsip_rx_data *rdata );
 static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata );
 
+void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata);
+
 static pjsip_module mod_stateful_proxy =
 {
   NULL, NULL,                         // prev, next
@@ -1140,7 +1142,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     }
   }
 
-  pjsip_routing_hdr* route_hdr;
   pjsip_sip_uri* upstream_uri;
 
   if (service_route != "")
@@ -1166,6 +1167,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     // When working as a load-balancer for a third-party P-CSCF, trust the
     // orig parameter of the top-most Route header.
     pjsip_param* orig_param = NULL;
+    pjsip_routing_hdr* route_hdr;
 
     // Check the rdata here, as the Route header may have been stripped
     // from the cloned tdata.
@@ -1474,6 +1476,15 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
               PJUtils::add_asserted_identity(tdata, aid2);
             }
           }
+
+          bool initial_request = (rdata->msg_info.to->tag.slen == 0);
+          if (initial_request)
+          {
+            // Initial requests (ones without a To tag) always go upstream
+            // to Sprout
+            LOG_DEBUG("Routing initial request from client to upstream Sprout");
+            proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+          }
         }
       }
     }
@@ -1539,6 +1550,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     if (*target == NULL)
     {
+      LOG_DEBUG("No target found yet");
+    
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
@@ -1912,7 +1925,8 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
       }
 
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
+      std::vector<std::string> bgcf_route = 
+                             bgcf_service->get_route_from_domain(domain, trail);
 
       if (!bgcf_route.empty())
       {
@@ -3783,6 +3797,12 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       uac_tdata = PJUtils::clone_tdata(_req);
       PJUtils::add_top_via(uac_tdata);
 
+      // Copy the targets onto the tdata as Route headers at this
+      // point - if the Request-URI is a tel: URI, PJSIP will refuse
+      // to create the transaction unless Route headers are present.
+      set_target_on_tdata(*it, uac_tdata);
+
+
       if (uac_tdata == NULL)
       {
         status = PJ_ENOMEM;
@@ -4149,36 +4169,33 @@ UACTransaction* UACTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAC) ? (UACTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-// Set the target for this UAC transaction.
-//
-void UACTransaction::set_target(const struct Target& target)
+// Modifies a tdata's Request-URI and Route headers to match the given Target object.
+void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
 {
-  enter_context();
-
   if (target.from_store)
   {
     // This target came from the registration store.  Before we overwrite the
     // URI, extract its AOR and write it to the P-Called-Party-ID header.
     static const pj_str_t called_party_id_hdr_name = pj_str("P-Called-Party-ID");
-    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(_tdata->msg, &called_party_id_hdr_name, NULL);
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &called_party_id_hdr_name, NULL);
     if (hdr)
     {
       pj_list_erase(hdr);
     }
-    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri) + ">");
+    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)tdata->msg->line.req.uri) + ">");
     pj_str_t called_party_id;
-    pj_strdup2(_tdata->pool,
+    pj_strdup2(tdata->pool,
                &called_party_id,
                name_addr_str.c_str());
-    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(_tdata->pool,
+    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                       &called_party_id_hdr_name,
                                                       &called_party_id);
-    pjsip_msg_add_hdr(_tdata->msg, hdr);
+    pjsip_msg_add_hdr(tdata->msg, hdr);
   }
 
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
-  _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
+  tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, target.uri);
 
   // If the target is routing to the upstream device (we're acting as an access
   // proxy), strip any extra loose routes on the message to prevent accidental
@@ -4188,16 +4205,13 @@ void UACTransaction::set_target(const struct Target& target)
     LOG_DEBUG("Stripping loose routes from proxied message");
 
     // Tight loop to strip all route headers.
-    while (pjsip_msg_find_remove_hdr(_tdata->msg,
+    while (pjsip_msg_find_remove_hdr(tdata->msg,
                                      PJSIP_H_ROUTE,
                                      NULL) != NULL)
     {
-      // Tight loop.
+      LOG_DEBUG("Stripped a Route header from proxied message");
     };
   }
-
-  // Store the liveness timeout.
-  _liveness_timeout = target.liveness_timeout;
 
   // Add all the paths as a sequence of Route headers.
   for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
@@ -4216,10 +4230,20 @@ void UACTransaction::set_target(const struct Target& target)
               uri->port,
               uri->transport_param.slen,
               uri->transport_param.ptr);
-    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
-    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, uri);
-    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
+    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(tdata->pool);
+    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, uri);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)route_hdr);
   }
+}
+
+// Set the target for this UAC transaction.
+//
+void UACTransaction::set_target(const struct Target& target)
+{
+  enter_context();
+
+  // Store the liveness timeout.
+  _liveness_timeout = target.liveness_timeout;
 
   if (target.from_store)
   {

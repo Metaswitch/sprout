@@ -64,13 +64,30 @@ extern "C" {
 #include "chronosconnection.h"
 #include "sproutsasevent.h"
 #include "constants.h"
+#include "json_parse_utils.h"
+
+RegStore::RegStore(Store* data_store,
+                   SerializerDeserializer*& serializer,
+                   std::vector<SerializerDeserializer*>& deserializers,
+                   ChronosConnection* chronos_connection) :
+  _chronos(chronos_connection),
+  _connector(NULL)
+{
+  _connector = new Connector(data_store, serializer, deserializers);
+}
+
 
 RegStore::RegStore(Store* data_store,
                    ChronosConnection* chronos_connection) :
   _chronos(chronos_connection),
   _connector(NULL)
 {
-  _connector = new Connector(data_store);
+  SerializerDeserializer* serializer = new BinarySerializerDeserializer();
+  std::vector<SerializerDeserializer*> deserializers = {
+    new BinarySerializerDeserializer(),
+  };
+
+  _connector = new Connector(data_store, serializer, deserializers);
 }
 
 
@@ -110,13 +127,26 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   if (status == Store::Status::OK)
   {
     // Retrieved the data, so deserialize it.
+    LOG_DEBUG("Data store returned a record, CAS = %ld", cas);
     aor_data = deserialize_aor(aor_id, data);
-    aor_data->_cas = cas;
-    LOG_DEBUG("Data store returned a record, CAS = %ld", aor_data->_cas);
 
-    SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
-    event.add_var_param(aor_id);
-    SAS::report_event(event);
+    if (aor_data != NULL)
+    {
+      aor_data->_cas = cas;
+
+      SAS::Event event(trail, SASEvent::REGSTORE_GET_FOUND, 0);
+      event.add_var_param(aor_id);
+      SAS::report_event(event);
+    }
+    else
+    {
+      // Could not deserialize the record. Treat it as not found.
+      LOG_INFO("Failed to deserialize record");
+      SAS::Event event(trail, SASEvent::REGSTORE_DESERIALIZATION_FAILED, 0);
+      event.add_var_param(aor_id);
+      event.add_var_param(data);
+      SAS::report_event(event);
+    }
   }
   else if (status == Store::Status::NOT_FOUND)
   {
@@ -369,178 +399,40 @@ void RegStore::expire_subscriptions(AoR* aor_data,
 /// Serialize the contents of an AoR.
 std::string RegStore::Connector::serialize_aor(AoR* aor_data)
 {
-  std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
-
-  int num_bindings = aor_data->bindings().size();
-  LOG_DEBUG("Serialize %d bindings", num_bindings);
-  oss.write((const char *)&num_bindings, sizeof(int));
-
-  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
-       i != aor_data->bindings().end();
-       ++i)
-  {
-    LOG_DEBUG("  Binding %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Binding* b = i->second;
-    oss << b->_uri << '\0';
-    oss << b->_cid << '\0';
-    oss.write((const char *)&b->_cseq, sizeof(int));
-    oss.write((const char *)&b->_expires, sizeof(int));
-    oss.write((const char *)&b->_priority, sizeof(int));
-    int num_params = b->_params.size();
-    oss.write((const char *)&num_params, sizeof(int));
-    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
-         i != b->_params.end();
-         ++i)
-    {
-      oss << i->first << '\0' << i->second << '\0';
-    }
-    int num_path_hdrs = b->_path_headers.size();
-    oss.write((const char *)&num_path_hdrs, sizeof(int));
-    for (std::list<std::string>::const_iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    oss << b->_timer_id << '\0';
-    oss << b->_private_id << '\0';
-    oss.write((const char *)&b->_emergency_registration, sizeof(int));
-  }
-
-  int num_subscriptions = aor_data->subscriptions().size();
-  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
-  oss.write((const char *)&num_subscriptions, sizeof(int));
-
-  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
-       i != aor_data->subscriptions().end();
-       ++i)
-  {
-    LOG_DEBUG("  Subscription %s", i->first.c_str());
-    oss << i->first << '\0';
-
-    AoR::Subscription* s = i->second;
-    oss << s->_req_uri << '\0';
-    oss << s->_from_uri << '\0';
-    oss << s->_from_tag << '\0';
-    oss << s->_to_uri << '\0';
-    oss << s->_to_tag << '\0';
-    oss << s->_cid << '\0';
-    int num_routes = s->_route_uris.size();
-    LOG_DEBUG("    number of routes = %d", num_routes);
-    oss.write((const char *)&num_routes, sizeof(int));
-    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      oss << *i << '\0';
-    }
-    oss.write((const char *)&s->_expires, sizeof(int));
-  }
-
-  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
-
-  return oss.str();
+  return _serializer->serialize_aor(aor_data);
 }
 
 
 /// Deserialize the contents of an AoR
 RegStore::AoR* RegStore::Connector::deserialize_aor(const std::string& aor_id, const std::string& s)
 {
-  std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
+  AoR* aor = NULL;
 
-  AoR* aor_data = new AoR(aor_id);
-
-  int num_bindings;
-  iss.read((char *)&num_bindings, sizeof(int));
-  LOG_DEBUG("Deserialize %d bindings", num_bindings);
-
-  for (int ii = 0; ii < num_bindings; ++ii)
+  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
+      it != _deserializers.end();
+      ++it)
   {
-    // Extract the binding identifier into a string.
-    std::string binding_id;
-    getline(iss, binding_id, '\0');
-    LOG_DEBUG("  Binding %s", binding_id.c_str());
+    SerializerDeserializer* deserializer = *it;
 
-    AoR::Binding* b = aor_data->get_binding(binding_id);
+    LOG_DEBUG("Try to deserialize record for %s with '%s' deserializer",
+              aor_id.c_str(),
+              deserializer->name().c_str());
+    aor = deserializer->deserialize_aor(aor_id, s);
 
-    // Now extract the various fixed binding parameters.
-    getline(iss, b->_uri, '\0');
-    getline(iss, b->_cid, '\0');
-    iss.read((char *)&b->_cseq, sizeof(int));
-    iss.read((char *)&b->_expires, sizeof(int));
-
-    iss.read((char *)&b->_priority, sizeof(int));
-
-    int num_params;
-    iss.read((char *)&num_params, sizeof(int));
-    for (int ii = 0;
-         ii < num_params;
-         ++ii)
+    if (aor != NULL)
     {
-      std::string pname;
-      std::string pvalue;
-      getline(iss, pname, '\0');
-      getline(iss, pvalue, '\0');
-      b->_params[pname] = pvalue;
+      LOG_DEBUG("Deserialization suceeded");
+      return aor;
     }
-
-    int num_paths = 0;
-    iss.read((char *)&num_paths, sizeof(int));
-    b->_path_headers.resize(num_paths);
-    LOG_DEBUG("Deserialize %d path headers", num_paths);
-    for (std::list<std::string>::iterator i = b->_path_headers.begin();
-         i != b->_path_headers.end();
-         ++i)
+    else
     {
-      getline(iss, *i, '\0');
-      LOG_DEBUG("  Deserialized path header %s", i->c_str());
+      LOG_DEBUG("Deserialization failed");
     }
-    getline(iss, b->_timer_id, '\0');
-    getline(iss, b->_private_id, '\0');
-    iss.read((char *)&b->_emergency_registration, sizeof(int));
   }
 
-  int num_subscriptions;
-  iss.read((char *)&num_subscriptions, sizeof(int));
-  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
-
-  for (int ii = 0; ii < num_subscriptions; ++ii)
-  {
-    // Extract the to tag index into a string.
-    std::string to_tag;
-    getline(iss, to_tag, '\0');
-    LOG_DEBUG("  Subscription %s", to_tag.c_str());
-
-    AoR::Subscription* s = aor_data->get_subscription(to_tag);
-
-    // Now extract the various fixed subscription parameters.
-    getline(iss, s->_req_uri, '\0');
-    getline(iss, s->_from_uri, '\0');
-    getline(iss, s->_from_tag, '\0');
-    getline(iss, s->_to_uri, '\0');
-    getline(iss, s->_to_tag, '\0');
-    getline(iss, s->_cid, '\0');
-
-    int num_routes = 0;
-    iss.read((char *)&num_routes, sizeof(int));
-    LOG_DEBUG("    number of routes = %d", num_routes);
-    s->_route_uris.resize(num_routes);
-    for (std::list<std::string>::iterator i = s->_route_uris.begin();
-         i != s->_route_uris.end();
-         ++i)
-    {
-      getline(iss, *i, '\0');
-    }
-
-    iss.read((char *)&s->_expires, sizeof(int));
-  }
-
-  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
-
-  return aor_data;
+  return aor;
 }
+
 
 /// Default constructor.
 RegStore::AoR::AoR(std::string sip_uri) :
@@ -723,13 +615,28 @@ void RegStore::send_notify(AoR::Subscription* s, int cseq,
   }
 }
 
-RegStore::Connector::Connector(Store* data_store) :
-  _data_store(data_store)
+RegStore::Connector::Connector(Store* data_store,
+                               SerializerDeserializer*& serializer,
+                               std::vector<SerializerDeserializer*>& deserializers) :
+  _data_store(data_store),
+  _serializer(serializer),
+  _deserializers(deserializers)
 {
+  // We have taken ownership of the serializer and deserializers.
+  serializer = NULL;
+  deserializers.clear();
 }
 
 RegStore::Connector::~Connector()
 {
+  delete _serializer; _serializer = NULL;
+
+  for(std::vector<SerializerDeserializer*>::iterator it = _deserializers.begin();
+      it != _deserializers.end();
+      ++it)
+  {
+    delete *it; *it = NULL;
+  }
 }
 
 // Generates the public GRUU for this binding from the address of record and
@@ -780,33 +687,489 @@ pjsip_sip_uri* RegStore::AoR::Binding::pub_gruu(pj_pool_t* pool) const
 
 // Utility method to return the public GRUU as a string.
 // Returns "" if this binding has no GRUU.
-pj_str_t RegStore::AoR::Binding::pub_gruu_pj_str(pj_pool_t* pool) const
+std::string RegStore::AoR::Binding::pub_gruu_str(pj_pool_t* pool) const
 {
   pjsip_sip_uri* pub_gruu_uri = pub_gruu(pool);
 
   if (pub_gruu_uri == NULL)
   {
-    return pj_str("");
+    return "";
   }
 
-  return PJUtils::uri_to_pj_str(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri, pool);
+  return PJUtils::uri_to_string(PJSIP_URI_IN_REQ_URI, (pjsip_uri*)pub_gruu_uri);
 }
 
 // Utility method to return the public GRUU surrounded by quotes.
 // Returns "" if this binding has no GRUU.
 std::string RegStore::AoR::Binding::pub_gruu_quoted_string(pj_pool_t* pool) const
 {
-  pj_str_t unquoted_pub_gruu = pub_gruu_pj_str(pool);
+  std::string unquoted_pub_gruu = pub_gruu_str(pool);
 
-  if (unquoted_pub_gruu.slen == 0)
+  if (unquoted_pub_gruu.length() == 0)
   {
     return "";
   }
 
-  std::string ret;
-  ret.reserve(unquoted_pub_gruu.slen + 2);
-  ret.append("\"");
-  ret.append(unquoted_pub_gruu.ptr, unquoted_pub_gruu.slen);
-  ret.append("\"");
+  std::string ret = "\"" + unquoted_pub_gruu + "\"";
   return ret;
+}
+
+
+//
+// (De)serializer for the binary RegStore format.
+//
+
+RegStore::AoR* RegStore::BinarySerializerDeserializer::
+  deserialize_aor(const std::string& aor_id, const std::string& s)
+{
+  std::istringstream iss(s, std::istringstream::in|std::istringstream::binary);
+
+  // First off, try to read the number of bindings.
+  int num_bindings;
+  iss.read((char*)&num_bindings, sizeof(int));
+
+  if (iss.eof())
+  {
+    // Hit an EOF which means the record is corrupt.
+    LOG_INFO("Could not deserialize AOR - EOF reached");
+    return NULL;
+  }
+
+  if (num_bindings > 0xffffff)
+  {
+    // That's a lot of bindings. It is more likely that the data is corrupt, or
+    // that we have been passed a record in a different format.
+    LOG_INFO("Could not deserialize AOR. Got %d bindings suggesting the data"
+             " is corrupt or not in the binary format",
+             num_bindings);
+    return NULL;
+  }
+
+  AoR* aor_data = new AoR(aor_id);
+
+  LOG_DEBUG("Deserialize %d bindings", num_bindings);
+
+  for (int ii = 0; ii < num_bindings; ++ii)
+  {
+    // Extract the binding identifier into a string.
+    std::string binding_id;
+    getline(iss, binding_id, '\0');
+    LOG_DEBUG("  Binding %s", binding_id.c_str());
+
+    AoR::Binding* b = aor_data->get_binding(binding_id);
+
+    // Now extract the various fixed binding parameters.
+    getline(iss, b->_uri, '\0');
+    getline(iss, b->_cid, '\0');
+    iss.read((char *)&b->_cseq, sizeof(int));
+    iss.read((char *)&b->_expires, sizeof(int));
+
+    iss.read((char *)&b->_priority, sizeof(int));
+
+    int num_params;
+    iss.read((char *)&num_params, sizeof(int));
+    for (int ii = 0;
+         ii < num_params;
+         ++ii)
+    {
+      std::string pname;
+      std::string pvalue;
+      getline(iss, pname, '\0');
+      getline(iss, pvalue, '\0');
+      b->_params[pname] = pvalue;
+    }
+
+    int num_paths = 0;
+    iss.read((char *)&num_paths, sizeof(int));
+    b->_path_headers.resize(num_paths);
+    LOG_DEBUG("Deserialize %d path headers", num_paths);
+    for (std::list<std::string>::iterator i = b->_path_headers.begin();
+         i != b->_path_headers.end();
+         ++i)
+    {
+      getline(iss, *i, '\0');
+      LOG_DEBUG("  Deserialized path header %s", i->c_str());
+    }
+    getline(iss, b->_timer_id, '\0');
+    getline(iss, b->_private_id, '\0');
+    iss.read((char *)&b->_emergency_registration, sizeof(int));
+  }
+
+  int num_subscriptions;
+  iss.read((char *)&num_subscriptions, sizeof(int));
+  LOG_DEBUG("Deserialize %d subscriptions", num_subscriptions);
+
+  for (int ii = 0; ii < num_subscriptions; ++ii)
+  {
+    // Extract the to tag index into a string.
+    std::string to_tag;
+    getline(iss, to_tag, '\0');
+    LOG_DEBUG("  Subscription %s", to_tag.c_str());
+
+    AoR::Subscription* s = aor_data->get_subscription(to_tag);
+
+    // Now extract the various fixed subscription parameters.
+    getline(iss, s->_req_uri, '\0');
+    getline(iss, s->_from_uri, '\0');
+    getline(iss, s->_from_tag, '\0');
+    getline(iss, s->_to_uri, '\0');
+    getline(iss, s->_to_tag, '\0');
+    getline(iss, s->_cid, '\0');
+
+    int num_routes = 0;
+    iss.read((char *)&num_routes, sizeof(int));
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    s->_route_uris.resize(num_routes);
+    for (std::list<std::string>::iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      getline(iss, *i, '\0');
+    }
+
+    iss.read((char *)&s->_expires, sizeof(int));
+  }
+
+  iss.read((char*)&aor_data->_notify_cseq, sizeof(int));
+
+  return aor_data;
+}
+
+
+std::string RegStore::BinarySerializerDeserializer::serialize_aor(AoR* aor_data)
+{
+  std::ostringstream oss(std::ostringstream::out|std::ostringstream::binary);
+
+  int num_bindings = aor_data->bindings().size();
+  LOG_DEBUG("Serialize %d bindings", num_bindings);
+  oss.write((const char *)&num_bindings, sizeof(int));
+
+  for (AoR::Bindings::const_iterator i = aor_data->bindings().begin();
+       i != aor_data->bindings().end();
+       ++i)
+  {
+    LOG_DEBUG("  Binding %s", i->first.c_str());
+    oss << i->first << '\0';
+
+    AoR::Binding* b = i->second;
+    oss << b->_uri << '\0';
+    oss << b->_cid << '\0';
+    oss.write((const char *)&b->_cseq, sizeof(int));
+    oss.write((const char *)&b->_expires, sizeof(int));
+    oss.write((const char *)&b->_priority, sizeof(int));
+    int num_params = b->_params.size();
+    oss.write((const char *)&num_params, sizeof(int));
+    for (std::map<std::string, std::string>::const_iterator i = b->_params.begin();
+         i != b->_params.end();
+         ++i)
+    {
+      oss << i->first << '\0' << i->second << '\0';
+    }
+    int num_path_hdrs = b->_path_headers.size();
+    oss.write((const char *)&num_path_hdrs, sizeof(int));
+    for (std::list<std::string>::const_iterator i = b->_path_headers.begin();
+         i != b->_path_headers.end();
+         ++i)
+    {
+      oss << *i << '\0';
+    }
+    oss << b->_timer_id << '\0';
+    oss << b->_private_id << '\0';
+    oss.write((const char *)&b->_emergency_registration, sizeof(int));
+  }
+
+  int num_subscriptions = aor_data->subscriptions().size();
+  LOG_DEBUG("Serialize %d subscriptions", num_subscriptions);
+  oss.write((const char *)&num_subscriptions, sizeof(int));
+
+  for (AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
+       i != aor_data->subscriptions().end();
+       ++i)
+  {
+    LOG_DEBUG("  Subscription %s", i->first.c_str());
+    oss << i->first << '\0';
+
+    AoR::Subscription* s = i->second;
+    oss << s->_req_uri << '\0';
+    oss << s->_from_uri << '\0';
+    oss << s->_from_tag << '\0';
+    oss << s->_to_uri << '\0';
+    oss << s->_to_tag << '\0';
+    oss << s->_cid << '\0';
+    int num_routes = s->_route_uris.size();
+    LOG_DEBUG("    number of routes = %d", num_routes);
+    oss.write((const char *)&num_routes, sizeof(int));
+    for (std::list<std::string>::const_iterator i = s->_route_uris.begin();
+         i != s->_route_uris.end();
+         ++i)
+    {
+      oss << *i << '\0';
+    }
+    oss.write((const char *)&s->_expires, sizeof(int));
+  }
+
+  oss.write((const char *)&aor_data->_notify_cseq, sizeof(int));
+
+  return oss.str();
+}
+
+std::string RegStore::BinarySerializerDeserializer::name()
+{
+  return "binary";
+}
+
+
+//
+// (De)serializer for the JSON RegStore format.
+//
+
+static const char* const JSON_BINDINGS = "bindings";
+static const char* const JSON_URI = "uri";
+static const char* const JSON_CID = "cid";
+static const char* const JSON_CSEQ = "cseq";
+static const char* const JSON_EXPIRES = "expires";
+static const char* const JSON_PRIORITY = "priority";
+static const char* const JSON_PARAMS = "params";
+static const char* const JSON_PATHS = "paths";
+static const char* const JSON_TIMER_ID = "timer_id";
+static const char* const JSON_PRIVATE_ID = "private_id";
+static const char* const JSON_EMERGENCY_REG = "emergency_reg";
+static const char* const JSON_SUBSCRIPTIONS = "subscriptions";
+static const char* const JSON_REQ_URI = "req_uri";
+static const char* const JSON_FROM_URI = "from_uri";
+static const char* const JSON_FROM_TAG = "from_tag";
+static const char* const JSON_TO_URI = "to_uri";
+static const char* const JSON_TO_TAG = "to_tag";
+static const char* const JSON_ROUTES = "routes";
+static const char* const JSON_NOTIFY_CSEQ = "notify_cseq";
+
+
+RegStore::AoR* RegStore::JsonSerializerDeserializer::
+  deserialize_aor(const std::string& aor_id, const std::string& s)
+{
+  LOG_DEBUG("Deserialize JSON document: %s", s.c_str());
+
+  rapidjson::Document doc;
+  doc.Parse<0>(s.c_str());
+
+  if (doc.HasParseError())
+  {
+    LOG_DEBUG("Failed to parse document");
+    return NULL;
+  }
+
+  AoR* aor = new AoR(aor_id);
+
+  try
+  {
+    JSON_ASSERT_CONTAINS(doc, JSON_BINDINGS);
+    JSON_ASSERT_OBJECT(doc[JSON_BINDINGS]);
+    const rapidjson::Value& bindings_obj = doc[JSON_BINDINGS];
+
+    for (rapidjson::Value::ConstMemberIterator bindings_it = bindings_obj.MemberBegin();
+         bindings_it != bindings_obj.MemberEnd();
+         ++bindings_it)
+    {
+      LOG_DEBUG("  Binding: %s", bindings_it->name.GetString());
+      AoR::Binding* b = aor->get_binding(bindings_it->name.GetString());
+
+      JSON_ASSERT_OBJECT(bindings_it->value);
+      const rapidjson::Value& b_obj = bindings_it->value;
+
+      JSON_GET_STRING_MEMBER(b_obj, JSON_URI, b->_uri);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_CID, b->_cid);
+      JSON_GET_INT_MEMBER(b_obj, JSON_CSEQ, b->_cseq);
+      JSON_GET_INT_MEMBER(b_obj, JSON_EXPIRES, b->_expires);
+      JSON_GET_INT_MEMBER(b_obj, JSON_PRIORITY, b->_priority);
+
+      JSON_ASSERT_CONTAINS(b_obj, JSON_PARAMS);
+      JSON_ASSERT_OBJECT(b_obj[JSON_PARAMS]);
+      const rapidjson::Value& params_obj = b_obj[JSON_PARAMS];
+
+      for (rapidjson::Value::ConstMemberIterator params_it = params_obj.MemberBegin();
+           params_it != params_obj.MemberEnd();
+           ++params_it)
+      {
+        JSON_ASSERT_STRING(params_it->value);
+        b->_params[params_it->name.GetString()] = params_it->value.GetString();
+      }
+
+      JSON_ASSERT_CONTAINS(b_obj, JSON_PATHS);
+      JSON_ASSERT_ARRAY(b_obj[JSON_PATHS]);
+      const rapidjson::Value& paths_arr = b_obj[JSON_PATHS];
+
+      for (rapidjson::Value::ConstValueIterator paths_it = paths_arr.Begin();
+           paths_it != paths_arr.End();
+           ++paths_it)
+      {
+        JSON_ASSERT_STRING(*paths_it);
+        b->_path_headers.push_back(paths_it->GetString());
+      }
+
+      JSON_GET_STRING_MEMBER(b_obj, JSON_TIMER_ID, b->_timer_id);
+      JSON_GET_STRING_MEMBER(b_obj, JSON_PRIVATE_ID, b->_private_id);
+      JSON_GET_BOOL_MEMBER(b_obj, JSON_EMERGENCY_REG, b->_emergency_registration);
+    }
+
+    JSON_ASSERT_CONTAINS(doc, JSON_SUBSCRIPTIONS);
+    JSON_ASSERT_OBJECT(doc[JSON_SUBSCRIPTIONS]);
+    const rapidjson::Value& subscriptions_obj = doc[JSON_SUBSCRIPTIONS];
+
+    for (rapidjson::Value::ConstMemberIterator subscriptions_it = subscriptions_obj.MemberBegin();
+         subscriptions_it != subscriptions_obj.MemberEnd();
+         ++subscriptions_it)
+    {
+      LOG_DEBUG("  Subscription: %s", subscriptions_it->name.GetString());
+      AoR::Subscription* s = aor->get_subscription(subscriptions_it->name.GetString());
+
+      JSON_ASSERT_OBJECT(subscriptions_it->value);
+      const rapidjson::Value& s_obj = subscriptions_it->value;
+
+      JSON_GET_STRING_MEMBER(s_obj, JSON_REQ_URI, s->_req_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_URI, s->_from_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_FROM_TAG, s->_from_tag);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_URI, s->_to_uri);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_TO_TAG, s->_to_tag);
+      JSON_GET_STRING_MEMBER(s_obj, JSON_CID, s->_cid);
+
+      JSON_ASSERT_CONTAINS(s_obj, JSON_ROUTES);
+      JSON_ASSERT_ARRAY(s_obj[JSON_ROUTES]);
+      const rapidjson::Value& routes_arr = s_obj[JSON_ROUTES];
+
+      for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
+           routes_it != routes_arr.End();
+           ++routes_it)
+      {
+        JSON_ASSERT_STRING(*routes_it);
+        s->_route_uris.push_back(routes_it->GetString());
+      }
+
+      JSON_GET_INT_MEMBER(s_obj, JSON_EXPIRES, s->_expires);
+    }
+
+    JSON_GET_INT_MEMBER(doc, JSON_NOTIFY_CSEQ, aor->_notify_cseq);
+  }
+  catch(JsonFormatError err)
+  {
+    LOG_INFO("Failed to deserialize JSON document (hit error at %s:%d)",
+             err._file, err._line);
+    delete aor; aor = NULL;
+  }
+
+  return aor;
+}
+
+
+std::string RegStore::JsonSerializerDeserializer::serialize_aor(AoR* aor_data)
+{
+  rapidjson::StringBuffer sb;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+
+  writer.StartObject();
+  {
+    //
+    // Bindings
+    //
+    writer.String(JSON_BINDINGS);
+    writer.StartObject();
+    {
+      for (AoR::Bindings::const_iterator it = aor_data->bindings().begin();
+           it != aor_data->bindings().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+
+        writer.StartObject();
+        {
+          AoR::Binding* b = it->second;
+          writer.String(JSON_URI); writer.String(b->_uri.c_str());
+          writer.String(JSON_CID); writer.String(b->_cid.c_str());
+          writer.String(JSON_CSEQ); writer.Int(b->_cseq);
+          writer.String(JSON_EXPIRES); writer.Int(b->_expires);
+          writer.String(JSON_PRIORITY); writer.Int(b->_priority);
+
+          writer.String(JSON_PARAMS);
+          writer.StartObject();
+          {
+            for (std::map<std::string, std::string>::const_iterator p = b->_params.begin();
+                 p != b->_params.end();
+                 ++p)
+            {
+              writer.String(p->first.c_str()); writer.String(p->second.c_str());
+            }
+          }
+          writer.EndObject();
+
+          writer.String(JSON_PATHS);
+          writer.StartArray();
+          {
+            for (std::list<std::string>::const_iterator p = b->_path_headers.begin();
+                 p != b->_path_headers.end();
+                 ++p)
+            {
+              writer.String(p->c_str());
+            }
+          }
+          writer.EndArray();
+
+          writer.String(JSON_TIMER_ID); writer.String(b->_timer_id.c_str());
+          writer.String(JSON_PRIVATE_ID); writer.String(b->_private_id.c_str());
+          writer.String(JSON_EMERGENCY_REG); writer.Bool(b->_emergency_registration);
+        }
+        writer.EndObject();
+      }
+    }
+    writer.EndObject();
+
+    //
+    // Subscriptions.
+    //
+    writer.String(JSON_SUBSCRIPTIONS);
+    writer.StartObject();
+    {
+      for (AoR::Subscriptions::const_iterator it = aor_data->subscriptions().begin();
+           it != aor_data->subscriptions().end();
+           ++it)
+      {
+        writer.String(it->first.c_str());
+        writer.StartObject();
+        {
+          AoR::Subscription* s = it->second;
+          writer.String(JSON_REQ_URI); writer.String(s->_req_uri.c_str());
+          writer.String(JSON_FROM_URI); writer.String(s->_from_uri.c_str());
+          writer.String(JSON_FROM_TAG); writer.String(s->_from_tag.c_str());
+          writer.String(JSON_TO_URI); writer.String(s->_to_uri.c_str());
+          writer.String(JSON_TO_TAG); writer.String(s->_to_tag.c_str());
+          writer.String(JSON_CID); writer.String(s->_cid.c_str());
+
+          writer.String(JSON_ROUTES);
+          writer.StartArray();
+          {
+            for (std::list<std::string>::const_iterator r = s->_route_uris.begin();
+                 r != s->_route_uris.end();
+                 ++r)
+            {
+              writer.String(r->c_str());
+            }
+          }
+          writer.EndArray();
+
+          writer.String(JSON_EXPIRES); writer.Int(s->_expires);
+        }
+        writer.EndObject();
+      }
+    }
+    writer.EndObject();
+
+    // Notify Cseq flag
+    writer.String(JSON_NOTIFY_CSEQ); writer.Int(aor_data->_notify_cseq);
+  }
+  writer.EndObject();
+
+  return sb.GetString();
+}
+
+std::string RegStore::JsonSerializerDeserializer::name()
+{
+  return "JSON";
 }
