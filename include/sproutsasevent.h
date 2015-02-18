@@ -152,6 +152,8 @@ namespace SASEvent
   const int BINDINGS_FROM_TARGETS = SPROUT_BASE + 0x0000D4;
   const int ALL_BINDINGS_FILTERED = SPROUT_BASE + 0x0000D5;
 
+  const int UNPARSEABLE_HEADER = SPROUT_BASE + 0x0000D6;
+
 } //namespace SASEvent
 
 #endif
