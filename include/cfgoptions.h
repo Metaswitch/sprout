@@ -126,6 +126,7 @@ struct options
   int                    max_tokens;
   float                  init_token_rate;
   float                  min_token_rate;
+  int                    cass_target_latency_us;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
