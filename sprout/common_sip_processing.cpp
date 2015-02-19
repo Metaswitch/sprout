@@ -373,8 +373,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
-			   Counter* requests_counter_arg,
-			   Counter* overload_counter_arg,
+                           Counter* requests_counter_arg,
+                           Counter* overload_counter_arg,
                            HealthChecker* health_checker_arg)
 {
   // Register the stack modules.
