@@ -96,6 +96,8 @@ extern "C" {
 #include "sprout_pd_definitions.h"
 #include "alarm.h"
 #include "communicationmonitor.h"
+#include "common_sip_processing.h"
+#include "thread_dispatcher.h"
 
 enum OptionTypes
 {
@@ -1407,11 +1409,9 @@ int main(int argc, char* argv[])
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,
-                      opt.worker_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
-                      load_monitor,
                       opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
@@ -1719,7 +1719,39 @@ int main(int argc, char* argv[])
     }
   }
 
-  status = start_stack();
+  Accumulator* latency_accumulator =
+      new StatisticAccumulator("latency_us",
+                               stack_data.stats_aggregator);
+  Accumulator* queue_size_accumulator =
+      new StatisticAccumulator("queue_size",
+                               stack_data.stats_aggregator);
+  Counter* requests_counter =
+      new StatisticCounter("incoming_requests",
+                           stack_data.stats_aggregator);
+  Counter* overload_counter =
+      new StatisticCounter("rejected_overload",
+                           stack_data.stats_aggregator);
+
+
+  init_common_sip_processing(load_monitor,
+                             requests_counter,
+                             overload_counter);
+  init_thread_dispatcher(opt.worker_threads,
+                         latency_accumulator,
+                         queue_size_accumulator,
+                         load_monitor);
+
+  // Create worker threads first as they take work from the PJSIP threads so
+  // need to be ready.
+
+  status = start_worker_threads();
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Error starting SIP worker threads, %s", PJUtils::pj_status_to_string(status).c_str());
+    return 1;
+  }
+
+  status = start_pjsip_threads();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
@@ -1764,7 +1796,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Wait here until the quite semaphore is signaled.
+  // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
 
   CL_SPROUT_ENDED.log();
@@ -1781,12 +1813,21 @@ int main(int argc, char* argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
+  
+  // Terminate the PJSIP threads and the worker threads to exit.  We kill
+  // the PJSIP threads first - if we killed the worker threads first the
+  // rx_msg_q will stop getting serviced so could fill up blocking
+  // PJSIP threads, causing a deadlock.
+  stop_pjsip_threads();
+  stop_worker_threads();
 
-  stop_stack();
-  // We must unregister stack modules here because this terminates the
+  // We must call stop_stack here because this terminates the
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
-  unregister_stack_modules();
+  stop_stack();
+  
+  unregister_thread_dispatcher();
+  unregister_common_processing_module();
 
   // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
@@ -1853,6 +1894,11 @@ int main(int argc, char* argv[])
     delete remote_vbucket_alarm;
   }
 
+  delete latency_accumulator;
+  delete queue_size_accumulator;
+  delete requests_counter;
+  delete overload_counter;
+  
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
   signal(QUIESCE_SIGNAL, SIG_DFL);
