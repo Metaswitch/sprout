@@ -58,7 +58,8 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   acr.cpp \
-                  signalhandler.cpp	\
+                  signalhandler.cpp \
+		  health_checker.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \

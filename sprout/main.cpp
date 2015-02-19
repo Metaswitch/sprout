@@ -1716,11 +1716,17 @@ int main(int argc, char* argv[])
   Counter* overload_counter =
       new StatisticCounter("rejected_overload",
                            stack_data.stats_aggregator);
+  HealthChecker* health_checker = new HealthChecker();
+  pthread_t health_check_thread;
+  pthread_attr_t health_check_attr;
+  pthread_attr_init(&health_check_attr);
+  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::main_thread_function, (void*)health_checker);
 
-
+  
   init_common_sip_processing(load_monitor,
                              requests_counter,
-                             overload_counter);
+                             overload_counter,
+                             health_checker);
   init_thread_dispatcher(opt.worker_threads,
                          latency_accumulator,
                          queue_size_accumulator,
@@ -1883,6 +1889,7 @@ int main(int argc, char* argv[])
   delete queue_size_accumulator;
   delete requests_counter;
   delete overload_counter;
+  delete health_checker;
   
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

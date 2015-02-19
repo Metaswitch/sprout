@@ -63,6 +63,7 @@ TARGET_SOURCES := logger.cpp \
                   scscfselector.cpp \
                   acr.cpp \
                   signalhandler.cpp \
+                  health_checker.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \

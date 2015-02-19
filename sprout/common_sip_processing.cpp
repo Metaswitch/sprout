@@ -69,10 +69,12 @@ extern "C" {
 #include "accumulator.h"
 #include "load_monitor.h"
 #include "counter.h"
+#include "health_checker.h"
 
 static Counter* requests_counter = NULL;
 static Counter* overload_counter = NULL;
 static LoadMonitor* load_monitor = NULL;
+static HealthChecker* health_checker = NULL;
 
 static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata);
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata);
@@ -352,6 +354,14 @@ static pj_bool_t process_on_rx_msg(pjsip_rx_data* rdata)
 
 static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 {
+  if ((health_checker != NULL) &&
+      (PJSIP_MSG_CSEQ_HDR(tdata->msg)->method.id == PJSIP_INVITE_METHOD) &&
+      (tdata->msg->line.status.code == 200))
+  {
+    // 200 OK to an INVITE - meets S-CSCF health check criteria
+    health_checker->health_check_passed();
+  }
+
   // Do logging.
   local_log_tx_msg(tdata);
   sas_log_tx_msg(tdata);
@@ -364,7 +374,8 @@ static pj_status_t process_on_tx_msg(pjsip_tx_data* tdata)
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
 			   Counter* requests_counter_arg,
-			   Counter* overload_counter_arg)
+			   Counter* overload_counter_arg,
+                           HealthChecker* health_checker_arg)
 {
   // Register the stack modules.
   pjsip_endpt_register_module(stack_data.endpt, &mod_common_processing);
@@ -374,6 +385,8 @@ init_common_sip_processing(LoadMonitor* load_monitor_arg,
   requests_counter = requests_counter_arg;
 
   load_monitor = load_monitor_arg;
+
+  health_checker = health_checker_arg;
 
   return PJ_SUCCESS;
 }
