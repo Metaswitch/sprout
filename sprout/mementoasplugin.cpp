@@ -119,7 +119,11 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                       opt.max_call_list_length,
                                       opt.memento_threads,
                                       opt.call_list_ttl,
-                                      stack_data.stats_aggregator);
+                                      stack_data.stats_aggregator,
+                                      opt.cass_target_latency_us,
+                                      opt.max_tokens,
+                                      opt.init_token_rate,
+                                      opt.min_token_rate);
 
       _memento_sproutlet = new SproutletAppServerShim(_memento);
       sproutlets.push_back(_memento_sproutlet);
