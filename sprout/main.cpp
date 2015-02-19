@@ -98,6 +98,7 @@ extern "C" {
 #include "communicationmonitor.h"
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
+#include "handle_exception.h"
 
 enum OptionTypes
 {
@@ -116,7 +117,8 @@ enum OptionTypes
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
-  OPT_CASS_TARGET_LATENCY_US
+  OPT_CASS_TARGET_LATENCY_US,
+  OPT_EXCEPTION_MAX_TTL
 };
 
 
@@ -178,6 +180,7 @@ const static struct pj_getopt_option long_opt[] =
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
+  { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { NULL,                           0,                 0, 0}
 };
 
@@ -188,6 +191,7 @@ static sem_t term_sem;
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
+HandleException* handle_exception;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -306,6 +310,9 @@ static void usage(void)
        "                            to memcached. Valid values are 'binary' and 'json' (default is 'binary')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
+       "     --exception-max-ttl <secs>\n"
+       "                            The maximum time before the process restarts if it hits an exception. The\n"
+       "                            actual time is randomised.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -837,6 +844,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       LOG_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
       break;
 
+    case OPT_EXCEPTION_MAX_TTL:
+      options->exception_max_ttl = atoi(pj_optarg);
+      LOG_INFO("Max TTL after an exception set to %d",
+               options->exception_max_ttl);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -911,6 +924,9 @@ void exception_handler(int sig)
   // Reset the signal handlers so that another exception will cause a crash.
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, SIG_DFL);
+
+  // Check if there's a stored jmp_buf on the thread and handle if there is
+  handle_exception->handle_exception();
 
   CL_SPROUT_CRASH.log(strsignal(sig));
   closelog();
@@ -1171,6 +1187,7 @@ int main(int argc, char* argv[])
   opt.interactive = PJ_FALSE;
   opt.memcached_write_format = MemcachedWriteFormat::BINARY;
   opt.override_npdi = PJ_FALSE;
+  opt.exception_max_ttl = 600;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
@@ -1389,6 +1406,11 @@ int main(int argc, char* argv[])
                                  opt.max_tokens,        // Maximum token bucket size.
                                  opt.init_token_rate,   // Initial token fill rate (per sec).
                                  opt.min_token_rate);   // Minimum token fill rate (per sec).
+
+  // Create an exception handler. The exception handler should attempt to 
+  // quiesce the process before killing it. 
+  handle_exception = new HandleException(opt.exception_max_ttl, 
+                                         true);                 
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
@@ -1739,7 +1761,8 @@ int main(int argc, char* argv[])
   init_thread_dispatcher(opt.worker_threads,
                          latency_accumulator,
                          queue_size_accumulator,
-                         load_monitor);
+                         load_monitor,
+                         handle_exception);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
@@ -1861,6 +1884,7 @@ int main(int argc, char* argv[])
 
   delete hss_connection;
   delete quiescing_mgr;
+  delete handle_exception;
   delete load_monitor;
   delete local_reg_store;
   delete remote_reg_store;
