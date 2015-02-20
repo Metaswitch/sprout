@@ -1720,7 +1720,7 @@ int main(int argc, char* argv[])
   pthread_t health_check_thread;
   pthread_attr_t health_check_attr;
   pthread_attr_init(&health_check_attr);
-  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::main_thread_function, (void*)health_checker);
+  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::static_main_thread_function, (void*)health_checker);
 
   
   init_common_sip_processing(load_monitor,
@@ -1889,6 +1889,10 @@ int main(int argc, char* argv[])
   delete queue_size_accumulator;
   delete requests_counter;
   delete overload_counter;
+  health_checker->terminate();
+
+  pthread_join(health_check_thread, NULL);
+
   delete health_checker;
   
   // Unregister the handlers that use semaphores (so we can safely destroy
