@@ -947,6 +947,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
   pj_thread_desc desc;
   pj_thread_t* thread;
   pj_status_t status;
+  pj_bzero(desc, sizeof(pj_thread_desc));
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
@@ -986,6 +987,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
     // thread while it is waiting on the semaphore will cause it to cancel.
     sem_wait(&quiescing_sem);
     new_quiescing = quiescing;
+    LOG_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
   }
 
   return NULL;
@@ -1013,6 +1015,7 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
     // won't work in this case).  This is okay for now because HttpStack
     // just creates a pool of threads at start of day.
     pj_thread_desc* td = (pj_thread_desc*)malloc(sizeof(pj_thread_desc));
+    pj_bzero(*td, sizeof(pj_thread_desc));
     pj_thread_t *thread = 0;
 
     pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread",
@@ -1093,25 +1096,8 @@ int main(int argc, char* argv[])
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
 
-  // Initialize the semaphore that unblocks the quiesce thread, and the thread
-  // itself.
-  sem_init(&quiescing_sem, 0, 0);
-  pthread_create(&quiesce_unquiesce_thread,
-                 NULL,
-                 quiesce_unquiesce_thread_func,
-                 NULL);
-
-  // Set up our signal handler for (un)quiesce signals.
-  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
-  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
-
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
-
-  // Create a new quiescing manager instance and register our completion handler
-  // with it.
-  quiescing_mgr = new QuiescingManager();
-  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
   opt.pcscf_enabled = false;
   opt.pcscf_trusted_port = 0;
@@ -1379,6 +1365,11 @@ int main(int argc, char* argv[])
   dns_resolver = new DnsCachedResolver(opt.dns_server);
   sip_resolver = new SIPResolver(dns_resolver);
 
+  // Create a new quiescing manager instance and register our completion handler
+  // with it.
+  quiescing_mgr = new QuiescingManager();
+  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
+
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
                       opt.sas_server,
@@ -1405,6 +1396,20 @@ int main(int argc, char* argv[])
     LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
+
+  // Initialize the semaphore that unblocks the quiesce thread, and the thread
+  // itself. This must happen after init_stack is called, because this
+  // calls init_pjsip, which calls pj_init, which sets up the
+  // necessary environment for us to register threads with pjsip.
+  sem_init(&quiescing_sem, 0, 0);
+  pthread_create(&quiesce_unquiesce_thread,
+                 NULL,
+                 quiesce_unquiesce_thread_func,
+                 NULL);
+
+  // Set up our signal handler for (un)quiesce signals.
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
 
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver, stack_data.addr_family);
