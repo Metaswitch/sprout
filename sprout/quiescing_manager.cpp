@@ -158,6 +158,11 @@ void QuiescingManager::process_input(int input)
          (_state == STATE_QUIESCED));
   // LCOV_EXCL_STOP
 
+  LOG_DEBUG("The Quiescing Manager received input %s (%d) "
+            "when in state %s (%d)",
+            INPUT_NAMES[input], input,
+            STATE_NAMES[_state], _state);  
+  
   switch (_state)
   {
     case STATE_ACTIVE:
@@ -305,11 +310,13 @@ void QuiescingManager::quiesce_connections()
     // Close the trusted listening port.  This prevents any new connections from
     // being established (note that on an edge proxy we should already have
     // closed the untrusted listening port).
+    LOG_DEBUG("Closing trusted port");
     _conns_handler->close_trusted_port();
 
     // Quiesce open connections.  This will close them when they no longer have
     // any outstanding transactions.  When this process has completed the
     // connection tracker will call connections_gone().
+    LOG_DEBUG("Quiescing all connections");
     _conns_handler->quiesce();
   }
 }
