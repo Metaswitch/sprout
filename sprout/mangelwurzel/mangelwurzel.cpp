@@ -237,7 +237,6 @@ void MangelwurzelTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 /// headers and send the request on. It can also change the request in various
 /// ways depending on the configuration in its Route header.
 /// - It can mangle the dialog identifiers using its mangalgorithm.
-/// - It can mangle the Request URI using its mangalgorithm.
 /// - It can mangle the Contact URI using its mangalgorithm.
 /// - It can mangle the To URI using its mangalgorithm.
 /// - It can edit the S-CSCF Route header to turn the request into either an
@@ -262,11 +261,6 @@ void MangelwurzelTsx::on_rx_in_dialog_request(pjsip_msg* req)
   if (_config.dialog)
   {
     mangle_dialog_identifiers(req, pool);
-  }
-
-  if (_config.req_uri)
-  {
-    mangle_req_uri(req, pool);
   }
 
   if (_config.contact)

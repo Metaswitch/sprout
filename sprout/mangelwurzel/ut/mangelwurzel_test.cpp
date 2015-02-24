@@ -492,5 +492,4 @@ TEST_F(MangelwurzelTest, InDialogReq)
   EXPECT_EQ("Route: <sip:3c2b1a_ido@niamodemoh.tuorps:5054;transport=TCP;lr>",
             get_headers(req, "Route"));
   EXPECT_EQ("", get_headers(req, "Via"));
-  EXPECT_THAT(req, ReqUriEquals("sip:1000555056@homedomain"));
 }
