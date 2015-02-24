@@ -47,7 +47,6 @@
 /// Mangelwurzel URI parameter constants.
 static const pj_str_t DIALOG_PARAM = pj_str((char *)"dialog");
 static const pj_str_t REQ_URI_PARAM = pj_str((char *)"req-uri");
-static const pj_str_t CONTACT_PARAM = pj_str((char *)"contact");
 static const pj_str_t TO_PARAM = pj_str((char *)"to");
 static const pj_str_t ROUTES_PARAM = pj_str((char *)"routes");
 static const pj_str_t DOMAIN_PARAM = pj_str((char *)"change-domain");
@@ -79,10 +78,6 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
     if (pjsip_param_find(&route_hdr_uri->other_param, &REQ_URI_PARAM) != NULL)
     {
       config.req_uri = true;
-    }
-    if (pjsip_param_find(&route_hdr_uri->other_param, &CONTACT_PARAM) != NULL)
-    {
-      config.contact = true;
     }
     if (pjsip_param_find(&route_hdr_uri->other_param, &TO_PARAM) != NULL)
     {
@@ -143,8 +138,7 @@ SproutletTsx* Mangelwurzel::get_tsx(SproutletTsxHelper* helper,
 /// the request in various ways depending on the configuration in its Route
 /// header.
 /// - It can mangle the dialog identifiers using its mangalgorithm.
-/// - It can mangle the Request URI using its mangalgorithm.
-/// - It can mangle the Contact URI using its mangalgorithm.
+/// - It can mangle the Request URI and Contact URI using its mangalgorithm.
 /// - It can mangle the To URI using its mangalgorithm.
 /// - It can edit the S-CSCF Route header to turn the request into either an
 ///   originating or terminating request.
@@ -175,10 +169,6 @@ void MangelwurzelTsx::on_rx_initial_request(pjsip_msg* req)
   if (_config.req_uri)
   {
     mangle_req_uri(req, pool);
-  }
-
-  if (_config.contact)
-  {
     mangle_contact(req, pool);
   }
 
@@ -237,7 +227,7 @@ void MangelwurzelTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 /// headers and send the request on. It can also change the request in various
 /// ways depending on the configuration in its Route header.
 /// - It can mangle the dialog identifiers using its mangalgorithm.
-/// - It can mangle the Contact URI using its mangalgorithm.
+/// - It can mangle the Request URI and Contact URI using its mangalgorithm.
 /// - It can mangle the To URI using its mangalgorithm.
 /// - It can edit the S-CSCF Route header to turn the request into either an
 ///   originating or terminating request.
@@ -263,8 +253,9 @@ void MangelwurzelTsx::on_rx_in_dialog_request(pjsip_msg* req)
     mangle_dialog_identifiers(req, pool);
   }
 
-  if (_config.contact)
+  if (_config.req_uri)
   {
+    mangle_req_uri(req, pool);
     mangle_contact(req, pool);
   }
 

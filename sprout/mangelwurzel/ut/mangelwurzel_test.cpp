@@ -229,7 +229,6 @@ TEST_F(MangelwurzelTest, CreateDefaults)
   EXPECT_TRUE(mangelwurzel_tsx != NULL);
   EXPECT_FALSE(mangelwurzel_tsx->_config.dialog);
   EXPECT_FALSE(mangelwurzel_tsx->_config.req_uri);
-  EXPECT_FALSE(mangelwurzel_tsx->_config.contact);
   EXPECT_FALSE(mangelwurzel_tsx->_config.to);
   EXPECT_FALSE(mangelwurzel_tsx->_config.change_domain);
   EXPECT_FALSE(mangelwurzel_tsx->_config.routes);
@@ -251,7 +250,7 @@ TEST_F(MangelwurzelTest, CreateFullConfig)
   // Set all the parameters on the Route header URI. Check the values are all
   // accurate in the transaction's config.
   hdr->name_addr.uri =
-    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=reverse",
+    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;to;routes;change-domain;orig;ootb;mangalgorithm=reverse",
                              stack_data.pool);
   EXPECT_CALL(*_helper, route_hdr()).WillOnce(Return(hdr));
 
@@ -262,7 +261,6 @@ TEST_F(MangelwurzelTest, CreateFullConfig)
   EXPECT_TRUE(mangelwurzel_tsx != NULL);
   EXPECT_TRUE(mangelwurzel_tsx->_config.dialog);
   EXPECT_TRUE(mangelwurzel_tsx->_config.req_uri);
-  EXPECT_TRUE(mangelwurzel_tsx->_config.contact);
   EXPECT_TRUE(mangelwurzel_tsx->_config.to);
   EXPECT_TRUE(mangelwurzel_tsx->_config.change_domain);
   EXPECT_TRUE(mangelwurzel_tsx->_config.routes);
@@ -361,7 +359,6 @@ TEST_F(MangelwurzelTest, InitialReq)
   MangelwurzelTsx::Config config;
   config.dialog = true;
   config.req_uri = true;
-  config.contact = true;
   config.to = true;
   config.routes = true;
   config.change_domain = true;
@@ -373,7 +370,7 @@ TEST_F(MangelwurzelTest, InitialReq)
   // mangelwurzel to request it when it Record-Routes itself.
   pjsip_route_hdr* hdr = pjsip_rr_hdr_create(stack_data.pool);
   hdr->name_addr.uri =
-    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=rot13",
+    PJUtils::uri_from_string("sip:mangelwurzel.homedomain;dialog;req-uri;to;routes;change-domain;orig;ootb;mangalgorithm=rot13",
                              stack_data.pool);
   EXPECT_CALL(*_helper, route_hdr()).WillRepeatedly(Return(hdr));
 
@@ -396,7 +393,7 @@ TEST_F(MangelwurzelTest, InitialReq)
             get_headers(req, "Route"));
   EXPECT_EQ("", get_headers(req, "Via"));
   EXPECT_THAT(req, ReqUriEquals("sip:1050005556@ubzrqbznva"));
-  EXPECT_EQ("Record-Route: <sip:mangelwurzel.homedomain;dialog;req-uri;contact;to;routes;change-domain;orig;ootb;mangalgorithm=rot13>\r\nRecord-Route: <sip:ubzrqbznva>",
+  EXPECT_EQ("Record-Route: <sip:mangelwurzel.homedomain;dialog;req-uri;to;routes;change-domain;orig;ootb;mangalgorithm=rot13>\r\nRecord-Route: <sip:ubzrqbznva>",
             get_headers(req, "Record-Route"));
 }
 
@@ -416,7 +413,6 @@ TEST_F(MangelwurzelTest, Response)
   MangelwurzelTsx::Config config;
   config.dialog = true;
   config.req_uri = true;
-  config.contact = true;
   config.to = true;
   config.routes = true;
   config.change_domain = true;
@@ -465,7 +461,6 @@ TEST_F(MangelwurzelTest, InDialogReq)
   MangelwurzelTsx::Config config;
   config.dialog = true;
   config.req_uri = true;
-  config.contact = true;
   config.to = true;
   config.routes = true;
   config.change_domain = false;
@@ -492,4 +487,5 @@ TEST_F(MangelwurzelTest, InDialogReq)
   EXPECT_EQ("Route: <sip:3c2b1a_ido@niamodemoh.tuorps:5054;transport=TCP;lr>",
             get_headers(req, "Route"));
   EXPECT_EQ("", get_headers(req, "Via"));
+  EXPECT_THAT(req, ReqUriEquals("sip:1000555056@homedomain"));
 }
