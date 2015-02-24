@@ -157,7 +157,7 @@ static int worker_thread(void* p)
                          pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
         PJUtils::respond_stateless(stack_data.endpt,
                                    rdata,
-                                   PJSIP_SC_SERVICE_UNAVAILABLE,
+                                   PJSIP_SC_INTERNAL_SERVER_ERROR,
                                    NULL,
                                    (pjsip_hdr*)retry_after,
                                    NULL);
@@ -170,7 +170,7 @@ static int worker_thread(void* p)
         }
 
         LOG_ERROR("Hit an exception when processing a SIP message");
-      CW_END
+      CW_END(handle_exception)
 
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
@@ -251,7 +251,7 @@ pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
 {
   // Set up the vectors of threads.  The threads don't get created until
   // start_worker_threads is called.
-  worker_threads.resize(num_worker_threads);
+  worker_threads.resize(num_worker_threads_arg);
 
   // Enable deadlock detection on the message queue.
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);

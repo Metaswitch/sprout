@@ -311,8 +311,8 @@ static void usage(void)
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
-       "                            The maximum time before the process restarts if it hits an exception. The\n"
-       "                            actual time is randomised.\n"
+       "                            The maximum time before the process restarts if it hits an exception.\n"
+       "                            The actual time is randomised.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -1806,7 +1806,11 @@ int main(int argc, char* argv[])
     try
     {
       http_stack->initialize();
-      http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
+      http_stack->configure(opt.http_address, 
+                            opt.http_port, 
+                            opt.http_threads, 
+                            handle_exception,
+                            access_logger);
       http_stack->register_handler("^/timers$",
                                    &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
