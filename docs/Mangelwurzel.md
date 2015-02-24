@@ -11,8 +11,7 @@ Mangelwurzel is installed on top of sprout-base. It can be installed through the
 Mangelwurzel is invoked and configured through iFCs. The URI must contain mangelwurzel (and must obviously be routable to the mangelwurzel node). Typically it would be either sip:mangelwurzel.homedomain or sip:mangelwurzel@<mangelwurzel_addr>. There are also a number of optional parameters encoded on the URI which define mangelwurzel's configuration. They are as follows:
 
 * dialog – Present if the dialog identifiers (From tag, To tag and call ID) should be changed.
-* req-uri – Present if the Request URI of this request should be changed.
-* contact – Present if the Contact header for this request should be changed.
+* req-uri – Present if the Request URI (and Contact URI) of this request should be changed.
 * to – Present if the To header of this request should be changed.
 * routes – Present if the route set of this request should be changed.
 * mangalgorithm – Specifies the algorithm to use for URI manipulation. Takes values of rot13 or reverse.

@@ -90,7 +90,6 @@ public:
     Config() :
       dialog(false),
       req_uri(false),
-      contact(false),
       to(false),
       change_domain(false),
       routes(false),
@@ -104,12 +103,9 @@ public:
     /// Whether or not to mangle the dialog identifiers on messages.
     bool dialog;
 
-    /// Whether or not to mangle the Request URI on requests (and the Contact
-    /// header on responses).
+    /// Whether or not to mangle the Request URI and Contact URI on requests
+    /// (and the Contact URI on responses).
     bool req_uri;
-
-    /// Whether or not to mangle the Contact URI on requests.
-    bool contact;
 
     /// Whether or not to mangle the To URI on requests.
     bool to;
