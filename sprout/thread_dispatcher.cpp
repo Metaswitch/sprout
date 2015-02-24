@@ -165,12 +165,10 @@ static int worker_thread(void* p)
         if (num_worker_threads == 1)
         { 
           // There's only one worker thread, so we can't sensibly proceed. 
-          LOG_ERROR("Skipping exception handling as there's only one thread");
+          // Abort so we get a core file
           abort();
         }
-
-        LOG_ERROR("Hit an exception when processing a SIP message");
-      CW_END(handle_exception)
+      CW_END
 
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
