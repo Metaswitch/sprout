@@ -604,8 +604,10 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case 'E':
-      options->enum_server = std::string(pj_optarg);
-      LOG_INFO("ENUM server set to %s", pj_optarg);
+      options->enum_servers.clear();
+      Utils::split_string(std::string(pj_optarg), ',', options->enum_servers, 0, false);
+      LOG_INFO("%d ENUM servers passed on the command line",
+               options->enum_servers.size());
       break;
 
     case 'x':
@@ -814,9 +816,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       break;
 
     case OPT_DNS_SERVER:
-      options->dns_server = std::string(pj_optarg);
-      LOG_INFO("Using DNS server %s", pj_optarg);
-      break;
+      options->dns_servers.clear();
+      Utils::split_string(std::string(pj_optarg), ',', options->dns_servers, 0, false);
+      LOG_INFO("%d DNS servers passed on the command line",
+               options->dns_servers.size());
+    break;
 
     case OPT_OVERRIDE_NPDI:
       options->override_npdi = true;
@@ -1125,7 +1129,7 @@ int main(int argc, char* argv[])
   opt.http_address = "0.0.0.0";
   opt.http_port = 9888;
   opt.http_threads = 1;
-  opt.dns_server = "127.0.0.1";
+  opt.dns_servers.push_back("127.0.0.1");
   opt.billing_cdf = "";
   opt.emerg_reg_accepted = PJ_FALSE;
   opt.max_call_list_length = 0;
@@ -1309,7 +1313,7 @@ int main(int argc, char* argv[])
     LOG_WARNING("A registration expiry period should not be specified for P-CSCF");
   }
 
-  if ((!opt.enum_server.empty()) &&
+  if ((!opt.enum_servers.empty()) &&
       (!opt.enum_file.empty()))
   {
     LOG_WARNING("Both ENUM server and ENUM file lookup enabled - ignoring ENUM file");
@@ -1362,7 +1366,7 @@ int main(int argc, char* argv[])
                                  opt.min_token_rate);   // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
-  dns_resolver = new DnsCachedResolver(opt.dns_server);
+  dns_resolver = new DnsCachedResolver(opt.dns_servers);
   sip_resolver = new SIPResolver(dns_resolver);
 
   // Create a new quiescing manager instance and register our completion handler
@@ -1448,9 +1452,9 @@ int main(int argc, char* argv[])
   if (opt.scscf_enabled)
   {
     // Create ENUM service required for S-CSCF.
-    if (!opt.enum_server.empty())
+    if (!opt.enum_servers.empty())
     {
-      enum_service = new DNSEnumService(opt.enum_server,
+      enum_service = new DNSEnumService(opt.enum_servers,
                                         opt.enum_suffix,
                                         new DNSResolverFactory(),
                                         enum_comm_monitor);

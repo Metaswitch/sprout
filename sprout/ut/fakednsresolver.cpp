@@ -74,9 +74,9 @@ void FakeDNSResolver::free_naptr_reply(struct ares_naptr_reply* naptr_reply) con
 }
 
 
-DNSResolver* FakeDNSResolverFactory::new_resolver(const struct IP46Address& server) const
+DNSResolver* FakeDNSResolverFactory::new_resolver(const std::vector<struct IP46Address>& servers) const
 {
   // Check the server is as expected and then construct a FakeDNSResolver.
-  EXPECT_TRUE(server.compare(_expected_server) == 0);
-  return new FakeDNSResolver(server);
+  EXPECT_TRUE(servers[0].compare(_expected_server) == 0);
+  return new FakeDNSResolver(servers);
 }

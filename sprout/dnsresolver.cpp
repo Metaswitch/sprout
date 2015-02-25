@@ -49,7 +49,7 @@
 #include "log.h"
 #include "sproutsasevent.h"
 
-DNSResolver::DNSResolver(const struct IP46Address& server) :
+DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
                          _req_pending(false),
                          _trail(0),
                          _domain(""),
@@ -59,33 +59,67 @@ DNSResolver::DNSResolver(const struct IP46Address& server) :
   // Set options to ensure we always get a response as quickly as possible -
   // we are on the call path!
   struct ares_options options;
-  options.flags = ARES_FLAG_PRIMARY | ARES_FLAG_STAYOPEN;
+  options.flags = ARES_FLAG_STAYOPEN;
   options.timeout = 1000;
-  options.tries = 1;
+  options.tries = 2;
   options.ndots = 0;
   options.servers = NULL;
   options.nservers = 0;
-  ares_init_options(&_channel, &options, ARES_OPT_FLAGS | ARES_OPT_TIMEOUTMS | ARES_OPT_TRIES | ARES_OPT_NDOTS | ARES_OPT_SERVERS);
+  ares_init_options(&_channel,
+                    &options,
+                    ARES_OPT_FLAGS |
+                    ARES_OPT_ROTATE |
+                    ARES_OPT_TIMEOUTMS |
+                    ARES_OPT_TRIES |
+                    ARES_OPT_NDOTS |
+                    ARES_OPT_SERVERS);
 
   // Point the DNS resolver at the desired server.  We must use
   // ares_set_servers rather than setting it in the options for IPv6 support,
-  struct ares_addr_node addr;
-  addr.family = server.af;
-  if (server.af == AF_INET)
+  struct ares_addr_node *first_addr = NULL;
+  struct ares_addr_node *addr = first_addr;
+
+  for (std::vector<struct IP46Address>::const_iterator server = servers.begin();
+       server != servers.end();
+       server++)
   {
-    memcpy(&addr.addr.addr4, &server.addr.ipv4, sizeof(addr.addr.addr4));
+    struct ares_addr_node* new_addr = (struct ares_addr_node*)malloc(sizeof(struct ares_addr_node));
+    memset(new_addr, 0, sizeof(struct ares_addr_node));
+    if (addr)
+    {
+      addr->next = new_addr;
+    }
+    else
+    {
+      first_addr = new_addr;
+    }
+    addr = new_addr;
+    addr->family = server->af;
+    if (server->af == AF_INET)
+    {
+      memcpy(&addr->addr.addr4, &server->addr.ipv4, sizeof(addr->addr.addr4));
+    }
+    else
+    {
+      memcpy(&addr->addr.addr6, &server->addr.ipv6, sizeof(addr->addr.addr6));
+    }
   }
-  else
-  {
-    memcpy(&addr.addr.addr6, &server.addr.ipv6, sizeof(addr.addr.addr6));
-  }
-  addr.next = NULL;
-  ares_set_servers(_channel, &addr);
+  ares_set_servers(_channel, first_addr);
 }
 
 
 DNSResolver::~DNSResolver()
 {
+  struct ares_addr_node *addr = NULL;
+  ares_get_servers(_channel, &addr);
+
+  while (addr != NULL)
+  {
+    struct ares_addr_node *tmp = addr->next;
+    free(addr);
+    addr = tmp;
+  }
+
   ares_destroy(_channel);
 
   // If we have a left-over NAPTR reply, destroy it.
@@ -258,7 +292,7 @@ void DNSResolver::ares_callback(int status,
 }
 
 
-DNSResolver* DNSResolverFactory::new_resolver(const struct IP46Address& server) const
+DNSResolver* DNSResolverFactory::new_resolver(const std::vector<struct IP46Address>& servers) const
 {
-  return new DNSResolver(server);
+  return new DNSResolver(servers);
 }

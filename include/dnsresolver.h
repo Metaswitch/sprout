@@ -55,7 +55,7 @@
 class DNSResolver
 {
 public:
-  DNSResolver(const struct IP46Address& server);
+  DNSResolver(const std::vector<struct IP46Address>& servers);
   ~DNSResolver();
   // Helper function wrapping the destructor for use as thread-local callbacks.
   static void destroy(DNSResolver* resolver);
@@ -111,7 +111,7 @@ class DNSResolverFactory
 public:
   inline DNSResolverFactory() {};
   // Create a new resolver.
-  virtual DNSResolver* new_resolver(const struct IP46Address& server) const;
+  virtual DNSResolver* new_resolver(const std::vector<struct IP46Address>& servers) const;
 
 };
 

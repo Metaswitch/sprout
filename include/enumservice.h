@@ -110,7 +110,7 @@ private:
 class DNSEnumService : public EnumService
 {
 public:
-  DNSEnumService(const std::string& dns_server = "127.0.0.1",
+  DNSEnumService(const std::vector<std::string>& dns_server,
                  const std::string& dns_suffix = ".e164.arpa",
                  const DNSResolverFactory* resolver_factory = new DNSResolverFactory(),
                  CommunicationMonitor* comm_monitor = NULL);
@@ -168,7 +168,7 @@ private:
                                 std::vector<DNSEnumService::Rule>& rules);
 
   // The IP address of the DNS server to query.
-  struct IP46Address _dns_server;
+  std::vector<struct IP46Address> _servers;
   // The suffix to apply to domain names used for ENUM lookups.
   const std::string _dns_suffix;
   // The thread-local store - used for storing DNSResolvers.
