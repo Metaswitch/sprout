@@ -102,7 +102,7 @@ get_settings()
         [ -f /etc/clearwater/remote_cluster_settings ] && remote_memstore_arg="--remote-memstore=/etc/clearwater/remote_cluster_settings"
 
         # Set up defaults for user settings then pull in any overrides.
-        # Sprout uses blocking look-up services, so must run multi-threaded
+        # Sprout uses blocking look-up services, so must run multi-threaded.
         num_pjsip_threads=1
         num_worker_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
         num_http_threads=$(($(grep processor /proc/cpuinfo | wc -l) * 50))
