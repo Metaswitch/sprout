@@ -98,7 +98,7 @@ extern "C" {
 #include "communicationmonitor.h"
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
-#include "handle_exception.h"
+#include "exception_handler.h"
 
 enum OptionTypes
 {
@@ -191,7 +191,7 @@ static sem_t term_sem;
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
-HandleException* handle_exception;
+ExceptionHandler* exception_handler;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -919,14 +919,14 @@ int daemonize()
 
 
 // Signal handler that simply dumps the stack and then crashes out.
-void exception_handler(int sig)
+void signal_handler(int sig)
 {
   // Reset the signal handlers so that another exception will cause a crash.
   signal(SIGABRT, SIG_DFL);
-  signal(SIGSEGV, SIG_DFL);
+  signal(SIGSEGV, signal_handler);
 
   // Check if there's a stored jmp_buf on the thread and handle if there is
-  handle_exception->handle_exception();
+  exception_handler->handle_exception();
 
   CL_SPROUT_CRASH.log(strsignal(sig));
   closelog();
@@ -1123,8 +1123,8 @@ int main(int argc, char* argv[])
   Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
-  signal(SIGABRT, exception_handler);
-  signal(SIGSEGV, exception_handler);
+  signal(SIGABRT, signal_handler);
+  signal(SIGSEGV, signal_handler);
 
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
@@ -1395,8 +1395,8 @@ int main(int argc, char* argv[])
 
   // Create an exception handler. The exception handler should attempt to 
   // quiesce the process before killing it. 
-  handle_exception = new HandleException(opt.exception_max_ttl, 
-                                         true);                 
+  exception_handler = new ExceptionHandler(opt.exception_max_ttl, 
+                                           true);                 
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
