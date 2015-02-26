@@ -450,6 +450,7 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
 // then Sprout should be aborted.
 TEST_F(CommonProcessingTest, DeathTest_MissingResponseFailsHealthCheck)
 {
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   _health_checker->hit_exception();
 
   // Inject a message.
@@ -510,6 +511,7 @@ TEST_F(CommonProcessingTest, Invite200PassesHealthCheck)
 // then Sprout should be aborted.
 TEST_F(CommonProcessingTest, DeathTest_Invite400FailsHealthCheck)
 {
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   _health_checker->hit_exception();
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_reject);
@@ -532,6 +534,7 @@ TEST_F(CommonProcessingTest, DeathTest_Invite400FailsHealthCheck)
 // then Sprout should be aborted.
 TEST_F(CommonProcessingTest, DeathTest_Message200FailsHealthCheck)
 {
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   _health_checker->hit_exception();
 
   pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
