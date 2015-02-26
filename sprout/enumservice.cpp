@@ -461,7 +461,8 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
   {
     LOG_DEBUG("Got NAPTR record: %u %u \"%s\" \"%s\" \"%s\" %s", record->order, record->preference, record->service, record->flags, record->regexp, record->replacement);
     if ((strcasecmp((char*)record->service, "e2u+sip") == 0) ||
-        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0))
+        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0) || 
+        (strcasecmp((char*)record->service, "e2u+pstn:tel") == 0))
     {
       boost::regex regex;
       std::string replace;

@@ -48,6 +48,8 @@
 
 using namespace std;
 
+enum RoutingType { DOMAIN_ROUTE, NUMBER_ROUTE };
+
 /// Fixture for BgcfServiceTest.
 class BgcfServiceTest : public ::testing::Test
 {
@@ -70,10 +72,20 @@ public:
   {
   }
 
-  void test(BgcfService& bgcf_)
+  void test(BgcfService& bgcf_, RoutingType rt)
   {
     SCOPED_TRACE(_in);
-    vector<string> ret = bgcf_.get_route(_in, 0);
+    vector<string> ret; 
+
+    if (rt == RoutingType::DOMAIN_ROUTE)
+    {
+      ret = bgcf_.get_route_from_domain(_in, 0);
+    }
+    else
+    {
+      ret = bgcf_.get_route_from_number(_in, 0);
+    }
+
     std::stringstream store_strings;
 
     for(size_t ii = 0; ii < ret.size(); ++ii)
@@ -99,25 +111,25 @@ TEST_F(BgcfServiceTest, SimpleTests)
 {
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
 
-  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
-  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "").test(bgcf_);
-  ET("",                           ""                  ).test(bgcf_);
-  ET("billy2",                     ""                  ).test(bgcf_);
-  ET("198.147.226.",               ""                  ).test(bgcf_);
-  ET("foreign-domain.example.com", "sip.example.com"   ).test(bgcf_);
-  ET("198.147.226.99",             "fd3.amazonaws.com" ).test(bgcf_);
-  ET("multiple-nodes.example.com", "sip2.example.com,sip3.example.com").test(bgcf_);
+  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("",                           ""                  ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("billy2",                     ""                  ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.",               ""                  ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("foreign-domain.example.com", "sip.example.com"   ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.99",             "fd3.amazonaws.com" ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("multiple-nodes.example.com", "sip2.example.com,sip3.example.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, DefaultRoute)
 {
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_default_route.json"));
 
-  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_);
-  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "sip.example.com").test(bgcf_);
-  ET("",                           "sip.example.com"   ).test(bgcf_);
-  ET("billy2",                     "sip.example.com"   ).test(bgcf_);
-  ET("198.147.226.",               "sip.example.com"   ).test(bgcf_);
+  ET("198.147.226.2",              "ec2-54-243-253-10.compute-1.amazonaws.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("ec2-54-243-253-10.compute-1.amazonaws.com", "sip.example.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("",                           "sip.example.com"   ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("billy2",                     "sip.example.com"   ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.",               "sip.example.com"   ).test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, ParseError)
@@ -125,7 +137,7 @@ TEST_F(BgcfServiceTest, ParseError)
   CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_parse_error.json"));
   EXPECT_TRUE(log.contains("Failed to read BGCF configuration data"));
-  ET("+15108580271", "").test(bgcf_);
+  ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingParts)
@@ -133,9 +145,19 @@ TEST_F(BgcfServiceTest, MissingParts)
   CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_parts.json"));
   EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
-  ET("foreign-domain.example.com", "").test(bgcf_);
-  ET("198.147.226.99", "").test(bgcf_);
-  ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_);
+  ET("foreign-domain.example.com", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.99", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.98", "fd4.amazonaws.com").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+}
+
+TEST_F(BgcfServiceTest, ExtraParts)
+{
+  // Test that entries with both domain and number values are invalid
+  CapturingTestLogger log;
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_extra_parts.json"));
+  EXPECT_TRUE(log.contains("Badly formed BGCF route entry"));
+  ET("198.147.226.98", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+  ET("198.147.226.98", "").test(bgcf_, RoutingType::NUMBER_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingBlock)
@@ -143,7 +165,7 @@ TEST_F(BgcfServiceTest, MissingBlock)
   CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/test_bgcf_missing_block.json"));
   EXPECT_TRUE(log.contains("Badly formed BGCF configuration file - missing routes object"));
-  ET("+15108580271", "").test(bgcf_);
+  ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
 }
 
 TEST_F(BgcfServiceTest, MissingFile)
@@ -151,5 +173,21 @@ TEST_F(BgcfServiceTest, MissingFile)
   CapturingTestLogger log;
   BgcfService bgcf_(string(UT_DIR).append("/NONEXISTENT_FILE.json"));
   EXPECT_TRUE(log.contains("No BGCF configuration"));
-  ET("+15108580271", "").test(bgcf_);
+  ET("+15108580271", "").test(bgcf_, RoutingType::DOMAIN_ROUTE);
+}
+
+TEST_F(BgcfServiceTest, NumberRouteTests)
+{
+  BgcfService bgcf_(string(UT_DIR).append("/test_bgcf.json"));
+
+  // Test that visual separators are stripped out, but other invalid
+  // characters aren't. Test that valid prefixes are picked up, 
+  // prioritizing the longest ones, and that incorrect matches aren't 
+  // chosen
+  ET("+123-123", "sip.example.com").test(bgcf_, RoutingType::NUMBER_ROUTE);
+  ET("+123123", "sip.example.com").test(bgcf_, RoutingType::NUMBER_ROUTE);
+  ET("123123", "").test(bgcf_, RoutingType::NUMBER_ROUTE);
+  ET("+123", "sip2.example.com").test(bgcf_, RoutingType::NUMBER_ROUTE);
+  ET("+654-(3.21)", "sip3.example.com").test(bgcf_, RoutingType::NUMBER_ROUTE);
+  ET("+654!-(321)", "").test(bgcf_, RoutingType::NUMBER_ROUTE);
 }

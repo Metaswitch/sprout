@@ -114,7 +114,7 @@ public:
       bool _emergency_registration;
 
       pjsip_sip_uri* pub_gruu(pj_pool_t* pool) const;
-      pj_str_t pub_gruu_pj_str(pj_pool_t* pool) const;
+      std::string pub_gruu_str(pj_pool_t* pool) const;
       std::string pub_gruu_quoted_string(pj_pool_t* pool) const;
     };
 
