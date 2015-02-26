@@ -1718,9 +1718,10 @@ int main(int argc, char* argv[])
                            stack_data.stats_aggregator);
   HealthChecker* health_checker = new HealthChecker();
   pthread_t health_check_thread;
-  pthread_attr_t health_check_attr;
-  pthread_attr_init(&health_check_attr);
-  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::static_main_thread_function, (void*)health_checker);
+  pthread_create(&health_check_thread,
+                 NULL,
+                 &HealthChecker::static_main_thread_function,
+                 (void*)health_checker);
 
   
   init_common_sip_processing(load_monitor,
