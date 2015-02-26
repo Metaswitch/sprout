@@ -460,7 +460,7 @@ TEST_F(CommonProcessingTest, DeathTest_MissingResponseFailsHealthCheck)
   // Expect it to just vanish.
   ASSERT_EQ(0, txdata_count());
 
-  ASSERT_DEATH(_health_checker->do_check(), "Health check failed");
+  ASSERT_DEATH(_health_checker->do_check(), "");
 }
 
 // If:
@@ -523,7 +523,7 @@ TEST_F(CommonProcessingTest, DeathTest_Invite400FailsHealthCheck)
   // Expect a response from mod_reject.
   ASSERT_EQ(1, txdata_count());
 
-  ASSERT_DEATH(_health_checker->do_check(), "Health check failed");
+  ASSERT_DEATH(_health_checker->do_check(), "");
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_reject);
 }
 
@@ -547,6 +547,6 @@ TEST_F(CommonProcessingTest, DeathTest_Message200FailsHealthCheck)
   // Expect a response from mod_ok.
   ASSERT_EQ(1, txdata_count());
 
-  ASSERT_DEATH(_health_checker->do_check(), "Health check failed");
+  ASSERT_DEATH(_health_checker->do_check(), "");
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
 }
