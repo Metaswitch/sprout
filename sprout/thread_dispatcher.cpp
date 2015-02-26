@@ -149,8 +149,11 @@ static int worker_thread(void* p)
       LOG_DEBUG("Worker thread dequeue message %p", rdata);
 
       CW_TRY
+      {
         pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+      }
       CW_EXCEPT(exception_handler)
+      {
         // Make a 500 response to the rdata with a retry-after header of 
         // 10 mins
         pjsip_retry_after_hdr* retry_after = 
@@ -165,9 +168,9 @@ static int worker_thread(void* p)
         if (num_worker_threads == 1)
         { 
           // There's only one worker thread, so we can't sensibly proceed. 
-          // Abort so we get a core file
-          abort();
+          exit(1);
         }
+      }
       CW_END
 
       LOG_DEBUG("Worker thread completed processing message %p", rdata);

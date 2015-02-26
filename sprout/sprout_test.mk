@@ -86,7 +86,7 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  handle_exception.cpp
+                  exception_handler.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \

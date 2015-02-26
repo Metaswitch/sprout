@@ -311,7 +311,7 @@ static void usage(void)
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
-       "                            The maximum time before the process restarts if it hits an exception.\n"
+       "                            The maximum time before the process exits if it hits an exception.\n"
        "                            The actual time is randomised.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
@@ -925,18 +925,18 @@ void signal_handler(int sig)
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, signal_handler);
 
-  // Check if there's a stored jmp_buf on the thread and handle if there is
-  exception_handler->handle_exception();
-
-  CL_SPROUT_CRASH.log(strsignal(sig));
-  closelog();
-
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
   LOG_COMMIT();
+
+  // Check if there's a stored jmp_buf on the thread and handle if there is
+  exception_handler->handle_exception();
+
+  CL_SPROUT_CRASH.log(strsignal(sig));
+  closelog();
 
   // Dump a core.
   abort();
@@ -1393,10 +1393,18 @@ int main(int argc, char* argv[])
                                  opt.init_token_rate,   // Initial token fill rate (per sec).
                                  opt.min_token_rate);   // Minimum token fill rate (per sec).
 
+  // Start the health checker
+  HealthChecker* health_checker = new HealthChecker();
+  pthread_t health_check_thread;
+  pthread_attr_t health_check_attr;
+  pthread_attr_init(&health_check_attr);
+  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::static_main_thread_function, (void*)health_checker);
+
   // Create an exception handler. The exception handler should attempt to 
   // quiesce the process before killing it. 
   exception_handler = new ExceptionHandler(opt.exception_max_ttl, 
-                                           true);                 
+                                           true,
+                                           health_checker);                 
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
@@ -1758,22 +1766,17 @@ int main(int argc, char* argv[])
   Counter* overload_counter =
       new StatisticCounter("rejected_overload",
                            stack_data.stats_aggregator);
-  HealthChecker* health_checker = new HealthChecker();
-  pthread_t health_check_thread;
-  pthread_attr_t health_check_attr;
-  pthread_attr_init(&health_check_attr);
-  pthread_create(&health_check_thread, &health_check_attr, &HealthChecker::static_main_thread_function, (void*)health_checker);
 
-  
   init_common_sip_processing(load_monitor,
                              requests_counter,
                              overload_counter,
                              health_checker);
+
   init_thread_dispatcher(opt.worker_threads,
                          latency_accumulator,
                          queue_size_accumulator,
                          load_monitor,
-                         handle_exception);
+                         exception_handler);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
@@ -1815,7 +1818,7 @@ int main(int argc, char* argv[])
       http_stack->configure(opt.http_address, 
                             opt.http_port, 
                             opt.http_threads, 
-                            handle_exception,
+                            exception_handler,
                             access_logger);
       http_stack->register_handler("^/timers$",
                                    &reg_timeout_handler);
@@ -1899,7 +1902,7 @@ int main(int argc, char* argv[])
 
   delete hss_connection;
   delete quiescing_mgr;
-  delete handle_exception;
+  delete exception_handler;
   delete load_monitor;
   delete local_reg_store;
   delete remote_reg_store;
@@ -1937,10 +1940,9 @@ int main(int argc, char* argv[])
   delete queue_size_accumulator;
   delete requests_counter;
   delete overload_counter;
+
   health_checker->terminate();
-
   pthread_join(health_check_thread, NULL);
-
   delete health_checker;
   
   // Unregister the handlers that use semaphores (so we can safely destroy
