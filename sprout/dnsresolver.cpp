@@ -61,14 +61,13 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
   struct ares_options options;
   options.flags = ARES_FLAG_STAYOPEN;
   options.timeout = 1000;
-  options.tries = 2;
+  options.tries = servers.size();
   options.ndots = 0;
   options.servers = NULL;
   options.nservers = 0;
   ares_init_options(&_channel,
                     &options,
                     ARES_OPT_FLAGS |
-                    ARES_OPT_ROTATE |
                     ARES_OPT_TIMEOUTMS |
                     ARES_OPT_TRIES |
                     ARES_OPT_NDOTS |
@@ -79,6 +78,8 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
   struct ares_addr_node *first_addr = NULL;
   struct ares_addr_node *addr = first_addr;
 
+  // Convert our vector of IP46Addresses into the linked list of
+  // ares_addr_nodes which ares_set_server takes.
   for (std::vector<struct IP46Address>::const_iterator server = servers.begin();
        server != servers.end();
        server++)
