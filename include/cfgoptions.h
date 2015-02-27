@@ -50,6 +50,7 @@
 #include "httpresolver.h"
 #include "acr.h"
 #include "enumservice.h"
+#include "exception_handler.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -127,6 +128,7 @@ struct options
   float                  init_token_rate;
   float                  min_token_rate;
   int                    cass_target_latency_us;
+  int                    exception_max_ttl;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
@@ -139,5 +141,6 @@ extern HttpConnection* ralf_connection;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
+extern ExceptionHandler* exception_handler;
 
 #endif

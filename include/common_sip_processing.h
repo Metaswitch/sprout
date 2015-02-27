@@ -52,11 +52,13 @@ extern "C" {
 
 #include "load_monitor.h"
 #include "counter.h"
+#include "health_checker.h"
 
 pj_status_t
 init_common_sip_processing(LoadMonitor* load_monitor_arg,
                            Counter* requests_counter_arg,
-                           Counter* overload_counter_arg);
+                           Counter* overload_counter_arg,
+                           HealthChecker* health_checker_arg);
 
 void unregister_common_processing_module(void);
 

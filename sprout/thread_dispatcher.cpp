@@ -74,6 +74,7 @@ extern "C" {
 #include "load_monitor.h"
 #include "counter.h"
 #include "sprout_pd_definitions.h"
+#include "exception_handler.h"
 
 static std::vector<pj_thread_t*> worker_threads;
 
@@ -91,9 +92,11 @@ eventq<struct rx_msg_qe> rx_msg_q;
 // from a single request, each with a possible 500ms timeout).
 static const int MSG_Q_DEADLOCK_TIME = 4000;
 
+static int num_worker_threads = 1;
 static Accumulator* latency_accumulator = NULL;
 static LoadMonitor* load_monitor = NULL;
 static Accumulator* queue_size_accumulator = NULL;
+static ExceptionHandler* exception_handler = NULL;
 
 static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata);
 
@@ -140,10 +143,36 @@ static int worker_thread(void* p)
   while (rx_msg_q.pop(qe))
   {
     pjsip_rx_data* rdata = qe.rdata;
+
     if (rdata)
     {
       LOG_DEBUG("Worker thread dequeue message %p", rdata);
-      pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+
+      CW_TRY
+      {
+        pjsip_endpt_process_rx_data(stack_data.endpt, rdata, &rp, NULL);
+      }
+      CW_EXCEPT(exception_handler)
+      {
+        // Make a 500 response to the rdata with a retry-after header of 
+        // 10 mins
+        pjsip_retry_after_hdr* retry_after = 
+                         pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
+        PJUtils::respond_stateless(stack_data.endpt,
+                                   rdata,
+                                   PJSIP_SC_INTERNAL_SERVER_ERROR,
+                                   NULL,
+                                   (pjsip_hdr*)retry_after,
+                                   NULL);
+
+        if (num_worker_threads == 1)
+        { 
+          // There's only one worker thread, so we can't sensibly proceed. 
+          exit(1);
+        }
+      }
+      CW_END
+
       LOG_DEBUG("Worker thread completed processing message %p", rdata);
       pjsip_rx_data_free_cloned(rdata);
 
@@ -215,21 +244,24 @@ static pj_bool_t threads_on_rx_msg(pjsip_rx_data* rdata)
   return PJ_TRUE;
 }
 
-pj_status_t init_thread_dispatcher(int num_worker_threads,
+pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    Accumulator* latency_acc_arg,
                                    Accumulator* queue_size_acc_arg,
-                                   LoadMonitor *load_monitor_arg)
+                                   LoadMonitor* load_monitor_arg,
+                                   ExceptionHandler* exception_handler_arg)
 {
   // Set up the vectors of threads.  The threads don't get created until
   // start_worker_threads is called.
-  worker_threads.resize(num_worker_threads);
+  worker_threads.resize(num_worker_threads_arg);
 
   // Enable deadlock detection on the message queue.
   rx_msg_q.set_deadlock_threshold(MSG_Q_DEADLOCK_TIME);
 
+  num_worker_threads = num_worker_threads_arg;
   latency_accumulator = latency_acc_arg;
   queue_size_accumulator = queue_size_acc_arg;
   load_monitor = load_monitor_arg;
+  exception_handler = exception_handler_arg;
 
   // Register the PJSIP module.
   pjsip_endpt_register_module(stack_data.endpt, &mod_thread_dispatcher);

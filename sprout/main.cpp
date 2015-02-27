@@ -98,6 +98,7 @@ extern "C" {
 #include "communicationmonitor.h"
 #include "common_sip_processing.h"
 #include "thread_dispatcher.h"
+#include "exception_handler.h"
 
 enum OptionTypes
 {
@@ -116,7 +117,8 @@ enum OptionTypes
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
-  OPT_CASS_TARGET_LATENCY_US
+  OPT_CASS_TARGET_LATENCY_US,
+  OPT_EXCEPTION_MAX_TTL
 };
 
 
@@ -178,6 +180,7 @@ const static struct pj_getopt_option long_opt[] =
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
+  { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
   { NULL,                           0,                 0, 0}
 };
 
@@ -306,6 +309,9 @@ static void usage(void)
        "                            to memcached. Valid values are 'binary' and 'json' (default is 'binary')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
+       "     --exception-max-ttl <secs>\n"
+       "                            The maximum time before the process exits if it hits an exception.\n"
+       "                            The actual time is randomised.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -837,6 +843,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       LOG_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
       break;
 
+    case OPT_EXCEPTION_MAX_TTL:
+      options->exception_max_ttl = atoi(pj_optarg);
+      LOG_INFO("Max TTL after an exception set to %d",
+               options->exception_max_ttl);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -906,14 +918,11 @@ int daemonize()
 
 
 // Signal handler that simply dumps the stack and then crashes out.
-void exception_handler(int sig)
+void signal_handler(int sig)
 {
   // Reset the signal handlers so that another exception will cause a crash.
   signal(SIGABRT, SIG_DFL);
-  signal(SIGSEGV, SIG_DFL);
-
-  CL_SPROUT_CRASH.log(strsignal(sig));
-  closelog();
+  signal(SIGSEGV, signal_handler);
 
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
@@ -921,6 +930,12 @@ void exception_handler(int sig)
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
   LOG_COMMIT();
+
+  // Check if there's a stored jmp_buf on the thread and handle if there is
+  exception_handler->handle_exception();
+
+  CL_SPROUT_CRASH.log(strsignal(sig));
+  closelog();
 
   // Dump a core.
   abort();
@@ -1073,7 +1088,7 @@ HttpConnection* ralf_connection = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
-
+ExceptionHandler* exception_handler = NULL;
 
 /*
  * main()
@@ -1107,8 +1122,8 @@ int main(int argc, char* argv[])
   Alarm* remote_vbucket_alarm = NULL;
 
   // Set up our exception signal handler for asserts and segfaults.
-  signal(SIGABRT, exception_handler);
-  signal(SIGSEGV, exception_handler);
+  signal(SIGABRT, signal_handler);
+  signal(SIGSEGV, signal_handler);
 
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
@@ -1157,6 +1172,7 @@ int main(int argc, char* argv[])
   opt.interactive = PJ_FALSE;
   opt.memcached_write_format = MemcachedWriteFormat::BINARY;
   opt.override_npdi = PJ_FALSE;
+  opt.exception_max_ttl = 600;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
@@ -1375,6 +1391,20 @@ int main(int argc, char* argv[])
                                  opt.max_tokens,        // Maximum token bucket size.
                                  opt.init_token_rate,   // Initial token fill rate (per sec).
                                  opt.min_token_rate);   // Minimum token fill rate (per sec).
+
+  // Start the health checker
+  HealthChecker* health_checker = new HealthChecker();
+  pthread_t health_check_thread;
+  pthread_create(&health_check_thread,
+                 NULL,
+                 &HealthChecker::static_main_thread_function,
+                 (void*)health_checker);
+
+  // Create an exception handler. The exception handler should attempt to 
+  // quiesce the process before killing it. 
+  exception_handler = new ExceptionHandler(opt.exception_max_ttl, 
+                                           true,
+                                           health_checker);                 
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
@@ -1737,14 +1767,16 @@ int main(int argc, char* argv[])
       new StatisticCounter("rejected_overload",
                            stack_data.stats_aggregator);
 
-
   init_common_sip_processing(load_monitor,
                              requests_counter,
-                             overload_counter);
+                             overload_counter,
+                             health_checker);
+
   init_thread_dispatcher(opt.worker_threads,
                          latency_accumulator,
                          queue_size_accumulator,
-                         load_monitor);
+                         load_monitor,
+                         exception_handler);
 
   // Create worker threads first as they take work from the PJSIP threads so
   // need to be ready.
@@ -1783,7 +1815,11 @@ int main(int argc, char* argv[])
     try
     {
       http_stack->initialize();
-      http_stack->configure(opt.http_address, opt.http_port, opt.http_threads, access_logger);
+      http_stack->configure(opt.http_address, 
+                            opt.http_port, 
+                            opt.http_threads, 
+                            exception_handler,
+                            access_logger);
       http_stack->register_handler("^/timers$",
                                    &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
@@ -1866,6 +1902,7 @@ int main(int argc, char* argv[])
 
   delete hss_connection;
   delete quiescing_mgr;
+  delete exception_handler;
   delete load_monitor;
   delete local_reg_store;
   delete remote_reg_store;
@@ -1903,6 +1940,10 @@ int main(int argc, char* argv[])
   delete queue_size_accumulator;
   delete requests_counter;
   delete overload_counter;
+
+  health_checker->terminate();
+  pthread_join(health_check_thread, NULL);
+  delete health_checker;
   
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
