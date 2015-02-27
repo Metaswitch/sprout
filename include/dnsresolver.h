@@ -99,6 +99,8 @@ private:
   // The reply data structure.  Only valid between ares_callback and
   // perform_naptr_query returning, and only if _status is ARES_SUCCESS.
   struct ares_naptr_reply* _naptr_reply;
+  // Pointer to a linked list of servers
+  struct ares_addr_node _ares_addrs[3];
 
 };
 

@@ -75,52 +75,39 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
 
   // Point the DNS resolver at the desired server.  We must use
   // ares_set_servers rather than setting it in the options for IPv6 support,
-  struct ares_addr_node *first_addr = NULL;
-  struct ares_addr_node *addr = first_addr;
 
   // Convert our vector of IP46Addresses into the linked list of
   // ares_addr_nodes which ares_set_server takes.
-  for (std::vector<struct IP46Address>::const_iterator server = servers.begin();
-       server != servers.end();
-       server++)
+  size_t server_count = std::min((size_t)3u, servers.size());
+  for (size_t ii = 0;
+       ii < server_count;
+       ii++)
   {
-    struct ares_addr_node* new_addr = (struct ares_addr_node*)malloc(sizeof(struct ares_addr_node));
-    memset(new_addr, 0, sizeof(struct ares_addr_node));
-    if (addr)
+    IP46Address server = servers[ii];
+    struct ares_addr_node* ares_addr = &_ares_addrs[ii];
+    memset(ares_addr, 0, sizeof(struct ares_addr_node));
+    if (ii > 0)
     {
-      addr->next = new_addr;
+      int prev_idx = ii - 1;
+      _ares_addrs[prev_idx].next = ares_addr;
+    }
+
+    ares_addr->family = server.af;
+    if (server.af == AF_INET)
+    {
+      memcpy(&ares_addr->addr.addr4, &server.addr.ipv4, sizeof(ares_addr->addr.addr4));
     }
     else
     {
-      first_addr = new_addr;
-    }
-    addr = new_addr;
-    addr->family = server->af;
-    if (server->af == AF_INET)
-    {
-      memcpy(&addr->addr.addr4, &server->addr.ipv4, sizeof(addr->addr.addr4));
-    }
-    else
-    {
-      memcpy(&addr->addr.addr6, &server->addr.ipv6, sizeof(addr->addr.addr6));
+      memcpy(&ares_addr->addr.addr6, &server.addr.ipv6, sizeof(ares_addr->addr.addr6));
     }
   }
-  ares_set_servers(_channel, first_addr);
+  ares_set_servers(_channel, &(_ares_addrs[0]));
 }
 
 
 DNSResolver::~DNSResolver()
 {
-  struct ares_addr_node *addr = NULL;
-  ares_get_servers(_channel, &addr);
-
-  while (addr != NULL)
-  {
-    struct ares_addr_node *tmp = addr->next;
-    free(addr);
-    addr = tmp;
-  }
-
   ares_destroy(_channel);
 
   // If we have a left-over NAPTR reply, destroy it.
