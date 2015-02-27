@@ -115,7 +115,8 @@ enum OptionTypes
   OPT_OVERRIDE_NPDI,
   OPT_MAX_TOKENS,
   OPT_INIT_TOKEN_RATE,
-  OPT_MIN_TOKEN_RATE
+  OPT_MIN_TOKEN_RATE,
+  OPT_CASS_TARGET_LATENCY_US
 };
 
 
@@ -176,6 +177,7 @@ const static struct pj_getopt_option long_opt[] =
   { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
   { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
+  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { NULL,                           0,                 0, 0}
 };
 
@@ -270,12 +272,15 @@ static void usage(void)
        "                            The session expiry period to request (in seconds)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
+       "     --cass-target-latency-us <usecs>\n"
+       "                            Target latency above which throttling applies for the Cassandra store\n"
+       "                            that's part of the Memento application server (default: 1000000)\n"
        "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n" 
-       "                            the throttling code (default: 20)\n"
+       "                            the throttling code (default: 20))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
-       "                            the throttling code (default: 100)\n"
+       "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
-       "                            the throttling code (default: 10)\n"
+       "                            the throttling code (default: 10.0))\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -675,6 +680,15 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       if (options->target_latency_us <= 0)
       {
         LOG_ERROR("Invalid --target-latency-us option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_CASS_TARGET_LATENCY_US:
+      options->cass_target_latency_us = atoi(pj_optarg);
+      if (options->cass_target_latency_us <= 0)
+      {
+        LOG_ERROR("Invalid --cass-target-latency-us option %s", pj_optarg);
         return -1;
       }
       break;
@@ -1139,6 +1153,7 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.alarms_enabled = PJ_FALSE;
   opt.target_latency_us = 100000;
+  opt.cass_target_latency_us = 1000000;
   opt.max_tokens = 20;
   opt.init_token_rate = 100.0;
   opt.min_token_rate = 10.0;
