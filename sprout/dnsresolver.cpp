@@ -59,6 +59,10 @@ DNSResolver::DNSResolver(const std::vector<struct IP46Address>& servers) :
   // Set options to ensure we always get a response as quickly as possible -
   // we are on the call path!
   struct ares_options options;
+
+  // ARES_FLAG_STAYOPEN implements TCP keepalive - it doesn't do
+  // anything obviously helpful for UDP connections to the DNS server,
+  // but it's what we've always tested with so not worth the risk of removing.
   options.flags = ARES_FLAG_STAYOPEN;
   options.timeout = 1000;
   options.tries = servers.size();
