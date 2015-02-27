@@ -191,7 +191,6 @@ static sem_t term_sem;
 static pj_bool_t quiescing = PJ_FALSE;
 static sem_t quiescing_sem;
 QuiescingManager* quiescing_mgr;
-ExceptionHandler* exception_handler;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
@@ -1089,7 +1088,7 @@ HttpConnection* ralf_connection = NULL;
 HttpResolver* http_resolver = NULL;
 ACRFactory* scscf_acr_factory = NULL;
 EnumService* enum_service = NULL;
-
+ExceptionHandler* exception_handler = NULL;
 
 /*
  * main()
