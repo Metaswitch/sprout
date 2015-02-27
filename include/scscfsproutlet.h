@@ -82,15 +82,28 @@ public:
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
                  bool user_phone,
-                 bool global_only_lookups);
+                 bool global_only_lookups,
+                 bool override_npdi);
   ~SCSCFSproutlet();
 
+  bool init();
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
 
-  void set_user_phone(bool v) { _user_phone = v; }
+  void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
+  void set_override_npdi(bool v) { _override_npdi = v; }
+
+  inline bool should_require_user_phone() const
+  {
+    return _user_phone;
+  }
+
+  inline bool should_override_npdi() const
+  {
+    return _override_npdi;
+  }
 
 private:
 
@@ -170,7 +183,13 @@ private:
 
   bool _global_only_lookups;
   bool _user_phone;
+  bool _override_npdi;
 
+  /// String versions of the cluster URIs
+  std::string _scscf_cluster_uri_str;
+  std::string _scscf_node_uri_str;
+  std::string _icscf_uri_str;
+  std::string _bgcf_uri_str;
 };
 
 
@@ -228,8 +247,9 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required.
-  pjsip_status_code uri_translation(pjsip_msg* req);
+  /// Does URI translation if required. Returns whether the routing 
+  /// decision for the request has already been made 
+  bool uri_translation_and_route(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.

@@ -96,6 +96,8 @@ extern "C" {
 #include "sprout_pd_definitions.h"
 #include "alarm.h"
 #include "communicationmonitor.h"
+#include "common_sip_processing.h"
+#include "thread_dispatcher.h"
 
 enum OptionTypes
 {
@@ -109,7 +111,12 @@ enum OptionTypes
   OPT_ALARMS_ENABLED,
   OPT_DNS_SERVER,
   OPT_TARGET_LATENCY_US,
-  OPT_MEMCACHED_WRITE_FORMAT
+  OPT_MEMCACHED_WRITE_FORMAT,
+  OPT_OVERRIDE_NPDI,
+  OPT_MAX_TOKENS,
+  OPT_INIT_TOKEN_RATE,
+  OPT_MIN_TOKEN_RATE,
+  OPT_CASS_TARGET_LATENCY_US
 };
 
 
@@ -166,6 +173,11 @@ const static struct pj_getopt_option long_opt[] =
   { "interactive",                  no_argument,       0, 't'},
   { "help",                         no_argument,       0, 'h'},
   { "memcached-write-format",       required_argument, 0, OPT_MEMCACHED_WRITE_FORMAT},
+  { "override-npdi",                no_argument,       0, OPT_OVERRIDE_NPDI},
+  { "max-tokens",                   required_argument, 0, OPT_MAX_TOKENS},
+  { "init-token-rate",              required_argument, 0, OPT_INIT_TOKEN_RATE},
+  { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
+  { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { NULL,                           0,                 0, 0}
 };
 
@@ -179,11 +191,6 @@ QuiescingManager* quiescing_mgr;
 
 const static int QUIESCE_SIGNAL = SIGQUIT;
 const static int UNQUIESCE_SIGNAL = SIGUSR1;
-
-const static int TARGET_LATENCY = 100000;
-const static int MAX_TOKENS = 20;
-const static float INITIAL_TOKEN_RATE = 10.0;
-const static float MIN_TOKEN_RATE = 10.0;
 
 static void usage(void)
 {
@@ -263,6 +270,15 @@ static void usage(void)
        "                            The session expiry period to request (in seconds)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
+       "     --cass-target-latency-us <usecs>\n"
+       "                            Target latency above which throttling applies for the Cassandra store\n"
+       "                            that's part of the Memento application server (default: 1000000)\n"
+       "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
+       "                            the throttling code (default: 20))\n"
+       "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
+       "                            the throttling code (default: 100.0))\n"
+       "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
+       "                            the throttling code (default: 10.0))\n"
        " -T  --http_address <server>\n"
        "                            Specify the HTTP bind address\n"
        " -o  --http_port <port>     Specify the HTTP bind port\n"
@@ -288,6 +304,8 @@ static void usage(void)
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
        "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
+       "     --override-npdi        Whether the deployment should check for number portability data on \n"
+       "                            requests that already have the 'npdi' indicator (default: false)\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -662,6 +680,42 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
       }
       break;
 
+    case OPT_CASS_TARGET_LATENCY_US:
+      options->cass_target_latency_us = atoi(pj_optarg);
+      if (options->cass_target_latency_us <= 0)
+      {
+        LOG_ERROR("Invalid --cass-target-latency-us option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_MAX_TOKENS:
+      options->max_tokens = atoi(pj_optarg);
+      if (options->max_tokens <= 0)
+      {
+        LOG_ERROR("Invalid --max-tokens option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_INIT_TOKEN_RATE:
+      options->init_token_rate = atoi(pj_optarg);
+      if (options->init_token_rate <= 0)
+      {
+        LOG_ERROR("Invalid --init-token-rate option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
+    case OPT_MIN_TOKEN_RATE:
+      options->min_token_rate = atoi(pj_optarg);
+      if (options->min_token_rate <= 0)
+      {
+        LOG_ERROR("Invalid --min-token-rate option %s", pj_optarg);
+        return -1;
+      }
+      break;
+
     case OPT_MEMCACHED_WRITE_FORMAT:
       if (strcmp(pj_optarg, "binary") == 0)
       {
@@ -776,6 +830,11 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
     case OPT_DNS_SERVER:
       options->dns_server = std::string(pj_optarg);
       LOG_INFO("Using DNS server %s", pj_optarg);
+      break;
+
+    case OPT_OVERRIDE_NPDI:
+      options->override_npdi = true;
+      LOG_INFO("Number portability lookups will be done on URIs containing the 'npdi' indicator");
       break;
 
     case 'h':
@@ -902,6 +961,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
   pj_thread_desc desc;
   pj_thread_t* thread;
   pj_status_t status;
+  pj_bzero(desc, sizeof(pj_thread_desc));
 
   status = pj_thread_register("Quiesce/unquiesce thread", desc, &thread);
 
@@ -941,6 +1001,7 @@ void* quiesce_unquiesce_thread_func(void* dummy)
     // thread while it is waiting on the semaphore will cause it to cancel.
     sem_wait(&quiescing_sem);
     new_quiescing = quiescing;
+    LOG_STATUS("Value of new_quiescing is %s", (new_quiescing == PJ_FALSE) ? "false" : "true");
   }
 
   return NULL;
@@ -968,6 +1029,7 @@ void reg_httpthread_with_pjsip(evhtp_t * htp, evthr_t * httpthread, void * arg)
     // won't work in this case).  This is okay for now because HttpStack
     // just creates a pool of threads at start of day.
     pj_thread_desc* td = (pj_thread_desc*)malloc(sizeof(pj_thread_desc));
+    pj_bzero(*td, sizeof(pj_thread_desc));
     pj_thread_t *thread = 0;
 
     pj_status_t thread_reg_status = pj_thread_register("SproutHTTPThread",
@@ -1048,25 +1110,8 @@ int main(int argc, char* argv[])
   signal(SIGABRT, exception_handler);
   signal(SIGSEGV, exception_handler);
 
-  // Initialize the semaphore that unblocks the quiesce thread, and the thread
-  // itself.
-  sem_init(&quiescing_sem, 0, 0);
-  pthread_create(&quiesce_unquiesce_thread,
-                 NULL,
-                 quiesce_unquiesce_thread_func,
-                 NULL);
-
-  // Set up our signal handler for (un)quiesce signals.
-  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
-  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
-
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
-
-  // Create a new quiescing manager instance and register our completion handler
-  // with it.
-  quiescing_mgr = new QuiescingManager();
-  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
   opt.pcscf_enabled = false;
   opt.pcscf_trusted_port = 0;
@@ -1102,11 +1147,16 @@ int main(int argc, char* argv[])
   opt.call_list_ttl = 604800;
   opt.alarms_enabled = PJ_FALSE;
   opt.target_latency_us = 100000;
+  opt.cass_target_latency_us = 1000000;
+  opt.max_tokens = 20;
+  opt.init_token_rate = 100.0;
+  opt.min_token_rate = 10.0;
   opt.log_to_file = PJ_FALSE;
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
   opt.memcached_write_format = MemcachedWriteFormat::JSON;
+  opt.override_npdi = PJ_FALSE;
 
   boost::filesystem::path p = argv[0];
   openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
@@ -1322,13 +1372,18 @@ int main(int argc, char* argv[])
 
   // Start the load monitor
   load_monitor = new LoadMonitor(opt.target_latency_us, // Initial target latency (us).
-                                 MAX_TOKENS,            // Maximum token bucket size.
-                                 INITIAL_TOKEN_RATE,    // Initial token fill rate (per sec).
-                                 MIN_TOKEN_RATE);       // Minimum token fill rate (per sec).
+                                 opt.max_tokens,        // Maximum token bucket size.
+                                 opt.init_token_rate,   // Initial token fill rate (per sec).
+                                 opt.min_token_rate);   // Minimum token fill rate (per sec).
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_server);
   sip_resolver = new SIPResolver(dns_resolver);
+
+  // Create a new quiescing manager instance and register our completion handler
+  // with it.
+  quiescing_mgr = new QuiescingManager();
+  quiescing_mgr->register_completion_handler(new QuiesceCompleteHandler());
 
   // Initialize the PJSIP stack and associated subsystems.
   status = init_stack(opt.sas_system_name,
@@ -1345,11 +1400,9 @@ int main(int argc, char* argv[])
                       opt.alias_hosts,
                       sip_resolver,
                       opt.pjsip_threads,
-                      opt.worker_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
                       quiescing_mgr,
-                      load_monitor,
                       opt.billing_cdf);
 
   if (status != PJ_SUCCESS)
@@ -1358,6 +1411,20 @@ int main(int argc, char* argv[])
     LOG_ERROR("Error initializing stack %s", PJUtils::pj_status_to_string(status).c_str());
     return 1;
   }
+
+  // Initialize the semaphore that unblocks the quiesce thread, and the thread
+  // itself. This must happen after init_stack is called, because this
+  // calls init_pjsip, which calls pj_init, which sets up the
+  // necessary environment for us to register threads with pjsip.
+  sem_init(&quiescing_sem, 0, 0);
+  pthread_create(&quiesce_unquiesce_thread,
+                 NULL,
+                 quiesce_unquiesce_thread_func,
+                 NULL);
+
+  // Set up our signal handler for (un)quiesce signals.
+  signal(QUIESCE_SIGNAL, quiesce_unquiesce_handler);
+  signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
 
   // Now that we know the address family, create an HttpResolver too.
   http_resolver = new HttpResolver(dns_resolver, stack_data.addr_family);
@@ -1619,7 +1686,14 @@ int main(int argc, char* argv[])
 
   // Load the sproutlet plugins.
   PluginLoader* loader = new PluginLoader("/usr/share/clearwater/sprout/plugins", opt);
-  loader->load(sproutlets);
+
+  if (!loader->load(sproutlets))
+  {
+    CL_SPROUT_PLUGIN_FAILURE.log();
+    closelog();
+    LOG_ERROR("Failed to successfully load plug-ins");
+    return 1;
+  }
 
   if (!sproutlets.empty())
   {
@@ -1650,7 +1724,39 @@ int main(int argc, char* argv[])
     }
   }
 
-  status = start_stack();
+  Accumulator* latency_accumulator =
+      new StatisticAccumulator("latency_us",
+                               stack_data.stats_aggregator);
+  Accumulator* queue_size_accumulator =
+      new StatisticAccumulator("queue_size",
+                               stack_data.stats_aggregator);
+  Counter* requests_counter =
+      new StatisticCounter("incoming_requests",
+                           stack_data.stats_aggregator);
+  Counter* overload_counter =
+      new StatisticCounter("rejected_overload",
+                           stack_data.stats_aggregator);
+
+
+  init_common_sip_processing(load_monitor,
+                             requests_counter,
+                             overload_counter);
+  init_thread_dispatcher(opt.worker_threads,
+                         latency_accumulator,
+                         queue_size_accumulator,
+                         load_monitor);
+
+  // Create worker threads first as they take work from the PJSIP threads so
+  // need to be ready.
+
+  status = start_worker_threads();
+  if (status != PJ_SUCCESS)
+  {
+    LOG_ERROR("Error starting SIP worker threads, %s", PJUtils::pj_status_to_string(status).c_str());
+    return 1;
+  }
+
+  status = start_pjsip_threads();
   if (status != PJ_SUCCESS)
   {
     CL_SPROUT_SIP_STACK_INIT_FAIL.log(PJUtils::pj_status_to_string(status).c_str());
@@ -1695,7 +1801,7 @@ int main(int argc, char* argv[])
     }
   }
 
-  // Wait here until the quite semaphore is signaled.
+  // Wait here until the quit semaphore is signaled.
   sem_wait(&term_sem);
 
   CL_SPROUT_ENDED.log();
@@ -1713,11 +1819,20 @@ int main(int argc, char* argv[])
     }
   }
 
-  stop_stack();
-  // We must unregister stack modules here because this terminates the
+  // Terminate the PJSIP threads and the worker threads to exit.  We kill
+  // the PJSIP threads first - if we killed the worker threads first the
+  // rx_msg_q will stop getting serviced so could fill up blocking
+  // PJSIP threads, causing a deadlock.
+  stop_pjsip_threads();
+  stop_worker_threads();
+
+  // We must call stop_stack here because this terminates the
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
-  unregister_stack_modules();
+  stop_stack();
+
+  unregister_thread_dispatcher();
+  unregister_common_processing_module();
 
   // Destroy the Sproutlet Proxy.
   delete sproutlet_proxy;
@@ -1783,6 +1898,11 @@ int main(int argc, char* argv[])
     delete vbucket_alarm;
     delete remote_vbucket_alarm;
   }
+
+  delete latency_accumulator;
+  delete queue_size_accumulator;
+  delete requests_counter;
+  delete overload_counter;
 
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).

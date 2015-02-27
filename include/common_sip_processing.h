@@ -1,8 +1,16 @@
 /**
- * @file bgcfservice.h class definition for an BGCF service provider
+ * @file common_sip_processing.h
+ * 
+ * Processing that needs to be done
+ * early on every SIP message.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
+ *
+ * Parts of this header were derived from GPL licensed PJSIP sample code
+ * with the following copyrights.
+ *   Copyright (C) 2008-2011 Teluu Inc. (http://www.teluu.com)
+ *   Copyright (C) 2003-2008 Benny Prijono <benny@prijono.org>
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,46 +42,22 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-///
-///
 
-#ifndef BGCFSERVICE_H__
-#define BGCFSERVICE_H__
+#ifndef COMMON_SIP_PROCESSING_H
+#define COMMON_SIP_PROCESSING_H
 
-#include <map>
-#include <string>
-#include <boost/regex.hpp>
+extern "C" {
+#include <pjsip.h>
+}
 
-#include <functional>
-#include "updater.h"
-#include "sas.h"
+#include "load_monitor.h"
+#include "counter.h"
 
-class BgcfService
-{
-public:
-  BgcfService(std::string configuration = "./bgcf.json");
-  ~BgcfService();
+pj_status_t
+init_common_sip_processing(LoadMonitor* load_monitor_arg,
+                           Counter* requests_counter_arg,
+                           Counter* overload_counter_arg);
 
-  /// Updates the bgcf routes
-  void update_routes();
-
-  std::vector<std::string> get_route_from_domain(const std::string &domain, 
-                                                 SAS::TrailId trail) const;
-  std::vector<std::string> get_route_from_number(const std::string &number, 
-                                                 SAS::TrailId trail) const;
-
-private:
-  std::map<std::string, std::vector<std::string>> _domain_routes;
-  std::map<std::string, std::vector<std::string>> _number_routes;
-  std::string _configuration;
-  Updater<void, BgcfService>* _updater;
-
-  // Strip any visual separators from the number
-  static const boost::regex CHARS_TO_STRIP;
-  static std::string remove_visual_separators(const std::string& number)
-  { 
-    return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
-  };
-};
+void unregister_common_processing_module(void);
 
 #endif

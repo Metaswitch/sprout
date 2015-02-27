@@ -433,4 +433,14 @@ static const PDLog1<int> CL_SPROUT_I_CSCF_INIT_FAIL2
   "Check the configuration in /etc/clearwater/config."
 );
 
+static const PDLog CL_SPROUT_PLUGIN_FAILURE
+(
+  PDLogBase::CL_SPROUT_ID + 38,
+  PDLOG_ERR,
+  "One or more plugins failed to load.",
+  "The service is no longer available.",
+  "The application will exit and restart until the problem is fixed.",
+  "Check the configuration in /etc/clearwater/config."
+);
+
 #endif

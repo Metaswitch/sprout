@@ -19,6 +19,10 @@
         {   "name" : "Route includes an invalid SIP URI angle bracket mix",
             "domain" : "domainnotasipurianglebracketmix",
             "route" : ["<10.0.0.1:5060>;lr"]
+        },
+        {   "name" : "Routing number",
+            "number" : "+1",
+            "route" : ["<sip:10.0.0.1:5060;transport=TCP>"]
         }
     ]
 }

@@ -41,6 +41,22 @@
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
         },
         {   "name" : "Clearwater internal numbers",
+            "prefix" : "+1650555",
+            "regex"  : "!(^.*$)!sip:\\1@homedomain!"
+        },
+        {   "name" : "Clearwater remote numbers (for testing BGCF)",
+            "prefix" : "+1650777",
+            "regex"  : "!(^.*$)!sip:\\1@remotedomain!"
+        },
+        {   "name" : "NP porting data",
+            "prefix" : "+16901",
+            "regex"  : "!^\\+16901(.*$)!tel:+16901\\1;npdi;rn=16901!"
+        },
+        {   "name" : "+1660xxxxxxx => +1650xxxxxxx - tests repeated TEL URI lookups",
+            "prefix" : "+1660",
+            "regex"  : "!^\\+1660(.*$)!tel:+1650\\1!"
+        },
+        {   "name" : "Clearwater internal numbers",
             "prefix" : "650555",
             "regex"  : "!(^.*$)!sip:\\1@ut-int.cw-ngv.com!"
         },

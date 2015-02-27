@@ -82,6 +82,7 @@ namespace SP
     string _branch;
     string _route;
     int _cseq;
+    bool _in_dialog;
 
     Message() :
       _method("INVITE"),
@@ -96,7 +97,8 @@ namespace SP
       _first_hop(false),
       _via("10.83.18.38:36530"),
       _branch(""),
-      _cseq(16567)
+      _cseq(16567),
+      _in_dialog(false)
     {
       static int unique = 1042;
       _unique = unique;
@@ -145,7 +147,7 @@ namespace SP
                        "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
                        "%12$s"
                        "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>\r\n"
+                       "To: <%10$s>%17$s\r\n"
                        "Max-Forwards: %8$d\r\n"
                        "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
                        "CSeq: %15$d %1$s\r\n"
@@ -172,7 +174,8 @@ namespace SP
                        /* 13 */ _via.c_str(),
                        /* 14 */ route.c_str(),
                        /* 15 */ _cseq,
-                       /* 16 */ branch.c_str()
+                       /* 16 */ branch.c_str(),
+                       /* 17 */ _in_dialog ?  ";tag=abcd" : ""
         );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -3168,6 +3171,7 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
   msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
   msg._route += "Route: <sip:123456@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>";
+  msg._in_dialog = true;
   inject_msg(msg.get_request(), &tp);
 
   // Check that the message is forwarded as expected.
@@ -3180,6 +3184,77 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
 
   // Goes to the right place (bono1, which is mapped to 10.6.6.200).
   expect_target("TCP", "10.6.6.200", stack_data.pcscf_trusted_port, tdata);
+
+  free_txdata();
+}
+
+// Test that Bono routes all initial requests to Sprout.
+TEST_F(StatefulEdgeProxyTest, TestAlwaysRouteUpstream)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send a MESSAGE from the client. Use a different domain in the Request-URI.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "sip:1234@someotherdomain";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._in_dialog = false;
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+
+  free_txdata();
+}
+
+// Test that Bono routes all initial requests to Sprout.
+TEST_F(StatefulEdgeProxyTest, TestAlwaysRouteUpstreamTel)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send a MESSAGE from the client. Use a tel: URI in the Request-URI
+  // to ensure that no SIP routing interferes.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "tel:1234";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._in_dialog = false;
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
 
   free_txdata();
 }

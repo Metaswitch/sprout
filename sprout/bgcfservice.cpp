@@ -45,6 +45,8 @@
 #include "sas.h"
 #include "sproutsasevent.h"
 
+const boost::regex BgcfService::CHARS_TO_STRIP = boost::regex("[.)(-]");
+
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
   _updater(NULL)
@@ -74,7 +76,8 @@ void BgcfService::update_routes()
 
   LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
 
-  std::map<std::string, std::vector<std::string>> new_routes;
+  std::map<std::string, std::vector<std::string>> new_domain_routes;
+  std::map<std::string, std::vector<std::string>> new_number_routes;
 
   file.open(_configuration.c_str());
   if (file.is_open())
@@ -95,14 +98,31 @@ void BgcfService::update_routes()
       for (size_t ii = 0; ii < routes.size(); ++ii)
       {
         Json::Value route = routes[(int)ii];
-        if ((route["domain"].isString()) &&
-            (route["route"].isArray()))
+
+        // An entry is valid if it has either a domain (string) OR a 
+        // number (string) AND an array of routes
+        if (((((route.isMember("domain")) && 
+               (route["domain"].isString()))   && 
+              (!route.isMember("number"))) || 
+             ((!route.isMember("domain"))  && 
+              ((route.isMember("number")) && 
+               (route["number"].isString())))) &&
+            (route["route"].isArray()) )
         {
           std::vector<std::string> route_vec;
           Json::Value route_vals = route["route"];
-          std::string domain = route["domain"].asString();
+          std::string routing_value;
 
-          LOG_DEBUG("Add route for %s", domain.c_str());
+          if (route["domain"].isString())
+          {
+            routing_value = route["domain"].asString();
+          }
+          else
+          {
+            routing_value = route["number"].asString();
+          }
+
+          LOG_DEBUG("Add route for %s", routing_value.c_str());
 
           for (size_t jj = 0; jj < route_vals.size(); ++jj)
           {
@@ -112,7 +132,17 @@ void BgcfService::update_routes()
             route_vec.push_back(route_uri);
           }
 
-          new_routes.insert(std::make_pair(domain, route_vec));
+          if (route["domain"].isString())
+          {
+            new_domain_routes.insert(std::make_pair(routing_value, route_vec));
+          }
+          else
+          {
+            new_number_routes.insert(
+                      std::make_pair(remove_visual_separators(routing_value), 
+                                     route_vec));
+          }
+
           route_vec.clear();
         }
         else
@@ -121,7 +151,8 @@ void BgcfService::update_routes()
         }
       }
 
-      _routes = new_routes;
+      _domain_routes = new_domain_routes;
+      _number_routes = new_number_routes;
     }
     else
     {
@@ -143,18 +174,20 @@ BgcfService::~BgcfService()
   _updater = NULL;
 }
 
-std::vector<std::string> BgcfService::get_route(const std::string &domain,
+std::vector<std::string> BgcfService::get_route_from_domain(
+                                                const std::string &domain,
                                                 SAS::TrailId trail) const
 {
   LOG_DEBUG("Getting route for URI domain %s via BGCF lookup", domain.c_str());
 
   // First try the specified domain.
-  std::map<std::string, std::vector<std::string>>::const_iterator i = _routes.find(domain);
-  if (i != _routes.end())
+  std::map<std::string, std::vector<std::string>>::const_iterator i = 
+                                                    _domain_routes.find(domain);
+  if (i != _domain_routes.end())
   {
     LOG_INFO("Found route to domain %s", domain.c_str());
 
-    SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE, 0);
+    SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE_DOMAIN, 0);
     event.add_var_param(domain);
     std::string route_string;
 
@@ -170,12 +203,12 @@ std::vector<std::string> BgcfService::get_route(const std::string &domain,
   }
 
   // Then try the default domain (*).
-  i = _routes.find("*");
-  if (i != _routes.end())
+  i = _domain_routes.find("*");
+  if (i != _domain_routes.end())
   {
     LOG_INFO("Found default route");
 
-    SAS::Event event(trail, SASEvent::BGCF_DEFAULT_ROUTE, 0);
+    SAS::Event event(trail, SASEvent::BGCF_DEFAULT_ROUTE_DOMAIN, 0);
     event.add_var_param(domain);
     std::string route_string;
 
@@ -190,8 +223,56 @@ std::vector<std::string> BgcfService::get_route(const std::string &domain,
     return i->second;
   }
 
-  SAS::Event event(trail, SASEvent::BGCF_NO_ROUTE, 0);
+  SAS::Event event(trail, SASEvent::BGCF_NO_ROUTE_DOMAIN, 0);
   event.add_var_param(domain);
+  SAS::report_event(event);
+
+  return std::vector<std::string>();
+}
+
+std::vector<std::string> BgcfService::get_route_from_number(
+                                                const std::string &number,
+                                                SAS::TrailId trail) const
+{
+  // The number routes map is ordered by length of key. Start from the end of 
+  // the map to get the longest prefixes first. 
+  for (std::map<std::string, std::vector<std::string>>::const_reverse_iterator it =
+        _number_routes.rbegin();
+       it != _number_routes.rend();
+       it++)
+  {
+    int len = std::min(number.size(), (*it).first.size());
+
+    if (remove_visual_separators(number).compare(0, 
+                                                 len, 
+                                                 (*it).first, 
+                                                 0, 
+                                                 len) == 0)
+    {
+      // Found a match, so return it
+      LOG_DEBUG("Match found. Number: %s, prefix: %s",
+                number.c_str(), (*it).first.c_str());
+
+      SAS::Event event(trail, SASEvent::BGCF_FOUND_ROUTE_NUMBER, 0);
+      event.add_var_param(number);
+      std::string route_string;
+
+      for (std::vector<std::string>::const_iterator ii = (*it).second.begin(); 
+                                                    ii != (*it).second.end(); 
+                                                    ++ii)
+      {
+        route_string = route_string + *ii + ";";
+      }
+
+      event.add_var_param(route_string);
+      SAS::report_event(event);
+
+      return (*it).second;
+    }
+  }
+
+  SAS::Event event(trail, SASEvent::BGCF_NO_ROUTE_NUMBER, 0);
+  event.add_var_param(number);
   SAS::report_event(event);
 
   return std::vector<std::string>();
