@@ -103,7 +103,7 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 
     _call_list_store = new CallListStore::Store();
     _call_list_store->initialize();
-    _call_list_store->configure("localhost", 9160, 0, 0, _cass_comm_monitor);
+    _call_list_store->configure("localhost", 9160, exception_handler, 0, 0, _cass_comm_monitor);
     CassandraStore::ResultCode store_rc = _call_list_store->start();
 
     if (store_rc != CassandraStore::OK)
@@ -123,7 +123,8 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
                                       opt.cass_target_latency_us,
                                       opt.max_tokens,
                                       opt.init_token_rate,
-                                      opt.min_token_rate);
+                                      opt.min_token_rate,
+                                      exception_handler);
 
       _memento_sproutlet = new SproutletAppServerShim(_memento);
       sproutlets.push_back(_memento_sproutlet);

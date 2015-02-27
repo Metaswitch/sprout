@@ -50,6 +50,7 @@
 #include "httpresolver.h"
 #include "acr.h"
 #include "enumservice.h"
+#include "exception_handler.h"
 
 enum struct MemcachedWriteFormat
 {
@@ -140,5 +141,6 @@ extern HttpConnection* ralf_connection;
 extern HttpResolver* http_resolver;
 extern ACRFactory* scscf_acr_factory;
 extern EnumService* enum_service;
+extern ExceptionHandler* exception_handler;
 
 #endif
