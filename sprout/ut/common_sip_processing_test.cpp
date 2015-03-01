@@ -92,7 +92,9 @@ public:
     _overload_counter = new StatisticCounter("rejected_overload",
                                              stack_data.stats_aggregator);
 
-    init_common_sip_processing(_lm, _requests_counter, _overload_counter);
+    _health_checker = new HealthChecker();
+
+    init_common_sip_processing(_lm, _requests_counter, _overload_counter, _health_checker);
   }
 
   ~CommonProcessingTest()
@@ -101,6 +103,7 @@ public:
     delete(_lm);
     delete(_requests_counter);
     delete(_overload_counter);
+    delete(_health_checker);
     unregister_common_processing_module();
     pjsip_tsx_layer_dump(true);
 
@@ -277,7 +280,80 @@ protected:
   LoadMonitor* _lm;
   StatisticCounter* _requests_counter;
   StatisticCounter* _overload_counter;
+  HealthChecker* _health_checker;
 };
+
+// Helper PJSIP modules which return a response that goes back through
+// common_sip_processing code.
+
+static pj_bool_t always_ok(pjsip_rx_data* rdata)
+{
+  pjsip_tx_data *tdata;
+  pjsip_response_addr res_addr;
+  pj_str_t string;
+  pj_cstr(&string, "OK"),
+  pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+  pjsip_get_response_addr(tdata->pool, rdata, &res_addr);
+  pjsip_endpt_create_response(stack_data.endpt,
+                              rdata,
+                              PJSIP_SC_OK,
+                              &string,
+                              &tdata);
+  pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
+  return PJ_TRUE;
+}
+
+static pj_bool_t always_reject(pjsip_rx_data* rdata)
+{
+  pjsip_tx_data *tdata;
+  pjsip_response_addr res_addr;
+  pj_str_t string;
+  pj_cstr(&string, "Bad Request"),
+  pjsip_endpt_create_tdata(stack_data.endpt, &tdata);
+  pjsip_get_response_addr(tdata->pool, rdata, &res_addr);
+  pjsip_endpt_create_response(stack_data.endpt,
+                              rdata,
+                              PJSIP_SC_BAD_REQUEST,
+                              &string,
+                              &tdata);
+  pjsip_endpt_send_response(stack_data.endpt, &res_addr, tdata, NULL, NULL);
+  return PJ_TRUE;
+}
+
+static pjsip_module mod_ok =
+{
+  NULL, NULL,                           /* prev, next.          */
+  pj_str("mod-ok"),      /* Name.                */
+  -1,                                   /* Id                   */
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER, /* Priority             */
+  NULL,                                 /* load()               */
+  NULL,                                 /* start()              */
+  NULL,                                 /* stop()               */
+  NULL,                                 /* unload()             */
+  &always_ok,                   /* on_rx_request()      */
+  NULL,                   /* on_rx_response()     */
+  NULL,                   /* on_tx_request()      */
+  NULL,                   /* on_tx_response()     */
+  NULL,                                 /* on_tsx_state()       */
+};
+
+static pjsip_module mod_reject =
+{
+  NULL, NULL,                           /* prev, next.          */
+  pj_str("mod-reject"),      /* Name.                */
+  -1,                                   /* Id                   */
+  PJSIP_MOD_PRIORITY_UA_PROXY_LAYER, /* Priority             */
+  NULL,                                 /* load()               */
+  NULL,                                 /* start()              */
+  NULL,                                 /* stop()               */
+  NULL,                                 /* unload()             */
+  &always_reject,                   /* on_rx_request()      */
+  NULL,                   /* on_rx_response()     */
+  NULL,                   /* on_tx_request()      */
+  NULL,                   /* on_tx_response()     */
+  NULL,                                 /* on_tsx_state()       */
+};
+
 
 TEST_F(CommonProcessingTest, RequestAllowed)
 {
@@ -365,4 +441,112 @@ TEST_F(CommonProcessingTest, BadResponseDropped)
 
   // Expect it to just vanish.
   ASSERT_EQ(0, txdata_count());
+}
+
+// If:
+//  - an exception has already been hit
+//  - the health-checker runs a check
+//  - and all the requests seen recently have not had a response
+// then Sprout should be aborted.
+TEST_F(CommonProcessingTest, DeathTest_MissingResponseFailsHealthCheck)
+{
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  _health_checker->hit_exception();
+
+  // Inject a message.
+  Message msg1;
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect it to just vanish.
+  ASSERT_EQ(0, txdata_count());
+
+  ASSERT_DEATH(_health_checker->do_check(), "");
+}
+
+// If:
+//  - the health-checker runs a check
+//  - and all the requests seen recently have not had a response
+//  - but an exception has not already been hit
+// then Sprout should not be aborted.
+TEST_F(CommonProcessingTest, MissingResponseWithoutExceptionPassesHealthCheck)
+{
+  // Inject a message.
+  Message msg1;
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect it to just vanish.
+  ASSERT_EQ(0, txdata_count());
+
+  // This should not crash
+  _health_checker->do_check();
+}
+
+// If:
+//  - an exception has already been hit
+//  - the health-checker runs a check
+//  - and one of the INVITE requests seen recently had a 200 OK response
+// then Sprout should not be aborted.
+TEST_F(CommonProcessingTest, Invite200PassesHealthCheck)
+{
+  _health_checker->hit_exception();
+
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+
+  // Inject a message.
+  Message msg1;
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a response from mod_ok.
+  ASSERT_EQ(1, txdata_count());
+
+  // This should not crash
+  _health_checker->do_check();
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
+}
+
+// If:
+//  - an exception has already been hit
+//  - the health-checker runs a check
+//  - and all of the INVITE requests seen recently had a 400 response
+// then Sprout should be aborted.
+TEST_F(CommonProcessingTest, DeathTest_Invite400FailsHealthCheck)
+{
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  _health_checker->hit_exception();
+
+  pjsip_endpt_register_module(stack_data.endpt, &mod_reject);
+
+  // Inject a message.
+  Message msg1;
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a response from mod_reject.
+  ASSERT_EQ(1, txdata_count());
+
+  ASSERT_DEATH(_health_checker->do_check(), "");
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_reject);
+}
+
+// If:
+//  - an exception has already been hit
+//  - the health-checker runs a check
+//  - and no INVITE requests have been seen recently
+// then Sprout should be aborted.
+TEST_F(CommonProcessingTest, DeathTest_Message200FailsHealthCheck)
+{
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  _health_checker->hit_exception();
+
+  pjsip_endpt_register_module(stack_data.endpt, &mod_ok);
+
+  // Inject a message.
+  Message msg1;
+  msg1._method = "MESSAGE";
+  inject_msg(msg1.get_request(), _tp);
+
+  // Expect a response from mod_ok.
+  ASSERT_EQ(1, txdata_count());
+
+  ASSERT_DEATH(_health_checker->do_check(), "");
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_ok);
 }

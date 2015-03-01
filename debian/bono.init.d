@@ -124,6 +124,7 @@ get_settings()
         [ -z "$init_token_rate" ] || init_token_rate_arg="--init-token-rate $init_token_rate"
         [ -z "$min_token_rate" ] || min_token_rate_arg="--min-token-rate $min_token_rate"
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
+        [ -z "$exception_max_ttl" ] || exception_max_ttl_arg="--exception-max-ttl $exception_max_ttl"
 }
 
 #
@@ -165,7 +166,8 @@ do_start()
                      $init_token_rate_arg
                      $min_token_rate_arg
                      $ibcf_arg
-                     $billing_cdf_arg"
+                     $billing_cdf_arg
+                     $exception_max_ttl_arg"
 
         [ "$additional_home_domains" = "" ] || DAEMON_ARGS="$DAEMON_ARGS --additional-domains $additional_home_domains"
 
