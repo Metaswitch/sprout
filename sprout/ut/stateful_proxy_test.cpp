@@ -149,7 +149,7 @@ namespace SP
                        "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
                        "To: <%10$s>%17$s\r\n"
                        "Max-Forwards: %8$d\r\n"
-                       "Call-ID: 0gQAAC8WAAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
+                       "Call-ID: 0gQAAC8W\"AAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
                        "CSeq: %15$d %1$s\r\n"
                        "User-Agent: Accession 2.0.0.0\r\n"
                        "Allow: PRACK, INVITE, ACK, BYE, CANCEL, UPDATE, SUBSCRIBE, NOTIFY, REFER, MESSAGE, OPTIONS\r\n"
@@ -2319,6 +2319,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   actual = get_headers(tdata->msg, "P-Charging-Vector");
   std::string call_id = get_headers(tdata->msg, "Call-ID");
   call_id.erase(std::remove(call_id.begin(), call_id.end(), '@'), call_id.end());
+  call_id.erase(std::remove(call_id.begin(), call_id.end(), '"'), call_id.end());
   EXPECT_EQ("P-Charging-Vector: icid-value=\"" + call_id.substr(9) + "\";icid-generated-at=127.0.0.1", actual);
 
   // Goes to the right place.

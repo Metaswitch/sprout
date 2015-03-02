@@ -89,6 +89,7 @@ static void proxy_add_p_charging_header(pjsip_tx_data *tdata)
                                                                         NULL);
     std::string c_id = PJUtils::pj_str_to_string(&call_id->id);
     c_id.erase(std::remove(c_id.begin(), c_id.end(), '@'), c_id.end());
+    c_id.erase(std::remove(c_id.begin(), c_id.end(), '"'), c_id.end());
 
     pjsip_p_c_v_hdr* p_c_v = pjsip_p_c_v_hdr_create(tdata->pool);
 
