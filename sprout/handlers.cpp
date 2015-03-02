@@ -49,6 +49,7 @@ extern "C" {
 #include "registration_utils.h"
 #include "stack.h"
 #include "pjutils.h"
+#include "sproutsasevent.h"
 
 static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
                                     std::string aor_id, RegStore* current_store,
@@ -593,6 +594,9 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
     }
     else
     {
+      SAS::Event event(trail(), SASEvent::AUTHENTICATION_TIMER_POP_IGNORED, 0);
+      SAS::report_event(event);
+
       LOG_DEBUG("Tombstone record indicates Authentication Vector has been used successfully - ignoring timer pop");
       success = true;
     }
