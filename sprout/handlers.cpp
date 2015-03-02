@@ -566,16 +566,16 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
   if (av != NULL)
   {
+    // Use the original REGISTER's branch parameter for SAS
+    // correlation
+
+    correlate_branch_from_av(av, trail());
+
     // If authentication completed, we'll have written a marker to
     // indicate that. Look for it.
     if (!av->isMember("tombstone"))
     {
       LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
-
-      // Retrieve the original authentication vector, so we have the
-      // original REGISTER's branch parameter for SAS correlation
-
-      correlate_branch_from_av(av, trail());
 
       // The AUTHENTICATION_TIMEOUT SAR is idempotent, so there's no
       // problem if Chronos' timer pops twice (e.g. if we have high
