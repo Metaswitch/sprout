@@ -593,7 +593,7 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   // Strip the quotes of manually instead of using
   // PJ_PARSE_REMOVE_QUOTE. This preserves the square bracket on IPv6
   // addresses.
-  if (value.ptr[0] == '"' && (value.slen > 2))
+  if (value.ptr[0] == '"' && value.ptr[slen-1] == '"' && (value.slen > 2))
   {
     value.ptr++;
     value.slen -= 2;
