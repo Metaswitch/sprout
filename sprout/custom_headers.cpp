@@ -590,7 +590,7 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   pjsip_parse_param_imp(scanner, pool, &name, &value,
                         NULL);
 
-  // Strip the quotes of manually instead of using
+  // Strip the quotes off manually instead of using
   // PJ_PARSE_REMOVE_QUOTE. This preserves the square bracket on IPv6
   // addresses.
   if (value.ptr[0] == '"' && value.ptr[slen-1] == '"' && (value.slen > 2))
