@@ -588,7 +588,20 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
 
   // Parse the required icid-value parameter first.
   pjsip_parse_param_imp(scanner, pool, &name, &value,
-                        PJSIP_PARSE_REMOVE_QUOTE);
+                        0);
+
+  // Strip the quotes off manually instead of using
+  // PJ_PARSE_REMOVE_QUOTE. This preserves the square bracket on IPv6
+  // addresses.
+  if (value.slen > 1 &&
+      value.ptr[0] == '"' &&
+      value.ptr[value.slen-1] == '"')
+      
+  {
+    value.ptr++;
+    value.slen -= 2;
+  }
+
 
   if (!pj_stricmp2(&name, "icid-value")) {
     hdr->icid = value;
