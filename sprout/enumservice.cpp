@@ -245,32 +245,40 @@ JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& 
   return NULL;
 }
 
-
-DNSEnumService::DNSEnumService(const std::string& dns_server,
+DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
                                const std::string& dns_suffix,
-                               const DNSResolverFactory* resolver_factory) :
+                               const DNSResolverFactory* resolver_factory,
+                               CommunicationMonitor* comm_monitor) :
                                _dns_suffix(dns_suffix),
-                               _resolver_factory(resolver_factory)
+                               _resolver_factory(resolver_factory),
+                               _comm_monitor(comm_monitor)
 {
   // Initialize the ares library.  This might have already been done by curl
   // but it's safe to do it twice.
   ares_library_init(ARES_LIB_INIT_ALL);
 
-  // Parse the DNS server's IP address.
-  if (inet_pton(AF_INET, dns_server.c_str(), &_dns_server.addr.ipv4))
+  for (std::vector<std::string>::const_iterator server = dns_servers.begin();
+       server != dns_servers.end();
+       server++)
   {
-    _dns_server.af = AF_INET;
-  }
-  else if (inet_pton(AF_INET6, dns_server.c_str(), &_dns_server.addr.ipv6))
-  {
-    _dns_server.af = AF_INET6;
-  }
-  else
-  {
-    LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", dns_server.c_str());
-    _dns_server.af = AF_INET;
-    (void)inet_aton("127.0.0.1", &_dns_server.addr.ipv4);
-  }
+    struct IP46Address dns_server_addr;
+    // Parse the DNS server's IP address.
+    if (inet_pton(AF_INET, server->c_str(), &dns_server_addr.addr.ipv4))
+    {
+      dns_server_addr.af = AF_INET;
+    }
+    else if (inet_pton(AF_INET6, server->c_str(), &dns_server_addr.addr.ipv6))
+    {
+      dns_server_addr.af = AF_INET6;
+    }
+    else
+    {
+      LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", server->c_str());
+      dns_server_addr.af = AF_INET;
+      (void)inet_aton("127.0.0.1", &dns_server_addr.addr.ipv4);
+    }
+    _servers.push_back(dns_server_addr);
+  }  
 
   // We store a DNSResolver in thread-local data, so create the thread-local
   // store.
@@ -399,6 +407,20 @@ std::string DNSEnumService::lookup_uri_from_user(const std::string& user, SAS::T
     string = std::string("");
   }
 
+  // Report state of last communication attempt (which may potentially set/clear
+  // an associated alarm). 
+  if (_comm_monitor)
+  {
+    if (failed)
+    {
+      _comm_monitor->inform_failure();
+    }
+    else
+    {
+      _comm_monitor->inform_success();
+    }
+  }
+
   return string;
 }
 
@@ -431,7 +453,7 @@ DNSResolver* DNSEnumService::get_resolver() const
   DNSResolver* resolver = (DNSResolver*)pthread_getspecific(_thread_local);
   if (resolver == NULL)
   {
-    resolver = _resolver_factory->new_resolver(_dns_server);
+    resolver = _resolver_factory->new_resolver(_servers);
     pthread_setspecific(_thread_local, resolver);
   }
   return resolver;
@@ -445,7 +467,8 @@ void DNSEnumService::parse_naptr_reply(const struct ares_naptr_reply* naptr_repl
   {
     LOG_DEBUG("Got NAPTR record: %u %u \"%s\" \"%s\" \"%s\" %s", record->order, record->preference, record->service, record->flags, record->regexp, record->replacement);
     if ((strcasecmp((char*)record->service, "e2u+sip") == 0) ||
-        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0))
+        (strcasecmp((char*)record->service, "e2u+pstn:sip") == 0) || 
+        (strcasecmp((char*)record->service, "e2u+pstn:tel") == 0))
     {
       boost::regex regex;
       std::string replace;

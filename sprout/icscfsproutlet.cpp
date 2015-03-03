@@ -50,6 +50,7 @@ extern "C" {
 
 #include "log.h"
 #include "pjutils.h"
+#include "stack.h"
 #include "sproutsasevent.h"
 #include "icscfsproutlet.h"
 #include "scscfselector.h"
@@ -60,20 +61,25 @@ extern "C" {
 #define MAX_ENUM_LOOKUPS 2
 
 /// Constructor.
-ICSCFSproutlet::ICSCFSproutlet(int port,
+ICSCFSproutlet::ICSCFSproutlet(const std::string& bgcf_uri,
+                               int port,
                                HSSConnection* hss,
                                ACRFactory* acr_factory,
                                SCSCFSelector* scscf_selector,
                                EnumService* enum_service,
                                bool enforce_global_only_lookups,
-                               bool enforce_user_phone) :
+                               bool enforce_user_phone,
+                               bool override_npdi) :
   Sproutlet("icscf", port),
+  _bgcf_uri(NULL),
   _hss(hss),
   _scscf_selector(scscf_selector),
   _acr_factory(acr_factory),
   _enum_service(enum_service),
   _global_only_lookups(enforce_global_only_lookups),
-  _user_phone(enforce_user_phone)
+  _user_phone(enforce_user_phone),
+  _override_npdi(override_npdi),
+  _bgcf_uri_str(bgcf_uri)
 {
 }
 
@@ -83,8 +89,25 @@ ICSCFSproutlet::~ICSCFSproutlet()
 {
 }
 
+bool ICSCFSproutlet::init()
+{
+  bool init_success = true;
 
-/// Creates a ICSCFSproutletTsx instance for performing BGCF service processing
+  // Convert the BGCF routing URI to a form suitable for PJSIP, so we're
+  // not continually converting from a string.
+  _bgcf_uri = PJUtils::uri_from_string(_bgcf_uri_str, stack_data.pool, false);
+
+  if (_bgcf_uri == NULL)
+  {
+    LOG_ERROR("Invalid BGCF URI %s", _bgcf_uri_str.c_str()); //LCOV_EXCL_LINE
+    init_success = false;
+  }
+
+  return init_success;
+}
+
+
+/// Creates a ICSCFSproutletTsx instance for performing I-CSCF service processing
 /// on a request.
 SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
                                       const std::string& alias,
@@ -106,6 +129,33 @@ SproutletTsx* ICSCFSproutlet::get_tsx(SproutletTsxHelper* helper,
 ACR* ICSCFSproutlet::get_acr(SAS::TrailId trail)
 {
   return _acr_factory->get_acr(trail, CALLING_PARTY, NODE_ROLE_TERMINATING);
+}
+
+/// Translates a Tel URI to a SIP URI (if ENUM is enabled).
+std::string ICSCFSproutlet::enum_translate_tel_uri(pjsip_tel_uri* uri,
+                                                   SAS::TrailId trail)
+{
+  std::string new_uri;
+  if (_enum_service != NULL)
+  {
+    // ENUM is enabled, so extract the user name from the Request-URI.
+    std::string user = PJUtils::pj_str_to_string(&uri->number);
+
+    // If we're enforcing global only lookups then check we have a global user.
+    if ((!_global_only_lookups) ||
+        (PJUtils::is_user_global(user)))
+    {
+      new_uri = _enum_service->lookup_uri_from_user(user, trail);
+    }
+  }
+  else
+  {
+    LOG_DEBUG("ENUM isn't enabled");
+    SAS::Event event(trail, SASEvent::ENUM_NOT_ENABLED, 0);
+    SAS::report_event(event);
+  }
+
+  return new_uri;
 }
 
 /*****************************************************************************/
@@ -174,8 +224,9 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
     impi = impu.substr(4);
   }
 
-  // Get the visted network identification if present.  If not, homestead will
-  // default it.
+  // Get the visited network identification if present.  If not, warn
+  // (because a spec-compliant P-CSCF should default it) and use a
+  // sensible default.
   pjsip_generic_string_hdr* vn_hdr =
     (pjsip_generic_string_hdr*)pjsip_msg_find_hdr_by_name(req,
                                                           &STR_P_V_N_I,
@@ -189,6 +240,8 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   {
     // Use the domain of the IMPU as the visited network.
     visited_network = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)to_uri)->host);
+    LOG_WARNING("No P-Visited-Network-ID in REGISTER - using %s as a default",
+                visited_network.c_str());
   }
 
   // Work out what authorization type to use by looking at the expiry
@@ -208,6 +261,7 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
+                                            _icscf->port(),
                                             impi,
                                             impu,
                                             visited_network,
@@ -373,7 +427,8 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
                                      ICSCFSproutlet* icscf) :
   SproutletTsx(helper),
   _icscf(icscf),
-  _acr(NULL)
+  _acr(NULL),
+  _routed_to_bgcf(false)
 {
 }
 
@@ -453,6 +508,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                             _icscf->get_scscf_selector(),
                                             trail(),
                                             _acr,
+                                            _icscf->port(),
                                             impu,
                                             _originating);
 
@@ -475,14 +531,14 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     // set. If it isn't, and we have a numeric SIP URI, it is possible that
     // this should have been a tel URI, so translate it and do the HSS lookup
     // again.
-    if ((!_icscf->get_user_phone()) &&
+    if ((!_icscf->should_require_user_phone()) &&
         (PJSIP_URI_SCHEME_IS_SIP(uri)) &&
         (PJUtils::is_user_numeric(((pjsip_sip_uri*)uri)->user)) &&
         (!PJUtils::is_uri_gruu(uri)))
     {
       LOG_DEBUG("enforce_user_phone set to false, try using a tel URI");
-      req->line.req.uri =
-        PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
+      uri = PJUtils::translate_sip_uri_to_tel_uri((pjsip_sip_uri*)uri, pool);
+      req->line.req.uri = uri;
 
       // We need to change the IMPU stored on our LIR router so that when
       // we do a new LIR we look up the new IMPU.
@@ -499,12 +555,90 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
          (ii < MAX_ENUM_LOOKUPS) && (scscf_not_found(status_code));
          ++ii)
     {
-      if ((PJSIP_URI_SCHEME_IS_TEL(uri)) &&
-          (enum_translate_tel_uri(req, pool)))
+      if (PJSIP_URI_SCHEME_IS_TEL(uri))
       {
-        // If we successfully translate the req URI, we should look for an
-        // S-CSCF again.
-        status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+        // Do an ENUM lookup and see if we should translate the TEL URI
+        std::string new_uri = _icscf->enum_translate_tel_uri(
+                                    (pjsip_tel_uri*)req->line.req.uri, trail());
+
+        if (!new_uri.empty())
+        {
+          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, 
+                                                                    pool);
+
+          if (req_uri != NULL)
+          {
+            if (PJUtils::get_npdi(uri))
+            {
+              if (!PJUtils::does_uri_represent_number(req_uri,
+                                           _icscf->should_require_user_phone()))
+              {
+                // The existing URI had NP data, but the ENUM lookup has returned
+                // a URI that doesn't represent a telephone number. This trumps the
+                // NP data.
+                req->line.req.uri = req_uri;
+   
+                // We need to change the IMPU stored on our LIR router so that when
+                // we next do an LIR we look up the new IMPU.
+                ((ICSCFLIRouter *)_router)->change_impu(new_uri);
+              }
+              else
+              {
+                LOG_DEBUG("Request URI already has existing NP information");
+
+                // The existing URI had NP data. Only overwrite the URI if
+                // we're configured to do so.
+                if (_icscf->should_override_npdi())
+                {
+                  LOG_DEBUG("Override existing NP information");
+                  req->line.req.uri = req_uri;
+                }       
+
+                route_to_bgcf(req);
+                return;
+              }
+            }
+            else if (PJUtils::get_npdi(req_uri))
+            {
+              // The ENUM lookup has returned NP data. Rewrite the request
+              // URI and route the request to the BGCF
+              LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+              req->line.req.uri = req_uri;
+              route_to_bgcf(req);
+              return;
+            }
+            else
+            {
+              LOG_DEBUG("Update request URI to %s", new_uri.c_str());
+              req->line.req.uri = req_uri;
+              ((ICSCFLIRouter *)_router)->change_impu(new_uri);
+            }
+          }
+          else
+          {
+            LOG_WARNING("Badly formed URI %s from ENUM translation",
+                        new_uri.c_str());
+            SAS::Event event(trail(), SASEvent::ENUM_INVALID, 0);
+            event.add_var_param(new_uri);
+            SAS::report_event(event);
+          }
+        }
+
+        // If we successfully translate the req URI and end up with either another TEL URI or a
+        // local SIP URI, we should look for an S-CSCF again.
+        uri = req->line.req.uri;
+        if ((PJSIP_URI_SCHEME_IS_TEL(uri)) ||
+            ((PJSIP_URI_SCHEME_IS_SIP(uri)) &&
+             (PJUtils::is_home_domain(uri))))
+        {
+          // TEL or local SIP URI.  Look up the S-CSCF again.
+          status_code = (pjsip_status_code)_router->get_scscf(pool, scscf_sip_uri);
+        }
+        else
+        {
+          // Number translated to off-switch.  Drop out of the loop.
+          ii = MAX_ENUM_LOOKUPS;
+        }
       }
       else
       {
@@ -530,12 +664,18 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     PJUtils::add_route_header(req, scscf_sip_uri, get_pool(req));
     send_request(req);
   }
-  else
+  else if ((PJSIP_URI_SCHEME_IS_SIP(req->line.req.uri)) &&
+           (PJUtils::is_home_domain(req->line.req.uri)))
   {
-    // Failed to find an S-CSCF, the is the final response.
+    // Target is in our home domain, but we failed to find an S-CSCF. This is the final response.
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
+  }
+  else
+  {
+    // Target is a TEL URI or not in our home domain.  Pass to the BGCF.
+    route_to_bgcf(req);
   }
 }
 
@@ -572,12 +712,15 @@ void ICSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
   // for.  See TS 24.229 - section 5.3.2.2.
   //
   // Note we support service restoration, so integrity-protected settings in
-  // Authorization header are immaterial).
+  // Authorization header are immaterial.
+  //
+  // Note also that we can never retry once we've routed to the BGCF.
   pjsip_status_code rsp_status = (pjsip_status_code)rsp->line.status.code;
   const ForkState& fork_status = fork_state(fork_id);
   LOG_DEBUG("Check retry conditions for non-REGISTER, S-CSCF %sresponsive",
             (fork_status.error_state != NONE) ? "not " : "");
-  if (fork_status.error_state != NONE)
+  if ((!_routed_to_bgcf) &&
+      (fork_status.error_state != NONE))
   {
     // Indeed it it, first log to SAS.
     LOG_DEBUG("Attempt retry to alternate S-CSCF for non-REGISTER request");
@@ -655,38 +798,16 @@ void ICSCFSproutletTsx::on_cancel(int status_code, pjsip_msg* cancel_req)
   }
 }
 
-bool ICSCFSproutletTsx::enum_translate_tel_uri(pjsip_msg* req, pj_pool_t* pool)
+/// Route the request to the BGCF.
+void ICSCFSproutletTsx::route_to_bgcf(pjsip_msg* req)
 {
-  bool found = false;
-  std::string user =
-    PJUtils::pj_str_to_string(&((pjsip_tel_uri*)req->line.req.uri)->number);
-
-  // If we're enforcing global only lookups then check we have a global user.
-  if (!(_icscf->get_global_only_lookups()) ||
-      (PJUtils::is_user_global(user)))
-  {
-    std::string new_uri =
-      _icscf->get_enum_service()->lookup_uri_from_user(user, trail());
-
-    if (!new_uri.empty())
-    {
-      pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, pool);
-      if (req_uri != NULL)
-      {
-        LOG_DEBUG("Update request URI to %s", new_uri.c_str());
-        req->line.req.uri = req_uri;
-
-        // We need to change the IMPU stored on our LIR router so that when
-        // we next do an LIR we look up the new IMPU.
-        ((ICSCFLIRouter *)_router)->change_impu(new_uri);
-        found = true;
-      }
-      else
-      {
-        LOG_WARNING("Badly formed URI %s from ENUM translation",
-                    new_uri.c_str());
-      }
-    }
-  }
-  return found;
+  LOG_INFO("Routing to BGCF %s",
+           PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                  _icscf->bgcf_uri()).c_str());
+  PJUtils::add_route_header(req,
+                            (pjsip_sip_uri*)pjsip_uri_clone(get_pool(req),
+                                                            _icscf->bgcf_uri()),
+                            get_pool(req));
+  send_request(req);
+  _routed_to_bgcf = true;
 }

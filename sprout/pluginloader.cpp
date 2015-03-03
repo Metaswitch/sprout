@@ -58,9 +58,10 @@ PluginLoader::~PluginLoader()
 }
 
 /// Load the plug-ins, returning the resulting list of Sproutlets.
-void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
+bool PluginLoader::load(std::list<Sproutlet*>& sproutlets)
 {
   LOG_STATUS("Loading plug-ins from %s", _path.c_str());
+  bool plugins_loaded = true;
 
   DIR* d = opendir(_path.c_str());
 
@@ -85,11 +86,21 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
         p.handle = dlopen(p.name.c_str(), RTLD_NOW);
         if (p.handle != NULL)
         {
-          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "plugin_loader"));
+          p.plugin = static_cast<SproutletPlugin*>(dlsym(p.handle, "sproutlet_plugin"));
 
           if (p.plugin != NULL)
           {
-            std::list<Sproutlet*> plugin_sproutlets = p.plugin->load(_opt);
+            std::list<Sproutlet*> plugin_sproutlets;
+            plugins_loaded = p.plugin->load(_opt, plugin_sproutlets);
+            
+            if (!plugins_loaded)
+            {
+              // There was an error loading one of the plugins. Return an error
+              // now so that Sprout is killed, rather than running with 
+              // unexpected plugins.
+              LOG_ERROR("Failed to successfully load plug-in %s", p.name.c_str());
+              break;
+            }
 
             for (std::list<Sproutlet*>::const_iterator i = plugin_sproutlets.begin();
                  i != plugin_sproutlets.end();
@@ -135,6 +146,7 @@ void PluginLoader::load(std::list<Sproutlet*>& sproutlets)
   }
 
   LOG_STATUS("Finished loading plug-ins");
+  return plugins_loaded;
 }
 
 /// Unload all the loaded plug-ins.

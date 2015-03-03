@@ -365,7 +365,13 @@ TEST_F(SIPResolverTest, Expiry)
   _dnsresolver.expire_cache();
   ASSERT_NE("", _dnsresolver.display_cache());
 
+  // Cached records should be available for 5 minutes past their TTL
+  // to protect against DNS server failure
   cwtest_advance_time_ms(2000);
+  _dnsresolver.expire_cache();
+  ASSERT_NE("", _dnsresolver.display_cache());
+
+  cwtest_advance_time_ms(300000);
   _dnsresolver.expire_cache();
   ASSERT_EQ("", _dnsresolver.display_cache());
 

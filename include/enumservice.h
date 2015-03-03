@@ -48,6 +48,7 @@
 #include "sas.h"
 #include "baseresolver.h"
 #include "dnsresolver.h"
+#include "communicationmonitor.h"
 
 /// @class EnumService
 ///
@@ -109,9 +110,10 @@ private:
 class DNSEnumService : public EnumService
 {
 public:
-  DNSEnumService(const std::string& dns_server = "127.0.0.1",
+  DNSEnumService(const std::vector<std::string>& dns_server,
                  const std::string& dns_suffix = ".e164.arpa",
-                 const DNSResolverFactory* resolver_factory = new DNSResolverFactory());
+                 const DNSResolverFactory* resolver_factory = new DNSResolverFactory(),
+                 CommunicationMonitor* comm_monitor = NULL);
   ~DNSEnumService();
 
   std::string lookup_uri_from_user(const std::string& user, SAS::TrailId trail) const;
@@ -166,13 +168,17 @@ private:
                                 std::vector<DNSEnumService::Rule>& rules);
 
   // The IP address of the DNS server to query.
-  struct IP46Address _dns_server;
+  std::vector<struct IP46Address> _servers;
   // The suffix to apply to domain names used for ENUM lookups.
   const std::string _dns_suffix;
   // The thread-local store - used for storing DNSResolvers.
   pthread_key_t _thread_local;
   // DNSResolverFactory, used for constructing DNSResolvers when required.
   const DNSResolverFactory* _resolver_factory;
+
+  // Helper used to track enum communication state, and issue/clear alarms
+  // based upon recent activity.
+  CommunicationMonitor* _comm_monitor;
 };
 
 #endif

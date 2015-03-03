@@ -54,11 +54,13 @@ using namespace std;
 class HssConnectionTest : public BaseTest
 {
   FakeHttpResolver _resolver;
+  CommunicationMonitor _cm;
   HSSConnection _hss;
 
   HssConnectionTest() :
     _resolver("10.42.42.42"),
-    _hss("narcissus", &_resolver, NULL, NULL)
+    _cm(new Alarm("sprout", AlarmDef::SPROUT_HOMESTEAD_COMM_ERROR, AlarmDef::CRITICAL)),
+    _hss("narcissus", &_resolver, NULL, NULL, &_cm)
   {
     fakecurl_responses.clear();
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid42/reg-data", "{\"reqtype\": \"reg\"}")] =
@@ -178,6 +180,36 @@ class HssConnectionTest : public BaseTest
         "<IMSSubscription>"
         "</IMSSubscription>"
       "</C>";
+   fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement4/reg-data", "{\"reqtype\": \"reg\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<IMSSubscription xsi=\"http://www.w3.org/2001/XMLSchema-instance\" noNamespaceSchemaLocation=\"CxDataType.xsd\">"
+                "<PrivateID>Unspecified</PrivateID>"
+        "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement5/reg-data", "{\"reqtype\": \"reg\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<IMSSubscription xsi=\"http://www.w3.org/2001/XMLSchema-instance\" noNamespaceSchemaLocation=\"CxDataType.xsd\">"
+          "<PrivateID>Unspecified</PrivateID>"
+          "<ServiceProfile>"
+         "</ServiceProfile>"
+        "</IMSSubscription>"
+      "</ClearwaterRegData>";
+    fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/missingelement6/reg-data", "{\"reqtype\": \"reg\"}")] =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<ClearwaterRegData>"
+        "<RegistrationState>REGISTERED</RegistrationState>"
+        "<IMSSubscription xsi=\"http://www.w3.org/2001/XMLSchema-instance\" noNamespaceSchemaLocation=\"CxDataType.xsd\">"
+          "<PrivateID>Unspecified</PrivateID>"
+          "<ServiceProfile>"
+            "<PublicIdentity>"
+            "</PublicIdentity>"
+         "</ServiceProfile>"
+        "</IMSSubscription>"
+      "</ClearwaterRegData>";
     fakecurl_responses_with_body[std::make_pair("http://10.42.42.42:80/impu/pubid46/reg-data", "{\"reqtype\": \"call\"}")] =
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
       "<ClearwaterRegData>"
@@ -354,6 +386,39 @@ TEST_F(HssConnectionTest, BadXML2)
   _hss.update_registration_state("pubid43_malformed", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
   EXPECT_TRUE(uris.empty());
   EXPECT_TRUE(log.contains("Malformed HSS XML"));
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingServiceProfile)
+{
+  CapturingTestLogger log;
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("missingelement4", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(log.contains("Malformed HSS XML"));
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingPublicIdentity)
+{
+  CapturingTestLogger log;
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("missingelement5", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(log.contains("Malformed ServiceProfile XML"));
+}
+
+TEST_F(HssConnectionTest, BadXML_MissingIdentity)
+{
+  CapturingTestLogger log;
+  std::vector<std::string> uris;
+  std::map<std::string, Ifcs> ifcs_map;
+  std::string regstate;
+  _hss.update_registration_state("missingelement6", "", HSSConnection::REG, regstate, ifcs_map, uris, 0);
+  EXPECT_TRUE(uris.empty());
+  EXPECT_TRUE(log.contains("Malformed PublicIdentity XML"));
 }
 
 TEST_F(HssConnectionTest, BadXML_MissingRegistrationState)

@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout_bgcf.so
+TARGET_TEST := sprout_bgcf.so_test
 
 TARGET_SOURCES := bgcfsproutlet.cpp	\
                   bgcfservice.cpp \
@@ -35,10 +36,6 @@ include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
 stage-build: build
-
-.PHONY: debug
-debug: | build_test
-	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
 distclean: clean

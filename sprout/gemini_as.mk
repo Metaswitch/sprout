@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := gemini-as.so
+TARGET_TEST := gemini-as.so_test
 
 TARGET_SOURCES := mobiletwinned.cpp	\
                   sproutletappserver.cpp \
@@ -25,8 +26,8 @@ CPPFLAGS += -I${ROOT}/include \
 
 CPPFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --cflags libpjproject)
 
-# Add cpp-common/src as VPATH so build will find modules there.
-VPATH = ${ROOT}/modules/cpp-common/src:${ROOT}/modules/gemini/src
+# Add gemini/src as VPATH so build will find modules there.
+VPATH = ${ROOT}/modules/gemini/src
 
 # Production build:
 #
@@ -40,10 +41,6 @@ include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
 stage-build: build
-
-.PHONY: debug
-debug: | build_test
-	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
 distclean: clean

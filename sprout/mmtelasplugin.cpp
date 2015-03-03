@@ -50,7 +50,7 @@ public:
   MMTELASPlugin();
   ~MMTELASPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -59,9 +59,9 @@ private:
   XDMConnection* _xdm_connection;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-MMTELASPlugin plugin_loader;
+MMTELASPlugin sproutlet_plugin;
 }
 
 
@@ -76,10 +76,10 @@ MMTELASPlugin::~MMTELASPlugin()
 {
 }
 
-/// Loads the BGCF plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> MMTELASPlugin::load(struct options& opt)
+/// Loads the MMTEL AS plug-in, returning the supported Sproutlets.
+bool MMTELASPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.xdm_server != "")
   {
@@ -96,10 +96,10 @@ std::list<Sproutlet*> MMTELASPlugin::load(struct options& opt)
     sproutlets.push_back(_mmtel_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
-/// Unloads the BGCF plug-in.
+/// Unloads the MMTEL AS plug-in.
 void MMTELASPlugin::unload()
 {
   delete _mmtel_sproutlet;

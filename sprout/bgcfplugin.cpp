@@ -51,7 +51,7 @@ public:
   BGCFPlugin();
   ~BGCFPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -60,9 +60,9 @@ private:
   BgcfService* _bgcf_service;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-BGCFPlugin plugin_loader;
+BGCFPlugin sproutlet_plugin;
 }
 
 
@@ -78,17 +78,12 @@ BGCFPlugin::~BGCFPlugin()
 }
 
 /// Loads the BGCF plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
+bool BGCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.scscf_enabled)
   {
-    // Determine the BGCF URIs.
-    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr,
-                                        stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
-
     // Create BGCF service required for the BGCF Sproutlet.
     _bgcf_service = new BgcfService();
 
@@ -98,12 +93,18 @@ std::list<Sproutlet*> BGCFPlugin::load(struct options& opt)
                        new ACRFactory();
 
     // Create the Sproutlet.
-    _bgcf_sproutlet = new BGCFSproutlet(0, _bgcf_service, _acr_factory);
+    _bgcf_sproutlet = new BGCFSproutlet(0, 
+                                        _bgcf_service, 
+                                        enum_service, 
+                                        _acr_factory, 
+                                        opt.enforce_user_phone,
+                                        opt.enforce_global_only_lookups,
+                                        opt.override_npdi);
 
     sproutlets.push_back(_bgcf_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the BGCF plug-in.

@@ -851,7 +851,6 @@ pj_status_t BasicProxy::UASTsx::forward_to_targets()
   {
     LOG_DEBUG("Allocating transaction and data for target");
     pjsip_tx_data* uac_tdata = PJUtils::clone_tdata(_req);
-    PJUtils::add_top_via(uac_tdata);
 
     if (uac_tdata == NULL)
     {
@@ -1071,6 +1070,19 @@ void BasicProxy::UASTsx::on_new_client_response(UACTsx* uac_tsx,
         // transaction.
         LOG_DEBUG("%s - All UAC responded", name());
         on_final_response();
+      }
+      else if ((_tsx->method.id == PJSIP_INVITE_METHOD) &&
+               (PJSIP_IS_STATUS_IN_CLASS(status_code, 600)))
+      {
+        // From RFC 3261, section 16.7, point 5:
+        // > If a 6xx response is received, it is not immediately forwarded,
+        // > but the stateful proxy SHOULD cancel all client pending
+        // > transactions as described in Section 10, and it MUST NOT create
+        // > any new branches in this context.
+
+        // Cancel any pending transactions, but don't dissociate so that we wait
+        // for all transactions to complete before forwarding the response.
+        cancel_pending_uac_tsx(status_code, false);
       }
     }
 
@@ -1316,7 +1328,12 @@ void BasicProxy::UASTsx::cancel_pending_uac_tsx(int st_code, bool dissociate_uac
 ///
 int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
 {
-  // Order is: (best) 487, 300, 301, ..., 698, 699, 408 (worst).
+  // See RFC 3261, section 16.7, point 6 for full logic for choosing the best response.
+  // We also priortize 487 over any 300-599 status code to ensure that after a CANCEL we
+  // get a 487 unless we get a definitive (6xx) response.
+  //
+  // Our order is:
+  // (best) 600, ..., 699, 487, 300, ..., 407, 409, ..., 486, 488, ..., 599, 408 (worst).
   LOG_DEBUG("Compare new status code %d with stored status code %d", sc1, sc2);
   if (sc1 == sc2)
   {
@@ -1333,16 +1350,32 @@ int BasicProxy::UASTsx::compare_sip_sc(int sc1, int sc2)
     // A non-timeout response is always better than a timeout.
     return 1;
   }
-  else if (sc2 == PJSIP_SC_REQUEST_TERMINATED)
+  else if (PJSIP_IS_STATUS_IN_CLASS(sc1, 600))
   {
-    // Request terminated is always better than anything else because
-    // this should only happen if transaction is CANCELLED by originator
-    // and this will be the expected response.
+    if (PJSIP_IS_STATUS_IN_CLASS(sc2, 600))
+    {
+      // Both 6xx series - compare directly.
+      return (sc1 < sc2) ? 1 : -1;
+    }
+    else
+    {
+      // sc1 is 6xx but sc2 is not - sc1 is better
+      return 1;
+    }
+  }
+  else if (PJSIP_IS_STATUS_IN_CLASS(sc2, 600))
+  {
+    // sc2 is 6xx and we know sc1 is not - sc2 is better
     return -1;
   }
+  // After 6xx, 487 takes precedence over anything else.
   else if (sc1 == PJSIP_SC_REQUEST_TERMINATED)
   {
     return 1;
+  }
+  else if (sc2 == PJSIP_SC_REQUEST_TERMINATED)
+  {
+    return -1;
   }
   // Default behaviour is to favour the lowest number.
   else if (sc1 < sc2)
@@ -1362,7 +1395,10 @@ void BasicProxy::UASTsx::dissociate(UACTsx* uac_tsx)
 {
   LOG_DEBUG("Dissociate UAC transaction %p for target %d", uac_tsx, uac_tsx->_index);
   uac_tsx->_uas_tsx = NULL;
-  _uac_tsx[uac_tsx->_index] = NULL;
+  if (_uac_tsx.size() > (size_t)uac_tsx->_index)
+  {
+    _uac_tsx[uac_tsx->_index] = NULL;
+  }
 }
 
 
@@ -1551,6 +1587,10 @@ pj_status_t BasicProxy::UACTsx::init(pjsip_tx_data* tdata)
 
   _trail = _uas_tsx->trail();
 
+  // Add a new top Via header to the request.  This must be done before creating
+  // the PJSIP UAC transaction as otherwise response correlation won't work.
+  PJUtils::add_top_via(tdata);
+
   if (tdata->msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Use the lock associated with the PJSIP UAS transaction.
@@ -1644,7 +1684,8 @@ void BasicProxy::UACTsx::send_request()
       // Send non-ACK request statefully.
       status = pjsip_tsx_send_msg(_tsx, _tdata);
 
-      if (status == PJ_SUCCESS)
+      if ((status == PJ_SUCCESS) &&
+          (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD))
       {
         start_timer_c();
       }
@@ -1667,6 +1708,9 @@ void BasicProxy::UACTsx::send_request()
     if ((_uas_tsx != NULL) &&
         (_tdata->msg->line.req.method.id != PJSIP_ACK_METHOD))
     {
+      // Remove the top Via from the request before reporting the error in
+      // case the request is used to build an error response.
+      PJUtils::remove_top_via(_tdata);
       _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TRANSPORT_ERROR);
     }
     //LCOV_EXCL_STOP
@@ -1852,6 +1896,10 @@ void BasicProxy::UACTsx::on_tsx_state(pjsip_event* event)
           SAS::report_event(sas_event);
         }
         // LCOV_EXCL_STOP - no timeouts in UT
+
+        // Report the error to the UASTsx.  Remove the top Via header from the
+        // request first in case it is used to generate an error response.
+        PJUtils::remove_top_via(_tdata);
         _uas_tsx->on_client_not_responding(this, event->body.tsx_state.type);
       }
     }
@@ -1933,6 +1981,21 @@ bool BasicProxy::UACTsx::retry_request()
     // future events from it.
     LOG_DEBUG("Attempt to retry request to alternate server");
     pjsip_transaction* retry_tsx;
+
+    // In congestion cases, the old tdata might still be held by PjSIP's
+    // trasport layer waiting to be sent.  Therefore it's not safe to re-send
+    // the same tdata, so we should clone it first.
+    // LCOV_EXCL_START - No congestion in UTs
+    if (_tdata->is_pending)
+    {
+      pjsip_tx_data* old_tdata = _tdata;
+      _tdata = PJUtils::clone_tdata(_tdata);
+
+      // We no longer care about the old tdata.
+      pjsip_tx_data_dec_ref(old_tdata);
+    }
+    // LCOV_EXCL_STOP
+
     PJUtils::generate_new_branch_id(_tdata);
     pj_status_t status = pjsip_tsx_create_uac2(_proxy->_mod_tu.module(),
                                                _tdata,
@@ -1967,8 +2030,11 @@ bool BasicProxy::UACTsx::retry_request()
         LOG_INFO("Retrying request to alternate target");
         retrying = true;
 
-        // Start Timer C again.
-        start_timer_c();
+        if (_tdata->msg->line.req.method.id == PJSIP_INVITE_METHOD)
+        {
+          // Start Timer C again.
+          start_timer_c();
+        }
       }
       else
       {
@@ -2081,11 +2147,14 @@ void BasicProxy::UACTsx::timer_c_expired()
     {
       // Either a non-INVITE transaction, or an INVITE transaction which
       // hasn't yet received a 100 Trying response, so terminate the
-      // transaction and report this target as non-responsive.
+      // transaction and report this target as non-responsive.  Remove
+      // the top Via header from the request in case it is used to generate
+      // an error response.
       LOG_INFO("Timer C expired, %.*s transaction in %s state, aborting",
                _tsx->method.name.slen, _tsx->method.name.ptr,
                pjsip_tsx_state_str(_tsx->state));
       pjsip_tsx_terminate(_tsx, PJSIP_SC_REQUEST_TIMEOUT);
+      PJUtils::remove_top_via(_tdata);
       _uas_tsx->on_client_not_responding(this, PJSIP_EVENT_TIMER);
     }
     //LCOV_EXCL_STOP

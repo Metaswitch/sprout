@@ -82,6 +82,7 @@ namespace SP
     string _branch;
     string _route;
     int _cseq;
+    bool _in_dialog;
 
     Message() :
       _method("INVITE"),
@@ -96,7 +97,8 @@ namespace SP
       _first_hop(false),
       _via("10.83.18.38:36530"),
       _branch(""),
-      _cseq(16567)
+      _cseq(16567),
+      _in_dialog(false)
     {
       static int unique = 1042;
       _unique = unique;
@@ -145,7 +147,7 @@ namespace SP
                        "Via: SIP/2.0/TCP %13$s;rport;branch=z9hG4bK%16$s\r\n"
                        "%12$s"
                        "From: <sip:%2$s@%3$s>;tag=10.114.61.213+1+8c8b232a+5fb751cf\r\n"
-                       "To: <%10$s>\r\n"
+                       "To: <%10$s>%17$s\r\n"
                        "Max-Forwards: %8$d\r\n"
                        "Call-ID: 0gQAAC8W\"AAACBAAALxYAAAL8P3UbW8l4mT8YBkKGRKc5SOHaJ1gMRqs%11$04dohntC@10.114.61.213\r\n"
                        "CSeq: %15$d %1$s\r\n"
@@ -172,7 +174,8 @@ namespace SP
                        /* 13 */ _via.c_str(),
                        /* 14 */ route.c_str(),
                        /* 15 */ _cseq,
-                       /* 16 */ branch.c_str()
+                       /* 16 */ branch.c_str(),
+                       /* 17 */ _in_dialog ?  ";tag=abcd" : ""
         );
 
       EXPECT_LT(n, (int)sizeof(buf));
@@ -578,6 +581,7 @@ protected:
                       string& xoToken,
                       string& xoBareToken,
                       int expiry = 300,
+                      string response = "",
                       string integrity = "",
                       string extraRspHeaders = "",
                       bool firstHop = false,
@@ -1589,6 +1593,7 @@ TEST_F(StatefulProxyTest, TestNonLocal)
   SCOPED_TRACE("");
   // This message is passing through this proxy; it's not local
   Message msg;
+  add_host_mapping("destination.com", "10.10.10.2");
   msg._to = "lasthop";
   msg._todomain = "destination.com";
   list<HeaderMatcher> hdrs;
@@ -2234,6 +2239,7 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
                                            string& xoToken, //^ out: token (parsed from Path)
                                            string& xoBareToken, //^ out: bare token (parsed from Path)
                                            int expires, //^ expiry period
+                                           string response, //^ response string to be included in authorization header
                                            string integrity, //^ expected integrity marking in authorization header
                                            string extraRspHeaders, //^ extra headers to be included in response
                                            bool firstHop,  //^ is this the first hop? If not, there was a previous hop to get here.
@@ -2251,6 +2257,10 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   msg._via = via.empty() ? xiTp->to_string(false) : via;
   msg._extra = "Contact: sip:wuntootreefower@";
   msg._extra.append(xiTp->to_string(true)).append(";ob;expires=").append(to_string<int>(expires, std::dec)).append(";+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"");
+  if (!response.empty())
+  {
+    msg._extra.append("\r\nAuthorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"").append(response).append("\"");
+  }
   if (!supported.empty())
   {
     msg._extra.append("\r\n").append("Supported: ").append(supported);
@@ -2298,12 +2308,14 @@ void StatefulEdgeProxyTest::doRegisterEdge(TransportFlow* xiTp,  //^ transport t
   if (!integrity.empty())
   {
     actual = get_headers(tdata->msg, "Authorization");
-    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"\",integrity-protected=" + integrity, actual);
+    EXPECT_EQ("Authorization: Digest username=\"6505551000@homedomain\", nonce=\"\", response=\"" + response + "\",integrity-protected=" + integrity, actual);
   }
 
   // Check P-Charging headers are added correctly
   actual = get_headers(tdata->msg, "P-Charging-Function-Addresses");
   EXPECT_EQ("P-Charging-Function-Addresses: ccf=cdfdomain", actual);
+  actual = get_headers(tdata->msg, "P-Visited-Network-ID");
+  EXPECT_EQ("P-Visited-Network-ID: homedomain", actual);
   actual = get_headers(tdata->msg, "P-Charging-Vector");
   std::string call_id = get_headers(tdata->msg, "Call-ID");
   call_id.erase(std::remove(call_id.begin(), call_id.end(), '@'), call_id.end());
@@ -2560,7 +2572,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
   SCOPED_TRACE("");
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, 300, "",
+  doRegisterEdge(tp, token, baretoken, 300, "1234123412341234", "ip-assoc-pending",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Send an INVITE from the client specifying one of the valid identities in
@@ -2732,7 +2744,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Refresh the registration.
   SCOPED_TRACE("");
-  doRegisterEdge(tp, token, baretoken, 300, "ip-assoc-yes",
+  doRegisterEdge(tp, token, baretoken, 300, "", "ip-assoc-yes",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Check that authorization is still in place by sending an INVITE from the client with no P-Preferred-Identity header.
@@ -2778,7 +2790,7 @@ TEST_F(StatefulEdgeProxyTest, TestPreferredAssertedIdentities)
 
   // Expire the registration.
   SCOPED_TRACE("");
-  doRegisterEdge(tp, token, baretoken, 0, "ip-assoc-yes",
+  doRegisterEdge(tp, token, baretoken, 0, "", "ip-assoc-yes",
                  "\nP-Associated-URI: <sip:6505551000@homedomain>, <sip:+16505551000@homedomain>, \"Fred\" <sip:1000@homedomain>\nP-Associated-URI: <tel:+16505551000>");
 
   // Check that authorization is gone by sending an INVITE from the client with no P-Preferred-Identity header.
@@ -2929,7 +2941,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.38",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "outbound, path", true, "");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "outbound, path", true, "");
   delete tp;
 
   // Client 2: Declares outbound support, behind NAT. Should get path.
@@ -2937,7 +2949,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.39",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "outbound, path", true, "10.22.3.4:9999");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "outbound, path", true, "10.22.3.4:9999");
   delete tp;
 
   // Client 3: Doesn't declare outbound support (no attr), not behind NAT. Shouldn't get path.
@@ -2951,7 +2963,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "path", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "path", true, "10.22.3.5:8888");
   delete tp;
 
   // Client 5: Doesn't declare outbound support (no header), not behind NAT. Shouldn't get path.
@@ -2965,7 +2977,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHopDetection)
                          stack_data.pcscf_untrusted_port,
                          "10.83.18.41",
                          49152);
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true, "", true, "10.22.3.5:8888");
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true, "", true, "10.22.3.5:8888");
   delete tp;
 }
 
@@ -2977,7 +2989,7 @@ TEST_F(StatefulEdgeProxyTest, TestEdgeFirstHop)
   TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(tp, token, baretoken, 300, "", "", "", true);
 
   // This is first hop, so should be marked
   EXPECT_THAT(token, HasSubstr(";ob"));
@@ -3059,7 +3071,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstOut)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.38", 36530);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   // INVITE from Sprout (or elsewhere) via bono to client
   Message msg;
@@ -3080,7 +3092,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineHeadersBonoFirstIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   // INVITE from client via bono to Sprout, first hop
   Message msg;
@@ -3160,6 +3172,7 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
   msg._route += "Route: <sip:bono1.homedomain:" + to_string<int>(stack_data.pcscf_trusted_port, std::dec) + ";transport=TCP;lr>\r\n";
   msg._route += "Route: <sip:123456@127.0.0.1:" + to_string<int>(stack_data.pcscf_untrusted_port, std::dec) + ";transport=TCP;lr>";
+  msg._in_dialog = true;
   inject_msg(msg.get_request(), &tp);
 
   // Check that the message is forwarded as expected.
@@ -3176,6 +3189,77 @@ TEST_F(StatefulEdgeProxyTest, TestLoopbackReqUri)
   free_txdata();
 }
 
+// Test that Bono routes all initial requests to Sprout.
+TEST_F(StatefulEdgeProxyTest, TestAlwaysRouteUpstream)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send a MESSAGE from the client. Use a different domain in the Request-URI.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "sip:1234@someotherdomain";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._in_dialog = false;
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+
+  free_txdata();
+}
+
+// Test that Bono routes all initial requests to Sprout.
+TEST_F(StatefulEdgeProxyTest, TestAlwaysRouteUpstreamTel)
+{
+  SCOPED_TRACE("");
+
+  // Register a client.
+  TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
+  string token;
+  string baretoken;
+  doRegisterEdge(&tp, token, baretoken);
+
+  // Send a MESSAGE from the client. Use a tel: URI in the Request-URI
+  // to ensure that no SIP routing interferes.
+  SCOPED_TRACE("");
+  Message msg;
+  msg._method = "MESSAGE";
+  msg._requri = "tel:1234";
+  msg._to = "6505551234";
+  msg._from = "6505551000";
+  msg._in_dialog = false;
+  inject_msg(msg.get_request(), &tp);
+
+  // Check that the message is forwarded as expected.
+  ASSERT_EQ(1, txdata_count());
+  pjsip_tx_data* tdata = current_txdata();
+
+  // Is the right kind and method.
+  ReqMatcher r1("MESSAGE");
+  r1.matches(tdata->msg);
+
+  // Goes to the configured upstream proxy ("upstreamnode", "10.6.6.8")
+  expect_target("TCP", "10.6.6.8", stack_data.pcscf_trusted_port, tdata);
+
+  free_txdata();
+}
+
 // Test flows into Bono (P-CSCF), first hop with Route header.
 TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
 {
@@ -3185,7 +3269,7 @@ TEST_F(StatefulEdgeProxyTest, TestMainlineBonoRouteIn)
   TransportFlow tp(TransportFlow::Protocol::TCP, stack_data.pcscf_untrusted_port, "10.83.18.37", 36531);
   string token;
   string baretoken;
-  doRegisterEdge(&tp, token, baretoken, 300, "", "", true);
+  doRegisterEdge(&tp, token, baretoken, 300, "", "", "", true);
 
   Message msg;
   msg._first_hop = true;

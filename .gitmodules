@@ -58,3 +58,9 @@
 [submodule "modules/memento"]
 	path = modules/memento
 	url = git@github.com:Metaswitch/memento
+[submodule "modules/thrift"]
+	path = modules/thrift
+	url = https://github.com/apache/thrift.git
+[submodule "modules/cassandra"]
+	path = modules/cassandra
+	url = https://github.com/apache/cassandra.git

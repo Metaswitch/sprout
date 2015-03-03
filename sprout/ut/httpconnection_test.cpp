@@ -54,15 +54,19 @@
 #include "test_utils.hpp"
 #include "load_monitor.h"
 #include "mock_sas.h"
+#include "mockcommunicationmonitor.h"
 
 using namespace std;
 using ::testing::MatchesRegex;
+using ::testing::_;
+using ::testing::NiceMock;
 
 /// Fixture for test.
 class HttpConnectionTest : public BaseTest
 {
   LoadMonitor _lm;
   FakeHttpResolver _resolver;
+  NiceMock<MockCommunicationMonitor> _cm;
   HttpConnection _http;
   HttpConnectionTest() :
     _lm(100000, 20, 10, 10),
@@ -73,12 +77,13 @@ class HttpConnectionTest : public BaseTest
           "connected_homers",
           &_lm,
           stack_data.stats_aggregator,
-          SASEvent::HttpLogLevel::PROTOCOL)
+          SASEvent::HttpLogLevel::PROTOCOL,
+          &_cm)
   {
     fakecurl_responses.clear();
     fakecurl_responses["http://10.42.42.42:80/blah/blah/blah"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
     fakecurl_responses["http://10.42.42.42:80/blah/blah/wot"] = CURLE_REMOTE_FILE_NOT_FOUND;
-    fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = CURLE_HTTP_RETURNED_ERROR;
+    fakecurl_responses["http://10.42.42.42:80/blah/blah/503"] = 503;
     fakecurl_responses["http://10.42.42.42:80/blah/blah/recv_error"] = CURLE_RECV_ERROR;
     fakecurl_responses["http://10.42.42.42:80/up/up/up"] = "<message>ok, whatever...</message>";
     fakecurl_responses["http://10.42.42.42:80/up/up/down"] = CURLE_REMOTE_ACCESS_DENIED;
@@ -121,7 +126,8 @@ TEST_F(HttpConnectionTest, SimpleIPv6Get)
                        "connected_homers",
                        &_lm,
                        stack_data.stats_aggregator,
-                       SASEvent::HttpLogLevel::PROTOCOL);
+                       SASEvent::HttpLogLevel::PROTOCOL,
+                       NULL);
   fakecurl_responses["http://[1::1]:80/ipv6get"] = CURLE_OK;
   long ret = http2.send_get("/ipv6get", output, "gandalf", 0);
   EXPECT_EQ(200, ret);
@@ -129,6 +135,7 @@ TEST_F(HttpConnectionTest, SimpleIPv6Get)
 
 TEST_F(HttpConnectionTest, SimpleGetFailure)
 {
+  EXPECT_CALL(_cm, inform_failure(_)).Times(2);
   string output;
   long ret = _http.send_get("/blah/blah/wot", output, "gandalf", 0);
   EXPECT_EQ(404, ret);
@@ -152,6 +159,7 @@ TEST_F(HttpConnectionTest, SimpleGetRetry)
 
 TEST_F(HttpConnectionTest, ReceiveError)
 {
+  EXPECT_CALL(_cm, inform_failure(_));
   string output;
   long ret = _http.send_get("/blah/blah/recv_error", output, "gandalf", 0);
   EXPECT_EQ(500, ret);
@@ -204,6 +212,7 @@ TEST_F(HttpConnectionTest, SimplePost)
 
 TEST_F(HttpConnectionTest, SimplePut)
 {
+  EXPECT_CALL(_cm, inform_success(_));
   long ret = _http.send_put("/put_id", "", 0);
   EXPECT_EQ(200, ret);
 }
@@ -279,7 +288,8 @@ TEST_F(HttpConnectionTest, ParseHostPort)
                        "connected_homers",
                        &_lm,
                        stack_data.stats_aggregator,
-                       SASEvent::HttpLogLevel::PROTOCOL);
+                       SASEvent::HttpLogLevel::PROTOCOL,
+                       NULL);
   fakecurl_responses["http://10.42.42.42:1234/port-1234"] = "<?xml version=\"1.0\" encoding=\"UTF-8\"><boring>Document</boring>";
 
   string output;
@@ -297,7 +307,8 @@ TEST_F(HttpConnectionTest, ParseHostPortIPv6)
                        "connected_homers",
                        &_lm,
                        stack_data.stats_aggregator,
-                       SASEvent::HttpLogLevel::PROTOCOL);
+                       SASEvent::HttpLogLevel::PROTOCOL,
+                       NULL);
 
   string output;
   long ret = http2.send_get("/blah/blah/blah", output, "gandalf", 0);

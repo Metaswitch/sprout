@@ -332,7 +332,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting subscribe request using invalid URI scheme");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_URLSCHEME, 0);
-    // Can't log the public ID as the subscribe has failed too early
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -370,7 +369,6 @@ void process_subscription_request(pjsip_rx_data* rdata)
     LOG_ERROR("Rejecting subscribe request from emergency registration");
 
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EMERGENCY, 0);
-    // Can't log the public ID as the subscribe has failed too early
     SAS::report_event(event);
 
     // Allow-Events is a mandatory header on 489 responses.
@@ -385,9 +383,11 @@ void process_subscription_request(pjsip_rx_data* rdata)
     return;
   }
 
+  // Create an ACR for the request.  The node role is always considered
+  // originating for SUBSCRIBE requests.
   ACR* acr = acr_factory->get_acr(get_trail(rdata),
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
@@ -579,7 +579,7 @@ void process_subscription_request(pjsip_rx_data* rdata)
     {
       // LCOV_EXCL_START
       SAS::Event event(trail, SASEvent::NOTIFICATION_FAILED, 0);
-      std::string error_msg = "Failed to send NOTIFY - error code: " + std::to_string(status);
+      std::string error_msg = "Failed to send NOTIFY - error: " + std::to_string(status);
       event.add_var_param(error_msg);
       SAS::report_event(event);
       // LCOV_EXCL_STOP
@@ -614,7 +614,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
          (PJUtils::is_uri_local(rdata->msg_info.msg->line.req.uri))) &&
         PJUtils::check_route_headers(rdata)))
   {
-    LOG_DEBUG("Rejecting subscription request not targeted at this domain or node");
+    LOG_DEBUG("Not processing subscription request not targeted at this domain or node");
     SAS::Event event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_DOMAIN, 0);
     SAS::report_event(event);
     return PJ_FALSE;
@@ -631,7 +631,7 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
   if (!event || (PJUtils::pj_str_to_string(&event->event_type) != "reg"))
   {
     // The Event header is missing or doesn't match "reg"
-    LOG_DEBUG("Rejecting subscription request with invalid event header");
+    LOG_DEBUG("Not processing subscription request that's not for the 'reg' package");
 
     SAS::Event sas_event(trail, SASEvent::SUBSCRIBE_FAILED_EARLY_EVENT, 0);
     if (event)
@@ -663,7 +663,8 @@ pj_bool_t subscription_on_rx_request(pjsip_rx_data *rdata)
     if (!found)
     {
       // The Accept header (if it exists) doesn't contain "application/reginfo+xml"
-      LOG_DEBUG("Rejecting subscription request with invalid accept header");
+      LOG_DEBUG("Not processing subscription request that doesn't "
+                "accept reginfo notifications");
       char accept_hdr_str[256];
       memset(accept_hdr_str, 0, 256);
       pjsip_hdr_print_on(accept, accept_hdr_str, 255);

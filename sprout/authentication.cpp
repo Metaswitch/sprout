@@ -67,7 +67,6 @@ extern "C" {
 // stack below the transaction layer.
 //
 static pj_bool_t authenticate_rx_request(pjsip_rx_data *rdata);
-void log_sas_auth_not_needed_event(SAS::TrailId trail, std::string error_msg, int instance_id=0);
 
 pjsip_module mod_auth =
 {
@@ -135,7 +134,7 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId t
                 impi.c_str(), av->toStyledString().c_str());
       rc = false;
 
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
       std::string error_msg = "AKA authentication vector is malformed: " + av->toStyledString();
       event.add_var_param(error_msg);
       SAS::report_event(event);
@@ -155,7 +154,7 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId t
                 impi.c_str(), av->toStyledString().c_str());
       rc = false;
 
-      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
       std::string error_msg = "Digest authentication vector is malformed: " + av->toStyledString();
       event.add_var_param(error_msg);
       SAS::report_event(event);
@@ -168,7 +167,7 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId t
               impi.c_str(), av->toStyledString().c_str());
     rc = false;
 
-    SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED, 0);
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
     std::string error_msg = "Authentication vector is malformed: " + av->toStyledString();
     event.add_var_param(error_msg);
     SAS::report_event(event);
@@ -325,9 +324,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // AKA authentication.
       LOG_DEBUG("Add AKA information");
 
-      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
-      std::string AKA = "AKA";
-      event.add_var_param(AKA);
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_AKA, 0);
       SAS::report_event(event);
 
       Json::Value& aka = (*av)["aka"];
@@ -361,9 +358,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Digest authentication.
       LOG_DEBUG("Add Digest information");
 
-      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE, 0);
-      std::string DIGEST = "DIGEST";
-      event.add_var_param(DIGEST);
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_DIGEST, 0);
       SAS::report_event(event);
 
       Json::Value& digest = (*av)["digest"];
@@ -406,28 +401,24 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
   else
   {
-    std::string error_msg;
-
     // If we couldn't get the AV because a downstream node is overloaded then don't return
     // a 4xx error to the client.
     if ((http_code == HTTP_SERVER_UNAVAILABLE) || (http_code == HTTP_GATEWAY_TIMEOUT))
     {
-      error_msg = "Downstream node is overloaded or unresponsive, unable to get Authentication vector";
-      LOG_DEBUG(error_msg.c_str());
+      LOG_DEBUG("Downstream node is overloaded or unresponsive, unable to get Authentication vector");
       tdata->msg->line.status.code = PJSIP_SC_SERVER_TIMEOUT;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_SERVER_TIMEOUT);
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED_OVERLOAD, 0);
+      SAS::report_event(event);
     }
     else
     {
-      error_msg = "Failed to get Authentication vector";
-      LOG_DEBUG(error_msg.c_str());
+      LOG_DEBUG("Failed to get Authentication vector");
       tdata->msg->line.status.code = PJSIP_SC_FORBIDDEN;
       tdata->msg->line.status.reason = *pjsip_get_status_text(PJSIP_SC_FORBIDDEN);
+      SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED, 0);
+      SAS::report_event(event);
     }
-
-    SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_FAILED, 0);
-    event.add_var_param(error_msg);
-    SAS::report_event(event);
 
     pjsip_tx_data_invalidate_msg(tdata);
   }
@@ -444,8 +435,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   if (rdata->tp_info.transport->local_name.port != stack_data.scscf_port)
   {
     // Request not received on S-CSCF port, so don't authenticate it.
-    std::string error_msg = "Request wasn't received on S-CSCF port";
-    log_sas_auth_not_needed_event(trail, error_msg);
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_SCSCF_PORT, 0);
+    SAS::report_event(event);
 
     return PJ_FALSE;
   }
@@ -454,8 +445,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   {
     // Non-REGISTER request, so don't do authentication as it must have come
     // from an authenticated or trusted source.
-    std::string error_msg = "Request wasn't a REGISTER";
-    log_sas_auth_not_needed_event(trail, error_msg);
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_NOT_REGISTER, 0);
+    SAS::report_event(event);
 
     return PJ_FALSE;
   }
@@ -478,8 +469,8 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
 
   if (emergency_reg)
   {
-    std::string error_msg = "Request is an emergency REGISTER";
-    log_sas_auth_not_needed_event(trail, error_msg);
+    SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_EMERGENCY_REGISTER, 0);
+    SAS::report_event(event);
 
     return PJ_FALSE;
   }
@@ -488,28 +479,44 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
            pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
 
-  if ((auth_hdr != NULL) &&
-      (auth_hdr->credential.digest.response.slen == 0))
+  if (auth_hdr != NULL)
   {
-    // There is an authorization header with no challenge response, so check
-    // for the integrity-protected indication.
-    LOG_DEBUG("Authorization header in request with no challenge response");
+    // There is an authorization header, so check for the integrity-protected
+    // indication.
+    LOG_DEBUG("Authorization header in request");
     pjsip_param* integrity =
            pjsip_param_find(&auth_hdr->credential.digest.other_param,
                             &STR_INTEGRITY_PROTECTED);
 
-    // Request has an integrity protected indication, so let it through if
-    // it is set to a "yes" value.
     if ((integrity != NULL) &&
-        ((pj_stricmp(&integrity->value, &STR_YES) == 0) ||
-         (pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
+        ((pj_stricmp(&integrity->value, &STR_TLS_YES) == 0) ||
          (pj_stricmp(&integrity->value, &STR_IP_ASSOC_YES) == 0)))
     {
-      // Request is already integrity protected, so let it through.
-      LOG_INFO("Request integrity protected by edge proxy");
+      // The integrity protected indicator is included and set to tls-yes or
+      // ip-assoc-yes.  This indicates the client has already been authenticated
+      // so we will accept this REGISTER even if there is a challenge response.
+      // (Values of tls-pending or ip-assoc-pending indicate the challenge
+      // should be checked.)
+      LOG_INFO("SIP Digest authenticated request integrity protected by edge proxy");
 
-      std::string error_msg = "Request integrity protected by edge proxy";
-      log_sas_auth_not_needed_event(trail, error_msg);
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+      SAS::report_event(event);
+
+      return PJ_FALSE;
+    }
+    else if ((integrity != NULL) &&
+             (pj_stricmp(&integrity->value, &STR_YES) == 0) &&
+             (auth_hdr->credential.digest.response.slen == 0))
+    {
+      // The integrity protected indicator is include and set to yes.  This
+      // indicates that AKA authentication is in use and the REGISTER was
+      // received on an integrity protected channel, so we will let the
+      // request through if there is no challenge response, but must check
+      // the challenge response if included.
+      LOG_INFO("AKA authenticated request integrity protected by edge proxy");
+
+      SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED_INTEGRITY_PROTECTED, 0);
+      SAS::report_event(event);
 
       return PJ_FALSE;
     }
@@ -619,10 +626,11 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
   SAS::Marker end_marker(trail, MARKER_ID_END, 1u);
   SAS::report_marker(end_marker);
 
-  // Create an ACR for the message and pass the request to it.
+  // Create an ACR for the message and pass the request to it.  Role is always
+  // considered originating for a REGISTER request.
   ACR* acr = acr_factory->get_acr(trail,
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   pjsip_tx_data* tdata;
@@ -742,11 +750,3 @@ void destroy_authentication()
 {
   pjsip_endpt_unregister_module(stack_data.endpt, &mod_auth);
 }
-
-void log_sas_auth_not_needed_event(SAS::TrailId trail, std::string error_msg, int instance_id)
-{
-  SAS::Event event(trail, SASEvent::AUTHENTICATION_NOT_NEEDED, instance_id);
-  event.add_var_param(error_msg);
-  SAS::report_event(event);
-}
-

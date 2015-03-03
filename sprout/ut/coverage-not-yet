@@ -16,6 +16,7 @@ modules/cpp-common/src/baseresolver.cpp
 modules/cpp-common/src/fakelogger.cpp
 modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
+modules/cpp-common/src/exception_handler.cpp
 modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp
@@ -23,6 +24,8 @@ modules/cpp-common/test_utils/mockhttpstack.hpp
 modules/cpp-common/test_utils/sip_common.cpp
 modules/cpp-common/test_utils/faketransport_tcp.cpp
 modules/cpp-common/test_utils/faketransport_udp.cpp
+modules/cpp-common/test_utils/fakezmq.h
+modules/cpp-common/test_utils/fakezmq.cpp
 
 modules/app-servers/include/appserver.h
 modules/app-servers/test/mockappserver.hpp
@@ -37,6 +40,7 @@ connection_pool.cpp
 pjutils.cpp
 callservices.cpp
 stack.cpp
+thread_dispatcher.cpp
 websockets.cpp
 dnsresolver.cpp
 flowtable.cpp

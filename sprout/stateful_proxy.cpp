@@ -181,6 +181,8 @@ PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 static pj_bool_t proxy_on_rx_request(pjsip_rx_data *rdata );
 static pj_bool_t proxy_on_rx_response(pjsip_rx_data *rdata );
 
+void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata);
+
 static pjsip_module mod_stateful_proxy =
 {
   NULL, NULL,                         // prev, next
@@ -245,6 +247,7 @@ static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
+static NodeRole acr_node_role(pjsip_msg *req);
 
 
 ///@{
@@ -438,7 +441,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
 
     acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                     CALLING_PARTY,
-                                    ACR::requested_node_role(rdata->msg_info.msg));
+                                    acr_node_role(rdata->msg_info.msg));
   }
   else
   {
@@ -508,7 +511,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
         // new one.
         acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                         CALLING_PARTY,
-                                        ACR::requested_node_role(rdata->msg_info.msg));
+                                        acr_node_role(rdata->msg_info.msg));
       }
     }
     else
@@ -814,7 +817,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   // Create and send an ACR for the CANCEL request.
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
-                                       ACR::requested_node_role(rdata->msg_info.msg));
+                                       acr_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -893,7 +896,7 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
 
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
-                                       ACR::requested_node_role(rdata->msg_info.msg));
+                                       acr_node_role(rdata->msg_info.msg));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
@@ -1139,7 +1142,6 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     }
   }
 
-  pjsip_routing_hdr* route_hdr;
   pjsip_sip_uri* upstream_uri;
 
   if (service_route != "")
@@ -1165,6 +1167,7 @@ static void proxy_route_upstream(pjsip_rx_data* rdata,
     // When working as a load-balancer for a third-party P-CSCF, trust the
     // orig parameter of the top-most Route header.
     pjsip_param* orig_param = NULL;
+    pjsip_routing_hdr* route_hdr;
 
     // Check the rdata here, as the Route header may have been stripped
     // from the cloned tdata.
@@ -1283,16 +1286,34 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     // for the REGISTER response from upstream.
     src_flow->touch();
 
-    // Add an integrity-protected indicator if the message was received on a
-    // client flow that has already been authenticated.  We don't add
-    // integrity-protected=no otherwise as this would be interpreted by the
-    // S-CSCF as a request to use AKA authentication.
     pjsip_to_hdr *to_hdr = PJSIP_MSG_TO_HDR(rdata->msg_info.msg);
     if (!src_flow->asserted_identity((pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri)).empty())
     {
+      // The message was received on a client flow that has already been
+      // authenticated, so add "integrity-protected=ip-assoc-yes" to flag this
+      // to the S-CSCF.
       PJUtils::add_integrity_protected_indication(tdata,
                                                   PJUtils::Integrity::IP_ASSOC_YES);
     }
+    else
+    {
+      // The message wasn't received on an authenticated client flow.  Add
+      // "integrity-protected=ip-assoc-pending" if the request contains a
+      // response to a challenge, otherwise don't add an integrity protected
+      // indicator at all (adding "integrity-protected=no" would be interpreted
+      // by the S-CSCF as a request to use AKA authentication).
+      pjsip_authorization_hdr* auth_hdr = (pjsip_authorization_hdr*)
+               pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_AUTHORIZATION, NULL);
+
+      if ((auth_hdr != NULL) &&
+          (auth_hdr->credential.digest.response.slen != 0))
+      {
+        PJUtils::add_integrity_protected_indication(tdata,
+                                                    PJUtils::Integrity::IP_ASSOC_PENDING);
+      }
+    }
+
+    PJUtils::add_pvni(tdata, &stack_data.default_home_domain);
 
     // Add a path header so we get included in the egress call flow.  If we're not
     // acting as access proxy, we'll add the bono cluster instead.
@@ -1455,6 +1476,15 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
               PJUtils::add_asserted_identity(tdata, aid2);
             }
           }
+
+          bool initial_request = (rdata->msg_info.to->tag.slen == 0);
+          if (initial_request)
+          {
+            // Initial requests (ones without a To tag) always go upstream
+            // to Sprout
+            LOG_DEBUG("Routing initial request from client to upstream Sprout");
+            proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+          }
         }
       }
     }
@@ -1520,6 +1550,8 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
 
     if (*target == NULL)
     {
+      LOG_DEBUG("No target found yet");
+    
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
@@ -1702,6 +1734,37 @@ static pj_status_t proxy_process_routing(pjsip_tx_data *tdata)
   return PJ_SUCCESS;
 }
 
+/// For a given message, calculate the role the message is requesting the
+/// node carry out.
+static NodeRole acr_node_role(pjsip_msg *req)
+{
+  NodeRole role;
+
+  // Determine whether this an originating or terminating request by looking for
+  // the `orig` parameter in the top route header.  REGISTERs, are neither, but
+  // originating makes most sense as they only correspond to the user that
+  // generates them.
+  pjsip_route_hdr* route_hdr = (pjsip_route_hdr*)
+                                   pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+
+  if ((route_hdr != NULL) &&
+      (pjsip_param_find(&((pjsip_sip_uri*)route_hdr->name_addr.uri)->other_param,
+                        &STR_ORIG) != NULL))
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else if (req->line.req.method.id == PJSIP_REGISTER_METHOD)
+  {
+    role = NODE_ROLE_ORIGINATING;
+  }
+  else
+  {
+    role = NODE_ROLE_TERMINATING;
+  }
+
+  return role;
+}
+
 ///@}
 
 void UASTransaction::cancel_trying_timer()
@@ -1739,9 +1802,9 @@ bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation
     std::string regstate;
     long http_code = hss->update_registration_state(public_id, "", HSSConnection::CALL, regstate, ifc_map, uris, trail);
     bool registered = (regstate == HSSConnection::STATE_REGISTERED);
-    info = {registered, ifc_map[public_id], uris};
     if (http_code == 200)
     {
+      info = {registered, ifc_map[public_id], uris};
       cached_hss_data[public_id] = info;
       rc = true;
     }
@@ -1862,7 +1925,8 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
       }
 
-      std::vector<std::string> bgcf_route = bgcf_service->get_route(domain, trail);
+      std::vector<std::string> bgcf_route = 
+                             bgcf_service->get_route_from_domain(domain, trail);
 
       if (!bgcf_route.empty())
       {
@@ -1891,7 +1955,7 @@ void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
         // switch ACR context for the downstream leg.
         _bgcf_acr = bgcf_acr_factory->get_acr(trail,
                                               CALLING_PARTY,
-                                              ACR::requested_node_role(msg));
+                                              acr_node_role(msg));
 
         if ((_downstream_acr != _upstream_acr) &&
             (!_as_chain_links.empty()))
@@ -2571,7 +2635,7 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
       // Allocate an I-CSCF ACR.
       _icscf_acr = icscf_acr_factory->get_acr(trail(),
                                               CALLING_PARTY,
-                                              ACR::requested_node_role(_req->msg));
+                                              acr_node_role(_req->msg));
       _icscf_acr->rx_request(_req->msg);
 
       // Create an I-CSCF router for the LIR query.
@@ -2580,6 +2644,7 @@ void UASTransaction::routing_proxy_handle_initial_non_cancel(const ServingState&
                                                       scscf_selector,
                                                       trail(),
                                                       _icscf_acr,
+                                                      stack_data.icscf_port,
                                                       public_id,
                                                       false);
 
@@ -2922,7 +2987,7 @@ bool UASTransaction::move_to_terminating_chain()
       _upstream_acr->tx_request(_req->msg);
       _downstream_acr = cscf_acr_factory->get_acr(trail(),
                                                   CALLING_PARTY,
-                                                  ACR::requested_node_role(_req->msg));
+                                                  acr_node_role(_req->msg));
       _downstream_acr->rx_request(_req->msg);
 
       // These headers name the originating user, so should not survive
@@ -3732,6 +3797,12 @@ pj_status_t UASTransaction::init_uac_transactions(TargetList& targets)
       uac_tdata = PJUtils::clone_tdata(_req);
       PJUtils::add_top_via(uac_tdata);
 
+      // Copy the targets onto the tdata as Route headers at this
+      // point - if the Request-URI is a tel: URI, PJSIP will refuse
+      // to create the transaction unless Route headers are present.
+      set_target_on_tdata(*it, uac_tdata);
+
+
       if (uac_tdata == NULL)
       {
         status = PJ_ENOMEM;
@@ -4098,36 +4169,33 @@ UACTransaction* UACTransaction::get_from_tsx(pjsip_transaction* tsx)
   return (tsx->role == PJSIP_ROLE_UAC) ? (UACTransaction *)tsx->mod_data[mod_tu.id] : NULL;
 }
 
-// Set the target for this UAC transaction.
-//
-void UACTransaction::set_target(const struct Target& target)
+// Modifies a tdata's Request-URI and Route headers to match the given Target object.
+void set_target_on_tdata(const struct Target& target, pjsip_tx_data* tdata)
 {
-  enter_context();
-
   if (target.from_store)
   {
     // This target came from the registration store.  Before we overwrite the
     // URI, extract its AOR and write it to the P-Called-Party-ID header.
     static const pj_str_t called_party_id_hdr_name = pj_str("P-Called-Party-ID");
-    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(_tdata->msg, &called_party_id_hdr_name, NULL);
+    pjsip_hdr* hdr = (pjsip_hdr*)pjsip_msg_find_hdr_by_name(tdata->msg, &called_party_id_hdr_name, NULL);
     if (hdr)
     {
       pj_list_erase(hdr);
     }
-    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)_tdata->msg->line.req.uri) + ">");
+    std::string name_addr_str("<" + PJUtils::aor_from_uri((pjsip_sip_uri*)tdata->msg->line.req.uri) + ">");
     pj_str_t called_party_id;
-    pj_strdup2(_tdata->pool,
+    pj_strdup2(tdata->pool,
                &called_party_id,
                name_addr_str.c_str());
-    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(_tdata->pool,
+    hdr = (pjsip_hdr*)pjsip_generic_string_hdr_create(tdata->pool,
                                                       &called_party_id_hdr_name,
                                                       &called_party_id);
-    pjsip_msg_add_hdr(_tdata->msg, hdr);
+    pjsip_msg_add_hdr(tdata->msg, hdr);
   }
 
   // Write the target in to the request.  Need to clone the URI to make
   // sure it comes from the right pool.
-  _tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, target.uri);
+  tdata->msg->line.req.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, target.uri);
 
   // If the target is routing to the upstream device (we're acting as an access
   // proxy), strip any extra loose routes on the message to prevent accidental
@@ -4137,16 +4205,13 @@ void UACTransaction::set_target(const struct Target& target)
     LOG_DEBUG("Stripping loose routes from proxied message");
 
     // Tight loop to strip all route headers.
-    while (pjsip_msg_find_remove_hdr(_tdata->msg,
+    while (pjsip_msg_find_remove_hdr(tdata->msg,
                                      PJSIP_H_ROUTE,
                                      NULL) != NULL)
     {
-      // Tight loop.
+      LOG_DEBUG("Stripped a Route header from proxied message");
     };
   }
-
-  // Store the liveness timeout.
-  _liveness_timeout = target.liveness_timeout;
 
   // Add all the paths as a sequence of Route headers.
   for (std::list<pjsip_uri*>::const_iterator pit = target.paths.begin();
@@ -4165,10 +4230,20 @@ void UACTransaction::set_target(const struct Target& target)
               uri->port,
               uri->transport_param.slen,
               uri->transport_param.ptr);
-    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(_tdata->pool);
-    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(_tdata->pool, uri);
-    pjsip_msg_add_hdr(_tdata->msg, (pjsip_hdr*)route_hdr);
+    pjsip_route_hdr* route_hdr = pjsip_route_hdr_create(tdata->pool);
+    route_hdr->name_addr.uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, uri);
+    pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)route_hdr);
   }
+}
+
+// Set the target for this UAC transaction.
+//
+void UACTransaction::set_target(const struct Target& target)
+{
+  enter_context();
+
+  // Store the liveness timeout.
+  _liveness_timeout = target.liveness_timeout;
 
   if (target.from_store)
   {
@@ -4986,5 +5061,6 @@ AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
   LOG_DEBUG("UASTransaction %p linked to AsChain %s", this, ret.to_string().c_str());
   return ret;
 }
+
 
 ///@}

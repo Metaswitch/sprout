@@ -71,7 +71,8 @@ class SCSCFSproutletTsx;
 class SCSCFSproutlet : public Sproutlet
 {
 public:
-  SCSCFSproutlet(const std::string& scscf_uri,
+  SCSCFSproutlet(const std::string& scscf_cluster_uri,
+                 const std::string& scscf_node_uri,
                  const std::string& icscf_uri,
                  const std::string& bgcf_uri,
                  int port,
@@ -81,23 +82,39 @@ public:
                  EnumService* enum_service,
                  ACRFactory* acr_factory,
                  bool user_phone,
-                 bool global_only_lookups);
+                 bool global_only_lookups,
+                 bool override_npdi);
   ~SCSCFSproutlet();
 
+  bool init();
   SproutletTsx* get_tsx(SproutletTsxHelper* helper,
                         const std::string& alias,
                         pjsip_msg* req);
 
-  void set_user_phone(bool v) { _user_phone = v; }
+  void set_enforce_user_phone(bool v) { _user_phone = v; }
   void set_global_only_lookups(bool v) { _global_only_lookups = v; }
+  void set_override_npdi(bool v) { _override_npdi = v; }
+
+  inline bool should_require_user_phone() const
+  {
+    return _user_phone;
+  }
+
+  inline bool should_override_npdi() const
+  {
+    return _override_npdi;
+  }
 
 private:
 
   /// Returns the AS chain table for this system.
   AsChainTable* as_chain_table() const;
 
-  /// Returns the configured S-CSCF URI for this system.
-  const pjsip_uri* scscf_uri() const;
+  /// Returns the configured S-CSCF cluster URI for this system.
+  const pjsip_uri* scscf_cluster_uri() const;
+
+  /// Returns the configured S-CSCF node URI for this system.
+  const pjsip_uri* scscf_node_uri() const;
 
   /// Returns the configured I-CSCF URI for this system.
   const pjsip_uri* icscf_uri() const;
@@ -110,6 +127,12 @@ private:
   void get_bindings(const std::string& aor,
                     RegStore::AoR** aor_data,
                     SAS::TrailId trail);
+
+  /// Removes the specified binding for the specified Address of Record from
+  /// the local or remote registration stores.
+  void remove_binding(const std::string& aor,
+                      const std::string& binding_id,
+                      SAS::TrailId trail);
 
   /// Read data for a public user identity from the HSS.
   bool read_hss_data(const std::string& public_id,
@@ -133,8 +156,18 @@ private:
 
   friend class SCSCFSproutletTsx;
 
-  pjsip_uri* _scscf_uri;
+  /// A URI which routes to the S-CSCF cluster.
+  pjsip_uri* _scscf_cluster_uri;
+
+  /// A URI which routes to this particular S-CSCF node.  This must be
+  /// constructed using an IP address or a domain name which resolves to this
+  /// Sprout node only.
+  pjsip_uri* _scscf_node_uri;
+
+  /// A URI which routes to the URI cluster.
   pjsip_uri* _icscf_uri;
+
+  /// A URI which routes to the BGCF.
   pjsip_uri* _bgcf_uri;
 
   RegStore* _store;
@@ -150,7 +183,13 @@ private:
 
   bool _global_only_lookups;
   bool _user_phone;
+  bool _override_npdi;
 
+  /// String versions of the cluster URIs
+  std::string _scscf_cluster_uri_str;
+  std::string _scscf_node_uri_str;
+  std::string _icscf_uri_str;
+  std::string _bgcf_uri_str;
 };
 
 
@@ -208,8 +247,9 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required.
-  pjsip_status_code uri_translation(pjsip_msg* req);
+  /// Does URI translation if required. Returns whether the routing 
+  /// decision for the request has already been made 
+  bool uri_translation_and_route(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
   /// the HSS. Returns true on success, false on failure.
@@ -236,12 +276,11 @@ private:
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
-  void add_record_route(pjsip_msg* msg,
-                        const std::string& billing_role);
+  void add_record_route(pjsip_msg* msg, NodeRole);
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  void get_billing_role(std::string& billing_role);
+  NodeRole get_billing_role();
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);

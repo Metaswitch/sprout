@@ -21,13 +21,15 @@ DEB_NAMES += sprout-bgcf sprout-bgcf-dbg
 DEB_NAMES += sprout-mmtel-as sprout-mmtel-as-dbg
 DEB_NAMES += gemini-as gemini-as-dbg
 DEB_NAMES += memento-as memento-as-dbg
+DEB_NAMES += call-diversion-as call-diversion-as-dbg
+DEB_NAMES += mangelwurzel-as mangelwurzel-as-dbg
 DEB_NAMES += bono bono-dbg restund
 DEB_NAMES += clearwater-sip-stress clearwater-sip-stress-dbg clearwater-sip-stress-stats
 
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := pjsip jsoncpp c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client memento
+SUBMODULES := pjsip jsoncpp c-ares curl libevhtp libmemcached libre restund openssl websocketpp sipp sas-client thrift cassandra memento
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/sprout.mk

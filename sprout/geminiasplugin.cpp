@@ -50,7 +50,7 @@ public:
   GeminiPlugin();
   ~GeminiPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
@@ -58,9 +58,9 @@ private:
   SproutletAppServerShim* _gemini_sproutlet;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-GeminiPlugin plugin_loader;
+GeminiPlugin sproutlet_plugin;
 }
 
 
@@ -75,20 +75,17 @@ GeminiPlugin::~GeminiPlugin()
 }
 
 /// Loads the Gemini plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> GeminiPlugin::load(struct options& opt)
+bool GeminiPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
-  if (opt.gemini_enabled)
-  {
-    // Create the Sproutlet.
-    _gemini = new MobileTwinnedAppServer("mobile-twinned");
-    _gemini_sproutlet = new SproutletAppServerShim(_gemini);
+  // Create the Sproutlet.
+  _gemini = new MobileTwinnedAppServer("mobile-twinned");
+  _gemini_sproutlet = new SproutletAppServerShim(_gemini);
 
-    sproutlets.push_back(_gemini_sproutlet);
-  }
+  sproutlets.push_back(_gemini_sproutlet);
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the Gemini plug-in.

@@ -127,7 +127,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
 {
   // Get a suitable binding string from +sip.instance and reg_id parameters
   // if they are supplied.
-  std::string id;
+  std::string id = "";
   pj_str_t *instance = NULL;
   pj_str_t *reg_id = NULL;
 
@@ -146,7 +146,7 @@ std::string get_binding_id(pjsip_contact_hdr *contact)
     p = p->next;
   }
 
-  if (instance != NULL)
+  if ((instance != NULL) && (pj_strlen(instance) >= 2))
   {
     // The contact a +sip.instance parameters, so form a suitable binding
     // string.
@@ -438,7 +438,8 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   }
 
   // Finally, send out SIP NOTIFYs for any subscriptions
-  if (send_notify)
+  if ((send_notify) &&
+      (aor_data != NULL))
   {
     for (RegStore::AoR::Subscriptions::const_iterator i = aor_data->subscriptions().begin();
          i != aor_data->subscriptions().end();
@@ -468,7 +469,7 @@ RegStore::AoR* write_to_store(RegStore* primary_store,       ///<store to write 
   if (all_bindings_expired)
   {
     LOG_DEBUG("All bindings have expired - triggering deregistration at the HSS");
-    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, 0);
+    hss->update_registration_state(aor, "", HSSConnection::DEREG_USER, trail);
   }
 
   out_is_initial_registration = is_initial_registration;
@@ -492,12 +493,7 @@ void process_register_request(pjsip_rx_data* rdata)
     // the AoR isn't valid for the domain in the RequestURI).
     LOG_ERROR("Rejecting register request using invalid URI scheme");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
-    // Can't log the public ID as the REGISTER has failed too early
-    std::string public_id = "UNKNOWN";
-    std::string error_msg = "Rejecting register request using invalid URI scheme";
-    event.add_var_param(public_id);
-    event.add_var_param(error_msg);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDURISCHEME, 0);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -509,10 +505,11 @@ void process_register_request(pjsip_rx_data* rdata)
     return;
   }
 
-  // Allocate an ACR for this transaction and pass the request to it.
+  // Allocate an ACR for this transaction and pass the request to it.  Node
+  // role is always considered originating for REGISTER requests.
   ACR* acr = acr_factory->get_acr(get_trail(rdata),
                                   CALLING_PARTY,
-                                  ACR::requested_node_role(rdata->msg_info.msg));
+                                  NODE_ROLE_ORIGINATING);
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   // Canonicalize the public ID from the URI in the To header.
@@ -601,10 +598,9 @@ void process_register_request(pjsip_rx_data* rdata)
 
     LOG_ERROR("Rejecting register request with invalid public/private identity");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDPUBPRIV, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting register request with invalid public/private identity";
-    event.add_var_param(error_msg);
+    event.add_var_param(private_id);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -663,10 +659,8 @@ void process_register_request(pjsip_rx_data* rdata)
 
   if (reject_with_400)
   {
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_INVALIDCONTACT, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting register request with invalid contact header";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -683,10 +677,8 @@ void process_register_request(pjsip_rx_data* rdata)
   {
     LOG_ERROR("Rejecting register request as attempting to deregister an emergency registration");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::DEREGISTER_FAILED_EMERGENCY, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Rejecting deregister request for emergency registrations";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     PJUtils::respond_stateless(stack_data.endpt,
@@ -729,10 +721,8 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - the can't fail to connect to the store we use for UT
     st_code = PJSIP_SC_INTERNAL_SERVER_ERROR;
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_REGSTORE, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Unable to access Registration Store";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     // LCOV_EXCL_STOP
@@ -794,10 +784,8 @@ void process_register_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_START - can't see how this could ever happen
     LOG_ERROR("Failed to add RFC 5626 headers");
 
-    SAS::Event event(trail, SASEvent::REGISTER_FAILED, 0);
+    SAS::Event event(trail, SASEvent::REGISTER_FAILED_5636, 0);
     event.add_var_param(public_id);
-    std::string error_msg = "Failed to add RFC 5636 headers";
-    event.add_var_param(error_msg);
     SAS::report_event(event);
 
     tdata->msg->line.status.code = PJSIP_SC_INTERNAL_SERVER_ERROR;
@@ -840,17 +828,21 @@ void process_register_request(pjsip_rx_data* rdata)
           pj_list_insert_before(&contact->other_param, new_param);
         }
 
-        // The pub-gruu parameter on the Contact header is calculated
-        // from the instance-id, to avoid unnecessary storage in
-        // memcached.
-
-        std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
-        if (!gruu.empty())
+        // Add a GRUU if the UE supports GRUUs and the contact header contains
+        // a +sip.instance parameter.
+        if (PJUtils::msg_supports_extension(msg, "gruu"))
         {
-          pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
-          pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
-          pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
-          pj_list_insert_before(&contact->other_param, new_param);
+          // The pub-gruu parameter on the Contact header is calculated
+          // from the instance-id, to avoid unnecessary storage in
+          // memcached.
+          std::string gruu = binding->pub_gruu_quoted_string(tdata->pool);
+          if (!gruu.empty())
+          {
+            pjsip_param *new_param = PJ_POOL_ALLOC_T(tdata->pool, pjsip_param);
+            pj_strdup2(tdata->pool, &new_param->name, "pub-gruu");
+            pj_strdup2(tdata->pool, &new_param->value, gruu.c_str());
+            pj_list_insert_before(&contact->other_param, new_param);
+          }
         }
 
         pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)contact);
@@ -968,28 +960,12 @@ void third_party_register_failed(const std::string& public_id,
   // 3GPP TS 24.229 V12.0.0 (2013-03) 5.4.1.7 specifies that an AS failure
   // where SESSION_TERMINATED is set means that we should deregister "the
   // currently registered public user identity" - i.e. all bindings
-  std::vector<std::string> uris;
-  std::map<std::string, Ifcs> ifc_map;
-  HTTPCode http_code = hss->update_registration_state(public_id,
-                                                      "",
-                                                      HSSConnection::DEREG_ADMIN,
-                                                      ifc_map,
-                                                      uris,
-                                                      trail);
-
-  // If we try to deregister a subscriber who has already
-  // registered (e.g. because our third-party-registration
-  // announcing a deregistration fails) Homestead will return an
-  // error and we'll avoid sending these in a loop.
-  if (http_code == HTTP_OK)
-  {
-    LOG_DEBUG("Initiating network-initiated deregistration");
-    RegistrationUtils::network_initiated_deregistration(store,
-                                                        ifc_map[public_id],
-                                                        public_id,
-                                                        "*",
-                                                        trail);
-  }
+  RegistrationUtils::remove_bindings(store,
+                                     hss,
+                                     public_id,
+                                     "*",
+                                     HSSConnection::DEREG_ADMIN,
+                                     trail);
 }
 
 
@@ -1032,23 +1008,31 @@ pj_status_t init_registrar(RegStore* registrar_store,
                                         stack_data.scscf_uri.ptr,
                                         stack_data.scscf_uri.slen,
                                         0);
-  service_route_uri->lr_param = 1;
+  if (service_route_uri != NULL)
+  {
+    service_route_uri->lr_param = 1;
 
-  // Add the orig parameter.  The UE must provide this back on future messages
-  // to ensure we perform originating processing.
-  pjsip_param *orig_param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
-  pj_strdup(stack_data.pool, &orig_param->name, &STR_ORIG);
-  pj_strdup2(stack_data.pool, &orig_param->value, "");
-  pj_list_insert_after(&service_route_uri->other_param, orig_param);
+    // Add the orig parameter.  The UE must provide this back on future messages
+    // to ensure we perform originating processing.
+    pjsip_param *orig_param = PJ_POOL_ALLOC_T(stack_data.pool, pjsip_param);
+    pj_strdup(stack_data.pool, &orig_param->name, &STR_ORIG);
+    pj_strdup2(stack_data.pool, &orig_param->value, "");
+    pj_list_insert_after(&service_route_uri->other_param, orig_param);
 
-  service_route = pjsip_route_hdr_create(stack_data.pool);
-  service_route->name = STR_SERVICE_ROUTE;
-  service_route->sname = pj_str("");
-  service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
+    service_route = pjsip_route_hdr_create(stack_data.pool);
+    service_route->name = STR_SERVICE_ROUTE;
+    service_route->sname = pj_str("");
+    service_route->name_addr.uri = (pjsip_uri*)service_route_uri;
 
-  status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
-  PJ_ASSERT_RETURN(status == PJ_SUCCESS, 1);
-
+    status = pjsip_endpt_register_module(stack_data.endpt, &mod_registrar);
+  }
+  else
+  {
+    // LCOV_EXCL_START - Start up failures not tested in UT
+    status = PJ_EINVAL;
+    // LCOV_EXCL_STOP
+  }
+  
   return status;
 }
 

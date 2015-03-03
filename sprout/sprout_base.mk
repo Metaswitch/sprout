@@ -6,6 +6,7 @@ ROOT := $(abspath $(shell pwd)/../)
 MK_DIR := ${ROOT}/mk
 
 TARGET := sprout
+TARGET_TEST := sprout_base_test
 
 TARGET_SOURCES := logger.cpp \
                   saslogger.cpp \
@@ -36,9 +37,9 @@ TARGET_SOURCES := logger.cpp \
                   simservs.cpp \
                   callservices.cpp \
                   enumservice.cpp \
-									bgcfservice.cpp \
-									icscfrouter.cpp \
-									scscfselector.cpp \
+                  bgcfservice.cpp \
+                  icscfrouter.cpp \
+                  scscfselector.cpp \
                   dnsresolver.cpp \
                   log.cpp \
                   pjutils.cpp \
@@ -57,7 +58,8 @@ TARGET_SOURCES := logger.cpp \
                   counter.cpp \
                   basicproxy.cpp \
                   acr.cpp \
-                  signalhandler.cpp	\
+                  signalhandler.cpp \
+                  health_checker.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \
@@ -69,7 +71,12 @@ TARGET_SOURCES := logger.cpp \
                   ipv6utils.cpp \
                   contact_filtering.cpp \
                   sproutletproxy.cpp \
-									pluginloader.cpp
+                  pluginloader.cpp \
+                  alarm.cpp \
+                  communicationmonitor.cpp \
+                  thread_dispatcher.cpp \
+                  common_sip_processing.cpp \
+                  exception_handler.cpp 
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -109,9 +116,10 @@ LDFLAGS += -lmemcached \
            -lzmq \
            -levhtp \
            -levent \
-           -levent_pthreads	\
-					 -lcurl \
-					 -lsas
+           -levent_pthreads \
+           -lcurl \
+           -lsas \
+           -lboost_filesystem
 
 LDFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
@@ -119,10 +127,6 @@ include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
 stage-build: build
-
-.PHONY: debug
-debug: | build_test
-	gdb --args $(TARGET_BIN_TEST) $(EXTRA_TEST_ARGS)
 
 .PHONY: distclean
 distclean: clean

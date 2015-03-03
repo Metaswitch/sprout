@@ -51,22 +51,26 @@ public:
   MementoPlugin();
   ~MementoPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>& sproutlets);
   void unload();
 
 private:
+  Alarm* _cass_comm_alarm;
+  CommunicationMonitor* _cass_comm_monitor;
   CallListStore::Store* _call_list_store;
   MementoAppServer* _memento;
   SproutletAppServerShim* _memento_sproutlet;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-MementoPlugin plugin_loader;
+MementoPlugin sproutlet_plugin;
 }
 
 
 MementoPlugin::MementoPlugin() :
+  _cass_comm_alarm(NULL),
+  _cass_comm_monitor(NULL),
   _call_list_store(NULL),
   _memento(NULL),
   _memento_sproutlet(NULL)
@@ -78,20 +82,34 @@ MementoPlugin::~MementoPlugin()
 }
 
 /// Loads the Memento plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
+bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
-  if (opt.memento_enabled)
+  if (((opt.max_call_list_length == 0) &&
+       (opt.call_list_ttl == 0)))
   {
+    LOG_ERROR("Can't have an unlimited maximum call length and a unlimited TTL for the call list store - disabling Memento");
+  }
+  else
+  {
+    if (opt.alarms_enabled)
+    {
+      _cass_comm_alarm = new Alarm("memento",
+                                   AlarmDef::MEMENTO_AS_CASSANDRA_COMM_ERROR,
+                                   AlarmDef::CRITICAL);
+      _cass_comm_monitor = new CommunicationMonitor(_cass_comm_alarm);
+    }
+
     _call_list_store = new CallListStore::Store();
     _call_list_store->initialize();
-    _call_list_store->configure("localhost", 9160);
+    _call_list_store->configure("localhost", 9160, exception_handler, 0, 0, _cass_comm_monitor);
     CassandraStore::ResultCode store_rc = _call_list_store->start();
 
     if (store_rc != CassandraStore::OK)
     {
       LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
+      plugin_loaded = false;
     }
     else
     {
@@ -100,14 +118,20 @@ std::list<Sproutlet*> MementoPlugin::load(struct options& opt)
                                       opt.home_domain,
                                       opt.max_call_list_length,
                                       opt.memento_threads,
-                                      opt.call_list_ttl);
+                                      opt.call_list_ttl,
+                                      stack_data.stats_aggregator,
+                                      opt.cass_target_latency_us,
+                                      opt.max_tokens,
+                                      opt.init_token_rate,
+                                      opt.min_token_rate,
+                                      exception_handler);
 
       _memento_sproutlet = new SproutletAppServerShim(_memento);
       sproutlets.push_back(_memento_sproutlet);
     }
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 /// Unloads the Memento plug-in.
@@ -116,4 +140,6 @@ void MementoPlugin::unload()
   delete _memento_sproutlet;
   delete _memento;
   delete _call_list_store;
+  delete _cass_comm_monitor;
+  delete _cass_comm_alarm;
 }

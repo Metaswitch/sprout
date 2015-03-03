@@ -55,7 +55,8 @@ public:
   ICSCFRouter(HSSConnection* hss,
               SCSCFSelector* scscf_selector,
               SAS::TrailId trail,
-              ACR* acr);
+              ACR* acr,
+              int port);
   virtual ~ICSCFRouter();
 
   int get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_uri);
@@ -83,6 +84,9 @@ protected:
   /// The ACR for the request if ACR reported is enabled, NULL otherwise.
   ACR* _acr;
 
+  // Port that I-CSCF is listening on
+  int _port;
+
   /// Flag which indicates whether or not we have asked the HSS for
   /// capabilities and got a successful response (even if there were no
   /// capabilities specified for this subscriber).
@@ -105,6 +109,7 @@ public:
                 SCSCFSelector* scscf_selector,
                 SAS::TrailId trail,
                 ACR* acr,
+                int port,
                 const std::string& impi,
                 const std::string& impu,
                 const std::string& visited_network,
@@ -138,6 +143,7 @@ public:
                  SCSCFSelector* scscf_selector,
                  SAS::TrailId trail,
                  ACR* acr,
+                 int port,
                  const std::string& impu,
                  bool originating);
   ~ICSCFLIRouter();

@@ -46,6 +46,8 @@ extern "C" {
 #include <pjlib.h>
 }
 
+#include "sprout_pd_definitions.h"
+
 #include "stack.h"
 #include "log.h"
 #include "constants.h"
@@ -235,6 +237,7 @@ std::string PJUtils::aor_from_uri(const pjsip_sip_uri* uri)
   aor.maddr_param.slen = 0;
   aor.other_param.next = NULL;
   aor.header_param.next = NULL;
+  aor.userinfo_param.next = NULL;
   returned_aor = uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&aor);
   LOG_DEBUG("aor_from_uri converted %s to %s", input_uri.c_str(), returned_aor.c_str());
   return returned_aor;
@@ -259,6 +262,7 @@ std::string PJUtils::public_id_from_uri(const pjsip_uri* uri)
     public_id.maddr_param.slen = 0;
     public_id.other_param.next = NULL;
     public_id.header_param.next = NULL;
+    public_id.userinfo_param.next = NULL;
     return uri_to_string(PJSIP_URI_IN_FROMTO_HDR, (pjsip_uri*)&public_id);
   }
   else if (PJSIP_URI_SCHEME_IS_TEL(uri))
@@ -379,6 +383,13 @@ pjsip_uri* PJUtils::term_served_user(pjsip_msg* msg)
   return msg->line.req.uri;
 }
 
+void PJUtils::add_pvni(pjsip_tx_data* tdata, pj_str_t* network_id)
+{
+  pjsip_generic_string_hdr* pvni_hdr = pjsip_generic_string_hdr_create(tdata->pool,
+                                                                       &STR_P_V_N_I,
+                                                                       network_id);
+  pjsip_msg_add_hdr(tdata->msg, (pjsip_hdr*)pvni_hdr);
+}
 
 void PJUtils::add_integrity_protected_indication(pjsip_tx_data* tdata, Integrity integrity)
 {
@@ -1175,55 +1186,64 @@ pj_status_t PJUtils::send_request(pjsip_tx_data* tdata,
   {
     // We have servers to send the request to, so allocate a transaction.
     status = pjsip_tsx_create_uac(&mod_sprout_util, tdata, &tsx);
-
-    if (status == PJ_SUCCESS)
-    {
-      // Set the trail ID in the transaction from the message.
-      set_trail(tsx, get_trail(tdata));
-      if (log_sas_branch)
-      {
-        PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
-      }
-      // Set up the module data for the new transaction to reference
-      // the state information.
-      tsx->mod_data[mod_sprout_util.id] = sss;
-
-      if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
-      {
-        // Transport has already been determined, so copy it across to the
-        // transaction.
-        LOG_DEBUG("Transport already determined");
-        pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
-      }
-
-      // Store the message and add a reference to prevent the transaction layer
-      // freeing it.
-      sss->tdata = tdata;
-      pjsip_tx_data_add_ref(tdata);
-
-      LOG_DEBUG("Sending request");
-      status = pjsip_tsx_send_msg(tsx, tdata);
-    }
   }
 
-  if (status != PJ_SUCCESS)
+  if (status == PJ_SUCCESS)
   {
-    // The assumption here is that, if pjsip_tsx_send_msg returns an error
-    // the on_tsx_state callback will not get called, so it is safe to free
-    // off the state data and request here.  Also, this is an unexpected
-    // error rather than an indication that the destination server is down,
-    // so we don't blacklist.
+    // Set the trail ID in the transaction from the message.
+    set_trail(tsx, get_trail(tdata));
+    if (log_sas_branch)
+    {
+      PJUtils::mark_sas_call_branch_ids(get_trail(tdata), NULL, tdata->msg);
+    }
+
+    // Set up the module data for the new transaction to reference
+    // the state information.
+    tsx->mod_data[mod_sprout_util.id] = sss;
+
+    if (tdata->tp_sel.type == PJSIP_TPSELECTOR_TRANSPORT)
+    {
+      // Transport has already been determined, so copy it across to the
+      // transaction.
+      LOG_DEBUG("Transport already determined");
+      pjsip_tsx_set_transport(tsx, &tdata->tp_sel);
+    }
+
+    // Store the message and add a reference to prevent the transaction layer
+    // freeing it.
+    sss->tdata = tdata;
+    pjsip_tx_data_add_ref(tdata);
+
+    LOG_DEBUG("Sending request");
+    status = pjsip_tsx_send_msg(tsx, tdata);
+
+    if (status != PJ_SUCCESS)
+    {
+      // If pjsip_tsx_send_msg fails when the UAC transaction is in NULL
+      // state it will always call the on_tsx_state callback terminating
+      // the transaction, so no clean-up left to do, and must return
+      // PJ_SUCCESS to caller to avoid potential double-free errors.  It's
+      // also not safe to access the request here, and logging of the error
+      // will have happened in the callback.
+      status = PJ_SUCCESS;
+    }
+  }
+  else
+  {
+    // Failed to resolve the destination or failed to create a PJSIP UAC
+    // transaction.
+    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                       PJUtils::next_hop(tdata->msg)).c_str(),
+                                       PJUtils::pj_status_to_string(status).c_str());
+
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
 
-    // Only free the state data if there are no more references to it
-    pj_status_t dec_status = pjsip_tx_data_dec_ref(tdata);
-
-    if (dec_status == PJSIP_EBUFDESTROYED)
-    {
-      delete sss;
-    }
+    // Since the on_tsx_state callback will not have been called we must
+    // clean up resources here.
+    pjsip_tx_data_dec_ref(tdata);
+    delete sss;
   }
 
   return status;
@@ -1343,6 +1363,9 @@ pj_status_t PJUtils::send_request_stateless(pjsip_tx_data* tdata, int retries)
     // and the request here.  Also, this would be an unexpected error rather
     // than an indication that the selected destination server is down, so we
     // don't blacklist.
+    CL_SPROUT_SIP_SEND_REQUEST_ERR.log(PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
+                                       PJUtils::next_hop(tdata->msg)).c_str(),
+                                       PJUtils::pj_status_to_string(status).c_str());
     LOG_ERROR("Failed to send request to %s",
               PJUtils::uri_to_string(PJSIP_URI_IN_ROUTING_HDR,
                                      PJUtils::next_hop(tdata->msg)).c_str());
@@ -1515,6 +1538,16 @@ void PJUtils::add_top_via(pjsip_tx_data* tdata)
   pjsip_via_hdr *hvia = pjsip_via_hdr_create(tdata->pool);
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)hvia);
   generate_new_branch_id(tdata);
+}
+
+void PJUtils::remove_top_via(pjsip_tx_data* tdata)
+{
+  // Removes the top Via header.
+  pjsip_via_hdr *hvia = (pjsip_via_hdr*)pjsip_msg_find_hdr(tdata->msg, PJSIP_H_VIA, NULL);
+  if (hvia != NULL)
+  {
+    pj_list_erase(hvia);
+  }
 }
 
 void PJUtils::add_reason(pjsip_tx_data* tdata, int reason_code)
@@ -2012,7 +2045,6 @@ pjsip_uri* PJUtils::translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
   tel_uri->context.slen = 0;
   tel_uri->isub_param.slen = 0;
   tel_uri->ext_param.slen = 0;
-  tel_uri->other_param.next = NULL;
 
   pjsip_param* isub = pjsip_param_find(&sip_uri->other_param, &STR_ISUB);
   if (isub != NULL)
@@ -2080,4 +2112,62 @@ pj_bool_t PJUtils::is_user_numeric(const std::string& user)
 pj_bool_t PJUtils::is_user_numeric(const pj_str_t& user)
 {
   return is_user_numeric(pj_str_to_string(&user));
+}
+
+bool PJUtils::get_npdi(pjsip_uri* uri)
+{
+  bool npdi = false;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    npdi = (pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_NPDI) != NULL);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the userinfo_params
+    npdi = (pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_NPDI) != NULL);
+  }
+
+  return npdi;
+}
+
+bool PJUtils::get_rn(pjsip_uri* uri, std::string& routing_value)
+{
+  bool rn_set = false;
+  pjsip_param* rn = NULL;
+
+  if (PJSIP_URI_SCHEME_IS_TEL(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the other_params
+    rn = pjsip_param_find(&((pjsip_tel_uri*)uri)->other_param, &STR_RN);
+  }
+  else if (PJSIP_URI_SCHEME_IS_SIP(uri))
+  {
+    // If the URI is a tel URI, pull out the information from the userinfo_params
+    rn = pjsip_param_find(&((pjsip_sip_uri*)uri)->userinfo_param, &STR_RN);
+  }
+
+  if (rn != NULL)
+  {
+    routing_value = pj_str_to_string(&rn->value);
+    rn_set = (routing_value.size() > 0);
+  }
+
+  return rn_set;
+}
+
+bool PJUtils::does_uri_represent_number(pjsip_uri* uri, 
+                                        bool enforce_user_phone)
+{
+  // A URI represents a telephone number if:
+  // - It's a Tel URI, or 
+  // - It's a SIP URI where
+  //    - user=phone is set or enforce_user_phone is false
+  //    - The user part is numeric
+  //    - It's not a gruu. 
+  return ((is_uri_phone_number(uri)) ||
+          ((!enforce_user_phone) &&
+           (is_user_numeric(user_from_uri(uri))) &&
+           (!is_uri_gruu(uri))));
 }

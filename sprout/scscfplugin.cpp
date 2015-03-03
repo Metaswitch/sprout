@@ -49,17 +49,16 @@ public:
   SCSCFPlugin();
   ~SCSCFPlugin();
 
-  std::list<Sproutlet*> load(struct options& opt);
+  bool load(struct options& opt, std::list<Sproutlet*>&);
   void unload();
 
 private:
   SCSCFSproutlet* _scscf_sproutlet;
-  EnumService* _enum_service;
 };
 
-/// Export the plug-in using the magic symbol "plugin-loader"
+/// Export the plug-in using the magic symbol "sproutlet_plugin"
 extern "C" {
-SCSCFPlugin plugin_loader;
+SCSCFPlugin sproutlet_plugin;
 }
 
 SCSCFPlugin::SCSCFPlugin() :
@@ -72,22 +71,26 @@ SCSCFPlugin::~SCSCFPlugin()
 }
 
 /// Loads the S-CSCF plug-in, returning the supported Sproutlets.
-std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
+bool SCSCFPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
 {
-  std::list<Sproutlet*> sproutlets;
+  bool plugin_loaded = true;
 
   if (opt.scscf_enabled)
   {
     // Determine the S-CSCF, BGCF and I-CSCF URIs.
-    std::string scscf_uri = std::string(stack_data.scscf_uri.ptr,
-                                        stack_data.scscf_uri.slen);
-    std::string bgcf_uri = "sip:bgcf." + scscf_uri.substr(4);
+    std::string scscf_cluster_uri = std::string(stack_data.scscf_uri.ptr,
+                                                stack_data.scscf_uri.slen);
+    std::string scscf_node_uri = "sip:" +
+                                 std::string(stack_data.local_host.ptr,
+                                             stack_data.local_host.slen) +
+                                 ":" + std::to_string(opt.scscf_port);
+    std::string bgcf_uri = "sip:bgcf." + scscf_cluster_uri.substr(4);
     std::string icscf_uri;
     if (opt.icscf_enabled)
     {
       // Create a local I-CSCF URI by replacing the S-CSCF port number in the
       // S-CSCF URI with the I-CSCF port number.
-      icscf_uri = scscf_uri;
+      icscf_uri = scscf_cluster_uri;
       size_t pos = icscf_uri.find(std::to_string(opt.scscf_port));
 
       if (pos != std::string::npos)
@@ -99,7 +102,7 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
       else
       {
         // No port number, so best we can do is strap icscf. on the front.
-        icscf_uri = "sip:icscf." + scscf_uri.substr(4);
+        icscf_uri = "sip:icscf." + scscf_cluster_uri.substr(4);
       }
     }
     else
@@ -107,7 +110,8 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
       icscf_uri = opt.external_icscf_uri;
     }
 
-    _scscf_sproutlet = new SCSCFSproutlet(scscf_uri,
+    _scscf_sproutlet = new SCSCFSproutlet(scscf_cluster_uri,
+                                          scscf_node_uri,
                                           icscf_uri,
                                           bgcf_uri,
                                           opt.scscf_port,
@@ -117,12 +121,14 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
                                           enum_service,
                                           scscf_acr_factory,
                                           opt.enforce_user_phone,
-                                          opt.enforce_global_only_lookups);
+                                          opt.enforce_global_only_lookups,
+                                          opt.override_npdi);
+    plugin_loaded = _scscf_sproutlet->init();
 
     sproutlets.push_back(_scscf_sproutlet);
   }
 
-  return sproutlets;
+  return plugin_loaded;
 }
 
 
@@ -130,5 +136,4 @@ std::list<Sproutlet*> SCSCFPlugin::load(struct options& opt)
 void SCSCFPlugin::unload()
 {
   delete _scscf_sproutlet;
-  delete _enum_service;
 }
