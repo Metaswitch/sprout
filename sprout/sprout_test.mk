@@ -63,6 +63,7 @@ TARGET_SOURCES := logger.cpp \
                   scscfselector.cpp \
                   acr.cpp \
                   signalhandler.cpp \
+                  health_checker.cpp \
                   subscription.cpp \
                   notify_utils.cpp \
                   unique.cpp \
@@ -84,7 +85,8 @@ TARGET_SOURCES := logger.cpp \
                   alarm.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
-                  common_sip_processing.cpp
+                  common_sip_processing.cpp \
+                  exception_handler.cpp
 
 TARGET_SOURCES_TEST := test_main.cpp \
                        fakecurl.cpp \

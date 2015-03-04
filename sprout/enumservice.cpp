@@ -245,8 +245,7 @@ JSONEnumService::NumberPrefix* JSONEnumService::prefix_match(const std::string& 
   return NULL;
 }
 
-
-DNSEnumService::DNSEnumService(const std::string& dns_server,
+DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
                                const std::string& dns_suffix,
                                const DNSResolverFactory* resolver_factory,
                                CommunicationMonitor* comm_monitor) :
@@ -258,20 +257,27 @@ DNSEnumService::DNSEnumService(const std::string& dns_server,
   // but it's safe to do it twice.
   ares_library_init(ARES_LIB_INIT_ALL);
 
-  // Parse the DNS server's IP address.
-  if (inet_pton(AF_INET, dns_server.c_str(), &_dns_server.addr.ipv4))
+  for (std::vector<std::string>::const_iterator server = dns_servers.begin();
+       server != dns_servers.end();
+       server++)
   {
-    _dns_server.af = AF_INET;
-  }
-  else if (inet_pton(AF_INET6, dns_server.c_str(), &_dns_server.addr.ipv6))
-  {
-    _dns_server.af = AF_INET6;
-  }
-  else
-  {
-    LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", dns_server.c_str());
-    _dns_server.af = AF_INET;
-    (void)inet_aton("127.0.0.1", &_dns_server.addr.ipv4);
+    struct IP46Address dns_server_addr;
+    // Parse the DNS server's IP address.
+    if (inet_pton(AF_INET, server->c_str(), &dns_server_addr.addr.ipv4))
+    {
+      dns_server_addr.af = AF_INET;
+    }
+    else if (inet_pton(AF_INET6, server->c_str(), &dns_server_addr.addr.ipv6))
+    {
+      dns_server_addr.af = AF_INET6;
+    }
+    else
+    {
+      LOG_ERROR("Failed to parse '%s' as IP address - defaulting to 127.0.0.1", server->c_str());
+      dns_server_addr.af = AF_INET;
+      (void)inet_aton("127.0.0.1", &dns_server_addr.addr.ipv4);
+    }
+    _servers.push_back(dns_server_addr);
   }
 
   // We store a DNSResolver in thread-local data, so create the thread-local
@@ -447,7 +453,7 @@ DNSResolver* DNSEnumService::get_resolver() const
   DNSResolver* resolver = (DNSResolver*)pthread_getspecific(_thread_local);
   if (resolver == NULL)
   {
-    resolver = _resolver_factory->new_resolver(_dns_server);
+    resolver = _resolver_factory->new_resolver(_servers);
     pthread_setspecific(_thread_local, resolver);
   }
   return resolver;

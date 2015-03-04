@@ -45,7 +45,7 @@
 class FakeDNSResolver : public DNSResolver
 {
 public:
-  inline FakeDNSResolver(const struct IP46Address& server) : DNSResolver(server) {};
+  inline FakeDNSResolver(const std::vector<struct IP46Address>& servers) : DNSResolver(servers) {};
   virtual int perform_naptr_query(const std::string& domain, struct ares_naptr_reply*& naptr_reply, SAS::TrailId trail);
   virtual void free_naptr_reply(struct ares_naptr_reply* naptr_reply) const;
   // Reset the static data.
@@ -63,7 +63,7 @@ public:
 class FakeDNSResolverFactory : public DNSResolverFactory
 {
 public:
-  virtual DNSResolver* new_resolver(const struct IP46Address& server) const;
+  virtual DNSResolver* new_resolver(const std::vector<struct IP46Address>& server) const;
 
   // The server for which we expect to create resolvers.
   static struct IP46Address _expected_server;

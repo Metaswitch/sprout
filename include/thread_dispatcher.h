@@ -49,11 +49,13 @@ extern "C" {
 
 #include "load_monitor.h"
 #include "accumulator.h"
+#include "exception_handler.h"
 
-pj_status_t init_thread_dispatcher(int num_worker_threads,
+pj_status_t init_thread_dispatcher(int num_worker_threads_arg,
                                    Accumulator* latency_acc_arg,
                                    Accumulator* queue_size_acc_arg,
-                                   LoadMonitor *load_monitor_arg);
+                                   LoadMonitor* load_monitor_arg,
+                                   ExceptionHandler* exception_handler_arg);
 
 void unregister_thread_dispatcher(void);
 

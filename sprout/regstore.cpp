@@ -252,12 +252,12 @@ bool RegStore::set_aor_data(const std::string& aor_id,
       // If a timer has been previously set for this binding, send a PUT. Otherwise sent a POST.
       if (b->_timer_id == "")
       {
-        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, 0);
+        status = _chronos->send_post(timer_id, expiry, callback_uri, opaque, trail);
       }
       else
       {
         timer_id = b->_timer_id;
-        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, 0);
+        status = _chronos->send_put(timer_id, expiry, callback_uri, opaque, trail);
       }
 
       // Update the timer id. If the update to Chronos failed, that's OK, don't reject the register

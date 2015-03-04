@@ -66,7 +66,21 @@ class EnumServiceTest : public ::testing::Test
 };
 
 class JSONEnumServiceTest : public EnumServiceTest {};
-class DNSEnumServiceTest : public EnumServiceTest {};
+class DNSEnumServiceTest : public EnumServiceTest
+{
+  DNSEnumServiceTest() : EnumServiceTest()
+  {
+    _servers.push_back("127.0.0.1");
+    _different_servers.push_back("1.2.3.4");
+    _ipv6_servers.push_back("0102:0304:0506:0708:090a:0b0c:0d0e:0f10");
+    _bad_servers.push_back("foobar");
+  }
+private:
+  std::vector<std::string> _servers;
+  std::vector<std::string> _different_servers;
+  std::vector<std::string> _ipv6_servers;
+  std::vector<std::string> _bad_servers;
+};
 
 /// A single test case.
 class ET
@@ -181,13 +195,13 @@ TEST_F(DNSEnumServiceTest, BasicTest)
 {
   CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
 TEST_F(DNSEnumServiceTest, BlankTest)
 {
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 0);
 }
@@ -195,14 +209,14 @@ TEST_F(DNSEnumServiceTest, BlankTest)
 TEST_F(DNSEnumServiceTest, PlusPrefixTest)
 {
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("+1234", "sip:+1234@ut.cw-ngv.com").test(enum_);
 }
 
 TEST_F(DNSEnumServiceTest, ArbitraryPunctuationTest)
 {
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1-2.3(4)", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
@@ -211,7 +225,7 @@ TEST_F(DNSEnumServiceTest, NonTerminalRuleTest)
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"", (unsigned char*)"e2u+sip", (unsigned char*)"!1234!5678!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
   FakeDNSResolver::_database.insert(std::make_pair(std::string("8.7.6.5.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 2);
 }
@@ -224,7 +238,7 @@ TEST_F(DNSEnumServiceTest, MultipleRuleTest)
   };
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
   FakeDNSResolver::_database.insert(std::make_pair(std::string("8.7.6.5.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
   ET("5678", "sip:5678@ut2.cw-ngv.com").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 2);
@@ -238,13 +252,13 @@ TEST_F(DNSEnumServiceTest, OrderPriorityTest)
     {NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1},
   };
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
 TEST_F(DNSEnumServiceTest, NoResponseTest)
 {
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 1);
 }
@@ -253,7 +267,7 @@ TEST_F(DNSEnumServiceTest, IncompleteRegexpTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!1234", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 1);
 }
@@ -262,7 +276,7 @@ TEST_F(DNSEnumServiceTest, InvalidRegexpTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!(!!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 1);
 }
@@ -271,7 +285,7 @@ TEST_F(DNSEnumServiceTest, InvalidFlagsTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"foo", (unsigned char*)"e2u+sip", (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 1);
 }
@@ -280,7 +294,7 @@ TEST_F(DNSEnumServiceTest, PstnSipTypeTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"u", (unsigned char*)"e2u+pstn:sip", (unsigned char*)"!(^.*$)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
@@ -288,7 +302,7 @@ TEST_F(DNSEnumServiceTest, InvalidTypeTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"u", (unsigned char*)"e2u+tel", (unsigned char*)"!(^.*$)!tel:\\1@ut.cw-ngv.com!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
 }
 
@@ -296,7 +310,7 @@ TEST_F(DNSEnumServiceTest, NoMatchTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!5678!!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 1);
 }
@@ -305,7 +319,7 @@ TEST_F(DNSEnumServiceTest, LoopingRuleTest)
 {
   struct ares_naptr_reply naptr_reply[] = {{NULL, (unsigned char*)"", (unsigned char*)"e2u+sip", (unsigned char*)"!(^.*$)!\\1!", ".", 1, 1}};
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
   ET("1234", "").test(enum_);
   EXPECT_EQ(FakeDNSResolver::_num_calls, 5);
 }
@@ -313,7 +327,7 @@ TEST_F(DNSEnumServiceTest, LoopingRuleTest)
 TEST_F(DNSEnumServiceTest, DifferentServerTest)
 {
   FakeDNSResolverFactory::_expected_server.addr.ipv4.s_addr = htonl(0x01020304);
-  DNSEnumService enum_("1.2.3.4", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_different_servers, ".e164.arpa", new FakeDNSResolverFactory());
 }
 
 TEST_F(DNSEnumServiceTest, IPv6ServerTest)
@@ -323,25 +337,25 @@ TEST_F(DNSEnumServiceTest, IPv6ServerTest)
   {
     FakeDNSResolverFactory::_expected_server.addr.ipv6.s6_addr[0] = i + 1;
   }
-  DNSEnumService enum_("0102:0304:0506:0708:090a:0b0c:0d0e:0f10", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_ipv6_servers, ".e164.arpa", new FakeDNSResolverFactory());
 }
 
 TEST_F(DNSEnumServiceTest, InvalidServerTest)
 {
-  DNSEnumService enum_("foobar", ".e164.arpa", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_bad_servers, ".e164.arpa", new FakeDNSResolverFactory());
 }
 
 TEST_F(DNSEnumServiceTest, DifferentSuffixTest)
 {
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa.cw-ngv.com"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa.cw-ngv.com", new FakeDNSResolverFactory());
+  DNSEnumService enum_(_servers, ".e164.arpa.cw-ngv.com", new FakeDNSResolverFactory());
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
 TEST_F(DNSEnumServiceTest, ResolverErrorTest)
 {
   CommunicationMonitor cm_(new Alarm("sprout", AlarmDef::SPROUT_ENUM_COMM_ERROR, AlarmDef::MAJOR));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }
 
@@ -350,7 +364,7 @@ TEST_F(DNSEnumServiceTest, ResolverOkCommMonMockTest)
   MockCommunicationMonitor cm_;
   EXPECT_CALL(cm_, inform_success(_));
   FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)basic_naptr_reply));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "sip:1234@ut.cw-ngv.com").test(enum_);
 }
 
@@ -358,6 +372,6 @@ TEST_F(DNSEnumServiceTest, ResolverErrorCommMonMockTest)
 {
   MockCommunicationMonitor cm_;
   EXPECT_CALL(cm_, inform_failure(_));
-  DNSEnumService enum_("127.0.0.1", ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }
