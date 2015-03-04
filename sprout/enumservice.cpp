@@ -278,7 +278,7 @@ DNSEnumService::DNSEnumService(const std::vector<std::string>& dns_servers,
       (void)inet_aton("127.0.0.1", &dns_server_addr.addr.ipv4);
     }
     _servers.push_back(dns_server_addr);
-  }  
+  }
 
   // We store a DNSResolver in thread-local data, so create the thread-local
   // store.

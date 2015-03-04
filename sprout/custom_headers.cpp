@@ -596,7 +596,6 @@ pjsip_hdr* parse_hdr_p_charging_vector(pjsip_parse_ctx* ctx)
   if (value.slen > 1 &&
       value.ptr[0] == '"' &&
       value.ptr[value.slen-1] == '"')
-      
   {
     value.ptr++;
     value.slen -= 2;

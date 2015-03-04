@@ -278,7 +278,7 @@ static void usage(void)
        "     --cass-target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies for the Cassandra store\n"
        "                            that's part of the Memento application server (default: 1000000)\n"
-       "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n" 
+       "     --max-tokens N         Maximum number of tokens allowed in the token bucket (used by\n"
        "                            the throttling code (default: 20))\n"
        "     --init-token-rate N    Initial token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 100.0))\n"
@@ -308,7 +308,7 @@ static void usage(void)
        "     --alarms-enabled       Whether SNMP alarms are enabled (default: false)\n"
        "     --memcached-write-format\n"
        "                            The data format to use when writing registration and subscription data\n"
-       "                            to memcached. Valid values are 'binary' and 'json' (default is 'binary')\n"
+       "                            to memcached. Valid values are 'binary' and 'json' (default is 'json')\n"
        "     --override-npdi        Whether the deployment should check for number portability data on \n"
        "                            requests that already have the 'npdi' indicator (default: false)\n"
        "     --exception-max-ttl <secs>\n"
@@ -1176,7 +1176,7 @@ int main(int argc, char* argv[])
   opt.log_level = 0;
   opt.daemon = PJ_FALSE;
   opt.interactive = PJ_FALSE;
-  opt.memcached_write_format = MemcachedWriteFormat::BINARY;
+  opt.memcached_write_format = MemcachedWriteFormat::JSON;
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
 
@@ -1406,11 +1406,11 @@ int main(int argc, char* argv[])
                  &HealthChecker::static_main_thread_function,
                  (void*)health_checker);
 
-  // Create an exception handler. The exception handler should attempt to 
-  // quiesce the process before killing it. 
-  exception_handler = new ExceptionHandler(opt.exception_max_ttl, 
+  // Create an exception handler. The exception handler should attempt to
+  // quiesce the process before killing it.
+  exception_handler = new ExceptionHandler(opt.exception_max_ttl,
                                            true,
-                                           health_checker);                 
+                                           health_checker);
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers);
@@ -1821,9 +1821,9 @@ int main(int argc, char* argv[])
     try
     {
       http_stack->initialize();
-      http_stack->configure(opt.http_address, 
-                            opt.http_port, 
-                            opt.http_threads, 
+      http_stack->configure(opt.http_address,
+                            opt.http_port,
+                            opt.http_threads,
                             exception_handler,
                             access_logger);
       http_stack->register_handler("^/timers$",
@@ -1860,7 +1860,7 @@ int main(int argc, char* argv[])
       LOG_ERROR("Caught HttpStack::Exception - %s - %d\n", e._func, e._rc);
     }
   }
-  
+
   // Terminate the PJSIP threads and the worker threads to exit.  We kill
   // the PJSIP threads first - if we killed the worker threads first the
   // rx_msg_q will stop getting serviced so could fill up blocking
@@ -1872,7 +1872,7 @@ int main(int argc, char* argv[])
   // transaction layer, which can otherwise generate work for other modules
   // after they have unregistered.
   stop_stack();
-  
+
   unregister_thread_dispatcher();
   unregister_common_processing_module();
 
@@ -1950,7 +1950,7 @@ int main(int argc, char* argv[])
   health_checker->terminate();
   pthread_join(health_check_thread, NULL);
   delete health_checker;
-  
+
   // Unregister the handlers that use semaphores (so we can safely destroy
   // them).
   signal(QUIESCE_SIGNAL, SIG_DFL);
@@ -1968,6 +1968,3 @@ int main(int argc, char* argv[])
 
   return 0;
 }
-
-
-

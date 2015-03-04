@@ -76,7 +76,7 @@ TARGET_SOURCES := logger.cpp \
                   communicationmonitor.cpp \
                   thread_dispatcher.cpp \
                   common_sip_processing.cpp \
-                  exception_handler.cpp 
+                  exception_handler.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 

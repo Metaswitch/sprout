@@ -154,9 +154,9 @@ static int worker_thread(void* p)
       }
       CW_EXCEPT(exception_handler)
       {
-        // Make a 500 response to the rdata with a retry-after header of 
+        // Make a 500 response to the rdata with a retry-after header of
         // 10 mins
-        pjsip_retry_after_hdr* retry_after = 
+        pjsip_retry_after_hdr* retry_after =
                          pjsip_retry_after_hdr_create(rdata->tp_info.pool, 600);
         PJUtils::respond_stateless(stack_data.endpt,
                                    rdata,
@@ -166,8 +166,8 @@ static int worker_thread(void* p)
                                    NULL);
 
         if (num_worker_threads == 1)
-        { 
-          // There's only one worker thread, so we can't sensibly proceed. 
+        {
+          // There's only one worker thread, so we can't sensibly proceed.
           exit(1);
         }
       }
