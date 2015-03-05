@@ -280,7 +280,7 @@ public:
 
   void match(pjsip_msg* msg)
   {
-    pj_str_t name_str = { const_cast<char*>(_header.data()), _header.length() };
+    pj_str_t name_str = { const_cast<char*>(_header.data()), (unsigned int)_header.length() };
     pjsip_hdr* hdr = NULL;
     list<string> values;
 

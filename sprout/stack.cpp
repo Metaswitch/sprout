@@ -383,6 +383,8 @@ class StackQuiesceHandler :
 {
 public:
 
+  virtual ~StackQuiesceHandler(){};
+
   //
   // The following methods are from QuiesceConnectionsInterface.
   //
@@ -508,7 +510,7 @@ pj_status_t init_pjsip()
 
   status = register_custom_headers();
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
-  
+
   return PJ_SUCCESS;
 }
 
@@ -530,7 +532,7 @@ pj_status_t start_pjsip_threads()
     }
     pjsip_threads[ii] = thread;
   }
-  
+
   return PJ_SUCCESS;
 }
 
