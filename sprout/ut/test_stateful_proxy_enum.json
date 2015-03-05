@@ -31,6 +31,14 @@
         {   "name" : "Clearwater Tel URI",
             "prefix" : "16505551234",
             "regex"  : "!(^.*$)!sip:\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Setup invalid ENUM rule",
+            "prefix" : "16505551239",
+            "regex"  : "!(^.*$)!sip:1\\1@ut.cw-ngv.com!"
+        },
+        {   "name" : "Invalid ENUM rule",
+            "prefix" : "116505551239",
+            "regex"  : "!\\+(^.*$)!sip:00\\1@ut.cw-ngv.com!"
         }
     ]
 }

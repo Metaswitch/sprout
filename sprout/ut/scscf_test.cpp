@@ -1762,6 +1762,22 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
+// Test where the BGCF does an ENUM lookup which returns an invalid rule.
+TEST_F(SCSCFTest, TestBGCFInvalidEnumRule)
+{
+  add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
+  SCOPED_TRACE("");
+  register_uri(_store, _hss_connection, "6505551239", "homedomain", "sip:wuntootreefower@10.114.61.213:5061;transport=tcp;ob");
+  _hss_connection->set_impu_result("sip:6505551000@homedomain", "call", HSSConnection::STATE_REGISTERED, "");
+  Message msg;
+  msg._toscheme = "tel";
+  msg._to = "16505551239";
+  msg._route = "Route: <sip:homedomain;orig>";
+  msg._todomain = "";
+  list<HeaderMatcher> hdrs;
+  doSlowFailureFlow(msg, 404, "", "ENUM failure");
+}
+
 TEST_F(SCSCFTest, TestValidBGCFRoute)
 {
   SCOPED_TRACE("");
