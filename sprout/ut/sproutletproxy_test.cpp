@@ -200,7 +200,7 @@ public:
         (!pj_strcmp2(&req->line.req.method.name, "MESSAGE")))
     {
       // Fork INVITE and MESSAGE requests.
-      for (int ii = 0; ii < N; ++ii)
+      for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
       {
         pjsip_msg* clone = clone_request(req);
         pj_pool_t* pool = get_pool(clone);
@@ -1071,7 +1071,7 @@ TEST_F(SproutletProxyTest, SimpleSproutletForker)
   tp->expect_target(tdata);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1240,7 +1240,7 @@ TEST_F(SproutletProxyTest, CancelForking)
   RespMatcher(200).matches(tdata->msg);
   free_txdata();
 
-  for (int ii = 1; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 1; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);
@@ -1650,7 +1650,7 @@ TEST_F(SproutletProxyTest, UASError)
 
   ASSERT_EQ(NUM_FORKS, txdata_count());
 
-  for (int ii = 0; ii < NUM_FORKS; ++ii)
+  for (int ii = NUM_FORKS - 1; ii >= 0; --ii)
   {
     tdata = current_txdata();
     expect_target("TCP", "10.10.20.1", 5060, tdata);

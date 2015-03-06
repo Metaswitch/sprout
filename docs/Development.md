@@ -2,7 +2,7 @@
 
 This document describes how to build and test Sprout and Bono.
 
-Sprout development is ongoing on Ubuntu 12.04, so the processes described
+Sprout development is ongoing on Ubuntu 14.04, so the processes described
 below are targetted for (and tested on) this platform.  The code has been
 written to be portable, though, and should compile on other platforms once the
 required dependencies are installed.
@@ -12,23 +12,15 @@ required dependencies are installed.
 Sprout and Bono depend on a number of tools and libraries.  Some of these are
 included as git submodules, but the rest must be installed separately.
 
-On Ubuntu 12.04,
+On Ubuntu 14.04,
 
-1. add the Clearwater repository to provide the ZeroMQ library
-
-    This step is necessary because Sprout and Bono rely on a newer version than Ubuntu provide.
-
-        echo "deb http://repo.cw-ngv.com/latest binary/" | sudo tee /etc/apt/sources.list.d/clearwater.list
-
-    For non-Ubuntu systems, you can build ZeroMQ from source. The source code is found [here](https://github.com/Metaswitch/zeromq3).  Note that you must install it to `/usr` (i.e. with `./configure --prefix=/usr`).
-
-2.  update the package list
+1.  update the package list
 
         sudo apt-get update
 
-3.  install the required packages
+2.  install the required packages
 
-        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl0 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils rubygems libevent-dev libevent-pthreads-2.0-5 cmake flex bison libboost-filesystem-dev
+        sudo apt-get install ntp build-essential autoconf scons pkg-config libtool libcloog-ppl1 gdb pstack git git-svn dpkg-dev devscripts dh-make python-setuptools python-virtualenv python-dev libcurl4-openssl-dev libmysqlclient-dev libgmp10 libgmp-dev libc-ares-dev ncurses-dev libxml2-dev libxslt1-dev libboost-all-dev libzmq3-dev valgrind libxml2-utils ruby libevent-dev libevent-pthreads-2.0-5 cmake flex bison libboost-filesystem-dev
 
 ## Getting the Code
 
