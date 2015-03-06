@@ -1762,7 +1762,10 @@ TEST_F(SCSCFTest, TestEnumNPBGCFTel)
   doSuccessfulFlow(msg, testing::MatchesRegex(".*+15108580401;rn.*+151085804;npdi@homedomain.*"), hdrs, false);
 }
 
-// Test where the BGCF does an ENUM lookup which returns an invalid rule.
+// Test where the BGCF does an ENUM lookup which returns an invalid rule. This
+// test uses two ENUM rules. The first one is invoked by the S-CSCF before
+// routing to the BGCF. The BGCF does the second lookup. At this point an
+// invalid rule is returned and we reply with a 404 ENUM failure.
 TEST_F(SCSCFTest, TestBGCFInvalidEnumRule)
 {
   add_host_mapping("ut.cw-ngv.com", "10.9.8.7");
