@@ -215,6 +215,7 @@ void BGCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                                          "ENUM failure");
         send_response(rsp);
         free_msg(req);
+        return;
       }
     }
     else
