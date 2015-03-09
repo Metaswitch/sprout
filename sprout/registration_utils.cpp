@@ -156,7 +156,11 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     }
     else
     {
-      LOG_DEBUG("Unable to create third party registration"); 
+      LOG_DEBUG("Unable to create third party registration for %s",
+                served_user.c_str());
+      SAS::Event event(trail, SASEvent::DEREGISTER_AS_FAILED, 0);
+      event.add_var_param(served_user);
+      SAS::report_event(event);
     }
   }
   else
@@ -214,20 +218,20 @@ void send_register_to_as(pjsip_rx_data *received_register,
   pj_cstr(&as_uri, as.server_name.c_str());
 
   status = pjsip_endpt_create_request(stack_data.endpt,
-                                      &method,      // Method
-                                      &as_uri,      // Target
-                                      &stack_data.scscf_uri,   // From
-                                      &user_uri,    // To
-                                      &stack_data.scscf_uri,   // Contact
-                                      NULL,         // Auto-generate Call-ID
-                                      1,            // CSeq
-                                      NULL,         // No body
-                                      &tdata);      // OUT
+                                      &method,               // Method
+                                      &as_uri,               // Target
+                                      &stack_data.scscf_uri, // From
+                                      &user_uri,             // To
+                                      &stack_data.scscf_uri, // Contact
+                                      NULL,                  // Auto-generate Call-ID
+                                      1,                     // CSeq
+                                      NULL,                  // No body
+                                      &tdata);               // OUT
 
   if (status != PJ_SUCCESS)
   {
     //LCOV_EXCL_START
-    LOG_ERROR("Failed to build third-party REGISTER request for server %s",
+    LOG_DEBUG("Failed to build third-party REGISTER request for server %s",
               as.server_name.c_str());
     return;
     //LCOV_EXCL_STOP

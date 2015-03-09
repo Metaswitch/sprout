@@ -175,6 +175,9 @@ class DeregistrationTaskTest : public SipTest
   MockRegStore* _remotestore;
   MockHttpStack* _httpstack;
   FakeHSSConnection* _hss;
+  MockHttpStack::Request* _req;
+  DeregistrationTask::Config* _cfg;
+  DeregistrationTask* _task;
 
   static void SetUpTestCase()
   {
@@ -192,48 +195,33 @@ class DeregistrationTaskTest : public SipTest
 
   void TearDown()
   {
+    delete _req;
+    delete _cfg;
     delete _hss;
     delete _remotestore;
     delete _regstore;
     delete _httpstack;
   }
- 
-  // Helper function when the deregistration request itself is badly formed
-  void invalid_dereg_request(std::string body,
-                             int expected_rc,
-                             std::string notify = "true", 
-                             htp_method method = htp_method_DELETE)
+
+  // Build the deregistration request
+  void build_dereg_request(std::string body,
+                           std::string notify = "true",
+                           htp_method method = htp_method_DELETE)
   {
-    MockHttpStack::Request req(_httpstack,
-                               "/registrations?send-notifications=" + notify,
-                               "",
-                               "send-notifications=" + notify,
-                               body, 
-                               method);
-    DeregistrationTask::Config cfg(_regstore, _remotestore, _hss, NULL);
-    DeregistrationTask* task = new DeregistrationTask(req, &cfg, 0);
-    EXPECT_CALL(*_httpstack, send_reply(_, expected_rc, _));
-    task->run();
+    _req = new MockHttpStack::Request(_httpstack,
+         "/registrations?send-notifications=" + notify,
+         "",
+         "send-notifications=" + notify,
+         body,
+         method);
+    _cfg = new DeregistrationTask::Config(_regstore, _remotestore, _hss, NULL);
+    _task = new DeregistrationTask(*_req, _cfg, 0);
   }
 
-  // Helper function when the deregistration request is well-formed (the 
-  // request can still fail though)
-  void valid_dereg_request(std::string body,
-                           int expected_rc,
-                           std::string notify,
-                           std::vector<std::string> aor_ids,
-                           std::vector<RegStore::AoR*> aors,
-                           RegStore::AoR* remote_aor)
+  void expect_reg_store_updates(std::vector<std::string> aor_ids,
+                                std::vector<RegStore::AoR*> aors,
+                                RegStore::AoR* remote_aor)
   {
-    MockHttpStack::Request req(_httpstack,
-                               "/registrations?send-notifications=" + notify,
-                               "",
-                               "send-notifications=" + notify,
-                               body,
-                               htp_method_DELETE);
-    DeregistrationTask::Config cfg(_regstore, _remotestore, _hss, NULL);
-    DeregistrationTask* task = new DeregistrationTask(req, &cfg, 0);
-
     for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
     {
       // Get the information from the local store
@@ -252,18 +240,18 @@ class DeregistrationTaskTest : public SipTest
         }
       }
     }
-
-    // Respond 
-    EXPECT_CALL(*_httpstack, send_reply(_, expected_rc, _));
-    task->run();
   }
 };
 
 // Mainline case
 TEST_F(DeregistrationTaskTest, MainlineTest)
 {
-  std::string aor_id = "sip:6505550231@homedomain";
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
+  build_dereg_request(body);
 
+  // Set up the regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
   // Get an initial empty AoR record and add a standard binding and subscription
   RegStore::AoR* aor = new RegStore::AoR(aor_id);
   int now = time(NULL);
@@ -288,20 +276,25 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   s1->_cid = std::string("xyzabc@192.91.191.29");
   s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
   s1->_expires = now + 300;
-
   // Set up the remote store to return NULL
   RegStore::AoR* remote_aor = NULL;
-
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
 
-  valid_dereg_request(body, 200, "true", aor_ids, aors, remote_aor);
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
 }
 
 // Test where there are multiple pairs of AoRs and Private IDs and single AoRs
 TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
 {
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}, {\"primary-impu\": \"sip:6505552003@homedomain\"}, {\"primary-impu\": \"sip:6505552004@homedomain\"}]}";
+  build_dereg_request(body, "false");
+
+  // Set up the regstore expectations
   std::string aor_id_1 = "sip:6505552001@homedomain";
   std::string aor_id_2 = "sip:6505552002@homedomain";
   std::string aor_id_3 = "sip:6505552003@homedomain";
@@ -311,26 +304,33 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   RegStore::AoR* aor_3 = new RegStore::AoR(aor_id_3);
   RegStore::AoR* aor_4 = new RegStore::AoR(aor_id_4);
   RegStore::AoR* remote_aor = NULL;
-
   std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
   std::vector<RegStore::AoR*> aors = {aor_1, aor_2, aor_3, aor_4};
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}, {\"primary-impu\": \"sip:6505552003@homedomain\"}, {\"primary-impu\": \"sip:6505552004@homedomain\"}]}";
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
 
-  valid_dereg_request(body, 200, "false", aor_ids, aors, remote_aor);
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
 }
 
 // Test when the RegStore can't be accessed. 
 TEST_F(DeregistrationTaskTest, RegStoreFailureTest)
 {
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
+  build_dereg_request(body, "false");
+
+  // Set up the regstore expectations
   std::string aor_id = "sip:6505552001@homedomain";
   RegStore::AoR* aor = NULL;
   RegStore::AoR* remote_aor = NULL;
-
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
 
-  valid_dereg_request(body, 500, "false", aor_ids, aors, remote_aor);
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
+  _task->run();
 }
 
 // Test that an invalid SIP URI doesn't get sent on third party registers.
@@ -339,15 +339,22 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
   _hss->set_result("/impu/notavalidsipuri/reg-data", HSS_NOT_REG_STATE);
   CapturingTestLogger log;
 
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"notavalidsipuri\"}]}";
+  build_dereg_request(body, "false");
+
+  // Set up the regstore expectations
   std::string aor_id = "notavalidsipuri";
   RegStore::AoR* aor = new RegStore::AoR(aor_id);
   RegStore::AoR* remote_aor = NULL;
-
   std::vector<std::string> aor_ids = {aor_id};
   std::vector<RegStore::AoR*> aors = {aor};
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"notavalidsipuri\"}]}";
 
-  valid_dereg_request(body, 200, "false", aor_ids, aors, remote_aor);
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
 
   EXPECT_TRUE(log.contains("Unable to create third party registration"));
   _hss->flush_all();
@@ -356,26 +363,34 @@ TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
 // Test that a dereg request that isn't a delete gets rejected.
 TEST_F(DeregistrationTaskTest, InvalidMethodTest)
 {
-  invalid_dereg_request("", 405, "", htp_method_GET);
+  build_dereg_request("", "", htp_method_GET);
+  EXPECT_CALL(*_httpstack, send_reply(_, 405, _));
+  _task->run();
 }
 
 // Test that a dereg request that doesn't have a valid send-notifications param gets rejected.
 TEST_F(DeregistrationTaskTest, InvalidParametersTest)
 {
-  invalid_dereg_request("", 400, "nottrueorfalse");
+  build_dereg_request("", "nottrueorfalse");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
 }
 
 // Test that a dereg request with invalid JSON gets rejected.
 TEST_F(DeregistrationTaskTest, InvalidJSONTest)
 {
-  invalid_dereg_request("{[}", 400);
+  build_dereg_request("{[}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
 }
 
 // Test that a dereg request where the JSON is missing the registration element get rejected.
 TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 {
   CapturingTestLogger log;
-  invalid_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}", 400);
+  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
   EXPECT_TRUE(log.contains("Registrations not available in JSON"));
 }
 
@@ -383,7 +398,9 @@ TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
 {
   CapturingTestLogger log;
-  invalid_dereg_request("{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}", 400);
+  build_dereg_request("{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
   EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
 }
 
