@@ -124,7 +124,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     std::string served_user_uri_string = "<"+served_user+">";
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
-
+    
     LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
 
     SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
@@ -132,28 +132,38 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
     SAS::report_event(event);
 
     status = pjsip_endpt_create_request(stack_data.endpt,
-                               &method,       // Method
-                               &stack_data.scscf_uri, // Target
-                               &served_user_uri,      // From
-                               &served_user_uri,      // To
-                               &served_user_uri,      // Contact
-                               NULL,          // Auto-generate Call-ID
-                               1,             // CSeq
-                               NULL,          // No body
-                               &tdata);       // OUT
+                                        &method,               // Method
+                                        &stack_data.scscf_uri, // Target
+                                        &served_user_uri,      // From
+                                        &served_user_uri,      // To
+                                        &served_user_uri,      // Contact
+                                        NULL,                  // Auto-generate Call-ID
+                                        1,                     // CSeq
+                                        NULL,                  // No body
+                                        &tdata);               // OUT
 
-    assert(status == PJ_SUCCESS);
-
-    // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any P-Associated-URI details.
-    ifcs.interpret(SessionCase::Originating, true, is_initial_registration, tdata->msg, as_list, trail);
-
-    status = pjsip_tx_data_dec_ref(tdata);
-    assert(status == PJSIP_EBUFDESTROYED);
+    if (status == PJ_SUCCESS)
+    {
+      // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any 
+      // P-Associated-URI details.
+      ifcs.interpret(SessionCase::Originating, 
+                     true, 
+                     is_initial_registration, 
+                     tdata->msg, 
+                     as_list, 
+                     trail);
+      pjsip_tx_data_dec_ref(tdata);
+    }
+    else
+    {
+      LOG_DEBUG("Unable to create third party registration"); 
+    }
   }
   else
   {
     ifcs.interpret(SessionCase::Originating, true, is_initial_registration, received_register->msg_info.msg, as_list, trail);
   }
+
   LOG_INFO("Found %d Application Servers", as_list.size());
 
   // Loop through the as_list
