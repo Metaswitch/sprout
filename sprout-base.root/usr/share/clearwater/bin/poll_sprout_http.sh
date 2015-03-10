@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# @file poll_sprout.sh
+# @file poll_sprout_http.sh
 #
 # Project Clearwater - IMS in the Cloud
-# Copyright (C) 2014  Metaswitch Networks Ltd
+# Copyright (C) 2015  Metaswitch Networks Ltd
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -34,29 +34,6 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-# This script uses a SIP message to poll a process and check whether it is
-# healthy.
-
-# In case sprout has only just restarted, give it a few seconds to come up
-sleep 5
-
-# Read the config, defaulting appropriately.
-scscf=5054
-icscf=0
 . /etc/clearwater/config
-[ -z $signaling_namespace ] || namespace_prefix="ip netns exec $signaling_namespace"
-
-# If we have S-CSCF configured, check it.
-rc=0
-if [ "$scscf" != "0" ] ; then
-  $namespace_prefix /usr/share/clearwater/bin/poll-sip $scscf
-  rc=$?
-fi
-
-# If that succeeded and we have I-CSCF configured, check it.
-if [ $rc = 0 ] && [ "$icscf" != "0" ] ; then
-  $namespace_prefix /usr/share/clearwater/bin/poll-sip $icscf
-  rc=$?
-fi
-
-exit $rc
+/usr/share/clearwater/bin/poll-http $local_ip:9888
+exit $?

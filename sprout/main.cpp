@@ -1817,6 +1817,7 @@ int main(int argc, char* argv[])
     ChronosHandler<RegistrationTimeoutTask, RegistrationTimeoutTask::Config> reg_timeout_handler(&reg_timeout_config);
     ChronosHandler<AuthTimeoutTask, AuthTimeoutTask::Config> auth_timeout_handler(&auth_timeout_config);
     HttpStackUtils::SpawningHandler<DeregistrationTask, DeregistrationTask::Config> deregistration_handler(&deregistration_config);
+    HttpStackUtils::PingHandler ping_handler;
 
     try
     {
@@ -1826,6 +1827,8 @@ int main(int argc, char* argv[])
                             opt.http_threads,
                             exception_handler,
                             access_logger);
+      http_stack->register_handler("^/ping$",
+                                   &ping_handler);
       http_stack->register_handler("^/timers$",
                                    &reg_timeout_handler);
       http_stack->register_handler("^/authentication-timeout$",
