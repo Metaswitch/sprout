@@ -22,9 +22,10 @@ libmemcached_test: libevhtp ${LIBMEM_MAKEFILE}
 
 libmemcached_clean: ${LIBMEM_MAKEFILE}
 	${MAKE} -C ${LIBMEM_DIR} clean
+	rm ${LIBMEM_CONFIGURE}
 
 libmemcached_distclean: ${LIBMEM_MAKEFILE}
 	${MAKE} -C ${LIBMEM_DIR} distclean
-
+	rm ${LIBMEM_CONFIGURE}
 
 .PHONY: libmemcached libmemcached_test libmemcached_clean libmemcached_distclean
