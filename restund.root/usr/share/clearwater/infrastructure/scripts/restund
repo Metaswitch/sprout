@@ -73,12 +73,10 @@ EOF
 cat > /etc/monit/conf.d/restund.monit <<EOF
 # Check the Restund process.
 
-# Check the SIP interface. This depends on the Bono process (and so won't run
-# unless the Bono process is running)
+# Check the restund process is responsive. This depends on the restund process (and so won't run
+# unless the restund process is running)
 check program poll_restund with path "/usr/share/clearwater/bin/poll_restund.sh"
   depends on restund
-
-  # Aborting generates a core file and triggers diagnostic collection.
   if status != 0 for 2 cycles then exec "/etc/init.d/restund abort'"
 
 # Monitor the service's PID file, CPU and memory use. Include a / in the "matching" 
@@ -89,10 +87,9 @@ check process restund matching /restund
   stop program = "/etc/init.d/restund stop"
   restart program = "/etc/init.d/restund restart"
 
-  # Check the service's resource usage, and abort the process if it's too high. This will
-  # generate a core file and trigger diagnostics collection. 
-  if cpu > 80% for 6 cycles then exec "etc/init.d/restund abort"
-  if memory > 80% for 6 cycles then exec "etc/init.d/restund abort"
+  # Check the service's resource usage, and abort the process if it's too high.
+  if cpu > 80% for 6 cycles then exec "/etc/init.d/restund abort"
+  if memory > 80% for 6 cycles then exec "/etc/init.d/restund abort"
 EOF
 chmod 0644 /etc/monit/conf.d/restund.monit
 

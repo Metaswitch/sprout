@@ -34,8 +34,6 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-. /etc/clearwater/config
-
 # Set up the monit configuration for bono with the right IP addresses and ports
 cat > /etc/monit/conf.d/bono.monit <<EOF
 # Check the Bono process.
@@ -57,8 +55,8 @@ check process bono with pidfile /var/run/bono.pid
 
   # Check the service's resource usage, and abort the process if it's too high. This will
   # generate a core file and trigger diagnostics collection. 
-  if cpu > 80% for 6 cycles then exec "etc/init.d/bono abort"
-  if memory > 80% for 6 cycles then exec "etc/init.d/bono abort"
+  if cpu > 80% for 6 cycles then exec "/etc/init.d/bono abort"
+  if memory > 80% for 6 cycles then exec "/etc/init.d/bono abort"
 EOF
 chmod 0644 /etc/monit/conf.d/bono.monit
 

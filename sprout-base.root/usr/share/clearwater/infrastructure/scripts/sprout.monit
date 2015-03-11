@@ -34,8 +34,6 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-. /etc/clearwater/config
-
 # Set up the monit configuration for sprout with the right IP addresses and ports
 cat > /etc/monit/conf.d/sprout.monit <<EOF
 # Check the Sprout process.
@@ -45,16 +43,14 @@ cat > /etc/monit/conf.d/sprout.monit <<EOF
 check program poll_sprout_sip with path "/usr/share/clearwater/bin/poll_sprout_sip.sh"
   depends on sprout
 
-  # Aborting generates a core file and triggers diagnostic collection. Monit will raise
-  # an alarm when it restarts the process
-  if status != 0 for 2 cycles then exec "/etc/init.d/sprout abort'"
+  # Aborting generates a core file and triggers diagnostic collection.
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
 check program poll_sprout_http with path "/usr/share/clearwater/bin/poll_sprout_http.sh"
   depends on sprout
 
-  # Aborting generates a core file and triggers diagnostic collection. Monit will raise
-  # an alarm when it restarts the process
-  if status != 0 for 2 cycles then exec "/etc/init.d/sprout abort'"
+  # Aborting generates a core file and triggers diagnostic collection. 
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
 # Monitor the service's PID file, CPU and memory use.
 check process sprout with pidfile /var/run/sprout.pid
@@ -65,10 +61,9 @@ check process sprout with pidfile /var/run/sprout.pid
   restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout restart'"
 
   # Check the service's resource usage, and abort the process if it's too high. This will
-  # generate a core file and trigger diagnostics collection. Monit will raise an alarm when
-  # it restarts the process
-  if cpu > 80% for 6 cycles then exec "etc/init.d/sprout abort"
-  if memory > 80% for 6 cycles then exec "etc/init.d/sprout abort"
+  # generate a core file and trigger diagnostics collection. 
+  if cpu > 80% for 6 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
+  if memory > 80% for 6 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
   # Clear any alarms if the process has been running for 30 seconds
   if uptime < 30 seconds
