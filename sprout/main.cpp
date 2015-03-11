@@ -1599,7 +1599,7 @@ int main(int argc, char* argv[])
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
 
-      local_data_store = (Store*)new MemcachedStore(false,
+      local_data_store = (Store*)new MemcachedStore(true,
                                                     opt.store_servers,
                                                     memcached_comm_monitor,
                                                     vbucket_alarm);
@@ -1616,7 +1616,7 @@ int main(int argc, char* argv[])
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
 
-        remote_data_store = (Store*)new MemcachedStore(false,
+        remote_data_store = (Store*)new MemcachedStore(true,
                                                        opt.remote_store_servers,
                                                        memcached_remote_comm_monitor,
                                                        remote_vbucket_alarm);
