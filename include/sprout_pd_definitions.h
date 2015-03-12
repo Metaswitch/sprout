@@ -161,17 +161,6 @@ static const PDLog CL_SPROUT_XDM_NO_HOMESTEAD
   "/etc/clearwater/config file. "
 );
 
-static const PDLog CL_SPROUT_S_CSCF_NO_CHRONOS
-(
-  PDLogBase::CL_SPROUT_ID + 10,
-  PDLOG_ERR,
-  "Fatal - S-CSCF and I-CSCF enabled with no Chronos service specified in "
-  "/etc/clearwater/config.",
-  "The chronos_hostname=<host:port> was not set in /etc/clearwater/config.",
-  "The application will exit and restart until the problem is fixed.",
-  "Set the chronos_hostname=<host:port> option in the /etc/clearwater/config. "
-);
-
 static const PDLog CL_SPROUT_BAD_S_CSCF_JSON
 (
   PDLogBase::CL_SPROUT_ID + 11,
