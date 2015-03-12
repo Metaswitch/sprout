@@ -703,6 +703,10 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       _session_case = &SessionCase::OriginatingCdiv;
       served_user = _as_chain_link.served_user();
 
+      SAS::Event start_cdiv(trail(), SASEvent::SCSCF_STARTED_ORIG_CDIV_PROC, 0);
+      start_cdiv.add_var_param(served_user);
+      SAS::report_event(start_cdiv);
+
       // We might not be the terminating server any more, so we
       // should blank out the term_ioi parameter. If we are still
       // the terminating server, we'll fill it back in when we go
@@ -775,6 +779,20 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
 
     if (!served_user.empty())
     {
+      // SAS log the start of originating or terminating processing.
+      if (_session_case->is_originating())
+      {
+        SAS::Event start_orig(trail(), SASEvent::SCSCF_STARTED_ORIG_PROC, 0);
+        start_orig.add_var_param(served_user);
+        SAS::report_event(start_orig);
+      }
+      else
+      {
+        SAS::Event start_term(trail(), SASEvent::SCSCF_STARTED_TERM_PROC, 0);
+        start_term.add_var_param(served_user);
+        SAS::report_event(start_term);
+      }
+
       LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
       Ifcs ifcs;
       if (lookup_ifcs(served_user, ifcs))
@@ -997,6 +1015,10 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 /// Attempt to route the request to an application server.
 void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_name)
 {
+  SAS::Event invoke_as(trail(), SASEvent::SCSCF_INVOKING_AS, 0);
+  invoke_as.add_var_param(server_name);
+  SAS::report_event(invoke_as);
+
   // Check that the AS URI is well-formed.
   pjsip_sip_uri* as_uri = (pjsip_sip_uri*)
                         PJUtils::uri_from_string(server_name, get_pool(req));
@@ -1273,6 +1295,10 @@ void SCSCFSproutletTsx::route_to_ue_bindings(pjsip_msg* req)
   }
   else
   {
+    SAS::Event route_to_ues(trail(), SASEvent::SCSCF_ROUTING_TO_UES, 0);
+    route_to_ues.add_static_param(targets.size());
+    SAS::report_event(route_to_ues);
+
     // Fork the request to the bindings, and remember the AoR used to query
     // the registration store and the binding identifier for each fork.
     _target_aor = aor;
@@ -1325,33 +1351,33 @@ bool SCSCFSproutletTsx::uri_translation_and_route(pjsip_msg* req)
     {
       // The URI was successfully translated, so attempt to parse the returned
       // URI and substitute it in to the request.
-      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,   
+      pjsip_uri* new_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri_str,
                                                                 get_pool(req));
 
       if (new_uri != NULL)
       {
         if (PJUtils::get_npdi(uri))
         {
-          if (!PJUtils::does_uri_represent_number(new_uri, 
+          if (!PJUtils::does_uri_represent_number(new_uri,
                                            _scscf->should_require_user_phone()))
           {
             // The existing URI had NP data, but the ENUM lookup has returned
             // a URI that doesn't represent a telephone number. This trumps the
-            // NP data. 
+            // NP data.
             req->line.req.uri = new_uri;
           }
           else
           {
             LOG_DEBUG("Request URI already has existing NP information");
 
-            // The existing URI had NP data. Only overwrite the URI if 
-            // we're configured to do so. 
+            // The existing URI had NP data. Only overwrite the URI if
+            // we're configured to do so.
             if (_scscf->should_override_npdi())
-            { 
+            {
               LOG_DEBUG("Override existing NP information");
               req->line.req.uri = new_uri;
             }
-        
+
             route_to_bgcf(req);
             already_routed = true;
           }

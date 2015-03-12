@@ -88,10 +88,6 @@ bool XDMConnection::get_simservs(const std::string& user,
   Utils::StopWatch stopWatch;
   stopWatch.start();
 
-  SAS::Event event(trail, SASEvent::HTTP_HOMER_SIMSERVS, 0);
-  event.add_var_param(user);
-  SAS::report_event(event);
-
   std::string url = "/org.etsi.ngn.simservs/users/" + Utils::url_escape(user) + "/simservs.xml";
 
   HTTPCode http_code = _http->send_get(url, xml_data, user, trail);
