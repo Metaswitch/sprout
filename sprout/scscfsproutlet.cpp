@@ -703,9 +703,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       _session_case = &SessionCase::OriginatingCdiv;
       served_user = _as_chain_link.served_user();
 
-      SAS::Event start_cdiv(trail(), SASEvent::SCSCF_STARTED_ORIG_CDIV_PROC, 0);
-      start_cdiv.add_var_param(served_user);
-      SAS::report_event(start_cdiv);
+      sas_log_start_of_sesion_case(req, _session_case, served_user);
 
       // We might not be the terminating server any more, so we
       // should blank out the term_ioi parameter. If we are still
@@ -780,18 +778,7 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     if (!served_user.empty())
     {
       // SAS log the start of originating or terminating processing.
-      if (_session_case->is_originating())
-      {
-        SAS::Event start_orig(trail(), SASEvent::SCSCF_STARTED_ORIG_PROC, 0);
-        start_orig.add_var_param(served_user);
-        SAS::report_event(start_orig);
-      }
-      else
-      {
-        SAS::Event start_term(trail(), SASEvent::SCSCF_STARTED_TERM_PROC, 0);
-        start_term.add_var_param(served_user);
-        SAS::report_event(start_term);
-      }
+      sas_log_start_of_sesion_case(req, _session_case, served_user);
 
       LOG_DEBUG("Looking up iFCs for %s for new AS chain", served_user.c_str());
       Ifcs ifcs;
@@ -1709,3 +1696,30 @@ void SCSCFSproutletTsx::add_second_p_a_i_hdr(pjsip_msg* msg)
     }
   }
 }
+
+void SCSCFSproutletTsx::sas_log_start_of_sesion_case(pjsip_msg* req,
+                                                     const SessionCase* session_case,
+                                                     const std::string& served_user)
+{
+  int event_id;
+
+  if (session_case == &SessionCase::Originating)
+  {
+    event_id = SASEvent::SCSCF_STARTED_ORIG_PROC;
+  }
+  else if (session_case == &SessionCase::Terminating)
+  {
+    event_id = SASEvent::SCSCF_STARTED_TERM_PROC;
+  }
+  else
+  {
+    event_id = SASEvent::SCSCF_STARTED_ORIG_CDIV_PROC;
+  }
+
+  SAS::Event event(trail(), event_id, 0);
+  event.add_var_param(served_user);
+  event.add_var_param(req->line.req.method.name.slen,
+                      req->line.req.method.name.ptr);
+  SAS::report_event(event);
+}
+
