@@ -18,6 +18,7 @@ modules/cpp-common/src/fakelogger.cpp
 modules/cpp-common/src/saslogger.cpp
 modules/cpp-common/src/ipv6utils.cpp
 modules/cpp-common/src/exception_handler.cpp
+modules/cpp-common/src/utils.cpp
 modules/cpp-common/test_utils/mock_sas.cpp
 modules/cpp-common/test_utils/fakecurl.cpp
 modules/cpp-common/test_utils/fakehttpconnection.cpp
