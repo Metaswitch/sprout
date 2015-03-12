@@ -349,17 +349,28 @@ public:
   /// in format "sip:2125551212@example.com"), creating creating it if
   /// necessary.  May return NULL in case of error.  Result is owned
   /// by caller and must be freed with delete.
-  AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
+  virtual AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
 
   /// Update the data for a particular address of record.  Writes the data
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail);
-  bool set_aor_data(const std::string& aor_id, AoR* data, bool update_timers, SAS::TrailId trail, bool& all_bindings_expired);
+  virtual bool set_aor_data(const std::string& aor_id, 
+                            AoR* data, 
+                            bool update_timers, 
+                            SAS::TrailId trail);
+  virtual bool set_aor_data(const std::string& aor_id, 
+                            AoR* data, 
+                            bool update_timers, 
+                            SAS::TrailId trail, 
+                            bool& all_bindings_expired);
 
   // Send a SIP NOTIFY
-  void send_notify(AoR::Subscription* s, int cseq, AoR::Binding* b, std::string b_id, SAS::TrailId trail);
+  virtual void send_notify(AoR::Subscription* s, 
+                           int cseq, 
+                           AoR::Binding* b, 
+                           std::string b_id, 
+                           SAS::TrailId trail);
 
 private:
   int expire_bindings(AoR* aor_data, int now, SAS::TrailId trail);

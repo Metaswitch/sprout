@@ -65,10 +65,8 @@ static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor
   {
     // Failed to get data for the AoR because there is no connection
     // to the store.
-    // LCOV_EXCL_START - local store (used in testing) never fails
     LOG_ERROR("Failed to get AoR binding for %s from store", aor_id.c_str());
     return false;
-    // LCOV_EXCL_STOP
   }
 
   // If we don't have any bindings, try the backup AoR and/or store.
@@ -195,6 +193,7 @@ void AuthTimeoutTask::run()
   send_http_reply(HTTP_OK);
   delete this;
 }
+//LCOV_EXCL_STOP
 
 void DeregistrationTask::run()
 {
@@ -234,7 +233,6 @@ void DeregistrationTask::run()
   send_http_reply(rc);
   delete this;
 }
-//LCOV_EXCL_STOP
 
 void RegistrationTimeoutTask::handle_response()
 {
@@ -412,11 +410,9 @@ HTTPCode DeregistrationTask::handle_request()
       // then this will lead to an inconsistency between the HSS and Sprout, as
       // Sprout will have changed some of the AoRs, but HSS will believe they all failed.
       // Sprout accepts changes to AoRs that don't exist though.
-      // LCOV_EXCL_START - local store (used in testing) never fails
       LOG_WARNING("Unable to connect to memcached for AoR %s", it->first.c_str());
       delete aor_data;
       return HTTP_SERVER_ERROR;
-      // LCOV_EXCL_STOP
     }
 
     delete aor_data;
@@ -441,9 +437,7 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
     if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
                                  current_store, remote_store, &previous_aor_data, trail()))
     {
-      // LCOV_EXCL_START - local store (used in testing) never fails
       break;
-      // LCOV_EXCL_STOP
     }
 
     std::vector<std::string> binding_ids;
@@ -476,9 +470,7 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
               j != aor_data->subscriptions().end();
                ++j)
           {
-            // LCOV_EXCL_START
             current_store->send_notify(j->second, aor_data->_notify_cseq, b, b_id, trail());
-            // LCOV_EXCL_STOP
           }
         }
 
