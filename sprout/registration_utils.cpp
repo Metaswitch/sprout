@@ -367,7 +367,7 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
     {
       break;
     }
-  }
+  }         // LCOV_EXCL_LINE No UT for retry loop.    
 
   return all_bindings_expired;
 }
