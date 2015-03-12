@@ -129,7 +129,7 @@ do_reload() {
         # restarting (for example, when it is sent a SIGHUP),
         # then implement that here.
         #
-        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDILE --exec $DAEMON
+        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --exec $DAEMON
         return 0
 }
 
