@@ -127,8 +127,12 @@ The sprout makefile offers the following additional options and targets.
 
 ## Running Sprout Locally
 
-To run sprout on the machine it was built on, change to the top-level `sprout` directory and then run the following command. Note that you will need to enable either S-CSCF, I-CSCF or P-CSCF, and provide a [Homestead](https://github.com/Metaswitch/homestead) server/cluster and a [Chronos](https://github.com/Metaswitch/chronos) host.
+To run sprout on the machine it was built on, change to the top-level `sprout` directory and then run the following command, passing in the appropriate parameters
 
-    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t -s 5054 -H <homestead.server> -K localhost:7253
+    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout <parameters>
+
+As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command.
+
+    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
 
 For all command-line options, use the `-h` option.
