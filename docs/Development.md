@@ -133,6 +133,6 @@ To run sprout on the machine it was built on, change to the top-level `sprout` d
 
 As an example, to run Sprout as a basic S-CSCF on port 5054 run the following command.
 
-    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain <Home Domain> --scscf 5054 --scscf-uri sip:<Sprout cluster>:5054;transport=TCP --hss <Homestead cluster> 
+    LD_LIBRARY_PATH=usr/lib:$LD_LIBRARY_PATH build/bin/sprout -t --domain=<Home Domain> --scscf=5054 --scscf-uri=sip:<Sprout cluster>:5054;transport=TCP --hss=<Homestead cluster> 
 
 For all command-line options, use the `-h` option.
