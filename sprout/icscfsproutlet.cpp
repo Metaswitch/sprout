@@ -205,6 +205,10 @@ void ICSCFSproutletRegTsx::on_rx_initial_request(pjsip_msg* req)
   pjsip_uri* to_uri = (pjsip_uri*)pjsip_uri_get_uri(to_hdr->uri);
   impu = PJUtils::public_id_from_uri(to_uri);
 
+  SAS::Event reg_event(trail(), SASEvent::ICSCF_RCVD_REGISTER, 0);
+  reg_event.add_var_param(impu);
+  SAS::report_event(reg_event);
+
   // Get the private identity from the Authentication header, or generate
   // a default if there is no Authentication header or no username in the
   // header.
@@ -475,6 +479,12 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     LOG_DEBUG("Originating request");
     _originating = true;
     impu = PJUtils::public_id_from_uri(PJUtils::orig_served_user(req));
+
+    SAS::Event event(trail(), SASEvent::ICSCF_RCVD_ORIG_NON_REG, 0);
+    event.add_var_param(impu);
+    event.add_var_param(req->line.req.method.name.slen,
+                        req->line.req.method.name.ptr);
+    SAS::report_event(event);
   }
   else
   {
@@ -500,6 +510,12 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     }
 
     impu = PJUtils::public_id_from_uri(PJUtils::term_served_user(req));
+
+    SAS::Event event(trail(), SASEvent::ICSCF_RCVD_TERM_NON_REG, 0);
+    event.add_var_param(impu);
+    event.add_var_param(req->line.req.method.name.slen,
+                        req->line.req.method.name.ptr);
+    SAS::report_event(event);
   }
 
   // Create an LIR router to handle the HSS interactions and S-CSCF
@@ -563,7 +579,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
         if (!new_uri.empty())
         {
-          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri, 
+          pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(new_uri,
                                                                     pool);
 
           if (req_uri != NULL)
@@ -577,7 +593,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                 // a URI that doesn't represent a telephone number. This trumps the
                 // NP data.
                 req->line.req.uri = req_uri;
-   
+
                 // We need to change the IMPU stored on our LIR router so that when
                 // we next do an LIR we look up the new IMPU.
                 ((ICSCFLIRouter *)_router)->change_impu(new_uri);
@@ -592,7 +608,7 @@ void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
                 {
                   LOG_DEBUG("Override existing NP information");
                   req->line.req.uri = req_uri;
-                }       
+                }
 
                 route_to_bgcf(req);
                 return;

@@ -865,6 +865,9 @@ void process_register_request(pjsip_rx_data* rdata)
     }
   }
 
+  SAS::Event reg_Accepted(trail, SASEvent::REGISTER_ACCEPTED, 0);
+  SAS::report_event(reg_Accepted);
+
   // Deal with path header related fields in the response.
   pjsip_routing_hdr* path_hdr = (pjsip_routing_hdr*)
                               pjsip_msg_find_hdr_by_name(msg, &STR_PATH, NULL);
@@ -1032,7 +1035,7 @@ pj_status_t init_registrar(RegStore* registrar_store,
     status = PJ_EINVAL;
     // LCOV_EXCL_STOP
   }
-  
+
   return status;
 }
 
