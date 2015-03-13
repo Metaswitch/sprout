@@ -1939,13 +1939,13 @@ protected:
 };
 
 
-// Check that the RegStore does not infinite loop when the underlying store is
+// Check that the registrar does not infinite loop when the underlying store is
 // in an odd state, specifically when it:
 // -  Returns NOT_FOUND to all gets
 // -  Returns ERROR to all sets.
 //
 // This is a repro for https://github.com/Metaswitch/sprout/issues/977
-TEST_F(RegistrarTestMockStore, SimpleMainlineAuthHeader)
+TEST_F(RegistrarTestMockStore, RegStoreWritesFail)
 {
   EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
     .WillOnce(Return(Store::NOT_FOUND));
@@ -1964,7 +1964,6 @@ TEST_F(RegistrarTestMockStore, SimpleMainlineAuthHeader)
   inject_msg(msg.get());
   ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
-  out = pop_txdata()->msg;
   EXPECT_EQ(500, out->line.status.code);
   free_txdata();
 }
