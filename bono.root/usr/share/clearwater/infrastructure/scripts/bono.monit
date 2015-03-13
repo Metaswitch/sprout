@@ -38,15 +38,7 @@
 cat > /etc/monit/conf.d/bono.monit <<EOF
 # Check the Bono process.
 
-# Check the SIP interface. This depends on the Bono process (and so won't run
-# unless the Bono process is running)
-check program poll_bono with path "/usr/share/clearwater/bin/poll_bono.sh"
-  depends on bono
-
-  # Aborting generates a core file and triggers diagnostic collection.
-  if status != 0 for 2 cycles then exec "/etc/init.d/bono abort'"
-
-# Monitor the service's PID file, CPU and memory use.
+# Monitor the service's PID file and memory use.
 check process bono with pidfile /var/run/bono.pid
 
   start program = "/etc/init.d/bono start"
@@ -55,8 +47,15 @@ check process bono with pidfile /var/run/bono.pid
 
   # Check the service's resource usage, and abort the process if it's too high. This will
   # generate a core file and trigger diagnostics collection. 
-  if cpu > 80% for 6 cycles then exec "/etc/init.d/bono abort"
   if memory > 80% for 6 cycles then exec "/etc/init.d/bono abort"
+
+# Check the SIP interface. This depends on the Bono process (and so won't run
+# unless the Bono process is running)
+check program poll_bono with path "/usr/share/clearwater/bin/poll_bono.sh"
+  depends on bono
+
+  # Aborting generates a core file and triggers diagnostic collection.
+  if status != 0 for 2 cycles then exec "/etc/init.d/bono abort'"
 EOF
 chmod 0644 /etc/monit/conf.d/bono.monit
 

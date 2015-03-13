@@ -73,13 +73,7 @@ EOF
 cat > /etc/monit/conf.d/restund.monit <<EOF
 # Check the Restund process.
 
-# Check the restund process is responsive. This depends on the restund process (and so won't run
-# unless the restund process is running)
-check program poll_restund with path "/usr/share/clearwater/bin/poll_restund.sh"
-  depends on restund
-  if status != 0 for 2 cycles then exec "/etc/init.d/restund abort'"
-
-# Monitor the service's PID file, CPU and memory use. Include a / in the "matching" 
+# Monitor the service's PID file and memory use. Include a / in the "matching" 
 # expression to ensure that this doesn't pick up poll_restund.sh by accident.
 check process restund matching /restund
 
@@ -88,8 +82,13 @@ check process restund matching /restund
   restart program = "/etc/init.d/restund restart"
 
   # Check the service's resource usage, and abort the process if it's too high.
-  if cpu > 80% for 6 cycles then exec "/etc/init.d/restund abort"
   if memory > 80% for 6 cycles then exec "/etc/init.d/restund abort"
+
+# Check the restund process is responsive. This depends on the restund process (and so won't run
+# unless the restund process is running)
+check program poll_restund with path "/usr/share/clearwater/bin/poll_restund.sh"
+  depends on restund
+  if status != 0 for 2 cycles then exec "/etc/init.d/restund abort'"
 EOF
 chmod 0644 /etc/monit/conf.d/restund.monit
 
