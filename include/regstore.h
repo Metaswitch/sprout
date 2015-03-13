@@ -296,10 +296,10 @@ public:
 
     AoR* get_aor_data(const std::string& aor_id, SAS::TrailId trail);
 
-    bool set_aor_data(const std::string& aor_id,
-                      AoR* aor_data,
-                      int expiry,
-                      SAS::TrailId trail);
+    Store::Status set_aor_data(const std::string& aor_id,
+                               AoR* aor_data,
+                               int expiry,
+                               SAS::TrailId trail);
 
     std::string serialize_aor(AoR* aor_data);
     AoR* deserialize_aor(const std::string& aor_id, const std::string& s);
@@ -355,21 +355,21 @@ public:
   /// atomically.  If the underlying data has changed since it was last
   /// read, the update is rejected and this returns false; if the update
   /// succeeds, this returns true.
-  virtual bool set_aor_data(const std::string& aor_id, 
-                            AoR* data, 
-                            bool update_timers, 
-                            SAS::TrailId trail);
-  virtual bool set_aor_data(const std::string& aor_id, 
-                            AoR* data, 
-                            bool update_timers, 
-                            SAS::TrailId trail, 
-                            bool& all_bindings_expired);
+  virtual Store::Status set_aor_data(const std::string& aor_id,
+                                     AoR* data,
+                                     bool update_timers,
+                                     SAS::TrailId trail);
+  virtual Store::Status set_aor_data(const std::string& aor_id,
+                                     AoR* data,
+                                     bool update_timers,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired);
 
   // Send a SIP NOTIFY
-  virtual void send_notify(AoR::Subscription* s, 
-                           int cseq, 
-                           AoR::Binding* b, 
-                           std::string b_id, 
+  virtual void send_notify(AoR::Subscription* s,
+                           int cseq,
+                           AoR::Binding* b,
+                           std::string b_id,
                            SAS::TrailId trail);
 
 private:

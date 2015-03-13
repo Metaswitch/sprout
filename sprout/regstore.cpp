@@ -171,10 +171,10 @@ RegStore::AoR* RegStore::Connector::get_aor_data(const std::string& aor_id, SAS:
   return aor_data;
 }
 
-bool RegStore::set_aor_data(const std::string& aor_id,
-                            AoR* aor_data,
-                            bool set_chronos,
-                            SAS::TrailId trail)
+Store::Status RegStore::set_aor_data(const std::string& aor_id,
+                                     AoR* aor_data,
+                                     bool set_chronos,
+                                     SAS::TrailId trail)
 {
   bool unused;
   return set_aor_data(aor_id, aor_data, set_chronos, trail, unused);
@@ -182,9 +182,12 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 
 
 /// Update the data for a particular address of record.  Writes the data
-/// atomically.  If the underlying data has changed since it was last
-/// read, the update is rejected and this returns false; if the update
-/// succeeds, this returns true.
+/// atomically.  Returns the code returned by the underlying store, one of:
+/// -  OK:              the AoR was writen successfully.
+/// -  DATA_CONTENTION: the AoR was not written to the store because the CAS is
+///                     out of date. The caller can refetch the AoR and try again.
+/// -  ERROR:           the AoR was not written successfully and the caller
+///                     should not retry.
 ///
 /// @param aor_id     The SIP Address of Record for the registration
 /// @param aor_data   The registration data record.
@@ -193,11 +196,11 @@ bool RegStore::set_aor_data(const std::string& aor_id,
 /// @param all_bindings_expired   Set to true to flag to the caller that
 ///                               no bindings remain for this AoR.
 
-bool RegStore::set_aor_data(const std::string& aor_id,
-                            AoR* aor_data,
-                            bool set_chronos,
-                            SAS::TrailId trail,
-                            bool& all_bindings_expired)
+Store::Status RegStore::set_aor_data(const std::string& aor_id,
+                                     AoR* aor_data,
+                                     bool set_chronos,
+                                     SAS::TrailId trail,
+                                     bool& all_bindings_expired)
 {
   all_bindings_expired = false;
   // Expire any old bindings before writing to the server.  In theory, if
@@ -272,10 +275,10 @@ bool RegStore::set_aor_data(const std::string& aor_id,
   return _connector->set_aor_data(aor_id, aor_data, max_expires - now, trail);
 }
 
-bool RegStore::Connector::set_aor_data(const std::string& aor_id,
-                                       AoR* aor_data,
-                                       int expiry,
-                                       SAS::TrailId trail)
+Store::Status RegStore::Connector::set_aor_data(const std::string& aor_id,
+                                                AoR* aor_data,
+                                                int expiry,
+                                                SAS::TrailId trail)
 {
   std::string data = serialize_aor(aor_data);
 
@@ -308,7 +311,7 @@ bool RegStore::Connector::set_aor_data(const std::string& aor_id,
   }
 
 
-  return (status == Store::Status::OK);
+  return status;
 }
 
 

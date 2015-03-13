@@ -230,13 +230,13 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
 
         // Write the information to the remote store
         EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _)).WillRepeatedly(Return(remote_aor));
         if (remote_aor != NULL)
         {
-          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
         }
       }
     }
@@ -313,7 +313,7 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   _task->run();
 }
 
-// Test when the RegStore can't be accessed. 
+// Test when the RegStore can't be accessed.
 TEST_F(DeregistrationTaskTest, RegStoreFailureTest)
 {
   // Build the request

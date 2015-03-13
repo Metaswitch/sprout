@@ -146,6 +146,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   bool backup_aor_alloced = false;
   int expiry = 0;
   pj_status_t status = PJ_FALSE;
+  Store::Status set_rc;
   (*aor_data) = NULL;
 
   do
@@ -293,8 +294,16 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
         analytics->subscription(aor, subscription_id, contact_uri, expiry);
       }
     }
+
+    // Try to write the AoR back to the store.
+    set_rc = primary_store->set_aor_data(aor, (*aor_data), false, trail);
+
+    if (set_rc != Store::OK)
+    {
+      delete *aor_data; *aor_data = NULL;
+    }
   }
-  while (!primary_store->set_aor_data(aor, (*aor_data), false, trail));
+  while (set_rc == Store::DATA_CONTENTION);
 
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)

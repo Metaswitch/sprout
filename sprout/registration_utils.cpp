@@ -124,7 +124,7 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     std::string served_user_uri_string = "<"+served_user+">";
     const pj_str_t served_user_uri = pj_str(const_cast<char *>(served_user_uri_string.c_str()));
-    
+
     LOG_INFO("Generating a fake REGISTER to send to IfcHandler using AOR %s", served_user.c_str());
 
     SAS::Event event(trail, SASEvent::REGISTER_AS_START, 0);
@@ -144,13 +144,13 @@ void RegistrationUtils::register_with_application_servers(Ifcs& ifcs,
 
     if (status == PJ_SUCCESS)
     {
-      // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any 
+      // As per TS 24.229, section 5.4.1.7, note 1, we don't fill in any
       // P-Associated-URI details.
-      ifcs.interpret(SessionCase::Originating, 
-                     true, 
-                     is_initial_registration, 
-                     tdata->msg, 
-                     as_list, 
+      ifcs.interpret(SessionCase::Originating,
+                     true,
+                     is_initial_registration,
+                     tdata->msg,
+                     as_list,
                      trail);
       pjsip_tx_data_dec_ref(tdata);
     }
@@ -352,8 +352,9 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
 {
   // We need the retry loop to handle the store's compare-and-swap.
   bool all_bindings_expired = false;
+  Store::Status set_rc;
 
-  for (;;)  // LCOV_EXCL_LINE No UT for retry loop.
+  do
   {
     RegStore::AoR* aor_data = store->get_aor_data(aor, trail);
     if (aor_data == NULL)
@@ -375,13 +376,14 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
                                             // single binding (flow failed).
     }
 
-    bool ok = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired);
-    delete aor_data;
-    if (ok)
-    {
-      break;
-    }
-  }
+    set_rc = store->set_aor_data(aor, aor_data, false, trail, all_bindings_expired);
+    delete aor_data; aor_data = NULL;
+
+    // We can only say for sure that the bindings were expired if we were able
+    // to update the store.
+    all_bindings_expired = (all_bindings_expired && (set_rc == Store::OK));
+
+  } while (set_rc == Store::DATA_CONTENTION);
 
   return all_bindings_expired;
 }

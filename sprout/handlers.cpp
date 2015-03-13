@@ -51,9 +51,12 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 
-static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
-                                    std::string aor_id, RegStore* current_store,
-                                    RegStore* remote_store, RegStore::AoR** previous_aor_data,
+static bool reg_store_access_common(RegStore::AoR** aor_data,
+                                    bool& previous_aor_data_alloced,
+                                    std::string aor_id,
+                                    RegStore* current_store,
+                                    RegStore* remote_store,
+                                    RegStore::AoR** previous_aor_data,
                                     SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
@@ -270,18 +273,34 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
+  Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
-                                 current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data,
+                                 previous_aor_data_alloced,
+                                 aor_id,
+                                 current_store,
+                                 remote_store,
+                                 &previous_aor_data,
+                                 trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
+
+    set_rc = current_store->set_aor_data(aor_id,
+                                         aor_data,
+                                         is_primary,
+                                         trail(),
+                                         all_bindings_expired);
+    if (set_rc != Store::OK)
+    {
+      delete aor_data; aor_data = NULL;
+    }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
+  while (set_rc == Store::DATA_CONTENTION);
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -431,11 +450,17 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
   bool all_bindings_expired = false;
+  Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
-                                 current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data,
+                                 previous_aor_data_alloced,
+                                 aor_id,
+                                 current_store,
+                                 remote_store,
+                                 &previous_aor_data,
+                                 trail()))
     {
       break;
     }
@@ -477,8 +502,18 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
         aor_data->remove_binding(b_id);
       }
     }
+
+    set_rc = current_store->set_aor_data(aor_id,
+                                         aor_data,
+                                         is_primary,
+                                         trail(),
+                                         all_bindings_expired);
+    if (set_rc != Store::OK)
+    {
+      delete aor_data; aor_data = NULL;
+    }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
+  while (set_rc == Store::DATA_CONTENTION);
 
   if (private_id == "")
   {
