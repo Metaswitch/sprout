@@ -35,6 +35,7 @@ TARGET_SOURCES := logger.cpp \
                   localstore.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
+                  memcached_config.cpp \
                   avstore.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \

@@ -247,8 +247,8 @@ private:
   /// Add a Route header with the specified URI.
   void add_route_uri(pjsip_msg* msg, pjsip_sip_uri* uri);
 
-  /// Does URI translation if required. Returns whether the routing 
-  /// decision for the request has already been made 
+  /// Does URI translation if required. Returns whether the routing
+  /// decision for the request has already been made
   bool uri_translation_and_route(pjsip_msg* req);
 
   /// Gets the subscriber's associated URIs and iFCs for each URI from
@@ -284,6 +284,12 @@ private:
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);
+
+  /// Raise a SAS log at the start of originating, terminating, or orig-cdiv
+  /// processing.
+  void sas_log_start_of_sesion_case(pjsip_msg* req,
+                                    const SessionCase* session_case,
+                                    const std::string& served_user);
 
   /// Pointer to the parent SCSCFSproutlet object - used for various operations
   /// that require access to global configuration or services.

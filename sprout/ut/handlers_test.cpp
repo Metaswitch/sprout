@@ -47,8 +47,11 @@
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
+#include "mock_reg_store.h"
 
 using namespace std;
+using ::testing::_;
+using ::testing::Return;
 
 const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                                   "<ClearwaterRegData>"
@@ -61,6 +64,10 @@ const std::string HSS_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                                       "</ServiceProfile>"
                                     "</IMSSubscription>"
                                   "</ClearwaterRegData>";
+const std::string HSS_NOT_REG_STATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                      "<ClearwaterRegData>"
+                                        "<RegistrationState>NOT_REGISTERED</RegistrationState>"
+                                      "</ClearwaterRegData>";
 
 class RegistrationTimeoutTasksTest : public SipTest
 {
@@ -164,16 +171,13 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
 
 class DeregistrationTaskTest : public SipTest
 {
-  FakeChronosConnection* chronos_connection;
-  LocalStore* local_data_store;
-  RegStore* store;
-  FakeHSSConnection* fake_hss;
-
-  MockHttpStack stack;
-  MockHttpStack::Request* req;
-  DeregistrationTask::Config* deregistration_config;
-
-  DeregistrationTask* handler;
+  MockRegStore* _regstore;
+  MockRegStore* _remotestore;
+  MockHttpStack* _httpstack;
+  FakeHSSConnection* _hss;
+  MockHttpStack::Request* _req;
+  DeregistrationTask::Config* _cfg;
+  DeregistrationTask* _task;
 
   static void SetUpTestCase()
   {
@@ -182,36 +186,76 @@ class DeregistrationTaskTest : public SipTest
 
   void SetUp()
   {
-    chronos_connection = new FakeChronosConnection();
-    local_data_store = new LocalStore();
-    store = new RegStore(local_data_store, chronos_connection);
-    fake_hss = new FakeHSSConnection();
-    req = new MockHttpStack::Request(&stack, "/", "registrations");
-    deregistration_config = new DeregistrationTask::Config(store, store, fake_hss, NULL);
-    handler = new DeregistrationTask(*req, deregistration_config, 0);
-
+    _httpstack = new MockHttpStack();
+    _regstore = new MockRegStore();
+    _remotestore = new MockRegStore();
+    _hss = new FakeHSSConnection();
     stack_data.scscf_uri = pj_str("sip:all.the.sprouts:5058;transport=TCP");
   }
 
   void TearDown()
   {
-    delete handler;
-    delete deregistration_config;
-    delete req;
-    delete fake_hss;
-    delete store; store = NULL;
-    delete local_data_store; local_data_store = NULL;
-    delete chronos_connection; chronos_connection = NULL;
+    delete _req;
+    delete _cfg;
+    delete _hss;
+    delete _remotestore;
+    delete _regstore;
+    delete _httpstack;
+  }
+
+  // Build the deregistration request
+  void build_dereg_request(std::string body,
+                           std::string notify = "true",
+                           htp_method method = htp_method_DELETE)
+  {
+    _req = new MockHttpStack::Request(_httpstack,
+         "/registrations?send-notifications=" + notify,
+         "",
+         "send-notifications=" + notify,
+         body,
+         method);
+    _cfg = new DeregistrationTask::Config(_regstore, _remotestore, _hss, NULL);
+    _task = new DeregistrationTask(*_req, _cfg, 0);
+  }
+
+  void expect_reg_store_updates(std::vector<std::string> aor_ids,
+                                std::vector<RegStore::AoR*> aors,
+                                RegStore::AoR* remote_aor)
+  {
+    for (uint32_t ii = 0; ii < aor_ids.size(); ++ii)
+    {
+      // Get the information from the local store
+      EXPECT_CALL(*_regstore, get_aor_data(aor_ids[ii], _)).WillOnce(Return(aors[ii]));
+
+      if (aors[ii] != NULL)
+      {
+        // Write the information to the local store
+        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+
+        // Write the information to the remote store
+        EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _)).WillRepeatedly(Return(remote_aor));
+        if (remote_aor != NULL)
+        {
+          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+        }
+      }
+    }
   }
 };
 
+// Mainline case
 TEST_F(DeregistrationTaskTest, MainlineTest)
 {
-  // Get an initial empty AoR record and add a standard binding
-  int now = time(NULL);
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
+  build_dereg_request(body);
 
-  RegStore::AoR* aor_data1 = store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
-  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
+  // Set up the regstore expectations
+  std::string aor_id = "sip:6505550231@homedomain";
+  // Get an initial empty AoR record and add a standard binding and subscription
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  int now = time(NULL);
+  RegStore::AoR::Binding* b1 = aor->get_binding(std::string("<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1"));
   b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
   b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
   b1->_cseq = 17038;
@@ -223,78 +267,141 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   b1->_params["+sip.ice"] = "";
   b1->_emergency_registration = false;
   b1->_private_id = "6505550231";
+  RegStore::AoR::Subscription* s1 = aor->get_subscription("1234");
+  s1->_req_uri = std::string("sip:5102175698@192.91.191.29:59934;transport=tcp");
+  s1->_from_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_from_tag = std::string("4321");
+  s1->_to_uri = std::string("<sip:5102175698@cw-ngv.com>");
+  s1->_to_tag = std::string("1234");
+  s1->_cid = std::string("xyzabc@192.91.191.29");
+  s1->_route_uris.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  s1->_expires = now + 300;
+  // Set up the remote store to return NULL
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
 
-  // Add the AoR record to the store.
-  store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
-  delete aor_data1; aor_data1 = NULL;
-
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
-  int status = handler->parse_request(body);
-  ASSERT_EQ(status, 200);
-
-  handler->_notify = "true";
-  handler->handle_request();
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
 }
 
-TEST_F(DeregistrationTaskTest, AoROnlyTest)
-{
-  fake_hss->set_result("/impu/sip%3A6505552001%40homedomain/reg-data", HSS_REG_STATE);
-  fake_hss->set_result("/impu/sip%3A6505552002/reg-data", HSS_REG_STATE);
-
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
-  int status = handler->parse_request(body);
-  ASSERT_EQ(status, 200);
-
-  handler->handle_request();
-  fake_hss->flush_all();
-}
-
+// Test where there are multiple pairs of AoRs and Private IDs and single AoRs
 TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
 {
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}]}";
-  int status = handler->parse_request(body);
-  ASSERT_EQ(status, 200);
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}, {\"primary-impu\": \"sip:6505552002@homedomain\", \"impi\": \"6505552002\"}, {\"primary-impu\": \"sip:6505552003@homedomain\"}, {\"primary-impu\": \"sip:6505552004@homedomain\"}]}";
+  build_dereg_request(body, "false");
 
-  handler->handle_request();
+  // Set up the regstore expectations
+  std::string aor_id_1 = "sip:6505552001@homedomain";
+  std::string aor_id_2 = "sip:6505552002@homedomain";
+  std::string aor_id_3 = "sip:6505552003@homedomain";
+  std::string aor_id_4 = "sip:6505552004@homedomain";
+  RegStore::AoR* aor_1 = new RegStore::AoR(aor_id_1);
+  RegStore::AoR* aor_2 = new RegStore::AoR(aor_id_2);
+  RegStore::AoR* aor_3 = new RegStore::AoR(aor_id_3);
+  RegStore::AoR* aor_4 = new RegStore::AoR(aor_id_4);
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id_1, aor_id_2, aor_id_3, aor_id_4};
+  std::vector<RegStore::AoR*> aors = {aor_1, aor_2, aor_3, aor_4};
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
 }
 
-TEST_F(DeregistrationTaskTest, AoRsOnlyTest)
+// Test when the RegStore can't be accessed. 
+TEST_F(DeregistrationTaskTest, RegStoreFailureTest)
 {
-  fake_hss->set_result("/impu/sip%3A6505552001%40homedomain/reg-data", HSS_REG_STATE);
-  fake_hss->set_result("/impu/sip%3A6505552002/reg-data", HSS_REG_STATE);
-  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}, {\"primary-impu\": \"sip:6505552002\"}]}";
-  int status = handler->parse_request(body);
-  ASSERT_EQ(status, 200);
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505552001@homedomain\"}]}";
+  build_dereg_request(body, "false");
 
-  handler->handle_request();
-  fake_hss->flush_all();
+  // Set up the regstore expectations
+  std::string aor_id = "sip:6505552001@homedomain";
+  RegStore::AoR* aor = NULL;
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
+  _task->run();
 }
 
+// Test that an invalid SIP URI doesn't get sent on third party registers.
+TEST_F(DeregistrationTaskTest, InvalidIMPUTest)
+{
+  _hss->set_result("/impu/notavalidsipuri/reg-data", HSS_NOT_REG_STATE);
+  CapturingTestLogger log;
+
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"notavalidsipuri\"}]}";
+  build_dereg_request(body, "false");
+
+  // Set up the regstore expectations
+  std::string aor_id = "notavalidsipuri";
+  RegStore::AoR* aor = new RegStore::AoR(aor_id);
+  RegStore::AoR* remote_aor = NULL;
+  std::vector<std::string> aor_ids = {aor_id};
+  std::vector<RegStore::AoR*> aors = {aor};
+
+  expect_reg_store_updates(aor_ids, aors, remote_aor);
+
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
+  _task->run();
+
+  EXPECT_TRUE(log.contains("Unable to create third party registration"));
+  _hss->flush_all();
+}
+
+// Test that a dereg request that isn't a delete gets rejected.
+TEST_F(DeregistrationTaskTest, InvalidMethodTest)
+{
+  build_dereg_request("", "", htp_method_GET);
+  EXPECT_CALL(*_httpstack, send_reply(_, 405, _));
+  _task->run();
+}
+
+// Test that a dereg request that doesn't have a valid send-notifications param gets rejected.
+TEST_F(DeregistrationTaskTest, InvalidParametersTest)
+{
+  build_dereg_request("", "nottrueorfalse");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
+}
+
+// Test that a dereg request with invalid JSON gets rejected.
 TEST_F(DeregistrationTaskTest, InvalidJSONTest)
 {
-  CapturingTestLogger log;
-  std::string body = "{[}";
-  int status = handler->parse_request(body);
-  EXPECT_TRUE(log.contains("Failed to read data"));
-  ASSERT_EQ(status, 400);
+  build_dereg_request("{[}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
 }
 
+// Test that a dereg request where the JSON is missing the registration element get rejected.
 TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 {
   CapturingTestLogger log;
-  std::string body = "{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}";
-  int status = handler->parse_request(body);
+  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
   EXPECT_TRUE(log.contains("Registrations not available in JSON"));
-  ASSERT_EQ(status, 400);
 }
 
+// Test that a dereg request where the JSON is missing the primary impu element get rejected.
 TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
 {
   CapturingTestLogger log;
-  std::string body = "{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}";
-  int status = handler->parse_request(body);
+  build_dereg_request("{\"registrations\": [{\"primary-imp\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}]}");
+  EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
+  _task->run();
   EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
-  ASSERT_EQ(status, 400);
 }
 
 class AuthTimeoutTest : public SipTest

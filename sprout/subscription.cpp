@@ -504,6 +504,9 @@ void process_subscription_request(pjsip_rx_data* rdata)
     // LCOV_EXCL_STOP
   }
 
+  SAS::Event sub_accepted(trail, SASEvent::SUBSCRIBE_ACCEPTED, 0);
+  SAS::report_event(sub_accepted);
+
   // Build and send the reply.
   pjsip_tx_data* tdata;
   status = PJUtils::create_response(stack_data.endpt, rdata, st_code, NULL, &tdata);

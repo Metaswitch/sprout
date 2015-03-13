@@ -131,12 +131,11 @@ const static struct pj_getopt_option long_opt[] =
   { "localhost",                    required_argument, 0, 'l'},
   { "domain",                       required_argument, 0, 'D'},
   { "additional-domains",           required_argument, 0, OPT_ADDITIONAL_HOME_DOMAINS},
-  { "scscf_uri",                    required_argument, 0, 'c'},
+  { "scscf-uri",                    required_argument, 0, 'c'},
   { "alias",                        required_argument, 0, 'n'},
   { "routing-proxy",                required_argument, 0, 'r'},
   { "ibcf",                         required_argument, 0, 'I'},
   { "external-icscf",               required_argument, 0, 'j'},
-  { "auth",                         required_argument, 0, 'A'},
   { "realm",                        required_argument, 0, 'R'},
   { "memstore",                     required_argument, 0, 'M'},
   { "remote-memstore",              required_argument, 0, 'm'},
@@ -161,9 +160,9 @@ const static struct pj_getopt_option long_opt[] =
   { "analytics",                    required_argument, 0, 'a'},
   { "authentication",               no_argument,       0, 'A'},
   { "log-file",                     required_argument, 0, 'F'},
-  { "http_address",                 required_argument, 0, 'T'},
-  { "http_port",                    required_argument, 0, 'o'},
-  { "http_threads",                 required_argument, 0, 'q'},
+  { "http-address",                 required_argument, 0, 'T'},
+  { "http-port",                    required_argument, 0, 'o'},
+  { "http-threads",                 required_argument, 0, 'q'},
   { "billing-cdf",                  required_argument, 0, 'B'},
   { "allow-emergency-registration", no_argument,       0, OPT_EMERGENCY_REG_ACCEPTED},
   { "max-call-list-length",         required_argument, 0, OPT_MAX_CALL_LIST_LENGTH},
@@ -209,14 +208,13 @@ static void usage(void)
        "                            Override the local host name with the specified\n"
        "                            hostname(s) or IP address(es).  If one name/address\n"
        "                            is specified it is used as both private and public names.\n"
-       " -D, --domain <name>        Override the home domain name\n"
+       " -D, --domain <name>        The home domain name\n"
        "     --additional-domains <names>\n"
        "                            Comma-separated list of additional home domain names\n"
-       " -c, --scscf-uri <name>     Override the Sprout S-CSCF cluster domain URI.  This URI\n"
+       " -c, --scscf-uri <name>     The Sprout S-CSCF cluster domain URI.  This URI\n"
        "                            must route requests to the S-CSCF port on the Sprout\n"
        "                            cluster, either by specifying the port explicitly or\n"
-       "                            using DNS SRV records to specify the port.  (If not\n"
-       "                            specified this defaults to sip:<localhost>:<scscf port>;transport=TCP)\n"
+       "                            using DNS SRV records to specify the port.\n"
        " -n, --alias <names>        Optional list of alias host names\n"
        " -r, --routing-proxy <name>[,<port>[,<connections>[,<recycle time>]]]\n"
        "                            Operate as an access proxy using the specified node\n"
@@ -243,8 +241,8 @@ static void usage(void)
        "                            Use specified host as Service Assurance Server and specified\n"
        "                            system name to identify this system to SAS.  If this option isn't\n"
        "                            specified SAS is disabled\n"
-       " -H, --hss <server>         Name/IP address of HSS server\n"
-       " -K, --chronos              Name/IP address of chronos service\n"
+       " -H, --hss <server>         Name/IP address of the Homestead cluster\n"
+       " -K, --chronos              Name/IP address of the local chronos service\n"
        " -C, --record-routing-model <model>\n"
        "                            If 'pcscf', Sprout Record-Routes itself only on initiation of\n"
        "                            originating processing and completion of terminating\n"
@@ -284,13 +282,13 @@ static void usage(void)
        "                            the throttling code (default: 100.0))\n"
        "     --min-token-rate N     Minimum token refill rate of tokens in the token bucket (used by\n"
        "                            the throttling code (default: 10.0))\n"
-       " -T  --http_address <server>\n"
+       " -T  --http-address <server>\n"
        "                            Specify the HTTP bind address\n"
-       " -o  --http_port <port>     Specify the HTTP bind port\n"
-       " -q  --http_threads N       Number of HTTP threads (default: 1)\n"
-       " -P, --pjsip_threads N      Number of PJSIP threads (default: 1)\n"
+       " -o  --http-port <port>     Specify the HTTP bind port\n"
+       " -q  --http-threads N       Number of HTTP threads (default: 1)\n"
+       " -P, --pjsip-threads N      Number of PJSIP threads (default: 1)\n"
        " -B, --billing-cdf <server> Billing CDF server\n"
-       " -W, --worker_threads N     Number of worker threads (default: 1)\n"
+       " -W, --worker-threads N     Number of worker threads (default: 1)\n"
        " -a, --analytics <directory>\n"
        "                            Generate analytics logs in specified directory\n"
        " -A, --authentication       Enable authentication\n"
@@ -507,7 +505,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'D':
       options->home_domain = std::string(pj_optarg);
-      LOG_INFO("Override home domain set to %s", pj_optarg);
+      LOG_INFO("Home domain set to %s", pj_optarg);
       break;
 
     case OPT_ADDITIONAL_HOME_DOMAINS:
@@ -517,7 +515,7 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
 
     case 'c':
       options->scscf_uri = std::string(pj_optarg);
-      LOG_INFO("Override sprout cluster URI set to %s", pj_optarg);
+      LOG_INFO("Sprout cluster URI set to %s", pj_optarg);
       break;
 
     case 'n':
@@ -1152,12 +1150,13 @@ int main(int argc, char* argv[])
   opt.icscf_enabled = false;
   opt.icscf_port = 0;
   opt.sas_server = "0.0.0.0";
+  opt.chronos_service = "localhost:7253";
   opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
-  opt.http_address = "0.0.0.0";
+  opt.http_address = "127.0.0.1";
   opt.http_port = 9888;
   opt.http_threads = 1;
   opt.dns_servers.push_back("127.0.0.1");
@@ -1291,6 +1290,12 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  if ((opt.scscf_enabled) && (opt.scscf_uri == ""))
+  {
+    LOG_ERROR("S-CSCF enabled, but no S-CSCF URI specified");
+    return 1;
+  }
+
   if (((opt.scscf_enabled) || (opt.icscf_enabled)) &&
       (opt.hss_server == ""))
   {
@@ -1304,7 +1309,7 @@ int main(int argc, char* argv[])
   {
     CL_SPROUT_AUTH_NO_HOMESTEAD.log();
     closelog();
-    LOG_ERROR("Authentication enable, but no Homestead server specified");
+    LOG_ERROR("Authentication enabled, but no Homestead server specified");
     return 1;
   }
 
@@ -1324,14 +1329,6 @@ int main(int argc, char* argv[])
   if ((opt.pcscf_enabled) && (opt.xdm_server != ""))
   {
     LOG_WARNING("XDM server configured on P-CSCF, ignoring");
-  }
-
-  if (opt.scscf_enabled && (opt.chronos_service == ""))
-  {
-    CL_SPROUT_S_CSCF_NO_CHRONOS.log();
-    closelog();
-    LOG_ERROR("S-CSCF enabled with no Chronos service");
-    return 1;
   }
 
   if ((opt.store_servers != "") &&
@@ -1599,7 +1596,7 @@ int main(int argc, char* argv[])
       // Use memcached store.
       LOG_STATUS("Using memcached compatible store with ASCII protocol");
 
-      local_data_store = (Store*)new MemcachedStore(false,
+      local_data_store = (Store*)new MemcachedStore(true,
                                                     opt.store_servers,
                                                     memcached_comm_monitor,
                                                     vbucket_alarm);
@@ -1616,7 +1613,7 @@ int main(int argc, char* argv[])
         // Use remote memcached store too.
         LOG_STATUS("Using remote memcached compatible store with ASCII protocol");
 
-        remote_data_store = (Store*)new MemcachedStore(false,
+        remote_data_store = (Store*)new MemcachedStore(true,
                                                        opt.remote_store_servers,
                                                        memcached_remote_comm_monitor,
                                                        remote_vbucket_alarm);
