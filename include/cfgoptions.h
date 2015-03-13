@@ -85,7 +85,6 @@ struct options
   std::string                          trusted_hosts;
   bool                                 auth_enabled;
   std::string                          auth_realm;
-  std::string                          auth_config;
   std::string                          sas_server;
   std::string                          sas_system_name;
   std::string                          hss_server;

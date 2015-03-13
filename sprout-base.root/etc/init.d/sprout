@@ -193,7 +193,7 @@ do_start()
                      --dns-server=$signaling_dns_server
                      --pjsip-threads=$num_pjsip_threads
                      --worker-threads=$num_worker_threads
-                     --http_threads=$num_http_threads
+                     --http-threads=$num_http_threads
                      --record-routing-model=$sprout_rr_level
                      --default-session-expires=$default_session_expires
                      $target_latency_us_arg
@@ -207,8 +207,8 @@ do_start()
                      $override_npdi_arg
                      $alarms_enabled_arg
                      $exception_max_ttl_arg
-                     --http_address=$local_ip
-                     --http_port=9888
+                     --http-address=$local_ip
+                     --http-port=9888
                      --analytics=$log_directory
                      --log-file=$log_directory
                      --log-level=$log_level"
@@ -251,9 +251,9 @@ do_start()
 
           if [ -n "$scscf_uri" ]
           then
-            DAEMON_ARGS="$DAEMON_ARGS --scscf_uri=$scscf_uri"
+            DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=$scscf_uri"
           else
-            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf_uri=sip:$sprout_hostname:$scscf;transport=TCP"
+            [ -z "$sprout_hostname" ] || DAEMON_ARGS="$DAEMON_ARGS --scscf-uri=sip:$sprout_hostname:$scscf;transport=TCP"
           fi
 
         fi
