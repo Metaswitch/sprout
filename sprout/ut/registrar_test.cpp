@@ -47,9 +47,11 @@
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
+#include "mock_store.h"
 
-using namespace std;
-using testing::MatchesRegex;
+using ::testing::MatchesRegex;
+using ::testing::_;
+using ::testing::Return;
 
 /// Fixture for RegistrarTest.
 class RegistrarTest : public SipTest
@@ -1877,14 +1879,12 @@ public:
   void SetUp()
   {
     _chronos_connection = new FakeChronosConnection();
-    _local_data_store = new LocalStore();
-    _remote_data_store = new LocalStore();
+    _local_data_store = new MockStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
-    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
     _hss_connection = new FakeHSSConnection();
     _acr_factory = new ACRFactory();
-    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, 300);
+    pj_status_t ret = init_registrar(_store, NULL, _hss_connection, _analytics, _acr_factory, 300);
     ASSERT_EQ(PJ_SUCCESS, ret);
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
@@ -1918,9 +1918,7 @@ public:
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _analytics;
-    delete _remote_store; _remote_store = NULL;
     delete _store; _store = NULL;
-    delete _remote_data_store; _remote_data_store = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _chronos_connection; _chronos_connection = NULL;
   }
@@ -1931,10 +1929,8 @@ public:
 
 
 protected:
-  LocalStore* _local_data_store;
-  LocalStore* _remote_data_store;
+  MockStore* _local_data_store;
   RegStore* _store;
-  RegStore* _remote_store;
   AnalyticsLogger* _analytics;
   IfcHandler* _ifc_handler;
   ACRFactory* _acr_factory;
@@ -1942,8 +1938,21 @@ protected:
   FakeChronosConnection* _chronos_connection;
 };
 
+
+// Check that the RegStore does not infinite loop when the underlying store is
+// in an odd state, specifically when it:
+// -  Returns NOT_FOUND to all gets
+// -  Returns ERROR to all sets.
+//
+// This is a repro for https://github.com/Metaswitch/sprout/issues/977
 TEST_F(RegistrarTestMockStore, SimpleMainlineAuthHeader)
 {
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+    .WillOnce(Return(Store::NOT_FOUND));
+
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+    .WillOnce(Return(Store::ERROR));
+
   // We have a private ID in this test, so set up the expect response
   // to the query.
   _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
@@ -1958,12 +1967,5 @@ TEST_F(RegistrarTestMockStore, SimpleMainlineAuthHeader)
   out = pop_txdata()->msg;
   EXPECT_EQ(200, out->line.status.code);
   EXPECT_EQ("OK", str_pj(out->line.status.reason));
-  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
-  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
-            get_headers(out, "Contact"));
-  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
-  EXPECT_EQ(msg._path, get_headers(out, "Path"));
-  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
-  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
   free_txdata();
 }
