@@ -37,9 +37,6 @@
 # This script uses a SIP message to poll a process and check whether it is
 # healthy.
 
-# In case sprout has only just restarted, give it a few seconds to come up
-sleep 5
-
 # Read the config, defaulting appropriately.
 scscf=5054
 icscf=0

@@ -34,35 +34,40 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
-. /etc/clearwater/config
-
 # Set up the monit configuration for sprout with the right IP addresses and ports
 cat > /etc/monit/conf.d/sprout.monit <<EOF
-# Check the service's public interfaces.  We put this first so that we process
-# failed polls (and maybe kill the server) before we process the restart.
+# Check the Sprout process.
 
-check program poll_sprout with path "/usr/share/clearwater/bin/poll_sprout.sh"
+# Monitor the service's PID file and memory use.
+check process sprout with pidfile /var/run/sprout.pid
 
-  if status != 0 for 2 cycles
-     then exec "/etc/init.d/sprout abort"
+  # The start, stop and restart commands are linked to alarms
+  start program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout start'"
+  stop program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout stop'"
+  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout restart'"
 
+  # Check the service's resource usage, and abort the process if it's too high. This will
+  # generate a core file and trigger diagnostics collection. 
+  if memory > 80% for 6 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 
-# Monitor the service's PID file and check its memory usage. Issue an alarm for
-# any restart, clear after the process has run for 30s.
-
-check process sprout pidfile /var/run/sprout.pid
-
-  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout start'"
-  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout stop'"
-  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort-restart'"
-
-  if memory is greater than 80% for 3 cycles
-     then restart
-
+  # Clear any alarms if the process has been running for 30 seconds
   if uptime < 30 seconds
      then exec "/bin/true"
-     else if succeeded
-         then exec "/usr/share/clearwater/bin/issue_alarm.py monit 1000.1"
+     else if succeeded then exec "/usr/share/clearwater/bin/issue_alarm.py monit 1000.1"
+
+# Check the SIP/HTTP interfaces. These depend on the Sprout process (and so won't run
+# unless the Sprout process is running)
+check program poll_sprout_sip with path "/usr/share/clearwater/bin/poll_sprout_sip.sh"
+  depends on sprout
+
+  # Aborting generates a core file and triggers diagnostic collection.
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
+
+check program poll_sprout_http with path "/usr/share/clearwater/bin/poll_sprout_http.sh"
+  depends on sprout
+
+  # Aborting generates a core file and triggers diagnostic collection.
+  if status != 0 for 2 cycles then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 1000.3; /etc/init.d/sprout abort'"
 EOF
 chmod 0644 /etc/monit/conf.d/sprout.monit
 
