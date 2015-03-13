@@ -1862,3 +1862,108 @@ TEST_F(RegistrarTest, RinstanceParameter)
   free_txdata();
 }
 
+
+/// Fixture for RegistrarTest.
+class RegistrarTestMockStore : public SipTest
+{
+public:
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+  }
+
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _local_data_store = new LocalStore();
+    _remote_data_store = new LocalStore();
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _remote_store = new RegStore((Store*)_remote_data_store, _chronos_connection);
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_registrar(_store, _remote_store, _hss_connection, _analytics, _acr_factory, 300);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  void TearDown()
+  {
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
+    // Stop and restart the layer just in case
+    //pjsip_tsx_layer_instance()->stop();
+    //pjsip_tsx_layer_instance()->start();
+
+    destroy_registrar();
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _analytics;
+    delete _remote_store; _remote_store = NULL;
+    delete _store; _store = NULL;
+    delete _remote_data_store; _remote_data_store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  RegistrarTestMockStore() : SipTest(&mod_registrar)
+  {
+  }
+
+
+protected:
+  LocalStore* _local_data_store;
+  LocalStore* _remote_data_store;
+  RegStore* _store;
+  RegStore* _remote_store;
+  AnalyticsLogger* _analytics;
+  IfcHandler* _ifc_handler;
+  ACRFactory* _acr_factory;
+  FakeHSSConnection* _hss_connection;
+  FakeChronosConnection* _chronos_connection;
+};
+
+TEST_F(RegistrarTestMockStore, SimpleMainlineAuthHeader)
+{
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  EXPECT_EQ("OK", str_pj(out->line.status.reason));
+  EXPECT_EQ("Supported: outbound", get_headers(out, "Supported"));
+  EXPECT_EQ("Contact: <sip:f5cc3de4334589d89c661a7acf228ed7@10.114.61.213:5061;transport=tcp;ob>;expires=300;+sip.ice;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\";reg-id=1;pub-gruu=\"sip:6505550231@homedomain;gr=urn:uuid:00000000-0000-0000-0000-b665231f1213\"",
+            get_headers(out, "Contact"));
+  EXPECT_EQ("Require: outbound", get_headers(out, "Require")); // because we have path
+  EXPECT_EQ(msg._path, get_headers(out, "Path"));
+  EXPECT_EQ("P-Associated-URI: <sip:6505550231@homedomain>", get_headers(out, "P-Associated-URI"));
+  EXPECT_EQ("Service-Route: <sip:all.the.sprout.nodes:5058;transport=TCP;lr;orig>", get_headers(out, "Service-Route"));
+  free_txdata();
+}
