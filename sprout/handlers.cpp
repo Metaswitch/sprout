@@ -259,6 +259,13 @@ void RegistrationTimeoutTask::handle_response()
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
+  else
+  {
+    // We couldn't update the RegStore but there is nothing else we can do to
+    // recover from this.
+    LOG_INFO("Could not update update RegStore on registration timeout for AoR: %s",
+             _aor_id.c_str());
+  }
 
   delete aor_data;
   report_sip_all_register_marker(trail(), _aor_id);
