@@ -97,6 +97,8 @@ public:
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
 
   ~SubscriptionTest()
@@ -593,6 +595,8 @@ public:
 
     _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
     _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
 
   static void TearDownTestCase()
@@ -642,7 +646,7 @@ TEST_F(SubscriptionTestMockStore, RegStoreWritesFail)
   SubscribeMessage msg;
   inject_msg(msg.get());
 
-  ASSERT_EQ(2, txdata_count());
+  ASSERT_EQ(1, txdata_count());
   pjsip_msg* out = current_txdata()->msg;
   EXPECT_EQ(500, out->line.status.code);
   free_txdata();

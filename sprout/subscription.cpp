@@ -148,6 +148,7 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
   pj_status_t status = PJ_FALSE;
   Store::Status set_rc;
   (*aor_data) = NULL;
+  RegStore::AoR::Subscription* subscription_copy = NULL;
 
   do
   {
@@ -252,47 +253,11 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       }
 
       subscription->_expires = now + expiry;
-      std::map<std::string, RegStore::AoR::Binding> bindings;
 
-      for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
-           i != (*aor_data)->bindings().end();
-           ++i)
-      {
-        std::string id = i->first;
-        RegStore::AoR::Binding bind = *(i->second);
-
-        if (!bind._emergency_registration)
-        {
-          bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
-        }
-      }
-
-      if (update_notify)
-      {
-        NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
-
-        if (expiry == 0)
-        {
-          state = NotifyUtils::SubscriptionState::TERMINATED;
-        }
-
-        // Increment the CSeq before creating a NOTIFY
-        (*aor_data)->_notify_cseq++;
-
-        status = NotifyUtils::create_notify(tdata_notify, subscription, aor,
-                                            (*aor_data)->_notify_cseq, bindings,
-                                            NotifyUtils::DocState::FULL,
-                                            NotifyUtils::RegistrationState::ACTIVE,
-                                            NotifyUtils::ContactState::ACTIVE,
-                                            NotifyUtils::ContactEvent::REGISTERED,
-                                            state, expiry);
-      }
-
-      if (analytics != NULL)
-      {
-        // Generate an analytics log for this subscription update.
-        analytics->subscription(aor, subscription_id, contact_uri, expiry);
-      }
+      // We need the subscription object to build a corresponding NOTIFY below.
+      // However calling `set_aor_data` may invalidate the pointer we already
+      // have, so make a copy of the subscription for later use.
+      subscription_copy = new RegStore::AoR::Subscription(*subscription);
     }
 
     // Try to write the AoR back to the store.
@@ -301,15 +266,70 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
     if (set_rc != Store::OK)
     {
       delete *aor_data; *aor_data = NULL;
+      delete subscription_copy; subscription_copy = NULL;
     }
   }
   while (set_rc == Store::DATA_CONTENTION);
 
+  if (subscription_copy != NULL)
+  {
+    std::map<std::string, RegStore::AoR::Binding> bindings;
+
+    for (RegStore::AoR::Bindings::const_iterator i = (*aor_data)->bindings().begin();
+         i != (*aor_data)->bindings().end();
+         ++i)
+    {
+      std::string id = i->first;
+      RegStore::AoR::Binding bind = *(i->second);
+
+      if (!bind._emergency_registration)
+      {
+        bindings.insert(std::pair<std::string, RegStore::AoR::Binding>(id, bind));
+      }
+    }
+
+    if (update_notify)
+    {
+      NotifyUtils::SubscriptionState state = NotifyUtils::SubscriptionState::ACTIVE;
+
+      if (expiry == 0)
+      {
+        state = NotifyUtils::SubscriptionState::TERMINATED;
+      }
+
+      // Increment the CSeq before creating a NOTIFY
+      (*aor_data)->_notify_cseq++;
+
+      status = NotifyUtils::create_notify(tdata_notify,
+                                          subscription_copy,
+                                          aor,
+                                          (*aor_data)->_notify_cseq,
+                                          bindings,
+                                          NotifyUtils::DocState::FULL,
+                                          NotifyUtils::RegistrationState::ACTIVE,
+                                          NotifyUtils::ContactState::ACTIVE,
+                                          NotifyUtils::ContactEvent::REGISTERED,
+                                          state,
+                                          expiry);
+    }
+
+    if (analytics != NULL)
+    {
+      // Generate an analytics log for this subscription update.
+      analytics->subscription(aor,
+                              subscription_id,
+                              subscription_copy->_req_uri,
+                              expiry);
+    }
+  }
+
   // If we allocated the backup AoR, tidy up.
   if (backup_aor_alloced)
   {
-    delete backup_aor;
+    delete backup_aor; backup_aor = NULL;
   }
+
+  delete subscription_copy; subscription_copy = NULL;
 
   return status;
 }
