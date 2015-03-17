@@ -383,7 +383,8 @@ static bool expire_bindings(RegStore *store, const std::string& aor, const std::
     // to update the store.
     all_bindings_expired = (all_bindings_expired && (set_rc == Store::OK));
 
-  } while (set_rc == Store::DATA_CONTENTION);
+  }
+  while (set_rc == Store::DATA_CONTENTION);
 
   return all_bindings_expired;
 }

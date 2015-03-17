@@ -1910,10 +1910,6 @@ public:
     cwtest_advance_time_ms(33000L);
     poll();
 
-    // Stop and restart the layer just in case
-    //pjsip_tsx_layer_instance()->stop();
-    //pjsip_tsx_layer_instance()->start();
-
     destroy_registrar();
     delete _acr_factory; _acr_factory = NULL;
     delete _hss_connection; _hss_connection = NULL;
