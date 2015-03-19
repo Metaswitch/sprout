@@ -327,7 +327,8 @@ public:
                                      ACR* acr);
 
   void on_initial_request(pjsip_msg* msg,
-                          std::string& server_name);
+                          std::string& server_name,
+                          SAS::TrailId msg_trail);
 
 private:
   friend class AsChainTable;

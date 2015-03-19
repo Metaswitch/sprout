@@ -3056,7 +3056,7 @@ AsChainLink::Disposition UASTransaction::apply_services(Target*& target)
 
   while (true)
   {
-    _as_chain_links.back().on_initial_request(_req->msg, server_name);
+    _as_chain_links.back().on_initial_request(_req->msg, server_name, trail());
     disposition = server_name.empty() ? AsChainLink::Disposition::Complete : AsChainLink::Disposition::Skip;
 
     if ((call_services_handler) &&

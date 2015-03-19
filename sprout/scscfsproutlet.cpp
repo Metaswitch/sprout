@@ -926,7 +926,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name);
+  _as_chain_link.on_initial_request(req, server_name, trail());
 
   if (!server_name.empty())
   {
@@ -980,7 +980,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name);
+  _as_chain_link.on_initial_request(req, server_name, trail());
 
   if (!server_name.empty())
   {
