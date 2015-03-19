@@ -118,6 +118,8 @@ get_settings()
         fi
 
         [ -z "$ralf_hostname" ] || ralf_arg="--ralf $ralf_hostname"
+        # cdf_identity is the correct option for billing cdf.  For historical reasons, we also allow billing_cdf.
+        [ -z "$cdf_identity" ] || billing_cdf_arg="--billing-cdf $cdf_identity"
         [ -z "$billing_cdf" ] || billing_cdf_arg="--billing-cdf $billing_cdf"
         [ -z "$target_latency_us" ] || target_latency_us_arg="--target-latency-us $target_latency_us"
         [ -z "$max_tokens" ] || max_tokens_arg="--max-tokens $max_tokens"
