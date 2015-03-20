@@ -629,11 +629,8 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
   }
 }
 
-
-pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
+void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 {
-  pjsip_status_code status_code = PJSIP_SC_OK;
-
   // Get the top route header.
   const pjsip_route_hdr* hroute = route_hdr();
 
@@ -679,6 +676,30 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
     }
 
+    // If an application server is a B2BUA and so changes the Call-ID,
+    // we'll normally correlate that in SAS through the AS chain
+    // (directly correlating the new trail and the trail of the
+    // original dialog). If it strips the ODI token for any reason,
+    // that won't work - so as a fallback, if we have no ODI token,
+    // we'll log an ICID marker to correlate the trails.
+    if (!_as_chain_link.is_set())
+    {
+      pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)pjsip_msg_find_hdr_by_name(req,
+                                                                          &STR_P_C_V,
+                                                                          NULL);
+      if (pcv)
+      {
+        LOG_DEBUG("No ODI token, or invalid ODI token, on request - logging ICID marker %.*s for B2BUA AS correlation", pcv->icid.slen, pcv->icid.ptr);
+        SAS::Marker icid_marker(trail(), MARKER_ID_IMS_CHARGING_ID, 1u);
+        icid_marker.add_var_param(pcv->icid.slen, pcv->icid.ptr);
+        SAS::report_marker(icid_marker, SAS::Marker::Scope::Trace);
+      }
+      else
+      {
+        LOG_DEBUG("No ODI token, or invalid ODI token, on request, and no P-Charging-Vector header (so can't log ICID for correlation)");
+      }
+    }
+    
     LOG_DEBUG("Got our Route header, session case %s, OD=%s",
               _session_case->to_string().c_str(),
               _as_chain_link.to_string().c_str());
@@ -691,6 +712,14 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
+  
+}
+
+pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
+{
+  pjsip_status_code status_code = PJSIP_SC_OK;
+
+  retrieve_odi_and_sesscase(req);
 
   if (_as_chain_link.is_set())
   {
@@ -926,7 +955,7 @@ void SCSCFSproutletTsx::apply_originating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name);
+  _as_chain_link.on_initial_request(req, server_name, trail());
 
   if (!server_name.empty())
   {
@@ -980,7 +1009,7 @@ void SCSCFSproutletTsx::apply_terminating_services(pjsip_msg* req)
 
   // Find the next application server to invoke.
   std::string server_name;
-  _as_chain_link.on_initial_request(req, server_name);
+  _as_chain_link.on_initial_request(req, server_name, trail());
 
   if (!server_name.empty())
   {
