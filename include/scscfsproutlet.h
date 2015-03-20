@@ -208,9 +208,9 @@ public:
   virtual void on_timer_expiry(void* context);
 
 private:
-  // Examines the top route header to determine the relevant AS chain
-  // (from the ODI token) and the session case (based on the presence of
-  // the 'orig' param).
+  /// Examines the top route header to determine the relevant AS chain
+  /// (from the ODI token) and the session case (based on the presence of
+  /// the 'orig' param), and sets those as member variables.
   void retrieve_odi_and_sesscase(pjsip_msg* req);
   
   /// Determines the served user for the request.
