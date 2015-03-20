@@ -47,9 +47,11 @@
 #include "fakehssconnection.hpp"
 #include "fakechronosconnection.hpp"
 #include "test_interposer.hpp"
+#include "mock_store.h"
 
-using namespace std;
-using testing::MatchesRegex;
+using ::testing::MatchesRegex;
+using ::testing::_;
+using ::testing::Return;
 
 /// Fixture for RegistrarTest.
 class RegistrarTest : public SipTest
@@ -1862,3 +1864,102 @@ TEST_F(RegistrarTest, RinstanceParameter)
   free_txdata();
 }
 
+
+/// Fixture for RegistrarTest.
+class RegistrarTestMockStore : public SipTest
+{
+public:
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+  }
+
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _local_data_store = new MockStore();
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_registrar(_store, NULL, _hss_connection, _analytics, _acr_factory, 300);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "reg", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_rc("/impu/sip%3A6505550231%40homedomain/reg-data", HTTP_OK);
+    _chronos_connection->set_result("", HTTP_OK);
+    _chronos_connection->set_result("post_identity", HTTP_OK);
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  void TearDown()
+  {
+    // PJSIP transactions aren't actually destroyed until a zero ms
+    // timer fires (presumably to ensure destruction doesn't hold up
+    // real work), so poll for that to happen. Otherwise we leak!
+    // Allow a good length of time to pass too, in case we have
+    // transactions still open. 32s is the default UAS INVITE
+    // transaction timeout, so we go higher than that.
+    cwtest_advance_time_ms(33000L);
+    poll();
+
+    destroy_registrar();
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _analytics;
+    delete _store; _store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  RegistrarTestMockStore() : SipTest(&mod_registrar)
+  {
+  }
+
+
+protected:
+  MockStore* _local_data_store;
+  RegStore* _store;
+  AnalyticsLogger* _analytics;
+  IfcHandler* _ifc_handler;
+  ACRFactory* _acr_factory;
+  FakeHSSConnection* _hss_connection;
+  FakeChronosConnection* _chronos_connection;
+};
+
+
+// Check that the registrar does not infinite loop when the underlying store is
+// in an odd state, specifically when it:
+// -  Returns NOT_FOUND to all gets
+// -  Returns ERROR to all sets.
+//
+// This is a repro for https://github.com/Metaswitch/sprout/issues/977
+TEST_F(RegistrarTestMockStore, RegStoreWritesFail)
+{
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+    .WillOnce(Return(Store::NOT_FOUND));
+
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+    .WillOnce(Return(Store::ERROR));
+
+  // We have a private ID in this test, so set up the expect response
+  // to the query.
+  _hss_connection->set_impu_result("sip:6505550231@homedomain", "reg", HSSConnection::STATE_REGISTERED, "", "?private_id=Alice");
+
+  Message msg;
+  msg._expires = "Expires: 300";
+  msg._auth = "Authorization: Digest username=\"Alice\", realm=\"atlanta.com\", nonce=\"84a4cc6f3082121f32b42a2187831a9e\", response=\"7587245234b3434cc3412213e5f113a5432\"";
+  msg._contact_params = ";+sip.ice;reg-id=1";
+  inject_msg(msg.get());
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  free_txdata();
+}

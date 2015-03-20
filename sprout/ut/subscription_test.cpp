@@ -46,11 +46,13 @@
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_store.h"
 
-using namespace std;
-using testing::MatchesRegex;
-using testing::HasSubstr;
-using testing::Not;
+using ::testing::MatchesRegex;
+using ::testing::HasSubstr;
+using ::testing::Not;
+using ::testing::_;
+using ::testing::Return;
 
 /// Fixture for SubscriptionTest.
 class SubscriptionTest : public SipTest
@@ -95,6 +97,8 @@ public:
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
 
   ~SubscriptionTest()
@@ -566,3 +570,84 @@ void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
   inject_msg(respond_to_current_txdata(200));
 }
 
+
+/// Fixture for Subscription tests that use a mock store instead of a fake one.
+class SubscriptionTestMockStore : public SipTest
+{
+public:
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+    add_host_mapping("sprout.example.com", "10.8.8.1");
+  }
+
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _local_data_store = new MockStore();
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_subscription(_store, NULL, _hss_connection, _acr_factory, _analytics, 300);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  void TearDown()
+  {
+    destroy_subscription();
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _analytics; _analytics = NULL;
+    delete _store; _store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  SubscriptionTestMockStore() : SipTest(&mod_subscription)
+  {
+  }
+
+protected:
+  MockStore* _local_data_store;
+  RegStore* _store;
+  AnalyticsLogger* _analytics;
+  ACRFactory* _acr_factory;
+  FakeHSSConnection* _hss_connection;
+  FakeChronosConnection* _chronos_connection;
+};
+
+
+// Check that the subscription module does not infinite loop when the underlying
+// store is in an odd state, specifically when it:
+// -  Returns NOT_FOUND to all gets
+// -  Returns ERROR to all sets.
+//
+// This is a repro for https://github.com/Metaswitch/sprout/issues/977
+TEST_F(SubscriptionTestMockStore, RegStoreWritesFail)
+{
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+    .WillOnce(Return(Store::NOT_FOUND));
+
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+    .WillOnce(Return(Store::ERROR));
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  free_txdata();
+}

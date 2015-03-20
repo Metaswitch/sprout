@@ -169,6 +169,64 @@ TEST_F(RegistrationTimeoutTasksTest, MissingBindingJSONTest)
   ASSERT_EQ(status, 400);
 }
 
+
+class RegistrationTimeoutTasksMockStoreTest : public SipTest
+{
+  FakeChronosConnection* chronos_connection;
+  MockRegStore* store;
+  FakeHSSConnection* fake_hss;
+
+  MockHttpStack stack;
+  MockHttpStack::Request* req;
+  RegistrationTimeoutTask::Config* chronos_config;
+
+  RegistrationTimeoutTask* handler;
+
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase(false);
+  }
+
+  void SetUp()
+  {
+    chronos_connection = new FakeChronosConnection();
+    store = new MockRegStore();
+    fake_hss = new FakeHSSConnection();
+    req = new MockHttpStack::Request(&stack, "/", "timers");
+    chronos_config = new RegistrationTimeoutTask::Config(store, NULL, fake_hss);
+    handler = new RegistrationTimeoutTask(*req, chronos_config, 0);
+  }
+
+  void TearDown()
+  {
+    delete handler;
+    delete chronos_config;
+    delete req;
+    delete fake_hss;
+    delete store; store = NULL;
+    delete chronos_connection; chronos_connection = NULL;
+  }
+
+};
+
+TEST_F(RegistrationTimeoutTasksMockStoreTest, RegStoreWritesFail)
+{
+  // Set up the RegStore to fail all sets and respond to all gets with not
+  // found.
+  RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
+  EXPECT_CALL(*store, get_aor_data(_, _)).WillOnce(Return(aor));
+  EXPECT_CALL(*store, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+
+  // Parse and handle the request
+  std::string body = "{\"aor_id\": \"sip:6505550231@homedomain\", \"binding_id\": \"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>:1\"}";
+  int status = handler->parse_response(body);
+
+  ASSERT_EQ(status, 200);
+
+  handler->handle_response();
+}
+
+
 class DeregistrationTaskTest : public SipTest
 {
   MockRegStore* _regstore;
@@ -230,13 +288,13 @@ class DeregistrationTaskTest : public SipTest
       if (aors[ii] != NULL)
       {
         // Write the information to the local store
-        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+        EXPECT_CALL(*_regstore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
 
         // Write the information to the remote store
         EXPECT_CALL(*_remotestore, get_aor_data(aor_ids[ii], _)).WillRepeatedly(Return(remote_aor));
         if (remote_aor != NULL)
         {
-          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(true));
+          EXPECT_CALL(*_remotestore, set_aor_data(aor_ids[ii], _, _, _, _)).WillOnce(Return(Store::OK));
         }
       }
     }
@@ -313,7 +371,7 @@ TEST_F(DeregistrationTaskTest, AoRPrivateIdPairsTest)
   _task->run();
 }
 
-// Test when the RegStore can't be accessed. 
+// Test when the RegStore can't be accessed.
 TEST_F(DeregistrationTaskTest, RegStoreFailureTest)
 {
   // Build the request
@@ -403,6 +461,29 @@ TEST_F(DeregistrationTaskTest, MissingPrimaryIMPUJSONTest)
   _task->run();
   EXPECT_TRUE(log.contains("Invalid JSON - registration doesn't contain primary-impu"));
 }
+
+
+TEST_F(DeregistrationTaskTest, RegStoreWritesFail)
+{
+  // We don't want a remote store for this test.
+  MockRegStore* tmp = _remotestore;
+  _remotestore = NULL;
+
+  // Build the request
+  std::string body = "{\"registrations\": [{\"primary-impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231\"}]}";
+  build_dereg_request(body);
+
+  RegStore::AoR* aor = new RegStore::AoR("sip:6505550231@homedomain");
+  EXPECT_CALL(*_regstore, get_aor_data(_, _)).WillOnce(Return(aor));
+  EXPECT_CALL(*_regstore, set_aor_data(_, _, _, _, _)).WillOnce(Return(Store::ERROR));
+
+  // Run the task
+  EXPECT_CALL(*_httpstack, send_reply(_, 500, _));
+  _task->run();
+
+  _remotestore = tmp;
+}
+
 
 class AuthTimeoutTest : public SipTest
 {

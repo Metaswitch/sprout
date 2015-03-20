@@ -49,11 +49,11 @@ public:
 
   MOCK_METHOD2(get_aor_data, AoR*(const std::string& aor_id,
                                   SAS::TrailId trail));
-  MOCK_METHOD5(set_aor_data, bool(const std::string& aor_id, 
-                                  AoR* data, 
-                                  bool update_timers, 
-                                  SAS::TrailId trail, 
-                                  bool& all_bindings_expired));
+  MOCK_METHOD5(set_aor_data, Store::Status(const std::string& aor_id,
+                                           AoR* data,
+                                           bool update_timers,
+                                           SAS::TrailId trail,
+                                           bool& all_bindings_expired));
   MOCK_METHOD5(send_notify, void(AoR::Subscription* s,
                                  int cseq,
                                  AoR::Binding* b,
