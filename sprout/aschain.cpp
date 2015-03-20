@@ -203,11 +203,9 @@ void AsChainLink::on_initial_request(pjsip_msg* msg,
 
   if (_as_chain->trail() != msg_trail)
   {
-    // LCOV_EXCL_START - SAS UI association not suitable for UT
     // Associate the two trails in SAS so B2BUA calls are displayed properly
     LOG_DEBUG("Asssociating original SAS trail %ld with new message SAS trail %ld", _as_chain->trail(), msg_trail);
     SAS::associate_trails(_as_chain->trail(), msg_trail);
-    // LCOV_EXCL_STOP
   }
 
   while (!complete()) 
