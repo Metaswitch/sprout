@@ -208,8 +208,12 @@ public:
   virtual void on_timer_expiry(void* context);
 
 private:
-  /// Determines the session case and the served user for the request,
-  /// and links to the appropriate AS Chain.
+  // Examines the top route header to determine the relevant AS chain
+  // (from the ODI token) and the session case (based on the presence of
+  // the 'orig' param).
+  void retrieve_odi_and_sesscase(pjsip_msg* req);
+  
+  /// Determines the served user for the request.
   pjsip_status_code determine_served_user(pjsip_msg* req);
 
   /// Gets the served user indicated in the message.

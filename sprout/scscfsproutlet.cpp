@@ -629,11 +629,8 @@ void SCSCFSproutletTsx::on_rx_cancel(int status_code, pjsip_msg* cancel_req)
   }
 }
 
-
-pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
+void SCSCFSproutletTsx::retrieve_odi_and_sesscase(pjsip_msg* req)
 {
-  pjsip_status_code status_code = PJSIP_SC_OK;
-
   // Get the top route header.
   const pjsip_route_hdr* hroute = route_hdr();
 
@@ -679,6 +676,12 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
       }
     }
 
+    // If an application server is a B2BUA and so changes the Call-ID,
+    // we'll normally correlate that in SAS through the AS chain
+    // (directly correlating the new trail and the trail of the
+    // original dialog). If it strips the ODI token for any reason,
+    // that won't work - so as a fallback, if we have no ODI token,
+    // we'll log an ICID marker to correlate the trails.
     if (!_as_chain_link.is_set())
     {
       pjsip_p_c_v_hdr* pcv = (pjsip_p_c_v_hdr*)pjsip_msg_find_hdr_by_name(req,
@@ -709,6 +712,14 @@ pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
     LOG_DEBUG("No S-CSCF Route header, so treat as terminating request");
     _session_case = &SessionCase::Terminating;
   }
+  
+}
+
+pjsip_status_code SCSCFSproutletTsx::determine_served_user(pjsip_msg* req)
+{
+  pjsip_status_code status_code = PJSIP_SC_OK;
+
+  retrieve_odi_and_sesscase(req);
 
   if (_as_chain_link.is_set())
   {
