@@ -528,6 +528,62 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
   delete aor_data; aor_data = NULL;
 }
 
+
+/// Check that subsequent NOTIFYs have updated CSeqs
+TEST_F(SubscriptionTest, CheckNotifyCseqs)
+{
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
+  delete aor_data1; aor_data1 = NULL;
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  // Receive the SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  // Store off CSeq for later checking.
+  std::string first_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  msg._expires = "0";
+  inject_msg(msg.get());
+
+  // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  std::string second_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the NOTIFY CSeq has increased.
+  int first_cseq_val = strtol(&(first_cseq.c_str()[5]), NULL, 0);
+  int second_cseq_val = strtol(&(second_cseq.c_str()[5]), NULL, 0);
+  EXPECT_GT(second_cseq_val, first_cseq_val);
+}
+
 void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
 {
   ASSERT_EQ(2, txdata_count());
