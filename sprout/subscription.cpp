@@ -258,6 +258,13 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       // However calling `set_aor_data` may invalidate the pointer we already
       // have, so make a copy of the subscription for later use.
       subscription_copy = new RegStore::AoR::Subscription(*subscription);
+
+      if (update_notify)
+      {
+        // We need to generate a notify so increment the cseq before writing
+        // the AoR back to the store.
+        (*aor_data)->_notify_cseq++;
+      }
     }
 
     // Try to write the AoR back to the store.
@@ -296,9 +303,6 @@ pj_status_t write_subscriptions_to_store(RegStore* primary_store,      ///<store
       {
         state = NotifyUtils::SubscriptionState::TERMINATED;
       }
-
-      // Increment the CSeq before creating a NOTIFY
-      (*aor_data)->_notify_cseq++;
 
       status = NotifyUtils::create_notify(tdata_notify,
                                           subscription_copy,
