@@ -375,3 +375,22 @@ TEST_F(DNSEnumServiceTest, ResolverErrorCommMonMockTest)
   DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory(), &cm_);
   ET("1234", "").test(enum_);
 }
+
+TEST_F(DNSEnumServiceTest, PosixRegexTest)
+{
+  /* [:digit:]+? is interpreted differently in Perl-compatible and POSIX Extended regular expressions:
+     - Perl treats +? as a nongreedy match, so will only read one digit.
+     - POSIX doesn't have nongreedy match syntax, so "?+" is unparseable and the match fails
+
+     This testcase outpus "sip:1@ut.cw-ngv.com if Perl-compatible regular expressions are used.
+  */
+
+  struct ares_naptr_reply invalid_posix_regex_naptr_reply[] = {
+    {NULL, (unsigned char*)"u", (unsigned char*)"e2u+sip", (unsigned char*)"!(^[[:digit:]]+?)!sip:\\1@ut.cw-ngv.com!", ".", 1, 1}
+  };
+
+  FakeDNSResolver::_database.insert(std::make_pair(std::string("4.3.2.1.e164.arpa"), (struct ares_naptr_reply*)invalid_posix_regex_naptr_reply));
+  DNSEnumService enum_(_servers, ".e164.arpa", new FakeDNSResolverFactory());
+  ET("1234", "").test(enum_);
+}
+
