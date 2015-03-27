@@ -612,19 +612,26 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
-  // Encode and send the request using the Ralf HTTP connection.
-  LOG_VERBOSE("Sending %s Ralf ACR (%p)",
-              ACR::node_name(_node_functionality).c_str(), this);
-  std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
-  std::map<std::string, std::string> headers;
-  long rc = _ralf->send_post(path,
-                             headers,
-                             get_message(timestamp),
-                             _trail);
-
-  if (rc != HTTP_OK)
+  // START and EVENT records must have CCFs to send to.  If not, just drop the
+  // message.
+  if (((_record_type != START_RECORD) &&
+       (_record_type != EVENT_RECORD)) ||
+      (!_ccfs.empty()))
   {
-    LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    // Encode and send the request using the Ralf HTTP connection.
+    LOG_VERBOSE("Sending %s Ralf ACR (%p)",
+                ACR::node_name(_node_functionality).c_str(), this);
+    std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
+    std::map<std::string, std::string> headers;
+    long rc = _ralf->send_post(path,
+                               headers,
+                               get_message(timestamp),
+                               _trail);
+
+    if (rc != HTTP_OK)
+    {
+      LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    }
   }
 }
 

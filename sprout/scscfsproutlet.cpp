@@ -472,13 +472,18 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   // Add a Session-Expires header if required.
   add_session_expires(req);
 
-  // Create an ACR for this request and pass the request to it.
-  _acr = _scscf->get_acr(trail(),
-                         CALLING_PARTY,
-                         get_billing_role());
+  // If we have a billing role, create and send an ACR.
+  NodeRole role = NODE_ROLE_ORIGINATING;
+  if (get_billing_role(&role))
+  {
+    // Create an ACR for this request and pass the request to it.
+    _acr = _scscf->get_acr(trail(),
+                           CALLING_PARTY,
+                           role);
 
-  // @TODO - request timestamp???
-  _acr->rx_request(req);
+    // @TODO - request timestamp???
+    _acr->rx_request(req);
+  }
 
   send_request(req);
 }
@@ -1542,6 +1547,18 @@ void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
 }
 
 
+/// Determines whether there is a P-Charging-Function-Address header containing
+/// any CCFs.
+bool SCSCFSproutletTsx::has_pcfa_hdr_ccfs(pjsip_msg* msg)
+{
+  pjsip_p_c_f_a_hdr* pcfa_hdr =
+    (pjsip_p_c_f_a_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
+
+  return ((pcfa_hdr != NULL) &&
+          (!pjsip_p_c_f_a_hdr(pcfa_hdr->ccf)));
+}
+
+
 /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed will
 /// be attached to the Record-Route and can be used to recover the billing
 /// role that is in use on subsequent in-dialog messages.
@@ -1551,20 +1568,25 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
   if (!_record_routed)
   {
     pj_pool_t* pool = get_pool(msg);
-
-    pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
-    pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
-    if (billing_role == NODE_ROLE_ORIGINATING)
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
-    }
-    else
-    {
-      pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
-    }
-
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
-    pj_list_insert_before(&uri->other_param, param);
+
+    // Only add the billing role if we're actually billing - we can tell this
+    // from whether the P-Charging-Function-Address exists and contains a CCF.
+    if (has_pcfa_hdr_ccfs(msg))
+    {
+      pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+      pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
+      if (billing_role == NODE_ROLE_ORIGINATING)
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_ORIG);
+      }
+      else
+      {
+        pj_strdup(pool, &param->value, &STR_CHARGE_TERM);
+      }
+  
+      pj_list_insert_before(&uri->other_param, param);
+    }
 
     pjsip_route_hdr* rr = pjsip_rr_hdr_create(pool);
     rr->name_addr.uri = (pjsip_uri*)uri;
@@ -1577,10 +1599,10 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
 
 
 /// Retrieve the billing role for an in-dialog message.
-NodeRole SCSCFSproutletTsx::get_billing_role()
+/// Returns true if billing required, false if not.
+bool SCSCFSproutletTsx::get_billing_role(NodeRole* role)
 {
-  NodeRole role;
-
+  bool got_role = false;
   const pjsip_route_hdr* route = route_hdr();
   if ((route != NULL) &&
       (is_uri_reflexive(route->name_addr.uri)))
@@ -1593,33 +1615,28 @@ NodeRole SCSCFSproutletTsx::get_billing_role()
       if (!pj_strcmp(&param->value, &STR_CHARGE_ORIG))
       {
         LOG_INFO("Charging role is originating");
-        role = NODE_ROLE_ORIGINATING;
+        *role = NODE_ROLE_ORIGINATING;
+        got_role = true;
       }
       else if (!pj_strcmp(&param->value, &STR_CHARGE_TERM))
       {
         LOG_INFO("Charging role is terminating");
-        role = NODE_ROLE_TERMINATING;
+        *role = NODE_ROLE_TERMINATING;
+        got_role = true;
       }
       else
       {
-        LOG_WARNING("Unknown charging role %.*s, assume originating",
+        LOG_WARNING("Unknown charging role %.*s - not charging",
                     param->value.slen, param->value.ptr);
-        role = NODE_ROLE_ORIGINATING;
       }
-    }
-    else
-    {
-      LOG_WARNING("No charging role in Route header, assume originating");
-      role = NODE_ROLE_ORIGINATING;
     }
   }
   else
   {
-    LOG_WARNING("Cannot determine charging role as no Route header, assume originating");
-    role = NODE_ROLE_ORIGINATING;
+    LOG_WARNING("Cannot determine charging role as no Route header");
   }
 
-  return role;
+  return got_role;
 }
 
 
