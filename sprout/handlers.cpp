@@ -215,7 +215,7 @@ void DeregistrationTask::run()
   if (_notify != "true" && _notify != "false")
   {
     LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    send_http_reply(HTTP_BAD_RESULT);
+    send_http_reply(HTTP_BAD_REQUEST);
     delete this;
     return;
   }
@@ -330,7 +330,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   {
     LOG_WARNING("Failed to read opaque data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("aor_id")) &&
@@ -341,7 +341,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   else
   {
     LOG_WARNING("AoR ID not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("binding_id")) &&
@@ -352,7 +352,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   else
   {
     LOG_WARNING("Binding ID not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   return HTTP_OK;
@@ -369,7 +369,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
   {
     LOG_WARNING("Failed to read data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("registrations")) &&
@@ -398,7 +398,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
       else
       {
         LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
-        return HTTP_BAD_RESULT;
+        return HTTP_BAD_REQUEST;
       }
 
       _bindings.insert(std::make_pair(primary_impu, impi));
@@ -407,7 +407,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
   else
   {
     LOG_WARNING("Registrations not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   LOG_DEBUG("HTTP request successfully parsed");
@@ -559,7 +559,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   {
     LOG_ERROR("Failed to read opaque data, %s",
               reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("impu")) &&
@@ -571,7 +571,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPU not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("impi")) &&
@@ -582,7 +582,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPI not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("nonce")) &&
@@ -593,7 +593,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("Nonce not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   bool success = false;
