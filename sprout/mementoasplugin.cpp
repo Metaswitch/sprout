@@ -102,33 +102,23 @@ bool MementoPlugin::load(struct options& opt, std::list<Sproutlet*>& sproutlets)
     }
 
     _call_list_store = new CallListStore::Store();
-    _call_list_store->initialize();
-    _call_list_store->configure("localhost", 9160, exception_handler, 0, 0, _cass_comm_monitor);
-    CassandraStore::ResultCode store_rc = _call_list_store->start();
+    _call_list_store->configure_connection("localhost", 9160, _cass_comm_monitor);
 
-    if (store_rc != CassandraStore::OK)
-    {
-      LOG_ERROR("Unable to create call list store (RC = %d)", store_rc);
-      plugin_loaded = false;
-    }
-    else
-    {
-      _memento = new MementoAppServer("memento",
-                                      _call_list_store,
-                                      opt.home_domain,
-                                      opt.max_call_list_length,
-                                      opt.memento_threads,
-                                      opt.call_list_ttl,
-                                      stack_data.stats_aggregator,
-                                      opt.cass_target_latency_us,
-                                      opt.max_tokens,
-                                      opt.init_token_rate,
-                                      opt.min_token_rate,
-                                      exception_handler);
+    _memento = new MementoAppServer("memento",
+                                    _call_list_store,
+                                    opt.home_domain,
+                                    opt.max_call_list_length,
+                                    opt.memento_threads,
+                                    opt.call_list_ttl,
+                                    stack_data.stats_aggregator,
+                                    opt.cass_target_latency_us,
+                                    opt.max_tokens,
+                                    opt.init_token_rate,
+                                    opt.min_token_rate,
+                                    exception_handler);
 
-      _memento_sproutlet = new SproutletAppServerShim(_memento);
-      sproutlets.push_back(_memento_sproutlet);
-    }
+    _memento_sproutlet = new SproutletAppServerShim(_memento);
+    sproutlets.push_back(_memento_sproutlet);
   }
 
   return plugin_loaded;
