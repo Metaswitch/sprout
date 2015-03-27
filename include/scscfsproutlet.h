@@ -277,6 +277,10 @@ private:
   /// exchange periodic session refresh messages.
   void add_session_expires(pjsip_msg* req);
 
+  // Determines whether there is a P-Charging-Function-Address header
+  // containing any CCFs.
+  bool has_pcfa_hdr_ccfs(pjsip_msg*);
+
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.
@@ -284,7 +288,7 @@ private:
 
   /// Retrieve the billing role for the incoming message.  This should have been
   /// set during session initiation.
-  NodeRole get_billing_role();
+  bool get_billing_role(NodeRole*);
 
   /// Adds a second P-Asserted-Identity header to a message when required.
   void add_second_p_a_i_hdr(pjsip_msg* msg);

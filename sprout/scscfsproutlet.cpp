@@ -1555,7 +1555,7 @@ bool SCSCFSproutletTsx::has_pcfa_hdr_ccfs(pjsip_msg* msg)
     (pjsip_p_c_f_a_hdr*)pjsip_msg_find_hdr_by_name(msg, &STR_P_C_F_A, NULL);
 
   return ((pcfa_hdr != NULL) &&
-          (!pjsip_p_c_f_a_hdr(pcfa_hdr->ccf)));
+          (pcfa_hdr->ccf.next != &pcfa_hdr->ccf));
 }
 
 
@@ -1571,8 +1571,10 @@ void SCSCFSproutletTsx::add_record_route(pjsip_msg* msg,
     pjsip_sip_uri* uri = get_reflexive_uri(pool);
 
     // Only add the billing role if we're actually billing - we can tell this
-    // from whether the P-Charging-Function-Address exists and contains a CCF.
-    if (has_pcfa_hdr_ccfs(msg))
+    // from whether we have CCFs (either from the subscriber or from the
+    // P-Charging-Function-Address header).
+    if (!_ccfs.empty() ||
+        (has_pcfa_hdr_ccfs(msg)))
     {
       pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
       pj_strdup(pool, &param->name, &STR_BILLING_ROLE);
