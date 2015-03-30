@@ -341,6 +341,7 @@ TEST_F(DeregistrationTaskTest, MainlineTest)
   expect_reg_store_updates(aor_ids, aors, remote_aor);
 
   // Run the task
+  EXPECT_CALL(*_regstore, send_notify(s1, _, b1, _, _));
   EXPECT_CALL(*_httpstack, send_reply(_, 200, _));
   _task->run();
 }

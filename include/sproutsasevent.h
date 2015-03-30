@@ -170,6 +170,8 @@ namespace SASEvent
   const int BYPASS_AS = SPROUT_BASE + 0x0000E4;
   const int AS_FAILED = SPROUT_BASE + 0x0000E5;
 
+  const int INVALID_SESSION_EXPIRES_HEADER = SPROUT_BASE + 0x0000E6;
+
 } //namespace SASEvent
 
 #endif

@@ -275,6 +275,8 @@ bool does_uri_represent_number(pjsip_uri* uri,
 bool get_npdi(pjsip_uri* uri);
 bool get_rn(pjsip_uri* uri, std::string& routing_value);
 
+bool add_session_expires(pjsip_msg* req, pj_pool_t* pool, SAS::TrailId trail);
+
 } // namespace PJUtils
 
 #endif

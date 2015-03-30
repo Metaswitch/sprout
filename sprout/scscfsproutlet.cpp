@@ -404,8 +404,16 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 
   pjsip_status_code status_code = PJSIP_SC_OK;
 
-  // Add a Session-Expires header if required.
-  add_session_expires(req);
+  // Try to add a Session-Expires header
+  if (!PJUtils::add_session_expires(req, get_pool(req), trail()))
+  {
+    // Session expires header is invalid, so reject the request
+    // This has been logged in PJUtils
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    send_response(rsp);
+    free_msg(req);
+    return;
+  }
 
   // Determine the session case and the served user.  This will link to
   // an AsChain object (creating it if necessary), if we need to provide
@@ -425,6 +433,7 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
     pjsip_msg* rsp = create_response(req, status_code);
     send_response(rsp);
     free_msg(req);
+    return;
   }
   else
   {
@@ -469,8 +478,16 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
 {
   LOG_INFO("S-CSCF received in-dialog request");
 
-  // Add a Session-Expires header if required.
-  add_session_expires(req);
+  // Try to add a Session-Expires header
+  if (!PJUtils::add_session_expires(req, get_pool(req), trail()))
+  {
+    // Session expires header is invalid, so reject the request
+    // This has been logged in PJUtils
+    pjsip_msg* rsp = create_response(req, PJSIP_SC_TEMPORARILY_UNAVAILABLE);
+    send_response(rsp);
+    free_msg(req);
+    return;
+  }
 
   // Create an ACR for this request and pass the request to it.
   _acr = _scscf->get_acr(trail(),
@@ -1522,23 +1539,6 @@ bool SCSCFSproutletTsx::lookup_ifcs(std::string public_id, Ifcs& ifcs)
     ifcs = _ifcs;
   }
   return success;
-}
-
-
-/// Ensures the request carries a Session-Expires header with an appropriate
-/// duration so the UAs at either end of the session send keepalives.
-void SCSCFSproutletTsx::add_session_expires(pjsip_msg* req)
-{
-  pjsip_session_expires_hdr* session_expires =
-    (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(req,
-                                                           &STR_SESSION_EXPIRES,
-                                                           NULL);
-  if (session_expires == NULL)
-  {
-    session_expires = pjsip_session_expires_hdr_create(get_pool(req));
-    pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
-  }
-  session_expires->expires = stack_data.default_session_expires;
 }
 
 
