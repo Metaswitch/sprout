@@ -405,7 +405,9 @@ void SCSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
   pjsip_status_code status_code = PJSIP_SC_OK;
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_session_expires(req, get_pool(req), trail()))
+  if (!PJUtils::add_update_session_expires(req, 
+                                           get_pool(req), 
+                                           trail()))
   {
     // Session expires header is invalid, so reject the request
     // This has been logged in PJUtils
@@ -479,7 +481,9 @@ void SCSCFSproutletTsx::on_rx_in_dialog_request(pjsip_msg* req)
   LOG_INFO("S-CSCF received in-dialog request");
 
   // Try to add a Session-Expires header
-  if (!PJUtils::add_session_expires(req, get_pool(req), trail()))
+  if (!PJUtils::add_update_session_expires(req, 
+                                           get_pool(req), 
+                                           trail()))
   {
     // Session expires header is invalid, so reject the request
     // This has been logged in PJUtils

@@ -3191,7 +3191,9 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
   }
 
   // Try to add the session_expires header
-  if (!PJUtils::add_session_expires(_req->msg, _req->pool, trail()))
+  if (!PJUtils::add_update_session_expires(_req->msg, 
+                                           _req->pool, 
+                                           trail()))
   {
     // Session expires header is invalid, so reject the request
     // This has been logged in PJUtils

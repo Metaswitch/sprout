@@ -2173,14 +2173,16 @@ bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
            (!is_uri_gruu(uri))));
 }
 
-// Adds a Session-Expires header to the request to force the UEs to
-// exchange periodic session refresh messages. We use the value of the 
-// Min-SE header if set, or the default session expiry value.
-// 
-// Returns success if we could add a valid session expires header
-bool PJUtils::add_session_expires(pjsip_msg* req,
-                                  pj_pool_t* pool, 
-                                  SAS::TrailId trail)
+// Adds/updates a Session-Expires header to/in the request.
+// We use the value of the Min-SE header if it's set (and valid), 
+// or the default session expiry value otherwise (which comes from
+// configuration. 
+//
+// Returns success if we could set the Session-Expires header to a 
+// valid value
+bool PJUtils::add_update_session_expires(pjsip_msg* req,
+                                         pj_pool_t* pool, 
+                                         SAS::TrailId trail)
 {
   bool added_se = true;
 
