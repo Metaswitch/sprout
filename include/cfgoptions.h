@@ -75,6 +75,7 @@ struct options
   std::string                          external_icscf_uri;
   int                                  record_routing_model;
   int                                  default_session_expires;
+  int                                  max_session_expires;
   int                                  target_latency_us;
   std::string                          local_host;
   std::string                          public_host;

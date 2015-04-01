@@ -232,6 +232,124 @@ pjsip_hdr_vptr identity_hdr_vptr =
 };
 
 
+/*****************************************************************************/
+/* Min-SE                                                                    */
+/*****************************************************************************/
+pjsip_hdr_vptr min_se_hdr_vptr =
+{
+  (clone_fptr) &pjsip_min_se_hdr_clone,
+  (clone_fptr) &pjsip_min_se_hdr_shallow_clone,
+  (print_fptr) &pjsip_min_se_hdr_print_on,
+};
+
+pjsip_min_se_hdr* pjsip_min_se_hdr_create(pj_pool_t* pool)
+{
+  void* mem = pj_pool_alloc(pool, sizeof(pjsip_min_se_hdr));
+  return pjsip_min_se_hdr_init(pool, mem);
+}
+
+pjsip_min_se_hdr* pjsip_min_se_hdr_init(pj_pool_t* pool, void* mem)
+{
+  pjsip_min_se_hdr* hdr = (pjsip_min_se_hdr*)mem;
+  PJ_UNUSED_ARG(pool);
+
+  hdr->type = PJSIP_H_OTHER;
+  hdr->name = STR_MIN_SE;
+  hdr->vptr = &min_se_hdr_vptr;
+  pj_list_init(hdr);
+  hdr->expires = 0;
+  pj_list_init(&hdr->other_param);
+  return hdr;
+}
+
+pjsip_hdr* parse_hdr_min_se(pjsip_parse_ctx* ctx)
+{
+  pj_pool_t* pool = ctx->pool;
+  pj_scanner* scanner = ctx->scanner;
+  pjsip_min_se_hdr* hdr = pjsip_min_se_hdr_create(pool);
+  const pjsip_parser_const_t* pc = pjsip_parser_const();
+
+  // Parse the expiry number
+  pj_str_t int_str;
+  pj_scan_get(scanner, &pc->pjsip_DIGIT_SPEC, &int_str);
+  hdr->expires = pj_strtoul(&int_str);
+  pj_scan_skip_whitespace(scanner);
+
+  // Parse the rest of the params, looking for the refresher param
+  while (*scanner->curptr == ';')
+  {
+    // Consume the ';'.
+    pj_scan_get_char(scanner);
+    pj_scan_skip_whitespace(scanner);
+
+    // Parse the param.
+    pj_str_t name;
+    pj_str_t value;
+    pjsip_parse_param_imp(scanner, pool, &name, &value,
+                          PJSIP_PARSE_REMOVE_QUOTE);
+
+    pjsip_param* param = PJ_POOL_ALLOC_T(pool, pjsip_param);
+    param->name = name;
+    param->value = value;
+    pj_list_insert_before(&hdr->other_param, param);
+  }
+
+  // We're done parsing this header.
+  pjsip_parse_end_hdr_imp(scanner);
+
+  return (pjsip_hdr*)hdr;
+}
+
+void* pjsip_min_se_hdr_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_min_se_hdr* hdr = pjsip_min_se_hdr_create(pool);
+  pjsip_min_se_hdr* other = (pjsip_min_se_hdr*)o;
+  hdr->expires = other->expires;
+  pjsip_param_clone(pool, &hdr->other_param, &other->other_param);
+  return hdr;
+}
+
+void* pjsip_min_se_hdr_shallow_clone(pj_pool_t* pool, const void* o)
+{
+  pjsip_min_se_hdr* hdr = pjsip_min_se_hdr_create(pool);
+  pjsip_min_se_hdr* other = (pjsip_min_se_hdr*)o;
+  hdr->expires = other->expires;
+  pjsip_param_shallow_clone(pool, &hdr->other_param, &other->other_param);
+  return hdr;
+}
+
+int pjsip_min_se_hdr_print_on(void* h, char* buf, pj_size_t len)
+{
+  char* p = buf;
+  const pjsip_min_se_hdr* hdr = (pjsip_min_se_hdr*)h;
+  const pjsip_parser_const_t *pc = pjsip_parser_const();
+
+  // As per pjsip_generic_int_hdr_print, integers are fewer then 15 characters long.
+  if ((pj_ssize_t)len < hdr->name.slen + 15)
+  {
+    return -1;
+  }
+
+  pj_memcpy(p, hdr->name.ptr, hdr->name.slen);
+  p += hdr->name.slen;
+  *p++ = ':';
+  *p++ = ' ';
+  p += pj_utoa(hdr->expires, p);
+
+  // Try to add the other params.
+  pj_ssize_t printed = pjsip_param_print_on(&hdr->other_param, p, buf+len-p,
+                                            &pc->pjsip_TOKEN_SPEC,
+                                            &pc->pjsip_TOKEN_SPEC, ';');
+  if (printed < 0)
+  {
+    return -1;
+  }
+  p += printed;
+  *p = '\0';
+
+  return p - buf;
+}
+
 /// Custom create, clone and print functions used for the P-Associated-URI,
 /// P-Asserted-Identity, P-Preferred-Identity, and P-Served-User headers
 pjsip_routing_hdr* identity_hdr_create(pj_pool_t* pool, const pj_str_t name)
@@ -1313,6 +1431,8 @@ pj_status_t register_custom_headers()
   status = pjsip_register_hdr_parser("Path", NULL, &parse_hdr_path);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Session-Expires", NULL, &parse_hdr_session_expires);
+  PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
+  status = pjsip_register_hdr_parser("Min-SE", NULL, &parse_hdr_min_se);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);
   status = pjsip_register_hdr_parser("Reject-Contact", "j", &parse_hdr_reject_contact);
   PJ_ASSERT_RETURN(status == PJ_SUCCESS, status);

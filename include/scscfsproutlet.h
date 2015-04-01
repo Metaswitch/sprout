@@ -273,10 +273,6 @@ private:
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
 
-  /// Adds a Session-Expires header to the request to force the UEs to
-  /// exchange periodic session refresh messages.
-  void add_session_expires(pjsip_msg* req);
-
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the
   /// billing role that is in use on subsequent in-dialog messages.

@@ -551,6 +551,7 @@ pj_status_t init_stack(const std::string& system_name,
                        int num_pjsip_threads,
                        int record_routing_model,
                        const int default_session_expires,
+                       const int max_session_expires,
                        QuiescingManager *quiescing_mgr_arg,
                        const std::string& cdf_domain)
 {
@@ -596,6 +597,7 @@ pj_status_t init_stack(const std::string& system_name,
 
   // Copy other functional options to stack data.
   stack_data.default_session_expires = default_session_expires;
+  stack_data.max_session_expires = max_session_expires;
 
   // Work out local and public hostnames and cluster domain names.
   stack_data.local_host = (local_host != "") ? pj_str(local_host_cstr) : *pj_gethostname();

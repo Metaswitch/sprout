@@ -53,6 +53,7 @@ extern "C" {
 #include "constants.h"
 #include "custom_headers.h"
 #include "sasevent.h"
+#include "sproutsasevent.h"
 
 static const int DEFAULT_RETRIES = 5;
 static const int DEFAULT_BLACKLIST_DURATION = 30;
@@ -2170,4 +2171,83 @@ bool PJUtils::does_uri_represent_number(pjsip_uri* uri,
           ((!enforce_user_phone) &&
            (is_user_numeric(user_from_uri(uri))) &&
            (!is_uri_gruu(uri))));
+}
+
+// Adds/updates a Session-Expires header to/in the request.
+// We use the value of the Min-SE header if it's set (and valid), 
+// or the default session expiry value otherwise (which comes from
+// configuration. 
+//
+// Returns success if we could set the Session-Expires header to a 
+// valid value
+bool PJUtils::add_update_session_expires(pjsip_msg* req,
+                                         pj_pool_t* pool, 
+                                         SAS::TrailId trail)
+{
+  bool added_se = true;
+
+  // Ensure that Session-Expires is added to the message to enable the session
+  // timer on the UEs.
+  pjsip_session_expires_hdr* session_expires =
+    (pjsip_session_expires_hdr*)pjsip_msg_find_hdr_by_name(req,
+                                                           &STR_SESSION_EXPIRES,
+                                                           NULL);
+
+  pjsip_min_se_hdr* min_se =
+    (pjsip_min_se_hdr*)pjsip_msg_find_hdr_by_name(req,
+                                                  &STR_MIN_SE,
+                                                  NULL);
+
+  if (session_expires == NULL)
+  {
+    // No session expiry header, so add one with the default session 
+    // expiry value
+    LOG_DEBUG("Adding session expires header with default value");
+    session_expires = pjsip_session_expires_hdr_create(pool);
+    pjsip_msg_add_hdr(req, (pjsip_hdr*)session_expires);
+    session_expires->expires = stack_data.default_session_expires;
+  }
+  else
+  {
+    if (min_se != NULL)
+    {
+      if (min_se->expires > stack_data.max_session_expires)
+      {
+        // Min SE header is requesting a session expiry that is too 
+        // large. Reject the request. 
+        LOG_INFO("Requested session expiry is too large");
+
+        SAS::Event event(trail, SASEvent::INVALID_SESSION_EXPIRES_HEADER, 0);
+        event.add_static_param(min_se->expires);
+        event.add_static_param(stack_data.max_session_expires);
+        SAS::report_event(event);
+
+        added_se = false;
+      }
+      else
+      {
+        LOG_DEBUG("Setting session expires value from Min-SE header: %d", 
+                  min_se->expires);
+        session_expires->expires = min_se->expires;
+      }
+    }
+    else
+    {
+      if (session_expires->expires > stack_data.max_session_expires)
+      {
+        // Session Expiry header is requesting a session expiry that is too
+        // large. Reject the request.
+        LOG_INFO("Requested session expiry is too large");
+
+        SAS::Event event(trail, SASEvent::INVALID_SESSION_EXPIRES_HEADER, 0);
+        event.add_static_param(session_expires->expires);
+        event.add_static_param(stack_data.max_session_expires);
+        SAS::report_event(event);
+
+        added_se = false;
+      }
+    }
+  }
+
+  return added_se;
 }

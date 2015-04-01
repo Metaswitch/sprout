@@ -91,6 +91,7 @@ const pj_str_t STR_X = pj_str((char*)"X");
 const pj_str_t STR_REASON = pj_str((char*)"Reason");
 const pj_str_t STR_TRANSIT_IOI = pj_str((char*)"transit-ioi");
 const pj_str_t STR_SESSION_EXPIRES = pj_str((char*)"Session-Expires");
+const pj_str_t STR_MIN_SE = pj_str((char*)"Min-SE");
 const pj_str_t STR_CALL_ID = pj_str((char*)"Call-ID");
 const pj_str_t STR_CCF = pj_str((char*)"ccf");
 const pj_str_t STR_ECF = pj_str((char*)"ecf");

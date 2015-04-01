@@ -118,7 +118,8 @@ enum OptionTypes
   OPT_INIT_TOKEN_RATE,
   OPT_MIN_TOKEN_RATE,
   OPT_CASS_TARGET_LATENCY_US,
-  OPT_EXCEPTION_MAX_TTL
+  OPT_EXCEPTION_MAX_TTL,
+  OPT_MAX_SESSION_EXPIRES
 };
 
 
@@ -143,6 +144,7 @@ const static struct pj_getopt_option long_opt[] =
   { "hss",                          required_argument, 0, 'H'},
   { "record-routing-model",         required_argument, 0, 'C'},
   { "default-session-expires",      required_argument, 0, OPT_DEFAULT_SESSION_EXPIRES},
+  { "max-session-expires",          required_argument, 0, OPT_MAX_SESSION_EXPIRES},
   { "target-latency-us",            required_argument, 0, OPT_TARGET_LATENCY_US},
   { "xdms",                         required_argument, 0, 'X'},
   { "chronos",                      required_argument, 0, 'K'},
@@ -271,6 +273,8 @@ static void usage(void)
        "                            The maximum allowed subscription period (in seconds)\n"
        "     --default-session-expires <expiry>\n"
        "                            The session expiry period to request (in seconds)\n"
+       "     --max-session-expires <expiry>\n"
+       "                            The maximum allowed session expiry period (in seconds)\n"
        "     --target-latency-us <usecs>\n"
        "                            Target latency above which throttling applies (default: 100000)\n"
        "     --cass-target-latency-us <usecs>\n"
@@ -807,6 +811,12 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->default_session_expires);
       break;
 
+    case OPT_MAX_SESSION_EXPIRES:
+      options->max_session_expires = atoi(pj_optarg);
+      LOG_INFO("Max session expiry set to %d",
+               options->max_session_expires);
+      break;
+
     case OPT_EMERGENCY_REG_ACCEPTED:
       options->emerg_reg_accepted = PJ_TRUE;
       LOG_INFO("Emergency registrations accepted");
@@ -1154,6 +1164,7 @@ int main(int argc, char* argv[])
   opt.pjsip_threads = 1;
   opt.record_routing_model = 1;
   opt.default_session_expires = 10 * 60;
+  opt.max_session_expires = 10 * 60;
   opt.worker_threads = 1;
   opt.analytics_enabled = PJ_FALSE;
   opt.http_address = "127.0.0.1";
@@ -1438,6 +1449,7 @@ int main(int argc, char* argv[])
                       opt.pjsip_threads,
                       opt.record_routing_model,
                       opt.default_session_expires,
+                      opt.max_session_expires,
                       quiescing_mgr,
                       opt.billing_cdf);
 

@@ -99,6 +99,7 @@ struct stack_data_struct
   bool record_route_on_diversion;
 
   int default_session_expires;
+  int max_session_expires;
 };
 
 extern struct stack_data_struct stack_data;
@@ -153,6 +154,7 @@ extern pj_status_t init_stack(const std::string& sas_system_name,
                               int num_pjsip_threads,
                               int record_routing_model,
                               const int default_session_expires,
+                              const int max_session_expires,
                               QuiescingManager *quiescing_mgr,
                               const std::string& cdf_domain);
 extern pj_status_t start_pjsip_threads();
