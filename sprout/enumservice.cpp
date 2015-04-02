@@ -69,7 +69,7 @@ bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::r
     LOG_DEBUG("Split regex into match=%s, replace=%s", match_replace[0].c_str(), match_replace[1].c_str());
     try
     {
-      regex.assign(match_replace[0]);
+      regex.assign(match_replace[0], boost::regex::extended);
       replace = match_replace[1];
       success = true;
     }

@@ -46,11 +46,13 @@
 #include "fakehssconnection.hpp"
 #include "test_interposer.hpp"
 #include "fakechronosconnection.hpp"
+#include "mock_store.h"
 
-using namespace std;
-using testing::MatchesRegex;
-using testing::HasSubstr;
-using testing::Not;
+using ::testing::MatchesRegex;
+using ::testing::HasSubstr;
+using ::testing::Not;
+using ::testing::_;
+using ::testing::Return;
 
 /// Fixture for SubscriptionTest.
 class SubscriptionTest : public SipTest
@@ -95,6 +97,8 @@ public:
   {
     _local_data_store->flush_all();  // start from a clean slate on each test
     _remote_data_store->flush_all();
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
   }
 
   ~SubscriptionTest()
@@ -524,6 +528,62 @@ void SubscriptionTest::check_subscriptions(std::string aor, uint32_t expected)
   delete aor_data; aor_data = NULL;
 }
 
+
+/// Check that subsequent NOTIFYs have updated CSeqs
+TEST_F(SubscriptionTest, CheckNotifyCseqs)
+{
+  // Get an initial empty AoR record and add a binding.
+  int now = time(NULL);
+
+  RegStore::AoR* aor_data1 = _store->get_aor_data(std::string("sip:6505550231@homedomain"), 0);
+  RegStore::AoR::Binding* b1 = aor_data1->get_binding(std::string("urn:uuid:00000000-0000-0000-0000-b4dd32817622:1"));
+  b1->_uri = std::string("<sip:6505550231@192.91.191.29:59934;transport=tcp;ob>");
+  b1->_cid = std::string("gfYHoZGaFaRNxhlV0WIwoS-f91NoJ2gq");
+  b1->_cseq = 17038;
+  b1->_expires = now + 300;
+  b1->_priority = 0;
+  b1->_path_headers.push_back(std::string("<sip:abcdefgh@bono-1.cw-ngv.com;lr>"));
+  b1->_params["+sip.instance"] = "\"<urn:uuid:00000000-0000-0000-0000-b4dd32817622>\"";
+  b1->_params["reg-id"] = "1";
+  b1->_params["+sip.ice"] = "";
+  b1->_emergency_registration = false;
+
+  // Add the AoR record to the store.
+  _store->set_aor_data(std::string("sip:6505550231@homedomain"), aor_data1, true, 0);
+  delete aor_data1; aor_data1 = NULL;
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  // Receive the SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
+  ASSERT_EQ(2, txdata_count());
+  pjsip_msg* out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  // Store off CSeq for later checking.
+  std::string first_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  msg._expires = "0";
+  inject_msg(msg.get());
+
+  // Receive another SUBSCRIBE 200 OK and NOTIFY, then send NOTIFY 200 OK.
+  ASSERT_EQ(2, txdata_count());
+  out = pop_txdata()->msg;
+  EXPECT_EQ(200, out->line.status.code);
+  out = current_txdata()->msg;
+  EXPECT_EQ("NOTIFY", str_pj(out->line.status.reason));
+  std::string second_cseq = get_headers(out, "CSeq");
+  inject_msg(respond_to_current_txdata(200));
+
+  // Check the NOTIFY CSeq has increased.
+  int first_cseq_val = strtol(&(first_cseq.c_str()[5]), NULL, 0);
+  int second_cseq_val = strtol(&(second_cseq.c_str()[5]), NULL, 0);
+  EXPECT_GT(second_cseq_val, first_cseq_val);
+}
+
 void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
 {
   ASSERT_EQ(2, txdata_count());
@@ -566,3 +626,84 @@ void SubscriptionTest::check_OK_and_NOTIFY(bool terminated)
   inject_msg(respond_to_current_txdata(200));
 }
 
+
+/// Fixture for Subscription tests that use a mock store instead of a fake one.
+class SubscriptionTestMockStore : public SipTest
+{
+public:
+  static void SetUpTestCase()
+  {
+    SipTest::SetUpTestCase();
+    add_host_mapping("sprout.example.com", "10.8.8.1");
+  }
+
+  void SetUp()
+  {
+    _chronos_connection = new FakeChronosConnection();
+    _local_data_store = new MockStore();
+    _store = new RegStore((Store*)_local_data_store, _chronos_connection);
+    _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
+    _hss_connection = new FakeHSSConnection();
+    _acr_factory = new ACRFactory();
+    pj_status_t ret = init_subscription(_store, NULL, _hss_connection, _acr_factory, _analytics, 300);
+    ASSERT_EQ(PJ_SUCCESS, ret);
+    stack_data.scscf_uri = pj_str("sip:all.the.sprout.nodes:5058;transport=TCP");
+
+    _hss_connection->set_impu_result("sip:6505550231@homedomain", "", HSSConnection::STATE_REGISTERED, "");
+    _hss_connection->set_impu_result("tel:6505550231", "", HSSConnection::STATE_REGISTERED, "");
+
+    _log_traffic = PrintingTestLogger::DEFAULT.isPrinting();
+  }
+
+  static void TearDownTestCase()
+  {
+    SipTest::TearDownTestCase();
+  }
+
+  void TearDown()
+  {
+    destroy_subscription();
+    delete _acr_factory; _acr_factory = NULL;
+    delete _hss_connection; _hss_connection = NULL;
+    delete _analytics; _analytics = NULL;
+    delete _store; _store = NULL;
+    delete _local_data_store; _local_data_store = NULL;
+    delete _chronos_connection; _chronos_connection = NULL;
+  }
+
+  SubscriptionTestMockStore() : SipTest(&mod_subscription)
+  {
+  }
+
+protected:
+  MockStore* _local_data_store;
+  RegStore* _store;
+  AnalyticsLogger* _analytics;
+  ACRFactory* _acr_factory;
+  FakeHSSConnection* _hss_connection;
+  FakeChronosConnection* _chronos_connection;
+};
+
+
+// Check that the subscription module does not infinite loop when the underlying
+// store is in an odd state, specifically when it:
+// -  Returns NOT_FOUND to all gets
+// -  Returns ERROR to all sets.
+//
+// This is a repro for https://github.com/Metaswitch/sprout/issues/977
+TEST_F(SubscriptionTestMockStore, RegStoreWritesFail)
+{
+  EXPECT_CALL(*_local_data_store, get_data(_, _, _, _, _))
+    .WillOnce(Return(Store::NOT_FOUND));
+
+  EXPECT_CALL(*_local_data_store, set_data(_, _, _, _, _, _))
+    .WillOnce(Return(Store::ERROR));
+
+  SubscribeMessage msg;
+  inject_msg(msg.get());
+
+  ASSERT_EQ(1, txdata_count());
+  pjsip_msg* out = current_txdata()->msg;
+  EXPECT_EQ(500, out->line.status.code);
+  free_txdata();
+}

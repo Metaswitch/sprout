@@ -73,6 +73,13 @@ typedef struct pjsip_session_expires_hdr {
   pjsip_param other_param;
 } pjsip_session_expires_hdr;
 
+typedef struct pjsip_min_se_hdr {
+  PJSIP_DECL_HDR_MEMBER(struct pjsip_min_se_hdr);
+  pj_int32_t expires;
+  session_refresher_t refresher;
+  pjsip_param other_param;
+} pjsip_min_se_hdr;
+
 typedef struct pjsip_p_c_v_hdr {
   PJSIP_DECL_HDR_MEMBER(struct pjsip_p_c_v_hdr);
   pj_str_t icid;
@@ -116,6 +123,14 @@ pjsip_session_expires_hdr* pjsip_session_expires_hdr_init(pj_pool_t* pool, void*
 void* pjsip_session_expires_hdr_clone(pj_pool_t* pool, const void* o);
 void* pjsip_session_expires_hdr_shallow_clone(pj_pool_t* pool, const void* o);
 int pjsip_session_expires_hdr_print_on(void *hdr, char* buf, pj_size_t len);
+
+// Min-SE
+pjsip_hdr* parse_hdr_min_se(pjsip_parse_ctx* ctx);
+pjsip_min_se_hdr* pjsip_min_se_hdr_create(pj_pool_t* pool);
+pjsip_min_se_hdr* pjsip_min_se_hdr_init(pj_pool_t* pool, void* mem);
+void* pjsip_min_se_hdr_clone(pj_pool_t* pool, const void* o);
+void* pjsip_min_se_hdr_shallow_clone(pj_pool_t* pool, const void* o);
+int pjsip_min_se_hdr_print_on(void *hdr, char* buf, pj_size_t len);
 
 // Preferred/Asserted Identity
 pjsip_hdr* parse_hdr_p_asserted_identity(pjsip_parse_ctx* ctx);

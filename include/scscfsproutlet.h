@@ -208,8 +208,12 @@ public:
   virtual void on_timer_expiry(void* context);
 
 private:
-  /// Determines the session case and the served user for the request,
-  /// and links to the appropriate AS Chain.
+  /// Examines the top route header to determine the relevant AS chain
+  /// (from the ODI token) and the session case (based on the presence of
+  /// the 'orig' param), and sets those as member variables.
+  void retrieve_odi_and_sesscase(pjsip_msg* req);
+  
+  /// Determines the served user for the request.
   pjsip_status_code determine_served_user(pjsip_msg* req);
 
   /// Gets the served user indicated in the message.
@@ -268,10 +272,6 @@ private:
   /// filled in correctly if this function returns true.
   bool lookup_ifcs(std::string public_id,
                    Ifcs& ifcs);
-
-  /// Adds a Session-Expires header to the request to force the UEs to
-  /// exchange periodic session refresh messages.
-  void add_session_expires(pjsip_msg* req);
 
   /// Record-Route the S-CSCF sproutlet into a dialog.  The parameter passed
   /// will be attached to the Record-Route and can be used to recover the

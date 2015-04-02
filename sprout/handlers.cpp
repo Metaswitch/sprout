@@ -51,9 +51,12 @@ extern "C" {
 #include "pjutils.h"
 #include "sproutsasevent.h"
 
-static bool reg_store_access_common(RegStore::AoR** aor_data, bool& previous_aor_data_alloced,
-                                    std::string aor_id, RegStore* current_store,
-                                    RegStore* remote_store, RegStore::AoR** previous_aor_data,
+static bool reg_store_access_common(RegStore::AoR** aor_data,
+                                    bool& previous_aor_data_alloced,
+                                    std::string aor_id,
+                                    RegStore* current_store,
+                                    RegStore* remote_store,
+                                    RegStore::AoR** previous_aor_data,
                                     SAS::TrailId trail)
 {
   // Find the current bindings for the AoR.
@@ -212,7 +215,7 @@ void DeregistrationTask::run()
   if (_notify != "true" && _notify != "false")
   {
     LOG_WARNING("Mandatory send-notifications param is missing or invalid, send 400");
-    send_http_reply(HTTP_BAD_RESULT);
+    send_http_reply(HTTP_BAD_REQUEST);
     delete this;
     return;
   }
@@ -256,6 +259,13 @@ void RegistrationTimeoutTask::handle_response()
       _cfg->_hss->update_registration_state(_aor_id, "", HSSConnection::DEREG_TIMEOUT, 0);
     }
   }
+  else
+  {
+    // We couldn't update the RegStore but there is nothing else we can do to
+    // recover from this.
+    LOG_INFO("Could not update update RegStore on registration timeout for AoR: %s",
+             _aor_id.c_str());
+  }
 
   delete aor_data;
   report_sip_all_register_marker(trail(), _aor_id);
@@ -270,18 +280,34 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
 {
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
+  Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
-                                 current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data,
+                                 previous_aor_data_alloced,
+                                 aor_id,
+                                 current_store,
+                                 remote_store,
+                                 &previous_aor_data,
+                                 trail()))
     {
       // LCOV_EXCL_START - local store (used in testing) never fails
       break;
       // LCOV_EXCL_STOP
     }
+
+    set_rc = current_store->set_aor_data(aor_id,
+                                         aor_data,
+                                         is_primary,
+                                         trail(),
+                                         all_bindings_expired);
+    if (set_rc != Store::OK)
+    {
+      delete aor_data; aor_data = NULL;
+    }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
+  while (set_rc == Store::DATA_CONTENTION);
 
   // If we allocated the AoR, tidy up.
   if (previous_aor_data_alloced)
@@ -304,7 +330,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   {
     LOG_WARNING("Failed to read opaque data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("aor_id")) &&
@@ -315,7 +341,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   else
   {
     LOG_WARNING("AoR ID not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("binding_id")) &&
@@ -326,7 +352,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   else
   {
     LOG_WARNING("Binding ID not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   return HTTP_OK;
@@ -343,7 +369,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
   {
     LOG_WARNING("Failed to read data, %s",
                 reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("registrations")) &&
@@ -372,7 +398,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
       else
       {
         LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
-        return HTTP_BAD_RESULT;
+        return HTTP_BAD_REQUEST;
       }
 
       _bindings.insert(std::make_pair(primary_impu, impi));
@@ -381,7 +407,7 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
   else
   {
     LOG_WARNING("Registrations not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   LOG_DEBUG("HTTP request successfully parsed");
@@ -431,11 +457,17 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
   RegStore::AoR* aor_data = NULL;
   bool previous_aor_data_alloced = false;
   bool all_bindings_expired = false;
+  Store::Status set_rc;
 
   do
   {
-    if (!reg_store_access_common(&aor_data, previous_aor_data_alloced, aor_id,
-                                 current_store, remote_store, &previous_aor_data, trail()))
+    if (!reg_store_access_common(&aor_data,
+                                 previous_aor_data_alloced,
+                                 aor_id,
+                                 current_store,
+                                 remote_store,
+                                 &previous_aor_data,
+                                 trail()))
     {
       break;
     }
@@ -477,8 +509,18 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
         aor_data->remove_binding(b_id);
       }
     }
+
+    set_rc = current_store->set_aor_data(aor_id,
+                                         aor_data,
+                                         is_primary,
+                                         trail(),
+                                         all_bindings_expired);
+    if (set_rc != Store::OK)
+    {
+      delete aor_data; aor_data = NULL;
+    }
   }
-  while (!current_store->set_aor_data(aor_id, aor_data, is_primary, trail(), all_bindings_expired));
+  while (set_rc == Store::DATA_CONTENTION);
 
   if (private_id == "")
   {
@@ -517,7 +559,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   {
     LOG_ERROR("Failed to read opaque data, %s",
               reader.getFormattedErrorMessages().c_str());
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("impu")) &&
@@ -529,7 +571,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPU not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("impi")) &&
@@ -540,7 +582,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("IMPI not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   if ((json_body.isMember("nonce")) &&
@@ -551,7 +593,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
   else
   {
     LOG_ERROR("Nonce not available in JSON");
-    return HTTP_BAD_RESULT;
+    return HTTP_BAD_REQUEST;
   }
 
   bool success = false;
