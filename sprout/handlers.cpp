@@ -34,7 +34,8 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include <json/reader.h>
+#include "rapidjson/document.h"
+#include "json_parse_utils.h"
 
 extern "C" {
 #include <pjsip.h>
@@ -321,37 +322,25 @@ RegStore::AoR* RegistrationTimeoutTask::set_aor_data(RegStore* current_store,
 // Retrieve the aor and binding ID from the opaque data
 HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 {
-  Json::Value json_body;
+  rapidjson::Document doc;
   std::string json_str = body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+  doc.Parse<0>(json_str.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read opaque data, %s",
-                reader.getFormattedErrorMessages().c_str());
+    LOG_INFO("Failed to parse opaque data as JSON, %s",
+             json_str.c_str());
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("aor_id")) &&
-      ((json_body)["aor_id"].isString()))
+  try
   {
-    _aor_id = json_body.get("aor_id", "").asString();
+    JSON_GET_STRING_MEMBER(doc, "aor_id", _aor_id);
+    JSON_GET_STRING_MEMBER(doc, "binding_id", _binding_id);
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_WARNING("AoR ID not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("binding_id")) &&
-      ((json_body)["binding_id"].isString()))
-  {
-    _binding_id = json_body.get("binding_id", "").asString();
-  }
-  else
-  {
-    LOG_WARNING("Binding ID not available in JSON");
+    LOG_INFO("Badly formed opaque data (missing aor_id or binding_id");
     return HTTP_BAD_REQUEST;
   }
 
@@ -361,52 +350,50 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 // Retrieve the aors and any private IDs from the request body
 HTTPCode DeregistrationTask::parse_request(std::string body)
 {
-  Json::Value json_body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(body.c_str(), json_body);
+  rapidjson::Document doc;
+  doc.Parse<0>(body.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read data, %s",
-                reader.getFormattedErrorMessages().c_str());
+    LOG_INFO("Failed to parse data as JSON, %s",
+             body.c_str());
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("registrations")) &&
-      ((json_body)["registrations"].isArray()))
+  try
   {
-    Json::Value registration_vals = json_body["registrations"];
+    JSON_ASSERT_CONTAINS(doc, "registrations");
+    JSON_ASSERT_ARRAY(doc["registrations"]);
+    const rapidjson::Value& reg_arr = doc["registrations"];
 
-    for (size_t ii = 0; ii < registration_vals.size(); ++ii)
+    for (rapidjson::Value::ConstValueIterator reg_it = reg_arr.Begin();
+         reg_it != reg_arr.End();
+         ++reg_it)
     {
-      Json::Value registration = registration_vals[(int)ii];
-      std::string primary_impu;
-      std::string impi = "";
-
-      if ((registration.isMember("primary-impu")) &&
-          ((registration)["primary-impu"].isString()))
+      try 
       {
-        primary_impu = registration["primary-impu"].asString();
+        std::string primary_impu;
+        std::string impi = "";
+        JSON_GET_STRING_MEMBER(*reg_it, "primary-impu", primary_impu);
 
-        if ((registration.isMember("impi")) &&
-            (registration["impi"].isString()))
-
+        if (((*reg_it).HasMember("impi")) &&
+            ((*reg_it)["impi"].IsString()))
         {
-          impi = registration["impi"].asString();
+          impi = (*reg_it)["impi"].GetString();
         }
+
+        _bindings.insert(std::make_pair(primary_impu, impi));
       }
-      else
+      catch (JsonFormatError err)
       {
         LOG_WARNING("Invalid JSON - registration doesn't contain primary-impu");
         return HTTP_BAD_REQUEST;
       }
-
-      _bindings.insert(std::make_pair(primary_impu, impi));
     }
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_WARNING("Registrations not available in JSON");
+    LOG_INFO("Registrations not available in JSON");
     return HTTP_BAD_REQUEST;
   }
 
@@ -550,49 +537,27 @@ RegStore::AoR* DeregistrationTask::set_aor_data(RegStore* current_store,
 
 HTTPCode AuthTimeoutTask::handle_response(std::string body)
 {
-  Json::Value json_body;
+  rapidjson::Document doc;
   std::string json_str = body;
-  Json::Reader reader;
-  bool parsingSuccessful = reader.parse(json_str.c_str(), json_body);
+  doc.Parse<0>(json_str.c_str());
 
-  if (!parsingSuccessful)
+  if (doc.HasParseError())
   {
-    LOG_ERROR("Failed to read opaque data, %s",
-              reader.getFormattedErrorMessages().c_str());
+    LOG_INFO("Failed to parse opaque data as JSON, %s",
+             json_str.c_str());
     return HTTP_BAD_REQUEST;
   }
 
-  if ((json_body.isMember("impu")) &&
-      ((json_body)["impu"].isString()))
+  try
   {
-    _impu = json_body.get("impu", "").asString();
+    JSON_GET_STRING_MEMBER(doc, "impu", _impu);
+    JSON_GET_STRING_MEMBER(doc, "impi", _impi);
+    JSON_GET_STRING_MEMBER(doc, "nonce", _nonce);
     report_sip_all_register_marker(trail(), _impu);
   }
-  else
+  catch (JsonFormatError err)
   {
-    LOG_ERROR("IMPU not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("impi")) &&
-      ((json_body)["impi"].isString()))
-  {
-    _impi = json_body.get("impi", "").asString();
-  }
-  else
-  {
-    LOG_ERROR("IMPI not available in JSON");
-    return HTTP_BAD_REQUEST;
-  }
-
-  if ((json_body.isMember("nonce")) &&
-      ((json_body)["nonce"].isString()))
-  {
-    _nonce = json_body.get("nonce", "").asString();
-  }
-  else
-  {
-    LOG_ERROR("Nonce not available in JSON");
+    LOG_INFO("Badly formed opaque data (missing impu, impi or nonce");
     return HTTP_BAD_REQUEST;
   }
 

@@ -447,7 +447,7 @@ TEST_F(DeregistrationTaskTest, InvalidJSONTest)
 TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 {
   CapturingTestLogger log;
-  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}");
+  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}");
   EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
   _task->run();
   EXPECT_TRUE(log.contains("Registrations not available in JSON"));

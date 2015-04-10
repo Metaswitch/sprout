@@ -49,7 +49,6 @@ extern "C" {
 #include <queue>
 #include <string>
 #include <boost/algorithm/string/predicate.hpp>
-#include <json/reader.h>
 
 #include "log.h"
 #include "stack.h"
