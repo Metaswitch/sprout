@@ -39,7 +39,6 @@
 
 #include <string>
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "stack.h"

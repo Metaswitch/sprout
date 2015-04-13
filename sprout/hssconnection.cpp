@@ -38,8 +38,6 @@
 #include <string>
 #include <memory>
 #include <map>
-#include <json/reader.h>
-#include <json/writer.h>
 
 #include "utils.h"
 #include "log.h"
