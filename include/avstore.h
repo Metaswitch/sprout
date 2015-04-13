@@ -37,7 +37,7 @@
 #ifndef AVSTORE_H_
 #define AVSTORE_H_
 
-#include <json/json.h>
+#include "rapidjson/document.h"
 
 #include "store.h"
 
@@ -59,27 +59,27 @@ public:
   /// private user identity and nonce.
   /// @param impi      A reference to the private user identity.
   /// @param nonce     A reference to the nonce.
-  /// @param av        A pointer to a JSONCPP Json::Value object encoding
+  /// @param av        A pointer to a rapidjson Document object encoding
   ///                  the Authentication Vector.
   /// @returns True if we successfully set the data in memcached,
   /// false otherwise.
   bool set_av(const std::string& impi,
               const std::string& nonce,
-              const Json::Value* av,
+              const rapidjson::Document* av,
               uint64_t cas,
               SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
-  /// @returns         A pointer to a JSONCPP Json::Value object encoding the
+  /// @returns         A pointer to a rapidjson::Document object encoding the
   ///                  Authentication Vector, or NULL if no vector found or if
   ///                  the vector is malformed.
   /// @param impi      A reference to the private user identity.
   /// @param nonce     A reference to the nonce.
-  Json::Value* get_av(const std::string& impi,
-                      const std::string& nonce,
-                      uint64_t& cas,
-                      SAS::TrailId trail);
+  rapidjson::Document* get_av(const std::string& impi,
+                              const std::string& nonce,
+                              uint64_t& cas,
+                              SAS::TrailId trail);
 
 private:
   /// A pointer to the underlying data store.
@@ -94,6 +94,6 @@ private:
 
 // Utility function - retrieves the "branch" field from the given AV
 // and raises a correlating transaction marker in the given trail.
-void correlate_branch_from_av(Json::Value* av, SAS::TrailId trail);
+void correlate_branch_from_av(rapidjson::Document* av, SAS::TrailId trail);
 
 #endif

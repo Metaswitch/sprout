@@ -93,7 +93,7 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
                                         const std::string& public_user_identity,
                                         const std::string& auth_type,
                                         const std::string& autn,
-                                        Json::Value*& av,
+                                        rapidjson::Document*& av,
                                         SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -126,7 +126,6 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
   }
 
   HTTPCode rc = get_json_object(path, av, trail);
-
   unsigned long latency_us = 0;
 
   // Only accumulate the latency if we haven't already applied a
@@ -151,21 +150,23 @@ HTTPCode HSSConnection::get_auth_vector(const std::string& private_user_identity
 
 /// Retrieve a JSON object from a path on the server. Caller is responsible for deleting.
 HTTPCode HSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& json_object,
+                                        rapidjson::Document*& json_object,
                                         SAS::TrailId trail)
 {
   std::string json_data;
-
   HTTPCode rc = _http->send_get(path, json_data, "", trail);
+
   if (rc == HTTP_OK)
   {
-    json_object = new Json::Value;
-    Json::Reader reader;
-    bool parsingSuccessful = reader.parse(json_data, *json_object);
-    if (!parsingSuccessful)
+    json_object = new rapidjson::Document;
+    json_object->Parse<0>(json_data.c_str());
+
+    if (json_object->HasParseError())
     {
-      // report to the user the failure and their locations in the document.
-      LOG_WARNING("Failed to parse Homestead response:\n %s\n %s\n %s\n", path.c_str(), json_data.c_str(), reader.getFormatedErrorMessages().c_str());
+      LOG_INFO("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n", 
+               path.c_str(), 
+               json_data.c_str(), 
+               json_object->GetErrorOffset());
       delete json_object;
       json_object = NULL;
     }
@@ -685,7 +686,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
                                              const std::string& public_user_identity,
                                              const std::string& visited_network,
                                              const std::string& auth_type,
-                                             Json::Value*& user_auth_status,
+                                             rapidjson::Document*& user_auth_status,
                                              SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;
@@ -731,7 +732,7 @@ HTTPCode HSSConnection::get_user_auth_status(const std::string& private_user_ide
 HTTPCode HSSConnection::get_location_data(const std::string& public_user_identity,
                                           const bool& originating,
                                           const std::string& auth_type,
-                                          Json::Value*& location_data,
+                                          rapidjson::Document*& location_data,
                                           SAS::TrailId trail)
 {
   Utils::StopWatch stopWatch;

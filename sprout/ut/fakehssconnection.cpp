@@ -121,7 +121,7 @@ void FakeHSSConnection::delete_rc(const std::string& url)
 
 
 long FakeHSSConnection::get_json_object(const std::string& path,
-                                        Json::Value*& object,
+                                        rapidjson::Document*& object,
                                         SAS::TrailId trail)
 {
   _calls.insert(UrlBody(path, ""));
@@ -131,21 +131,21 @@ long FakeHSSConnection::get_json_object(const std::string& path,
 
   if (i != _results.end())
   {
-    object = new Json::Value;
-    Json::Reader reader;
     LOG_DEBUG("Found HSS data for %s\n%s", path.c_str(), i->second.c_str());
-    bool parsingSuccessful = reader.parse(i->second, *object);
-    if (parsingSuccessful)
+    object = new rapidjson::Document;
+    object->Parse<0>(i->second.c_str());
+
+    if (!object->HasParseError())
     {
       http_code = HTTP_OK;
     }
     else
     {
       // report to the user the failure and their locations in the document.
-      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s\n %s\n",
+      LOG_ERROR("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n",
                 path.c_str(),
                 i->second.c_str(),
-                reader.getFormatedErrorMessages().c_str());
+                object->GetErrorOffset());
       delete object;
       object = NULL;
     }

@@ -204,7 +204,7 @@ int ICSCFRouter::get_scscf(pj_pool_t* pool, pjsip_sip_uri*& scscf_sip_uri)
 
 
 /// Parses the response from the HSS.
-int ICSCFRouter::parse_hss_response(Json::Value& rsp, bool queried_caps)
+int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps)
 {
   int status_code = PJSIP_SC_OK;
 
@@ -214,10 +214,11 @@ int ICSCFRouter::parse_hss_response(Json::Value& rsp, bool queried_caps)
   _hss_rsp.optional_caps.clear();
   _hss_rsp.scscf = "";
 
-  if ((!rsp.isMember("result-code")) ||
-      ((rsp["result-code"].asString() != "2001") &&
-       (rsp["result-code"].asString() != "2002") &&
-       (rsp["result-code"].asString() != "2003")))
+  if ((!rsp->HasMember("result-code")) ||
+      (!(*rsp)["result-code"].IsInt()) ||
+      (((*rsp)["result-code"].GetInt() != 2001) &&
+       ((*rsp)["result-code"].GetInt() != 2002) &&
+       ((*rsp)["result-code"].GetInt() != 2003)))
   {
     // Error from HSS, so respond with 404 Not Found.  (This may be changed
     // to 403 Forbidden if request is a REGISTER.)
@@ -226,29 +227,29 @@ int ICSCFRouter::parse_hss_response(Json::Value& rsp, bool queried_caps)
   else
   {
     // Successful response from HSS, so parse it.
-    if ((rsp.isMember("scscf")) &&
-        (rsp["scscf"].isString()))
+    if ((rsp->HasMember("scscf")) &&
+        ((*rsp)["scscf"].IsString()))
     {
       // Response specifies a S-CSCF, so select this as the target.
-      LOG_DEBUG("HSS returned S-CSCF %s as target", rsp["scscf"].asCString());
-      _hss_rsp.scscf = rsp["scscf"].asString();
+      LOG_DEBUG("HSS returned S-CSCF %s as target", (*rsp)["scscf"].GetString());
+      _hss_rsp.scscf = (*rsp)["scscf"].GetString();
     }
 
-    if ((rsp.isMember("mandatory-capabilities")) &&
-        (rsp["mandatory-capabilities"].isArray()) &&
-        (rsp.isMember("optional-capabilities")) &&
-        (rsp["optional-capabilities"].isArray()))
+    if ((rsp->HasMember("mandatory-capabilities")) &&
+        ((*rsp)["mandatory-capabilities"].IsArray()) &&
+        (rsp->HasMember("optional-capabilities")) &&
+        ((*rsp)["optional-capabilities"].IsArray()))
     {
       // Response specifies capabilities - we might have explicitly queried capabilities
       // or implicitly because there was no server assigned.
       LOG_DEBUG("HSS returned capabilities");
       queried_caps = true;
-      if ((!parse_capabilities(rsp["mandatory-capabilities"], _hss_rsp.mandatory_caps)) ||
-          (!parse_capabilities(rsp["optional-capabilities"], _hss_rsp.optional_caps)))
+
+      if ((!parse_capabilities((*rsp)["mandatory-capabilities"], _hss_rsp.mandatory_caps)) ||
+          (!parse_capabilities((*rsp)["optional-capabilities"], _hss_rsp.optional_caps)))
       {
         // Failed to parse capabilities, so reject with 480 response.
-        LOG_WARNING("Malformed required capabilities returned by HSS\n%s",
-                    rsp.toStyledString().c_str());
+        LOG_INFO("Malformed required capabilities returned by HSS\n");
         status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
       }
     }
@@ -271,14 +272,14 @@ int ICSCFRouter::parse_hss_response(Json::Value& rsp, bool queried_caps)
 
 
 /// Parses a set of capabilities in the HSS response to a vector of integers.
-bool ICSCFRouter::parse_capabilities(Json::Value& caps,
+bool ICSCFRouter::parse_capabilities(rapidjson::Value& caps,
                                      std::vector<int>& parsed_caps)
 {
-  for (size_t ii = 0; ii < caps.size(); ++ii)
+  for (size_t ii = 0; ii < caps.Size(); ++ii)
   {
-    if (caps[(int)ii].isUInt())
+    if (caps[(int)ii].IsUint())
     {
-      parsed_caps.push_back(caps[(int)ii].asUInt());
+      parsed_caps.push_back(caps[(int)ii].GetUint());
     }
     else
     {
@@ -324,7 +325,7 @@ int ICSCFUARouter::hss_query()
             _impi.c_str(), _impu.c_str(),
             _visited_network.c_str(), auth_type.c_str());
 
-  Json::Value* rsp = NULL;
+  rapidjson::Document* rsp = NULL;
   HTTPCode rc =_hss->get_user_auth_status(_impi,
                                           _impu,
                                           _visited_network,
@@ -349,7 +350,7 @@ int ICSCFUARouter::hss_query()
   else
   {
     // HSS returned a well-formed response, so parse it.
-    status_code = parse_hss_response(*rsp, auth_type == "CAPAB");
+    status_code = parse_hss_response(rsp, auth_type == "CAPAB");
 
     if (status_code == PJSIP_SC_NOT_FOUND)
     {
@@ -398,7 +399,7 @@ int ICSCFLIRouter::hss_query()
             _impu.c_str(),
             (_originating) ? "true" : "false",
             (auth_type != "") ? auth_type.c_str() : "None");
-  Json::Value* rsp = NULL;
+  rapidjson::Document* rsp = NULL;
   HTTPCode rc =_hss->get_location_data(_impu,
                                        _originating,
                                        auth_type,
@@ -422,7 +423,7 @@ int ICSCFLIRouter::hss_query()
   else
   {
     // HSS returned a well-formed response, so parse it.
-    status_code = parse_hss_response(*rsp, auth_type == "CAPAB");
+    status_code = parse_hss_response(rsp, auth_type == "CAPAB");
   }
 
   delete rsp;

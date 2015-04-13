@@ -563,7 +563,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
   bool success = false;
   uint64_t cas;
-  Json::Value* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
+  rapidjson::Document* av = _cfg->_avstore->get_av(_impi, _nonce, cas, trail());
   if (av != NULL)
   {
     // Use the original REGISTER's branch parameter for SAS
@@ -573,7 +573,7 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
     // If authentication completed, we'll have written a marker to
     // indicate that. Look for it.
-    if (!av->isMember("tombstone"))
+    if (!av->HasMember("tombstone"))
     {
       LOG_DEBUG("AV for %s:%s has timed out", _impi.c_str(), _nonce.c_str());
 

@@ -469,26 +469,26 @@ TEST_F(HssConnectionTest, ServerFailure)
 
 TEST_F(HssConnectionTest, SimpleUserAuth)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("server-name", actual->get("scscf", "").asString());
+  EXPECT_TRUE(strcmp("server-name", (*actual)["scscf"].GetString()) == 0);
   delete actual;
 }
 
 TEST_F(HssConnectionTest, FullUserAuth)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "domain", "REG", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, CorruptAuth)
 {
   CapturingTestLogger log;
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_user_auth_status("privid_corrupt", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual == NULL);
   EXPECT_TRUE(log.contains("Failed to parse Homestead response"));
@@ -497,34 +497,34 @@ TEST_F(HssConnectionTest, CorruptAuth)
 
 TEST_F(HssConnectionTest, SimpleLocation)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", false, "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("server-name", actual->get("scscf", "").asString());
+  EXPECT_TRUE(strcmp("server-name", (*actual)["scscf"].GetString()) == 0);
   delete actual;
 }
 
 TEST_F(HssConnectionTest, LocationWithAuthType)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", false, "DEREG", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, FullLocation)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   _hss.get_location_data("pubid44", true, "CAPAB", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_EQ("2001", actual->get("result-code", "").asString());
+  EXPECT_EQ(2001, (*actual)["result-code"].GetInt());
   delete actual;
 }
 
 TEST_F(HssConnectionTest, LocationNotFound)
 {
-  Json::Value* actual;
+  rapidjson::Document* actual;
   HTTPCode rc = _hss.get_location_data("pubid45", false, "", actual, 0);
   ASSERT_TRUE(actual == NULL);
   ASSERT_TRUE(rc == 404);
