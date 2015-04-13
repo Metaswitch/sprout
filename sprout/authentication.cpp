@@ -113,48 +113,54 @@ pjsip_auth_srv auth_srv;
 
 
 /// Verifies that the supplied authentication vector is valid.
-bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId trail)
+bool verify_auth_vector(rapidjson::Document* av, const std::string& impi, SAS::TrailId trail)
 {
   bool rc = true;
 
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  av->Accept(writer);
+  std::string av_str = buffer.GetString();
+  LOG_DEBUG("Verifying AV: %s", av_str.c_str());
+
   // Check the AV is well formed.
-  if (av->isMember("aka"))
+  if (av->HasMember("aka"))
   {
     // AKA is specified, check all the expected parameters are present.
     LOG_DEBUG("AKA specified");
-    Json::Value& aka = (*av)["aka"];
-    if ((!aka["challenge"].isString()) ||
-        (!aka["response"].isString()) ||
-        (!aka["cryptkey"].isString()) ||
-        (!aka["integritykey"].isString()))
+    rapidjson::Value& aka = (*av)["aka"];
+    if (!(((aka.HasMember("challenge")) && (aka["challenge"].IsString())) &&
+          ((aka.HasMember("response")) && (aka["response"].IsString())) &&
+          ((aka.HasMember("cryptkey")) && (aka["cryptkey"].IsString())) &&
+          ((aka.HasMember("integritykey")) && (aka["integritykey"].IsString()))))
     {
       // Malformed AKA entry
-      LOG_ERROR("Badly formed AKA authentication vector for %s\n%s",
-                impi.c_str(), av->toStyledString().c_str());
+      LOG_INFO("Badly formed AKA authentication vector for %s",
+               impi.c_str());
       rc = false;
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
-      std::string error_msg = "AKA authentication vector is malformed: " + av->toStyledString();
+      std::string error_msg = std::string("AKA authentication vector is malformed: ") + av_str.c_str();
       event.add_var_param(error_msg);
       SAS::report_event(event);
     }
   }
-  else if (av->isMember("digest"))
+  else if (av->HasMember("digest"))
   {
     // Digest is specified, check all the expected parameters are present.
     LOG_DEBUG("Digest specified");
-    Json::Value& digest = (*av)["digest"];
-    if ((!digest["realm"].isString()) ||
-        (!digest["qop"].isString()) ||
-        (!digest["ha1"].isString()))
+    rapidjson::Value& digest = (*av)["digest"];
+    if (!(((digest.HasMember("realm")) && (digest["realm"].IsString())) &&
+          ((digest.HasMember("qop")) && (digest["qop"].IsString())) &&
+          ((digest.HasMember("ha1")) && (digest["ha1"].IsString()))))
     {
       // Malformed digest entry
-      LOG_ERROR("Badly formed Digest authentication vector for %s\n%s",
-                impi.c_str(), av->toStyledString().c_str());
+      LOG_INFO("Badly formed Digest authentication vector for %s",
+               impi.c_str());
       rc = false;
 
       SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
-      std::string error_msg = "Digest authentication vector is malformed: " + av->toStyledString();
+      std::string error_msg = std::string("Digest authentication vector is malformed: ") + av_str.c_str();;
       event.add_var_param(error_msg);
       SAS::report_event(event);
     }
@@ -162,12 +168,12 @@ bool verify_auth_vector(Json::Value* av, const std::string& impi, SAS::TrailId t
   else
   {
     // Neither AKA nor Digest information present.
-    LOG_ERROR("No AKA or Digest object in authentication vector for %s\n%s",
-              impi.c_str(), av->toStyledString().c_str());
+    LOG_INFO("No AKA or Digest object in authentication vector for %s",
+             impi.c_str());
     rc = false;
 
     SAS::Event event(trail, SASEvent::AUTHENTICATION_FAILED_MALFORMED, 0);
-    std::string error_msg = "Authentication vector is malformed: " + av->toStyledString();
+    std::string error_msg = std::string("Authentication vector is malformed: ") + av_str.c_str();
     event.add_var_param(error_msg);
     SAS::report_event(event);
   }
@@ -196,7 +202,7 @@ pj_status_t user_lookup(pj_pool_t *pool,
   std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
 
   // Get the Authentication Vector from the store.
-  Json::Value* av = (Json::Value*)av_param;
+  rapidjson::Document* av = (rapidjson::Document*)av_param;
 
   if (av == NULL)
   {
@@ -214,12 +220,12 @@ pj_status_t user_lookup(pj_pool_t *pool,
   {
     pj_cstr(&cred_info->scheme, "digest");
     pj_strdup(pool, &cred_info->username, acc_name);
-    if (av->isMember("aka"))
+    if (av->HasMember("aka"))
     {
       // AKA authentication.  The response in the AV must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
       // into binary as this is what PJSIP is expecting.
-      std::string response = (*av)["aka"]["response"].asString();
+      std::string response = (*av)["aka"]["response"].GetString();
       std::string xres;
       for (size_t ii = 0; ii < response.length(); ii += 2)
       {
@@ -234,13 +240,13 @@ pj_status_t user_lookup(pj_pool_t *pool,
       pj_strdup(pool, &cred_info->realm, realm);
       status = PJ_SUCCESS;
     }
-    else if (av->isMember("digest"))
+    else if (av->HasMember("digest"))
     {
-      if (pj_strcmp2(realm, (*av)["digest"]["realm"].asCString()) == 0)
+      if (pj_strcmp2(realm, (*av)["digest"]["realm"].GetString()) == 0)
       {
         // Digest authentication, so ha1 field is hashed password.
         cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-        pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].asCString());
+        pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].GetString());
         cred_info->realm = *realm;
         LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
         status = PJ_SUCCESS;
@@ -291,7 +297,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
   }
 
   // Get the Authentication Vector from the HSS.
-  Json::Value* av = NULL;
+  rapidjson::Document* av = NULL;
   HTTPCode http_code = hss->get_auth_vector(impi, impu, auth_type, resync, av, get_trail(rdata));
 
   if ((av != NULL) &&
@@ -318,7 +324,7 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     // Digest authentication).
     hdr->scheme = STR_DIGEST;
 
-    if (av->isMember("aka"))
+    if (av->HasMember("aka"))
     {
       // AKA authentication.
       LOG_DEBUG("Add AKA information");
@@ -326,12 +332,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_AKA, 0);
       SAS::report_event(event);
 
-      Json::Value& aka = (*av)["aka"];
+      rapidjson::Value& aka = (*av)["aka"];
 
       // Use default realm for AKA as not specified in the AV.
       pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &aka_realm);
       hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
-      nonce = aka["challenge"].asString();
+      nonce = aka["challenge"].GetString();
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
@@ -341,14 +347,16 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      std::string ck = "\"" + aka["cryptkey"].asString() + "\"";
+      std::string cryptkey = aka["cryptkey"].GetString();
+      std::string ck = "\"" + cryptkey + "\"";
       pj_strdup2(tdata->pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
 
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      std::string ik = "\"" + aka["integritykey"].asString() + "\"";
+      std::string integritykey = aka["integritykey"].GetString();
+      std::string ik = "\"" + integritykey + "\"";
       pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
     }
@@ -360,15 +368,15 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       SAS::Event event(get_trail(rdata), SASEvent::AUTHENTICATION_CHALLENGE_DIGEST, 0);
       SAS::report_event(event);
 
-      Json::Value& digest = (*av)["digest"];
-      pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, digest["realm"].asCString());
+      rapidjson::Value& digest = (*av)["digest"];
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, digest["realm"].GetString());
       hdr->challenge.digest.algorithm = STR_MD5;
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.nonce, &random);
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
-      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, digest["qop"].asCString());
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, digest["qop"].GetString());
       hdr->challenge.digest.stale = stale;
     }
 
@@ -379,7 +387,9 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     pjsip_via_hdr* via_hdr = (pjsip_via_hdr*)pjsip_msg_find_hdr(rdata->msg_info.msg, PJSIP_H_VIA, NULL);
     std::string branch = (via_hdr != NULL) ? PJUtils::pj_str_to_string(&via_hdr->branch_param) : "";
 
-    (*av)["branch"] = branch;
+    rapidjson::Value branch_value;
+    branch_value.SetString(branch.c_str(), (*av).GetAllocator());
+    (*av).AddMember("branch", branch_value, (*av).GetAllocator());
 
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
@@ -531,7 +541,7 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
     std::string nonce = PJUtils::pj_str_to_string(&auth_hdr->credential.digest.nonce);
     uint64_t cas = 0;
 
-    Json::Value* av = av_store->get_av(impi, nonce, cas, trail);
+    rapidjson::Document* av = av_store->get_av(impi, nonce, cas, trail);
 
     // Request contains a response to a previous challenge, so pass it to
     // the authentication module to verify.
@@ -546,7 +556,14 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      (*av)["tombstone"] = Json::Value("true");
+//    rapidjson::Value branch_value;
+//    branch_value.SetString(branch.c_str(), (*av).GetAllocator());
+//    (*av).AddMember("branch", branch_value, (*av).GetAllocator());
+
+      rapidjson::Value tombstone_value;
+      tombstone_value.SetBool(true);
+      av->AddMember("tombstone", tombstone_value, (*av).GetAllocator());
+
       bool rc = av_store->set_av(impi, nonce, av, cas, trail);
 
       if (!rc)
