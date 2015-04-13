@@ -77,9 +77,11 @@ void SCSCFSelector::update_scscf()
 
   if (scscf_str == "")
   {
+    // LCOV_EXCL_START
     LOG_WARNING("Failed to read S-CSCF configuration data from %s",
                 _configuration.c_str());
     return;
+    // LCOV_EXCL_STOP
   }
 
   // Now parse the document

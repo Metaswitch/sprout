@@ -77,9 +77,11 @@ void BgcfService::update_routes()
 
   if (bgcf_str == "")
   {
+    // LCOV_EXCL_START
     LOG_WARNING("Failed to read BGCF configuration data from %s", 
                 _configuration.c_str());
     return;
+    // LCOV_EXCL_STOP
   }
  
   // Now parse the document

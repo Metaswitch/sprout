@@ -109,9 +109,11 @@ JSONEnumService::JSONEnumService(std::string configuration)
 
   if (enum_str == "")
   {
+    // LCOV_EXCL_START
     LOG_WARNING("Failed to read ENUM configuration data from %s",
                 configuration.c_str());
     return;
+    // LCOV_EXCL_STOP
   }
 
   // Now parse the document
