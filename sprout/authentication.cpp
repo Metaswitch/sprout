@@ -556,10 +556,6 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-//    rapidjson::Value branch_value;
-//    branch_value.SetString(branch.c_str(), (*av).GetAllocator());
-//    (*av).AddMember("branch", branch_value, (*av).GetAllocator());
-
       rapidjson::Value tombstone_value;
       tombstone_value.SetBool(true);
       av->AddMember("tombstone", tombstone_value, (*av).GetAllocator());
