@@ -212,7 +212,6 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -lmemcachedutil \
-           -ljsoncpp \
            -lssl \
            -lcrypto \
            -ldl \

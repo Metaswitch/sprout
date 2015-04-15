@@ -10,9 +10,6 @@
 [submodule "modules/gmock"]
 	path = modules/gmock
 	url = git@github.com:Metaswitch/gmock-upstream.git
-[submodule "modules/jsoncpp"]
-	path = modules/jsoncpp
-	url = git@github.com:Metaswitch/jsoncpp-upstream.git
 [submodule "modules/libmemcached"]
 	path = modules/libmemcached
 	url = git@github.com:Metaswitch/libmemcached-upstream.git

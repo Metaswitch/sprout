@@ -41,7 +41,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 #include "utils.h"
 #include "sas.h"

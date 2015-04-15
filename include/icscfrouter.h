@@ -47,6 +47,7 @@
 #include "servercaps.h"
 #include "acr.h"
 
+#include "rapidjson/document.h"
 
 /// Class implementing common routing functions of an I-CSCF.
 class ICSCFRouter
@@ -67,10 +68,10 @@ protected:
   virtual int hss_query() = 0;
 
   /// Parses the HSS response.
-  int parse_hss_response(Json::Value& rsp, bool queried_caps);
+  int parse_hss_response(rapidjson::Document*& rsp, bool queried_caps);
 
   /// Parses a set of capabilities in the HSS response.
-  bool parse_capabilities(Json::Value& caps, std::vector<int>& parsed_caps);
+  bool parse_capabilities(rapidjson::Value& caps, std::vector<int>& parsed_caps);
 
   /// Homestead connection class for performing HSS queries.
   HSSConnection* _hss;

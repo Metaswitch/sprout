@@ -37,7 +37,6 @@
 #include <string>
 #include <sstream>
 #include "gtest/gtest.h"
-#include <json/reader.h>
 
 extern "C" {
 #include <pjsip.h>

@@ -1212,9 +1212,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSMultipleDefaultCapabs)
 TEST_F(ICSCFSproutletTest, RouteRegisterHSSFail)
 {
   // Tests routing of REGISTER requests when the HSS responds to the
-  // registration status lookup with an error.  This test case uses disallowed
-  // roaming as an example.
-
+  // registration status lookup with an invalid response.
   pjsip_tx_data* tdata;
 
   // Create a TCP connection to the I-CSCF listening port.
@@ -1225,7 +1223,7 @@ TEST_F(ICSCFSproutletTest, RouteRegisterHSSFail)
 
   // Set up HSS response for the user registration status query.
   _hss_connection->set_result("/impi/6505551000%40homedomain/registration-status?impu=sip%3A6505551000%40homedomain&visited-network=roaming.net&auth-type=REG",
-                              "{\"result-code\": \"DIAMETER_ERROR_ROAMING_NOT_ALLOWED\"}");
+                              "{\"result-code\": \"5004\"}");
 
   // Inject a REGISTER request.
   Message msg1;
@@ -1881,7 +1879,7 @@ TEST_F(ICSCFSproutletTest, RouteOrigInviteHSSFail)
 
   // Set up the HSS response for the originating location query.
   _hss_connection->set_result("/impu/sip%3A6505551000%40homedomain/location?originating=true",
-                              "{\"result-code\": \"DIAMETER_ERROR_NOT_FOUND\"}");
+                              "{\"result-code\": 5004}");
 
   // Inject a INVITE request with orig in the Route header and a P-Served-User
   // header.

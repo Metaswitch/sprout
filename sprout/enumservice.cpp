@@ -35,7 +35,9 @@
  */
 
 #include <sys/stat.h>
-#include <json/reader.h>
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "json_parse_utils.h"
 #include <fstream>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -89,12 +91,6 @@ bool EnumService::parse_regex_replace(const std::string& regex_replace, boost::r
 
 JSONEnumService::JSONEnumService(std::string configuration)
 {
-  Json::Value root;
-  Json::Reader reader;
-
-  std::string jsonData;
-  std::ifstream file;
-
   // Check whether the file exists.
   struct stat s;
   if ((stat(configuration.c_str(), &s) != 0) &&
@@ -107,63 +103,78 @@ JSONEnumService::JSONEnumService(std::string configuration)
 
   LOG_STATUS("Loading ENUM configuration from %s", configuration.c_str());
 
-  file.open(configuration.c_str());
-  if (file.is_open())
+  // Read from the file
+  std::ifstream fs(configuration.c_str());
+  std::string enum_str((std::istreambuf_iterator<char>(fs)),
+                        std::istreambuf_iterator<char>());
+
+  if (enum_str == "")
   {
-    if (!reader.parse(file, root))
-    {
-      LOG_WARNING("Failed to read ENUM configuration data\n%s",
-                  reader.getFormattedErrorMessages().c_str());
-      return;
-    }
-    file.close();
+    // LCOV_EXCL_START
+    LOG_ERROR("Failed to read ENUM configuration data from %s",
+              configuration.c_str());
+    return;
+    // LCOV_EXCL_STOP
+  }
 
-    if (root["number_blocks"].isArray())
-    {
-      Json::Value number_blocks = root["number_blocks"];
+  // Now parse the document
+  rapidjson::Document doc;
+  doc.Parse<0>(enum_str.c_str());
 
-      for (unsigned int i = 0; i < number_blocks.size(); i++)
+  if (doc.HasParseError())
+  {
+    LOG_ERROR("Failed to read ENUM configuration data: %s\nError: %s",
+              enum_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
+    return;
+  }
+
+  try
+  {
+    JSON_ASSERT_CONTAINS(doc, "number_blocks");
+    JSON_ASSERT_ARRAY(doc["number_blocks"]);
+    const rapidjson::Value& nb_arr = doc["number_blocks"];
+
+    for (rapidjson::Value::ConstValueIterator nb_it = nb_arr.Begin();
+         nb_it != nb_arr.End();
+         ++nb_it)
+    {
+      try
       {
-        Json::Value nb = number_blocks[i];
-        if ((nb["prefix"].isString()) &&
-            (nb["regex"].isString()))
-        {
-          // Entry is well-formed, so add it.
-          LOG_DEBUG("Found valid number prefix block %s", nb["prefix"].asString().c_str());
-          NumberPrefix *pfix = new NumberPrefix;
-          pfix->prefix = nb["prefix"].asString();
-          std::string regex = nb["regex"].asString();
+        std::string prefix; 
+        JSON_GET_STRING_MEMBER(*nb_it, "prefix", prefix);
+        std::string regex;
+        JSON_GET_STRING_MEMBER(*nb_it, "regex", regex);
 
-          if (parse_regex_replace(regex, pfix->match, pfix->replace))
-          {
-            _number_prefixes.push_back(pfix);
-            LOG_STATUS("  Adding number prefix %d, %s, regex=%s",
-                       i, pfix->prefix.c_str(), regex.c_str());
-          }
-          else
-          {
-            LOG_WARNING("Badly formed regular expression in ENUM number block %s",
-                        nb.toStyledString().c_str());
-            delete pfix;
-          }
+        // Entry is well-formed, so add it.
+        LOG_DEBUG("Found valid number prefix block %s", prefix.c_str());
+        NumberPrefix *pfix = new NumberPrefix;
+        pfix->prefix = prefix;
+
+        if (parse_regex_replace(regex, pfix->match, pfix->replace))
+        {
+          _number_prefixes.push_back(pfix);
+          LOG_STATUS("  Adding number prefix %s, regex=%s",
+                     pfix->prefix.c_str(), regex.c_str());
         }
         else
         {
-          // Badly formed number block.
-          LOG_WARNING("Badly formed ENUM number block %s", nb.toStyledString().c_str());
+          LOG_WARNING("Badly formed regular expression in ENUM number block %s",
+                      regex.c_str());
+          delete pfix;
         }
       }
-    }
-    else
-    {
-      LOG_WARNING("Badly formed ENUM configuration data - missing number_blocks object");
+      catch (JsonFormatError err)
+      {
+        // Badly formed number block.
+        LOG_WARNING("Badly formed ENUM number block (hit error at %s:%d)",
+                    err._file, err._line);
+      }
     }
   }
-  else
+  catch (JsonFormatError err)
   {
-    //LCOV_EXCL_START
-    LOG_WARNING("Failed to read ENUM configuration data %d", file.rdstate());
-    //LCOV_EXCL_STOP
+    LOG_ERROR("Badly formed ENUM configuration data - missing number_blocks object");
   }
 }
 

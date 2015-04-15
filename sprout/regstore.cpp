@@ -65,6 +65,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "constants.h"
 #include "json_parse_utils.h"
+#include "rapidjson/error/en.h"
 
 RegStore::RegStore(Store* data_store,
                    SerializerDeserializer*& serializer,
@@ -957,7 +958,9 @@ RegStore::AoR* RegStore::JsonSerializerDeserializer::
 
   if (doc.HasParseError())
   {
-    LOG_DEBUG("Failed to parse document");
+    LOG_DEBUG("Failed to parse document: %s\nError: %s", 
+              s.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
     return NULL;
   }
 

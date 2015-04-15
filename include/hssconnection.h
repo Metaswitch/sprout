@@ -41,7 +41,7 @@
 #define HSSCONNECTION_H__
 
 #include <curl/curl.h>
-#include <json/value.h>
+#include "rapidjson/document.h"
 
 #include "httpconnection.h"
 #include "rapidxml/rapidxml.hpp"
@@ -69,18 +69,18 @@ public:
                            const std::string& public_user_id,
                            const std::string& auth_type,
                            const std::string& autn,
-                           Json::Value*& object,
+                           rapidjson::Document*& object,
                            SAS::TrailId trail);
   HTTPCode get_user_auth_status(const std::string& private_user_identity,
                                 const std::string& public_user_identity,
                                 const std::string& visited_network,
                                 const std::string& auth_type,
-                                Json::Value*& object,
+                                rapidjson::Document*& object,
                                 SAS::TrailId trail);
   HTTPCode get_location_data(const std::string& public_user_identity,
                              const bool& originating,
                              const std::string& auth_type,
-                             Json::Value*& object,
+                             rapidjson::Document*& object,
                              SAS::TrailId trail);
 
   HTTPCode update_registration_state(const std::string& public_user_identity,
@@ -145,7 +145,7 @@ public:
   static const std::string STATE_NOT_REGISTERED;
 
 private:
-  virtual long get_json_object(const std::string& path, Json::Value*& object, SAS::TrailId trail);
+  virtual long get_json_object(const std::string& path, rapidjson::Document*& object, SAS::TrailId trail);
   virtual long get_xml_object(const std::string& path, rapidxml::xml_document<>*& root, SAS::TrailId trail);
   virtual long put_for_xml_object(const std::string& path, std::string body, rapidxml::xml_document<>*& root, SAS::TrailId trail);
 

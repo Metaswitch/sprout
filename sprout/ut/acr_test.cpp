@@ -45,8 +45,6 @@ extern "C" {
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include <json/json.h>
-
 #include "test_utils.hpp"
 #include "siptest.hpp"
 #include "utils.h"
@@ -89,34 +87,37 @@ protected:
   bool compare_acr(const std::string& output,
                    const std::string& expected_file)
   {
-    Json::Reader reader;
-    Json::Value json_output;
-    Json::Value json_expected;
-
     // Parse the output ACR.
-    if (!reader.parse(output, json_output))
+    rapidjson::Document json_output;
+    json_output.Parse<0>(output.c_str());
+
+    if (json_output.HasParseError())
     {
       printf("Failed to parse output ACR\n%s\n", output.c_str());
     }
 
     // Read and parse the expected ACR.
     std::string expected_pathname = UT_DIR + "/" + expected_file;
-    std::ifstream is;
-    is.open(expected_pathname, ios::in);
-    if (!reader.parse(is, json_expected))
+    std::ifstream fs(expected_pathname.c_str());
+    std::string exp_str((std::istreambuf_iterator<char>(fs)),
+                         std::istreambuf_iterator<char>());
+    rapidjson::Document json_expected;
+    json_expected.Parse<0>(exp_str.c_str());
+
+    if (json_expected.HasParseError())
     {
       printf("Failed to parse expected ACR from file %s\n",
              expected_file.c_str());
     }
-    is.close();
+
     bool rc = (json_output == json_expected);
 
     if (!rc)
     {
-      Json::FastWriter writer;
-      printf("JSON comparison failed\nReceived\n%s\nExpected\n%s\n",
-             json_output.toStyledString().c_str(),
-             json_expected.toStyledString().c_str());
+//      Json::FastWriter writer;
+  //    printf("JSON comparison failed\nReceived\n%s\nExpected\n%s\n",
+    //         json_output.toStyledString().c_str(),
+      //TODO       json_expected.toStyledString().c_str());
     }
 
     return rc;
