@@ -54,6 +54,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 
+#define MAX_SIP_MSG_SIZE 65535
 
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
@@ -772,6 +773,38 @@ void SproutletProxy::UASTsx::schedule_requests()
           {
             req.upstream.first->rx_response(trying, req.upstream.second);
           }
+        }
+
+        // Log the request at VERBOSE level before we send it out to aid in
+        // tracking its path through the sproutlets.
+        //
+        // Serialise the message in a separate buffer using the function
+        // exposed by PJSIP.  In principle we could use req.req's own
+        // serialisation buffer structure for this, but then we'd need to
+        // explicitly invalidate it afterwards to avoid accidentally sending
+        // the wrong data over SIP at some future point.  Safer to use a local
+        // buffer.
+        if (Log::enabled(Log::VERBOSE_LEVEL))
+        {
+          char buf[MAX_SIP_MSG_SIZE];
+          pj_ssize_t size;
+
+          // Ensure that buf contains a valid string before we attempt to
+          // serialise the message in it (so that we aren't left with an
+          // unterminated string if pjsip_msg_print fails).
+          buf[0] = 0;
+          size   = pjsip_msg_print(req.req->msg, buf, sizeof(buf));
+          size   = std::max(0L, size);
+
+          LOG_VERBOSE("Sending %d bytes %s to downstream sproutlet %s:\n"
+                      "--start msg--\n\n"
+                      "%.*s\n"
+                      "--end msg--",
+                      size,
+                      pjsip_tx_data_get_info(req.req),
+                      sproutlet->service_name().c_str(),
+                      (int)size,
+                      buf);
         }
 
         // Pass the request to the downstream sproutlet.
