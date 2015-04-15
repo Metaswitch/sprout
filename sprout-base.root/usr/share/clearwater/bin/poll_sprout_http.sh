@@ -34,7 +34,15 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
+scscf=5054
 . /etc/clearwater/config
-http_ip=$(/usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
-/usr/share/clearwater/bin/poll-http $http_ip:9888
-exit $?
+
+# If we have S-CSCF configured, check it.
+rc=0
+if [ "$scscf" != "0" ] ; then
+  http_ip=$(/usr/share/clearwater/bin/bracket_ipv6_address.py $local_ip)
+  /usr/share/clearwater/bin/poll-http $http_ip:9888
+  rc=$?
+fi
+
+exit $rc
