@@ -471,7 +471,7 @@ TEST_F(HssConnectionTest, SimpleUserAuth)
   rapidjson::Document* actual;
   _hss.get_user_auth_status("privid69", "pubid44", "", "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_TRUE(strcmp("server-name", (*actual)["scscf"].GetString()) == 0);
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString()); 
   delete actual;
 }
 
@@ -499,7 +499,7 @@ TEST_F(HssConnectionTest, SimpleLocation)
   rapidjson::Document* actual;
   _hss.get_location_data("pubid44", false, "", actual, 0);
   ASSERT_TRUE(actual != NULL);
-  EXPECT_TRUE(strcmp("server-name", (*actual)["scscf"].GetString()) == 0);
+  EXPECT_EQ(std::string("server-name"), (*actual)["scscf"].GetString());
   delete actual;
 }
 

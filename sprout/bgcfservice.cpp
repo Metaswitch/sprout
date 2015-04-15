@@ -36,6 +36,7 @@
 
 #include <sys/stat.h>
 #include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 #include "json_parse_utils.h"
 #include <fstream>
 #include <stdlib.h>
@@ -78,8 +79,8 @@ void BgcfService::update_routes()
   if (bgcf_str == "")
   {
     // LCOV_EXCL_START
-    LOG_WARNING("Failed to read BGCF configuration data from %s", 
-                _configuration.c_str());
+    LOG_ERROR("Failed to read BGCF configuration data from %s", 
+              _configuration.c_str());
     return;
     // LCOV_EXCL_STOP
   }
@@ -90,7 +91,9 @@ void BgcfService::update_routes()
 
   if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read BGCF configuration data");
+    LOG_ERROR("Failed to read BGCF configuration data: %s\nError: %s",
+              bgcf_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
     return;
   }
 
@@ -159,7 +162,7 @@ void BgcfService::update_routes()
   }
   catch (JsonFormatError err)
   {
-    LOG_WARNING("Badly formed BGCF configuration file - missing routes object");
+    LOG_ERROR("Badly formed BGCF configuration file - missing routes object");
   }
 }
 

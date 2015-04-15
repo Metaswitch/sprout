@@ -225,7 +225,13 @@ pj_status_t user_lookup(pj_pool_t *pool,
       // AKA authentication.  The response in the AV must be used as a
       // plain-text password for the MD5 Digest computation.  Convert the text
       // into binary as this is what PJSIP is expecting.
-      std::string response = (*av)["aka"]["response"].GetString();
+      std::string response = "";
+      if (((*av)["aka"].HasMember("response")) &&
+          ((*av)["aka"]["response"].IsString())) 
+      {     
+        response = (*av)["aka"]["response"].GetString();
+      }
+
       std::string xres;
       for (size_t ii = 0; ii < response.length(); ii += 2)
       {
@@ -242,11 +248,25 @@ pj_status_t user_lookup(pj_pool_t *pool,
     }
     else if (av->HasMember("digest"))
     {
-      if (pj_strcmp2(realm, (*av)["digest"]["realm"].GetString()) == 0)
+      std::string digest_realm = "";
+      if (((*av)["digest"].HasMember("realm")) &&
+          ((*av)["digest"]["realm"].IsString()))
+      {
+        digest_realm = (*av)["digest"]["realm"].GetString();
+      }
+
+      if (pj_strcmp2(realm, digest_realm.c_str()) == 0)
       {
         // Digest authentication, so ha1 field is hashed password.
         cred_info->data_type = PJSIP_CRED_DATA_DIGEST;
-        pj_strdup2(pool, &cred_info->data, (*av)["digest"]["ha1"].GetString());
+        std::string digest_ha1 = "";
+        if (((*av)["digest"].HasMember("ha1")) &&
+            ((*av)["digest"]["ha1"].IsString()))
+        {
+          digest_ha1 = (*av)["digest"]["ha1"].GetString();
+        }
+
+        pj_strdup2(pool, &cred_info->data, digest_ha1.c_str());
         cred_info->realm = *realm;
         LOG_DEBUG("Found Digest HA1 = %.*s", cred_info->data.slen, cred_info->data.ptr);
         status = PJ_SUCCESS;
@@ -337,7 +357,13 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Use default realm for AKA as not specified in the AV.
       pj_strdup(tdata->pool, &hdr->challenge.digest.realm, &aka_realm);
       hdr->challenge.digest.algorithm = STR_AKAV1_MD5;
-      nonce = aka["challenge"].GetString();
+
+      if ((aka.HasMember("challenge")) &&
+          (aka["challenge"].IsString()))
+      {
+        nonce = aka["challenge"].GetString();
+      }
+
       pj_strdup2(tdata->pool, &hdr->challenge.digest.nonce, nonce.c_str());
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
@@ -347,7 +373,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Add the cryptography key parameter.
       pjsip_param* ck_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ck_param->name = STR_CK;
-      std::string cryptkey = aka["cryptkey"].GetString();
+      std::string cryptkey = "";
+      if ((aka.HasMember("cryptkey")) &&
+          (aka["cryptkey"].IsString()))
+      {
+        cryptkey = aka["cryptkey"].GetString();
+      }
       std::string ck = "\"" + cryptkey + "\"";
       pj_strdup2(tdata->pool, &ck_param->value, ck.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ck_param);
@@ -355,7 +386,12 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       // Add the integrity key parameter.
       pjsip_param* ik_param = (pjsip_param*)pj_pool_alloc(tdata->pool, sizeof(pjsip_param));
       ik_param->name = STR_IK;
-      std::string integritykey = aka["integritykey"].GetString();
+      std::string integritykey = "";
+      if ((aka.HasMember("integritykey")) &&
+          (aka["integritykey"].IsString()))
+      {
+        integritykey = aka["integritykey"].GetString();
+      }
       std::string ik = "\"" + integritykey + "\"";
       pj_strdup2(tdata->pool, &ik_param->value, ik.c_str());
       pj_list_insert_before(&hdr->challenge.digest.other_param, ik_param);
@@ -369,14 +405,27 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
       SAS::report_event(event);
 
       rapidjson::Value& digest = (*av)["digest"];
-      pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, digest["realm"].GetString());
+      std::string realm = "";
+      if ((digest.HasMember("realm")) &&
+          (digest["realm"].IsString()))
+      {
+        realm = digest["realm"].GetString();
+      }
+
+      std::string qop = "";
+      if ((digest.HasMember("qop")) &&
+          (digest["qop"].IsString()))
+      {
+        qop = digest["qop"].GetString();
+      }
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.realm, realm.c_str());
       hdr->challenge.digest.algorithm = STR_MD5;
       pj_create_random_string(buf, sizeof(buf));
       nonce.assign(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.nonce, &random);
       pj_create_random_string(buf, sizeof(buf));
       pj_strdup(tdata->pool, &hdr->challenge.digest.opaque, &random);
-      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, digest["qop"].GetString());
+      pj_strdup2(tdata->pool, &hdr->challenge.digest.qop, qop.c_str());
       hdr->challenge.digest.stale = stale;
     }
 

@@ -36,6 +36,7 @@
 
 #include <sys/stat.h>
 #include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 #include "json_parse_utils.h"
 #include <fstream>
 #include <stdlib.h>
@@ -78,8 +79,8 @@ void SCSCFSelector::update_scscf()
   if (scscf_str == "")
   {
     // LCOV_EXCL_START
-    LOG_WARNING("Failed to read S-CSCF configuration data from %s",
-                _configuration.c_str());
+    LOG_ERROR("Failed to read S-CSCF configuration data from %s",
+              _configuration.c_str());
     return;
     // LCOV_EXCL_STOP
   }
@@ -90,7 +91,9 @@ void SCSCFSelector::update_scscf()
 
   if (doc.HasParseError())
   {
-    LOG_WARNING("Failed to read S-CSCF configuration data");
+    LOG_ERROR("Failed to read S-CSCF configuration data: %s\nError: %s",
+              scscf_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
     return;
   }
 
@@ -146,7 +149,7 @@ void SCSCFSelector::update_scscf()
   }
   catch (JsonFormatError err)
   {
-    LOG_WARNING("Badly formed S-CSCF configuration file - missing s-cscfs object");
+    LOG_ERROR("Badly formed S-CSCF configuration file - missing s-cscfs object");
   }
 }
 

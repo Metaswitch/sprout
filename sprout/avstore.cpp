@@ -44,6 +44,7 @@
 #include "sproutsasevent.h"
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
+#include "rapidjson/error/en.h"
 
 AvStore::AvStore(Store* data_store) :
   _data_store(data_store)
@@ -108,8 +109,9 @@ rapidjson::Document* AvStore::get_av(const std::string& impi,
 
     if (av->HasParseError())
     {
-      LOG_INFO("Failed to parse AV. Error offset: %d\n",
-               av->GetErrorOffset());
+      LOG_INFO("Failed to parse AV: %s\nError: %s",
+               data.c_str(),
+               rapidjson::GetParseError_En(av->GetParseError()));
       delete av;
       av = NULL;
     }

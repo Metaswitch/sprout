@@ -35,6 +35,7 @@
  */
 
 #include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
 #include "json_parse_utils.h"
 
 extern "C" {
@@ -328,8 +329,9 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse opaque data as JSON, %s",
-             json_str.c_str());
+    LOG_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(), 
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 
@@ -340,7 +342,7 @@ HTTPCode RegistrationTimeoutTask::parse_response(std::string body)
   }
   catch (JsonFormatError err)
   {
-    LOG_INFO("Badly formed opaque data (missing aor_id or binding_id");
+    LOG_INFO("Badly formed opaque data (missing aor_id or binding_id)");
     return HTTP_BAD_REQUEST;
   }
 
@@ -355,8 +357,9 @@ HTTPCode DeregistrationTask::parse_request(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse data as JSON, %s",
-             body.c_str());
+    LOG_INFO("Failed to parse data as JSON: %s\nError: %s",
+             body.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 
@@ -543,8 +546,9 @@ HTTPCode AuthTimeoutTask::handle_response(std::string body)
 
   if (doc.HasParseError())
   {
-    LOG_INFO("Failed to parse opaque data as JSON, %s",
-             json_str.c_str());
+    LOG_INFO("Failed to parse opaque data as JSON: %s\nError: %s",
+             json_str.c_str(),
+             rapidjson::GetParseError_En(doc.GetParseError()));
     return HTTP_BAD_REQUEST;
   }
 

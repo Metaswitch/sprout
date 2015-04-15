@@ -46,6 +46,7 @@
 #include "httpconnection.h"
 #include "hssconnection.h"
 #include "accumulator.h"
+#include "rapidjson/error/en.h"
 
 const std::string HSSConnection::REG = "reg";
 const std::string HSSConnection::CALL = "call";
@@ -161,10 +162,10 @@ HTTPCode HSSConnection::get_json_object(const std::string& path,
 
     if (json_object->HasParseError())
     {
-      LOG_INFO("Failed to parse Homestead response:\n %s\n %s.\n Error offset: %d\n", 
+      LOG_INFO("Failed to parse Homestead response:\nPath: %s\nData: %s\nError: %s\n", 
                path.c_str(), 
                json_data.c_str(), 
-               json_object->GetErrorOffset());
+               rapidjson::GetParseError_En(json_object->GetParseError()));
       delete json_object;
       json_object = NULL;
     }

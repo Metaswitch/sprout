@@ -215,10 +215,7 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   _hss_rsp.scscf = "";
 
   if ((!rsp->HasMember("result-code")) ||
-      (!(*rsp)["result-code"].IsInt()) ||
-      (((*rsp)["result-code"].GetInt() != 2001) &&
-       ((*rsp)["result-code"].GetInt() != 2002) &&
-       ((*rsp)["result-code"].GetInt() != 2003)))
+      (!(*rsp)["result-code"].IsInt()))
   {
     // Error from HSS, so respond with 404 Not Found.  (This may be changed
     // to 403 Forbidden if request is a REGISTER.)
@@ -226,31 +223,47 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   }
   else
   {
-    // Successful response from HSS, so parse it.
-    if ((rsp->HasMember("scscf")) &&
-        ((*rsp)["scscf"].IsString()))
+    int rc = (*rsp)["result-code"].GetInt();
+  
+    if ((rc != 2001) &&
+        (rc != 2002) &&
+        (rc != 2003))
     {
-      // Response specifies a S-CSCF, so select this as the target.
-      LOG_DEBUG("HSS returned S-CSCF %s as target", (*rsp)["scscf"].GetString());
-      _hss_rsp.scscf = (*rsp)["scscf"].GetString();
+      // Error from HSS, so respond with 404 Not Found.  (This may be changed
+      // to 403 Forbidden if request is a REGISTER.)
+      status_code = PJSIP_SC_NOT_FOUND;
     }
-
-    if ((rsp->HasMember("mandatory-capabilities")) &&
-        ((*rsp)["mandatory-capabilities"].IsArray()) &&
-        (rsp->HasMember("optional-capabilities")) &&
-        ((*rsp)["optional-capabilities"].IsArray()))
+    else
     {
-      // Response specifies capabilities - we might have explicitly queried capabilities
-      // or implicitly because there was no server assigned.
-      LOG_DEBUG("HSS returned capabilities");
-      queried_caps = true;
-
-      if ((!parse_capabilities((*rsp)["mandatory-capabilities"], _hss_rsp.mandatory_caps)) ||
-          (!parse_capabilities((*rsp)["optional-capabilities"], _hss_rsp.optional_caps)))
+      // Successful response from HSS, so parse it.
+      if ((rsp->HasMember("scscf")) &&
+          ((*rsp)["scscf"].IsString()))
       {
-        // Failed to parse capabilities, so reject with 480 response.
-        LOG_INFO("Malformed required capabilities returned by HSS\n");
-        status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+        // Response specifies a S-CSCF, so select this as the target.
+        LOG_DEBUG("HSS returned S-CSCF %s as target", (*rsp)["scscf"].GetString());
+        _hss_rsp.scscf = (*rsp)["scscf"].GetString();
+      }
+
+      if ((rsp->HasMember("mandatory-capabilities")) &&
+          ((*rsp)["mandatory-capabilities"].IsArray()) &&
+          (rsp->HasMember("optional-capabilities")) &&
+          ((*rsp)["optional-capabilities"].IsArray()))
+      {
+        // Response specifies capabilities - we might have explicitly 
+        // queried capabilities or implicitly because there was no 
+        // server assigned.
+        LOG_DEBUG("HSS returned capabilities");
+        queried_caps = true;
+  
+        if ((!parse_capabilities((*rsp)["mandatory-capabilities"], 
+                                 _hss_rsp.mandatory_caps)) ||
+            (!parse_capabilities((*rsp)["optional-capabilities"], 
+                                 _hss_rsp.optional_caps)))
+        {
+          // Failed to parse capabilities, so reject with 480 response.
+          LOG_INFO("Malformed required capabilities returned by HSS\n");
+          status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+        }
       }
     }
   }
