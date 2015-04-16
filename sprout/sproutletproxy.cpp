@@ -54,8 +54,6 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "sproutletproxy.h"
 
-#define MAX_SIP_MSG_SIZE 65535
-
 const pj_str_t SproutletProxy::STR_SERVICE = {"service", 7};
 
 const ForkState NULL_FORK_STATE = {PJSIP_TSX_STATE_NULL, NONE};
@@ -786,7 +784,7 @@ void SproutletProxy::UASTsx::schedule_requests()
         // buffer.
         if (Log::enabled(Log::VERBOSE_LEVEL))
         {
-          char buf[MAX_SIP_MSG_SIZE];
+          char buf[PJSIP_MAX_PKT_LEN];
           pj_ssize_t size;
 
           // Ensure that buf contains a valid string before we attempt to
