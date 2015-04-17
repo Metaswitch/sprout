@@ -1067,19 +1067,23 @@ std::string RalfACR::get_message(pj_time_val timestamp)
            i != _msg_bodies.end();
            ++i)
       {
-        writer.String("Content-Type");
-        writer.String(i->type.c_str());
-        writer.String("Content-Length");
-        writer.Int(i->length);
-
-        if (!i->disposition.empty())
+        writer.StartObject();
         {
-          writer.String("Content-Disposition");
-          writer.String(i->disposition.c_str());
-        }
+          writer.String("Content-Type");
+          writer.String(i->type.c_str());
+          writer.String("Content-Length");
+          writer.Int(i->length);
 
-        writer.String("Originator");
-        writer.Int(i->originator);
+          if (!i->disposition.empty())
+          {
+            writer.String("Content-Disposition");
+            writer.String(i->disposition.c_str());
+          }
+
+          writer.String("Originator");
+          writer.Int(i->originator);
+        }
+        writer.EndObject();
       }
 
       writer.EndArray();
