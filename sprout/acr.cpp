@@ -87,6 +87,10 @@ std::string ACR::get_message(pj_time_val timestamp)
   return std::string();
 }
 
+void ACR::set_default_ccf(const std::string& default_ccf)
+{
+}
+
 std::string ACR::node_name(Node node_functionality)
 {
   switch (node_functionality)
@@ -612,19 +616,30 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
-  // Encode and send the request using the Ralf HTTP connection.
-  LOG_VERBOSE("Sending %s Ralf ACR (%p)",
-              ACR::node_name(_node_functionality).c_str(), this);
-  std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
-  std::map<std::string, std::string> headers;
-  long rc = _ralf->send_post(path,
-                             headers,
-                             get_message(timestamp),
-                             _trail);
-
-  if (rc != HTTP_OK)
+  if ((!_ccfs.empty()) || (!_ecfs.empty()))
   {
-    LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    // Encode and send the request using the Ralf HTTP connection.
+    LOG_VERBOSE("Sending %s Ralf ACR (%p)",
+                ACR::node_name(_node_functionality).c_str(), this);
+    std::string path = "/call-id/" + Utils::url_escape(_user_session_id);
+    std::map<std::string, std::string> headers;
+    long rc = _ralf->send_post(path,
+                               headers,
+                               get_message(timestamp),
+                               _trail);
+
+    if (rc != HTTP_OK)
+    {
+      LOG_WARNING("Failed to send Ralf ACR message (%p), rc = %ld", this, rc);
+    }
+  }
+  else
+  {
+    // There's no CCF or ECF to send to.  Drop the ACR.  This is a software
+    // or configuration fault - we shouldn't be trying to supply an ACR
+    // without a CCF.
+    LOG_ERROR("No CCF or ECF to send ACR for session %s to - dropping!",
+              _user_session_id.c_str());
   }
 }
 
@@ -1224,6 +1239,16 @@ std::string RalfACR::get_message(pj_time_val timestamp)
 
   // Render the message to a string and return it.
   return sb.GetString();
+}
+
+void RalfACR::set_default_ccf(const std::string& default_ccf)
+{
+  // If we don't yet have a CCF, set this.  It will get overwritten if we
+  // subsequently find another CCF.
+  if (_ccfs.empty())
+  {
+    _ccfs.push_back(default_ccf);
+  }
 }
 
 void RalfACR::encode_sdp_description(
