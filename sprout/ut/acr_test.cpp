@@ -52,6 +52,8 @@ extern "C" {
 #include "stack.h"
 #include "acr.h"
 
+#include "rapidjson/error/en.h"
+
 using namespace std;
 using testing::StrEq;
 using testing::ElementsAre;
@@ -93,7 +95,10 @@ protected:
 
     if (json_output.HasParseError())
     {
-      printf("Failed to parse output ACR\n%s\n", output.c_str());
+      printf("Failed to parse output ACR: %s at %ld\n%s\n",
+             rapidjson::GetParseError_En(json_output.GetParseError()),
+             json_output.GetErrorOffset(),
+             output.c_str());
     }
 
     // Read and parse the expected ACR.
@@ -106,8 +111,11 @@ protected:
 
     if (json_expected.HasParseError())
     {
-      printf("Failed to parse expected ACR from file %s\n",
-             expected_file.c_str());
+      printf("Failed to parse expected ACR from file %s: %s at %ld\n%s\n",
+             expected_file.c_str(),
+             rapidjson::GetParseError_En(json_expected.GetParseError()),
+             json_expected.GetErrorOffset(),
+             exp_str.c_str());
     }
 
     bool rc = (json_output == json_expected);
@@ -1018,5 +1026,50 @@ TEST_F(ACRTest, ICSCFRegister)
   // Build and checked the resulting Rf ACR message.
   acr_message = acr->get_message(ts);
   EXPECT_TRUE(compare_acr(acr_message, "acr_icscfregister_final.json"));
+  delete acr;
+}
+
+TEST_F(ACRTest, SCSCFPublish)
+{
+  // Tests mainline Rf message generation for a successful publish transaction (with body)
+  // at the S-CSCF.
+  pj_time_val ts;
+  ACR* acr;
+  std::string acr_message;
+
+  // Create a Ralf ACR factory for S-CSCF ACRs.
+  RalfACRFactory f(NULL, SCSCF);
+
+  // Create an ACR instance for the ACR[EVENT] triggered by the REGISTER.
+  acr = f.get_acr(0, CALLING_PARTY, NODE_ROLE_ORIGINATING);
+
+  // Build the original REGISTER request.
+  SIPRequest pub("PUBLISH");
+  pub._requri = "sip:homedomain";
+  pub._routes = "Route: <sip:sprout.homedomain:5054;transport=TCP;orig;lr>\r\n";
+  pub._from = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  pub._to = "\"6505550000\" <sip:6505550000@homedomain>";   // Strip tag.
+  pub._extra_hdrs = "Contact: <sip:6505550000@10.83.18.38:36530;transport=TCP>;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  pub._extra_hdrs += "Expires: 300\r\n";
+  pub._extra_hdrs += "P-Charging-Vector: icid-value=1234bc9876e;icid-generated-at=10.83.18.28;orig-ioi=homedomain\r\n";
+  pub._extra_hdrs += "P-Charging-Function-Addresses: ccf=192.1.1.1;ccf=192.1.1.2;ecf=192.1.1.3;ecf=192.1.1.4\r\n";
+  pub._extra_hdrs += "Content-Type: text/plain\r\n";
+  pub._body = "Hello world!";
+
+  // Pass the request to the ACR as a received request.
+  ts.sec = 1;
+  ts.msec = 0;
+  acr->rx_request(parse_msg(pub.get()), ts);
+
+  // Now build a 200 OK response.
+  SIPResponse pub200ok(200, "PUBLISH");
+
+  // Pass the response to ACR as a transmitted response.
+  ts.msec = 25;
+  acr->tx_response(parse_msg(pub200ok.get()), ts);
+
+  // Build and checked the resulting Rf ACR message.
+  acr_message = acr->get_message(ts);
+  EXPECT_TRUE(compare_acr(acr_message, "acr_scscfpublish.json"));
   delete acr;
 }
