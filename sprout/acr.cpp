@@ -616,7 +616,12 @@ void RalfACR::server_capabilities(const ServerCapabilities& caps)
 
 void RalfACR::send_message(pj_time_val timestamp)
 {
-  if ((!_ccfs.empty()) || (!_ecfs.empty()))
+  // If we have a CCF or ECF, or this isn't a record type that needs one, send
+  // the message.
+  if ((!_ccfs.empty()) ||
+      (!_ecfs.empty()) ||
+      (_record_type == INTERIM_RECORD) ||
+      (_record_type == STOP_RECORD))
   {
     // Encode and send the request using the Ralf HTTP connection.
     LOG_VERBOSE("Sending %s Ralf ACR (%p)",
@@ -635,9 +640,9 @@ void RalfACR::send_message(pj_time_val timestamp)
   }
   else
   {
-    // There's no CCF or ECF to send to.  Drop the ACR.  This is a software
-    // or configuration fault - we shouldn't be trying to supply an ACR
-    // without a CCF.
+    // There's no CCF or ECF to send to, and we need one.  Drop the ACR.  This
+    // is a software or configuration fault - we shouldn't be trying to supply
+    // an ACR without a CCF.
     LOG_ERROR("No CCF or ECF to send ACR for session %s to - dropping!",
               _user_session_id.c_str());
   }
