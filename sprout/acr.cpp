@@ -40,6 +40,7 @@
 #include "constants.h"
 #include "custom_headers.h"
 #include "acr.h"
+#include "sproutsasevent.h"
 
 const pj_time_val ACR::unspec = {-1,0};
 
@@ -643,8 +644,10 @@ void RalfACR::send_message(pj_time_val timestamp)
     // There's no CCF or ECF to send to, and we need one.  Drop the ACR.  This
     // is a software or configuration fault - we shouldn't be trying to supply
     // an ACR without a CCF.
-    LOG_ERROR("No CCF or ECF to send ACR for session %s to - dropping!",
-              _user_session_id.c_str());
+    LOG_INFO("No CCF or ECF to send ACR for session %s to - dropping!",
+             _user_session_id.c_str());
+    SAS::Event event(_trail, SASEvent::NO_CCFS_FOR_ACR, 0);
+    SAS::report_event(event);
   }
 }
 
