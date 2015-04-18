@@ -432,6 +432,7 @@ ICSCFSproutletTsx::ICSCFSproutletTsx(SproutletTsxHelper* helper,
   SproutletTsx(helper),
   _icscf(icscf),
   _acr(NULL),
+  _router(NULL),
   _routed_to_bgcf(false)
 {
 }
@@ -456,6 +457,14 @@ ICSCFSproutletTsx::~ICSCFSproutletTsx()
 void ICSCFSproutletTsx::on_rx_initial_request(pjsip_msg* req)
 {
   pj_pool_t* pool = get_pool(req);
+
+  pjsip_route_hdr* hroute = (pjsip_route_hdr*)
+                                pjsip_msg_find_hdr(req, PJSIP_H_ROUTE, NULL);
+  if (hroute != NULL)
+  {
+    send_request(req);
+    return;
+  }
 
   // Create an ACR for this transaction.
   _acr = _icscf->get_acr(trail());
