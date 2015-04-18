@@ -589,6 +589,7 @@ void SCSCFSproutletTsx::on_rx_response(pjsip_msg* rsp, int fork_id)
 
         _as_chain_link = _as_chain_link.next();
         pjsip_msg* req = original_request();
+        _record_routed = false;
         if (_session_case->is_originating())
         {
           apply_originating_services(req);
@@ -1648,6 +1649,7 @@ void SCSCFSproutletTsx::on_timer_expiry(void* context)
 
       _as_chain_link = _as_chain_link.next();
       pjsip_msg* req = original_request();
+      _record_routed = false;
       if (_session_case->is_originating())
       {
         apply_originating_services(req);
