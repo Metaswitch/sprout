@@ -2184,15 +2184,10 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteNoUnregisteredServices)
   _hss_connection->set_result("/impu/sip%3A6505551234%40homedomain/location",
                               "{\"result-code\": 5003}");
 
-  // Inject a INVITE request with orig in the Route header and a P-Served-User
-  // header.
+  // Inject a INVITE request 
   Message msg1;
   msg1._method = "INVITE";
   msg1._via = tp->to_string(false);
-  msg1._extra = "Contact: sip:6505551000@" +
-                tp->to_string(true) +
-                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
-  msg1._extra += "P-Served-User: <sip:6505551000@homedomain>";
   msg1._route = "Route: <sip:homedomain>";
   inject_msg(msg1.get_request(), tp);
 
