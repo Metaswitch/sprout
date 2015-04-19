@@ -1079,9 +1079,6 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
              odi_value.c_str(),
              _as_chain_link.to_string().c_str());
 
-    // Add the application server URI as the next Route header.
-    PJUtils::add_route_header(req, as_uri, get_pool(req));
-
     // Insert route header below it with an ODI in it.  This must use the
     // URI for this S-CSCF node (not the cluster) to ensure any forwarded
     // requests are routed to this node.
@@ -1096,7 +1093,10 @@ void SCSCFSproutletTsx::route_to_as(pjsip_msg* req, const std::string& server_na
       pj_strdup2(get_pool(req), &orig_param->value, "");
       pj_list_insert_after(&odi_uri->other_param, orig_param);
     }
-    PJUtils::add_route_header(req, odi_uri, get_pool(req));
+    PJUtils::add_top_route_header(req, odi_uri, get_pool(req));
+    
+    // Add the application server URI as the top Route header, per TS 24.229.
+    PJUtils::add_top_route_header(req, as_uri, get_pool(req));
 
     // Set P-Served-User, including session case and registration
     // state, per RFC5502 and the extension in 3GPP TS 24.229
