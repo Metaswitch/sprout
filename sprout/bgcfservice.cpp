@@ -34,9 +34,10 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-
 #include <sys/stat.h>
-#include <json/reader.h>
+#include "rapidjson/document.h"
+#include "rapidjson/error/en.h"
+#include "json_parse_utils.h"
 #include <fstream>
 #include <stdlib.h>
 
@@ -57,12 +58,6 @@ BgcfService::BgcfService(std::string configuration) :
 
 void BgcfService::update_routes()
 {
-  Json::Value root;
-  Json::Reader reader;
-
-  std::string jsonData;
-  std::ifstream file;
-
   // Check whether the file exists.
   struct stat s;
   LOG_DEBUG("stat(%s) returns %d", _configuration.c_str(), stat(_configuration.c_str(), &s));
@@ -76,94 +71,98 @@ void BgcfService::update_routes()
 
   LOG_STATUS("Loading BGCF configuration from %s", _configuration.c_str());
 
-  std::map<std::string, std::vector<std::string>> new_domain_routes;
-  std::map<std::string, std::vector<std::string>> new_number_routes;
+  // Read from the file
+  std::ifstream fs(_configuration.c_str());
+  std::string bgcf_str((std::istreambuf_iterator<char>(fs)),
+                        std::istreambuf_iterator<char>());
 
-  file.open(_configuration.c_str());
-  if (file.is_open())
+  if (bgcf_str == "")
   {
-    if (!reader.parse(file, root))
+    // LCOV_EXCL_START
+    LOG_ERROR("Failed to read BGCF configuration data from %s", 
+              _configuration.c_str());
+    return;
+    // LCOV_EXCL_STOP
+  }
+ 
+  // Now parse the document
+  rapidjson::Document doc;
+  doc.Parse<0>(bgcf_str.c_str());
+
+  if (doc.HasParseError())
+  {
+    LOG_ERROR("Failed to read BGCF configuration data: %s\nError: %s",
+              bgcf_str.c_str(),
+              rapidjson::GetParseError_En(doc.GetParseError()));
+    return;
+  }
+
+  try
+  {
+    std::map<std::string, std::vector<std::string>> new_domain_routes;
+    std::map<std::string, std::vector<std::string>> new_number_routes;
+
+    JSON_ASSERT_CONTAINS(doc, "routes");
+    JSON_ASSERT_ARRAY(doc["routes"]);
+    const rapidjson::Value& routes_arr = doc["routes"];
+
+    for (rapidjson::Value::ConstValueIterator routes_it = routes_arr.Begin();
+         routes_it != routes_arr.End();
+         ++routes_it)
     {
-      LOG_WARNING("Failed to read BGCF configuration data, %s",
-                  reader.getFormattedErrorMessages().c_str());
-      return;
-    }
-
-    file.close();
-
-    if (root["routes"].isArray())
-    {
-      Json::Value routes = root["routes"];
-
-      for (size_t ii = 0; ii < routes.size(); ++ii)
+      // An entry is valid if it has either a domain (string) OR a
+      // number (string) AND an array of routes
+      if ((((((*routes_it).HasMember("domain")) &&
+             ((*routes_it)["domain"].IsString()))   &&
+            (!(*routes_it).HasMember("number"))) ||
+           ((!(*routes_it).HasMember("domain"))  &&
+            (((*routes_it).HasMember("number")) &&
+             ((*routes_it)["number"].IsString())))) &&
+          ((*routes_it)["route"].IsArray())) 
       {
-        Json::Value route = routes[(int)ii];
+        std::vector<std::string> route_vec;
+        const rapidjson::Value& route_arr = (*routes_it)["route"];
 
-        // An entry is valid if it has either a domain (string) OR a 
-        // number (string) AND an array of routes
-        if (((((route.isMember("domain")) && 
-               (route["domain"].isString()))   && 
-              (!route.isMember("number"))) || 
-             ((!route.isMember("domain"))  && 
-              ((route.isMember("number")) && 
-               (route["number"].isString())))) &&
-            (route["route"].isArray()) )
+        for (rapidjson::Value::ConstValueIterator route_it = route_arr.Begin();
+             route_it != route_arr.End();
+            ++route_it)
         {
-          std::vector<std::string> route_vec;
-          Json::Value route_vals = route["route"];
-          std::string routing_value;
+          std::string route_uri = (*route_it).GetString();
+          LOG_DEBUG("  %s", route_uri.c_str());
+          route_vec.push_back(route_uri);
+        }
 
-          if (route["domain"].isString())
-          {
-            routing_value = route["domain"].asString();
-          }
-          else
-          {
-            routing_value = route["number"].asString();
-          }
+        std::string routing_value;
 
-          LOG_DEBUG("Add route for %s", routing_value.c_str());
-
-          for (size_t jj = 0; jj < route_vals.size(); ++jj)
-          {
-            Json::Value route_val = route_vals[(int)jj];
-            std::string route_uri = route_val.asString();
-            LOG_DEBUG("  %s", route_uri.c_str());
-            route_vec.push_back(route_uri);
-          }
-
-          if (route["domain"].isString())
-          {
-            new_domain_routes.insert(std::make_pair(routing_value, route_vec));
-          }
-          else
-          {
-            new_number_routes.insert(
-                      std::make_pair(remove_visual_separators(routing_value), 
-                                     route_vec));
-          }
-
-          route_vec.clear();
+        if ((*routes_it).HasMember("domain"))
+        {
+          routing_value = (*routes_it)["domain"].GetString();
+          new_domain_routes.insert(std::make_pair(routing_value, route_vec));
         }
         else
         {
-          LOG_WARNING("Badly formed BGCF route entry %s", route.toStyledString().c_str());
+          routing_value = (*routes_it)["number"].GetString();
+          new_number_routes.insert(
+                    std::make_pair(remove_visual_separators(routing_value),
+                                   route_vec));
         }
-      }
 
-      _domain_routes = new_domain_routes;
-      _number_routes = new_number_routes;
+        route_vec.clear();
+
+        LOG_DEBUG("Add route for %s", routing_value.c_str());
+      }
+      else
+      {
+        LOG_WARNING("Badly formed BGCF route entry");
+      }
     }
-    else
-    {
-      LOG_WARNING("Badly formed BGCF configuration file - missing routes object");
-    }
+
+    _domain_routes = new_domain_routes;
+    _number_routes = new_number_routes;
   }
-  else
+  catch (JsonFormatError err)
   {
-    //LCOV_EXCL_START
-    LOG_WARNING("Failed to read BGCF configuration data %d", file.rdstate());
-    //LCOV_EXCL_STOP
+    LOG_ERROR("Badly formed BGCF configuration file - missing routes object");
   }
 }
 

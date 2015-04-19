@@ -74,7 +74,9 @@ case "$1" in
         rm -f /etc/monit/conf.d/$NAME.monit
         reload clearwater-monit &> /dev/null || true
         service $NAME stop || true
-        remove_user
+        if [ "$1" != "upgrade" ]; then
+          remove_user
+        fi
         remove_section /etc/security/limits.conf $NAME
     ;;
 

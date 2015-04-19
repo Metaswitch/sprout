@@ -57,6 +57,7 @@ DESC="Restund STUN/TURN server"
 NAME=restund
 #PIDFILE=/var/run/$NAME.pid
 DAEMON=/usr/share/clearwater/bin/restund
+DAEMON_ARGS="-f /etc/clearwater/restund.conf"
 
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
@@ -73,6 +74,17 @@ DAEMON=/usr/share/clearwater/bin/restund
 . /lib/lsb/init-functions
 
 #
+# Function to set up environment
+#
+setup_environment()
+{
+        export LD_LIBRARY_PATH=/usr/share/clearwater/restund/lib
+        ulimit -Hn 10000
+        ulimit -Sn 10000
+        ulimit -c unlimited
+}
+
+#
 # Function that starts the daemon/service
 #
 do_start()
@@ -85,11 +97,7 @@ do_start()
                 || return 1
 
         # daemon is not running, so attempt to start it.
-        export LD_LIBRARY_PATH=/usr/share/clearwater/restund/lib
-        ulimit -Hn 10000
-        ulimit -Sn 10000
-        ulimit -c unlimited
-        DAEMON_ARGS="-f /etc/clearwater/restund.conf"
+        setup_environment
         start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
@@ -121,6 +129,16 @@ do_stop()
         # Many daemons don't delete their pidfiles when they exit.
         #rm -f $PIDFILE
         return "$RETVAL"
+}
+
+#
+# Function that runs the daemon/service in the foreground
+#
+do_run()
+{
+        setup_environment
+        $namespace_prefix start-stop-daemon --start --quiet --exec $DAEMON --chuid $NAME -- -n $DAEMON_ARGS \
+                || return 2
 }
 
 #
@@ -169,6 +187,14 @@ case "$1" in
   stop)
         [ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
         do_stop
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
+  run)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Running $DESC" "$NAME"
+        do_run
         case "$?" in
                 0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
                 2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
@@ -231,8 +257,7 @@ case "$1" in
         esac
         ;;
   *)
-        #echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|force-reload}" >&2
+        echo "Usage: $SCRIPTNAME {start|stop|run|status|restart|force-reload|abort|abort-restart}" >&2
         exit 3
         ;;
 esac

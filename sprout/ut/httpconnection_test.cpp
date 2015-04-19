@@ -40,7 +40,6 @@
 #include <string>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include <json/reader.h>
 #include <boost/algorithm/string.hpp>
 
 #include "utils.h"

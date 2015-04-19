@@ -103,7 +103,6 @@ CPPFLAGS_BUILD += -O2
 LDFLAGS += -L${ROOT}/usr/lib -rdynamic
 LDFLAGS += -lmemcached \
            -lmemcachedutil \
-           -ljsoncpp \
            -lssl \
            -lcrypto \
            -ldl \

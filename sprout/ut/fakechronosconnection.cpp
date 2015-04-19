@@ -36,7 +36,6 @@
 
 #include <cstdio>
 #include "fakechronosconnection.hpp"
-#include <json/reader.h>
 #include "gtest/gtest.h"
 #include "sas.h"
 

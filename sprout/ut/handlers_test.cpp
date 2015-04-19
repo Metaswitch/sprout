@@ -447,7 +447,7 @@ TEST_F(DeregistrationTaskTest, InvalidJSONTest)
 TEST_F(DeregistrationTaskTest, MissingRegistrationsJSONTest)
 {
   CapturingTestLogger log;
-  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}}");
+  build_dereg_request("{\"primary-impu\": \"sip:6505552001@homedomain\", \"impi\": \"6505552001\"}");
   EXPECT_CALL(*_httpstack, send_reply(_, 400, _));
   _task->run();
   EXPECT_TRUE(log.contains("Registrations not available in JSON"));
@@ -533,11 +533,9 @@ class AuthTimeoutTest : public SipTest
 TEST_F(AuthTimeoutTest, NonceTimedOut)
 {
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
-  Json::Value av(Json::objectValue);
-  Json::Value digest(Json::objectValue);
-  Json::Value branch("abcde");
-  av["digest"] = digest;
-  av["branch"] = branch;
+  std::string av_str = "{\"digest\":{}, \"branch\":\"abcde\"}";
+  rapidjson::Document av;
+  av.Parse<0>(av_str.c_str());
   store->set_av("6505550231@homedomain", "abcdef", &av, 0, 0);
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   int status = handler->handle_response(body);
@@ -551,9 +549,9 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithNoBranch)
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   int status = 0;
-  Json::Value av_nobranch(Json::objectValue);
-  Json::Value digest(Json::objectValue);
-  av_nobranch["digest"] = digest;
+  std::string av_str = "{\"digest\":{}}";
+  rapidjson::Document av_nobranch;
+  av_nobranch.Parse<0>(av_str.c_str());
 
   store->set_av("6505550231@homedomain", "abcdef", &av_nobranch, 0, 0);
   status = handler->handle_response(body);
@@ -567,11 +565,9 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithEmptyBranch)
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   int status = 0;
-  Json::Value av_emptybranch(Json::objectValue);
-  Json::Value digest(Json::objectValue);
-  Json::Value branch("");
-  av_emptybranch["digest"] = digest;
-  av_emptybranch["branch"] = branch;
+  std::string av_str = "{\"digest\":{}, \"branch\":\"\"}";
+  rapidjson::Document av_emptybranch;
+  av_emptybranch.Parse<0>(av_str.c_str());
 
   store->set_av("6505550231@homedomain", "abcdef", &av_emptybranch, 0, 0);
   status = handler->handle_response(body);
@@ -585,11 +581,9 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithIntegerBranch)
   fake_hss->set_impu_result("sip:6505550231@homedomain", "dereg-auth-timeout", HSSConnection::STATE_REGISTERED, "", "?private_id=6505550231%40homedomain");
   std::string body = "{\"impu\": \"sip:6505550231@homedomain\", \"impi\": \"6505550231@homedomain\", \"nonce\": \"abcdef\"}";
   int status = 0;
-  Json::Value av_intbranch(Json::objectValue);
-  Json::Value digest(Json::objectValue);
-  Json::Value intbranch(6);
-  av_intbranch["digest"] = digest;
-  av_intbranch["branch"] = intbranch;
+  std::string av_str = "{\"digest\":{}, \"branch\":6}";
+  rapidjson::Document av_intbranch;
+  av_intbranch.Parse<0>(av_str.c_str());
 
   store->set_av("6505550231@homedomain", "abcdef", &av_intbranch, 0, 0);
   status = handler->handle_response(body);
@@ -601,12 +595,9 @@ TEST_F(AuthTimeoutTest, NonceTimedOutWithIntegerBranch)
 TEST_F(AuthTimeoutTest, MainlineTest)
 {
   std::string body = "{\"impu\": \"sip:test@example.com\", \"impi\": \"test@example.com\", \"nonce\": \"abcdef\"}";
-  Json::Value av(Json::objectValue);
-  Json::Value digest(Json::objectValue);
-  Json::Value branch("abcde");
-  av["digest"] = digest;
-  av["branch"] = branch;
-  av["tombstone"] = Json::Value("true");
+  std::string av_str = "{\"digest\":{}, \"branch\":\"abcde\", \"tombstone\": true}";
+  rapidjson::Document av;
+  av.Parse<0>(av_str.c_str());
   store->set_av("test@example.com", "abcdef", &av, 0, 0);
   int status = handler->handle_response(body);
 
