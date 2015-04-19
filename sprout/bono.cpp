@@ -154,7 +154,6 @@ static pjsip_uri* upstream_proxy;
 static ConnectionPool* upstream_conn_pool = NULL;
 static FlowTable* flow_table;
 static DialogTracker* dialog_tracker;
-static AsChainTable* as_chain_table;
 static HSSConnection* hss;
 static pjsip_uri* icscf_uri = NULL;
 
@@ -423,6 +422,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
     delete target; target = NULL;
     return;
   }
+  assert(target);
 
   acr = cscf_acr_factory->get_acr(get_trail(rdata),
       CALLING_PARTY,
@@ -568,6 +568,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   // UASTrancation has taken ownership of the ACR.
   acr = NULL;
 
+  assert(target);
   uas_data->access_proxy_handle_non_cancel(target);
 
   uas_data->exit_context();
@@ -1332,18 +1333,18 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
       // Check if we have any Route headers.  If so, we'll follow them.  If not,
       // we get to choose where to route to, so route upstream to sprout.
       void* top_route = pjsip_msg_find_hdr(tdata->msg, PJSIP_H_ROUTE, NULL);
-      if (top_route)
-      {
-        // We already have Route headers, so just build a target that mirrors
-        // the current request URI.
-        *target = new Target();
-        (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
-      }
-      else if (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
-               PJUtils::is_uri_local(tdata->msg->line.req.uri))
+      if ((top_route == NULL) &&
+          (PJUtils::is_home_domain(tdata->msg->line.req.uri) ||
+           PJUtils::is_uri_local(tdata->msg->line.req.uri)))
       {
         // Route the request upstream to Sprout.
         proxy_route_upstream(rdata, tdata, src_flow, trust, target);
+      }
+      else
+      {
+        // We have a Route header, or this is not local (e.g. if we're an IBCF) so follow standard SIP routing
+        *target = new Target();
+        (*target)->uri = (pjsip_uri*)pjsip_uri_clone(tdata->pool, tdata->msg->line.req.uri);
       }
 
       // Work out the next hop target for the message.  This will either be the
@@ -1354,6 +1355,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
           (tgt_flow == NULL) &&
           (PJSIP_URI_SCHEME_IS_SIP(next_hop)))
       {
+        
         // Check if the message is destined for a SIP trunk
         LOG_DEBUG("Check whether destination %.*s is a SIP trunk",
                   ((pjsip_sip_uri*)next_hop)->host.slen, ((pjsip_sip_uri*)next_hop)->host.ptr);
@@ -1558,301 +1560,8 @@ void UASTransaction::cancel_trying_timer()
   pthread_mutex_unlock(&_trying_timer_lock);
 }
 
-// Gets the subscriber's associated URIs and iFCs for each URI from
-// the HSS. Returns true on success, false on failure.
-
-// The info parameter is only filled in correctly if this function
-// returns true,
-bool UASTransaction::get_data_from_hss(std::string public_id, HSSCallInformation& info, SAS::TrailId trail)
-{
-  std::map<std::string, HSSCallInformation>::iterator data = cached_hss_data.find(public_id);
-  bool rc = false;
-  if (data != cached_hss_data.end())
-  {
-    info = data->second;
-    rc = true;
-  }
-  else
-  {
-    std::vector<std::string> uris;
-    std::map<std::string, Ifcs> ifc_map;
-    std::string regstate;
-    long http_code = hss->update_registration_state(public_id, "", HSSConnection::CALL, regstate, ifc_map, uris, trail);
-    bool registered = (regstate == HSSConnection::STATE_REGISTERED);
-    if (http_code == 200)
-    {
-      info = {registered, ifc_map[public_id], uris};
-      cached_hss_data[public_id] = info;
-      rc = true;
-    }
-  }
-  return rc;
-}
-
-// Look up the registration state for the given public ID, using the
-// per-transaction cache if possible (and caching them and the iFC otherwise).
-bool UASTransaction::is_user_registered(std::string public_id)
-{
-  HSSCallInformation data;
-  bool success = get_data_from_hss(public_id, data, trail());
-  if (success)
-  {
-    return data.registered;
-  }
-  else
-  {
-    LOG_ERROR("Connection to Homestead failed, treating user as unregistered");
-    return false;
-  }
-}
-
-// Look up the associated URIs for the given public ID, using the cache if possible (and caching them and the iFC otherwise).
-// The uris parameter is only filled in correctly if this function
-// returns true,
-bool UASTransaction::get_associated_uris(std::string public_id, std::vector<std::string>& uris, SAS::TrailId trail)
-{
-  HSSCallInformation data;
-  bool success = get_data_from_hss(public_id, data, trail);
-  if (success)
-  {
-    uris = data.uris;
-  }
-  return success;
-}
-
-// Look up the Ifcs for the given public ID, using the cache if possible (and caching them and the associated URIs otherwise).
-// The ifcs parameter is only filled in correctly if this function
-// returns true,
-bool UASTransaction::lookup_ifcs(std::string public_id, Ifcs& ifcs, SAS::TrailId trail)
-{
-  HSSCallInformation data;
-  bool success = get_data_from_hss(public_id, data, trail);
-  if (success)
-  {
-    ifcs = data.ifcs;
-  }
-  return success;
-}
-
 ///@{
 // IN-TRANSACTION PROCESSING
-
-/// Calculate a list of targets for the message.
-void UASTransaction::proxy_calculate_targets(pjsip_msg* msg,
-                                             pj_pool_t* pool,
-                                             TargetList& targets,
-                                             int max_targets,
-                                             SAS::TrailId trail)
-{
-  bool sip_uri = false;
-  bool tel_uri = false;
-
-  // RFC 3261 Section 16.5 Determining Request Targets
-
-  pjsip_uri* req_uri = (pjsip_uri*)msg->line.req.uri;
-
-  if (PJSIP_URI_SCHEME_IS_SIP(msg->line.req.uri))
-  {
-    sip_uri = true;
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(msg->line.req.uri))
-  {
-    tel_uri = true;
-  }
-
-  // If the Request-URI of the request contains an maddr parameter, the
-  // Request-URI MUST be placed into the target set as the only target
-  // URI, and the proxy MUST proceed to Section 16.6.
-  if (sip_uri && ((pjsip_sip_uri*)req_uri)->maddr_param.slen)
-  {
-    LOG_INFO("Route request to maddr %.*s",
-             ((pjsip_sip_uri*)req_uri)->maddr_param.slen,
-             ((pjsip_sip_uri*)req_uri)->maddr_param.ptr);
-    Target target;
-    target.uri = req_uri;
-    targets.push_back(target);
-    return;
-  }
-
-  // If the domain of the Request-URI indicates a domain this element is
-  // not responsible for, the Request-URI MUST be placed into the target
-  // set as the only target, and the element MUST proceed to the task of
-  // Request Forwarding (Section 16.6).
-  if ((!PJUtils::is_home_domain(req_uri)) &&
-      (!PJUtils::is_uri_local(req_uri)))
-  {
-    if (sip_uri)
-    {
-      LOG_INFO("Route request to domain %.*s",
-               ((pjsip_sip_uri*)req_uri)->host.slen,
-               ((pjsip_sip_uri*)req_uri)->host.ptr);
-    }
-
-    Target target;
-    target.uri = req_uri;
-
-    if ((bgcf_service) &&
-        (sip_uri || tel_uri))
-    {
-      // See if we have a configured route to the destination.
-      std::string domain;
-
-      if (!PJUtils::is_uri_phone_number(req_uri))
-      {
-        domain = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)req_uri)->host);
-      }
-
-      std::vector<std::string> bgcf_route = 
-                             bgcf_service->get_route_from_domain(domain, trail);
-
-      if (!bgcf_route.empty())
-      {
-        for (std::vector<std::string>::const_iterator ii = bgcf_route.begin(); ii != bgcf_route.end(); ++ii)
-        {
-          pjsip_uri* route_uri = PJUtils::uri_from_string(*ii, pool);
-
-          if (route_uri != NULL && PJSIP_URI_SCHEME_IS_SIP(route_uri))
-          {
-            // Enforce loose routing
-            ((pjsip_sip_uri*)route_uri)->lr_param = 1;
-
-            LOG_DEBUG("Adding route: %s", (*ii).c_str());
-            target.paths.push_back(route_uri);
-          }
-          else
-          {
-            // One of the routes is an invalid SIP URI. Stop processing the entry
-            // and clear the target
-            LOG_WARNING("Invalid route: %s. Clear the target routes", (*ii).c_str());
-            target.paths.clear();
-          }
-        }
-
-        // We have added a BGCF generated route to the request, so we should
-        // switch ACR context for the downstream leg.
-        _bgcf_acr = bgcf_acr_factory->get_acr(trail,
-                                              CALLING_PARTY,
-                                              acr_node_role(msg));
-
-        if ((_downstream_acr != _upstream_acr) &&
-            (!_as_chain_links.empty()))
-        {
-          // We've already set up a different downstream ACR to the upstream ACR
-          // and the ASChain hasn't taken ownership of the acr so free it off.
-          delete _downstream_acr;
-        }
-
-        _downstream_acr = _bgcf_acr;
-
-        // Pass the request to the downstream ACR as if it is being received.
-        _downstream_acr->rx_request(msg);
-      }
-    }
-
-    targets.push_back(target);
-
-    return;
-  }
-
-  // If the target set for the request has not been predetermined as
-  // described above, this implies that the element is responsible for the
-  // domain in the Request-URI, and the element MAY use whatever mechanism
-  // it desires to determine where to send the request.
-  //
-  // is_user_registered() checks on Homestead to see whether the user
-  // is registered - if not, we don't need to use the memcached store
-  // to look up their bindings.
-  std::string public_id;
-  if (sip_uri)
-  {
-    public_id = PJUtils::aor_from_uri((pjsip_sip_uri*)req_uri);
-  }
-
-  if ((!public_id.empty()) && (store) && (hss) && is_user_registered(public_id))
-  {
-    // Determine the canonical public ID, and look up the set of associated
-    // URIs on the HSS.
-    std::vector<std::string> uris;
-    bool success = get_associated_uris(public_id, uris, trail);
-
-    std::string aor;
-    if (success && (uris.size() > 0))
-    {
-      // Take the first associated URI as the AOR.
-      aor = uris.front();
-    }
-    else
-    {
-      // Failed to get the associated URIs from Homestead.  We'll try to
-      // do the registration look-up with the specified target URI - this may
-      // fail, but we'll never misroute the call.
-      LOG_WARNING("Invalid Homestead response - a user is registered but has no list of associated URIs");
-      aor = public_id;
-    }
-
-    get_targets_from_store(aor,
-                           store,
-                           remote_store,
-                           msg,
-                           pool,
-                           max_targets,
-                           targets,
-                           trail);
-    if (targets.empty())
-    {
-      LOG_ERROR("Failed to find any valid bindings for %s in registration store", aor.c_str());
-    }
-  }
-}
-
-/// Calculate targets from the registration store.
-void UASTransaction::get_targets_from_store(const std::string& aor,
-                                            RegStore*& store,
-                                            RegStore*& remote_store,
-                                            pjsip_msg*& msg,
-                                            pj_pool_t* pool,
-                                            int max_targets,
-                                            TargetList& targets,
-                                            SAS::TrailId trail)
-{
-  RegStore::AoR* aor_data = NULL;
-  get_all_bindings(aor,
-                   store,
-                   remote_store,
-                   &aor_data,
-                   trail);
-  filter_bindings_to_targets(aor,
-                             aor_data,
-                             msg,
-                             pool,
-                             max_targets,
-                             targets,
-                             trail);
-  delete aor_data; aor_data = NULL;
-}
-
-void UASTransaction::get_all_bindings(const std::string& aor,
-                                      RegStore*& store,
-                                      RegStore*& remote_store,
-                                      RegStore::AoR** aor_data,
-                                      SAS::TrailId trail)
-{
-  // Look up the target in the registration data store.
-  LOG_INFO("Look up targets in registration store: %s", aor.c_str());
-  *aor_data = store->get_aor_data(aor, trail);
-
-  // If we didn't get bindings from the local store and we have a remote
-  // store, try the remote.
-  if ((remote_store != NULL) &&
-      ((*aor_data == NULL) ||
-       ((*aor_data)->bindings().empty())))
-  {
-    delete *aor_data;
-    *aor_data = remote_store->get_aor_data(aor, trail);
-  }
-
-  // TODO - Log bindings to SAS
-}
 
 static void proxy_process_register_response(pjsip_rx_data* rdata)
 {
@@ -2091,25 +1800,6 @@ UASTransaction::~UASTransaction()
   LOG_DEBUG("Transaction is%s linked to an AS chain(s)", _as_chain_links.empty() ? " not" : "");
   LOG_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
 
-  if (_as_chain_links.empty())
-  {
-    // This transaction has not been linked to any AS chains, so is still
-    // in control of the ACR, so send it now.
-    if (_downstream_acr != _upstream_acr)
-    {
-      // The downstream ACR is not the same as the upstream one, so send the
-      // message and destroy the object.
-      _downstream_acr->send_message();
-      delete _downstream_acr;
-    }
-
-    // Send the ACR for the upstream side.
-    _upstream_acr->send_message();
-    delete _upstream_acr;
-    _upstream_acr = NULL;
-    _downstream_acr = NULL;
-  }
-
   if (_icscf_router != NULL)
   {
     delete _icscf_router;
@@ -2215,27 +1905,9 @@ void UASTransaction::handle_outgoing_non_cancel(Target* target)
 {
   // Calculate targets
   TargetList targets;
-  if (target != NULL)
-  {
-    // Already have a target, so use it.
-    targets.push_back(*target);
-  }
-  else
-  {
-    // Find targets.
-    proxy_calculate_targets(_req->msg, _req->pool, targets, MAX_FORKING, trail());
-  }
-
-  if (targets.size() == 0)
-  {
-    // No targets found, so reject with a 480 error.
-    // There will only be no targets when the terminating user isn't
-    // registered or has no valid bindings.
-    LOG_INFO("Reject request with 480");
-    send_response(PJSIP_SC_TEMPORARILY_UNAVAILABLE);
-
-    return;
-  }
+  assert(target != NULL);
+  // Already have a target, so use it.
+  targets.push_back(*target);
 
   // Try to add the session_expires header
   if (!PJUtils::add_update_session_expires(_req->msg, 
@@ -3731,81 +3403,6 @@ static pj_status_t add_path(pjsip_tx_data* tdata,
   pjsip_msg_insert_first_hdr(tdata->msg, (pjsip_hdr*)path_hdr);
 
   return PJ_SUCCESS;
-}
-
-
-/// Factory method: create AsChain by looking up iFCs.
-AsChainLink UASTransaction::create_as_chain(const SessionCase& session_case,
-                                            Ifcs ifcs,
-                                            std::string served_user)
-{
-  if (served_user.empty())
-  {
-    LOG_WARNING("create_as_chain called with an empty served_user");
-  }
-  bool is_registered = is_user_registered(served_user);
-
-  // Select the ACR to use for the AS Chain.  For originating chains and
-  // terminating chains we use the upstream and downstream ACRs respectivly.
-  // For the originating-cdiv case we create a new ACR copied from the
-  // downstream ACR.
-  ACR* acr = NULL;
-  if (session_case == SessionCase::Originating)
-  {
-    // Originating chain, so use upstream ACR.
-    acr = _upstream_acr;
-  }
-  else if (session_case == SessionCase::Terminating)
-  {
-    // Terminating chain, so use downstream ACR.
-    acr = _downstream_acr;
-  }
-  else if (session_case == SessionCase::OriginatingCdiv)
-  {
-    // Originating-cdiv chain, so create a copy of the downstream ACR.
-    acr = new ACR(*_downstream_acr);
-  }
-
-  // Create the AsChain, and schedule its destruction.  AsChain
-  // lifetime is tied to the lifetime of the creating transaction.
-  //
-  // Rationale:
-  //
-  // Consider two successive Sprout UAS transactions Ai and Ai+1 in
-  // the chain. Sprout creates Ai+1 in response to it receiving the Ai
-  // ODI token from the AS.
-  //
-  // (1) Ai+1 can only be created if the ODI is valid at the point
-  // Sprout receives the transaction-creating message.
-  //
-  // (2) Before the point Sprout creates Ai+1, the ODI’s lifetime
-  // cannot be dependent on Ai+1, but only on Ai (and previous
-  // transactions).
-  //
-  // (3) Hence at the point Ai+1 is created, Ai must still be live.
-  //
-  // (4) This applies transitively, so the lifetime of A0 bounds the
-  // lifetime of Aj for all j.
-  //
-  // This means that there’s a constraint on B2BUA AS behaviour: it
-  // must not give a final response to the inbound transaction before
-  // receiving a final response from the outbound transaction.
-  //
-  // While this constraint is not stated explicitly in 24.229, there
-  // is no other sensible lifetime for the ODI token. The alternative
-  // would allow B2BUAs that gave a final response to the caller, and
-  // then at some arbitrary time later did some action that continued
-  // the original AS chain, which is nonsensical.
-
-  AsChainLink ret = AsChainLink::create_as_chain(as_chain_table,
-                                                 session_case,
-                                                 served_user,
-                                                 is_registered,
-                                                 trail(),
-                                                 ifcs,
-                                                 acr);
-  LOG_DEBUG("UASTransaction %p linked to AsChain %s", this, ret.to_string().c_str());
-  return ret;
 }
 
 
