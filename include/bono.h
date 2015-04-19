@@ -1,5 +1,5 @@
 /**
- * @file stateful_proxy.h Initialization/termination functions for Stateful Proxy module.
+ * @file bono.h Initialization/termination functions for Bono subcomponent.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd

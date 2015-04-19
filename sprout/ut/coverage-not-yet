@@ -37,7 +37,7 @@ modules/rapidjson/include/rapidjson/allocators.h
 modules/rapidjson/include/rapidjson/internal/stack.h
 modules/rapidjson/include/rapidjson/writer.h
 
-stateful_proxy.cpp
+bono.cpp
 connection_pool.cpp
 pjutils.cpp
 callservices.cpp

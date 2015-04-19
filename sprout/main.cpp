@@ -69,7 +69,7 @@ extern "C" {
 #include "stack.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
-#include "stateful_proxy.h"
+#include "bono.h"
 #include "websockets.h"
 #include "mmtel.h"
 #include "subscription.h"

@@ -21,7 +21,7 @@ TARGET_SOURCES := logger.cpp \
                   dnscachedresolver.cpp \
                   baseresolver.cpp \
                   sipresolver.cpp \
-                  stateful_proxy.cpp \
+                  bono.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \
@@ -112,7 +112,7 @@ TARGET_SOURCES_TEST := test_main.cpp \
                        regstore_test.cpp \
                        avstore_test.cpp \
                        registrar_test.cpp \
-                       stateful_proxy_test.cpp \
+                       bono_test.cpp \
                        bgcfservice_test.cpp \
                        options_test.cpp \
                        logger_test.cpp \

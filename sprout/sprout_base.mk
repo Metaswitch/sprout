@@ -17,7 +17,7 @@ TARGET_SOURCES := logger.cpp \
                   dnscachedresolver.cpp \
                   baseresolver.cpp \
                   sipresolver.cpp \
-                  stateful_proxy.cpp \
+                  bono.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \

@@ -1,5 +1,5 @@
 /**
- * @file stateful_proxy_test.cpp UT for Sprout stateful proxy module.
+ * @file bono_test.cpp UT for Bono.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -45,7 +45,7 @@
 #include "utils.h"
 #include "test_utils.hpp"
 #include "analyticslogger.h"
-#include "stateful_proxy.h"
+#include "bono.h"
 #include "fakecurl.hpp"
 #include "fakehssconnection.hpp"
 #include "fakexdmconnection.hpp"

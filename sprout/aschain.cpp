@@ -40,7 +40,6 @@
 #include "pjutils.h"
 
 #include "constants.h"
-#include "stateful_proxy.h"
 #include "aschain.h"
 #include "ifchandler.h"
 

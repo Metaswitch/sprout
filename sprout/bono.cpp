@@ -1,5 +1,5 @@
 /**
- * @file stateful_proxy.cpp Stateful proxy implementation
+ * @file bono.cpp P-CSCF/IBCF implementation
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -114,7 +114,7 @@ extern "C" {
 #include "sproutsasevent.h"
 #include "analyticslogger.h"
 #include "regstore.h"
-#include "stateful_proxy.h"
+#include "bono.h"
 #include "callservices.h"
 #include "constants.h"
 #include "enumservice.h"
