@@ -163,13 +163,6 @@ static bool icscf = false;
 static bool scscf = false;
 static bool allow_emergency_reg = false;
 
-// Pre-built Record-Route header added to requests handled by the S-CSCF.
-static pjsip_rr_hdr* scscf_rr;
-
-// S-CSCF domain name.
-static pj_str_t scscf_domain_name;
-
-
 PJUtils::host_list_t trusted_hosts(&PJUtils::compare_pj_sockaddr);
 
 //
@@ -241,7 +234,6 @@ static pj_bool_t proxy_trusted_source(pjsip_rx_data* rdata);
 
 // Helper functions.
 static int compare_sip_sc(int sc1, int sc2);
-static pj_bool_t is_uri_routeable(const pjsip_uri* uri);
 static pj_status_t add_path(pjsip_tx_data* tdata,
                             const Flow* flow_data,
                             const pjsip_rx_data* rdata);
@@ -400,7 +392,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
   Target *target = NULL;
   ACR* acr = NULL;
   ACR* downstream_acr = NULL;
-  bool in_dialog;
 
   // Verify incoming request.
   int status_code = proxy_verify_request(rdata);
@@ -418,9 +409,6 @@ void process_tsx_request(pjsip_rx_data* rdata)
     reject_request(rdata, PJSIP_SC_INTERNAL_SERVER_ERROR);
     return;
   }
-
-  // If the request has a tag in the To header it's in-dialog.
-  in_dialog = (rdata->msg_info.to->tag.slen != 0);
 
   assert(edge_proxy);
   // Process access proxy routing.  This also does IBCF function if enabled.
@@ -1865,61 +1853,6 @@ void UASTransaction::get_all_bindings(const std::string& aor,
 
   // TODO - Log bindings to SAS
 }
-
-/// Attempt ENUM lookup if appropriate.
-static pj_status_t translate_request_uri(pjsip_tx_data* tdata, SAS::TrailId trail)
-{
-  pj_status_t status = PJ_SUCCESS;
-  std::string user;
-  std::string uri;
-
-  // Determine whether we have a SIP URI or a tel URI
-  if (PJSIP_URI_SCHEME_IS_SIP(tdata->msg->line.req.uri))
-  {
-    user = PJUtils::pj_str_to_string(&((pjsip_sip_uri*)tdata->msg->line.req.uri)->user);
-  }
-  else if (PJSIP_URI_SCHEME_IS_TEL(tdata->msg->line.req.uri))
-  {
-    user = PJUtils::public_id_from_uri((pjsip_uri*)tdata->msg->line.req.uri);
-  }
-
-  // Check whether we have a global number or whether we allow
-  // ENUM lookups for local numbers
-  if (PJUtils::is_user_global(user) || !global_only_lookups)
-  {
-    // Perform an ENUM lookup if we have a tel URI, or if we have
-    // a SIP URI which is being treated as a phone number
-    if ((PJUtils::is_uri_phone_number(tdata->msg->line.req.uri)) ||
-        (!user_phone && PJUtils::is_user_numeric(user)))
-    {
-      LOG_DEBUG("Performing ENUM lookup for user %s", user.c_str());
-      uri = enum_service->lookup_uri_from_user(user, trail);
-    }
-  }
-  else if (PJUtils::is_uri_phone_number(tdata->msg->line.req.uri))
-  {
-    LOG_WARNING("Unable to resolve URI phone number %s using ENUM", user.c_str());
-    status = PJ_EUNKNOWN;
-  }
-
-  if (!uri.empty())
-  {
-    pjsip_uri* req_uri = (pjsip_uri*)PJUtils::uri_from_string(uri, tdata->pool);
-    if (req_uri != NULL)
-    {
-      LOG_DEBUG("Update request URI to %s", uri.c_str());
-      tdata->msg->line.req.uri = req_uri;
-    }
-    else
-    {
-      LOG_WARNING("Badly formed URI %s from ENUM translation", uri.c_str());
-      status = PJ_EINVAL;
-    }
-  }
-
-  return status;
-}
-
 
 static void proxy_process_register_response(pjsip_rx_data* rdata)
 {
@@ -3756,15 +3689,6 @@ static int compare_sip_sc(int sc1, int sc2)
     return -1;
   }
 }
-
-
-// TODO: this will always return false until we have a better way to check
-//       if a uri is routable
-static pj_bool_t is_uri_routeable(const pjsip_uri* uri)
-{
-  return PJ_FALSE;
-}
-
 
 /// Adds a Path header when functioning as an edge proxy.
 ///
