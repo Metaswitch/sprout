@@ -339,13 +339,11 @@ public:
     _local_data_store = new LocalStore();
     _store = new RegStore((Store*)_local_data_store, _chronos_connection);
     _analytics = new AnalyticsLogger(&PrintingTestLogger::DEFAULT);
-    _call_services = NULL;
     _hss_connection = new FakeHSSConnection();
     if (ifcs)
     {
       _xdm_connection = new FakeXDMConnection();
       _ifc_handler = new IfcHandler();
-      _call_services = new CallServices(_xdm_connection);
     }
     // We only test with a JSONEnumService, not with a DNSEnumService - since
     // it is stateful_proxy.cpp that's under test here, the EnumService
@@ -362,7 +360,7 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
-                                          _call_services,
+                                          NULL,
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),
@@ -403,7 +401,6 @@ public:
     delete _chronos_connection; _chronos_connection = NULL;
     delete _local_data_store; _local_data_store = NULL;
     delete _analytics; _analytics = NULL;
-    delete _call_services; _call_services = NULL;
     delete _ifc_handler; _ifc_handler = NULL;
     delete _hss_connection; _hss_connection = NULL;
     delete _xdm_connection; _xdm_connection = NULL;
@@ -469,7 +466,6 @@ protected:
   static AnalyticsLogger* _analytics;
   static FakeHSSConnection* _hss_connection;
   static FakeXDMConnection* _xdm_connection;
-  static CallServices* _call_services;
   static IfcHandler* _ifc_handler;
   static EnumService* _enum_service;
   static BgcfService* _bgcf_service;
@@ -501,7 +497,6 @@ RegStore* StatefulProxyTestBase::_store;
 AnalyticsLogger* StatefulProxyTestBase::_analytics;
 FakeHSSConnection* StatefulProxyTestBase::_hss_connection;
 FakeXDMConnection* StatefulProxyTestBase::_xdm_connection;
-CallServices* StatefulProxyTestBase::_call_services;
 IfcHandler* StatefulProxyTestBase::_ifc_handler;
 EnumService* StatefulProxyTestBase::_enum_service;
 BgcfService* StatefulProxyTestBase::_bgcf_service;
