@@ -2089,14 +2089,23 @@ pj_bool_t PJUtils::is_user_global(const pj_str_t& user)
 }
 
 
+static const boost::regex CHARS_TO_STRIP = boost::regex("[.)(-]");
+
+// Strip any visual separators from the number
+std::string PJUtils::remove_visual_separators(const std::string& number)
+{ 
+  return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
+};
+
 /// Determines whether a user string is purely numeric (maybe with a leading +).
 ///
 /// @returns                      PJ_TRUE if the user is numeric, PJ_FALSE if
 ///                               not.
 /// @param user                   The user to test.
-pj_bool_t PJUtils::is_user_numeric(const std::string& user)
+pj_bool_t PJUtils::is_user_numeric(const std::string& user_raw)
 {
   pj_bool_t rc = PJ_TRUE;
+  std::string user = PJUtils::remove_visual_separators(user_raw);
 
   for (size_t i = 0; i < user.size(); i++)
   {
