@@ -289,6 +289,7 @@ private:
   void tx_cancel(int fork_id);
   int compare_sip_sc(int sc1, int sc2);
   bool is_uri_local(const pjsip_uri*) const;
+  void log_inter_sproutlet(pjsip_tx_data* tdata, bool downstream);
 
   SproutletProxy* _proxy;
 
