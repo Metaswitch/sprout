@@ -1789,7 +1789,7 @@ int SproutletWrapper::compare_sip_sc(int sc1, int sc2)
 }
 
 void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
-                                           bool           downstream)
+                                           bool downstream)
 {
   char buf[PJSIP_MAX_PKT_LEN];
   pj_ssize_t size;
@@ -1803,7 +1803,7 @@ void SproutletWrapper::log_inter_sproutlet(pjsip_tx_data* tdata,
   size = pjsip_msg_print(tdata->msg, buf, sizeof(buf));
 
   // Defensively set size to zero if pjsip_msg_print failed
-  size   = std::max(0L, size);
+  size = std::max(0L, size);
 
   LOG_VERBOSE("Routing %s (%d bytes) to %s sproutlet %s:\n"
               "--start msg--\n\n"
