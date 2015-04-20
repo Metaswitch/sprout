@@ -2097,7 +2097,8 @@ std::string PJUtils::remove_visual_separators(const std::string& number)
   return boost::regex_replace(number, CHARS_TO_STRIP, std::string("")); 
 };
 
-/// Determines whether a user string is purely numeric (maybe with a leading +).
+/// Determines whether a user string is a valid phone number
+/// (maybe with a leading + or separator characters).
 ///
 /// @returns                      PJ_TRUE if the user is numeric, PJ_FALSE if
 ///                               not.
