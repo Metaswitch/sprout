@@ -267,6 +267,8 @@ pjsip_uri* translate_sip_uri_to_tel_uri(const pjsip_sip_uri* sip_uri,
 pj_bool_t is_user_global(const std::string& user);
 pj_bool_t is_user_global(const pj_str_t& user);
 
+std::string remove_visual_separators(const std::string& user);
+
 pj_bool_t is_user_numeric(const std::string& user);
 pj_bool_t is_user_numeric(const pj_str_t& user);
 

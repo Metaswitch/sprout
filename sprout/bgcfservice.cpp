@@ -45,8 +45,7 @@
 #include "log.h"
 #include "sas.h"
 #include "sproutsasevent.h"
-
-const boost::regex BgcfService::CHARS_TO_STRIP = boost::regex("[.)(-]");
+#include "pjutils.h"
 
 BgcfService::BgcfService(std::string configuration) :
   _configuration(configuration),
@@ -143,7 +142,7 @@ void BgcfService::update_routes()
         {
           routing_value = (*routes_it)["number"].GetString();
           new_number_routes.insert(
-                    std::make_pair(remove_visual_separators(routing_value),
+                    std::make_pair(PJUtils::remove_visual_separators(routing_value),
                                    route_vec));
         }
 
@@ -242,11 +241,11 @@ std::vector<std::string> BgcfService::get_route_from_number(
   {
     int len = std::min(number.size(), (*it).first.size());
 
-    if (remove_visual_separators(number).compare(0, 
-                                                 len, 
-                                                 (*it).first, 
-                                                 0, 
-                                                 len) == 0)
+    if (PJUtils::remove_visual_separators(number).compare(0,
+                                                          len,
+                                                          (*it).first,
+                                                          0,
+                                                          len) == 0)
     {
       // Found a match, so return it
       LOG_DEBUG("Match found. Number: %s, prefix: %s",
