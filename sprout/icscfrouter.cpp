@@ -225,15 +225,9 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
   {
     int rc = (*rsp)["result-code"].GetInt();
   
-    if ((rc != 2001) &&
-        (rc != 2002) &&
-        (rc != 2003))
-    {
-      // Error from HSS, so respond with 404 Not Found.  (This may be changed
-      // to 403 Forbidden if request is a REGISTER.)
-      status_code = PJSIP_SC_NOT_FOUND;
-    }
-    else
+    if ((rc == 2001) ||
+        (rc == 2002) ||
+        (rc == 2003))
     {
       // Successful response from HSS, so parse it.
       if ((rsp->HasMember("scscf")) &&
@@ -265,6 +259,18 @@ int ICSCFRouter::parse_hss_response(rapidjson::Document*& rsp, bool queried_caps
           status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
         }
       }
+    }
+    else if (rc == 5003)
+    {
+      // Failure response from HSS indicating that a subscriber exists but is unregistered and
+      // has no unregistered services, so respond with 480 Temporarily Unavailable.
+      status_code = PJSIP_SC_TEMPORARILY_UNAVAILABLE;
+    }
+    else
+    {
+      // Error from HSS, so respond with 404 Not Found.  (This may be changed
+      // to 403 Forbidden if request is a REGISTER.)
+      status_code = PJSIP_SC_NOT_FOUND;
     }
   }
 
