@@ -42,6 +42,7 @@
 
 #include "basetest.hpp"
 #include "load_monitor.h"
+#include "test_interposer.hpp"
 
 /// Fixture for LoadMonitorTest.
 class LoadMonitorTest : public BaseTest
@@ -51,10 +52,12 @@ class LoadMonitorTest : public BaseTest
   LoadMonitorTest() :
     _load_monitor(100000, 20, 10, 10)
   {
+    cwtest_completely_control_time();
   }
 
   virtual ~LoadMonitorTest()
   {
+    cwtest_reset_time();
   }
 };
 
@@ -74,31 +77,45 @@ class TokenBucketTest : public BaseTest
 
 TEST_F(LoadMonitorTest, RequestComplete)
 {
-  // Start with the expected latency. The rate will be unchanged. 
-  for (int ii = 0; ii < 40; ii++)
+  float initial_rate = _load_monitor.bucket.rate;
+
+  // Keep the latency at the expected value.
+  for (int ii = 0; ii < 20; ii++)
   {
    _load_monitor.request_complete(100000);
   }
 
-  EXPECT_EQ(_load_monitor.smoothed_latency, 99517);
+  // The token rate is unchanged, because although we've seen 20 requests, 2 seconds haven't passed
+  EXPECT_EQ(_load_monitor.bucket.rate, initial_rate);
 
-  // Increase the latency; this will cause the token rate to decrease
+  // Move time forwards 2 seconds and inject another request.
+  cwtest_advance_time_ms(2000);
+
+  _load_monitor.request_complete(100000);
+
+  // Bucket fill rate should still be at the initial rate, because the latency is as expected.
+  EXPECT_EQ(_load_monitor.bucket.rate, initial_rate);
+  initial_rate = _load_monitor.bucket.rate;
+
+  // Keep the latency low, but without a penalty.
   for (int ii = 0; ii < 20; ii++)
   {
-   _load_monitor.request_complete(200000);
+   _load_monitor.request_complete(1000);
   }
 
-  EXPECT_EQ(_load_monitor.smoothed_latency, 193042);
+  // The token rate is unchanged, because although we've seen 20 requests, 2 seconds haven't passed
+  EXPECT_EQ(_load_monitor.bucket.rate, initial_rate);
 
-  // Dectease the latency; this will cause the token rate to increase. 
-  for (int ii = 0; ii < 20; ii++)
-  {
-    _load_monitor.request_complete(1000);
-  }
+  // Move time forwards 2 seconds and inject another request.
+  cwtest_advance_time_ms(2000);
+  _load_monitor.request_complete(1000);
 
-  EXPECT_EQ(_load_monitor.smoothed_latency, 14288);
+  // Bucket fill rate should have increased due to the low latency.
+  EXPECT_GT(_load_monitor.bucket.rate, initial_rate);
 
-  // Keep the latency low, but incur a penalty. The token rate increases. 
+  float changed_rate = _load_monitor.bucket.rate;
+
+  // Keep the latency low, but incur a penalty.
   _load_monitor.incr_penalties();
 
   for (int ii = 0; ii < 20; ii++)
@@ -106,7 +123,33 @@ TEST_F(LoadMonitorTest, RequestComplete)
     _load_monitor.request_complete(1000);
   }
 
-  EXPECT_EQ(_load_monitor.smoothed_latency, 1917);
+  // The token rate is unchanged, because although we've seen 20 requests, 2 seconds haven't passed
+  EXPECT_EQ(_load_monitor.bucket.rate, changed_rate);
+
+  // Move time forwards 2 seconds and inject another request.
+  cwtest_advance_time_ms(2000);
+  _load_monitor.request_complete(1000);
+
+  // Bucket fill rate should have decreased due to the penalty.
+  EXPECT_LT(_load_monitor.bucket.rate, changed_rate);
+
+}
+
+TEST_F(LoadMonitorTest, NoRateDecreaseBelowMinimum)
+{
+  float initial_rate = _load_monitor.bucket.rate;
+
+  for (int ii = 0; ii < 20; ii++)
+  {
+    _load_monitor.request_complete(100000000);
+  }
+
+  // Move time forwards 2 seconds and inject another request.
+  cwtest_advance_time_ms(2000);
+  _load_monitor.request_complete(100000000);
+
+  // Bucket fill rate should be unchanged at the minimum value.
+  EXPECT_EQ(_load_monitor.bucket.rate, initial_rate);
 }
 
 TEST_F(LoadMonitorTest, AdmitRequest)
