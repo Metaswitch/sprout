@@ -360,7 +360,6 @@ public:
     _acr_factory = new ACRFactory();
     pj_status_t ret = init_stateful_proxy(_store,
                                           NULL,
-                                          NULL,
                                           _ifc_handler,
                                           !_edge_upstream_proxy.empty(),
                                           _edge_upstream_proxy.c_str(),

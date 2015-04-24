@@ -353,7 +353,6 @@ private:
 
 pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 RegStore* remote_reg_store,
-                                void* call_services,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,

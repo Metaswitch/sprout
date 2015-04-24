@@ -425,8 +425,8 @@ void process_tsx_request(pjsip_rx_data* rdata)
   assert(target);
 
   acr = cscf_acr_factory->get_acr(get_trail(rdata),
-      CALLING_PARTY,
-      acr_node_role(rdata->msg_info.msg));
+                                  CALLING_PARTY,
+                                  acr_node_role(rdata->msg_info.msg));
 
   // Do standard processing of Route headers.
   status = proxy_process_routing(tdata);
@@ -434,7 +434,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   if (status != PJ_SUCCESS)
   {
     LOG_ERROR("Error processing route, %s",
-        PJUtils::pj_status_to_string(status).c_str());
+              PJUtils::pj_status_to_string(status).c_str());
 
     delete target; target = NULL;
     delete acr; acr = NULL;
@@ -3143,7 +3143,6 @@ void UACTransaction::exit_context()
 
 pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 RegStore* remote_reg_store,
-                                void* call_services,
                                 IfcHandler* ifc_handler_in,
                                 pj_bool_t enable_edge_proxy,
                                 const std::string& upstream_proxy_arg,
