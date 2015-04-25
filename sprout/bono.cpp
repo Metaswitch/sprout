@@ -1797,9 +1797,23 @@ UASTransaction::~UASTransaction()
     _bgcf_acr = NULL;
   }
 
-  LOG_DEBUG("Transaction is%s linked to an AS chain(s)", _as_chain_links.empty() ? " not" : "");
   LOG_DEBUG("Upstream ACR = %p, Downstream ACR = %p", _upstream_acr, _downstream_acr);
 
+  // This transaction is still in control of the ACR, so send it now.
+  if (_downstream_acr != _upstream_acr)
+  {
+    // The downstream ACR is not the same as the upstream one, so send the
+    // message and destroy the object.
+    _downstream_acr->send_message();
+    delete _downstream_acr;
+  }
+
+  // Send the ACR for the upstream side.
+  _upstream_acr->send_message();
+  delete _upstream_acr;
+  _upstream_acr = NULL;
+  _downstream_acr = NULL;
+  
   if (_icscf_router != NULL)
   {
     delete _icscf_router;

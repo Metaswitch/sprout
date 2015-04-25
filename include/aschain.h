@@ -138,7 +138,6 @@ private:
   std::string to_string(size_t index) const;
   const SessionCase& session_case() const;
   size_t size() const;
-  bool matches_target(pjsip_tx_data* tdata) const;
   SAS::TrailId trail() const;
   ACR* acr() const;
 
@@ -267,11 +266,6 @@ public:
     return (_as_chain != NULL) ? _as_chain->_is_registered : false;
   }
 
-  bool matches_target(pjsip_tx_data* tdata) const
-  {
-    return _as_chain->matches_target(tdata);
-  }
-
   /// Returns the ODI token of the next AsChainLink in this chain.
   const std::string& next_odi_token() const
   {
@@ -293,9 +287,6 @@ public:
 
   /// Called on receipt of each response from the AS.
   void on_response(int status_code);
-
-  /// Called if the AS is not responding.
-  void on_not_responding();
 
   /// Disposition of a request. Suggests what to do next.
   enum Disposition {
