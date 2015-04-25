@@ -172,6 +172,8 @@ namespace SASEvent
 
   const int INVALID_SESSION_EXPIRES_HEADER = SPROUT_BASE + 0x0000E6;
 
+  const int NO_CCFS_FOR_ACR = SPROUT_BASE + 0xF0;
+
 } //namespace SASEvent
 
 #endif

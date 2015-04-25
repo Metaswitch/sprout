@@ -427,6 +427,7 @@ void process_tsx_request(pjsip_rx_data* rdata)
   acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                   CALLING_PARTY,
                                   acr_node_role(rdata->msg_info.msg));
+  acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
 
   // Do standard processing of Route headers.
   status = proxy_process_routing(tdata);
@@ -634,6 +635,7 @@ void process_cancel_request(pjsip_rx_data* rdata)
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
                                        acr_node_role(rdata->msg_info.msg));
+  acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
   acr->send_message();
   delete acr;
@@ -713,14 +715,15 @@ static void reject_request(pjsip_rx_data* rdata, int status_code)
   ACR* acr = cscf_acr_factory->get_acr(get_trail(rdata),
                                        CALLING_PARTY,
                                        acr_node_role(rdata->msg_info.msg));
+  acr->set_default_ccf(PJUtils::pj_str_to_string(&stack_data.cdf_domain));
   acr->rx_request(rdata->msg_info.msg, rdata->pkt_info.timestamp);
 
   if (rdata->msg_info.msg->line.req.method.id != PJSIP_ACK_METHOD)
   {
     // Not an ACK, so we should send a response.
-    LOG_ERROR("Reject %.*s request with %d status code",
-              rdata->msg_info.msg->line.req.method.name.slen,
-              rdata->msg_info.msg->line.req.method.name.ptr, status_code);
+    LOG_INFO("Reject %.*s request with %d status code",
+             rdata->msg_info.msg->line.req.method.name.slen,
+             rdata->msg_info.msg->line.req.method.name.ptr, status_code);
     pjsip_tx_data* tdata;
 
     // Use default status text except for cases where PJSIP doesn't know
@@ -1314,7 +1317,7 @@ int proxy_process_access_routing(pjsip_rx_data *rdata,
     if (!trusted)
     {
       // Request is not from a trusted source, so reject or discard it.
-      LOG_WARNING("Rejecting request from untrusted source");
+      LOG_INFO("Rejecting request from untrusted source");
       if (src_flow != NULL)
       {
         src_flow->dec_ref();

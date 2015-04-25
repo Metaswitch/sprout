@@ -1,8 +1,8 @@
 /**
- * @file bgcfservice.h class definition for an BGCF service provider
+ * @file pjutils_test.cpp UT for PJUtils.
  *
  * Project Clearwater - IMS in the Cloud
- * Copyright (C) 2013  Metaswitch Networks Ltd
+ * Copyright (C) 2015 Metaswitch Networks Ltd
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -35,39 +35,32 @@
  */
 
 ///
-///
+///----------------------------------------------------------------------------
 
-#ifndef BGCFSERVICE_H__
-#define BGCFSERVICE_H__
-
-#include <map>
 #include <string>
-#include <boost/regex.hpp>
+#include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
-#include <functional>
-#include "updater.h"
-#include "sas.h"
+#include "basetest.hpp"
+#include "pjutils.h"
 
-class BgcfService
+class PJUtilsTest : public BaseTest
 {
-public:
-  BgcfService(std::string configuration = "./bgcf.json");
-  ~BgcfService();
 
-  /// Updates the bgcf routes
-  void update_routes();
+  PJUtilsTest() 
+  {
+  }
 
-  std::vector<std::string> get_route_from_domain(const std::string &domain, 
-                                                 SAS::TrailId trail) const;
-  std::vector<std::string> get_route_from_number(const std::string &number, 
-                                                 SAS::TrailId trail) const;
-
-private:
-  std::map<std::string, std::vector<std::string>> _domain_routes;
-  std::map<std::string, std::vector<std::string>> _number_routes;
-  std::string _configuration;
-  Updater<void, BgcfService>* _updater;
-
+  virtual ~PJUtilsTest()
+  {
+  }
 };
 
-#endif
+TEST_F(PJUtilsTest, IsUserNumeric)
+{
+  EXPECT_TRUE(PJUtils::is_user_numeric("+1234"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("1234"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("(1)-23-4"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("1-23-4"));
+  EXPECT_TRUE(PJUtils::is_user_numeric("+1.23.4"));
+}
