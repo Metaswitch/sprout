@@ -46,6 +46,9 @@ do
   cp /usr/share/clearwater/sip-stress/call_load2.xml /var/log/clearwater-sip-stress/call_load2.xml.$index
   mv /var/log/clearwater-sip-stress/call_load2.xml.$index /var/log/clearwater-sip-stress/call_load2.xml
 
+  # sipp wants a terminal.  Give it a dumb one (we're going to send it to file anyway).
+  export TERM=dumb
+
   # Actually run sipp.
   nice -n-20 /usr/share/clearwater/sip-stress/sipp -i $local_ip -sf /var/log/clearwater-sip-stress/call_load2.xml $stress_target:5060 -t tn -s $home_domain -inf /usr/share/clearwater/sip-stress/users.csv.$index -users $(($(wc -l < /usr/share/clearwater/sip-stress/users.csv.$index) - 1)) -default_behaviors all,-bye -max_socket 65000 -trace_stat -trace_rtt -trace_counts -trace_err -max_reconnect -1 -reconnect_sleep 0 -reconnect_close 0 -send_timeout 4000 -recv_timeout 12000 -nostdin >> /var/log/clearwater-sip-stress/sipp.$index.out 2>&1
 
