@@ -39,7 +39,8 @@
 #include "sas.h"
 #include "sproutsasevent.h"
 
-SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
+SIPResolver::SIPResolver(DnsCachedResolver* dns_client,
+                         int blacklist_duration) :
   BaseResolver(dns_client)
 {
   LOG_DEBUG("Creating SIP resolver");
@@ -54,7 +55,7 @@ SIPResolver::SIPResolver(DnsCachedResolver* dns_client) :
   create_srv_cache();
 
   // Create the blacklist.
-  create_blacklist();
+  create_blacklist(blacklist_duration);
 
   LOG_STATUS("Created SIP resolver");
 }

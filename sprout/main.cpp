@@ -119,7 +119,9 @@ enum OptionTypes
   OPT_MIN_TOKEN_RATE,
   OPT_CASS_TARGET_LATENCY_US,
   OPT_EXCEPTION_MAX_TTL,
-  OPT_MAX_SESSION_EXPIRES
+  OPT_MAX_SESSION_EXPIRES,
+  OPT_SIP_BLACKLIST_DURATION,
+  OPT_HTTP_BLACKLIST_DURATION
 };
 
 
@@ -182,6 +184,8 @@ const static struct pj_getopt_option long_opt[] =
   { "min-token-rate",               required_argument, 0, OPT_MIN_TOKEN_RATE},
   { "cass-target-latency-us",       required_argument, 0, OPT_CASS_TARGET_LATENCY_US},
   { "exception-max-ttl",            required_argument, 0, OPT_EXCEPTION_MAX_TTL},
+  { "sip-blacklist-duration",       required_argument, 0, OPT_SIP_BLACKLIST_DURATION},
+  { "http-blacklist-duration",      required_argument, 0, OPT_HTTP_BLACKLIST_DURATION},
   { NULL,                           0,                 0, 0}
 };
 
@@ -316,6 +320,10 @@ static void usage(void)
        "     --exception-max-ttl <secs>\n"
        "                            The maximum time before the process exits if it hits an exception.\n"
        "                            The actual time is randomised.\n"
+       "     --sip-blacklist-duration <secs>\n"
+       "                            The amount of time to blacklist a SIP peer when it is unresponsive.\n"
+       "     --http-blacklist-duration <secs>\n"
+       "                            The amount of time to blacklist an HTTP peer when it is unresponsive.\n"
        " -F, --log-file <directory>\n"
        "                            Log to file in specified directory\n"
        " -L, --log-level N          Set log level to N (default: 4)\n"
@@ -863,6 +871,18 @@ static pj_status_t init_options(int argc, char* argv[], struct options* options)
                options->exception_max_ttl);
       break;
 
+    case OPT_SIP_BLACKLIST_DURATION:
+      options->sip_blacklist_duration = atoi(pj_optarg);
+      LOG_INFO("SIP blacklist duration set to %d",
+               options->sip_blacklist_duration);
+      break;
+
+    case OPT_HTTP_BLACKLIST_DURATION:
+      options->http_blacklist_duration = atoi(pj_optarg);
+      LOG_INFO("HTTP blacklist duration set to %d",
+               options->http_blacklist_duration);
+      break;
+
     case 'h':
       usage();
       return -1;
@@ -1189,6 +1209,8 @@ int main(int argc, char* argv[])
   opt.memcached_write_format = MemcachedWriteFormat::JSON;
   opt.override_npdi = PJ_FALSE;
   opt.exception_max_ttl = 600;
+  opt.sip_blacklist_duration = SIPResolver::DEFAULT_BLACKLIST_DURATION;
+  opt.http_blacklist_duration = HttpResolver::DEFAULT_BLACKLIST_DURATION;
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -1425,7 +1447,7 @@ int main(int argc, char* argv[])
 
   // Create a DNS resolver and a SIP specific resolver.
   dns_resolver = new DnsCachedResolver(opt.dns_servers);
-  sip_resolver = new SIPResolver(dns_resolver);
+  sip_resolver = new SIPResolver(dns_resolver, opt.sip_blacklist_duration);
 
   // Create a new quiescing manager instance and register our completion handler
   // with it.
@@ -1475,7 +1497,9 @@ int main(int argc, char* argv[])
   signal(UNQUIESCE_SIGNAL, quiesce_unquiesce_handler);
 
   // Now that we know the address family, create an HttpResolver too.
-  http_resolver = new HttpResolver(dns_resolver, stack_data.addr_family);
+  http_resolver = new HttpResolver(dns_resolver,
+                                   stack_data.addr_family,
+                                   opt.http_blacklist_duration);
 
   if (opt.ralf_server != "")
   {

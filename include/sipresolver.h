@@ -43,7 +43,8 @@
 class SIPResolver : public BaseResolver
 {
 public:
-  SIPResolver(DnsCachedResolver* dns_client);
+  SIPResolver(DnsCachedResolver* dns_client,
+              int blacklist_duration = DEFAULT_BLACKLIST_DURATION);
   ~SIPResolver();
 
   void resolve(const std::string& name,
@@ -53,6 +54,9 @@ public:
                int retries,
                std::vector<AddrInfo>& targets,
                SAS::TrailId trail = 0);
+
+  /// Default duration to blacklist hosts after we fail to connect to them.
+  static const int DEFAULT_BLACKLIST_DURATION = 30;
 
   std::string get_transport_str(int transport);
 };

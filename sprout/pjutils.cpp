@@ -56,7 +56,6 @@ extern "C" {
 #include "sproutsasevent.h"
 
 static const int DEFAULT_RETRIES = 5;
-static const int DEFAULT_BLACKLIST_DURATION = 30;
 
 static void on_tsx_state(pjsip_transaction*, pjsip_event*);
 
@@ -950,7 +949,7 @@ void PJUtils::resolve_next_hop(pjsip_tx_data* tdata,
 /// resolve calls.
 void PJUtils::blacklist_server(AddrInfo& server)
 {
-  stack_data.sipresolver->blacklist(server, DEFAULT_BLACKLIST_DURATION);
+  stack_data.sipresolver->blacklist(server);
 }
 
 
