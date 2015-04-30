@@ -94,6 +94,10 @@ case "$1" in
         add_section /etc/security/limits.conf sprout /etc/security/limits.conf.sprout
         /usr/share/clearwater/infrastructure/scripts/sprout.monit
 
+        # Stop the cluster manager, so that it is restarted by Monit and picks up the new memcached
+        # and Chronos scaling plugins.
+        service clearwater-cluster-manager stop || /bin/true
+
         # Restart sprout.  Always do this by terminating sprout so monit will
         # restart it more-or-less immediately.  (monit restart seems to have
         # significant lag.)
