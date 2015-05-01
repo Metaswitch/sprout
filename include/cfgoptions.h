@@ -129,6 +129,8 @@ struct options
   float                                min_token_rate;
   int                                  cass_target_latency_us;
   int                                  exception_max_ttl;
+  int                                  sip_blacklist_duration;
+  int                                  http_blacklist_duration;
 };
 
 // Objects that must be shared with dynamically linked sproutlets must be
