@@ -57,11 +57,11 @@ AvStore::~AvStore()
 }
 
 
-bool AvStore::set_av(const std::string& impi,
-                     const std::string& nonce,
-                     const rapidjson::Document* av,
-                     uint64_t cas,
-                     SAS::TrailId trail)
+Store::Status AvStore::set_av(const std::string& impi,
+                              const std::string& nonce,
+                              const rapidjson::Document* av,
+                              uint64_t cas,
+                              SAS::TrailId trail)
 {
   std::string key = impi + '\\' + nonce;
   rapidjson::StringBuffer buffer;
@@ -72,23 +72,23 @@ bool AvStore::set_av(const std::string& impi,
   LOG_DEBUG("Set AV for %s\n%s", key.c_str(), data.c_str());
   Store::Status status = _data_store->set_data("av", key, data, cas, AV_EXPIRY, trail);
 
-  if (status != Store::Status::OK)
+  if (status == Store::Status::OK)
+  {
+    SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
+    event.add_var_param(impi);
+    SAS::report_event(event);
+  }
+  else
   {
     // LCOV_EXCL_START
     LOG_ERROR("Failed to write Authentication Vector for private_id %s", impi.c_str());
     SAS::Event event(trail, SASEvent::AVSTORE_SET_FAILURE, 0);
     event.add_var_param(impi);
     SAS::report_event(event);
-
-    return false;
     // LCOV_EXCL_STOP
   }
 
-  SAS::Event event(trail, SASEvent::AVSTORE_SET_SUCCESS, 0);
-  event.add_var_param(impi);
-  SAS::report_event(event);
-
-  return true;
+  return status;
 }
 
 rapidjson::Document* AvStore::get_av(const std::string& impi,

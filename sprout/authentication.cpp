@@ -443,8 +443,8 @@ void create_challenge(pjsip_authorization_hdr* auth_hdr,
     // Write the authentication vector (as a JSON string) into the AV store.
     LOG_DEBUG("Write AV to store");
     uint64_t cas = 0;
-    bool success = av_store->set_av(impi, nonce, av, cas, get_trail(rdata));
-    if (success)
+    Store::Status status = av_store->set_av(impi, nonce, av, cas, get_trail(rdata));
+    if (status == Store::OK)
     {
       // We've written the AV into the store, so need to set a Chronos
       // timer so that an AUTHENTICATION_TIMEOUT SAR is sent to the
@@ -605,13 +605,38 @@ pj_bool_t authenticate_rx_request(pjsip_rx_data* rdata)
       SAS::Event event(trail, SASEvent::AUTHENTICATION_SUCCESS, 0);
       SAS::report_event(event);
 
-      rapidjson::Value tombstone_value;
-      tombstone_value.SetBool(true);
-      av->AddMember("tombstone", tombstone_value, (*av).GetAllocator());
+      // Write a tombstone flag back to the AV store, handling contention.
+      // We don't actually expect anything else to be writing to this row in
+      // the AV store, but there is a window condition where we failed to read
+      // from the primary, successfully read from the backup (with a different
+      // CAS value) and then try to write back to the primary, which fails due
+      // to "contention".
+      Store::Status store_status;
+      do
+      {
+        // Set the tomestone flag in the JSON authentication vector.
+        rapidjson::Value tombstone_value;
+        tombstone_value.SetBool(true);
+        av->AddMember("tombstone", tombstone_value, (*av).GetAllocator());
 
-      bool rc = av_store->set_av(impi, nonce, av, cas, trail);
+        // Store it.  If this fails due to contention, read the updated JSON.
+        store_status = av_store->set_av(impi, nonce, av, cas, trail);
+        if (store_status == Store::DATA_CONTENTION)
+        {
+          // LCOV_EXCL_START - No support for contention in UT
+          LOG_DEBUG("Data contention writing tombstone - retry");
+          delete av;
+          av = av_store->get_av(impi, nonce, cas, trail);
+          if (av == NULL)
+          {
+            store_status = Store::ERROR;
+          }
+          // LCOV_EXCL_STOP
+        }
+      }
+      while (store_status == Store::DATA_CONTENTION);
 
-      if (!rc)
+      if (store_status != Store::OK)
       {
         // LCOV_EXCL_START
         LOG_ERROR("Tried to tombstone AV for %s/%s after processing an authentication, but failed",
