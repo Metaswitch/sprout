@@ -35,11 +35,10 @@
 from metaswitch.clearwater.cluster_manager.plugin_base import \
     SynchroniserPluginBase
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
-    write_chronos_cluster_settings
+    write_chronos_cluster_settings, run_command
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
 from metaswitch.clearwater.cluster_manager import constants
 import logging
-import os
 
 _log = logging.getLogger("sprout_chronos_plugin")
 
@@ -54,20 +53,20 @@ class SproutChronosPlugin(SynchroniserPluginBase):
         return "/sprout/clustering/chronos"
 
     def on_cluster_changing(self, cluster_view):
+        _log.debug("Sprout's Chronos cluster is changing")
         write_chronos_cluster_settings("/etc/chronos/chronos_cluster.conf",
                                cluster_view,
                                self.local_server)
-        _log.debug("Reloading Chronos")
-        os.system("service chronos reload")
+        run_command("service chronos reload")
 
     def on_joining_cluster(self, cluster_view):
-        _log.debug("Sprout's Chronos cluster is changing")
+        _log.debug("This Sprout's Chronos is joining a Chronos cluster")
         self.on_cluster_changing(cluster_view)
 
     def on_new_cluster_config_ready(self, cluster_view):
         _log.debug("Started running Chronos resynchronization")
-        os.system("service chronos resync")
-        os.system("service chronos wait-sync")
+        run_command("service chronos resync")
+        run_command("service chronos wait-sync")
         _log.debug("Finished running Chronos resynchronization")
 
     def on_stable_cluster(self, cluster_view):
