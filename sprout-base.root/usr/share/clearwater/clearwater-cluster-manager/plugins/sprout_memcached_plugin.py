@@ -34,13 +34,13 @@
 from metaswitch.clearwater.cluster_manager.plugin_base import \
     SynchroniserPluginBase
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
-    run_command, write_cluster_settings
+    run_command, write_memcached_cluster_settings
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
 from metaswitch.clearwater.cluster_manager import constants
 import logging
 import os
 
-_log = logging.getLogger("prout_memcached_plugin")
+_log = logging.getLogger("sprout_memcached_plugin")
 
 
 class SproutMemcachedPlugin(SynchroniserPluginBase):
@@ -54,8 +54,8 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
         return ["/etc/clearwater/cluster_settings"]
 
     def on_cluster_changing(self, cluster_view):
-        write_cluster_settings("/etc/clearwater/cluster_settings",
-                               cluster_view)
+        write_memcached_cluster_settings("/etc/clearwater/cluster_settings",
+                                         cluster_view)
         run_command("service sprout reload")
 
     def on_joining_cluster(self, cluster_view):
@@ -73,5 +73,5 @@ class SproutMemcachedPlugin(SynchroniserPluginBase):
         pass
 
 
-def load_as_plugin():
-    return SproutMemcachedPlugin()
+def load_as_plugin(ip):
+    return SproutMemcachedPlugin(ip)
