@@ -52,6 +52,9 @@ class SproutChronosPlugin(SynchroniserPluginBase):
     def key(self):
         return "/sprout/clustering/chronos"
 
+    def files(self):
+        return ["/etc/chronos/chronos_cluster.conf"]
+
     def on_cluster_changing(self, cluster_view):
         _log.debug("Sprout's Chronos cluster is changing")
         write_chronos_cluster_settings("/etc/chronos/chronos_cluster.conf",
