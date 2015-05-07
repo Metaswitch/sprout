@@ -118,7 +118,6 @@ const pj_str_t STR_DIALOG_ID = pj_str((char*)"dialog_id");
 const pj_str_t STR_TARGET = pj_str((char*)"target");
 const pj_str_t STR_CONDITIONS = pj_str((char*)"conditions");
 const pj_str_t STR_NO_REPLY_TIMER = pj_str((char*)"no-reply-timer");
-const pj_str_t STR_3GPP_ICS = pj_str((char*)"g.3gpp.ics");
 const pj_str_t STR_NPDI = pj_str((char*)"npdi");
 const pj_str_t STR_RN = pj_str((char*)"rn");
 
