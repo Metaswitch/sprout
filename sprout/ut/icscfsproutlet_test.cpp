@@ -2715,6 +2715,61 @@ TEST_F(ICSCFSproutletTest, RouteTermInviteUserPhone)
   delete tp;
 }
 
+// The following test (similar to RouteTermInviteUserPhone apart from the
+// absence of leading "+" characters on the user) verifies that I-CSCF doesn't
+// perform a Tel URI conversion if the number is not globally specified (i.e.
+// doesn't start with a "+")
+TEST_F(ICSCFSproutletTest, RouteTermInviteLocalUserPhoneFailure)
+{
+  pjsip_tx_data* tdata;
+
+  // Create a TCP connection to the I-CSCF listening port.
+  TransportFlow* tp = new TransportFlow(TransportFlow::Protocol::TCP,
+                                        stack_data.icscf_port,
+                                        "1.2.3.4",
+                                        49152);
+
+  // Set up the HSS responses for the terminating location query.
+  _hss_connection->set_result("/impu/tel%3A16505551234/location",
+                              "{\"result-code\": 2001,"
+                              " \"scscf\": \"sip:scscf1.homedomain:5058;transport=TCP\"}");
+
+  // Inject an INVITE request to a sip URI representing a telephone number with a
+  // P-Served-User header.
+  Message msg1;
+  msg1._method = "INVITE";
+  msg1._requri = "sip:16505551234@homedomain;user=phone;isub=1234;ext=4321";
+  msg1._to = "16505551234";
+  msg1._via = tp->to_string(false);
+  msg1._extra = "Contact: sip:16505551000@" +
+                tp->to_string(true) +
+                ";ob;expires=300;+sip.ice;reg-id=1;+sip.instance=\"<urn:uuid:00000000-0000-0000-0000-b665231f1213>\"\r\n";
+  msg1._extra += "P-Served-User: <sip:16505551000@homedomain>";
+  msg1._route = "Route: <sip:homedomain>";
+  inject_msg(msg1.get_request(), tp);
+
+  // Expecting 100 Trying and final 404 responses.  I-CSCF shouldn't perform
+  // a TelURI conversion and therefore shouldn't match on the HSS result
+  // inserted above.
+  ASSERT_EQ(2, txdata_count());
+
+  // Check the 100 Trying.
+  tdata = current_txdata();
+  RespMatcher(100).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  // Check the 404 Not Found.
+  tdata = current_txdata();
+  RespMatcher(404).matches(tdata->msg);
+  tp->expect_target(tdata);
+  free_txdata();
+
+  _hss_connection->delete_result("/impu/tel%3A16505551234/location");
+
+  delete tp;
+}
+
 
 TEST_F(ICSCFSproutletTest, RouteTermInviteNumericSIPURI)
 {
