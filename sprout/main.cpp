@@ -1581,7 +1581,6 @@ int main(int argc, char* argv[])
     status = init_stateful_proxy(NULL,
                                  NULL,
                                  NULL,
-                                 NULL,
                                  true,
                                  opt.upstream_proxy,
                                  opt.upstream_proxy_port,
