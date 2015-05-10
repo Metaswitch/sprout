@@ -40,7 +40,6 @@
 #include "pjutils.h"
 
 #include "constants.h"
-#include "stateful_proxy.h"
 #include "aschain.h"
 #include "ifchandler.h"
 
@@ -138,28 +137,6 @@ ACR* AsChain::acr() const
 }
 
 
-/// @returns whether the given message has the same target as the
-// chain.  Used to detect the orig-cdiv case.  Only valid for
-// terminating chains.
-bool AsChain::matches_target(pjsip_tx_data* tdata) const
-{
-  pj_assert(_session_case == SessionCase::Terminating);
-
-  // We do not support alias URIs per 3GPP TS 24.229 s3.1 and 29.228
-  // sB.2.1. This is an explicit limitation.  So this step reduces to
-  // simple syntactic canonicalization.
-  //
-  // 3GPP TS 24.229 s5.4.3.3 note 3 says "The canonical form of the
-  // Request-URI is obtained by removing all URI parameters (including
-  // the user-param), and by converting any escaped characters into
-  // unescaped form.".
-  const std::string& orig_uri = _served_user;
-  const std::string msg_uri = IfcHandler::served_user_from_msg(SessionCase::Terminating,
-                                                               tdata->msg,
-                                                               tdata->pool);
-  return (orig_uri == msg_uri);
-}
-
 SAS::TrailId AsChain::trail() const
 {
   return _trail;
@@ -252,13 +229,6 @@ void AsChainLink::on_response(int status_code)
     // Store the status code returned by the AS.
     _as_chain->_as_info[_index].status_code = status_code;
   }
-}
-
-
-void AsChainLink::on_not_responding()
-{
-  // Store the status code returned by the AS.
-  _as_chain->_as_info[_index].timeout = true;
 }
 
 

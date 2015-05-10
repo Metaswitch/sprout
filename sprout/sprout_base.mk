@@ -17,7 +17,7 @@ TARGET_SOURCES := logger.cpp \
                   dnscachedresolver.cpp \
                   baseresolver.cpp \
                   sipresolver.cpp \
-                  stateful_proxy.cpp \
+                  bono.cpp \
                   registration_utils.cpp \
                   registrar.cpp \
                   authentication.cpp \
@@ -36,7 +36,6 @@ TARGET_SOURCES := logger.cpp \
                   regstore.cpp \
                   xdmconnection.cpp \
                   simservs.cpp \
-                  callservices.cpp \
                   enumservice.cpp \
                   bgcfservice.cpp \
                   icscfrouter.cpp \

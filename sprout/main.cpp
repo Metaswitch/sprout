@@ -69,7 +69,7 @@ extern "C" {
 #include "stack.h"
 #include "hssconnection.h"
 #include "xdmconnection.h"
-#include "stateful_proxy.h"
+#include "bono.h"
 #include "websockets.h"
 #include "mmtel.h"
 #include "subscription.h"
@@ -1579,7 +1579,6 @@ int main(int argc, char* argv[])
 
     // Launch stateful proxy as P-CSCF.
     status = init_stateful_proxy(NULL,
-                                 NULL,
                                  NULL,
                                  NULL,
                                  true,

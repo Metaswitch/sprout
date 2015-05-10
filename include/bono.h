@@ -1,5 +1,5 @@
 /**
- * @file stateful_proxy.h Initialization/termination functions for Stateful Proxy module.
+ * @file bono.h Initialization/termination functions for Bono subcomponent.
  *
  * Project Clearwater - IMS in the Cloud
  * Copyright (C) 2013  Metaswitch Networks Ltd
@@ -52,7 +52,6 @@ class UACTransaction;
 #include "enumservice.h"
 #include "bgcfservice.h"
 #include "analyticslogger.h"
-#include "callservices.h"
 #include "regstore.h"
 #include "stack.h"
 #include "trustboundary.h"
@@ -157,8 +156,6 @@ public:
   void cancel_pending_uac_tsx(int st_code, bool dissociate_uac);
   pj_status_t handle_final_response();
 
-  void register_proxy(CallServices::Terminating* proxy);
-
   pj_status_t send_trying(pjsip_rx_data* rdata);
   pj_status_t send_response(int st_code, const pj_str_t* st_text=NULL);
   bool redirect(std::string, int);
@@ -252,7 +249,6 @@ private:
     pjsip_to_hdr*   to;
     pjsip_cid_hdr*  cid;
   } _analytics;
-  CallServices::Terminating* _proxy;  //< A proxy inserted into the signalling path, which sees all responses.
   bool                 _pending_destroy;
   int                  _context_count;
   std::list<AsChainLink> _as_chain_links; //< References to the AsChains this transaction is associated with.
@@ -357,7 +353,6 @@ private:
 
 pj_status_t init_stateful_proxy(RegStore* registrar_store,
                                 RegStore* remote_reg_store,
-                                CallServices* call_services,
                                 IfcHandler* ifc_handler,
                                 pj_bool_t enable_access_proxy,
                                 const std::string& upstream_proxy,
