@@ -63,11 +63,11 @@ public:
   ///                  the Authentication Vector.
   /// @returns True if we successfully set the data in memcached,
   /// false otherwise.
-  bool set_av(const std::string& impi,
-              const std::string& nonce,
-              const rapidjson::Document* av,
-              uint64_t cas,
-              SAS::TrailId trail);
+  Store::Status set_av(const std::string& impi,
+                       const std::string& nonce,
+                       const rapidjson::Document* av,
+                       uint64_t cas,
+                       SAS::TrailId trail);
 
   /// Retrieves the Authentication Vector for the specified private user identity
   /// and nonce.
