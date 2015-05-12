@@ -120,6 +120,10 @@ LDFLAGS += -lmemcached \
            -lsas \
            -lboost_filesystem
 
+# Explicitly link some pjsip modules. Some plugins require symbols in them
+# (which sprout-base doesn't), and the plugins are dynamically linked at run
+# time, so GCC won't link in the symbols they need unless we explicitly tell
+# it to.
 LDFLAGS += -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
 include ${MK_DIR}/platform.mk
