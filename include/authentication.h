@@ -44,7 +44,7 @@
 #include "acr.h"
 #include "analyticslogger.h"
 
-extern pjsip_module mod_auth;
+extern pjsip_module mod_authentication;
 
 pj_status_t init_authentication(const std::string& realm_name,
                                 AvStore* avstore,

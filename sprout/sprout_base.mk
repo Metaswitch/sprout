@@ -120,7 +120,7 @@ LDFLAGS += -lmemcached \
            -lsas \
            -lboost_filesystem
 
-LDFLAGS += $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
+LDFLAGS += -Wl,--whole-archive -lpjmedia-x86_64-unknown-linux-gnu -Wl,--no-whole-archive $(shell PKG_CONFIG_PATH=${ROOT}/usr/lib/pkgconfig pkg-config --libs libpjproject)
 
 include ${MK_DIR}/platform.mk
 
