@@ -62,12 +62,12 @@ extern "C" {
 
 
 //
-// mod_auth authenticates SIP requests.  It must be inserted into the
+// mod_authentication authenticates SIP requests.  It must be inserted into the
 // stack below the transaction layer.
 //
 static pj_bool_t authenticate_rx_request(pjsip_rx_data *rdata);
 
-pjsip_module mod_auth =
+pjsip_module mod_authentication =
 {
   NULL, NULL,                         // prev, next
   pj_str("mod-auth"),                 // Name
@@ -819,7 +819,7 @@ pj_status_t init_authentication(const std::string& realm_name,
 
   // Register the authentication module.  This needs to be in the stack
   // before the transaction layer.
-  status = pjsip_endpt_register_module(stack_data.endpt, &mod_auth);
+  status = pjsip_endpt_register_module(stack_data.endpt, &mod_authentication);
 
   // Initialize the authorization server.
   pjsip_auth_srv_init_param params;
@@ -834,5 +834,5 @@ pj_status_t init_authentication(const std::string& realm_name,
 
 void destroy_authentication()
 {
-  pjsip_endpt_unregister_module(stack_data.endpt, &mod_auth);
+  pjsip_endpt_unregister_module(stack_data.endpt, &mod_authentication);
 }
