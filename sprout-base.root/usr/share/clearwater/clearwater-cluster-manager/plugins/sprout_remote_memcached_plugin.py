@@ -1,5 +1,3 @@
-# @file sprout_chronos_plugin.py
-#
 # Project Clearwater - IMS in the Cloud
 # Copyright (C) 2015  Metaswitch Networks Ltd
 #
@@ -32,55 +30,56 @@
 # under which the OpenSSL Project distributes the OpenSSL toolkit software,
 # as those licenses appear in the file LICENSE-OPENSSL.
 
+
 from metaswitch.clearwater.cluster_manager.plugin_base import \
     SynchroniserPluginBase
 from metaswitch.clearwater.cluster_manager.plugin_utils import \
-    write_chronos_cluster_settings, run_command
+    run_command, write_memcached_cluster_settings
 from metaswitch.clearwater.cluster_manager.alarms import issue_alarm
 from metaswitch.clearwater.cluster_manager import constants
 import logging
+import os
 
-_log = logging.getLogger("sprout_chronos_plugin")
+_log = logging.getLogger("sprout_remote_memcached_plugin")
 
 
-class SproutChronosPlugin(SynchroniserPluginBase):
-    def __init__(self, local_server, local_site, _remote_site):
-        self.local_server = local_server
-        self._key = "/clearwater/{}/sprout/clustering/chronos".format(local_site)
-        _log.debug("Raising not-clustered alarm")
-        issue_alarm(constants.RAISE_CHRONOS_NOT_YET_CLUSTERED)
+class SproutRemoteMemcachedPlugin(SynchroniserPluginBase):
+    def __init__(self, _ip, local_site, remote_site):
+        self._key = "/clearwater/{}/sprout/clustering/memcached".format(remote_site)
+        self._remote_site = remote_site
 
     def key(self):
         return self._key
 
+    def should_be_in_cluster(self):
+        return False
+
     def files(self):
-        return ["/etc/chronos/chronos_cluster.conf"]
+        return ["/etc/clearwater/remote_cluster_settings"]
 
     def on_cluster_changing(self, cluster_view):
-        _log.debug("Sprout's Chronos cluster is changing")
-        write_chronos_cluster_settings("/etc/chronos/chronos_cluster.conf",
-                               cluster_view,
-                               self.local_server)
-        run_command("service chronos reload")
+        if self._remote_site != "":
+            write_memcached_cluster_settings("/etc/clearwater/remote_cluster_settings",
+                                             cluster_view)
+            run_command("service sprout reload")
 
     def on_joining_cluster(self, cluster_view):
-        _log.debug("This Sprout's Chronos is joining a Chronos cluster")
-        self.on_cluster_changing(cluster_view)
+        # We should never join the remote cluster, because it's the *remote*
+        # cluster
+        pass
 
     def on_new_cluster_config_ready(self, cluster_view):
-        _log.debug("Started running Chronos resynchronization")
-        run_command("service chronos resync")
-        run_command("service chronos wait-sync")
-        _log.debug("Finished running Chronos resynchronization")
+        # No Astaire resync needed - the remote site handles that
+        pass
 
     def on_stable_cluster(self, cluster_view):
         self.on_cluster_changing(cluster_view)
-        issue_alarm(constants.CLEAR_CHRONOS_NOT_YET_CLUSTERED)
-        _log.debug("Sprout Chronos cluster is stable again")
 
     def on_leaving_cluster(self, cluster_view):
+        # We should never leave the remote cluster, because it's the *remote*
+        # cluster
         pass
 
 
-def load_as_plugin(local_server, local_site, remote_site):
-    return SproutChronosPlugin(local_server, local_site, remote_site)
+def load_as_plugin(ip, local_site, remote_site):
+    return SproutRemoteMemcachedPlugin(ip, local_site, remote_site)
