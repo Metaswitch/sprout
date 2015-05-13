@@ -111,8 +111,18 @@ get_settings()
           echo "servers=$cluster_ip:11211" > /etc/clearwater/cluster_settings
         fi
 
-        # If the remote cluster settings file exists then start sprout with geo-redundancy enabled
-        [ -f /etc/clearwater/remote_cluster_settings ] && remote_memstore_arg="--remote-memstore=/etc/clearwater/remote_cluster_settings"
+        # If a remote site name is set, then start sprout with geo-redundancy enabled
+        if [ -n "$remote_site_name" ]
+        then
+          remote_memstore_arg="--remote-memstore=/etc/clearwater/remote_cluster_settings"
+          # Create /etc/clearwater/remote_cluster_settings if it doesn't exist
+          # This means 'service sprout reload' will pick up changes
+          if [ ! -f /etc/clearwater/remote_cluster_settings ]
+          then
+            echo "servers=" > /etc/clearwater/remote_cluster_settings
+          fi  
+        fi
+
 
         # Set up defaults for user settings then pull in any overrides.
         # Sprout uses blocking look-up services, so must run multi-threaded.
