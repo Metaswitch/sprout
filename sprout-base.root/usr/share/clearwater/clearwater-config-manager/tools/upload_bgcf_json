@@ -47,7 +47,7 @@ fi
 # Populate the file with defaults if not already present
 if [[ ! -f $FILENAME ]]
 then
-  echo > $FILENAME << EOF
+  cat > $FILENAME << EOF
 { "routes": [] }
 EOF
 fi
