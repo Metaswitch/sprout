@@ -42,6 +42,9 @@ class SproutBGCFJsonPlugin(ConfigPluginBase):
     def key(self):
         return "/configuration/bgcf_json"
 
+    def file(self):
+        return "/etc/clearwater/bgcf.json"
+
     def on_config_changed(self, value):
         _log.info("Updating BGCF routing rules")
 

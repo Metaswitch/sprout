@@ -42,6 +42,9 @@ class SproutENUMJsonPlugin(ConfigPluginBase):
     def key(self):
         return "/configuration/enum_json"
 
+    def file(self):
+        return "/etc/clearwater/enum.json"
+
     def on_config_changed(self, value):
         _log.info("Updating ENUM mapping rules")
 

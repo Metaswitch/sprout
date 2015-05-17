@@ -42,6 +42,9 @@ class SproutSCSCFJsonPlugin(ConfigPluginBase):
     def key(self):
         return "/configuration/scscf_json"
 
+    def file(self):
+        return "/etc/clearwater/s-cscf.json"
+
     def on_config_changed(self, value):
         _log.info("Updating S-CSCF selection information")
 
